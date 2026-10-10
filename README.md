@@ -34,10 +34,18 @@ alphus --root . --config quality-gates.toml --run --profile check
 
 ## Use from another repository
 
-Until the project chooses a package index, install from a local source checkout
-or build and distribute the wheel through your existing package channel. For
-local development, point the other repository's development environment at the
-standalone package directory:
+Until the project chooses a package index, consumers can install from a local
+source checkout, pin a Git commit, or build and distribute the wheel through an
+existing package channel. For a reproducible Git dependency, pin an immutable
+commit rather than a branch name:
+
+```sh
+python -m pip install \
+  "alphus @ git+https://github.com/sheepfling/alphus.git@<commit-sha>"
+```
+
+For local development, point the other repository's development environment at
+the standalone package directory:
 
 ```sh
 python -m pip install -e /path/to/alphus
