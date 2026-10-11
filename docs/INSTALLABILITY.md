@@ -7,8 +7,9 @@ revision `35b2924da7a689d0f9b3986b8306a5ea479295f1` (tree
 `0fac805351d7866aa39b8da6980668b62c547ef5`). The package declares version
 `0.1.0`, Python `>=3.11`, the `alphus` console command, and `py.typed`. The
 published extraction branch `feature/initial-work` is five commits ahead of
-`main` at `289b1072202f75200df709384f22de81e9b13db3`; the review branch adds
-one closure commit on top of the extracted package.
+`main` at `289b1072202f75200df709384f22de81e9b13db3`. The review branch adds
+the consumer/readiness guide and a Python 3.12 proof correction on top of the
+extracted package.
 
 ## Python 3.11 wheel and runtime proof
 
@@ -39,13 +40,30 @@ Its policy still pins Alphus at `73e4cdb`; no mdutils-stubs files were changed.
 
 ## Python 3.12 proof
 
-An earlier Python 3.12.14 wheel/profile run passed 10/10 self-check steps,
-including 139 package tests, and 12/12 consumer steps. A fresh Python 3.12
-wheel build for this final source snapshot could not complete: build isolation
-could not resolve `pypi.org` to download `setuptools>=68`. Treat that earlier
-run as historical, not as a current exact-revision proof. This check does not
-expand mdutils-stubs' separate Python 3.11–3.14 runtime or 3.10–3.14 typing
-coverage.
+Built the current package source at commit
+`f445b9d62c8b5ea3be8085ce20011fe6ecba34cd` (tree
+`c27f1e4272b2fe63897f8451c048ef9fd870beb1`) with Python 3.12.14 in the
+isolated environment `/tmp/alphus-clean-deps-20261010`. The wheel SHA-256 is
+`1496caa0f3355283c801bdbc80f5dd640bcea572be6467294821c19d3839341b`. The
+wheel was installed from the local artifact into
+`/tmp/alphus-f445-py312-installed`; its import resolved there, metadata
+reported version `0.1.0`, `py.typed` was present, CLI help succeeded, and
+`pip check` found no broken requirements. The venv has packaging 26.3, pydantic
+2.14.0, Rich 15.0.0, Typer 0.27.3, mdrepo 0.0.1.post0, Ruff 0.17.0, and
+pytest 9.1.1. The external profile tools were Pyright 1.1.411 and rumdl
+0.2.77.
+
+The installed wheel's self-check profile passed 10/10, including 139 package
+tests. A generic consumer fixture passed 12/12, including mdrepo, rumdl, Ruff,
+Pyright, and pytest. Its deliberately invalid variant exited 1 with the
+expected missing-target (`MDR004`), orphan (`MDR101`), and formatting
+findings; 10/12 steps passed and the later Python checks still ran. The first
+build attempt in the restricted shell failed to resolve `pypi.org`; the
+approval-reviewed official PyPI route then fetched isolated build dependencies
+and the same exact-source wheel build succeeded. This records the transport
+failure and its resolution, rather than treating the first attempt as a
+remaining package blocker. The proof does not expand mdutils-stubs' separate
+Python 3.11–3.14 runtime or 3.10–3.14 typing coverage.
 
 ## Distribution status
 
