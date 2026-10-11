@@ -167,6 +167,48 @@ def test_json_profile_emits_one_structured_summary(
     }
 
 
+def test_json_profile_reports_launch_errors_and_continues(
+    tmp_path: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
+    config_path = tmp_path / "quality.toml"
+    config_path.write_text("schema_version = 1\n", encoding="utf-8")
+    policy = OrchestrationPolicy(
+        steps=(
+            CommandRunStep(
+                kind="command",
+                name="missing tool",
+                argv=(str(tmp_path / "missing-tool"),),
+            ),
+            RuleRunStep(kind="rule", name="later rule", rule="line-length"),
+        ),
+        profiles=(
+            OrchestrationProfile(name="check", steps=("missing tool", "later rule")),
+        ),
+    )
+    called_rules: list[str] = []
+
+    result = run_orchestration(
+        tmp_path,
+        config_path,
+        policy,
+        "check",
+        lambda rule: called_rules.append(rule) or 0,
+        json_output=True,
+    )
+
+    captured = capfd.readouterr()
+    payload = json.loads(captured.out)
+    assert result == 1
+    assert called_rules == ["line-length"]
+    assert payload["exit_code"] == 1
+    assert payload["steps"][0]["exit_code"] == 127
+    assert payload["steps"][0]["status"] == "failed"
+    assert payload["steps"][0]["diagnostics"]
+    assert "missing-tool" in payload["steps"][0]["diagnostics"][0]
+    assert payload["steps"][1]["status"] == "passed"
+    assert "missing-tool" in captured.err
+
+
 def test_native_output_follows_its_profile_marker_when_stdout_is_captured(
     tmp_path: Path, capfd: pytest.CaptureFixture[str]
 ) -> None:

@@ -42,6 +42,12 @@ directories within the configured repository root. Consumers can configure
 Markdown link and formatting tools as ordinary command steps without adding
 repository-specific code to the package.
 
+For a coordinated consumer example that assigns Markdown graph checks to
+mdrepo, Markdown formatting to rumdl, and Python lint, typing, and tests to
+their native tools, see [consumer quality profiles](CONSUMER-PROFILES.md).
+This keeps upstream rule ownership intact while Alphus aggregates profile
+status.
+
 Profiles execute only when explicitly selected with `--run`. Review command
 steps before running a policy from a repository that is not trusted, because
 those steps execute the configured programs.

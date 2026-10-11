@@ -73,7 +73,13 @@ workflow, which should also install its declared runtime dependencies.
 Consumers depend on `alphus`; they do not copy its source or import
 application packages from the repository that publishes the policy.
 See the [package architecture](docs/ARCHITECTURE.md) for the reusable
-checker, policy, and orchestration boundaries.
+checker, policy, and orchestration boundaries. The
+[consumer profile guide](docs/CONSUMER-PROFILES.md) includes a coordinated
+mdrepo, rumdl, and Python-tool example. The
+[TITAN lesson ledger](docs/TITAN-LESSON-LEDGER.md) separates reusable checks,
+finding IDs, configured instances, and remediation milestones. The
+[installability report](docs/INSTALLABILITY.md) records the current wheel,
+Python-version, and distribution evidence.
 
 ## Toolchain ownership
 

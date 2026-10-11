@@ -3,7 +3,7 @@ schema_version = 1
 [files]
 include = [
   "src/**/*.py", "tests/**/*.py", "README.md", "docs/**/*.md",
-  "pyproject.toml", "quality-gates.toml",
+  "examples/**/*.toml", "pyproject.toml", "quality-gates.toml",
 ]
 exclude = []
 
