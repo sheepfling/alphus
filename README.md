@@ -133,8 +133,10 @@ Available rules are `file-size`, `line-length`, `json-structure`,
 `runtime-types`, `cli`, `script-policy`, `module-roles`, `package-boundaries`,
 `dependency-locks`, and `repository-layout`. Package boundaries also check
 the configured architecture graph, metadata versions, and callable registry.
-Module roles enforce configured import, call, and definition boundaries for
-audited composition, operation, contract, and adapter modules. Import patterns
+Module roles enforce configured import, call, definition, and module-level
+assignment boundaries for audited composition, operation, contract, and adapter
+modules. Assignment rules catch callable and type aliases even inside module
+control-flow branches while ignoring local and class attributes. Import patterns
 can cover module families such as route adapters without enumerating each name.
 Repository layout checks configured paths, tracked files, and instruction
 routers. `--report` prints findings with a successful exit status; `--json`

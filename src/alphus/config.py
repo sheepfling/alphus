@@ -954,6 +954,9 @@ class ModuleRoleRule(_StrictModel):
     forbidden_import_patterns: Annotated[tuple[str, ...], Field(default_factory=tuple)]
     forbidden_calls: Annotated[tuple[str, ...], Field(default_factory=tuple)]
     forbidden_definitions: Annotated[tuple[str, ...], Field(default_factory=tuple)]
+    forbidden_module_assignments: Annotated[
+        tuple[str, ...], Field(default_factory=tuple)
+    ]
 
     @field_validator("path")
     @classmethod
@@ -1000,6 +1003,17 @@ class ModuleRoleRule(_StrictModel):
             raise ValueError("forbidden names must be unique")
         return tuple(names)
 
+    @field_validator("forbidden_module_assignments")
+    @classmethod
+    def validate_forbidden_module_assignments(
+        cls, names: Sequence[str]
+    ) -> tuple[str, ...]:
+        if any(not name.isidentifier() for name in names):
+            raise ValueError("forbidden module assignments must be identifiers")
+        if len(names) != len(set(names)):
+            raise ValueError("forbidden module assignments must be unique")
+        return tuple(names)
+
     @model_validator(mode="after")
     def require_a_boundary(self) -> ModuleRoleRule:
         if not any(
@@ -1008,6 +1022,7 @@ class ModuleRoleRule(_StrictModel):
                 self.forbidden_import_patterns,
                 self.forbidden_calls,
                 self.forbidden_definitions,
+                self.forbidden_module_assignments,
             )
         ):
             raise ValueError("module-role rules require at least one boundary")

@@ -122,6 +122,79 @@ def test_module_role_reports_reintroduced_calculation_imports_calls_and_helpers(
     assert [finding.line for finding in findings] == [1, 2, 4, 5, 6]
 
 
+def test_module_role_reports_forbidden_module_assignments(tmp_path: Path) -> None:
+    path = "src/providers.py"
+    source = tmp_path / path
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "from typing import Callable, TypeAlias\n"
+        "RegistryProvider = Callable[[], object]\n"
+        "ConfigurationProvider: TypeAlias = Callable[[str], object]\n"
+        "if True:\n"
+        "    OptionalProvider = Callable[[], object]\n"
+        "def local() -> None:\n"
+        "    RegistryProvider = object\n"
+        "class Contract:\n"
+        "    ConfigurationProvider = object\n",
+        encoding="utf-8",
+    )
+    policy = ModuleRolePolicy.model_validate(
+        {
+            "modules": [
+                {
+                    "path": path,
+                    "role": "operation",
+                    "forbidden_module_assignments": [
+                        "RegistryProvider",
+                        "ConfigurationProvider",
+                        "OptionalProvider",
+                    ],
+                }
+            ]
+        }
+    )
+
+    findings = check_module_roles(tmp_path, policy)
+
+    assert [
+        (finding.rule_id, finding.line, finding.message) for finding in findings
+    ] == [
+        (
+            "module-role.forbidden-assignment",
+            2,
+            "operation role must not assign module-level name 'RegistryProvider'",
+        ),
+        (
+            "module-role.forbidden-assignment",
+            3,
+            "operation role must not assign module-level name 'ConfigurationProvider'",
+        ),
+        (
+            "module-role.forbidden-assignment",
+            5,
+            "operation role must not assign module-level name 'OptionalProvider'",
+        ),
+    ]
+
+
+@pytest.mark.parametrize("names", [("not-valid",), ("Provider", "Provider")])
+def test_module_role_validates_forbidden_module_assignment_names(
+    names: tuple[str, ...],
+) -> None:
+    with pytest.raises(ValidationError, match="module assignments"):
+        ModuleRolePolicy.model_validate(
+            {
+                "modules": [
+                    {
+                        "path": "src/provider.py",
+                        "role": "operation",
+                        "forbidden_module_assignments": names,
+                    }
+                ]
+            }
+        )
+
+
 def test_module_role_rejects_configured_parent_traversal() -> None:
     with pytest.raises(ValidationError, match="module-role path"):
         ModuleRolePolicy.model_validate(
@@ -176,7 +249,9 @@ def test_module_role_is_available_through_structured_cli_output(
 ) -> None:
     source = tmp_path / "src/provider.py"
     source.parent.mkdir(parents=True)
-    source.write_text("import domain.heading\n", encoding="utf-8")
+    source.write_text(
+        "import domain.heading\nRegistryProvider = object\n", encoding="utf-8"
+    )
     subprocess.run(
         ["git", "init"],
         cwd=tmp_path,
@@ -215,6 +290,7 @@ extensions = [".py"]
 path = "src/provider.py"
 role = "composition"
 forbidden_imports = ["domain.heading"]
+forbidden_module_assignments = ["RegistryProvider"]
 """,
         encoding="utf-8",
     )
@@ -233,5 +309,9 @@ forbidden_imports = ["domain.heading"]
 
     assert result == 1
     findings = json.loads(capsys.readouterr().out)
-    assert findings[0]["rule_id"] == "module-role.forbidden-import"
-    assert findings[0]["path"] == "src/provider.py"
+    assert [
+        (finding["rule_id"], finding["line"], finding["path"]) for finding in findings
+    ] == [
+        ("module-role.forbidden-import", 1, "src/provider.py"),
+        ("module-role.forbidden-assignment", 2, "src/provider.py"),
+    ]

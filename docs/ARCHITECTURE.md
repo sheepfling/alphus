@@ -32,6 +32,10 @@ repository-relative arguments. Empty scopes pass without starting the command.
 Each checker receives an explicit root, validated rule policy, and selected
 files. It returns typed findings or a typed report; it does not print, start
 processes, or discover a checkout from the current directory or module path.
+Module-role policies can name forbidden module-level assignments separately
+from functions and classes. The assignment scanner follows module-level
+control-flow branches and stops at function, class, and lambda scopes, so a
+provider alias cannot hide in a conditional or be confused with a local name.
 The CLI owns rendering, subprocess calls, report-only behavior, and exit
 status. Use argument arrays for native tools, and keep their working
 directories within the configured repository root. Consumers can configure

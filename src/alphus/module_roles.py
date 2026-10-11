@@ -66,6 +66,64 @@ def _imported_names(node: ast.Import | ast.ImportFrom) -> tuple[str, ...]:
     return imported_names
 
 
+def _assignment_names(target: ast.expr) -> tuple[str, ...]:
+    match target:
+        case ast.Name(id=name):
+            return (name,)
+        case ast.Tuple(elts=elements) | ast.List(elts=elements):
+            return tuple(
+                name for element in elements for name in _assignment_names(element)
+            )
+        case ast.Starred(value=value):
+            return _assignment_names(value)
+        case _:
+            return ()
+
+
+class _ModuleAssignmentVisitor(ast.NodeVisitor):
+    """Collect configured assignments made in module scope, including branches."""
+
+    def __init__(self, forbidden_assignments: tuple[str, ...]) -> None:
+        self._forbidden_assignments = frozenset(forbidden_assignments)
+        self._scope_depth = 0
+        self.assignments: list[tuple[str, int]] = []
+
+    def _record(self, target: ast.expr, line: int) -> None:
+        for name in _assignment_names(target):
+            if name in self._forbidden_assignments:
+                self.assignments.append((name, line))
+
+    def _visit_nested_scope(self, node: ast.AST) -> None:
+        self._scope_depth += 1
+        try:
+            self.generic_visit(node)
+        finally:
+            self._scope_depth -= 1
+
+    def visit_Assign(self, node: ast.Assign) -> None:
+        if self._scope_depth == 0:
+            for target in node.targets:
+                self._record(target, node.lineno)
+        self.generic_visit(node)
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
+        if self._scope_depth == 0:
+            self._record(node.target, node.lineno)
+        self.generic_visit(node)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        self._visit_nested_scope(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        self._visit_nested_scope(node)
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        self._visit_nested_scope(node)
+
+    def visit_Lambda(self, node: ast.Lambda) -> None:
+        self._visit_nested_scope(node)
+
+
 def _inspect_source(rule: ModuleRoleRule, source: str) -> list[Finding]:
     try:
         tree = ast.parse(source, filename=rule.path)
@@ -136,6 +194,18 @@ def _inspect_source(rule: ModuleRoleRule, source: str) -> list[Finding]:
                     )
             case _:
                 continue
+
+    assignment_visitor = _ModuleAssignmentVisitor(rule.forbidden_module_assignments)
+    assignment_visitor.visit(tree)
+    for name, line in assignment_visitor.assignments:
+        findings.append(
+            _finding(
+                rule,
+                "module-role.forbidden-assignment",
+                line,
+                f"must not assign module-level name '{name}'",
+            )
+        )
     return findings
 
 
