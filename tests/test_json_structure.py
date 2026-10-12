@@ -2,8 +2,12 @@
 
 from pathlib import Path
 
+import pytest
+
 from alphus.config import SourceScanPolicy
 from alphus.json_structure import (
+    DECODER_MODULES,
+    JS_DECODERS,
     check_json_structure,
     js_json_findings,
     python_json_findings,
@@ -22,6 +26,7 @@ def test_python_import_aliases_and_from_imports_are_reported() -> None:
         (3, "raw JSON decode; validate into a named model"),
         (4, "raw JSON decode; validate into a named model"),
     ]
+    assert python_json_findings(source)[0].line == 3
 
 
 def test_model_validate_json_is_clean() -> None:
@@ -87,6 +92,30 @@ def test_scan_uses_configured_extensions_and_exclusions(tmp_path: Path) -> None:
         ("src/client.mjs", 1),
         ("src/service.py", 2),
     ]
+
+
+def test_source_scanner_extensions_are_consumer_configurable(tmp_path: Path) -> None:
+    relative = Path("src/view.vue")
+    path = tmp_path / relative
+    path.parent.mkdir(parents=True)
+    path.write_text("const value = JSON.parse(text);\n", encoding="utf-8")
+    policy = SourceScanPolicy(extensions=[".vue"], exclude=[])
+
+    findings = check_json_structure(tmp_path, [relative], policy)
+
+    assert [(finding.path, finding.line) for finding in findings] == [
+        ("src/view.vue", 1)
+    ]
+    with pytest.raises(ValueError, match="lowercase suffixes"):
+        SourceScanPolicy(extensions=[".VUE"], exclude=[])
+
+
+def test_decoder_tables_are_immutable() -> None:
+    assert isinstance(DECODER_MODULES, frozenset)
+    with pytest.raises(AttributeError):
+        DECODER_MODULES.add("custom_json")  # type: ignore[attr-defined]
+    with pytest.raises(TypeError):
+        JS_DECODERS["custom decoder"] = __import__("re").compile("custom")  # type: ignore[index]
 
 
 def test_check_reads_utf8_bom_source(tmp_path: Path) -> None:

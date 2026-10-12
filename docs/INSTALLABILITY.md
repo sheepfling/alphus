@@ -2,14 +2,12 @@
 
 ## Candidate package
 
-The candidate is `sheepfling/alphus`, branch `feature/initial-work`, at source
-revision `35b2924da7a689d0f9b3986b8306a5ea479295f1` (tree
-`0fac805351d7866aa39b8da6980668b62c547ef5`). The package declares version
-`0.1.0`, Python `>=3.11`, the `alphus` console command, and `py.typed`. The
-published extraction branch `feature/initial-work` is five commits ahead of
-`main` at `289b1072202f75200df709384f22de81e9b13db3`. The review branch adds
-the consumer/readiness guide and a Python 3.12 proof correction on top of the
-extracted package.
+The candidate is `sheepfling/alphus`, under review in draft PR #1 on
+`codex/alphus-quality-closure`. The PR currently points at
+`05f468b2cee5245ced189e0eaf899a83c0bd2557`; the closure changes are recorded
+in the review-candidate snapshot below. The package declares version `0.1.0`,
+Python `>=3.11`, the `alphus` console command, and `py.typed`. The earlier 3.11
+and 3.12 proofs document source revisions tested before this closure work.
 
 ## Python 3.11 wheel and runtime proof
 
@@ -65,17 +63,38 @@ failure and its resolution, rather than treating the first attempt as a
 remaining package blocker. The proof does not expand mdutils-stubs' separate
 Python 3.11–3.14 runtime or 3.10–3.14 typing coverage.
 
+## Review closure snapshot (2026-10-12)
+
+Built and installed the closure candidate wheel on Python 3.11.16 with
+`--no-deps`. Its SHA-256 is
+`ca891d2853deb1bd69883ea0157cde5a146d926856c49bbf2c7c0a1040dec977`. The
+installed wheel loaded the repository policy from a text stream, loaded the
+consumer policy with all 12 configured steps, scanned a custom `.vue` source
+suffix, and returned a named module-path result and a module-role finding.
+The dependency-independent test set passed 90/90 against the installed wheel;
+Ruff passed for `src` and `tests`.
+
+The full installed-wheel self and consumer command profiles could not be
+verified in this environment. Typer and Rich are not installed, and a local
+attempt to install the declared versions failed because `pypi.org` did not
+resolve. Five test modules that import the CLI therefore could not be
+collected; the Python 3.12 interpreter also has none of the project's runtime
+or test dependencies. The configured Pyright environment lacks these
+dependencies as well, so its full strict check did not produce usable results.
+The complete 139-test self profile and positive and expected-negative consumer
+profiles remain evidenced by the earlier source revisions above, not by this
+closure candidate.
+
 ## Distribution status
 
-These proofs establish local wheel build and installation with dependencies
-resolved from the approved official PyPI route. They do not establish a clean
-install from a public Alphus package index or from a public Git URL. Prior
-registry checks found no PyPI project or GitHub release. At that lookup there
-was no PR; this review branch is being submitted as a draft PR that includes
-the extracted package history plus the closure commit. A draft PR is not a
-release. The local tag `quality-gate/module-role-assignments` is a development
-tag. No publish or release action was taken.
+The earlier proofs establish local wheel builds and installations for their
+source revisions, with dependencies resolved from the approved official PyPI
+route. They do not establish a clean install from a public Alphus package
+index or from a public Git URL. Prior registry checks found no PyPI project or
+GitHub release. Draft PR #1 is review only and is not a release. The local tag
+`quality-gate/module-role-assignments` is a development tag. No publish or
+release action was taken.
 
-For adoption, merge the feature branch, choose the distribution channel, and
+For adoption, merge the PR, choose the distribution channel, and
 verify a clean install through that channel. Keep consumer pins on immutable
 commits until a supported distribution path is selected and verified.

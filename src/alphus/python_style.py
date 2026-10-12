@@ -6,6 +6,7 @@ import ast
 from collections.abc import Sequence
 from collections.abc import Set as AbstractSet
 from pathlib import Path
+from typing import TypedDict
 
 from alphus.config import PythonStylePolicy
 from alphus.inventory import matches_path
@@ -179,6 +180,23 @@ def has_abstract_pydantic_collection(node: ast.expr, names: AbstractSet[str]) ->
     return isinstance(node, (ast.Name, ast.Attribute)) and type_name(node) in names
 
 
+class StyleFindings(TypedDict):
+    """Named Python-style finding categories with their source line numbers."""
+
+    bare_containers: list[int]
+    bare_tuples: list[int]
+    concrete_inputs: list[int]
+    local_imports: list[int]
+    opaque_mappings: list[int]
+    unslotted_dataclasses: list[int]
+    quoted_types: list[int]
+    type_checking_imports: list[int]
+    os_path: list[int]
+    main_module_imports: list[int]
+    legacy_pydantic_fields: list[int]
+    pydantic_collection_contracts: list[int]
+
+
 def has_bare_container(
     node: ast.expr, names: AbstractSet[str], modules: AbstractSet[str]
 ) -> bool:
@@ -243,7 +261,7 @@ class StyleVisitor(ast.NodeVisitor):
         source: str = "",
         boundary_file: bool = False,
     ) -> None:
-        self.findings: dict[str, list[int]] = {
+        self.findings: StyleFindings = {
             "bare_containers": [],
             "bare_tuples": [],
             "concrete_inputs": [],
@@ -579,9 +597,9 @@ class StyleVisitor(ast.NodeVisitor):
 
 def findings_for(
     root: Path, paths: Sequence[Path], policy: PythonStylePolicy
-) -> dict[str, dict[str, list[int]]]:
+) -> dict[str, StyleFindings]:
     """Parse selected Python source files, failing on syntax errors."""
-    findings: dict[str, dict[str, list[int]]] = {}
+    findings: dict[str, StyleFindings] = {}
     checkout = root.resolve(strict=True)
     for relative in paths:
         if relative.suffix.lower() not in policy.extensions or any(

@@ -76,8 +76,8 @@ See the [package architecture](docs/ARCHITECTURE.md) for the reusable
 checker, policy, and orchestration boundaries. The
 [consumer profile guide](docs/CONSUMER-PROFILES.md) includes a coordinated
 mdrepo, rumdl, and Python-tool example. The
-[TITAN lesson ledger](docs/TITAN-LESSON-LEDGER.md) separates reusable checks,
-finding IDs, configured instances, and remediation milestones. The
+[extension and diagnostics proposal](docs/EXTENSIBILITY.md) records a staged
+design for categories, shared findings, and future third-party rules. The
 [installability report](docs/INSTALLABILITY.md) records the current wheel,
 Python-version, and distribution evidence.
 
@@ -193,5 +193,7 @@ inspection_exclude = []
 ```
 
 Configuration is validated before scanning. Unknown fields, unsafe file
-patterns, invalid language suffixes, and invalid rule settings fail early.
-Policy collections are immutable after loading.
+patterns, malformed source suffixes, and invalid rule settings fail early.
+Source suffixes are consumer-configurable; Python AST rules remain restricted
+to `.py`, while the source text heuristics use JavaScript-compatible syntax on
+other configured extensions. Policy collections are immutable after loading.

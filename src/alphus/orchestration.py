@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import subprocess
 import sys
@@ -21,6 +20,7 @@ from alphus.config import (
     RuleRunStep,
 )
 from alphus.inventory import candidate_files
+from alphus.platform_utils import is_windows
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,7 +83,7 @@ def _arguments(
 
 def _windows_shell_required(arguments: Sequence[str]) -> bool:
     """Allow Windows batch launchers such as npm.cmd without shell snippets."""
-    if os.name != "nt":
+    if not is_windows():
         return False
     executable = shutil.which(arguments[0])
     return Path(executable or arguments[0]).suffix.casefold() in {".cmd", ".bat"}

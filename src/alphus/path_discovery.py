@@ -4,42 +4,48 @@ from __future__ import annotations
 
 import ast
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from collections.abc import Set as AbstractSet
 from pathlib import Path
+from re import Pattern
+from types import MappingProxyType
 
 from alphus.config import PathDiscoveryPolicy
-from alphus.findings import Finding
+from alphus.findings import Finding, SourceFinding
 from alphus.inventory import matches_path
 
-JS_PATTERNS = {
-    "module URL used as an implicit path root": re.compile(
-        r"\b(?:path\.)?dirname\s*\(\s*fileURLToPath\s*\(\s*import\.meta\.url\s*\)\s*\)"
-    ),
-    "module directory used as an implicit path root": re.compile(
-        r"\bimport\.meta\.(?:dirname|filename)\b"
-    ),
-    "current working directory used as an implicit path root": re.compile(
-        r"\b(?:process\.cwd|path\.resolve)\s*\(\s*\)"
-    ),
-    "Git checkout discovery used as an implicit path root": re.compile(
-        r"(?:--show-toplevel|show-toplevel)"
-    ),
-}
-JS_INSPECTION_PATTERNS = {
-    "slash prefix test; parse the declared path flavor": re.compile(
-        r"\.startsWith\s*\(\s*['\"](?:/|\\\\)"
-    ),
-    "URL prefix test; parse with URL": re.compile(
-        r"\.startsWith\s*\(\s*['\"]https?://"
-    ),
-    "URL scheme substring test; parse with URL": re.compile(
-        r"\.includes\s*\(\s*['\"]://['\"]\s*\)"
-    ),
-    "separator rewrite; parse the declared path flavor": re.compile(
-        r"\.replace(?:All)?\s*\(\s*['\"]\\\\['\"]\s*,\s*['\"]/['\"]"
-    ),
-}
+JS_PATTERNS: Mapping[str, Pattern[str]] = MappingProxyType(
+    {
+        "module URL used as an implicit path root": re.compile(
+            r"\b(?:path\.)?dirname\s*\(\s*fileURLToPath\s*\(\s*import\.meta\.url\s*\)\s*\)"
+        ),
+        "module directory used as an implicit path root": re.compile(
+            r"\bimport\.meta\.(?:dirname|filename)\b"
+        ),
+        "current working directory used as an implicit path root": re.compile(
+            r"\b(?:process\.cwd|path\.resolve)\s*\(\s*\)"
+        ),
+        "Git checkout discovery used as an implicit path root": re.compile(
+            r"(?:--show-toplevel|show-toplevel)"
+        ),
+    }
+)
+JS_INSPECTION_PATTERNS: Mapping[str, Pattern[str]] = MappingProxyType(
+    {
+        "slash prefix test; parse the declared path flavor": re.compile(
+            r"\.startsWith\s*\(\s*['\"](?:/|\\\\)"
+        ),
+        "URL prefix test; parse with URL": re.compile(
+            r"\.startsWith\s*\(\s*['\"]https?://"
+        ),
+        "URL scheme substring test; parse with URL": re.compile(
+            r"\.includes\s*\(\s*['\"]://['\"]\s*\)"
+        ),
+        "separator rewrite; parse the declared path flavor": re.compile(
+            r"\.replace(?:All)?\s*\(\s*['\"]\\\\['\"]\s*,\s*['\"]/['\"]"
+        ),
+    }
+)
 SYS_PATH_MUTATORS = {
     "append",
     "clear",
@@ -183,10 +189,10 @@ def _sys_executable_reference(node: ast.AST) -> bool:
             return False
 
 
-def python_path_findings(source: str) -> list[tuple[int, str]]:
+def python_path_findings(source: str) -> list[SourceFinding]:
     """Locate implicit roots and sys.path edits in Python source."""
     tree = ast.parse(source)
-    findings: set[tuple[int, str]] = set()
+    findings: set[SourceFinding] = set()
     system_names, path_names = _sys_path_names(tree)
     for node in ast.walk(tree):
         match node:
@@ -195,13 +201,17 @@ def python_path_findings(source: str) -> list[tuple[int, str]]:
                 slice=ast.Constant(value=int() as level),
             ) if level >= 1 and has_source_file_reference(value):
                 findings.add(
-                    (node.lineno, "module __file__ used to infer a parent root")
+                    SourceFinding(
+                        node.lineno, "module __file__ used to infer a parent root"
+                    )
                 )
             case ast.Attribute(
                 attr="parent", value=ast.Attribute(attr="parent") as value
             ) if has_source_file_reference(value):
                 findings.add(
-                    (node.lineno, "module __file__ used to infer a parent root")
+                    SourceFinding(
+                        node.lineno, "module __file__ used to infer a parent root"
+                    )
                 )
             case _:
                 pass
@@ -213,7 +223,10 @@ def python_path_findings(source: str) -> list[tuple[int, str]]:
                         and _path_reference(value, system_names, path_names)
                     ):
                         findings.add(
-                            (call.lineno, "sys.path mutated for local module discovery")
+                            SourceFinding(
+                                call.lineno,
+                                "sys.path mutated for local module discovery",
+                            )
                         )
                     case _:
                         pass
@@ -236,7 +249,7 @@ def python_path_findings(source: str) -> list[tuple[int, str]]:
                     "git",
                 } and any(_git_root_argument(child) for child in ast.walk(call)):
                     findings.add(
-                        (
+                        SourceFinding(
                             call.lineno,
                             "Git checkout discovery used as an implicit path root",
                         )
@@ -244,11 +257,17 @@ def python_path_findings(source: str) -> list[tuple[int, str]]:
                 if name in {"Path", "PurePath", "PosixPath", "WindowsPath"} and any(
                     _sys_executable_reference(child) for child in ast.walk(call)
                 ):
-                    findings.add((call.lineno, "sys.executable used to derive a path"))
+                    findings.add(
+                        SourceFinding(
+                            call.lineno, "sys.executable used to derive a path"
+                        )
+                    )
                 match function:
                     case ast.Attribute(attr="cwd", value=ast.Name(id="Path")):
                         findings.add(
-                            (call.lineno, "Path.cwd() used as an implicit path root")
+                            SourceFinding(
+                                call.lineno, "Path.cwd() used as an implicit path root"
+                            )
                         )
                     case ast.Attribute(attr=method, value=ast.Name(id="os")) if (
                         method
@@ -258,7 +277,9 @@ def python_path_findings(source: str) -> list[tuple[int, str]]:
                         }
                     ):
                         findings.add(
-                            (call.lineno, "os.getcwd() used as an implicit path root")
+                            SourceFinding(
+                                call.lineno, "os.getcwd() used as an implicit path root"
+                            )
                         )
                     case _:
                         pass
@@ -270,45 +291,53 @@ def python_path_findings(source: str) -> list[tuple[int, str]]:
                 for target in targets
             ):
                 findings.add(
-                    (node.lineno, "sys.path mutated for local module discovery")
+                    SourceFinding(
+                        node.lineno, "sys.path mutated for local module discovery"
+                    )
                 )
             case ast.AnnAssign(target=target) if _path_assignment_target(
                 target, system_names, path_names
             ):
                 findings.add(
-                    (node.lineno, "sys.path mutated for local module discovery")
+                    SourceFinding(
+                        node.lineno, "sys.path mutated for local module discovery"
+                    )
                 )
             case ast.AugAssign(target=target) if _augmented_path_target(
                 target, system_names, path_names
             ):
                 findings.add(
-                    (node.lineno, "sys.path mutated for local module discovery")
+                    SourceFinding(
+                        node.lineno, "sys.path mutated for local module discovery"
+                    )
                 )
             case ast.Delete(targets=targets) if any(
                 _path_assignment_target(target, system_names, path_names)
                 for target in targets
             ):
                 findings.add(
-                    (node.lineno, "sys.path mutated for local module discovery")
+                    SourceFinding(
+                        node.lineno, "sys.path mutated for local module discovery"
+                    )
                 )
             case _:
                 pass
     return sorted(findings)
 
 
-def js_path_findings(source: str) -> list[tuple[int, str]]:
+def js_path_findings(source: str) -> list[SourceFinding]:
     """Locate ESM module-file, cwd, and Git root discovery in JS source."""
-    findings: set[tuple[int, str]] = set()
+    findings: set[SourceFinding] = set()
     for label, pattern in JS_PATTERNS.items():
         for match in pattern.finditer(source):
-            findings.add((source.count("\n", 0, match.start()) + 1, label))
+            findings.add(SourceFinding(source.count("\n", 0, match.start()) + 1, label))
     return sorted(findings)
 
 
-def python_inspection_findings(source: str) -> list[tuple[int, str]]:
+def python_inspection_findings(source: str) -> list[SourceFinding]:
     """Find path and URL interpretation through raw string operations."""
     tree = ast.parse(source)
-    findings: set[tuple[int, str]] = set()
+    findings: set[SourceFinding] = set()
     for node in ast.walk(tree):
         match node:
             case ast.Call(func=ast.Attribute(attr=method), args=arguments) as call:
@@ -323,11 +352,13 @@ def python_inspection_findings(source: str) -> list[tuple[int, str]]:
                 if method in {"startswith", "endswith"}:
                     if any(_URL_SCHEME_SEPARATOR in value for value in values):
                         findings.add(
-                            (call.lineno, "URL prefix test; parse with urlsplit")
+                            SourceFinding(
+                                call.lineno, "URL prefix test; parse with urlsplit"
+                            )
                         )
                     elif any("/" in value or "\\" in value for value in values):
                         findings.add(
-                            (
+                            SourceFinding(
                                 call.lineno,
                                 "slash prefix test; parse the declared path flavor",
                             )
@@ -340,7 +371,7 @@ def python_inspection_findings(source: str) -> list[tuple[int, str]]:
                             *_rest,
                         ] if {first, second} == {"/", "\\"}:
                             findings.add(
-                                (
+                                SourceFinding(
                                     call.lineno,
                                     "separator rewrite; parse the declared path flavor",
                                 )
@@ -353,7 +384,7 @@ def python_inspection_findings(source: str) -> list[tuple[int, str]]:
                 ) as comparison
             ) if separator == _URL_SCHEME_SEPARATOR:
                 findings.add(
-                    (
+                    SourceFinding(
                         comparison.lineno,
                         "URL scheme substring test; parse with urlsplit",
                     )
@@ -363,12 +394,14 @@ def python_inspection_findings(source: str) -> list[tuple[int, str]]:
     return sorted(findings)
 
 
-def js_inspection_findings(source: str) -> list[tuple[int, str]]:
+def js_inspection_findings(source: str) -> list[SourceFinding]:
     """Find obvious JavaScript path and URL string heuristics."""
-    findings: set[tuple[int, str]] = set()
+    findings: set[SourceFinding] = set()
     for reason, pattern in JS_INSPECTION_PATTERNS.items():
         for match in pattern.finditer(source):
-            findings.add((source.count("\n", 0, match.start()) + 1, reason))
+            findings.add(
+                SourceFinding(source.count("\n", 0, match.start()) + 1, reason)
+            )
     return sorted(findings)
 
 
@@ -403,9 +436,9 @@ def check_path_discovery(
             Finding(
                 rule_id="paths.implicit-discovery",
                 path=name,
-                line=line,
-                message=message,
+                line=source_finding.line,
+                message=source_finding.message,
             )
-            for line, message in source_findings
+            for source_finding in source_findings
         )
     return findings

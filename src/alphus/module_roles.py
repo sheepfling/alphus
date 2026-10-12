@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 from fnmatch import fnmatchcase
 from pathlib import Path, PurePosixPath
+from typing import NamedTuple
 
 from alphus.config import ModuleRolePolicy, ModuleRoleRule
 from alphus.findings import Finding
@@ -209,7 +210,14 @@ def _inspect_source(rule: ModuleRoleRule, source: str) -> list[Finding]:
     return findings
 
 
-def _module_path(root: Path, rule: ModuleRoleRule) -> tuple[Path | None, str | None]:
+class ModulePathResult(NamedTuple):
+    """Resolved repository module path, or the reason it could not be read."""
+
+    path: Path | None
+    error: str | None
+
+
+def _module_path(root: Path, rule: ModuleRoleRule) -> ModulePathResult:
     checkout = root.resolve(strict=True)
     relative = Path(*PurePosixPath(rule.path).parts)
     candidate = checkout / relative
@@ -217,30 +225,35 @@ def _module_path(root: Path, rule: ModuleRoleRule) -> tuple[Path | None, str | N
     for part in relative.parts:
         current = current / part
         if current.is_symlink():
-            return None, "configured module path contains a symlink"
+            return ModulePathResult(None, "configured module path contains a symlink")
     try:
         resolved = candidate.resolve(strict=True)
     except OSError:
-        return None, "configured module file does not exist"
+        return ModulePathResult(None, "configured module file does not exist")
     if not resolved.is_relative_to(checkout) or not resolved.is_file():
-        return None, "configured module path is outside the repository or not a file"
-    return resolved, None
+        return ModulePathResult(
+            None, "configured module path is outside the repository or not a file"
+        )
+    return ModulePathResult(resolved, None)
 
 
 def check_module_roles(root: Path, policy: ModuleRolePolicy) -> list[Finding]:
     """Check configured modules for imports, calls, and definitions outside their role."""
     findings: list[Finding] = []
     for rule in policy.modules:
-        source_path, path_error = _module_path(root, rule)
-        if source_path is None:
+        module_path = _module_path(root, rule)
+        if module_path.path is None:
             findings.append(
                 _finding(
-                    rule, "module-role.path", None, path_error or "path is invalid"
+                    rule,
+                    "module-role.path",
+                    None,
+                    module_path.error or "path is invalid",
                 )
             )
             continue
         try:
-            source = source_path.read_text(encoding="utf-8")
+            source = module_path.path.read_text(encoding="utf-8")
         except (OSError, UnicodeError) as error:
             findings.append(
                 _finding(

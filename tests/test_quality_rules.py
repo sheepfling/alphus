@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from io import StringIO
 from pathlib import Path
 
 import pytest
@@ -16,6 +17,7 @@ from alphus.config import (
     QualityGateConfig,
     SharedUtilitiesPolicy,
     load_config,
+    load_config_stream,
 )
 from alphus.inventory import candidate_files, matches_path, tracked_files
 from alphus.rules import check_file_size, check_line_length
@@ -119,6 +121,16 @@ def test_config_rejects_unknown_policy_fields(tmp_path: Path) -> None:
 
     with pytest.raises(ValidationError):
         load_config(config_path)
+
+
+def test_config_can_be_loaded_from_a_caller_owned_text_stream() -> None:
+    stream = StringIO(POLICY)
+
+    config = load_config_stream(stream)
+
+    assert config.schema_version == 1
+    assert not stream.closed
+    assert stream.tell() == len(POLICY)
 
 
 def test_older_policy_configs_remain_valid_without_new_scanner_sections(

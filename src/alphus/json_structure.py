@@ -4,23 +4,27 @@ from __future__ import annotations
 
 import ast
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from pathlib import Path
+from re import Pattern
+from types import MappingProxyType
 
 from alphus.config import SourceScanPolicy
-from alphus.findings import Finding
+from alphus.findings import Finding, SourceFinding
 from alphus.inventory import matches_path
 
-DECODER_MODULES = {"json", "orjson", "ujson", "rapidjson"}
-JS_DECODERS = {
-    "JSON.parse returns an unvalidated value": re.compile(r"\bJSON\.parse\s*\("),
-    "response.json() returns an unvalidated value": re.compile(
-        r"(?:\b(?:response|res|[A-Za-z_$][\w$]*Response)|\))\.json\s*\("
-    ),
-}
+DECODER_MODULES: frozenset[str] = frozenset({"json", "orjson", "ujson", "rapidjson"})
+JS_DECODERS: Mapping[str, Pattern[str]] = MappingProxyType(
+    {
+        "JSON.parse returns an unvalidated value": re.compile(r"\bJSON\.parse\s*\("),
+        "response.json() returns an unvalidated value": re.compile(
+            r"(?:\b(?:response|res|[A-Za-z_$][\w$]*Response)|\))\.json\s*\("
+        ),
+    }
+)
 
 
-def python_json_findings(source: str) -> list[tuple[int, str]]:
+def python_json_findings(source: str) -> list[SourceFinding]:
     """Locate standard and alternate Python JSON decoder calls."""
     tree = ast.parse(source)
     modules: set[str] = set()
@@ -43,30 +47,36 @@ def python_json_findings(source: str) -> list[tuple[int, str]]:
                 )
             case _:
                 pass
-    findings: set[tuple[int, str]] = set()
+    findings: set[SourceFinding] = set()
     for node in ast.walk(tree):
         match node:
             case ast.Call(func=ast.Name(id=name)) if name in functions:
                 findings.add(
-                    (node.lineno, "raw JSON decode; validate into a named model")
+                    SourceFinding(
+                        node.lineno, "raw JSON decode; validate into a named model"
+                    )
                 )
             case ast.Call(func=ast.Attribute(attr=attr, value=ast.Name(id=name))) if (
                 attr in {"load", "loads"} and name in modules
             ):
                 findings.add(
-                    (node.lineno, "raw JSON decode; validate into a named model")
+                    SourceFinding(
+                        node.lineno, "raw JSON decode; validate into a named model"
+                    )
                 )
             case _:
                 pass
     return sorted(findings)
 
 
-def js_json_findings(source: str) -> list[tuple[int, str]]:
+def js_json_findings(source: str) -> list[SourceFinding]:
     """Locate common JavaScript JSON decoding calls."""
-    findings: set[tuple[int, str]] = set()
+    findings: set[SourceFinding] = set()
     for reason, pattern in JS_DECODERS.items():
         for match in pattern.finditer(source):
-            findings.add((source.count("\n", 0, match.start()) + 1, reason))
+            findings.add(
+                SourceFinding(source.count("\n", 0, match.start()) + 1, reason)
+            )
     return sorted(findings)
 
 
@@ -96,9 +106,9 @@ def check_json_structure(
             Finding(
                 rule_id="data.json-structure",
                 path=name,
-                line=line,
-                message=message,
+                line=source_finding.line,
+                message=source_finding.message,
             )
-            for line, message in source_findings
+            for source_finding in source_findings
         )
     return findings

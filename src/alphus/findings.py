@@ -3,6 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import NamedTuple
+
+
+class SourceFinding(NamedTuple):
+    """One source-level location and explanation before repository context is added."""
+
+    line: int
+    message: str
 
 
 @dataclass(frozen=True, slots=True)

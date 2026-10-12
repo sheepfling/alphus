@@ -2,8 +2,12 @@
 
 from pathlib import Path
 
+import pytest
+
 from alphus.config import PathDiscoveryPolicy
 from alphus.path_discovery import (
+    JS_INSPECTION_PATTERNS,
+    JS_PATTERNS,
     check_path_discovery,
     js_inspection_findings,
     js_path_findings,
@@ -31,6 +35,29 @@ def test_selected_parent_walk_is_flagged(tmp_path: Path) -> None:
     ]
 
 
+def test_inspection_scanner_extensions_are_consumer_configurable(
+    tmp_path: Path,
+) -> None:
+    relative = Path("src/view.vue")
+    path = tmp_path / relative
+    path.parent.mkdir(parents=True)
+    path.write_text("const root = process.cwd();\n", encoding="utf-8")
+    policy = PathDiscoveryPolicy(extensions=[".vue"], exclude=[], inspection_exclude=[])
+
+    findings = check_path_discovery(tmp_path, [relative], policy)
+
+    assert [(finding.path, finding.line) for finding in findings] == [
+        ("src/view.vue", 1)
+    ]
+
+
+def test_path_inspection_patterns_are_read_only_mappings() -> None:
+    with pytest.raises(TypeError):
+        JS_PATTERNS["new pattern"] = None  # type: ignore[index]
+    with pytest.raises(TypeError):
+        JS_INSPECTION_PATTERNS["new pattern"] = None  # type: ignore[index]
+
+
 def test_cwd_and_parent_chain_are_flagged() -> None:
     """Changing the syntax does not hide implicit path roots."""
     source = (
@@ -44,6 +71,7 @@ def test_cwd_and_parent_chain_are_flagged() -> None:
         (4, "Path.cwd() used as an implicit path root"),
         (5, "os.getcwd() used as an implicit path root"),
     ]
+    assert python_path_findings(source)[0].line == 3
 
 
 def test_sys_path_mutations_are_flagged_through_import_and_assignment_aliases() -> None:

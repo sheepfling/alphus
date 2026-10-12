@@ -32,6 +32,9 @@ repository-relative arguments. Empty scopes pass without starting the command.
 Each checker receives an explicit root, validated rule policy, and selected
 files. It returns typed findings or a typed report; it does not print, start
 processes, or discover a checkout from the current directory or module path.
+Policy models are grouped by source scanning, architecture, repository
+metadata, and orchestration in separate modules. `alphus.config` re-exports
+those models as the compatibility import surface.
 Module-role policies can name forbidden module-level assignments separately
 from functions and classes. The assignment scanner follows module-level
 control-flow branches and stops at function, class, and lambda scopes, so a
@@ -47,6 +50,10 @@ mdrepo, Markdown formatting to rumdl, and Python lint, typing, and tests to
 their native tools, see [consumer quality profiles](CONSUMER-PROFILES.md).
 This keeps upstream rule ownership intact while Alphus aggregates profile
 status.
+
+The [extension and diagnostics proposal](EXTENSIBILITY.md) records how
+categories, findings, and future third-party hooks could evolve while current
+selectors remain stable.
 
 Profiles execute only when explicitly selected with `--run`. Review command
 steps before running a policy from a repository that is not trusted, because

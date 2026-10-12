@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from collections.abc import Set as AbstractSet
 from pathlib import Path, PurePosixPath
 
 from packaging.requirements import InvalidRequirement, Requirement
@@ -28,7 +29,7 @@ def _include_path(root: Path, source: str, value: str) -> str | None:
 
 
 def _load_requirements(
-    root: Path, relative: str, active: frozenset[str] = frozenset()
+    root: Path, relative: str, active: AbstractSet[str] = frozenset()
 ) -> tuple[dict[str, Requirement], list[Finding]]:
     if relative in active:
         return {}, [

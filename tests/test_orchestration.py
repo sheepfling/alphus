@@ -17,7 +17,7 @@ from alphus.config import (
     OrchestrationProfile,
     RuleRunStep,
 )
-from alphus.orchestration import run_orchestration
+from alphus.orchestration import _windows_shell_required, run_orchestration
 
 
 def _policy() -> OrchestrationPolicy:
@@ -42,6 +42,19 @@ def _policy() -> OrchestrationPolicy:
         ),
         default_profile="check",
     )
+
+
+def test_windows_batch_detection_uses_the_shared_platform_probe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from alphus import orchestration
+
+    monkeypatch.setattr(orchestration, "is_windows", lambda: False)
+    assert not _windows_shell_required(("npm.cmd",))
+
+    monkeypatch.setattr(orchestration, "is_windows", lambda: True)
+    monkeypatch.setattr(orchestration.shutil, "which", lambda _: "npm.cmd")
+    assert _windows_shell_required(("npm.cmd",))
 
 
 def test_python_orchestrator_runs_profile_without_node_on_path(
