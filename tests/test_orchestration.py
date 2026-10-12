@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from alphus import orchestration
 from alphus.config import (
     CommandRunStep,
     FileInventoryPolicy,
@@ -47,8 +48,6 @@ def _policy() -> OrchestrationPolicy:
 def test_windows_batch_detection_uses_the_shared_platform_probe(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from alphus import orchestration
-
     monkeypatch.setattr(orchestration, "is_windows", lambda: False)
     assert not _windows_shell_required(("npm.cmd",))
 

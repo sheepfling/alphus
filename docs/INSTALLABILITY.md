@@ -3,11 +3,10 @@
 ## Candidate package
 
 The candidate is `sheepfling/alphus`, under review in draft PR #1 on
-`codex/alphus-quality-closure`. The PR currently points at
-`05f468b2cee5245ced189e0eaf899a83c0bd2557`; the closure changes are recorded
-in the review-candidate snapshot below. The package declares version `0.1.0`,
-Python `>=3.11`, the `alphus` console command, and `py.typed`. The earlier 3.11
-and 3.12 proofs document source revisions tested before this closure work.
+`codex/alphus-quality-closure`; the closure changes are recorded in the
+review-candidate snapshot below. The package declares version `0.1.0`, Python
+`>=3.11`, the `alphus` console command, and `py.typed`. The earlier 3.11 and
+3.12 proofs document source revisions tested before this closure work.
 
 ## Python 3.11 wheel and runtime proof
 
@@ -65,25 +64,25 @@ Python 3.11–3.14 runtime or 3.10–3.14 typing coverage.
 
 ## Review closure snapshot (2026-10-12)
 
-Built and installed the closure candidate wheel on Python 3.11.16 with
-`--no-deps`. Its SHA-256 is
-`ca891d2853deb1bd69883ea0157cde5a146d926856c49bbf2c7c0a1040dec977`. The
-installed wheel loaded the repository policy from a text stream, loaded the
-consumer policy with all 12 configured steps, scanned a custom `.vue` source
-suffix, and returned a named module-path result and a module-role finding.
-The dependency-independent test set passed 90/90 against the installed wheel;
-Ruff passed for `src` and `tests`.
+Built `alphus-0.1.0-py3-none-any.whl` from this closure candidate with Python
+3.11.16 in `/tmp/alphus-python311-venv`. The SHA-256 is
+`2d413e758a7c91a5891722ce290ef34fe78c0e310aeddc0751f21b846b76ef4b`. The
+same pure-Python wheel was installed with `--no-deps` into fresh target
+directories and imported from those directories under Python 3.11.16 and
+3.12.14. The 3.12 environment was
+`/tmp/alphus-clean-deps-20261010`; it already contained the runtime and test
+dependencies. Its build backend did not include setuptools, so the universal
+wheel was built once under 3.11 and the exact artifact was used for both
+installed-wheel proofs.
 
-The full installed-wheel self and consumer command profiles could not be
-verified in this environment. Typer and Rich are not installed, and a local
-attempt to install the declared versions failed because `pypi.org` did not
-resolve. Five test modules that import the CLI therefore could not be
-collected; the Python 3.12 interpreter also has none of the project's runtime
-or test dependencies. The configured Pyright environment lacks these
-dependencies as well, so its full strict check did not produce usable results.
-The complete 139-test self profile and positive and expected-negative consumer
-profiles remain evidenced by the earlier source revisions above, not by this
-closure candidate.
+The installed-wheel self-check profile passed 10/10 steps on each Python
+version, including 145 package tests. A clean copy of the consumer fixture,
+with its intentionally broken Markdown link and formatting corrected, passed
+all 12 profile steps on both versions, including mdrepo, rumdl, Ruff, Pyright,
+and pytest. The original broken-docs fixture was left untouched; its expected
+negative profile exited 1 with `MDR004`, `MDR101`, and Markdown-format findings,
+while the remaining checks ran (10/12 steps passed) on both versions. The
+fresh positive fixture is `/tmp/alphus-consumer-positive-ac972`.
 
 ## Distribution status
 
