@@ -7,17 +7,23 @@ plugin loader or change which checks run.
 ## Current contracts
 
 Each portable checker receives an explicit repository root, validated policy,
-and selected files. Repository-level findings use the frozen `Finding` record
-with a stable rule ID, repository-relative path, optional line, message, and
-severity. Source-level helpers may return a named line and message before the
-checker adds its rule ID and path. Native command steps keep their own output
-and exit codes; Alphus reports their execution status without converting their
-diagnostics into Alphus findings.
+and selected files. Direct rule results keep the frozen `Finding` record with
+stable rule ID, repository-relative path, optional line, message, and severity.
+Profile aggregation now adapts Alphus-owned rule results into a named
+`Diagnostic` carrying source, rule ID, path, line, message, and severity; this
+does not rewrite the direct-rule JSON contract. Source-level helpers may return
+a named line and message before the checker adds its rule ID and path. Native
+command steps keep their own output and exit codes; Alphus retains their raw
+output and reports execution status without converting command text into
+Alphus findings.
 
 TOML selects current rules and ordered profiles. It contains consumer paths,
-thresholds, and command arguments, not executable Python callbacks. Alphus
-does not currently discover third-party rule packages or expose pytest-style
-hooks.
+thresholds, and command arguments, not executable Python callbacks. The
+profile `failure_threshold` currently defaults to `error`, and a rule step may
+override the severity of its findings. These are narrow threshold controls;
+they do not add category-wide selectors or an independent enforcement-state
+model. Alphus does not currently discover third-party rule packages or expose
+pytest-style hooks.
 
 ## Proposed category model
 
@@ -40,17 +46,20 @@ owner and category before exposing category-wide switches.
 ## Proposed diagnostic contract
 
 Keep a diagnostic distinct from a rule, category, profile, and enforcement
-setting. The existing `Finding` record is the compatibility baseline: retain
-stable rule IDs and locations while individual checkers migrate. Any future
-public diagnostic contract should name its fields and preserve JSON field
-names. It should distinguish severity from remediation priority and from
-enforcement (`enforced`, `advisory`, or `disabled`).
+setting. Profile output now has an internal normalized `Diagnostic`; the
+existing `Finding` record remains the direct-rule compatibility baseline while
+individual checkers migrate. Any broader public diagnostic contract should
+preserve stable IDs, locations, and JSON field names. The current severity
+threshold is a compatibility control for failure levels, not the final
+enforcement model. A future category configuration should distinguish
+severity from remediation priority and from enforcement (`enforced`,
+`advisory`, or `disabled`).
 
-The execution result should report `passed`, `failed`, `not applicable`, and
-`not run` separately. A disabled, unselected, or inapplicable check must not
-be presented as a successful check. Category and rule overrides should resolve
-to a printed plan before execution, with existing behavior preserved unless a
-consumer explicitly changes its configuration.
+The fuller execution model should report `passed`, `failed`, `not applicable`,
+and `not run` separately. A disabled, unselected, or inapplicable check must
+not be presented as a successful check. Category and rule overrides should
+resolve to a printed plan before execution, with existing behavior preserved
+unless a consumer explicitly changes its configuration.
 
 ## Future extension hooks
 
