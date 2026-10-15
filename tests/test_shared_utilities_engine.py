@@ -128,6 +128,33 @@ def test_duplicate_helpers_ignore_names_and_docstrings_but_exclude_tests(
     ]
 
 
+def test_duplicate_helpers_find_class_methods_with_qualified_names(
+    tmp_path: Path,
+) -> None:
+    """Method duplicates retain their owning class in the report location."""
+    first = (
+        "class FirstStore:\n"
+        "    def digest(self, path):\n"
+        "        data = path.read_bytes()\n"
+        "        if not data:\n"
+        "            raise ValueError('empty')\n"
+        "        return data.hex()\n"
+    )
+    second = first.replace("FirstStore", "SecondStore").replace("digest", "encode")
+    _write(tmp_path, "src/first.py", first)
+    _write(tmp_path, "src/second.py", second)
+
+    groups = duplicate_helpers(
+        tmp_path,
+        [Path("src/first.py"), Path("src/second.py")],
+        POLICY,
+    )
+
+    assert list(groups.values()) == [
+        ["src/first.py:FirstStore.digest", "src/second.py:SecondStore.encode"]
+    ]
+
+
 def test_file_hash_scan_skips_configured_canonical_and_non_file_hashes(
     tmp_path: Path,
 ) -> None:
@@ -154,6 +181,12 @@ def test_file_hash_scan_skips_configured_canonical_and_non_file_hashes(
             "        digest.update(stream.read())\n"
             "    return digest.hexdigest()\n"
         ),
+        "src/class_method.py": (
+            "import hashlib\n"
+            "class FileHasher:\n"
+            "    def checksum(self, path):\n"
+            "        return hashlib.sha256(path.read_bytes()).hexdigest()\n"
+        ),
         "src/bytes_only.py": (
             "import hashlib\n"
             "def digest(payload):\n"
@@ -170,6 +203,7 @@ def test_file_hash_scan_skips_configured_canonical_and_non_file_hashes(
     paths = [Path(name) for name in modules]
 
     assert file_sha256_helpers(tmp_path, paths, POLICY) == [
+        "src/class_method.py:3:FileHasher.checksum",
         "src/direct.py:2:checksum",
         "src/stream.py:2:digest_file",
     ]

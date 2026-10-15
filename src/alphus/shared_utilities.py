@@ -40,14 +40,33 @@ def _selected_python_files(
     )
 
 
+def _class_method_definitions(
+    node: ast.ClassDef, prefix: str
+) -> Iterable[tuple[str, ast.FunctionDef | ast.AsyncFunctionDef]]:
+    """Yield class methods with a stable class-qualified name."""
+    for child in node.body:
+        match child:
+            case ast.FunctionDef() | ast.AsyncFunctionDef():
+                yield f"{prefix}.{child.name}", child
+            case ast.ClassDef():
+                yield from _class_method_definitions(
+                    child,
+                    f"{prefix}.{child.name}",
+                )
+            case _:
+                pass
+
+
 def _function_definitions(
     module: ast.Module,
-) -> Iterable[ast.FunctionDef | ast.AsyncFunctionDef]:
-    """Yield module-level synchronous and asynchronous function definitions."""
+) -> Iterable[tuple[str, ast.FunctionDef | ast.AsyncFunctionDef]]:
+    """Yield module functions and class methods with qualified names."""
     for node in module.body:
         match node:
             case ast.FunctionDef() | ast.AsyncFunctionDef():
-                yield node
+                yield node.name, node
+            case ast.ClassDef():
+                yield from _class_method_definitions(node, node.name)
             case _:
                 pass
 
@@ -68,7 +87,7 @@ def _without_docstring(
 def duplicate_helpers(
     root: Path, paths: Iterable[Path], policy: SharedUtilitiesPolicy
 ) -> dict[str, list[str]]:
-    """Group repeated top-level function bodies, ignoring names and docstrings."""
+    """Group repeated function and method bodies, ignoring names and docstrings."""
     candidates: dict[str, list[str]] = defaultdict(list)
     checkout = root.resolve(strict=True)
     for relative in _selected_python_files(paths, policy):
@@ -78,7 +97,7 @@ def duplicate_helpers(
         module = ast.parse(
             path.read_text(encoding="utf-8"), filename=relative.as_posix()
         )
-        for node in _function_definitions(module):
+        for qualified_name, node in _function_definitions(module):
             body = _without_docstring(node.body)
             if (
                 len(body) < policy.minimum_body_statements
@@ -91,7 +110,7 @@ def duplicate_helpers(
                     ast.Module(body=body, type_ignores=[]), include_attributes=False
                 ).encode()
             ).hexdigest()
-            candidates[fingerprint].append(f"{relative.as_posix()}:{node.name}")
+            candidates[fingerprint].append(f"{relative.as_posix()}:{qualified_name}")
     return {
         key: sorted(set(locations))
         for key, locations in candidates.items()
@@ -146,7 +165,7 @@ def file_sha256_helpers(
         module = ast.parse(
             path.read_text(encoding="utf-8-sig"), filename=relative.as_posix()
         )
-        for node in _function_definitions(module):
+        for qualified_name, node in _function_definitions(module):
             if (
                 relative.as_posix() == canonical_path
                 and node.name == canonical_function
@@ -168,7 +187,9 @@ def file_sha256_helpers(
             binary_stream = any(_is_binary_open_call(child) for child in ast.walk(node))
             updates_digest = any(_is_update_call(child) for child in ast.walk(node))
             if direct_file_hash or calls and binary_stream and updates_digest:
-                locations.append(f"{relative.as_posix()}:{node.lineno}:{node.name}")
+                locations.append(
+                    f"{relative.as_posix()}:{node.lineno}:{qualified_name}"
+                )
     return sorted(locations)
 
 
