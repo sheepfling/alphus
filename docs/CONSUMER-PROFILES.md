@@ -54,11 +54,40 @@ rumdl step uses Alphus's Git-aware file inventory, including tracked and
 non-ignored untracked Markdown files. An empty scope is a successful skipped
 step; otherwise file paths are passed as separate arguments.
 
-Human output shows each step and its exit status. `--json` writes one JSON
-summary to stdout with each step's status, exit code, and captured diagnostic
-lines; launch errors use exit code 127. The profile exits 1 when any step
-fails, and invalid policy/profile selection exits 2. Native tool output and
-exit codes are not rewritten into Alphus rule findings.
+Human output shows each step, normalized Alphus findings, and its exit status.
+`--json` writes one summary to stdout with per-step findings, raw command
+`stdout`/`stderr`, severity counts, and the configured failure threshold.
+Successful command output is retained in that result. Command output is opaque:
+Alphus does not infer warnings from words in arbitrary text. A nonzero native
+tool exit or a launch failure remains a failed step regardless of threshold.
+Invalid policy/profile selection exits 2.
+
+## Severity and triage
+
+Alphus findings use `error`, `warning`, or `info`, ordered from most to least
+severe. The profile's `failure_threshold` defaults to `error`; `warning` also
+fails on warnings, and `info` fails on every finding. A rule step may set
+`severity` to classify all of that Alphus rule's findings at one level. With
+no step override, each finding keeps its own severity.
+
+```toml
+[orchestration]
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "advisory line check"
+rule = "line-length"
+severity = "warning"
+```
+
+The threshold also applies to direct `--rule` checks when the policy defines
+an orchestration section. Direct `--report` continues to print findings and
+return success. Error-only human lines and the direct-rule JSON shape remain
+compatible; warning and info lines carry their severity. Profile JSON adds
+structured records with source, rule ID, path, line, message, and severity.
+External command text remains in the raw output fields; no unsupported native
+format is parsed into Alphus findings.
 
 ## Tool configuration
 

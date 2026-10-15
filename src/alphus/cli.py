@@ -8,12 +8,14 @@ import sys
 import tomllib
 from collections import Counter
 from collections.abc import Mapping, Sequence
+from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import asdict
+from io import StringIO
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, TypeAlias
 
 import typer
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 from rich.console import Console
 
 from alphus.architecture_graph import check_architecture_graph
@@ -21,14 +23,21 @@ from alphus.callable_registry import check_callable_registry
 from alphus.cli_policy import policy_issues as cli_policy_issues
 from alphus.config import QualityGateConfig, QualityRuleName, load_config
 from alphus.dependency_locks import check_dependency_locks
-from alphus.findings import Finding
+from alphus.findings import (
+    Diagnostic,
+    Finding,
+    Severity,
+    SeverityCounts,
+    severity_meets_threshold,
+)
 from alphus.inventory import candidate_files, tracked_files
 from alphus.json_structure import check_json_structure
 from alphus.module_roles import check_module_roles
-from alphus.orchestration import run_orchestration
+from alphus.orchestration import RuleRunResult, run_orchestration
 from alphus.output_escaping import check_output_escaping
 from alphus.package_boundaries import check_package_boundaries
 from alphus.path_discovery import check_path_discovery
+from alphus.python_style import StyleFindings
 from alphus.python_style import findings_for as python_style_findings
 from alphus.repository_layout import check_repository_layout
 from alphus.rules import check_file_size, check_line_length
@@ -38,6 +47,66 @@ from alphus.shared_utilities import SharedUtilitiesReport, check_shared_utilitie
 from alphus.version_sync import check_version_sync
 
 QualityRule = QualityRuleName
+PythonStyleRuleOutput: TypeAlias = dict[str, dict[str, list[int]]]
+
+
+class _SharedUtilitiesRuleOutput(BaseModel):
+    """Validated wire shape emitted by the shared-utilities rule."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    duplicate_groups: tuple[tuple[str, ...], ...]
+    failed: bool
+    file_hash_implementations: tuple[str, ...]
+
+
+_FINDING_RULE_OUTPUT: TypeAdapter[list[Finding]] = TypeAdapter(list[Finding])
+_STRING_RULE_OUTPUT: TypeAdapter[list[str]] = TypeAdapter(list[str])
+_PYTHON_STYLE_RULE_OUTPUT: TypeAdapter[PythonStyleRuleOutput] = TypeAdapter(
+    PythonStyleRuleOutput
+)
+_SHARED_UTILITIES_RULE_OUTPUT: TypeAdapter[_SharedUtilitiesRuleOutput] = TypeAdapter(
+    _SharedUtilitiesRuleOutput
+)
+
+
+def _findings_fail(
+    findings: Sequence[Finding], threshold: Severity, *, report: bool
+) -> bool:
+    """Apply report mode and severity threshold to structured rule findings."""
+    return not report and any(
+        severity_meets_threshold(finding.severity, threshold) for finding in findings
+    )
+
+
+def _errors_fail(count: int, threshold: Severity, *, report: bool) -> bool:
+    """Treat legacy string findings as errors until their checkers return records."""
+    return not report and count > 0 and severity_meets_threshold("error", threshold)
+
+
+def _render_finding(finding: Finding) -> None:
+    """Render a legacy finding line, marking advisory levels explicitly."""
+    location = f"{finding.path}:{finding.line}" if finding.line else finding.path
+    if finding.severity == "error":
+        _human_print(f"{location}: {finding.message}")
+        return
+    _human_print(
+        f"{finding.severity.upper()} alphus {finding.rule_id} "
+        f"{location}: {finding.message}"
+    )
+
+
+def _render_severity_totals(findings: Sequence[Finding]) -> None:
+    """Add triage totals when a rule emits advisory findings."""
+    counts = SeverityCounts.from_diagnostics(
+        finding.as_diagnostic() for finding in findings
+    )
+    if counts.warning or counts.info:
+        _human_print(
+            f"Severity totals: {counts.error} error(s), {counts.warning} warning(s), "
+            f"{counts.info} info(s)"
+        )
+
 
 app = typer.Typer(
     name="alphus",
@@ -116,43 +185,36 @@ def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
         _human_print(
             f"Line length: {len(findings)} violation(s) in {len(counts)} files"
         )
+        _render_severity_totals(findings)
         return
     if rule == "json-structure":
         for finding in findings:
-            location = (
-                f"{finding.path}:{finding.line}" if finding.line else finding.path
-            )
-            _human_print(f"{location}: {finding.message}")
+            _render_finding(finding)
         _human_print(f"JSON structure: {len(findings)} violation(s)")
+        _render_severity_totals(findings)
         return
     if rule == "output-escaping":
         for finding in findings:
-            location = (
-                f"{finding.path}:{finding.line}" if finding.line else finding.path
-            )
-            _human_print(f"{location}: {finding.message}")
+            _render_finding(finding)
         _human_print(f"Output escaping: {len(findings)} finding(s)")
+        _render_severity_totals(findings)
         return
     if rule == "path-discovery":
         for finding in findings:
-            location = (
-                f"{finding.path}:{finding.line}" if finding.line else finding.path
-            )
-            _human_print(f"{location}: {finding.message}")
+            _render_finding(finding)
         _human_print(f"Path handling: {len(findings)} violation(s)")
+        _render_severity_totals(findings)
         return
     if rule == "module-roles":
         for finding in findings:
-            location = (
-                f"{finding.path}:{finding.line}" if finding.line else finding.path
-            )
-            _human_print(f"{location}: {finding.message}")
+            _render_finding(finding)
         _human_print(f"Module roles: {len(findings)} violation(s)")
+        _render_severity_totals(findings)
         return
     for finding in findings:
-        location = f"{finding.path}:{finding.line}" if finding.line else finding.path
-        _human_print(f"{location}: {finding.message}")
+        _render_finding(finding)
     _human_print(f"File size: {len(findings)} violation(s)")
+    _render_severity_totals(findings)
 
 
 def _render_shared_utilities(report: SharedUtilitiesReport) -> None:
@@ -171,11 +233,11 @@ def _render_shared_utilities(report: SharedUtilitiesReport) -> None:
     )
 
 
-def _render_python_style(findings: Mapping[str, Mapping[str, Sequence[int]]]) -> int:
+def _render_python_style(findings: Mapping[str, StyleFindings]) -> int:
     """Render grouped Python style findings and return their total count."""
     total = 0
     for name, issues in findings.items():
-        for kind, lines in issues.items():
+        for kind, lines in _python_style_categories(issues):
             if lines:
                 total += len(lines)
                 _human_print(
@@ -202,6 +264,26 @@ def _render_cli_policy(issues: Sequence[str]) -> None:
     )
 
 
+def _python_style_categories(
+    issues: StyleFindings,
+) -> tuple[tuple[str, list[int]], ...]:
+    """Keep the style categories statically typed while rendering summaries."""
+    return (
+        ("bare_containers", issues["bare_containers"]),
+        ("bare_tuples", issues["bare_tuples"]),
+        ("concrete_inputs", issues["concrete_inputs"]),
+        ("local_imports", issues["local_imports"]),
+        ("opaque_mappings", issues["opaque_mappings"]),
+        ("unslotted_dataclasses", issues["unslotted_dataclasses"]),
+        ("quoted_types", issues["quoted_types"]),
+        ("type_checking_imports", issues["type_checking_imports"]),
+        ("os_path", issues["os_path"]),
+        ("main_module_imports", issues["main_module_imports"]),
+        ("legacy_pydantic_fields", issues["legacy_pydantic_fields"]),
+        ("pydantic_collection_contracts", issues["pydantic_collection_contracts"]),
+    )
+
+
 def _render_script_policy(issues: Sequence[str]) -> None:
     """Render the launcher-language inventory."""
     for issue in issues:
@@ -212,28 +294,28 @@ def _render_script_policy(issues: Sequence[str]) -> None:
 def _render_package_boundaries(findings: Sequence[Finding]) -> None:
     """Render the package, layout, registry, and metadata boundary findings."""
     for finding in findings:
-        location = f"{finding.path}:{finding.line}" if finding.line else finding.path
-        _human_print(f"{location}: {finding.message}")
+        _render_finding(finding)
     _human_print(f"Package boundaries: {len(findings)} violation(s)")
+    _render_severity_totals(findings)
 
 
 def _render_dependency_locks(findings: Sequence[Finding]) -> None:
     """Render requirement and exact-pin findings."""
     for finding in findings:
-        location = f"{finding.path}:{finding.line}" if finding.line else finding.path
-        _human_print(f"{location}: {finding.message}")
+        _render_finding(finding)
     _human_print(f"Dependency locks: {len(findings)} violation(s)")
+    _render_severity_totals(findings)
 
 
 def _render_repository_layout(findings: Sequence[Finding]) -> None:
     """Render configured artifact, path, and instruction-router findings."""
     for finding in findings:
-        location = f"{finding.path}:{finding.line}" if finding.line else finding.path
-        _human_print(f"{location}: {finding.message}")
+        _render_finding(finding)
     if findings:
         _human_print(f"Repository layout: {len(findings)} violation(s)")
     else:
         _human_print("Tracked-file layout is clean.")
+    _render_severity_totals(findings)
 
 
 def _execute(
@@ -248,6 +330,11 @@ def _execute(
     root = root.resolve(strict=True)
     config_path = config_path if config_path.is_absolute() else root / config_path
     config = _load_policy(config_path)
+    failure_threshold = (
+        config.orchestration.failure_threshold
+        if config.orchestration is not None
+        else "error"
+    )
     files = candidate_files(root, config.files)
     if verbose:
         _log_verbose(rule, root, len(files))
@@ -264,7 +351,7 @@ def _execute(
             )
         else:
             _render_dependency_locks(findings)
-        return 1 if findings and not report else 0
+        return int(_findings_fail(findings, failure_threshold, report=report))
     if rule == "repository-layout":
         policy = config.checks.repository_layout
         if policy is None:
@@ -278,7 +365,7 @@ def _execute(
             )
         else:
             _render_repository_layout(findings)
-        return 1 if findings and not report else 0
+        return int(_findings_fail(findings, failure_threshold, report=report))
     if rule == "module-roles":
         policy = config.checks.module_roles
         if policy is None:
@@ -292,7 +379,7 @@ def _execute(
             )
         else:
             _render(rule, findings)
-        return 1 if findings and not report else 0
+        return int(_findings_fail(findings, failure_threshold, report=report))
     if rule == "package-boundaries":
         package_policy = config.checks.package_boundaries
         if package_policy is None:
@@ -317,7 +404,7 @@ def _execute(
             )
         else:
             _render_package_boundaries(findings)
-        return 1 if findings and not report else 0
+        return int(_findings_fail(findings, failure_threshold, report=report))
     if rule == "script-policy":
         policy = config.checks.script_policy
         if policy is None:
@@ -329,7 +416,7 @@ def _execute(
             typer.echo(json.dumps(issues))
         else:
             _render_script_policy(issues)
-        return 1 if issues and not report else 0
+        return int(_errors_fail(len(issues), failure_threshold, report=report))
     if rule == "cli":
         policy = config.checks.cli
         if policy is None:
@@ -341,7 +428,7 @@ def _execute(
             typer.echo(json.dumps(issues))
         else:
             _render_cli_policy(issues)
-        return 1 if issues and not report else 0
+        return int(_errors_fail(len(issues), failure_threshold, report=report))
     if rule == "python-style":
         policy = config.checks.python_style
         if policy is None:
@@ -350,13 +437,15 @@ def _execute(
             )
         findings = python_style_findings(root, files, policy)
         total = sum(
-            len(lines) for issues in findings.values() for lines in issues.values()
+            len(lines)
+            for issues in findings.values()
+            for _, lines in _python_style_categories(issues)
         )
         if json_output:
             typer.echo(json.dumps(findings, sort_keys=True))
         else:
             total = _render_python_style(findings)
-        return 1 if total and not report else 0
+        return int(_errors_fail(total, failure_threshold, report=report))
     if rule == "runtime-types":
         policy = config.checks.runtime_types
         if policy is None:
@@ -368,7 +457,7 @@ def _execute(
             typer.echo(json.dumps(issues))
         else:
             _render_runtime_types(issues)
-        return 1 if issues and not report else 0
+        return int(_errors_fail(len(issues), failure_threshold, report=report))
     if rule == "shared-utilities":
         policy = config.checks.shared_utilities
         if policy is None:
@@ -389,7 +478,9 @@ def _execute(
             )
         else:
             _render_shared_utilities(shared_report)
-        return 1 if shared_report.failed and not report else 0
+        return int(
+            _errors_fail(int(shared_report.failed), failure_threshold, report=report)
+        )
     findings = _run(rule, root, files, config)
     if json_output:
         typer.echo(
@@ -397,7 +488,75 @@ def _execute(
         )
     else:
         _render(rule, findings)
-    return 1 if findings and not report else 0
+    return int(_findings_fail(findings, failure_threshold, report=report))
+
+
+def _diagnostics_from_rule_json(
+    rule: QualityRule, encoded: str
+) -> tuple[Diagnostic, ...]:
+    """Validate Alphus-owned rule output before adding source provenance."""
+    if rule == "python-style":
+        style_payload = _PYTHON_STYLE_RULE_OUTPUT.validate_json(encoded)
+        diagnostics: list[Diagnostic] = []
+        for path, buckets in style_payload.items():
+            for category, lines in buckets.items():
+                diagnostics.extend(
+                    Diagnostic(
+                        source="alphus",
+                        rule_id=f"python-style.{category}",
+                        path=path,
+                        line=line,
+                        message=category.replace("_", " "),
+                    )
+                    for line in lines
+                )
+        return tuple(diagnostics)
+
+    if rule == "shared-utilities":
+        utilities_payload = _SHARED_UTILITIES_RULE_OUTPUT.validate_json(encoded)
+        diagnostics = []
+        for group in utilities_payload.duplicate_groups:
+            diagnostics.append(
+                Diagnostic(
+                    source="alphus",
+                    rule_id="shared-utilities.duplicate-helper",
+                    message=f"Duplicate Python helper: {', '.join(group)}",
+                )
+            )
+        if len(utilities_payload.file_hash_implementations) > 1:
+            diagnostics.append(
+                Diagnostic(
+                    source="alphus",
+                    rule_id="shared-utilities.file-hash-implementation",
+                    message=(
+                        "Repeated file SHA-256 implementation: "
+                        f"{', '.join(utilities_payload.file_hash_implementations)}"
+                    ),
+                )
+            )
+        if utilities_payload.failed and not diagnostics:
+            diagnostics.append(
+                Diagnostic(
+                    source="alphus",
+                    rule_id="shared-utilities.failure",
+                    message="Shared utilities check reported failure without details.",
+                )
+            )
+        return tuple(diagnostics)
+
+    if rule in {"cli", "script-policy", "runtime-types"}:
+        messages = _STRING_RULE_OUTPUT.validate_json(encoded)
+        return tuple(
+            Diagnostic(
+                source="alphus",
+                rule_id=f"alphus.{rule}",
+                message=message,
+            )
+            for message in messages
+        )
+
+    findings = _FINDING_RULE_OUTPUT.validate_json(encoded)
+    return tuple(finding.as_diagnostic() for finding in findings)
 
 
 def _execute_profile(
@@ -419,12 +578,51 @@ def _execute_profile(
         return 2
     selected_profile = profile_name or policy.default_profile
 
-    def run_rule(rule: QualityRule) -> int:
+    def run_rule(rule: QualityRule) -> RuleRunResult:
+        captured_output = StringIO()
+        captured_error = StringIO()
         try:
-            return _execute(checkout, resolved_config, rule, False, False, verbose)
+            with redirect_stdout(captured_output), redirect_stderr(captured_error):
+                exit_code = _execute(
+                    checkout, resolved_config, rule, True, False, verbose
+                )
         except typer.BadParameter as error:
-            typer.echo(str(error), err=True)
-            return 2
+            return RuleRunResult(
+                execution_failure=str(error),
+                exit_code=2,
+                stderr=captured_error.getvalue(),
+            )
+        except typer.Exit as error:
+            return RuleRunResult(
+                execution_failure="Invalid quality policy.",
+                exit_code=error.exit_code,
+                stderr=captured_error.getvalue(),
+            )
+        try:
+            findings = _diagnostics_from_rule_json(rule, captured_output.getvalue())
+        except (ValidationError, TypeError, ValueError) as error:
+            return RuleRunResult(
+                execution_failure=f"Alphus rule output could not be decoded: {error}",
+                exit_code=2,
+                stderr=captured_error.getvalue(),
+            )
+        if exit_code not in {0, 1}:
+            return RuleRunResult(
+                execution_failure=f"Alphus rule returned exit code {exit_code}.",
+                exit_code=exit_code,
+                stderr=captured_error.getvalue(),
+            )
+        if exit_code == 1 and not findings:
+            return RuleRunResult(
+                execution_failure="Alphus rule failed without structured findings.",
+                exit_code=2,
+                stderr=captured_error.getvalue(),
+            )
+        return RuleRunResult(
+            findings=findings,
+            exit_code=exit_code,
+            stderr=captured_error.getvalue(),
+        )
 
     return run_orchestration(
         checkout,

@@ -38,6 +38,7 @@ from alphus.config_sources import (
     SharedUtilitiesPolicy,
     SourceScanPolicy,
 )
+from alphus.findings import Severity
 
 
 class CheckPolicies(StrictModel):
@@ -68,6 +69,7 @@ class RuleRunStep(StrictModel):
     kind: Literal["rule"]
     name: str
     rule: QualityRuleName
+    severity: Severity | None = None
 
     @field_validator("name")
     @classmethod
@@ -154,6 +156,7 @@ class OrchestrationPolicy(StrictModel):
     steps: Annotated[tuple[OrchestrationStep, ...], Field(min_length=1)]
     profiles: Annotated[tuple[OrchestrationProfile, ...], Field(min_length=1)]
     default_profile: str = "check"
+    failure_threshold: Severity = "error"
 
     @model_validator(mode="after")
     def validate_plan(self) -> OrchestrationPolicy:

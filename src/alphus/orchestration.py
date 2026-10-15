@@ -8,7 +8,7 @@ import subprocess
 import sys
 from collections.abc import Callable, Sequence
 from contextlib import redirect_stderr, redirect_stdout
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from io import StringIO
 from pathlib import Path, PurePosixPath
 from typing import Literal, TextIO
@@ -18,6 +18,12 @@ from alphus.config import (
     OrchestrationPolicy,
     QualityRuleName,
     RuleRunStep,
+)
+from alphus.findings import (
+    Diagnostic,
+    Severity,
+    SeverityCounts,
+    severity_meets_threshold,
 )
 from alphus.inventory import candidate_files
 from alphus.platform_utils import is_windows
@@ -31,6 +37,20 @@ class OrchestrationStepResult:
     status: Literal["passed", "failed"]
     exit_code: int
     diagnostics: tuple[str, ...] = ()
+    findings: tuple[Diagnostic, ...] = ()
+    stdout: str = ""
+    stderr: str = ""
+    severity_counts: SeverityCounts = field(default_factory=SeverityCounts)
+
+
+@dataclass(frozen=True, slots=True)
+class RuleRunResult:
+    """Structured outcome from an Alphus-owned rule invocation."""
+
+    findings: tuple[Diagnostic, ...] = ()
+    execution_failure: str | None = None
+    exit_code: int = 0
+    stderr: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,6 +62,8 @@ class OrchestrationResult:
     failed: int
     exit_code: int
     steps: tuple[OrchestrationStepResult, ...]
+    failure_threshold: Severity = "error"
+    severity_counts: SeverityCounts = field(default_factory=SeverityCounts)
 
 
 def _step_directory(root: Path, working_directory: str) -> Path:
@@ -89,12 +111,44 @@ def _windows_shell_required(arguments: Sequence[str]) -> bool:
     return Path(executable or arguments[0]).suffix.casefold() in {".cmd", ".bat"}
 
 
+def _render_diagnostic(diagnostic: Diagnostic, output: TextIO) -> None:
+    """Render normalized findings with stable source and rule provenance."""
+    location = diagnostic.path or ""
+    if diagnostic.line is not None:
+        location = f"{location}:{diagnostic.line}" if location else str(diagnostic.line)
+    suffix = f" {location}" if location else ""
+    print(
+        f"{diagnostic.severity.upper()} {diagnostic.source} "
+        f"{diagnostic.rule_id}{suffix}: {diagnostic.message}",
+        file=output,
+        flush=True,
+    )
+
+
+def _legacy_diagnostic_line(diagnostic: Diagnostic) -> str:
+    """Keep the existing string diagnostics field useful for older consumers."""
+    location = diagnostic.path or ""
+    if diagnostic.line is not None:
+        location = f"{location}:{diagnostic.line}" if location else str(diagnostic.line)
+    prefix = "" if diagnostic.severity == "error" else f"{diagnostic.severity.upper()} "
+    if location:
+        return f"{prefix}{location}: {diagnostic.message}"
+    return f"{prefix}{diagnostic.message}"
+
+
+def _write_captured(stream: TextIO, value: str) -> None:
+    """Replay command output without interpreting its contents."""
+    if value:
+        stream.write(value)
+        stream.flush()
+
+
 def run_orchestration(
     root: Path,
     config_path: Path,
     policy: OrchestrationPolicy,
     profile_name: str,
-    run_rule: Callable[[QualityRuleName], int],
+    run_rule: Callable[[QualityRuleName], int | RuleRunResult],
     *,
     json_output: bool = False,
     stdout: TextIO | None = None,
@@ -113,24 +167,115 @@ def run_orchestration(
     failed = 0
     completed = 0
     results: list[OrchestrationStepResult] = []
+    all_findings: list[Diagnostic] = []
+    threshold = policy.failure_threshold
     for step_name in profile.steps:
-        step = next(item for item in policy.steps if item.name == step_name)
+        step: RuleRunStep | CommandRunStep = next(
+            item for item in policy.steps if item.name == step_name
+        )
         if not json_output:
             print(f"==> {step.name}", file=output, flush=True)
         captured_stdout = StringIO()
         captured_stderr = StringIO()
+        step_stdout = ""
+        step_stderr = ""
+        findings: list[Diagnostic] = []
         skipped_empty_file_scope = False
+        legacy_diagnostics: tuple[str, ...] = ()
         try:
             match step:
                 case RuleRunStep(rule=rule):
-                    if json_output:
-                        with (
-                            redirect_stdout(captured_stdout),
-                            redirect_stderr(captured_stderr),
-                        ):
-                            exit_code = run_rule(rule)
+                    with (
+                        redirect_stdout(captured_stdout),
+                        redirect_stderr(captured_stderr),
+                    ):
+                        rule_result: int | RuleRunResult = run_rule(rule)
+                    if isinstance(rule_result, RuleRunResult):
+                        findings = list(rule_result.findings)
+                        if step.severity is not None:
+                            findings = [
+                                Diagnostic(
+                                    source=item.source,
+                                    rule_id=item.rule_id,
+                                    message=item.message,
+                                    severity=step.severity,
+                                    path=item.path,
+                                    line=item.line,
+                                )
+                                for item in findings
+                            ]
+                        legacy_diagnostics = tuple(
+                            _legacy_diagnostic_line(finding) for finding in findings
+                        )
+                        step_stderr = rule_result.stderr or captured_stderr.getvalue()
+                        step_stdout = captured_stdout.getvalue()
+                        if rule_result.execution_failure is not None:
+                            message = rule_result.execution_failure
+                            findings.append(
+                                Diagnostic(
+                                    source="alphus",
+                                    rule_id="orchestration.rule-execution",
+                                    message=message,
+                                )
+                            )
+                            exit_code = rule_result.exit_code or 2
+                            legacy_diagnostics = (message,)
+                        elif rule_result.exit_code not in {0, 1}:
+                            message = (
+                                "Alphus rule execution failed with exit code "
+                                f"{rule_result.exit_code}"
+                            )
+                            findings.append(
+                                Diagnostic(
+                                    source="alphus",
+                                    rule_id="orchestration.rule-execution",
+                                    message=message,
+                                )
+                            )
+                            exit_code = rule_result.exit_code
+                            legacy_diagnostics = (message,)
+                        elif rule_result.exit_code == 1 and not rule_result.findings:
+                            message = "Alphus rule failed without structured findings."
+                            findings.append(
+                                Diagnostic(
+                                    source="alphus",
+                                    rule_id="orchestration.rule-execution",
+                                    message=message,
+                                )
+                            )
+                            exit_code = 2
+                            legacy_diagnostics = (message,)
+                        else:
+                            exit_code = (
+                                1
+                                if any(
+                                    severity_meets_threshold(
+                                        finding.severity, threshold
+                                    )
+                                    for finding in findings
+                                )
+                                else 0
+                            )
                     else:
-                        exit_code = run_rule(rule)
+                        exit_code = rule_result
+                        step_stdout = captured_stdout.getvalue()
+                        step_stderr = captured_stderr.getvalue()
+                        if exit_code != 0:
+                            raw_lines = tuple(
+                                line
+                                for captured in (captured_stdout, captured_stderr)
+                                for line in captured.getvalue().splitlines()
+                            )
+                            legacy_diagnostics = raw_lines or (
+                                f"rule runner exited with status {exit_code}",
+                            )
+                            findings.append(
+                                Diagnostic(
+                                    source="alphus",
+                                    rule_id="orchestration.rule-execution",
+                                    message=f"rule runner exited with status {exit_code}",
+                                )
+                            )
                 case CommandRunStep(working_directory=working_directory):
                     selected_files = (
                         candidate_files(checkout, step.files)
@@ -150,19 +295,46 @@ def run_orchestration(
                             cwd=directory,
                             check=False,
                             shell=_windows_shell_required(arguments),
-                            capture_output=json_output,
-                            text=json_output,
+                            capture_output=True,
+                            text=True,
                         )
                         exit_code = result.returncode
-                        if json_output:
-                            captured_stdout.write(result.stdout or "")
-                            captured_stderr.write(result.stderr or "")
+                        step_stdout = result.stdout or ""
+                        step_stderr = result.stderr or ""
+                        if exit_code != 0:
+                            legacy_diagnostics = tuple(
+                                line
+                                for captured in (step_stdout, step_stderr)
+                                for line in captured.splitlines()
+                            )
+                            findings.append(
+                                Diagnostic(
+                                    source=step.name,
+                                    rule_id="orchestration.command-exit",
+                                    message=f"command exited with status {exit_code}",
+                                )
+                            )
         except (OSError, ValueError, subprocess.CalledProcessError) as error:
             message = f"{step.name}: {error}"
             captured_stderr.write(f"{message}\n")
-            if not json_output:
-                print(message, file=errors, flush=True)
+            step_stderr = captured_stderr.getvalue()
+            legacy_diagnostics = (message,)
+            findings.append(
+                Diagnostic(
+                    source="alphus" if isinstance(step, RuleRunStep) else step.name,
+                    rule_id=(
+                        "orchestration.rule-execution"
+                        if isinstance(step, RuleRunStep)
+                        else "orchestration.command-launch"
+                    ),
+                    message=message,
+                )
+            )
             exit_code = 127
+
+        if not json_output:
+            _write_captured(output, step_stdout)
+            _write_captured(errors, step_stderr)
 
         completed += 1
         if exit_code == 0:
@@ -171,35 +343,61 @@ def run_orchestration(
                     step.name,
                     "passed",
                     exit_code,
-                    ("No files matched the configured command scope.",)
-                    if skipped_empty_file_scope
-                    else (),
+                    diagnostics=(
+                        legacy_diagnostics
+                        or (
+                            ("No files matched the configured command scope.",)
+                            if skipped_empty_file_scope
+                            else ()
+                        )
+                    ),
+                    findings=tuple(findings),
+                    stdout=step_stdout,
+                    stderr=step_stderr,
+                    severity_counts=SeverityCounts.from_diagnostics(findings),
                 )
             )
+            all_findings.extend(findings)
+            if not json_output and isinstance(step, RuleRunStep):
+                for finding in findings:
+                    _render_diagnostic(finding, output)
             if not json_output:
                 details = " (no files matched)" if skipped_empty_file_scope else ""
                 print(f"PASS {step.name}{details}", file=output, flush=True)
         else:
             failed += 1
-            diagnostics = tuple(
-                line
-                for captured in (captured_stdout, captured_stderr)
-                for line in captured.getvalue().splitlines()
-            )
             results.append(
-                OrchestrationStepResult(step.name, "failed", exit_code, diagnostics)
+                OrchestrationStepResult(
+                    step.name,
+                    "failed",
+                    exit_code,
+                    diagnostics=legacy_diagnostics,
+                    findings=tuple(findings),
+                    stdout=step_stdout,
+                    stderr=step_stderr,
+                    severity_counts=SeverityCounts.from_diagnostics(findings),
+                )
             )
+            all_findings.extend(findings)
+            if not json_output and isinstance(step, RuleRunStep):
+                for finding in findings:
+                    _render_diagnostic(finding, output)
             if not json_output:
                 print(f"FAIL {step.name} (exit {exit_code})", file=output, flush=True)
-        captured_errors = captured_stderr.getvalue()
-        if json_output and captured_errors:
-            print(captured_errors, end="", file=errors, flush=True)
+        if json_output and step_stderr:
+            print(step_stderr, end="", file=errors, flush=True)
 
     passed = completed - failed
     exit_code = 1 if failed else 0
     if json_output:
         result = OrchestrationResult(
-            profile_name, passed, failed, exit_code, tuple(results)
+            profile_name,
+            passed,
+            failed,
+            exit_code,
+            tuple(results),
+            threshold,
+            SeverityCounts.from_diagnostics(all_findings),
         )
         print(json.dumps(asdict(result), sort_keys=True), file=output, flush=True)
     else:
@@ -208,4 +406,13 @@ def run_orchestration(
             file=output,
             flush=True,
         )
+        counts = SeverityCounts.from_diagnostics(all_findings)
+        if counts.error or counts.warning or counts.info:
+            print(
+                "Diagnostic triage: "
+                f"{counts.error} error(s), {counts.warning} warning(s), "
+                f"{counts.info} info(s); failure threshold={threshold}",
+                file=output,
+                flush=True,
+            )
     return exit_code

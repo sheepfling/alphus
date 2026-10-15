@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from alphus import cli
 from alphus.cli import main
 from alphus.config import (
     NodeCliPolicy,
@@ -19,6 +20,7 @@ from alphus.config import (
     load_config,
     load_config_stream,
 )
+from alphus.findings import Finding
 from alphus.inventory import candidate_files, matches_path, tracked_files
 from alphus.rules import check_file_size, check_line_length
 
@@ -455,6 +457,149 @@ steps = ["native tool"]
     assert "portable rule" not in lint_output
 
 
+def test_profile_rule_severity_override_makes_warning_advisory(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _repository(tmp_path)
+    _write(
+        tmp_path, "src/long.py", "value = 'a line that exceeds the configured limit'\n"
+    )
+    (tmp_path / "quality.toml").write_text(
+        POLICY
+        + """
+
+[orchestration]
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "line check"
+rule = "line-length"
+severity = "warning"
+
+[[orchestration.profiles]]
+name = "check"
+steps = ["line check"]
+""",
+        encoding="utf-8",
+    )
+    arguments = ["--root", str(tmp_path), "--config", "quality.toml", "--run"]
+
+    assert main([*arguments, "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["steps"][0]["status"] == "passed"
+    assert payload["steps"][0]["findings"][0]["severity"] == "warning"
+    assert payload["steps"][0]["findings"][0]["source"] == "alphus"
+    assert payload["severity_counts"] == {"error": 0, "warning": 1, "info": 0}
+
+    assert main(arguments) == 0
+    text_output = capsys.readouterr().out
+    assert "WARNING alphus source.line-length" in text_output
+    assert "Diagnostic triage: 0 error(s), 1 warning(s), 0 info(s)" in text_output
+
+
+def test_rule_profile_json_adapters_validate_each_owned_shape() -> None:
+    style_findings = cli._diagnostics_from_rule_json(
+        "python-style",
+        json.dumps({"src/example.py": {"bare_containers": [7]}}),
+    )
+    assert style_findings == (
+        cli.Diagnostic(
+            source="alphus",
+            rule_id="python-style.bare_containers",
+            path="src/example.py",
+            line=7,
+            message="bare containers",
+        ),
+    )
+
+    shared_findings = cli._diagnostics_from_rule_json(
+        "shared-utilities",
+        json.dumps(
+            {
+                "duplicate_groups": [["src/a.py:helper", "src/b.py:helper"]],
+                "failed": True,
+                "file_hash_implementations": ["src/a.py:hash", "src/b.py:hash"],
+            }
+        ),
+    )
+    assert [finding.rule_id for finding in shared_findings] == [
+        "shared-utilities.duplicate-helper",
+        "shared-utilities.file-hash-implementation",
+    ]
+
+    legacy_messages = cli._diagnostics_from_rule_json(
+        "runtime-types", '["src/example.py:4: annotate the union"]'
+    )
+    assert legacy_messages[0].rule_id == "alphus.runtime-types"
+    assert legacy_messages[0].message == "src/example.py:4: annotate the union"
+
+    finding_records = cli._diagnostics_from_rule_json(
+        "line-length",
+        '[{"rule_id":"source.line-length","path":"src/example.py",'
+        '"line":4,"message":"line is long","severity":"warning"}]',
+    )
+    assert finding_records[0].severity == "warning"
+    assert finding_records[0].source == "alphus"
+
+
+def test_direct_rule_uses_threshold_and_report_mode_overrides_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _repository(tmp_path)
+    (tmp_path / "quality.toml").write_text(
+        POLICY
+        + """
+
+[orchestration]
+failure_threshold = "warning"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "json check"
+rule = "json-structure"
+
+[[orchestration.profiles]]
+name = "check"
+steps = ["json check"]
+""",
+        encoding="utf-8",
+    )
+
+    def warning_json_finding(*_args: object) -> list[Finding]:
+        return [
+            Finding(
+                "json.raw-decode",
+                "src/decode.py",
+                "validate raw JSON",
+                line=3,
+                severity="warning",
+            )
+        ]
+
+    monkeypatch.setattr(cli, "check_json_structure", warning_json_finding)
+    arguments = [
+        "--root",
+        str(tmp_path),
+        "--config",
+        "quality.toml",
+        "--rule",
+        "json-structure",
+    ]
+
+    assert main([*arguments, "--json"]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload[0]["severity"] == "warning"
+
+    assert main(arguments) == 1
+    output = capsys.readouterr().out
+    assert "WARNING alphus json.raw-decode src/decode.py:3: validate raw JSON" in output
+    assert "Severity totals: 0 error(s), 1 warning(s), 0 info(s)" in output
+
+    assert main([*arguments, "--report"]) == 0
+    assert "WARNING alphus json.raw-decode src/decode.py:3" in capsys.readouterr().out
+
+
 def test_invalid_cli_policy_reports_validation_error_without_traceback(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -473,6 +618,44 @@ def test_invalid_cli_policy_reports_validation_error_without_traceback(
 
     assert main(arguments) == 2
 
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "Invalid quality policy" in captured.err
+    assert "Traceback" not in captured.err
+
+
+def test_invalid_failure_threshold_still_rejects_profile_config(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _repository(tmp_path)
+    (tmp_path / "quality.toml").write_text(
+        POLICY
+        + """
+
+[orchestration]
+failure_threshold = "critical"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "line check"
+rule = "line-length"
+
+[[orchestration.profiles]]
+name = "check"
+steps = ["line check"]
+""",
+        encoding="utf-8",
+    )
+    arguments = [
+        "--root",
+        str(tmp_path),
+        "--config",
+        "quality.toml",
+        "--run",
+        "--json",
+    ]
+
+    assert main(arguments) == 2
     captured = capsys.readouterr()
     assert captured.out == ""
     assert "Invalid quality policy" in captured.err
