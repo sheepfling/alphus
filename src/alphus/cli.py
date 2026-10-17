@@ -634,7 +634,6 @@ def _execute_profile(
     )
 
 
-@app.callback(invoke_without_command=True)
 def _command(
     root: Annotated[
         Path,
@@ -687,6 +686,9 @@ def _command(
     if rule is None:
         raise typer.BadParameter("choose either --rule or --run")
     raise typer.Exit(_execute(root, config, rule, json_output, report, verbose))
+
+
+app.callback(invoke_without_command=True)(_command)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

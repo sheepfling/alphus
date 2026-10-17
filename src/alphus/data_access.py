@@ -4,11 +4,16 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 from pydantic import JsonValue, TypeAdapter
 
-_JSON_VALUE_ADAPTER: TypeAdapter[JsonValue] = TypeAdapter(JsonValue)
+# Pydantic accepts its recursive JsonValue union at runtime, but Pyright sees
+# that alias as a UnionType rather than as a TypeForm. Keep the adapter's result
+# concrete and cast only the schema argument accepted by Pydantic.
+_JSON_VALUE_ADAPTER: TypeAdapter[JsonValue] = TypeAdapter[JsonValue](
+    cast(Any, JsonValue)
+)
 
 
 def contained_file(root: Path, relative: str) -> Path | None:
