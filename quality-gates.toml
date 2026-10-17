@@ -1,0 +1,133 @@
+schema_version = 1
+
+[files]
+include = [
+  "src/**/*.py", "tests/**/*.py", "README.md", "docs/**/*.md",
+  "examples/**/*.toml", "pyproject.toml", "quality-gates.toml",
+]
+exclude = []
+
+[checks.file_size]
+code_extensions = [".py"]
+code_limit = 3000
+hard_limit = 5000
+initializer_name = "__init__.py"
+initializer_limit = 100
+exclude = []
+
+[checks.line_length]
+exclude = []
+
+[checks.line_length.limits]
+".py" = 100
+".md" = 120
+
+[checks.json_structure]
+extensions = [".py"]
+exclude = ["tests/**"]
+
+[checks.output_escaping]
+extensions = [".py"]
+exclude = []
+
+[checks.path_discovery]
+extensions = [".py"]
+exclude = []
+inspection_exclude = ["tests/**"]
+
+[checks.python_style]
+extensions = [".py"]
+exclude = []
+opaque_boundary_paths = []
+opaque_boundary_marker_prefix = "# opaque-boundary: "
+opaque_boundary_min_reason_chars = 12
+forbidden_main_imports = ["main"]
+
+[checks.runtime_types]
+extensions = [".py"]
+exclude = [
+  "tests/**",
+  "src/alphus/python_style.py",
+  "src/alphus/runtime_types.py",
+]
+
+[checks.package_boundaries]
+metadata_patterns = ["pyproject.toml"]
+source_directory = "src"
+local_dependency_prefixes = ["alphus"]
+loose_module_directories = []
+forbidden_import_roots = ["src", "tests"]
+vendor_path_components = ["vendor"]
+file_loader_calls = ["spec_from_file_location", "SourceFileLoader", "run_path"]
+reject_sys_path_mutations = true
+reject_dynamic_imports = true
+require_import_packages = true
+
+[checks.package_boundaries.allowed_dependencies]
+alphus = []
+
+[orchestration]
+default_profile = "check"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Package boundaries"
+rule = "package-boundaries"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Python structure"
+rule = "python-style"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Runtime type usage"
+rule = "runtime-types"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "JSON structure"
+rule = "json-structure"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Output escaping"
+rule = "output-escaping"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Path handling"
+rule = "path-discovery"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Line length"
+rule = "line-length"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "File size"
+rule = "file-size"
+
+[[orchestration.steps]]
+kind = "command"
+name = "Python lint"
+argv = [
+  "{python}", "-m", "ruff", "check", "src", "tests", "--select",
+  "E4,E7,E9,F,ANN,I",
+]
+
+[[orchestration.steps]]
+kind = "command"
+name = "Package tests"
+argv = [
+  "{python}", "-m", "pytest", "-p", "no:cacheprovider", "tests", "-q",
+]
+
+[[orchestration.profiles]]
+name = "check"
+steps = [
+  "Package boundaries", "Python structure", "Runtime type usage",
+  "JSON structure", "Output escaping", "Path handling", "Line length",
+  "File size", "Python lint", "Package tests",
+]

@@ -1,0 +1,128 @@
+schema_version = 1
+
+[files]
+include = [
+  "src/**/*.py", "tests/**/*.py", "README.md", "*.md", "docs/**/*.md",
+  "pyproject.toml", "quality-gates.toml", "mdrepo.toml",
+]
+exclude = []
+
+[checks.file_size]
+code_extensions = [".py"]
+code_limit = 3000
+hard_limit = 5000
+initializer_name = "__init__.py"
+initializer_limit = 100
+exclude = []
+
+[checks.line_length]
+exclude = []
+
+[checks.line_length.limits]
+".py" = 100
+".md" = 120
+
+[checks.json_structure]
+extensions = [".py"]
+exclude = ["tests/**"]
+
+[checks.output_escaping]
+extensions = [".py"]
+exclude = []
+
+[checks.path_discovery]
+extensions = [".py"]
+exclude = []
+inspection_exclude = ["tests/**"]
+
+[checks.python_style]
+extensions = [".py"]
+exclude = []
+opaque_boundary_paths = []
+opaque_boundary_marker_prefix = "# opaque-boundary: "
+opaque_boundary_min_reason_chars = 12
+forbidden_main_imports = ["main"]
+
+[checks.runtime_types]
+extensions = [".py"]
+exclude = ["tests/**"]
+
+[orchestration]
+default_profile = "check"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Python structure"
+rule = "python-style"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Runtime type narrowing"
+rule = "runtime-types"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "JSON structure"
+rule = "json-structure"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Output escaping"
+rule = "output-escaping"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Path discovery"
+rule = "path-discovery"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Line length"
+rule = "line-length"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "File size"
+rule = "file-size"
+
+[[orchestration.steps]]
+kind = "command"
+name = "Markdown links and graph"
+argv = [
+  "{python}", "-m", "mdrepo", "--root", "{root}", "--config",
+  "{root}/mdrepo.toml", "check",
+]
+
+[[orchestration.steps]]
+kind = "command"
+name = "Markdown format"
+argv = ["rumdl", "fmt", "--check", "--no-cache", "{files}"]
+files = { include = ["**/*.[mM][dD]", "*.[mM][dD]"] }
+
+[[orchestration.steps]]
+kind = "command"
+name = "Python lint"
+argv = ["{python}", "-m", "ruff", "check", "src", "tests"]
+
+[[orchestration.steps]]
+kind = "command"
+name = "Python types"
+argv = ["pyright", "--pythonpath", "{python}", "src", "tests"]
+
+[[orchestration.steps]]
+kind = "command"
+name = "Python tests"
+argv = ["{python}", "-m", "pytest", "tests", "-q"]
+
+[[orchestration.profiles]]
+name = "check"
+steps = [
+  "Python structure", "Runtime type narrowing", "JSON structure",
+  "Output escaping", "Path discovery", "Line length", "File size",
+  "Markdown links and graph", "Markdown format", "Python lint",
+  "Python types", "Python tests",
+]
+
+[[orchestration.profiles]]
+name = "docs"
+steps = ["Markdown links and graph", "Markdown format"]
