@@ -62,6 +62,50 @@ Profiles execute only when explicitly selected with `--run`. Review command
 steps before running a policy from a repository that is not trusted, because
 those steps execute the configured programs.
 
+## Static source-scanner resolution
+
+`ImportAliases(modules, symbols)` remains valid. Both maps remain read-only; they
+now contain surviving module bindings rather than imports gathered from every
+nested scope. The optional keyword-only `resolution` context stores read-only
+expression resolutions for the original AST. A stored `None` is an explicitly
+unresolved binding and never falls back to the module maps. For an independently
+parsed expression, `canonical_expression_name` still expands the module maps;
+that compatibility path cannot prove lexical binding or execution order.
+
+The call and reference scanners resolve import aliases at each syntax occurrence.
+Nested imports stay in their scope; function/lambda parameters and function-local
+bindings shadow enclosing names. Assignments, deletes, reimports, loop/with/match
+bindings and explicit attribute writes invalidate the affected alias. Store
+syntax is not reported as a reference. Comprehension targets stay local, and
+methods skip class locals for unqualified lexical lookup. Deferred function
+bodies use only stable imports from enclosing scopes, suppressing uncertain
+bindings that are reassigned elsewhere in that scope.
+
+Control-flow joins retain a binding only when alternatives agree. Loops and
+exception paths may leave names unresolved; the scanner does not prove branch
+reachability, iteration counts, exceptions or invocation order. Star imports and
+relative imports cannot establish a canonical absolute target. Explicit
+`global`/`nonlocal` reads can use a stable enclosing import; writes are handled
+within the scanned body but are not propagated through callers.
+
+Stored callable references are still reported at the original imported name,
+without tracing their later assigned aliases. The registry scanner separately
+recognizes the returned decorator from a proven factory call and invalidates it
+on rebinding. Only top-level decorated functions are returned by that API.
+
+These are import-origin checks, not Python execution proofs. They do not follow
+arbitrary assignments, return values, `getattr`, `exec`, monkeypatching, dynamic
+imports, external state changes or interprocedural writes. Deferred generator
+execution and other timing-sensitive cases may be suppressed conservatively;
+absence of a finding does not prove that a runtime call cannot reach the target.
+
+The contextual resolutions belong to the original AST snapshot. Recompute
+`import_aliases` after changing AST nodes; identities retained in the context do
+not track subsequent edits. The lexical model covers ordinary module, function,
+class and comprehension scopes. Python 3.12 type-parameter/annotation scopes and
+`type` aliases are not modeled; results for those constructs are not complete
+binding analysis.
+
 ## Migration and verification
 
 Migrate one checker at a time. Keep the consumer's command name as an adapter
