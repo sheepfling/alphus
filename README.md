@@ -91,6 +91,42 @@ build systems, and language-specific test tools retain ownership of their
 checks and run as subprocesses. npm and Node.js are needed only for configured
 Node-based checks, not just because a repository contains JavaScript.
 
+## Python AST query API
+
+`alphus.source_scanning` provides small, policy-free queries over an already
+parsed Python `ast.Module`. The caller owns file discovery, parsing, scope,
+diagnostic wording, and the decision to reject a pattern. The query module
+does not load a repository, import inspected source, or read files.
+
+| API | Contract |
+| --- | --- |
+| `ImportAliases` | Frozen record with read-only module and symbol mappings |
+| `import_aliases` | Collect import spellings, including nested imports |
+| `canonical_expression_name` | Resolve a dotted expression using those mappings |
+| `qualified_call_lines` | Find calls to one canonical function or class |
+| `qualified_reference_lines` | Find matching Name/Attribute occurrences; sorted unique lines |
+| `registry_decorated_function_lines` | Find top-level sync/async callbacks for a registry factory |
+
+For example, a stored class-method reference is visible even without a call:
+
+```python
+import ast
+
+from alphus.source_scanning import qualified_reference_lines
+
+tree = ast.parse("from datetime import datetime as Clock\nparse = Clock.fromisoformat\n")
+assert qualified_reference_lines(tree, "datetime.datetime.fromisoformat") == [2]
+```
+
+These are syntactic queries. Import collection uses one module-wide mapping;
+it does not prove lexical bindings or account for shadowing and rebindings.
+Relative imports receive no package context. References include callable
+values, annotations, and decorators, but do not follow a variable after an
+assignment or evaluate dynamic attribute access. Callers must account for
+these limits before treating a match as a policy violation. The recovered
+call and registry queries retain their existing result order; the reference
+query explicitly sorts and deduplicates its line results.
+
 ## Run a check
 
 Pass the checkout and its policy file explicitly:

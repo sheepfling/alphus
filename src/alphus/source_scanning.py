@@ -1,4 +1,4 @@
-"""Repository-independent Python AST name and call scanners."""
+"""Repository-independent Python AST name, reference and call scanners."""
 
 from __future__ import annotations
 
@@ -77,6 +77,26 @@ def qualified_call_lines(module: ast.Module, qualified_name: str) -> list[int]:
             case _:
                 continue
     return lines
+
+
+def qualified_reference_lines(module: ast.Module, qualified_name: str) -> list[int]:
+    """Return sorted unique lines mentioning a canonical function or class.
+
+    Inspect Name and Attribute syntax using the shared import-alias resolver.
+    This includes stored callable references without following their later
+    assignments or proving lexical bindings. The input AST is not modified.
+    """
+    aliases = import_aliases(module)
+    lines: set[int] = set()
+    for node in ast.walk(module):
+        match node:
+            case ast.Name() | ast.Attribute() if (
+                canonical_expression_name(node, aliases) == qualified_name
+            ):
+                lines.add(node.lineno)
+            case _:
+                continue
+    return sorted(lines)
 
 
 def _assignment_target_names(node: ast.Assign | ast.AnnAssign) -> tuple[str, ...]:
