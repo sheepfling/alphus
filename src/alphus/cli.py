@@ -30,9 +30,11 @@ from alphus.findings import (
     SeverityCounts,
     severity_meets_threshold,
 )
+from alphus.input_contracts import check_input_contracts
 from alphus.inventory import candidate_files, tracked_files
 from alphus.json_structure import check_json_structure
 from alphus.module_roles import check_module_roles
+from alphus.numeric_literals import check_numeric_literals
 from alphus.orchestration import RuleRunResult, run_orchestration
 from alphus.output_escaping import check_output_escaping
 from alphus.package_boundaries import check_package_boundaries
@@ -44,6 +46,7 @@ from alphus.rules import check_file_size, check_line_length
 from alphus.runtime_types import policy_issues as runtime_type_issues
 from alphus.script_policy import policy_issues as script_policy_issues
 from alphus.shared_utilities import SharedUtilitiesReport, check_shared_utilities
+from alphus.test_quality import check_test_quality
 from alphus.version_sync import check_version_sync
 
 QualityRule = QualityRuleName
@@ -152,6 +155,27 @@ def _run(
     rule: QualityRule, root: Path, files: Sequence[Path], config: QualityGateConfig
 ) -> list[Finding]:
     """Dispatch one named rule over a validated policy."""
+    if rule == "numeric-literals":
+        policy = config.checks.numeric_literals
+        if policy is None:
+            raise typer.BadParameter(
+                "the selected configuration has no [checks.numeric_literals] policy"
+            )
+        return check_numeric_literals(root, files, policy)
+    if rule == "test-quality":
+        test_policy = config.checks.test_quality
+        if test_policy is None:
+            raise typer.BadParameter(
+                "the selected configuration has no [checks.test_quality] policy"
+            )
+        return check_test_quality(root, files, test_policy)
+    if rule == "input-contracts":
+        input_policy = config.checks.input_contracts
+        if input_policy is None:
+            raise typer.BadParameter(
+                "the selected configuration has no [checks.input_contracts] policy"
+            )
+        return check_input_contracts(root, files, input_policy)
     if rule == "file-size":
         return check_file_size(root, files, config)
     if rule == "line-length":
@@ -165,6 +189,17 @@ def _run(
 
 def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
     """Keep concise text summaries while offering a stable JSON format."""
+    review_labels = {
+        "numeric-literals": "Numeric literals",
+        "test-quality": "Test quality",
+        "input-contracts": "Input contracts",
+    }
+    if rule in review_labels:
+        for finding in findings:
+            _render_finding(finding)
+        _human_print(f"{review_labels[rule]}: {len(findings)} finding(s)")
+        _render_severity_totals(findings)
+        return
     if rule == "line-length":
         counts = Counter(finding.path for finding in findings)
         for name, count in sorted(counts.items()):

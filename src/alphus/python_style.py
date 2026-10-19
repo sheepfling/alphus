@@ -111,13 +111,16 @@ def has_quoted_type(node: ast.expr) -> bool:
 
 
 def has_concrete_input(
-    node: ast.expr, typing_set_names: AbstractSet[str], typing_names: AbstractSet[str]
+    node: ast.expr,
+    typing_set_names: AbstractSet[str],
+    typing_names: AbstractSet[str],
+    concrete_names: AbstractSet[str] = frozenset(CONCRETE),
 ) -> bool:
     """Find mutable collection annotations at any nesting depth."""
     return any(
         isinstance(child, ast.expr)
         and (
-            type_name(child) in CONCRETE
+            type_name(child) in concrete_names
             or isinstance(child, ast.Name)
             and child.id in typing_set_names
             or (
@@ -286,6 +289,7 @@ class StyleVisitor(ast.NodeVisitor):
         self.typing_names = {"typing"}
         self.container_modules = {"typing", "collections.abc"}
         self.typing_set_names: set[str] = set()
+        self.concrete_input_names = set(CONCRETE)
         self.tuple_names = {"tuple", "Tuple"}
         self.container_names = set(BARE_CONTAINERS)
         self.mapping_names = set(MAPPING_NAMES)
@@ -355,7 +359,10 @@ class StyleVisitor(ast.NodeVisitor):
             if arg.annotation is None:
                 continue
             if has_concrete_input(
-                arg.annotation, self.typing_set_names, self.typing_names
+                arg.annotation,
+                self.typing_set_names,
+                self.typing_names,
+                self.concrete_input_names,
             ):
                 self.findings["concrete_inputs"].append(arg.lineno)
             if has_quoted_type(arg.annotation):
@@ -527,6 +534,8 @@ class StyleVisitor(ast.NodeVisitor):
             self.findings["os_path"].append(node.lineno)
         elif node.module == "typing":
             for alias in node.names:
+                if alias.name in CONCRETE:
+                    self.concrete_input_names.add(alias.asname or alias.name)
                 if alias.name in ABSTRACT_PYDANTIC_COLLECTIONS:
                     self.abstract_pydantic_collection_names.add(
                         alias.asname or alias.name

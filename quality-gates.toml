@@ -51,6 +51,21 @@ exclude = [
   "src/alphus/runtime_types.py",
 ]
 
+[checks.numeric_literals]
+extensions = [".py"]
+exclude = []
+math_constants = true
+
+[checks.test_quality]
+extensions = [".py"]
+exclude = []
+test_paths = ["tests/**"]
+ephemeral_document_patterns = []
+
+[checks.input_contracts]
+extensions = [".py"]
+exclude = []
+
 [checks.package_boundaries]
 metadata_patterns = ["pyproject.toml"]
 source_directory = "src"
@@ -131,3 +146,22 @@ steps = [
   "JSON structure", "Output escaping", "Path handling", "Line length",
   "File size", "Python lint", "Package tests",
 ]
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Numeric review"
+rule = "numeric-literals"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Test review"
+rule = "test-quality"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Input contract review"
+rule = "input-contracts"
+
+[[orchestration.profiles]]
+name = "review"
+steps = ["Numeric review", "Test review", "Input contract review"]

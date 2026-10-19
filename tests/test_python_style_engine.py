@@ -91,7 +91,7 @@ def test_bare_container_annotations_are_reported_at_all_annotation_sites() -> No
         "from typing import Mapping as M, List as L\n"
         "from collections.abc import Sequence as S\n"
         "def f(x: M, y: L, z: S): pass"
-    ) == {"bare_containers", "opaque_mappings"}
+    ) == {"bare_containers", "opaque_mappings", "concrete_inputs"}
     assert findings("from collections import deque as D\nclass Cache:\n items: D") == {
         "bare_containers",
     }
@@ -274,3 +274,10 @@ def test_mutability_setting_can_be_overridden_on_a_frozen_model_subclass() -> No
         " model_config = ConfigDict(frozen=False)\n"
         " records: Sequence[str]"
     ) == {"pydantic_collection_contracts"}
+
+
+def test_imported_concrete_list_and_dict_aliases_do_not_hide_input_contracts() -> None:
+    assert findings(
+        "from typing import List as L, Dict as D\n"
+        "def f(x: L[str], y: D[str, int]): pass"
+    ) == {"concrete_inputs"}

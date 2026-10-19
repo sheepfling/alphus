@@ -26,6 +26,11 @@ from alphus.config_repository import (
     RepositoryLayoutPolicy,
     VersionSyncPolicy,
 )
+from alphus.config_review import (
+    InputContractPolicy,
+    NumericLiteralPolicy,
+    TestQualityPolicy,
+)
 from alphus.config_sources import (
     CliPolicy,
     FileInventoryPolicy,
@@ -49,6 +54,9 @@ class CheckPolicies(StrictModel):
     json_structure: SourceScanPolicy
     output_escaping: SourceScanPolicy
     path_discovery: PathDiscoveryPolicy
+    numeric_literals: NumericLiteralPolicy | None = None
+    test_quality: TestQualityPolicy | None = None
+    input_contracts: InputContractPolicy | None = None
     shared_utilities: SharedUtilitiesPolicy | None = None
     python_style: PythonStylePolicy | None = None
     runtime_types: RuntimeTypePolicy | None = None

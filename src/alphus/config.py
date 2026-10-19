@@ -42,6 +42,12 @@ from alphus.config_repository import (
     VersionSource,
     VersionSyncPolicy,
 )
+from alphus.config_review import (
+    InputContractPolicy,
+    NumericLiteralPolicy,
+    NumericLiteralSpec,
+    TestQualityPolicy,
+)
 from alphus.config_sources import (
     CliPolicy,
     FileInventoryPolicy,
@@ -71,6 +77,10 @@ __all__ = [
     "GlobRule",
     "InstructionRouterPolicy",
     "InstructionRouterRoute",
+    "InputContractPolicy",
+    "NumericLiteralPolicy",
+    "NumericLiteralSpec",
+    "TestQualityPolicy",
     "JsonArrayRule",
     "LineLengthPolicy",
     "LockfilePair",

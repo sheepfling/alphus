@@ -32,6 +32,11 @@ portable rules to this source tree, then runs Ruff and the package tests:
 alphus --root . --config quality-gates.toml --run --profile check
 ```
 
+For the installed-wheel version of this check, including the current self-profile
+scope and exclusions, see [Self-checking Alphus](docs/SELF-CHECK.md). The separate
+`review` profile runs [optional advisory checks](docs/REVIEW-CHECKS.md) for numeric
+literals, test contracts, and collection inputs.
+
 ## Use from another repository
 
 Until the project chooses a package index, consumers can install from a local

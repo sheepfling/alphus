@@ -25,6 +25,9 @@ QualityRuleName: TypeAlias = Literal[
     "package-boundaries",
     "dependency-locks",
     "repository-layout",
+    "numeric-literals",
+    "test-quality",
+    "input-contracts",
 ]
 
 
