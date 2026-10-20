@@ -1,7 +1,6 @@
 """Generic AST and runtime-inspection helpers for stub API audits.
 
-This module is used by the pinned Alphus GitHub Action. It lives outside
-Alphus's installable source tree; consumer packages do not depend on Alphus.
+The installed Alphus tools and the pinned GitHub Action use this same implementation.
 """
 
 from __future__ import annotations
@@ -10,9 +9,14 @@ import ast
 import importlib.util
 import inspect
 from collections.abc import Iterable, Mapping
+from collections.abc import Set as AbstractSet
 from enum import Enum
 from pathlib import Path
-from typing import Any, NoReturn, cast
+from typing import Any, NoReturn, TypeAlias, cast
+
+# Annotation shapes contain source names and recursively nested shapes only.
+AnnotationShape: TypeAlias = tuple["ShapePart", ...]
+ShapePart: TypeAlias = str | AnnotationShape
 
 
 def fail(message: str) -> NoReturn:
@@ -100,6 +104,8 @@ def class_attributes(class_node: ast.ClassDef) -> set[str]:
             for target in targets:
                 attributes.update(target_names(target))
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if "property" in decorator_kinds(node):
+                attributes.add(node.name)
             parameters = [*node.args.posonlyargs, *node.args.args]
             if parameters:
                 receiver = parameters[0].arg
@@ -319,11 +325,11 @@ def runtime_decorators(value: object) -> set[str]:
 def normalized_type(
     node: ast.expr,
     owner_class: str | None = None,
-    scoped_type_names: frozenset[str] = frozenset(),
-) -> tuple[object, ...]:
+    scoped_type_names: AbstractSet[str] = frozenset(),
+) -> AnnotationShape:
     """Canonicalize common equivalent runtime and stub annotation spellings."""
     if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
-        parts: list[tuple[object, ...]] = []
+        parts: list[AnnotationShape] = []
 
         def collect(item: ast.expr) -> None:
             if isinstance(item, ast.BinOp) and isinstance(item.op, ast.BitOr):
@@ -332,7 +338,7 @@ def normalized_type(
                 return
             shape = normalized_type(item, owner_class, scoped_type_names)
             if shape[0] == "union":
-                parts.extend(cast(tuple[tuple[object, ...], ...], shape[1]))
+                parts.extend(cast(tuple[AnnotationShape, ...], shape[1]))
             else:
                 parts.append(shape)
 
@@ -371,7 +377,7 @@ def normalized_type(
         if base == canonical_pathlike:
             return canonical_pathlike
         if isinstance(node.slice, ast.Tuple):
-            item_type: tuple[object, ...] = (
+            item_type: AnnotationShape = (
                 "tuple",
                 tuple(
                     normalized_type(item, owner_class, scoped_type_names)
@@ -396,11 +402,11 @@ def normalized_type(
     return ("source", ast.unparse(node))
 
 
-def type_union(*shapes: tuple[object, ...]) -> tuple[object, ...]:
-    members: set[tuple[object, ...]] = set()
+def type_union(*shapes: AnnotationShape) -> AnnotationShape:
+    members: set[AnnotationShape] = set()
     for shape in shapes:
         if shape[0] == "union":
-            members.update(cast(tuple[tuple[object, ...], ...], shape[1]))
+            members.update(cast(tuple[AnnotationShape, ...], shape[1]))
         else:
             members.add(shape)
     return ("union", tuple(sorted(members, key=repr)))
@@ -429,11 +435,10 @@ def validate_signature(
     runtime_value: object,
     owner_class: str | None = None,
     *,
-    annotation_widenings: Mapping[tuple[str, str], Iterable[tuple[object, ...]]]
+    annotation_widenings: Mapping[tuple[str, str], Iterable[AnnotationShape]]
     | None = None,
-    return_annotation_widenings: Mapping[str, Iterable[tuple[object, ...]]]
-    | None = None,
-    scoped_type_names: frozenset[str] = frozenset(),
+    return_annotation_widenings: Mapping[str, Iterable[AnnotationShape]] | None = None,
+    scoped_type_names: AbstractSet[str] = frozenset(),
 ) -> None:
     expected = ast_parameters(stub_node)
     actual = runtime_parameters(runtime_value)
@@ -580,3 +585,58 @@ def assigned_public_instance_attributes(path: Path, class_name: str) -> set[str]
                 ):
                     names.add(target.attr)
     return names
+
+
+def default_key(value: ast.expr | None) -> str | None:
+    return None if value is None else ast.dump(value, include_attributes=False)
+
+
+def source_signature_shape(
+    function: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> tuple[tuple[str, str, str | None], ...]:
+    args = function.args
+    positional = [*args.posonlyargs, *args.args]
+    positional_defaults: dict[str, ast.expr] = dict(
+        zip(
+            (arg.arg for arg in positional[-len(args.defaults) :])
+            if args.defaults
+            else (),
+            args.defaults,
+        )
+    )
+    result = [
+        (
+            arg.arg,
+            "positional_only"
+            if index < len(args.posonlyargs)
+            else "positional_or_keyword",
+            default_key(positional_defaults.get(arg.arg)),
+        )
+        for index, arg in enumerate(positional)
+    ]
+    if args.vararg is not None:
+        result.append((args.vararg.arg, "var_positional", None))
+    result.extend(
+        (arg.arg, "keyword_only", default_key(default))
+        for arg, default in zip(args.kwonlyargs, args.kw_defaults)
+    )
+    if args.kwarg is not None:
+        result.append((args.kwarg.arg, "var_keyword", None))
+    return tuple(result)
+
+
+def decorator_kinds(function: ast.FunctionDef | ast.AsyncFunctionDef) -> frozenset[str]:
+    kinds: set[str] = set()
+    for decorator in function.decorator_list:
+        if isinstance(decorator, ast.Name) and decorator.id in {
+            "staticmethod",
+            "classmethod",
+            "property",
+        }:
+            kinds.add(decorator.id)
+        elif isinstance(decorator, ast.Attribute) and decorator.attr in {
+            "setter",
+            "deleter",
+        }:
+            kinds.add(decorator.attr)
+    return frozenset(kinds)

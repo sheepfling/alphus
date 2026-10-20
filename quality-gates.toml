@@ -80,6 +80,7 @@ require_import_packages = true
 
 [checks.package_boundaries.allowed_dependencies]
 alphus = []
+alphus_stub_quality = []
 
 [orchestration]
 default_profile = "check"

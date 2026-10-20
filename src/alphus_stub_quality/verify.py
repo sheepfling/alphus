@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
 import time
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import cast
+from typing import Annotated
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 ACTION_ROOT = Path(__file__).resolve().parent
 IGNORED_BUILD_PATHS = {
@@ -28,21 +29,33 @@ IGNORED_BUILD_PATHS = {
 }
 
 
-@dataclass(frozen=True)
-class VerificationConfig:
-    stubtest_module: str
-    stubtest_allowlist: str
-    positive_fixture: str
-    negative_fixture: str
-    api_audit_module: str | None = None
+NonEmptyString = Annotated[str, Field(min_length=1)]
+
+
+class VerificationConfig(BaseModel):
+    """Validated, immutable consumer contract shared by installed and CI gates."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    stubtest_module: NonEmptyString
+    stubtest_allowlist: NonEmptyString
+    positive_fixture: NonEmptyString
+    negative_fixture: NonEmptyString
+    api_audit_module: NonEmptyString | None = None
     api_audit_args: tuple[str, ...] = ()
-    runtime_smoke_module: str | None = None
-    negative_expected_count: int | None = None
-    mypy_diagnostics: tuple[str, ...] = ()
-    pyright_diagnostics: tuple[str, ...] = ()
+    runtime_smoke_module: NonEmptyString | None = None
+    negative_expected_count: Annotated[int, Field(strict=True, ge=1)] | None = None
+    mypy_diagnostics: tuple[NonEmptyString, ...] = ()
+    pyright_diagnostics: tuple[NonEmptyString, ...] = ()
 
 
-def copy_ignore(_directory: str, names: list[str]) -> set[str]:
+class VerificationDocument(BaseModel):
+    """Read the verification section; allow other consumer-owned sections."""
+
+    model_config = ConfigDict(frozen=True)
+    verification: VerificationConfig
+
+
+def copy_ignore(_directory: str, names: Sequence[str]) -> set[str]:
     ignored = {name for name in names if name in IGNORED_BUILD_PATHS}
     ignored.update(name for name in names if name.endswith((".egg-info", ".pyc")))
     return ignored
@@ -65,92 +78,13 @@ def project_path(root: Path, value: str, *, field: str) -> Path:
 def read_config(root: Path, config_path: Path) -> VerificationConfig:
     resolved = config_path if config_path.is_absolute() else root / config_path
     try:
-        value: object = json.loads(resolved.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
+        return VerificationDocument.model_validate_json(
+            resolved.read_text(encoding="utf-8")
+        ).verification
+    except (OSError, ValidationError) as error:
         raise SystemExit(
             f"could not read verification config {resolved}: {error}"
         ) from error
-    if not isinstance(value, dict):
-        raise SystemExit("verification config must contain a JSON object")
-    config = cast(dict[str, object], value)
-    settings_value = config.get("verification")
-    if not isinstance(settings_value, dict):
-        raise SystemExit("config must contain a 'verification' object")
-    settings = cast(dict[str, object], settings_value)
-    required = {
-        "stubtest_allowlist",
-        "stubtest_module",
-        "positive_fixture",
-        "negative_fixture",
-    }
-    optional = {
-        "api_audit_module",
-        "api_audit_args",
-        "runtime_smoke_module",
-        "negative_expected_count",
-        "mypy_diagnostics",
-        "pyright_diagnostics",
-    }
-    missing = sorted(required - settings.keys())
-    if missing:
-        raise SystemExit("missing verification settings: " + ", ".join(missing))
-    unknown = sorted(settings.keys() - required - optional)
-    if unknown:
-        raise SystemExit("unknown verification settings: " + ", ".join(unknown))
-    typed_settings: dict[str, str] = {}
-    for key in required:
-        value = settings[key]
-        if not isinstance(value, str) or not value:
-            raise SystemExit(f"verification setting {key!r} must be a non-empty string")
-        typed_settings[key] = value
-    for key in ("api_audit_module", "runtime_smoke_module"):
-        value = settings.get(key)
-        if value is not None and (not isinstance(value, str) or not value):
-            raise SystemExit(f"verification setting {key!r} must be a non-empty string")
-        if isinstance(value, str):
-            typed_settings[key] = value
-
-    api_audit_args_value = settings.get("api_audit_args", [])
-    if not isinstance(api_audit_args_value, list):
-        raise SystemExit(
-            "verification setting 'api_audit_args' must be a list of strings"
-        )
-    api_audit_args = cast(list[object], api_audit_args_value)
-    if not all(isinstance(item, str) for item in api_audit_args):
-        raise SystemExit(
-            "verification setting 'api_audit_args' must be a list of strings"
-        )
-
-    expected_count = settings.get("negative_expected_count")
-    if expected_count is not None and (
-        not isinstance(expected_count, int)
-        or isinstance(expected_count, bool)
-        or expected_count < 1
-    ):
-        raise SystemExit("negative_expected_count must be a positive integer")
-
-    diagnostics: dict[str, tuple[str, ...]] = {}
-    for key in ("mypy_diagnostics", "pyright_diagnostics"):
-        value = settings.get(key, [])
-        if not isinstance(value, list):
-            raise SystemExit(f"verification setting {key!r} must be a list of strings")
-        typed_diagnostics = cast(list[object], value)
-        if not all(isinstance(item, str) and item for item in typed_diagnostics):
-            raise SystemExit(f"verification setting {key!r} must be a list of strings")
-        diagnostics[key] = tuple(cast(list[str], typed_diagnostics))
-
-    return VerificationConfig(
-        stubtest_module=typed_settings["stubtest_module"],
-        stubtest_allowlist=typed_settings["stubtest_allowlist"],
-        positive_fixture=typed_settings["positive_fixture"],
-        negative_fixture=typed_settings["negative_fixture"],
-        api_audit_module=typed_settings.get("api_audit_module"),
-        api_audit_args=tuple(cast(list[str], api_audit_args)),
-        runtime_smoke_module=typed_settings.get("runtime_smoke_module"),
-        negative_expected_count=expected_count,
-        mypy_diagnostics=diagnostics["mypy_diagnostics"],
-        pyright_diagnostics=diagnostics["pyright_diagnostics"],
-    )
 
 
 def expand_path_arguments(
@@ -162,7 +96,9 @@ def expand_path_arguments(
     ]
 
 
-def run_step(name: str, arguments: list[str], cwd: Path, env: dict[str, str]) -> float:
+def run_step(
+    name: str, arguments: Sequence[str], cwd: Path, env: Mapping[str, str]
+) -> float:
     print(f"==> {name}", flush=True)
     started = time.monotonic()
     result = subprocess.run(arguments, cwd=cwd, env=env, check=False)
@@ -196,7 +132,7 @@ def module_command(module: str) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--root", type=Path, default=Path.cwd())
+    parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--config", type=Path, default=Path("stub-quality.json"))
     parser.add_argument("--with-twine", action="store_true")
     options = parser.parse_args()

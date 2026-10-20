@@ -23,6 +23,8 @@ dev = [
 
 [project.scripts]
 alphus = "alphus.cli:main"
+alphus-typing-fixtures = "alphus_stub_quality.typing_fixtures:main"
+alphus-stub-quality = "alphus_stub_quality.verify:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -31,7 +33,7 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src", "ci/stub-quality/python"]
+pythonpath = ["src"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["alphus", "alphus_stub_quality"]
@@ -46,3 +48,4 @@ typeCheckingMode = "strict"
 
 [tool.setuptools.package-data]
 alphus = ["py.typed"]
+alphus_stub_quality = ["py.typed"]

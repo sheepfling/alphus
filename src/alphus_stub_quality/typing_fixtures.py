@@ -87,6 +87,12 @@ def check_result(
     observed_lines = observed_error_lines(output, fixture.name)
     if returncode == 0:
         issues.append("negative fixture unexpectedly passed")
+    if returncode not in (0, 1):
+        issues.append(f"expected diagnostic exit 1, got {returncode}")
+    if expected_lines and any(
+        not observed_error_lines(line, fixture.name) for line in error_lines
+    ):
+        issues.append("errors outside the configured negative fixture")
     if expected_lines and observed_lines != expected_lines:
         issues.append(
             f"expected errors on lines {sorted(expected_lines)}, "
@@ -271,7 +277,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--positive-fixture", required=True, type=Path)
     parser.add_argument("--negative-fixture", required=True, type=Path)
-    parser.add_argument("--root", type=Path, default=Path.cwd())
+    parser.add_argument("--root", type=Path, required=True)
     parser.add_argument(
         "--checkers",
         nargs="+",
