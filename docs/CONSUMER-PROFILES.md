@@ -98,8 +98,13 @@ For a local run, install the consumer's `requirements-quality.txt` from that
 repository root, then use the same `alphus --run --profile check` command.
 A policy using `includes` requires an Alphus revision supporting composition;
 the immutable pin prevents accidentally using an older configuration schema.
-The legacy [stub-only action](../ci/stub-quality/action.yml) remains available
-for callers needing only its established verification contract.
+The [stub-only action](../ci/stub-quality/action.yml) supports separate checker
+and target runtimes. Both stub consumers now run `quality` (`python` plus
+`markdown`) once and a separate target compatibility matrix (3.10–3.14), only
+on merged PRs or manual dispatch. Local `check` continues to include all three
+profiles; set `ALPHUS_TARGET_PYTHON` to select a separate target. See the
+[interpreter setup](STUB-PACKAGE-CI.md#separate-checker-and-target-environments).
+One native run per target is required; a checker-version matrix is insufficient.
 
 ## Ownership hierarchy
 

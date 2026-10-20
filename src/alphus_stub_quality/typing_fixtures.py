@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -11,6 +12,8 @@ import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+
+from alphus_stub_quality.environments import child_environment, probe_python
 
 ERROR_LINE = re.compile(r"\berror:\s")
 
@@ -47,16 +50,29 @@ def observed_error_lines(output: str, filename: str) -> set[int]:
 
 
 def build_command(
-    checker: Checker, fixture: Path, cache_directory: Path | None
+    checker: Checker,
+    fixture: Path,
+    cache_directory: Path | None,
+    *,
+    target_python: str | None = None,
+    python_version: str | None = None,
 ) -> list[str]:
     """Build an argv vector using this interpreter and no shell wrapper."""
+    if target_python is not None and python_version is None:
+        raise ValueError("target_python requires explicit python_version")
     command = [sys.executable, "-m", checker.module]
     if checker.name == "mypy":
         if cache_directory is None:
             raise ValueError("mypy requires a temporary cache directory")
         command.extend(("--strict", "--cache-dir", str(cache_directory)))
+        if target_python is not None:
+            command.extend(("--python-executable", target_python))
+        if python_version is not None:
+            command.extend(("--python-version", python_version))
     elif checker.name == "pyright":
-        command.extend(("--pythonpath", sys.executable))
+        command.extend(("--pythonpath", target_python or sys.executable))
+        if python_version is not None:
+            command.extend(("--pythonversion", python_version))
     else:
         raise ValueError(f"unknown checker: {checker.name}")
     command.append(str(fixture.resolve()))
@@ -144,6 +160,8 @@ def run_case(
     expected_count: int | None = None,
     required_diagnostics: Sequence[str] = (),
     process_runner: ProcessRunner | None = None,
+    target_python: str | None = None,
+    python_version: str | None = None,
 ) -> bool:
     """Run one fixture and enforce its checker-specific result contract."""
     runner = subprocess.run if process_runner is None else process_runner
@@ -157,7 +175,13 @@ def run_case(
         ) from None
 
     def invoke(actual_fixture: Path, cache_directory: Path | None) -> bool:
-        command = build_command(checker, actual_fixture, cache_directory)
+        command = build_command(
+            checker,
+            actual_fixture,
+            cache_directory,
+            target_python=target_python,
+            python_version=python_version,
+        )
         started = time.monotonic()
         try:
             result = runner(
@@ -169,6 +193,7 @@ def run_case(
                 errors="replace",
                 check=False,
                 timeout=180,
+                env=child_environment(os.environ, sys.executable),
             )
         except subprocess.TimeoutExpired as error:
             output = "\n".join(
@@ -242,6 +267,8 @@ def run_suite(
     mypy_diagnostics: Sequence[str] = (),
     pyright_diagnostics: Sequence[str] = (),
     checkers: Sequence[Checker] = CHECKERS,
+    target_python: str | None = None,
+    python_version: str | None = None,
 ) -> bool:
     """Run both fixtures through each checker with the configured contracts."""
     success = True
@@ -256,6 +283,8 @@ def run_suite(
                 positive_fixture,
                 root=root,
                 expect_errors=False,
+                target_python=target_python,
+                python_version=python_version,
             )
             and success
         )
@@ -265,6 +294,8 @@ def run_suite(
                 negative_fixture,
                 root=root,
                 expect_errors=True,
+                target_python=target_python,
+                python_version=python_version,
                 expected_count=expected_count,
                 required_diagnostics=diagnostics_by_name.get(checker.name, ()),
             )
@@ -284,6 +315,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         choices=("mypy", "pyright"),
         default=("mypy", "pyright"),
     )
+    parser.add_argument("--target-python")
+    parser.add_argument("--python-version")
     parser.add_argument("--expected-count", type=int)
     parser.add_argument("--mypy-diagnostic", action="append", default=[])
     parser.add_argument("--pyright-diagnostic", action="append", default=[])
@@ -295,6 +328,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         checker for checker in CHECKERS if checker.name in options.checkers
     )
     try:
+        if options.target_python is not None:
+            target = probe_python(options.target_python)
+            if options.python_version not in (None, target.minor):
+                raise ValueError(
+                    f"--python-version {options.python_version} disagrees with "
+                    f"target Python {target.minor}"
+                )
+            options.target_python = target.executable
+            options.python_version = target.minor
         success = run_suite(
             options.positive_fixture,
             options.negative_fixture,
@@ -303,6 +345,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             mypy_diagnostics=options.mypy_diagnostic,
             pyright_diagnostics=options.pyright_diagnostic,
             checkers=checkers,
+            target_python=options.target_python,
+            python_version=options.python_version,
         )
     except (OSError, ValueError) as error:
         parser.error(str(error))

@@ -330,7 +330,8 @@ class TypeCheckVisitor(ast.NodeVisitor):
             return True
         return (
             len(shape.names) >= 2
-            and not shape.names & {"builtins.object", "typing.Any"}
+            and not shape.names
+            & {"builtins.object", "typing.Any", "typing_extensions.Any"}
             and classes <= shape.names
         )
 

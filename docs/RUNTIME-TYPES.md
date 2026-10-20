@@ -72,6 +72,11 @@ handling and callable/data mismatch validation.
 
 This is a bounded source convention, not a replacement type checker. It models
 selected ASDL fields and local flow; unsupported producers remain unknown.
+Nominal inheritance support is limited to standard AST classes, not arbitrary
+application hierarchies or custom AST subclasses. Ordinary object attributes,
+including directly annotated `self.value`, are not inferred; AST fields are
+modeled explicitly. Broad unions containing either typing.Any or
+typing_extensions.Any remain rejected. Dynamic getattr predicates are unknown.
 Imported helper return types are not loaded from arbitrary modules. General
 alias mutation, effects of arbitrary calls, complete exception reachability,
 interprocedural flow and dynamic imports are not proved. Reflection declarations
@@ -84,7 +89,7 @@ exception and context-manager captures, short-circuit assignment, container
 writes, invalid metadata, unauthorized predicates and public adapter behavior.
 Real installed consumer verification remains separate from these synthetic cases.
 
-## Local correction verification
+## Initial correction verification
 
 The approved correction was checked with the same installed wheel on Python
 3.11.16 and 3.12.14, running the CLI outside the source checkouts with
@@ -107,8 +112,8 @@ and exact expected-negative Mypy/Pyright results, and passed stubtest/runtime
 smoke. Public adapter tests also confirm that `get_type_hints` still sees
 `object` and that invalid callable/property inputs retain their rejection.
 
-This correction remains local for review. Consumer source, requirements and
-workflow pins are unchanged at the published migration revision. The local
-verification overrides Alphus with the correction wheel; it does not claim that
-the published pins already contain this correction. No new exclusions, severity
-overrides, threshold changes or hosted runs were introduced.
+Those initial results describe correction commit 8507318 before the checker/target
+follow-up. Current candidate evidence, including the Any-from-typing_extensions
+counterexample and explicit inference limits, is in the
+[migration record](TEST-GATE-MIGRATION.md#checkertarget-acceptance).
+No new exclusions, severity overrides or threshold changes were introduced.

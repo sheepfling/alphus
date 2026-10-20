@@ -91,10 +91,10 @@ Run these from the repository root in the development environment:
 ```sh
 ruff check src tests --select E4,E7,E9,F,ANN,I
 ruff format --check src tests
-pyright src
+python -m pyright --pythonpath "$(python -c 'import sys; print(sys.executable)')" src
 ```
 
 The first command is the self-profile's native Ruff lint step; formatting is
-checked separately. `pyright src` uses the repository's strict mode from
+checked separately. The Pyright command uses the repository's strict mode from
 `pyproject.toml`. Native tools retain ownership of lint, formatting, and type
 diagnostics; Alphus does not duplicate or reinterpret them.

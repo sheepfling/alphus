@@ -47,18 +47,75 @@ Example caller step (replace the revision with the reviewed Alphus commit SHA):
     config-file: stub-quality.json
 ```
 
-For a local run, install the reviewed Alphus wheel in a dedicated verification
-environment,
-then use the same consumer configuration:
+## Separate checker and target environments
+
+Alphus installs on Python >=3.11. A stub package may target Python >=3.10.
+`--target-python` names the actual target executable; the default is the
+checker interpreter for compatibility with existing local commands.
+`ALPHUS_TARGET_PYTHON` supplies the same selection to a composed profile.
+The verifier probes and records both full versions, executable paths, prefixes
+and installed tool versions before running. It preserves venv executable paths.
+
+| Stage | Interpreter/environment |
+| --- | --- |
+| Wheel/sdist build without isolation; install; pip check | Target |
+| API adapter; native mypy.stubtest; runtime smoke | Target |
+| Mypy/Pyright positive and expected-negative fixtures | Checker; explicit target packages and version |
+| Optional native Twine metadata check | Checker |
+
+Mypy receives `--python-executable TARGET --python-version X.Y`; Pyright
+receives `--pythonpath TARGET --pythonversion X.Y`. `X.Y` comes from the actual
+target probe. The standalone fixture CLI also probes the target and rejects a
+conflicting explicit version. These flags override consumer language defaults.
+The checker's own version alone is not compatibility evidence.
+
+For a reusable POSIX local run, start in the consumer repository. Replace
+`/path/to/alphus.whl` with the reviewed wheel and choose each target interpreter:
 
 ```sh
-python -m alphus_stub_quality.verify \
-  --root /path/to/consumer --config stub-quality.json --with-twine
+repo="$(pwd)"
+work="$(mktemp -d)"
+python3.12 -m venv "$work/checker"
+python3.10 -m venv "$work/target"
+"$work/checker/bin/python" -m pip install /path/to/alphus.whl \
+  'mypy>=2.3' 'pyright>=1.1.414' 'twine>=7.0'
+"$work/target/bin/python" -m pip install -r "$repo/requirements-target.txt" \
+  -r "$repo/requirements-compat.txt"
+(
+  cd "$work"
+  "$work/checker/bin/python" -m alphus_stub_quality.verify \
+    --root "$repo" --config stub-quality.json --with-twine \
+    --target-python "$work/target/bin/python" --report "$work/result.json"
+)
 ```
 
-Install the consumer's declared verification tools and runtime requirement in
-the selected Python environment before the local run. The GitHub Action does
-that setup itself.
+mdutils uses `requirements/compatibility.txt` for its runtime pin instead.
+The target requirements declare build/backend tools, wheel, typing_extensions
+and Mypy for native stubtest. Neither Alphus nor Pyright needs to be installed
+in the target. The checker needs no consumer runtime or stub package.
+
+The API adapter uses a temporary target import overlay containing exactly five
+unchanged installed-wheel files: `alphus_stub_quality/__init__.py`,
+`api_audit_support.py`, `api_contracts.py`, `runtime_audit.py` and `py.typed`.
+No core Alphus module, controller, Pydantic dependency, source checkout or whole
+checker site-packages directory is exposed. Inherited PYTHONPATH, PYTHONHOME,
+MYPYPATH and VIRTUAL_ENV are removed; user-site loading is disabled. The built
+consumer wheel is installed in the target. Fresh venvs are the reproducible
+isolation boundary; the verifier does not erase unrelated preinstalled packages.
+
+`--report` records both identities, exact stage argv, exits and elapsed times.
+A failure stops later stages, leaves `passed=false`, and preserves native output
+in the caller's log. Spawn failures record exit 127 and the error. Preflight
+errors exit before stages; an old report is removed before preflight, so absence
+of a new report cannot masquerade as a prior success. A missing target tool
+fails in that target; there is no checker fallback. Target smoke or dependency
+failure fails the run even when static fixtures pass.
+
+The POSIX stub action creates distinct checker and target venvs even when their
+versions match. Set `python-version: "3.12"`, `target-python-version: "3.10"`
+and `target-requirements-file: requirements-target.txt` for that matrix leg.
+Its original inputs remain usable; an omitted target version selects the checker
+version. The caller retains its trigger and permission policy.
 
 ## Generic gates and consumer adapters
 
@@ -91,12 +148,8 @@ resolve arbitrary control flow or dynamic aliases, or infer complete typing
 semantics.
 Source shape checks preserve AST default expressions and decorator distinctions.
 
-Alphus requires Python 3.11 or later to install. Its shared test
-modules retain Python 3.10 syntax for consumer matrix jobs: use a reviewed
-Alphus source checkout with `PYTHONPATH=/path/to/alphus/src` for those jobs.
-Provision the verifier's Pydantic dependency in that environment as the action
-does.
-This does not extend the supported Python versions of the main Alphus CLI.
+Only the five shared audit helper files need Python 3.10 compatibility.
+The controller stays installed in the Python >=3.11 checker environment.
 Alphus's own regression suite uses these same shared engines with neutral
 positive and intentionally broken examples.
 
@@ -106,12 +159,14 @@ Alphus profile; they are not source-only `--rule` scanners. The GitHub Action
 installs the same pinned Alphus code as a verification tool.
 
 The [migration record](TEST-GATE-MIGRATION.md) maps consumer ownership and
-records the current acceptance blocker.
+records revision-specific acceptance evidence.
 
 ## Composed consumer profiles
 
 The two stub consumers use the general [quality action](../ci/quality/action.yml)
-and compose `stubs`, `python`, and `markdown` profiles. That action executes the
-consumer's whole profile once; it does not run the stub verifier a second time.
+for their `quality` selection (`python` plus `markdown`). Their separate
+stub-action matrix runs `stubs` once for each target 3.10–3.14. The local default
+`check` still composes all three profiles. CI does not repeat the 3.12 stub gate
+inside `quality`. Both actions and local requirements pin the same Alphus SHA.
 See [consumer profiles](CONSUMER-PROFILES.md) for composition and pinning.
 The stub-only action above retains its existing interface for other callers.

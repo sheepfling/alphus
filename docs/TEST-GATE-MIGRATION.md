@@ -62,7 +62,7 @@ because its unchanged rule requires an explicit union annotation for every
 `isinstance` check. The remaining steps, including the regression suite, pass.
 Strict Pyright reports zero errors, warnings and informational diagnostics.
 
-This is a remaining self-application blocker. The migration has not added an
+This was the self-application blocker at that historical checkpoint. The migration has not added an
 exclusion, changed a failure threshold, or modified that rule to accept its own
 code. A policy decision about nominal AST/library introspection remains before
 this candidate can be declared ready. Other Python/runtime matrix combinations
@@ -72,7 +72,7 @@ revision.
 ## Explicit consumer composition
 
 Both consumer `check` profiles include `stubs`, `python`, and `markdown`.
-The shared quality action and the local CLI run that same selection. The stub
+The local CLI runs that full selection; hosted quality and target jobs select its parts explicitly. The stub
 verifier owns one isolated build/install stage, with Twine selected in the
 consumer's argv. The other profiles retain native tool ownership. mdutils's
 previous `stub-package` source-policy profile and `markdown-quality` selection
@@ -86,12 +86,12 @@ attribute types. Finite unions would misrepresent the arbitrary runtime
 reflection boundaries. A semantic policy decision remains necessary; consumer
 profile selection does not silently exempt this source from self-application.
 
-The subsequent approved local correction supports typed AST subtype dispatch
+The subsequent approved correction supports typed AST subtype dispatch
 and value-specific reflection contracts. Its semantics, counterexamples and
 remaining inference limits are documented in [Runtime type checks](RUNTIME-TYPES.md).
 It adds no file exclusions and preserves the existing object-facing adapters.
 The results below remain the historical migration checkpoint; local correction
-verification is recorded separately and is not a published PR update.
+verification and the interpreter split are recorded below for this candidate.
 
 ## Composition verification
 
@@ -131,3 +131,67 @@ Both the local requirement and hosted quality action select the same immutable
 Alphus revision. Hosted workflow execution and the broader release matrix are
 not established by this local evidence. Existing merged-PR/manual triggers
 remain unchanged.
+
+## Checker/target acceptance
+
+The current candidate includes the approved runtime-type correction and the
+separate checker/target execution contract. The unchanged established Alphus
+self-profile now passes **10/10 with zero findings** on Python 3.11.16 and
+3.12.14. No self-policy exclusions, scope, severity or threshold were changed.
+The shared source-scanner alias-resolution module is unchanged by this follow-up.
+
+An installed wheel was invoked outside the source checkouts, with inherited
+package-path variables removed. The clean checker is Python **3.12.14**, with
+Mypy **2.4.0**, Pyright **1.1.414** and Twine **7.0.0**. It has neither consumer
+runtime nor stub distribution installed. Each target is a separate venv with
+build **1.6.1**, setuptools **84.2.0**, setuptools-scm **10.3.4**, wheel **0.48.0**
+and Mypy **2.4.0** for native stubtest. Alphus is absent from all target
+distributions. Runtime baselines remain SnakeMD **2.4.1** and mdutils **1.8.1**.
+
+| Actual target | SnakeMD installed-wheel gate | mdutils installed-wheel gate |
+| --- | --- | --- |
+| 3.10.22 | 8/8 stages passed | 8/8 stages passed |
+| 3.11.16 | 8/8 stages passed | 8/8 stages passed |
+| 3.12.14 | 8/8 stages passed | 8/8 stages passed |
+| 3.13.15 | 8/8 stages passed | 8/8 stages passed |
+| 3.14.7 | 8/8 stages passed | 8/8 stages passed |
+
+Every row includes native target build, installation, pip check, API audit,
+stubtest and smoke; native Twine and both positive/expected-negative static
+checkers run in the checker. All configured marker/count/diagnostic-fragment
+contracts remain enforced. These ten runs establish the exact pinned runtimes,
+not every release inside a package's advertised dependency range.
+
+Additional boundary evidence:
+
+- Five opt-in integration cases prove both checkers discover packages installed
+  only in each target. A `typing.Self` fixture fails for target 3.10 and passes
+  for 3.11–3.14 despite deliberately conflicting consumer language defaults.
+- A temporary consumer copy with smoke exiting 7 only on target 3.10 passes its
+  first seven stages, including both static checkers, then fails stage eight
+  with exit 7 and `passed=false`.
+- A target without build tools fails its first native stage with exit 1. Later
+  stages are absent; no checker fallback occurs.
+- Both checker-side suites pass **485 cases**, including the five explicitly
+  provisioned native integration cases. Without their environment variables,
+  480 regular cases run and the opt-in group skips.
+- Native configured Ruff lint and formatting pass; strict Pyright over both
+  shipped source packages reports **0 errors, warnings and information**.
+- Full consumer profiles pass SnakeMD **8/8**, mdutils **5/5**, and mdutils's
+  optional source selection **6/6**, on Python 3.11.16 and 3.12.14.
+- Portable examples pass **12/12** positive and the intended **10/12** negative;
+  only the native Markdown checks fail. Markdown-only examples pass **2/2**
+  positive and **1/2** for the missing-link counterexample on both interpreters.
+
+Use the reusable commands in [the shared gate guide](STUB-PACKAGE-CI.md) and
+[Alphus self-check guide](SELF-CHECK.md). To rerun the native integration cases,
+set `ALPHUS_TEST_CHECKER_PYTHON` to a clean checker executable and
+`ALPHUS_TEST_TARGET_PYTHONS` to the path-separator-delimited target executables
+before `python -m pytest -q tests`. Provision both installed consumer wheels in
+the targets using the documented verifier first.
+
+Hosted workflows retain merged-PR/manual triggers and read-only repository
+permissions. They run one `quality` selection and five target compatibility
+legs with a 3.12 checker. No ordinary PR/push trigger or dispatched hosted run
+was added by this verification. Hosted Ubuntu execution remains unverified;
+these local results use macOS arm64. No release or merge is part of this work.
