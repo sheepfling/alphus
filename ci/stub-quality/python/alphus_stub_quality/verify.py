@@ -35,6 +35,7 @@ class VerificationConfig:
     positive_fixture: str
     negative_fixture: str
     api_audit_module: str | None = None
+    api_audit_args: tuple[str, ...] = ()
     runtime_smoke_module: str | None = None
     negative_expected_count: int | None = None
     mypy_diagnostics: tuple[str, ...] = ()
@@ -84,6 +85,7 @@ def read_config(root: Path, config_path: Path) -> VerificationConfig:
     }
     optional = {
         "api_audit_module",
+        "api_audit_args",
         "runtime_smoke_module",
         "negative_expected_count",
         "mypy_diagnostics",
@@ -107,6 +109,17 @@ def read_config(root: Path, config_path: Path) -> VerificationConfig:
             raise SystemExit(f"verification setting {key!r} must be a non-empty string")
         if isinstance(value, str):
             typed_settings[key] = value
+
+    api_audit_args_value = settings.get("api_audit_args", [])
+    if not isinstance(api_audit_args_value, list):
+        raise SystemExit(
+            "verification setting 'api_audit_args' must be a list of strings"
+        )
+    api_audit_args = cast(list[object], api_audit_args_value)
+    if not all(isinstance(item, str) for item in api_audit_args):
+        raise SystemExit(
+            "verification setting 'api_audit_args' must be a list of strings"
+        )
 
     expected_count = settings.get("negative_expected_count")
     if expected_count is not None and (
@@ -132,11 +145,21 @@ def read_config(root: Path, config_path: Path) -> VerificationConfig:
         positive_fixture=typed_settings["positive_fixture"],
         negative_fixture=typed_settings["negative_fixture"],
         api_audit_module=typed_settings.get("api_audit_module"),
+        api_audit_args=tuple(cast(list[str], api_audit_args)),
         runtime_smoke_module=typed_settings.get("runtime_smoke_module"),
         negative_expected_count=expected_count,
         mypy_diagnostics=diagnostics["mypy_diagnostics"],
         pyright_diagnostics=diagnostics["pyright_diagnostics"],
     )
+
+
+def expand_path_arguments(
+    arguments: tuple[str, ...], *, source: Path, consumer: Path
+) -> list[str]:
+    return [
+        argument.replace("{source}", str(source)).replace("{consumer}", str(consumer))
+        for argument in arguments
+    ]
 
 
 def run_step(name: str, arguments: list[str], cwd: Path, env: dict[str, str]) -> float:
@@ -278,56 +301,40 @@ def main() -> int:
             env=env,
         )
         if settings.api_audit_module is not None:
+            audit_command = module_command(settings.api_audit_module)
+            audit_command.extend(
+                expand_path_arguments(
+                    settings.api_audit_args, source=source, consumer=consumer
+                )
+            )
             elapsed += run_step(
                 "Runtime-to-stub API audit",
-                module_command(settings.api_audit_module),
+                audit_command,
                 cwd=consumer,
                 env=env,
             )
-        elapsed += run_step(
-            "Positive mypy consumer fixture",
-            [
-                sys.executable,
-                "-m",
-                "mypy",
-                "--strict",
-                str(positive_consumer.relative_to(consumer)),
-            ],
-            cwd=consumer,
-            env=env,
-        )
-        elapsed += run_step(
-            "Positive Pyright consumer fixture",
-            [
-                sys.executable,
-                "-m",
-                "pyright",
-                "--pythonpath",
-                sys.executable,
-                str(positive_consumer.relative_to(consumer)),
-            ],
-            cwd=consumer,
-            env=env,
-        )
-        negative_command = [
+        typecheck_command = [
             sys.executable,
-            str(ACTION_ROOT / "negative_typecheck.py"),
-            "--fixture",
+            "-m",
+            "alphus_stub_quality.typing_fixtures",
+            "--positive-fixture",
+            str(positive_consumer),
+            "--negative-fixture",
             str(negative_consumer),
             "--root",
             str(consumer),
         ]
         if settings.negative_expected_count is not None:
-            negative_command.extend(
+            typecheck_command.extend(
                 ("--expected-count", str(settings.negative_expected_count))
             )
         for diagnostic in settings.mypy_diagnostics:
-            negative_command.extend(("--mypy-diagnostic", diagnostic))
+            typecheck_command.extend(("--mypy-diagnostic", diagnostic))
         for diagnostic in settings.pyright_diagnostics:
-            negative_command.extend(("--pyright-diagnostic", diagnostic))
+            typecheck_command.extend(("--pyright-diagnostic", diagnostic))
         elapsed += run_step(
-            "Expected-negative mypy and Pyright fixtures",
-            negative_command,
+            "Positive and expected-negative mypy and Pyright fixtures",
+            typecheck_command,
             cwd=consumer,
             env=env,
         )

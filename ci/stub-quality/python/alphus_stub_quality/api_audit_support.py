@@ -7,6 +7,7 @@ Alphus's installable source tree; consumer packages do not depend on Alphus.
 from __future__ import annotations
 
 import ast
+import importlib.util
 import inspect
 from collections.abc import Iterable, Mapping
 from enum import Enum
@@ -23,6 +24,197 @@ def ast_default(node: ast.expr) -> str:
         return repr(ast.literal_eval(node))
     except (ValueError, TypeError):
         return ast.unparse(node)
+
+
+def is_public(name: str) -> bool:
+    return not name.startswith("_") or (name.startswith("__") and name.endswith("__"))
+
+
+def defined_names(tree: ast.Module) -> set[str]:
+    return {
+        node.name
+        for node in tree.body
+        if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+        and is_public(node.name)
+    }
+
+
+def class_nodes(tree: ast.Module) -> dict[str, ast.ClassDef]:
+    return {
+        node.name: node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and is_public(node.name)
+    }
+
+
+def method_nodes(
+    class_node: ast.ClassDef,
+) -> dict[str, ast.FunctionDef | ast.AsyncFunctionDef]:
+    return {
+        node.name: node
+        for node in class_node.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and is_public(node.name)
+    }
+
+
+def signature_shape(
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> tuple[tuple[str, str, str | None], ...]:
+    return tuple(
+        (name, kind.replace("-", "_"), default)
+        for name, kind, default in ast_parameters(node)
+    )
+
+
+def expression_name(expression: ast.expr) -> str:
+    if isinstance(expression, ast.Name):
+        return expression.id
+    if isinstance(expression, ast.Attribute):
+        return f"{expression_name(expression.value)}.{expression.attr}"
+    return ast.dump(expression, include_attributes=False)
+
+
+def class_bases(class_node: ast.ClassDef) -> tuple[str, ...]:
+    if not class_node.bases:
+        return ("object",)
+    return tuple(expression_name(base) for base in class_node.bases)
+
+
+def target_names(target: ast.expr) -> set[str]:
+    if isinstance(target, ast.Name) and is_public(target.id):
+        return {target.id}
+    if isinstance(target, (ast.Tuple, ast.List)):
+        names: set[str] = set()
+        for item in target.elts:
+            names.update(target_names(item))
+        return names
+    return set()
+
+
+def class_attributes(class_node: ast.ClassDef) -> set[str]:
+    attributes: set[str] = set()
+    for node in class_node.body:
+        if isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            for target in targets:
+                attributes.update(target_names(target))
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            parameters = [*node.args.posonlyargs, *node.args.args]
+            if parameters:
+                receiver = parameters[0].arg
+                for child in ast.walk(node):
+                    if isinstance(child, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+                        targets = (
+                            child.targets
+                            if isinstance(child, ast.Assign)
+                            else [child.target]
+                        )
+                        for target in targets:
+                            if (
+                                isinstance(target, ast.Attribute)
+                                and isinstance(target.value, ast.Name)
+                                and target.value.id == receiver
+                                and is_public(target.attr)
+                            ):
+                                attributes.add(target.attr)
+    return attributes
+
+
+def enum_members(class_node: ast.ClassDef) -> set[str]:
+    if not any(
+        expression_name(base).split(".")[-1] in {"Enum", "IntEnum", "StrEnum"}
+        for base in class_node.bases
+    ):
+        return set()
+    members: set[str] = set()
+    for node in class_node.body:
+        if isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            for target in targets:
+                members.update(target_names(target))
+    return members
+
+
+def stub_import_bindings(package: str, tree: ast.Module) -> dict[str, tuple[str, str]]:
+    bindings: dict[str, tuple[str, str]] = {}
+    for node in tree.body:
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        if node.level:
+            relative = "." * node.level + (node.module or "")
+            module = importlib.util.resolve_name(relative, package)
+        else:
+            module = node.module or ""
+        for alias in node.names:
+            exported = alias.asname or alias.name
+            bindings[exported] = (module, alias.name)
+    return bindings
+
+
+def uses_typing_any(tree: ast.Module) -> bool:
+    direct_aliases: set[str] = set()
+    module_aliases: set[str] = set()
+    for node in tree.body:
+        if isinstance(node, ast.ImportFrom) and node.module in {
+            "typing",
+            "typing_extensions",
+        }:
+            direct_aliases.update(
+                alias.asname or alias.name
+                for alias in node.names
+                if alias.name == "Any"
+            )
+        elif isinstance(node, ast.Import):
+            module_aliases.update(
+                alias.asname or alias.name
+                for alias in node.names
+                if alias.name in {"typing", "typing_extensions"}
+            )
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id in direct_aliases:
+            return True
+        if (
+            isinstance(node, ast.Attribute)
+            and node.attr == "Any"
+            and isinstance(node.value, ast.Name)
+            and node.value.id in module_aliases
+        ):
+            return True
+    return False
+
+
+def stub_function_parameters(
+    function: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> list[ast.arg]:
+    arguments = function.args
+    parameters = [*arguments.posonlyargs, *arguments.args, *arguments.kwonlyargs]
+    if arguments.vararg is not None:
+        parameters.append(arguments.vararg)
+    if arguments.kwarg is not None:
+        parameters.append(arguments.kwarg)
+    if parameters and parameters[0].arg in {"self", "cls"}:
+        parameters = parameters[1:]
+    return parameters
+
+
+def runtime_package_root(package_name: str) -> Path:
+    spec = importlib.util.find_spec(package_name)
+    if spec is None or spec.origin is None:
+        fail(f"the {package_name} runtime dependency is not installed")
+    return Path(spec.origin).parent
+
+
+def runtime_class_index(
+    runtime_root: Path, module_paths: Mapping[str, str]
+) -> dict[str, set[str]]:
+    result: dict[str, set[str]] = {}
+    for module, relative_path in module_paths.items():
+        path = runtime_root / f"{relative_path}.py"
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        result[module] = set(class_nodes(tree))
+    return result
 
 
 def runtime_default(value: object) -> str:

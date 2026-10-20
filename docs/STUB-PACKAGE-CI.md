@@ -22,6 +22,14 @@ Each consumer repository keeps the facts that define its own contract:
 - positive and marked negative typing fixtures;
 - its API inventory, runtime smoke assertions, and `stubtest` allowlist.
 
+An API-audit module can receive `api_audit_args`; the verifier expands
+`{source}` and `{consumer}` to the isolated source and consumer-copy paths.
+This lets a source-inspection audit receive its package-specific stub root
+without making that contract part of the shared action.
+
+For example, an audit that accepts a stub-root argument can set
+`api_audit_args` to `['--stub-root', '{source}/mdutils-stubs']`.
+
 The action runs after the caller checks out its repository. Keep a full Git
 history checkout when the stub package uses `setuptools-scm`; the action builds
 an isolated source copy, so build artifacts do not pollute the caller checkout.
