@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import tomllib
 from pathlib import Path
-from typing import Literal, TextIO
+from typing import Annotated, Literal, TextIO
+
+from pydantic import Field
 
 from alphus.config_architecture import (
     ArchitectureGraphCheckPolicy,
@@ -24,6 +26,7 @@ from alphus.config_orchestration import (
     OrchestrationPolicy,
     OrchestrationProfile,
     OrchestrationStep,
+    ProfilePlan,
     RuleRunStep,
 )
 from alphus.config_repository import (
@@ -91,6 +94,7 @@ __all__ = [
     "OrchestrationPolicy",
     "OrchestrationProfile",
     "OrchestrationStep",
+    "ProfilePlan",
     "PackageBoundaryPolicy",
     "PathDiscoveryPolicy",
     "PathRule",
@@ -120,7 +124,7 @@ class QualityGateConfig(StrictModel):
 
     schema_version: Literal[1]
     files: FileInventoryPolicy
-    checks: CheckPolicies
+    checks: Annotated[CheckPolicies, Field(default_factory=CheckPolicies)]
     orchestration: OrchestrationPolicy | None = None
 
 

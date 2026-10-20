@@ -158,6 +158,8 @@ def test_loaded_policy_collections_are_immutable(tmp_path: Path) -> None:
     config = load_config(tmp_path / "quality.toml")
 
     assert isinstance(config.files.include, tuple)
+    assert config.checks.file_size is not None
+    assert config.checks.line_length is not None
     assert isinstance(config.checks.file_size.exclude, tuple)
     assert config.checks.line_length.limit_for(".py") == 18
     assert not hasattr(config.files.include, "append")

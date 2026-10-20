@@ -6,7 +6,7 @@ import re
 from collections.abc import Hashable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from pathlib import PurePosixPath
-from typing import Literal, TypeAlias, cast
+from typing import Literal, TypeAlias, TypeVar, cast
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
@@ -29,6 +29,21 @@ QualityRuleName: TypeAlias = Literal[
     "test-quality",
     "input-contracts",
 ]
+
+PolicyT = TypeVar("PolicyT")
+
+
+class MissingPolicyError(ValueError):
+    """A selected portable gate has no consumer-owned configuration."""
+
+
+def require_policy(policy: PolicyT | None, name: str) -> PolicyT:
+    """Return an existing policy without substituting permissive defaults."""
+    if policy is None:
+        raise MissingPolicyError(
+            f"the selected configuration has no [checks.{name}] policy"
+        )
+    return policy
 
 
 def _freeze_config(value: object) -> object:

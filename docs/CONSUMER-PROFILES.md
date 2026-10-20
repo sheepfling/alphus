@@ -8,6 +8,98 @@ Copy it into a consumer repository and adjust file scopes, thresholds, and
 tool arguments there. Alphus does not add mdrepo, rumdl, Ruff, Pyright, or
 pytest to its runtime dependencies.
 
+## Profiles by consumer type
+
+A consumer selects capabilities explicitly. File extensions do not silently
+activate gates. Ordinary Python repositories can combine `python` and
+`markdown`; stub packages combine those with `stubs`.
+
+| Profile | Typical checks | Policy owner |
+| --- | --- | --- |
+| `markdown` | Document links/graph, style/format | mdrepo and rumdl |
+| `python` | Lint, formatting, project tests/tooling types | Ruff, pytest/unittest, Mypy/Pyright |
+| `stubs` | Build/install, API, typed examples, stubtest, smoke | Alphus and native checkers |
+| `python-policy` | Optional repository-specific source conventions | Explicit Alphus source policy |
+
+Define each profile's steps in the consumer policy, then compose them:
+
+```toml
+[[orchestration.profiles]]
+name = "stubs"
+steps = ["Installed stub consumer verification"]
+
+[[orchestration.profiles]]
+name = "python"
+steps = ["Python lint", "Python format", "Python tests"]
+
+[[orchestration.profiles]]
+name = "markdown"
+steps = ["Markdown links", "Markdown style"]
+
+[[orchestration.profiles]]
+name = "check"
+includes = ["stubs", "python", "markdown"]
+```
+
+Step names refer to the policy's existing `[[orchestration.steps]]` definitions.
+Run `--profile check` for the whole selection or select an individual profile.
+The stub consumers build/install first so later tooling can inspect the
+installed consumer surface. A repository without stubs omits that profile.
+
+Includes expand depth-first in declared order, followed by the profile's direct
+steps. A named step executes once, at its first occurrence, including diamond
+composition. Give genuinely separate invocations separate step names. Duplicate
+includes, unknown profiles/steps, empty profiles and inclusion cycles are
+configuration errors before execution. No profile changes another profile's
+threshold, scope or severity. Existing flat profiles retain their behavior and
+JSON shape; composed results add `profiles` with the resolved profile order.
+Later steps continue after a failure, and any failed step fails the aggregate.
+
+The names above express consumer policy, not a fixed registry. There is no
+plugin import, category rewrite, or automatic type detection. Package-specific
+API expectations and runtime assertions remain in each stub repository.
+The shared checking algorithms and their unit tests live in Alphus.
+
+Portable policy sections are optional when their gates are unselected. A
+command-only Markdown consumer can omit `[checks]` entirely; see the
+[minimal Markdown policy](../examples/markdown/quality-gates.toml) and its
+[native graph config](../examples/markdown/mdrepo.toml). A selected portable
+rule requires its own complete `[checks.<name>]` section. Missing selected
+policies exit 2 before any profile command runs; declared malformed sections
+remain invalid even when unselected. No permissive policy defaults are added.
+
+Alphus's self-profile retains all ten established steps by including
+`python-policy` and `python`. Composition does not remove its remaining
+runtime-type policy findings; see the [migration record](TEST-GATE-MIGRATION.md).
+
+## One pinned local and hosted entrypoint
+
+The general [quality action](../ci/quality/action.yml) installs Alphus from the
+selected action commit plus consumer-owned tool/runtime requirements, then
+runs the chosen profile once:
+
+```yaml
+- uses: sheepfling/alphus/ci/quality@<REVIEWED_ALPHUS_SHA>
+  with:
+    requirements-file: requirements-verification.txt
+    runtime-requirements-file: requirements/compatibility.txt
+    config-file: quality-gates.toml
+    profile: check
+```
+
+Both stub repositories pin this action and their local Alphus Git requirement
+to the same immutable reviewed commit. Their verification requirements select
+their existing `dev` extra plus native Markdown tools. Runtime dependencies of
+the distributed stub wheels remain unchanged. The profile owns Twine selection
+through its stub-verifier argv; the general action has no competing Twine flag.
+
+For a local run, install the consumer's `requirements-quality.txt` from that
+repository root, then use the same `alphus --run --profile check` command.
+A policy using `includes` requires an Alphus revision supporting composition;
+the immutable pin prevents accidentally using an older configuration schema.
+The legacy [stub-only action](../ci/stub-quality/action.yml) remains available
+for callers needing only its established verification contract.
+
 ## Ownership hierarchy
 
 The repository's top-level `check` command is the stable local and CI entry

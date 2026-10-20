@@ -22,6 +22,7 @@ from alphus.architecture_graph import check_architecture_graph
 from alphus.callable_registry import check_callable_registry
 from alphus.cli_policy import policy_issues as cli_policy_issues
 from alphus.config import QualityGateConfig, QualityRuleName, load_config
+from alphus.config_base import MissingPolicyError, require_policy
 from alphus.dependency_locks import check_dependency_locks
 from alphus.findings import (
     Diagnostic,
@@ -181,10 +182,18 @@ def _run(
     if rule == "line-length":
         return check_line_length(root, files, config)
     if rule == "json-structure":
-        return check_json_structure(root, files, config.checks.json_structure)
+        return check_json_structure(
+            root, files, require_policy(config.checks.json_structure, "json_structure")
+        )
     if rule == "output-escaping":
-        return check_output_escaping(root, files, config.checks.output_escaping)
-    return check_path_discovery(root, files, config.checks.path_discovery)
+        return check_output_escaping(
+            root,
+            files,
+            require_policy(config.checks.output_escaping, "output_escaping"),
+        )
+    return check_path_discovery(
+        root, files, require_policy(config.checks.path_discovery, "path_discovery")
+    )
 
 
 def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
@@ -516,7 +525,10 @@ def _execute(
         return int(
             _errors_fail(int(shared_report.failed), failure_threshold, report=report)
         )
-    findings = _run(rule, root, files, config)
+    try:
+        findings = _run(rule, root, files, config)
+    except MissingPolicyError as error:
+        raise typer.BadParameter(str(error)) from error
     if json_output:
         typer.echo(
             json.dumps([asdict(finding) for finding in findings], sort_keys=True)
@@ -612,6 +624,15 @@ def _execute_profile(
         typer.echo("The selected policy has no [orchestration] section.", err=True)
         return 2
     selected_profile = profile_name or policy.default_profile
+    plan = policy.resolve_profile(selected_profile)
+    if plan is not None:
+        try:
+            for step in policy.steps:
+                if step.name in plan.steps and step.kind == "rule":
+                    config.checks.require_rule(step.rule)
+        except MissingPolicyError as error:
+            typer.echo(str(error), err=True)
+            return 2
 
     def run_rule(rule: QualityRule) -> RuleRunResult:
         captured_output = StringIO()

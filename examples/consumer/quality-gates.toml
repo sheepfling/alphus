@@ -115,14 +115,24 @@ name = "Python tests"
 argv = ["{python}", "-m", "pytest", "tests", "-q"]
 
 [[orchestration.profiles]]
-name = "check"
+name = "python-policy"
 steps = [
   "Python structure", "Runtime type narrowing", "JSON structure",
   "Output escaping", "Path discovery", "Line length", "File size",
-  "Markdown links and graph", "Markdown format", "Python lint",
-  "Python types", "Python tests",
 ]
 
 [[orchestration.profiles]]
-name = "docs"
+name = "python"
+steps = ["Python lint", "Python types", "Python tests"]
+
+[[orchestration.profiles]]
+name = "markdown"
 steps = ["Markdown links and graph", "Markdown format"]
+
+[[orchestration.profiles]]
+name = "check"
+includes = ["python-policy", "markdown", "python"]
+
+[[orchestration.profiles]]
+name = "docs"
+includes = ["markdown"]

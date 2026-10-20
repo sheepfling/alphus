@@ -107,3 +107,11 @@ installs the same pinned Alphus code as a verification tool.
 
 The [migration record](TEST-GATE-MIGRATION.md) maps consumer ownership and
 records the current acceptance blocker.
+
+## Composed consumer profiles
+
+The two stub consumers use the general [quality action](../ci/quality/action.yml)
+and compose `stubs`, `python`, and `markdown` profiles. That action executes the
+consumer's whole profile once; it does not run the stub verifier a second time.
+See [consumer profiles](CONSUMER-PROFILES.md) for composition and pinning.
+The stub-only action above retains its existing interface for other callers.

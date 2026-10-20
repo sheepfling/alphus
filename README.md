@@ -79,7 +79,8 @@ Consumers depend on `alphus`; they do not copy its source or import
 application packages from the repository that publishes the policy.
 See the [package architecture](docs/ARCHITECTURE.md) for the reusable
 checker, policy, and orchestration boundaries. The
-[consumer profile guide](docs/CONSUMER-PROFILES.md) includes a coordinated
+[consumer profile guide](docs/CONSUMER-PROFILES.md) describes explicit composition
+of Markdown, Python and stub-testing profiles, with a coordinated
 mdrepo, rumdl, and Python-tool example. The
 [shared stub-package CI action](docs/STUB-PACKAGE-CI.md) hosts reusable
 PEP 561 build, checker, and runtime-compatibility gates without adding an

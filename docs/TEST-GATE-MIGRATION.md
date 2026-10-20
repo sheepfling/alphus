@@ -1,6 +1,6 @@
 # Shared test gate migration
 
-The local migration candidates extract the repeated checking mechanisms from
+The migration extracts the repeated checking mechanisms from
 SnakeMD and mdutils into the installed Alphus distribution. Consumer adapters
 retain package facts and behavioral assertions.
 
@@ -65,3 +65,59 @@ code. A policy decision about nominal AST/library introspection remains before
 this candidate can be declared ready. Other Python/runtime matrix combinations
 and hosted execution are separate evidence; prior runs do not verify this
 revision.
+
+## Explicit consumer composition
+
+Both consumer `check` profiles include `stubs`, `python`, and `markdown`.
+The shared quality action and the local CLI run that same selection. The stub
+verifier owns one isolated build/install stage, with Twine selected in the
+consumer's argv. The other profiles retain native tool ownership. mdutils's
+previous `stub-package` source-policy profile and `markdown-quality` selection
+remain available by name; its default is now the full `check` composition.
+
+The 104 self-profile findings comprise 95 AST subclass-dispatch checks and nine
+runtime-reflection checks. These violate the literal explicit-union convention;
+they do not alone establish a runtime or typing defect. The heuristic does not
+model nominal AST inheritance, inferred child types, prior narrowing, or
+attribute types. Finite unions would misrepresent the arbitrary runtime
+reflection boundaries. A semantic policy decision remains necessary; consumer
+profile selection does not silently exempt this source from self-application.
+
+## Composition verification
+
+The extraction and composition were verified with an installed Alphus wheel
+on Python 3.11.16 and 3.12.14, invoking the profiles from outside the source
+checkouts with `PYTHONPATH` unset:
+
+| Check | Result on both interpreters |
+| --- | --- |
+| Alphus regression suite | 374 passed |
+| Native Ruff lint and format | Passed |
+| Native strict Pyright over both shipped packages | 0 errors, warnings, information |
+| SnakeMD `check` (`stubs`, `python`, `markdown`) | 8/8 stages passed |
+| mdutils `check` (`stubs`, `python`, `markdown`) | 5/5 stages passed |
+| mdutils optional `stub-package` source policy | 6/6 stages passed |
+| Portable consumer positive / expected negative | 12/12 / 10/12; only native Markdown checks failed |
+| Markdown-only positive / missing-link counterexample | 2/2 / 1/2; native link check failed |
+| Alphus established self-profile | 9/10; 104 runtime-type findings remain |
+
+Each consumer stub stage builds wheel and sdist, checks both with Twine,
+installs the wheel, checks dependencies, runs its API adapter, requires clean
+positive and the configured expected-negative Mypy/Pyright examples, then runs
+stubtest and runtime smoke. These are real consumer runs, separate from the
+shared engines' synthetic regression cases. A fresh Python 3.12 environment
+also verified mdutils using only its declared verification/runtime requirements
+and the installed Alphus wheel, including its non-isolated build prerequisites.
+
+For a reusable local command, install `requirements-quality.txt` from either
+consumer repository root and run:
+
+```shell
+alphus --root /path/to/stub-repository \
+  --config quality-gates.toml --run --profile check
+```
+
+Both the local requirement and hosted quality action select the same immutable
+Alphus revision. Hosted workflow execution and the broader release matrix are
+not established by this local evidence. Existing merged-PR/manual triggers
+remain unchanged.

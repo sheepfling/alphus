@@ -160,7 +160,8 @@ def run_orchestration(
     output = stdout if stdout is not None else sys.stdout
     errors = stderr if stderr is not None else sys.stderr
     profile = policy.profile(profile_name)
-    if profile is None:
+    plan = policy.resolve_profile(profile_name)
+    if profile is None or plan is None:
         print(f"Unknown orchestration profile: {profile_name}", file=errors, flush=True)
         return 2
 
@@ -169,7 +170,9 @@ def run_orchestration(
     results: list[OrchestrationStepResult] = []
     all_findings: list[Diagnostic] = []
     threshold = policy.failure_threshold
-    for step_name in profile.steps:
+    if profile.includes and not json_output:
+        print(f"Selected profiles: {', '.join(plan.profiles)}", file=output, flush=True)
+    for step_name in plan.steps:
         step: RuleRunStep | CommandRunStep = next(
             item for item in policy.steps if item.name == step_name
         )
@@ -399,7 +402,10 @@ def run_orchestration(
             threshold,
             SeverityCounts.from_diagnostics(all_findings),
         )
-        print(json.dumps(asdict(result), sort_keys=True), file=output, flush=True)
+        payload = asdict(result)
+        if profile.includes:
+            payload["profiles"] = plan.profiles
+        print(json.dumps(payload, sort_keys=True), file=output, flush=True)
     else:
         print(
             f"Quality profile {profile_name}: {passed} passed, {failed} failed",

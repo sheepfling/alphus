@@ -1,0 +1,6 @@
+[links]
+check-missing-targets = true
+
+[orphans]
+enabled = true
+roots = ["README.md"]

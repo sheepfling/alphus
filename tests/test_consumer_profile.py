@@ -13,7 +13,7 @@ def test_consumer_example_composes_portable_rules_and_native_tools() -> None:
     config = load_config(_POLICY)
     orchestration = config.orchestration
     assert orchestration is not None
-    profile = orchestration.profile("check")
+    profile = orchestration.resolve_profile("check")
     assert profile is not None
     steps = {step.name: step for step in orchestration.steps}
 
@@ -84,6 +84,6 @@ def test_consumer_documentation_profile_has_only_native_doc_owners() -> None:
     config = load_config(_POLICY)
     orchestration = config.orchestration
     assert orchestration is not None
-    profile = orchestration.profile("docs")
+    profile = orchestration.resolve_profile("docs")
     assert profile is not None
     assert profile.steps == ("Markdown links and graph", "Markdown format")

@@ -141,12 +141,20 @@ argv = [
 ]
 
 [[orchestration.profiles]]
-name = "check"
+name = "python-policy"
 steps = [
   "Package boundaries", "Python structure", "Runtime type usage",
   "JSON structure", "Output escaping", "Path handling", "Line length",
-  "File size", "Python lint", "Package tests",
+  "File size",
 ]
+
+[[orchestration.profiles]]
+name = "python"
+steps = ["Python lint", "Package tests"]
+
+[[orchestration.profiles]]
+name = "check"
+includes = ["python-policy", "python"]
 
 [[orchestration.steps]]
 kind = "rule"

@@ -1,0 +1,53 @@
+name: Consumer quality profiles
+description: Install the pinned Alphus tools and run an explicit consumer profile.
+inputs:
+  python-version:
+    description: Python 3.11 or later used by the verification environment.
+    required: false
+    default: "3.12"
+  requirements-file:
+    description: Consumer-owned verification tool requirements, relative to the checkout.
+    required: true
+  runtime-requirements-file:
+    description: Optional consumer-owned runtime compatibility requirements.
+    required: false
+    default: ""
+  config-file:
+    description: Consumer-owned Alphus TOML policy.
+    required: false
+    default: quality-gates.toml
+  profile:
+    description: Explicit profile or composed profile to execute.
+    required: false
+    default: check
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: pip
+        cache-dependency-path: |
+          pyproject.toml
+          ${{ inputs.requirements-file }}
+          ${{ inputs.runtime-requirements-file }}
+    - name: Install pinned Alphus and consumer verification tools
+      shell: bash
+      env:
+        ALPHUS_ROOT: ${{ github.action_path }}/../..
+        TOOL_REQUIREMENTS: ${{ inputs.requirements-file }}
+        RUNTIME_REQUIREMENTS: ${{ inputs.runtime-requirements-file }}
+      run: |
+        args=("$ALPHUS_ROOT" -r "$TOOL_REQUIREMENTS")
+        if [[ -n "$RUNTIME_REQUIREMENTS" ]]; then
+          args+=(-r "$RUNTIME_REQUIREMENTS")
+        fi
+        python -m pip install --disable-pip-version-check "${args[@]}"
+    - name: Run selected consumer quality profile
+      shell: bash
+      env:
+        QUALITY_CONFIG: ${{ inputs.config-file }}
+        QUALITY_PROFILE: ${{ inputs.profile }}
+      run: |
+        python -m alphus --root "$GITHUB_WORKSPACE" \
+          --config "$QUALITY_CONFIG" --run --profile "$QUALITY_PROFILE"

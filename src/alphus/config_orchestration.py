@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
-from typing import Annotated, Literal
+from collections.abc import Mapping, Sequence
+from typing import Annotated, Literal, NamedTuple
 
 from pydantic import Field, field_validator, model_validator
 
@@ -17,6 +17,7 @@ from alphus.config_architecture import (
 from alphus.config_base import (
     QualityRuleName,
     StrictModel,
+    require_policy,
     require_unique,
     validate_one_line_message,
     validate_single_path,
@@ -49,11 +50,11 @@ from alphus.findings import Severity
 class CheckPolicies(StrictModel):
     """Settings for the currently available source gates."""
 
-    file_size: FileSizePolicy
-    line_length: LineLengthPolicy
-    json_structure: SourceScanPolicy
-    output_escaping: SourceScanPolicy
-    path_discovery: PathDiscoveryPolicy
+    file_size: FileSizePolicy | None = None
+    line_length: LineLengthPolicy | None = None
+    json_structure: SourceScanPolicy | None = None
+    output_escaping: SourceScanPolicy | None = None
+    path_discovery: PathDiscoveryPolicy | None = None
     numeric_literals: NumericLiteralPolicy | None = None
     test_quality: TestQualityPolicy | None = None
     input_contracts: InputContractPolicy | None = None
@@ -69,6 +70,29 @@ class CheckPolicies(StrictModel):
     version_sync: VersionSyncPolicy | None = None
     callable_registry: CallableRegistryPolicy | None = None
     dependency_locks: DependencyLockPolicy | None = None
+
+    def require_rule(self, rule: QualityRuleName) -> None:
+        """Validate only the primary policy needed by a selected rule."""
+        policies: Mapping[QualityRuleName, StrictModel | None] = {
+            "file-size": self.file_size,
+            "line-length": self.line_length,
+            "json-structure": self.json_structure,
+            "output-escaping": self.output_escaping,
+            "path-discovery": self.path_discovery,
+            "numeric-literals": self.numeric_literals,
+            "test-quality": self.test_quality,
+            "input-contracts": self.input_contracts,
+            "shared-utilities": self.shared_utilities,
+            "python-style": self.python_style,
+            "runtime-types": self.runtime_types,
+            "cli": self.cli,
+            "script-policy": self.script_policy,
+            "package-boundaries": self.package_boundaries,
+            "module-roles": self.module_roles,
+            "dependency-locks": self.dependency_locks,
+            "repository-layout": self.repository_layout,
+        }
+        require_policy(policies[rule], rule.replace("-", "_"))
 
 
 class RuleRunStep(StrictModel):
@@ -131,10 +155,11 @@ class CommandRunStep(StrictModel):
 
 
 class OrchestrationProfile(StrictModel):
-    """Select an ordered subset of named orchestration steps."""
+    """Compose named profiles and append an ordered subset of named steps."""
 
     name: str
-    steps: Annotated[tuple[str, ...], Field(min_length=1)]
+    steps: tuple[str, ...] = ()
+    includes: tuple[str, ...] = ()
 
     @field_validator("name")
     @classmethod
@@ -153,6 +178,28 @@ class OrchestrationProfile(StrictModel):
             raise ValueError("profile step names must be non-empty and unique")
         require_unique(steps, "profile step names must be non-empty and unique")
         return tuple(steps)
+
+    @field_validator("includes")
+    @classmethod
+    def validate_includes(cls, includes: Sequence[str]) -> tuple[str, ...]:
+        if any(not name for name in includes):
+            raise ValueError("included profile names must be non-empty and unique")
+        require_unique(includes, "included profile names must be non-empty and unique")
+        return tuple(includes)
+
+    @model_validator(mode="after")
+    def require_selection(self) -> OrchestrationProfile:
+        if not self.steps and not self.includes:
+            raise ValueError("a profile must select steps or include another profile")
+        return self
+
+
+class ProfilePlan(NamedTuple):
+    """One validated profile's deterministic, deduplicated execution plan."""
+
+    name: str
+    profiles: tuple[str, ...]
+    steps: tuple[str, ...]
 
 
 OrchestrationStep = Annotated[RuleRunStep | CommandRunStep, Field(discriminator="kind")]
@@ -185,7 +232,52 @@ class OrchestrationPolicy(StrictModel):
                 "profiles reference unknown orchestration steps: "
                 f"{', '.join(sorted(unknown_steps))}"
             )
+        unknown_profiles = {
+            included
+            for profile in self.profiles
+            for included in profile.includes
+            if included not in profile_names
+        }
+        if unknown_profiles:
+            raise ValueError(
+                "profiles reference unknown orchestration profiles: "
+                f"{', '.join(sorted(unknown_profiles))}"
+            )
+        for profile in self.profiles:
+            self.resolve_profile(profile.name)
         return self
+
+    def resolve_profile(self, name: str) -> ProfilePlan | None:
+        """Expand included profiles first; execute each named step once."""
+        configured = {profile.name: profile for profile in self.profiles}
+        if name not in configured:
+            return None
+        active: list[str] = []
+        completed: set[str] = set()
+        selected_profiles: list[str] = []
+        selected_steps: list[str] = []
+        seen_steps: set[str] = set()
+
+        def visit(profile_name: str) -> None:
+            if profile_name in active:
+                chain = " -> ".join([*active, profile_name])
+                raise ValueError(f"profile inclusion cycle: {chain}")
+            if profile_name in completed:
+                return
+            active.append(profile_name)
+            profile = configured[profile_name]
+            for included in profile.includes:
+                visit(included)
+            for step in profile.steps:
+                if step not in seen_steps:
+                    selected_steps.append(step)
+                    seen_steps.add(step)
+            active.pop()
+            completed.add(profile_name)
+            selected_profiles.append(profile_name)
+
+        visit(name)
+        return ProfilePlan(name, tuple(selected_profiles), tuple(selected_steps))
 
     def profile(self, name: str) -> OrchestrationProfile | None:
         """Return the configured execution profile, if present."""

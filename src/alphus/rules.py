@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from alphus.config import QualityGateConfig
+from alphus.config_base import require_policy
 from alphus.findings import Finding
 from alphus.inventory import matches_path
 
@@ -15,15 +16,15 @@ def check_line_length(
     root: Path, files: Sequence[Path], config: QualityGateConfig
 ) -> list[Finding]:
     """Report each physical source line beyond its configured extension limit."""
+    policy = require_policy(config.checks.line_length, "line_length")
     findings: list[Finding] = []
     checkout = root.resolve(strict=True)
     for relative in files:
         if any(
-            matches_path(relative.as_posix(), pattern)
-            for pattern in config.checks.line_length.exclude
+            matches_path(relative.as_posix(), pattern) for pattern in policy.exclude
         ):
             continue
-        limit = config.checks.line_length.limit_for(relative.suffix.lower())
+        limit = policy.limit_for(relative.suffix.lower())
         if limit is None:
             continue
         source = (checkout / relative).read_text(encoding="utf-8")
@@ -82,9 +83,9 @@ def check_file_size(
     root: Path, files: Sequence[Path], config: QualityGateConfig
 ) -> list[Finding]:
     """Report source, Markdown, and package initializer size violations."""
+    policy = require_policy(config.checks.file_size, "file_size")
     findings: list[Finding] = []
     checkout = root.resolve(strict=True)
-    policy = config.checks.file_size
     for relative in files:
         if any(
             matches_path(relative.as_posix(), pattern) for pattern in policy.exclude
