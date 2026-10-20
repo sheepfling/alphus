@@ -53,7 +53,7 @@ alias/data flow or complete type semantics.
 ## Acceptance blocker
 
 The installed-wheel verifiers pass against both actual consumer candidates on
-Python 3.11. The Alphus self-profile currently passes nine of ten steps.
+Python 3.11 and 3.12. The Alphus self-profile passes nine of ten steps on both.
 `Runtime type usage` reports 104 findings in the newly included inspection code
 because its unchanged rule requires an explicit union annotation for every
 `isinstance` check. The remaining steps, including the regression suite, pass.

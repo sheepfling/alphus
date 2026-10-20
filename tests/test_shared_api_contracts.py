@@ -132,3 +132,17 @@ def test_verification_config_rejects_invalid_diagnostic_counts(
     )
     with pytest.raises(SystemExit, match="could not read verification config"):
         read_config(tmp_path, path)
+
+
+def test_negative_contract_rejects_missing_diagnostic_fragment(tmp_path: Path) -> None:
+    fixture = tmp_path / "negative.py"
+    fixture.write_text("bad()\n", encoding="utf-8")
+    issues = check_result(
+        fixture,
+        1,
+        "negative.py:1: error: unrelated argument",
+        expect_errors=True,
+        expected_count=1,
+        required_diagnostics=("required argument type",),
+    )
+    assert any("missing expected diagnostics" in issue for issue in issues)
