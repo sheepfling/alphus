@@ -64,6 +64,16 @@ def test_negative_fixture_requires_exact_error_lines(tmp_path: Path) -> None:
         )
         == []
     )
+    assert (
+        check_result(
+            fixture,
+            1,
+            "negative_typecheck.py:2: error: first diagnostic\n"
+            "negative_typecheck.py:2:5 - error: second diagnostic",
+            expect_errors=True,
+        )
+        == []
+    )
     assert check_result(fixture, 0, "", expect_errors=True)
     assert check_result(
         fixture,

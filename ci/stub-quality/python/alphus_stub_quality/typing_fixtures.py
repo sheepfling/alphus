@@ -87,9 +87,7 @@ def check_result(
     observed_lines = observed_error_lines(output, fixture.name)
     if returncode == 0:
         issues.append("negative fixture unexpectedly passed")
-    if expected_lines and (
-        observed_lines != expected_lines or len(error_lines) != len(expected_lines)
-    ):
+    if expected_lines and observed_lines != expected_lines:
         issues.append(
             f"expected errors on lines {sorted(expected_lines)}, "
             f"received errors on lines {sorted(observed_lines)}"
