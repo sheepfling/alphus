@@ -9,7 +9,7 @@ from collections.abc import Set as AbstractSet
 from enum import Enum
 from pathlib import Path
 from types import FunctionType, MappingProxyType, ModuleType
-from typing import TypeAlias, cast
+from typing import Annotated, TypeAlias, cast
 
 from alphus_stub_quality.api_audit_support import (
     AnnotationShape,
@@ -111,7 +111,14 @@ def class_member_nodes(node: ast.ClassDef) -> dict[str, ast.AST]:
     return members
 
 
-def visible_class_member(name: str, value: object) -> bool:
+def visible_class_member(
+    name: str,
+    value: Annotated[
+        object,
+        "alphus:class-member",
+        "Unfiltered value from the inspected runtime class namespace",
+    ],
+) -> bool:
     if name in CLASS_METADATA:
         return False
     if not name.startswith("_"):
@@ -239,11 +246,16 @@ def validate_stub_tree(
             )
 
         for member_name, runtime_member in runtime_member_values.items():
+            inspected_member: Annotated[
+                object,
+                "alphus:class-member",
+                "Value from the validated runtime class member inventory",
+            ] = runtime_member
             stub_member = stub_members[member_name]
             label = f"{module_name}.{name}.{member_name}"
             if isinstance(stub_member, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 if not inspect.isroutine(runtime_member) and not isinstance(
-                    runtime_member, (staticmethod, classmethod, property)
+                    inspected_member, (staticmethod, classmethod, property)
                 ):
                     fail(f"stub callable {label} is not a runtime callable")
                 source_member = source_methods.get(member_name)
@@ -271,7 +283,7 @@ def validate_stub_tree(
                 validate_enum(label, runtime_member, stub_member)
             else:
                 if inspect.isroutine(runtime_member) or isinstance(
-                    runtime_member, (staticmethod, classmethod, property)
+                    inspected_member, (staticmethod, classmethod, property)
                 ):
                     fail(f"runtime callable {label} is not declared as a stub method")
 

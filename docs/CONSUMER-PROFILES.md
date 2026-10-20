@@ -69,8 +69,9 @@ policies exit 2 before any profile command runs; declared malformed sections
 remain invalid even when unselected. No permissive policy defaults are added.
 
 Alphus's self-profile retains all ten established steps by including
-`python-policy` and `python`. Composition does not remove its remaining
-runtime-type policy findings; see the [migration record](TEST-GATE-MIGRATION.md).
+`python-policy` and `python`. Composition does not remove runtime-type
+enforcement; see the [migration record](TEST-GATE-MIGRATION.md) for results
+at each revision and the [runtime-type contract](RUNTIME-TYPES.md).
 
 ## One pinned local and hosted entrypoint
 

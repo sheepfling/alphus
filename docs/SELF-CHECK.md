@@ -7,7 +7,8 @@ not a step in this profile.
 
 ## Run the installed wheel against this checkout
 
-Use Python 3.11 or newer. From anywhere inside the Alphus Git checkout, build a wheel, install it with
+Use Python 3.11 or newer. From anywhere inside the Alphus Git checkout, build a
+wheel, install it with
 the project's declared development dependencies in a temporary environment,
 then run its installed `alphus` command from outside the checkout. The
 explicit `--root` and `--config` paths make it inspect this checkout's real
@@ -38,6 +39,10 @@ Pip installs the wheel's runtime requirements alongside those tools. The
 profile includes Ruff lint and pytest; it does not include formatting or
 Pyright.
 
+The [runtime-type contract](RUNTIME-TYPES.md) describes typed AST dispatch and
+explicit reflection-value annotations. The existing exclusions below remain
+unchanged; that correction adds no file exclusions or threshold relaxation.
+
 ## Self-profile scope and exclusions
 
 `quality-gates.toml` inventories `src/**/*.py`, `tests/**/*.py`, `README.md`,
@@ -49,12 +54,14 @@ length, File size, Python lint, and Package tests. The global
 
 The only non-empty rule exclusions are:
 
-- **Runtime type usage, `tests/**`:** tests deliberately exercise dynamic and broad runtime-type
+- **Runtime type usage, `tests/**`:** tests deliberately exercise dynamic and
+  broad runtime-type
   cases to verify the rule; this policy is for application code.
 - **Runtime type usage, `src/alphus/python_style.py` and
   `src/alphus/runtime_types.py`:** these AST analyzers use `isinstance` to narrow
   AST nodes, not application runtime values.
-- **JSON structure, `tests/**`:** tests include decoder calls in source snippets to
+- **JSON structure, `tests/**`:** tests include decoder calls in source
+  snippets to
   verify which patterns the rule reports.
 - **Path inspection, `tests/**`:** test code asserts suspicious path strings to
   exercise the string-inspection heuristic; it is not application code.

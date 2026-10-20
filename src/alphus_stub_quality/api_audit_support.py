@@ -12,7 +12,7 @@ from collections.abc import Iterable, Mapping
 from collections.abc import Set as AbstractSet
 from enum import Enum
 from pathlib import Path
-from typing import Any, NoReturn, TypeAlias, cast
+from typing import Annotated, Any, NoReturn, TypeAlias, cast
 
 # Annotation shapes contain source names and recursively nested shapes only.
 AnnotationShape: TypeAlias = tuple["ShapePart", ...]
@@ -223,7 +223,13 @@ def runtime_class_index(
     return result
 
 
-def runtime_default(value: object) -> str:
+def runtime_default(
+    value: Annotated[
+        object,
+        "alphus:signature-default",
+        "Default value returned by inspect.signature",
+    ],
+) -> str:
     if isinstance(value, Enum):
         return f"{type(value).__qualname__}.{value.name}"
     return repr(value)
@@ -267,7 +273,13 @@ def ast_parameters(
     return result
 
 
-def runtime_parameters(value: object) -> list[tuple[str, str, str | None]]:
+def runtime_parameters(
+    value: Annotated[
+        object,
+        "alphus:class-member",
+        "Runtime callable or descriptor supplied for signature validation",
+    ],
+) -> list[tuple[str, str, str | None]]:
     if isinstance(value, (staticmethod, classmethod)):
         value = cast(Any, value).__func__
     elif isinstance(value, property):
@@ -306,7 +318,13 @@ def decorator_names(node: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
     }
 
 
-def runtime_decorators(value: object) -> set[str]:
+def runtime_decorators(
+    value: Annotated[
+        object,
+        "alphus:class-member",
+        "Runtime member supplied for decorator inspection",
+    ],
+) -> set[str]:
     result: set[str] = set()
     if isinstance(value, staticmethod):
         result.add("staticmethod")

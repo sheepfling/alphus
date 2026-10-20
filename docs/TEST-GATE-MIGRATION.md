@@ -50,7 +50,10 @@ static limits: direct imports, configured re-exports, constructor assignments,
 and direct calls. It does not prove runtime branch coverage or infer arbitrary
 alias/data flow or complete type semantics.
 
-## Acceptance blocker
+## Published migration acceptance checkpoint
+
+The following results describe published migration commit `d613d28`, before
+the separately approved local runtime-type correction.
 
 The installed-wheel verifiers pass against both actual consumer candidates on
 Python 3.11 and 3.12. The Alphus self-profile passes nine of ten steps on both.
@@ -82,6 +85,13 @@ model nominal AST inheritance, inferred child types, prior narrowing, or
 attribute types. Finite unions would misrepresent the arbitrary runtime
 reflection boundaries. A semantic policy decision remains necessary; consumer
 profile selection does not silently exempt this source from self-application.
+
+The subsequent approved local correction supports typed AST subtype dispatch
+and value-specific reflection contracts. Its semantics, counterexamples and
+remaining inference limits are documented in [Runtime type checks](RUNTIME-TYPES.md).
+It adds no file exclusions and preserves the existing object-facing adapters.
+The results below remain the historical migration checkpoint; local correction
+verification is recorded separately and is not a published PR update.
 
 ## Composition verification
 
