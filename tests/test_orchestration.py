@@ -6,11 +6,12 @@ import json
 import subprocess
 from io import StringIO
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
 
-from alphus import orchestration
+from alphus import orchestration, platform_utils
 from alphus.config import (
     CommandRunStep,
     FileInventoryPolicy,
@@ -59,6 +60,27 @@ def test_windows_batch_detection_uses_the_shared_platform_probe(
     monkeypatch.setattr(orchestration, "is_windows", lambda: True)
     monkeypatch.setattr(orchestration.shutil, "which", lambda _: "npm.cmd")
     assert _windows_shell_required(("npm.cmd",))
+
+
+@pytest.mark.parametrize(
+    ("platform", "expected"),
+    [
+        ("win32", (True, False, False)),
+        ("linux", (False, True, False)),
+        ("darwin", (False, False, True)),
+    ],
+)
+def test_platform_probes(
+    monkeypatch: pytest.MonkeyPatch,
+    platform: str,
+    expected: tuple[bool, bool, bool],
+) -> None:
+    monkeypatch.setattr(platform_utils, "sys", SimpleNamespace(platform=platform))
+    assert (
+        platform_utils.is_windows(),
+        platform_utils.is_linux(),
+        platform_utils.is_macos(),
+    ) == expected
 
 
 def test_python_orchestrator_runs_profile_without_node_on_path(
@@ -504,8 +526,18 @@ def test_orchestration_policy_rejects_unknown_profile_steps() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("working_directory", "expected_file"),
+    [
+        (".", "docs/guide.md"),
+        ("docs", "guide.md"),
+        ("private", "../docs/guide.md"),
+    ],
+)
 def test_file_scoped_command_receives_only_configured_repository_files(
     tmp_path: Path,
+    working_directory: str,
+    expected_file: str,
 ) -> None:
     subprocess.run(["git", "init", "--quiet", str(tmp_path)], check=True)
     (tmp_path / "docs").mkdir()
@@ -532,6 +564,7 @@ def test_file_scoped_command_receives_only_configured_repository_files(
                 files=FileInventoryPolicy(
                     include=("**/*.md",), exclude=("private/**",)
                 ),
+                working_directory=working_directory,
             ),
         ),
         profiles=(
@@ -551,9 +584,9 @@ def test_file_scoped_command_receives_only_configured_repository_files(
     )
 
     assert result == 0
-    assert json.loads((tmp_path / "seen.json").read_text(encoding="utf-8")) == [
-        "docs/guide.md"
-    ]
+    assert json.loads(
+        (tmp_path / working_directory / "seen.json").read_text(encoding="utf-8")
+    ) == [expected_file]
 
 
 def test_file_scoped_command_skips_when_no_files_match(tmp_path: Path) -> None:

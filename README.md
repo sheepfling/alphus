@@ -26,16 +26,16 @@ python -m pip install -e ".[dev]"
 ```
 
 Run the self-check profile from the repository root. It applies Alphus's
-portable rules to this source tree, then runs Ruff and the package tests:
+portable and review rules to this source tree, validates TOML, then runs Ruff
+lint/format, strict Pyright, and the package tests:
 
 ```sh
 alphus --root . --config quality-gates.toml --run --profile check
 ```
 
 For the installed-wheel version of this check, including the current self-profile
-scope and exclusions, see [Self-checking Alphus](docs/SELF-CHECK.md). The separate
-`review` profile runs [optional advisory checks](docs/REVIEW-CHECKS.md) for numeric
-literals, test contracts, and collection inputs.
+scope and exclusions, see [Self-checking Alphus](docs/SELF-CHECK.md). The
+`review` profile also selects [the review checks](docs/REVIEW-CHECKS.md) alone.
 
 ## Use from another repository
 

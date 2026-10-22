@@ -19,6 +19,8 @@ activate gates. Ordinary Python repositories can combine `python` and
 | `markdown` | Document links/graph, style/format | mdrepo and rumdl |
 | `python` | Lint, formatting, project tests/tooling types | Ruff, pytest/unittest, Mypy/Pyright |
 | `stubs` | Build/install, API, typed examples, stubtest, smoke | Alphus and native checkers |
+| `toml` | TOML document syntax | Python `tomllib` or a consumer-selected validator |
+| `json` | JSON document syntax | Python `json` or a consumer-selected validator |
 | `python-policy` | Optional repository-specific source conventions | Explicit Alphus source policy |
 
 Define each profile's steps in the consumer policy, then compose them:
@@ -60,6 +62,15 @@ plugin import, category rewrite, or automatic type detection. Package-specific
 API expectations and runtime assertions remain in each stub repository.
 The shared checking algorithms and their unit tests live in Alphus.
 
+The consumer example defines independent `toml` and `json` profiles for
+document syntax. Each runs only when selected; a repository can add either to
+`check` when those files are part of its required gate. These document checks
+are separate from `json-structure`, which analyzes JSON parsing patterns in
+Python source.
+The same command-step mechanism lets a C++ or JavaScript consumer define its
+own native build, lint, and test profiles without changing the Python, stub,
+or Markdown selections.
+
 Portable policy sections are optional when their gates are unselected. A
 command-only Markdown consumer can omit `[checks]` entirely; see the
 [minimal Markdown policy](../examples/markdown/quality-gates.toml) and its
@@ -69,7 +80,8 @@ policies exit 2 before any profile command runs; declared malformed sections
 remain invalid even when unselected. No permissive policy defaults are added.
 
 Alphus's self-profile retains all ten established steps by including
-`python-policy` and `python`. Composition does not remove runtime-type
+`python-policy` and `python`, then adds TOML syntax and the three review
+rules. Its Python profile also checks formatting. Composition does not remove runtime-type
 enforcement; see the [migration record](TEST-GATE-MIGRATION.md) for results
 at each revision and the [runtime-type contract](RUNTIME-TYPES.md).
 

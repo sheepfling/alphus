@@ -197,8 +197,8 @@ def policy_issues(root: Path, paths: Iterable[Path], policy: CliPolicy) -> list[
             continue
         source = (checkout / relative).read_text(encoding="utf-8-sig")
         for issue in python_cli_issues(source, policy.python):
-            issues.append(f"{relative}: {issue}")
+            issues.append(f"{relative.as_posix()}: {issue}")
     if policy.node is not None:
         for relative in sorted(node_cli_files(checkout, authored, policy.node)):
-            issues.append(f"{relative}: {policy.node_endpoint_message}")
+            issues.append(f"{relative.as_posix()}: {policy.node_endpoint_message}")
     return issues

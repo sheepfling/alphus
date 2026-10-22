@@ -121,6 +121,13 @@ version. The caller retains its trigger and permission policy.
 
 `alphus-typing-fixtures` (also `python -m alphus_stub_quality.typing_fixtures`)
 checks positive and expected-negative examples through native Mypy and Pyright.
+Ty is available as an opt-in checker with `--checkers ty` after installing it
+in the checker environment. It uses concise diagnostics and accepts the same
+target interpreter and Python version selection. Add `--ty-diagnostic` when a
+negative fixture requires a Ty-specific diagnostic fragment. The default
+checker selection remains Mypy and Pyright. The isolated stub verifier accepts
+`typing_checkers = ["mypy", "pyright", "ty"]` and optional `ty_diagnostics` in
+its `verification` config to enable Ty alongside them.
 Positive examples require exit zero and no errors. Negative contracts require
 an exact set of marked lines, or a configured diagnostic count, plus any
 checker-specific diagnostic fragments. An unrelated failure never establishes

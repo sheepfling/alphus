@@ -112,7 +112,9 @@ def test_child_environment_does_not_inherit_checker_package_paths(
         "VIRTUAL_ENV": "/checker",
     }
     env = child_environment(base, "/target/bin/python")
-    assert env["PATH"].split(os.pathsep)[0] == "/target/bin"
+    assert env["PATH"].split(os.pathsep)[0] == str(
+        Path("/target/bin/python").absolute().parent
+    )
     assert env["PYTHONNOUSERSITE"] == "1"
     assert all(
         key not in env
@@ -155,13 +157,37 @@ def test_target_overlay_contains_only_unchanged_pure_python_engines(
         assert path.read_bytes() == (verify.ACTION_ROOT / path.name).read_bytes()
 
 
+def test_consumer_copy_accepts_allowlist_inside_tests(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    (source / "tests").mkdir(parents=True)
+    (source / "tests" / "allowlist.txt").write_text("allowed\n", encoding="utf-8")
+    (source / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
+    settings = verify.VerificationConfig(
+        stubtest_module="example",
+        stubtest_allowlist="tests/allowlist.txt",
+        positive_fixture="tests/positive.py",
+        negative_fixture="tests/negative.py",
+    )
+    destination = tmp_path / "consumer"
+
+    verify.prepare_consumer(source, destination, settings)
+
+    assert (destination / "tests" / "allowlist.txt").read_text(
+        encoding="utf-8"
+    ) == "allowed\n"
+
+
 @pytest.mark.parametrize(
     "failure", [None, "Runtime consumer smoke", "Installed dependency consistency"]
+)
+@pytest.mark.parametrize(
+    "typing_checkers", [("mypy", "pyright"), ("mypy", "pyright", "ty")]
 )
 def test_every_stage_uses_its_declared_environment_and_target_failure_propagates(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     failure: str | None,
+    typing_checkers: tuple[str, ...],
 ) -> None:
     root = tmp_path / "repo"
     (root / "tests").mkdir(parents=True)
@@ -182,6 +208,10 @@ def test_every_stage_uses_its_declared_environment_and_target_failure_propagates
                     "negative_fixture": "tests/negative.py",
                     "api_audit_module": "tests.audit",
                     "runtime_smoke_module": "tests.smoke",
+                    "typing_checkers": typing_checkers,
+                    "ty_diagnostics": ["invalid-assignment"]
+                    if "ty" in typing_checkers
+                    else [],
                 }
             }
         ),
@@ -251,10 +281,15 @@ def test_every_stage_uses_its_declared_environment_and_target_failure_propagates
     assert result.target.version == (3, 10, 22)
     assert result.checker.version == (3, 12, 14)
     assert result.passed == (failure is None)
+    type_stage = (
+        "Positive and expected-negative mypy and Pyright fixtures"
+        if typing_checkers == ("mypy", "pyright")
+        else "Positive and expected-negative mypy, pyright, ty fixtures"
+    )
     for name, (arguments, env) in calls.items():
         is_checker = name in {
             "Checker: Twine artifact metadata",
-            "Positive and expected-negative mypy and Pyright fixtures",
+            type_stage,
         }
         assert arguments[0] == (checker.executable if is_checker else target.executable)
         assert ("PYTHONPATH" in env) == (
@@ -262,6 +297,9 @@ def test_every_stage_uses_its_declared_environment_and_target_failure_propagates
         )
     if failure is None:
         assert len(calls) == 8
-        command = calls["Positive and expected-negative mypy and Pyright fixtures"][0]
+        command = calls[type_stage][0]
         assert command[command.index("--target-python") + 1] == target.executable
         assert command[command.index("--python-version") + 1] == "3.10"
+        start = command.index("--checkers") + 1
+        assert command[start : start + len(typing_checkers)] == list(typing_checkers)
+        assert ("--ty-diagnostic" in command) == ("ty" in typing_checkers)

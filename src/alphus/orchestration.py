@@ -84,6 +84,7 @@ def _arguments(
     root: Path,
     config_path: Path,
     files: Sequence[Path] = (),
+    directory: Path | None = None,
 ) -> list[str]:
     """Expand only the documented runner placeholders in an argv vector."""
     replacements = {
@@ -94,13 +95,28 @@ def _arguments(
     arguments: list[str] = []
     for configured_argument in step.argv:
         if configured_argument == "{files}":
-            arguments.extend(path.as_posix() for path in files)
+            arguments.extend(
+                _relative_file_argument(root, directory or root, path) for path in files
+            )
             continue
         argument = configured_argument
         for token, value in replacements.items():
             argument = argument.replace(token, value)
         arguments.append(argument)
     return arguments
+
+
+def _relative_file_argument(root: Path, directory: Path, path: Path) -> str:
+    """Name an inventoried file relative to the command's working directory."""
+    base_parts = directory.relative_to(root).parts
+    file_parts = path.parts
+    common = 0
+    for base_part, file_part in zip(base_parts, file_parts):
+        if base_part != file_part:
+            break
+        common += 1
+    parts = ("..",) * (len(base_parts) - common) + file_parts[common:]
+    return PurePosixPath(*parts).as_posix()
 
 
 def _windows_shell_required(arguments: Sequence[str]) -> bool:
@@ -185,6 +201,7 @@ def run_orchestration(
         findings: list[Diagnostic] = []
         skipped_empty_file_scope = False
         legacy_diagnostics: tuple[str, ...] = ()
+        attempted_command: str | None = None
         try:
             match step:
                 case RuleRunStep(rule=rule):
@@ -289,10 +306,11 @@ def run_orchestration(
                         skipped_empty_file_scope = True
                         exit_code = 0
                     else:
-                        arguments = _arguments(
-                            step, checkout, resolved_config, selected_files
-                        )
                         directory = _step_directory(checkout, working_directory)
+                        arguments = _arguments(
+                            step, checkout, resolved_config, selected_files, directory
+                        )
+                        attempted_command = arguments[0]
                         result = subprocess.run(
                             arguments,
                             cwd=directory,
@@ -318,7 +336,10 @@ def run_orchestration(
                                 )
                             )
         except (OSError, ValueError, subprocess.CalledProcessError) as error:
-            message = f"{step.name}: {error}"
+            detail = str(error)
+            if attempted_command is not None and attempted_command not in detail:
+                detail = f"{attempted_command}: {detail}"
+            message = f"{step.name}: {detail}"
             captured_stderr.write(f"{message}\n")
             step_stderr = captured_stderr.getvalue()
             legacy_diagnostics = (message,)

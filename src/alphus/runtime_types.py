@@ -140,12 +140,15 @@ class TypeCheckVisitor(ast.NodeVisitor):
         )
         if resolved is not None:
             return resolved
-        if isinstance(expression, ast.Name) and expression.id in BUILTINS:
-            if not any(
+        if (
+            isinstance(expression, ast.Name)
+            and expression.id in BUILTINS
+            and not any(
                 expression.id in scope.values or "*" in scope.values
                 for scope in self._visible()
-            ):
-                return f"builtins.{expression.id}"
+            )
+        ):
+            return f"builtins.{expression.id}"
         if isinstance(expression, ast.Name):
             for scope in self._visible():
                 if expression.id in scope.values:
@@ -771,7 +774,7 @@ def policy_issues(
         path = checkout / relative
         if path.is_file():
             issues.extend(
-                f"{relative}:{line}: {reason}"
+                f"{relative.as_posix()}:{line}: {reason}"
                 for line, reason in type_check_findings(
                     path.read_text(encoding="utf-8-sig")
                 )

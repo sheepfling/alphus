@@ -87,3 +87,18 @@ def test_consumer_documentation_profile_has_only_native_doc_owners() -> None:
     profile = orchestration.resolve_profile("docs")
     assert profile is not None
     assert profile.steps == ("Markdown links and graph", "Markdown format")
+
+
+def test_consumer_data_formats_have_separate_opt_in_profiles() -> None:
+    config = load_config(_POLICY)
+    orchestration = config.orchestration
+    assert orchestration is not None
+    toml = orchestration.resolve_profile("toml")
+    json_profile = orchestration.resolve_profile("json")
+    check = orchestration.resolve_profile("check")
+
+    assert toml is not None and toml.steps == ("TOML syntax",)
+    assert json_profile is not None and json_profile.steps == ("JSON syntax",)
+    assert check is not None
+    assert "TOML syntax" not in check.steps
+    assert "JSON syntax" not in check.steps

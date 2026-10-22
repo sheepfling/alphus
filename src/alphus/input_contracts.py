@@ -18,7 +18,7 @@ from alphus.source_scanning import (
     import_aliases,
 )
 
-Family = Literal["sequence", "mapping", "set"]
+Family = Literal["sequence", "mapping", "set", "binary"]
 _ABSTRACT_FAMILIES: tuple[tuple[str, Family], ...] = (
     ("Sequence", "sequence"),
     ("MutableSequence", "sequence"),
@@ -41,6 +41,9 @@ _COLLECTIONS: Mapping[str, tuple[Family, bool, bool]] = MappingProxyType(
         "typing.Tuple": ("sequence", False, False),
         "frozenset": ("set", False, False),
         "typing.FrozenSet": ("set", False, False),
+        "bytes": ("binary", True, False),
+        "bytearray": ("binary", True, True),
+        "memoryview": ("binary", True, True),
         **{
             f"{module}.{name}": (family, False, name.startswith("Mutable"))
             for module in ("typing", "collections.abc")
@@ -96,6 +99,21 @@ _MUTATORS: Mapping[Family, frozenset[str]] = MappingProxyType(
                 "__ixor__",
             }
         ),
+        "binary": frozenset(
+            {
+                "append",
+                "extend",
+                "insert",
+                "remove",
+                "pop",
+                "clear",
+                "reverse",
+                "__setitem__",
+                "__delitem__",
+                "__iadd__",
+                "__imul__",
+            }
+        ),
     }
 )
 _READ_METHODS: Mapping[Family, frozenset[str]] = MappingProxyType(
@@ -105,6 +123,19 @@ _READ_METHODS: Mapping[Family, frozenset[str]] = MappingProxyType(
             {"get", "keys", "values", "items", "__len__", "__getitem__", "__iter__"}
         ),
         "set": frozenset({"isdisjoint", "__len__", "__iter__", "__contains__"}),
+        "binary": frozenset(
+            {
+                "count",
+                "index",
+                "decode",
+                "hex",
+                "tobytes",
+                "tolist",
+                "__len__",
+                "__getitem__",
+                "__iter__",
+            }
+        ),
     }
 )
 _ITERATION_CALLS = frozenset(
@@ -667,6 +698,7 @@ def _function_findings(
         if (
             policy.suggest_read_only
             and usage.annotation.concrete
+            and usage.annotation.family != "binary"
             and usage.reads
             and not usage.mutations
             and not usage.uncertain

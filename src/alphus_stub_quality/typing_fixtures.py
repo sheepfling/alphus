@@ -15,7 +15,7 @@ from pathlib import Path
 
 from alphus_stub_quality.environments import child_environment, probe_python
 
-ERROR_LINE = re.compile(r"\berror:\s")
+ERROR_LINE = re.compile(r"\berror(?::|\[[^\]]+\]:?)\s")
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +25,8 @@ class Checker:
 
 
 CHECKERS = (Checker("mypy", "mypy"), Checker("pyright", "pyright"))
+OPTIONAL_CHECKERS = (Checker("ty", "ty"),)
+AVAILABLE_CHECKERS = CHECKERS + OPTIONAL_CHECKERS
 ProcessRunner = Callable[..., subprocess.CompletedProcess[str]]
 
 
@@ -39,7 +41,8 @@ def expected_error_lines(source: str) -> set[int]:
 def observed_error_lines(output: str, filename: str) -> set[int]:
     escaped_name = re.escape(filename)
     location = re.compile(
-        rf"(?:^|[/\\]){escaped_name}:(\d+)(?::\d+)?(?::\s*error:|\s+-\s+error:)"
+        rf"(?:^|[/\\]){escaped_name}:(\d+)(?::\d+)?"
+        rf"(?::\s*error(?::|\[[^\]]+\]:?)|\s+-\s+error:)"
     )
     return {
         int(match.group(1))
@@ -73,6 +76,12 @@ def build_command(
         command.extend(("--pythonpath", target_python or sys.executable))
         if python_version is not None:
             command.extend(("--pythonversion", python_version))
+    elif checker.name == "ty":
+        command.extend(("check", "--output-format", "concise", "--no-progress"))
+        if target_python is not None:
+            command.extend(("--python", target_python))
+        if python_version is not None:
+            command.extend(("--python-version", python_version))
     else:
         raise ValueError(f"unknown checker: {checker.name}")
     command.append(str(fixture.resolve()))
@@ -126,10 +135,10 @@ def check_result(
     return issues
 
 
-def _text_output(value: str | bytes | None) -> str:
+def _text_output(value: str | bytes | bytearray | None) -> str:
     if value is None:
         return ""
-    if isinstance(value, bytes):
+    if isinstance(value, (bytes, bytearray)):
         return value.decode("utf-8", errors="replace")
     return value
 
@@ -266,6 +275,7 @@ def run_suite(
     expected_count: int | None = None,
     mypy_diagnostics: Sequence[str] = (),
     pyright_diagnostics: Sequence[str] = (),
+    ty_diagnostics: Sequence[str] = (),
     checkers: Sequence[Checker] = CHECKERS,
     target_python: str | None = None,
     python_version: str | None = None,
@@ -275,6 +285,7 @@ def run_suite(
     diagnostics_by_name = {
         "mypy": mypy_diagnostics,
         "pyright": pyright_diagnostics,
+        "ty": ty_diagnostics,
     }
     for checker in checkers:
         success = (
@@ -312,7 +323,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--checkers",
         nargs="+",
-        choices=("mypy", "pyright"),
+        choices=tuple(checker.name for checker in AVAILABLE_CHECKERS),
         default=("mypy", "pyright"),
     )
     parser.add_argument("--target-python")
@@ -320,12 +331,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--expected-count", type=int)
     parser.add_argument("--mypy-diagnostic", action="append", default=[])
     parser.add_argument("--pyright-diagnostic", action="append", default=[])
+    parser.add_argument("--ty-diagnostic", action="append", default=[])
     options = parser.parse_args(argv)
 
     if options.expected_count is not None and options.expected_count < 1:
         parser.error("--expected-count must be a positive integer")
     checkers = tuple(
-        checker for checker in CHECKERS if checker.name in options.checkers
+        checker for checker in AVAILABLE_CHECKERS if checker.name in options.checkers
     )
     try:
         if options.target_python is not None:
@@ -344,6 +356,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             expected_count=options.expected_count,
             mypy_diagnostics=options.mypy_diagnostic,
             pyright_diagnostics=options.pyright_diagnostic,
+            ty_diagnostics=options.ty_diagnostic,
             checkers=checkers,
             target_python=options.target_python,
             python_version=options.python_version,

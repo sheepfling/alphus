@@ -6,6 +6,7 @@ import subprocess
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -27,8 +28,10 @@ from alphus_stub_quality.api_audit_support import (
     target_names,
     uses_typing_any,
 )
+from alphus_stub_quality.runtime_audit import validate_stub_tree
 from alphus_stub_quality.typing_fixtures import (
     CHECKERS,
+    OPTIONAL_CHECKERS,
     Checker,
     build_command,
     check_result,
@@ -100,6 +103,52 @@ def test_negative_fixture_requires_exact_error_lines(tmp_path: Path) -> None:
         expected_count=2,
     )
     assert any("expected 2 error diagnostics, got 1" in issue for issue in count_issues)
+
+
+def test_ty_concise_diagnostics_and_target_flags(tmp_path: Path) -> None:
+    fixture = tmp_path / "negative_typecheck.py"
+    fixture.write_text("value = 1  # expect-error\n", encoding="utf-8")
+    command = build_command(
+        OPTIONAL_CHECKERS[0],
+        fixture,
+        None,
+        target_python=sys.executable,
+        python_version="3.12",
+    )
+    output = f"{fixture.name}:1:9: error[invalid-assignment] incompatible type"
+
+    assert command[:4] == [sys.executable, "-m", "ty", "check"]
+    assert command[command.index("--python") + 1] == sys.executable
+    assert command[command.index("--python-version") + 1] == "3.12"
+    assert check_result(fixture, 1, output, expect_errors=True) == []
+
+
+def test_runtime_stub_accepts_declared_public_instance_attribute(
+    tmp_path: Path,
+) -> None:
+    source = "class Item:\n def __init__(self) -> None:\n  self.value = 1\n"
+    source_path = tmp_path / "example.py"
+    source_path.write_text(source, encoding="utf-8")
+    module = ModuleType("example")
+
+    class Item:
+        def __init__(self) -> None:
+            self.value = 1
+
+    Item.__module__ = "example"
+    module.__dict__["Item"] = Item
+    stub = ast.parse("class Item:\n value: int\n def __init__(self) -> None: ...\n")
+
+    assert validate_stub_tree(
+        "example",
+        stub,
+        module,
+        source_path,
+        forbidden_names=frozenset(),
+        annotation_widenings={},
+        return_annotation_widenings={},
+        scoped_type_names=frozenset(),
+    ) == (1, 0)
 
 
 @pytest.mark.parametrize("checker", CHECKERS, ids=lambda item: item.name)

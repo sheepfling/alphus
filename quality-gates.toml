@@ -3,7 +3,7 @@ schema_version = 1
 [files]
 include = [
   "src/**/*.py", "tests/**/*.py", "README.md", "docs/**/*.md",
-  "examples/**/*.toml", "pyproject.toml", "quality-gates.toml",
+  "**/*.toml", "*.toml", "**/*.json", "*.json",
 ]
 exclude = []
 
@@ -60,7 +60,7 @@ math_constants = true
 extensions = [".py"]
 exclude = []
 test_paths = ["tests/**"]
-ephemeral_document_patterns = []
+ephemeral_document_patterns = ["docs/**"]
 
 [checks.input_contracts]
 extensions = [".py"]
@@ -84,6 +84,7 @@ alphus_stub_quality = []
 
 [orchestration]
 default_profile = "check"
+failure_threshold = "warning"
 
 [[orchestration.steps]]
 kind = "rule"
@@ -140,6 +141,36 @@ argv = [
   "{python}", "-m", "pytest", "-p", "no:cacheprovider", "tests", "-q",
 ]
 
+[[orchestration.steps]]
+kind = "command"
+name = "Python format"
+argv = ["{python}", "-m", "ruff", "format", "--check", "src", "tests"]
+
+[[orchestration.steps]]
+kind = "command"
+name = "Python types"
+argv = ["{python}", "-m", "pyright", "--pythonpath", "{python}", "src"]
+
+[[orchestration.steps]]
+kind = "command"
+name = "TOML syntax"
+argv = [
+  "{python}", "-c",
+  "import sys, tomllib; from pathlib import Path; [tomllib.loads(Path(p).read_text(encoding='utf-8')) for p in sys.argv[1:]]",
+  "{files}",
+]
+files = { include = ["**/*.toml", "*.toml"] }
+
+[[orchestration.steps]]
+kind = "command"
+name = "JSON syntax"
+argv = [
+  "{python}", "-c",
+  "import json, sys; from pathlib import Path; [json.loads(Path(p).read_text(encoding='utf-8')) for p in sys.argv[1:]]",
+  "{files}",
+]
+files = { include = ["**/*.json", "*.json"] }
+
 [[orchestration.profiles]]
 name = "python-policy"
 steps = [
@@ -150,11 +181,19 @@ steps = [
 
 [[orchestration.profiles]]
 name = "python"
-steps = ["Python lint", "Package tests"]
+steps = ["Python lint", "Python format", "Python types", "Package tests"]
+
+[[orchestration.profiles]]
+name = "toml"
+steps = ["TOML syntax"]
+
+[[orchestration.profiles]]
+name = "json"
+steps = ["JSON syntax"]
 
 [[orchestration.profiles]]
 name = "check"
-includes = ["python-policy", "python"]
+includes = ["python-policy", "toml", "python", "review"]
 
 [[orchestration.steps]]
 kind = "rule"

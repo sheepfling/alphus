@@ -165,6 +165,21 @@ def test_set_membership_can_use_an_abstract_set_contract() -> None:
     assert "AbstractSet[str]" in findings[0].message
 
 
+def test_binary_buffers_report_writes_without_replacement_type_advice() -> None:
+    findings = analyze("""
+        def update(data: bytearray, view: memoryview, fixed: bytes):
+            data.append(1)
+            view[0] = 2
+            return len(fixed)
+    """)
+
+    assert [(item.rule_id, item.line) for item in findings] == [
+        ("input-contracts.argument-mutation", 2),
+        ("input-contracts.argument-mutation", 3),
+    ]
+    assert analyze("def inspect(data: bytearray):\n return len(data)\n") == []
+
+
 def test_unknown_custom_annotations_and_variadic_element_annotations_are_not_inferred() -> (
     None
 ):

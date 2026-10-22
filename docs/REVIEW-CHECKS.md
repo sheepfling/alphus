@@ -1,4 +1,4 @@
-# Optional Python review checks
+# Python review checks
 
 These bounded source checks emit structured **warning** findings. They prompt a
 review of intent; they do not prove numeric correctness, test quality, or the
@@ -6,17 +6,17 @@ absence of side effects. Existing policies remain valid without their optional
 sections. Ruff, Pyright, pytest, mdrepo, and rumdl retain their own checks.
 
 Alphus applies all three scanners to its real source/test inventory through the
-`review` profile. Its existing `check` profile still has ten steps and an error
-failure threshold. Build/install the wheel using [the self-check guide](SELF-CHECK.md),
-then invoke the installed command from the temporary directory:
+`review` profile and includes them in `check` with a warning failure threshold.
+Build/install the wheel using [the self-check guide](SELF-CHECK.md), then
+invoke the installed command from the temporary directory:
 
 ```sh
 "$work/venv/bin/alphus" --root "$repo" --config "$repo/quality-gates.toml" --run --profile review
 ```
 
-Warnings stay visible and do not fail the default error threshold. A consumer
-can explicitly set `orchestration.failure_threshold = "warning"` to enforce
-warnings, or set a rule step's `severity`. Native command failures still fail.
+Other consumers retain the default error threshold unless they explicitly set
+`orchestration.failure_threshold = "warning"` or a rule step's `severity`.
+Native command failures still fail.
 
 ## Numeric literals
 
@@ -102,10 +102,11 @@ Pytest `tmp_path`/`tmpdir` inputs and files created earlier in the same test are
 recognized as fixtures. Helper-built paths, external fixture setup, indirect
 reads, and general interprocedural dependencies are unresolved.
 
-Alphus currently sets `ephemeral_document_patterns = []`: it has no declared
-transient documents for tests to depend on. That subcheck is unconfigured in
-self-application; its positive and negative cases are exercised in generic
-regression fixtures. This is not a global file exclusion.
+Alphus sets `ephemeral_document_patterns = ["docs/**"]` for its own tests.
+This makes a direct read of repository documentation an enforced finding in
+the self `check` profile; a test-created fixture or temporary path remains
+allowed. Consumers select their own document folders. This is not a global
+file exclusion.
 
 ## Input contracts
 
@@ -135,6 +136,9 @@ promise indexing, length, or repeated traversal. Dictionary and set reads can
 suggest `Mapping[K, V]` and `AbstractSet[T]`. Unknown helpers, escapes, unsupported
 methods, and uncertain aliases suppress read-only advice. List-specific methods
 such as `sort` do not receive an automatic `MutableSequence` replacement.
+For `bytes`, `bytearray`, and `memoryview`, the rule records visible writes to
+mutable buffers but does not suggest replacing one with another: `bytes` is
+immutable, while a `memoryview` may expose a writable underlying buffer.
 
 The existing `python-style.concrete_inputs` annotation convention stays at its
 configured severity, independently of these optional warnings. Its imported

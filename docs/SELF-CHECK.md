@@ -1,9 +1,8 @@
 # Self-checking Alphus
 
 The `check` profile validates the package against its own repository policy. It
-runs Alphus portable rules, native Ruff lint, and the package tests. Ruff
-formatting and strict Pyright remain native checks run separately; Pyright is
-not a step in this profile.
+runs Alphus portable rules, the review rules, TOML syntax, native Ruff lint
+and format checks, strict Pyright, and the package tests.
 
 ## Run the installed wheel against this checkout
 
@@ -23,7 +22,7 @@ mkdir -p "$work/wheels"
 python3 -m pip wheel --no-deps --wheel-dir "$work/wheels" "$repo"
 python3 -m venv "$work/venv"
 wheel="$(find "$work/wheels" -maxdepth 1 -name 'alphus-*.whl' -print -quit)"
-"$work/venv/bin/python" -m pip install "$wheel" 'pytest>=8,<10' 'ruff>=0.16,<1'
+"$work/venv/bin/python" -m pip install "$wheel" 'pyright>=1.1.414,<2' 'pytest>=8,<10' 'ruff>=0.16,<1'
 
 (
   cd "$work"
@@ -34,10 +33,9 @@ wheel="$(find "$work/wheels" -maxdepth 1 -name 'alphus-*.whl' -print -quit)"
 )
 ```
 
-The pytest and Ruff version ranges match the `dev` extra in `pyproject.toml`.
+The Pyright, pytest, and Ruff version ranges match the `dev` extra in `pyproject.toml`.
 Pip installs the wheel's runtime requirements alongside those tools. The
-profile includes Ruff lint and pytest; it does not include formatting or
-Pyright.
+profile includes Ruff lint, formatting, strict Pyright, and pytest.
 
 The [runtime-type contract](RUNTIME-TYPES.md) describes typed AST dispatch and
 explicit reflection-value annotations. The existing exclusions below remain
@@ -46,10 +44,11 @@ unchanged; that correction adds no file exclusions or threshold relaxation.
 ## Self-profile scope and exclusions
 
 `quality-gates.toml` inventories `src/**/*.py`, `tests/**/*.py`, `README.md`,
-`docs/**/*.md`, `examples/**/*.toml`, `pyproject.toml`, and
-`quality-gates.toml`. The profile runs Package boundaries, Python structure,
-Runtime type usage, JSON structure, Output escaping, Path handling, Line
-length, File size, Python lint, and Package tests. The global
+`docs/**/*.md`, and all repository TOML and JSON files. The profile retains
+the original eight portable rules and Python lint/package tests, then adds
+TOML syntax, Python formatting, strict Pyright, Numeric review, Test review, and Input contract
+review. The separate `json` profile is available when JSON documents are
+added to this repository. The global
 `[files].exclude` is empty.
 
 The only non-empty rule exclusions are:
@@ -74,15 +73,16 @@ test file's `Path(__file__).resolve().parents[1]` finding remains while its
 
 All other configured rule `exclude` lists are empty: file size, line length,
 output escaping, Python structure, and structural path handling. There is no
-global file exclusion. The optional numeric, test-quality, and input-contract
+global file exclusion. The numeric, test-quality, and input-contract
 review scanners also have empty exclusion lists. These targeted exceptions do
 not relax Ruff or Pyright.
 
-The separate `review` profile applies three optional warning scanners to the
-same real inventory. It does not change the ten-step `check` profile. Its test
-prose scan covers `tests/**`; its ephemeral-document patterns are empty because
-this repository declares no transient plan documents as test inputs. See
-[optional review checks](REVIEW-CHECKS.md) for exact behavior and current limits.
+The `review` profile still selects the three warning scanners on its own.
+`check` now includes it and fails on warnings so test prose and input-contract
+regressions cannot be silently accepted. The test scan covers `tests/**` and
+flags direct reads from `docs/**`; temporary fixtures and paths created by the
+test remain allowed. See [review checks](REVIEW-CHECKS.md) for exact behavior
+and current limits.
 
 ## Native Python checks
 
@@ -94,7 +94,7 @@ ruff format --check src tests
 python -m pyright --pythonpath "$(python -c 'import sys; print(sys.executable)')" src
 ```
 
-The first command is the self-profile's native Ruff lint step; formatting is
-checked separately. The Pyright command uses the repository's strict mode from
+These commands are the self-profile's native Python steps. The Pyright
+command uses the repository's strict mode from
 `pyproject.toml`. Native tools retain ownership of lint, formatting, and type
 diagnostics; Alphus does not duplicate or reinterpret them.

@@ -11,7 +11,7 @@ import tempfile
 import time
 from collections.abc import Mapping, MutableSequence, Sequence
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -50,8 +50,12 @@ class VerificationConfig(BaseModel):
     api_audit_args: tuple[str, ...] = ()
     runtime_smoke_module: NonEmptyString | None = None
     negative_expected_count: Annotated[int, Field(strict=True, ge=1)] | None = None
+    typing_checkers: Annotated[
+        tuple[Literal["mypy", "pyright", "ty"], ...], Field(min_length=1)
+    ] = ("mypy", "pyright")
     mypy_diagnostics: tuple[NonEmptyString, ...] = ()
     pyright_diagnostics: tuple[NonEmptyString, ...] = ()
+    ty_diagnostics: tuple[NonEmptyString, ...] = ()
 
 
 class VerificationStage(BaseModel):
@@ -160,11 +164,11 @@ def prepare_consumer(
     destination.mkdir()
     path = project_path(source, settings.stubtest_allowlist, field="stubtest_allowlist")
     relative = path.relative_to(source)
+    shutil.copytree(source / "tests", destination / "tests")
     target = destination / relative
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(path, target)
     shutil.copy2(source / "pyproject.toml", destination / "pyproject.toml")
-    shutil.copytree(source / "tests", destination / "tests")
 
 
 def module_command(module: str, *, python: str | None = None) -> list[str]:
@@ -354,6 +358,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 str(negative_consumer),
                 "--root",
                 str(consumer),
+                "--checkers",
+                *settings.typing_checkers,
             ]
             if settings.negative_expected_count is not None:
                 typecheck_command.extend(
@@ -363,8 +369,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                 typecheck_command.extend(("--mypy-diagnostic", diagnostic))
             for diagnostic in settings.pyright_diagnostics:
                 typecheck_command.extend(("--pyright-diagnostic", diagnostic))
+            for diagnostic in settings.ty_diagnostics:
+                typecheck_command.extend(("--ty-diagnostic", diagnostic))
+            checker_names = (
+                "mypy and Pyright"
+                if settings.typing_checkers == ("mypy", "pyright")
+                else ", ".join(settings.typing_checkers)
+            )
             elapsed += run_step(
-                "Positive and expected-negative mypy and Pyright fixtures",
+                f"Positive and expected-negative {checker_names} fixtures",
                 typecheck_command,
                 cwd=consumer,
                 env=checker_env,
