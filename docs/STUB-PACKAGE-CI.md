@@ -49,7 +49,7 @@ Example caller step (replace the revision with the reviewed Alphus commit SHA):
 
 ## Separate checker and target environments
 
-Alphus installs on Python >=3.11. A stub package may target Python >=3.10.
+Alphus installs on Python >=3.11,<3.15. A stub package may target Python >=3.10.
 `--target-python` names the actual target executable; the default is the
 checker interpreter for compatibility with existing local commands.
 `ALPHUS_TARGET_PYTHON` supplies the same selection to a composed profile.
@@ -156,7 +156,7 @@ semantics.
 Source shape checks preserve AST default expressions and decorator distinctions.
 
 Only the five shared audit helper files need Python 3.10 compatibility.
-The controller stays installed in the Python >=3.11 checker environment.
+The controller stays installed in the Python >=3.11,<3.15 checker environment.
 Alphus's own regression suite uses these same shared engines with neutral
 positive and intentionally broken examples.
 

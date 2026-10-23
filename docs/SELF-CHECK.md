@@ -5,12 +5,14 @@ runs Alphus portable rules, the comment-marker and review rules, TOML syntax, in
 import smoke and compatibility-import removal checks, native Ruff lint and
 format checks, strict Pyright, and the package tests.
 The repository's GitHub Actions quality workflow runs this profile on Python
-3.11 and 3.12 for pull requests and main-branch pushes. It checks editable
+3.11 through 3.14 for pull requests and main-branch pushes. It checks editable
 installation, builds and installs a wheel, then invokes the installed package.
+An additional Python 3.11 job runs the profile with every direct runtime and
+`python` extra dependency at its declared minimum version.
 
 ## Run the installed wheel against this checkout
 
-Use Python 3.11 or newer. From anywhere inside the Alphus Git checkout, build a
+Use Python 3.11 through 3.14. From anywhere inside the Alphus Git checkout, build a
 wheel, install it with
 the project's declared development dependencies in a temporary environment,
 then run its installed `alphus` command from outside the checkout. The

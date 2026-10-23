@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -33,5 +33,24 @@ jobs:
           python -m pip wheel --no-deps --wheel-dir "$RUNNER_TEMP/alphus-wheels" .
           python -m pip install --disable-pip-version-check --no-deps \
             --force-reinstall "$RUNNER_TEMP"/alphus-wheels/alphus-*.whl
+      - name: Run Alphus quality profile
+        run: alphus
+
+  minimum-dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install declared dependency floors
+        run: |
+          python -m pip install --disable-pip-version-check -e ".[python]" \
+            'packaging==23.0' 'pydantic==2.7.0' 'rich==15.0.0' \
+            'typer==0.27.3' 'pyright==1.1.414' 'pytest==8.0.0' \
+            'ruff==0.16.0'
+          python -m pip check
       - name: Run Alphus quality profile
         run: alphus

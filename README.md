@@ -28,7 +28,7 @@ the Python 3.10 target cannot import the Python 3.11+ checker. See the
 
 ## Install
 
-Use Python 3.11 or newer:
+Use Python 3.11 through 3.14:
 
 ```sh
 python -m pip install .
@@ -59,6 +59,8 @@ alphus
 For the installed-wheel version of this check, including the current self-profile
 scope and exclusions, see [Self-checking Alphus](docs/SELF-CHECK.md). The
 `review` profile also selects [the review checks](docs/REVIEW-CHECKS.md) alone.
+See [version support](docs/VERSION-SUPPORT.md) for the checker Python range,
+dependency bounds, stub targets, and native tool ownership.
 
 ## Use from another repository
 

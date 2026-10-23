@@ -4,9 +4,10 @@
 
 The candidate is `sheepfling/alphus`, under review in PR #1 on
 `codex/alphus-quality-closure`; the closure changes are recorded in the
-review-candidate snapshot below. The package declares version `0.1.0`, Python
-`>=3.11`, the `alphus` console command, and `py.typed`. The earlier 3.11 and
-3.12 proofs document source revisions tested before this closure work.
+review-candidate snapshot below. The current package version and Python range
+are declared in `pyproject.toml`; the `0.1.0` artifacts below are historical
+proofs from earlier source revisions. The package provides the `alphus`
+console command and `py.typed`.
 
 ## Current editable-install proof (2026-10-22)
 
