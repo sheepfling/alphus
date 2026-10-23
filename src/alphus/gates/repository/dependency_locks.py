@@ -34,7 +34,7 @@ def _load_requirements(
     if relative in active:
         return {}, [
             Finding(
-                rule_id="dependency-lock.include-cycle",
+                rule_id="alphus/repository/none/dependencies/lock-include-cycle",
                 path=relative,
                 message="requirement include cycle",
             )
@@ -43,7 +43,7 @@ def _load_requirements(
     if path is None:
         return {}, [
             Finding(
-                rule_id="dependency-lock.input-missing",
+                rule_id="alphus/repository/none/dependencies/lock-input-missing",
                 path=relative,
                 message="requirement file is missing or resolves outside the repository",
             )
@@ -67,7 +67,7 @@ def _load_requirements(
             if nested is None:
                 findings.append(
                     Finding(
-                        rule_id="dependency-lock.include-invalid",
+                        rule_id="alphus/repository/none/dependencies/lock-include-invalid",
                         path=relative,
                         line=line_number,
                         message=f"requirement include {include_value!r} is unsafe or missing",
@@ -83,7 +83,7 @@ def _load_requirements(
         except InvalidRequirement:
             findings.append(
                 Finding(
-                    rule_id="dependency-lock.requirement-invalid",
+                    rule_id="alphus/repository/none/dependencies/requirement-invalid",
                     path=relative,
                     line=line_number,
                     message="invalid requirement declaration",
@@ -107,7 +107,7 @@ def _exact_pin_findings(
         ):
             findings.append(
                 Finding(
-                    rule_id="dependency-lock.pin-not-exact",
+                    rule_id="alphus/repository/none/dependencies/requirement-pin-not-exact",
                     path=path,
                     message=f"{name} needs one exact version pin",
                 )
@@ -125,7 +125,7 @@ def _pair_findings(root: Path, input_file: str, lock_file: str) -> list[Finding]
         if resolved is None:
             findings.append(
                 Finding(
-                    rule_id="dependency-lock.requirement-unlocked",
+                    rule_id="alphus/repository/none/dependencies/requirement-unlocked",
                     path=lock_file,
                     message=f"missing declared requirement {name} from {input_file}",
                 )
@@ -134,7 +134,7 @@ def _pair_findings(root: Path, input_file: str, lock_file: str) -> list[Finding]
             if resolved.url != requirement.url:
                 findings.append(
                     Finding(
-                        rule_id="dependency-lock.source-mismatch",
+                        rule_id="alphus/repository/none/dependencies/lock-source-mismatch",
                         path=lock_file,
                         message=f"{name} source differs from {input_file}",
                     )
@@ -144,7 +144,7 @@ def _pair_findings(root: Path, input_file: str, lock_file: str) -> list[Finding]
         ):
             findings.append(
                 Finding(
-                    rule_id="dependency-lock.pin-unsatisfied",
+                    rule_id="alphus/repository/none/dependencies/requirement-pin-unsatisfied",
                     path=lock_file,
                     message=f"{name} pin does not satisfy {input_file}",
                 )

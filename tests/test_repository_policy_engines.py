@@ -95,7 +95,7 @@ def test_architecture_graph_uses_configured_mermaid_syntax(
     guide.write_text(f"```mermaid\n{wrong_header}\n```\n", encoding="utf-8")
     assert [
         finding.rule_id for finding in check_architecture_graph(tmp_path, graph, policy)
-    ] == ["architecture.syntax-mismatch"]
+    ] == ["alphus/repository/none/architecture/graph-syntax-mismatch"]
 
 
 def test_repository_layout_checks_paths_manifests_and_python_symbols(

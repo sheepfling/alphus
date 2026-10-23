@@ -30,7 +30,7 @@ def check_line_length(
         source = (checkout / relative).read_text(encoding="utf-8")
         findings.extend(
             Finding(
-                rule_id="source.line-length",
+                rule_id="alphus/any/none/style/line-too-long",
                 path=relative.as_posix(),
                 line=number,
                 message=f"line has {len(line)} columns (limit {limit})",
@@ -48,7 +48,7 @@ def _initializer_findings(source: str, name: str, limit: int) -> list[Finding]:
     if len(lines) > limit:
         findings.append(
             Finding(
-                rule_id="source.initializer-size",
+                rule_id="alphus/python/none/maintainability/initializer-too-large",
                 path=name,
                 message=f"{Path(name).name} has {len(lines)} lines (limit {limit})",
             )
@@ -58,7 +58,7 @@ def _initializer_findings(source: str, name: str, limit: int) -> list[Finding]:
             case ast.FunctionDef() | ast.AsyncFunctionDef() | ast.ClassDef():
                 findings.append(
                     Finding(
-                        rule_id="source.initializer-definition",
+                        rule_id="alphus/python/none/architecture/initializer-contains-definition",
                         path=name,
                         line=node.lineno,
                         message="move definitions into a named module",
@@ -68,7 +68,7 @@ def _initializer_findings(source: str, name: str, limit: int) -> list[Finding]:
                 if any(alias.name == "*" for alias in node.names):
                     findings.append(
                         Finding(
-                            rule_id="source.initializer-wildcard-import",
+                            rule_id="alphus/python/none/style/initializer-wildcard-import",
                             path=name,
                             line=node.lineno,
                             message="use explicit exports instead of import *",
@@ -103,7 +103,7 @@ def check_file_size(
         if count > policy.hard_limit:
             findings.append(
                 Finding(
-                    rule_id="source.hard-file-size",
+                    rule_id="alphus/any/none/maintainability/file-exceeds-hard-limit",
                     path=relative.as_posix(),
                     message=f"{count} lines exceeds the absolute {policy.hard_limit}-line cap",
                 )
@@ -113,7 +113,7 @@ def check_file_size(
         ):
             findings.append(
                 Finding(
-                    rule_id="source.code-file-size",
+                    rule_id="alphus/any/none/maintainability/code-file-too-large",
                     path=relative.as_posix(),
                     message=f"{count} lines exceeds the {policy.code_limit}-line limit",
                 )

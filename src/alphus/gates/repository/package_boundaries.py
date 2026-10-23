@@ -121,7 +121,7 @@ def _distributions(
         if not _inside_root(checkout, config):
             findings.append(
                 Finding(
-                    rule_id="package.metadata-path",
+                    rule_id="alphus/python/none/metadata/package-metadata-path-invalid",
                     path=relative_config,
                     message="distribution metadata resolves outside the repository root",
                 )
@@ -134,7 +134,7 @@ def _distributions(
         except (ValueError, tomllib.TOMLDecodeError) as error:
             findings.append(
                 Finding(
-                    rule_id="package.metadata",
+                    rule_id="alphus/python/none/metadata/package-metadata-invalid",
                     path=relative_config,
                     message=f"invalid project metadata ({type(error).__name__})",
                 )
@@ -148,7 +148,7 @@ def _distributions(
                 if not _valid_script_reference(reference):
                     findings.append(
                         Finding(
-                            rule_id="package.entry-point",
+                            rule_id="alphus/python/none/metadata/package-entry-point-invalid",
                             path=relative_config,
                             message=(
                                 f"invalid [project.{group}] entry point "
@@ -208,7 +208,7 @@ def _metadata_findings(
         if name not in allowed:
             findings.append(
                 Finding(
-                    rule_id="package.contract-missing",
+                    rule_id="alphus/python/none/configuration/package-contract-missing",
                     path=metadata_path,
                     message=f"distribution {name} has no boundary contract",
                 )
@@ -216,7 +216,7 @@ def _metadata_findings(
         if policy.require_import_packages and not distribution.import_roots:
             findings.append(
                 Finding(
-                    rule_id="package.import-root-missing",
+                    rule_id="alphus/python/none/configuration/package-import-root-missing",
                     path=metadata_path,
                     message="distribution has no installed import package",
                 )
@@ -229,7 +229,7 @@ def _metadata_findings(
                 if dependency not in allowed.get(name, frozenset()):
                     findings.append(
                         Finding(
-                            rule_id="package.dependency-forbidden",
+                            rule_id="alphus/python/none/dependencies/forbidden-package-dependency",
                             path=metadata_path,
                             message=f"{name} must not declare {dependency}",
                         )
@@ -237,7 +237,7 @@ def _metadata_findings(
                 if dependency not in present:
                     findings.append(
                         Finding(
-                            rule_id="package.dependency-missing",
+                            rule_id="alphus/python/none/dependencies/missing-package-dependency",
                             path=metadata_path,
                             message=f"missing local distribution {dependency}",
                         )
@@ -245,7 +245,7 @@ def _metadata_findings(
             else:
                 findings.append(
                     Finding(
-                        rule_id="package.dependency-unknown",
+                        rule_id="alphus/python/none/dependencies/unknown-package-dependency",
                         path=metadata_path,
                         message=f"unknown local dependency {dependency}",
                     )
@@ -284,7 +284,7 @@ def _cycle_findings(
         visit(name, (name,))
     return [
         Finding(
-            rule_id="package.dependency-cycle",
+            rule_id="alphus/python/none/dependencies/package-dependency-cycle",
             path="package metadata",
             message=f"dependency cycle {' -> '.join(cycle)}",
         )
@@ -376,7 +376,7 @@ def _source_findings(
             if previous != distribution.name:
                 findings.append(
                     Finding(
-                        rule_id="package.import-root-duplicate",
+                        rule_id="alphus/python/none/configuration/duplicate-package-import-root",
                         path="package metadata",
                         message=(
                             f"import root {import_name} is owned by both "
@@ -437,7 +437,7 @@ def _source_findings(
                     if owner not in allowed.get(owner_distribution.name, frozenset()):
                         findings.append(
                             Finding(
-                                rule_id="package.import-forbidden",
+                                rule_id="alphus/python/none/architecture/forbidden-import",
                                 path=source_relative,
                                 line=line,
                                 message=f"{owner_distribution.name} must not import {owner}",
@@ -446,7 +446,7 @@ def _source_findings(
                     elif owner not in owner_distribution.dependencies:
                         findings.append(
                             Finding(
-                                rule_id="package.import-undeclared",
+                                rule_id="alphus/python/none/architecture/undeclared-import",
                                 path=source_relative,
                                 line=line,
                                 message=f"{imported} requires declared dependency {owner}",
@@ -458,7 +458,7 @@ def _source_findings(
                 ):
                     findings.append(
                         Finding(
-                            rule_id="package.import-loose-module",
+                            rule_id="alphus/python/none/architecture/loose-module-import",
                             path=source_relative,
                             line=line,
                             message=f"package imports loose module {imported}",
@@ -467,7 +467,7 @@ def _source_findings(
                 elif imported in loose_roots:
                     findings.append(
                         Finding(
-                            rule_id="package.import-forbidden-root",
+                            rule_id="alphus/python/none/architecture/forbidden-import-root",
                             path=source_relative,
                             line=line,
                             message=f"package imports loose root {imported}",
@@ -487,7 +487,7 @@ def _source_findings(
                             if imported == "<dynamic>":
                                 findings.append(
                                     Finding(
-                                        rule_id="package.import-opaque-dynamic",
+                                        rule_id="alphus/python/none/architecture/opaque-dynamic-import",
                                         path=relative,
                                         line=node.lineno,
                                         message="opaque dynamic import",
@@ -500,7 +500,7 @@ def _source_findings(
                         if call_name in policy.file_loader_calls:
                             findings.append(
                                 Finding(
-                                    rule_id="package.file-backed-loading",
+                                    rule_id="alphus/python/none/architecture/file-backed-module-loading",
                                     path=relative,
                                     line=node.lineno,
                                     message="file-backed module loading",
@@ -513,7 +513,7 @@ def _source_findings(
                         if imported == "<dynamic>":
                             findings.append(
                                 Finding(
-                                    rule_id="package.import-opaque-dynamic",
+                                    rule_id="alphus/python/none/architecture/opaque-dynamic-import",
                                     path=relative,
                                     line=node.lineno,
                                     message="opaque dynamic import",
@@ -533,7 +533,7 @@ def _source_findings(
                         ) if _edits_sys_path(node, path_aliases):
                             findings.append(
                                 Finding(
-                                    rule_id="package.sys-path-mutation",
+                                    rule_id="alphus/python/none/security/python-path-mutation",
                                     path=relative,
                                     line=node.lineno,
                                     message="installed package edits sys.path",

@@ -132,5 +132,5 @@ def test_check_reads_utf8_bom_source(tmp_path: Path) -> None:
     )
 
     assert [(finding.path, finding.line, finding.rule_id) for finding in findings] == [
-        ("src/decoder.py", 2, "data.json-structure")
+        ("src/decoder.py", 2, "alphus/python/none/validation/unvalidated-json-decode")
     ]

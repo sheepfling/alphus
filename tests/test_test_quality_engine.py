@@ -38,7 +38,7 @@ def test_large_exact_narrative_and_local_aliases_warn_at_the_assertion() -> None
     findings = python_findings(source, "tests/test_report.py", POLICY)
 
     assert [(item.rule_id, item.line, item.severity) for item in findings] == [
-        ("test-quality.large-prose-assertion", 4, "warning")
+        ("alphus/python/none/testing/large-prose-assertion", 4, "warning")
     ]
     assert findings[0].path == "tests/test_report.py"
 
@@ -52,7 +52,7 @@ def test_large_exact_narrative_and_local_aliases_warn_at_the_assertion() -> None
 )
 def test_direct_narrative_operands_are_symmetric(assertion: str) -> None:
     assert scan(f"def test_report():\n {assertion}\n") == [
-        ("test-quality.large-prose-assertion", 2)
+        ("alphus/python/none/testing/large-prose-assertion", 2)
     ]
 
 
@@ -131,8 +131,8 @@ def test_only_test_functions_and_methods_use_expected_aliases() -> None:
         "def test_module_alias():\n assert render() == EXPECTED\n"
     )
     assert scan(source) == [
-        ("test-quality.large-prose-assertion", 7),
-        ("test-quality.large-prose-assertion", 9),
+        ("alphus/python/none/testing/large-prose-assertion", 7),
+        ("alphus/python/none/testing/large-prose-assertion", 9),
     ]
 
 
@@ -170,9 +170,9 @@ def test_configured_plan_reads_and_existence_checks_warn_without_opening_files()
         " with open('PLAN.md', encoding='utf-8') as stream:\n  assert stream.read()\n"
     )
     assert scan(source) == [
-        ("test-quality.ephemeral-plan-dependency", 5),
-        ("test-quality.ephemeral-plan-dependency", 6),
-        ("test-quality.ephemeral-plan-dependency", 7),
+        ("alphus/python/none/testing/ephemeral-plan-dependency", 5),
+        ("alphus/python/none/testing/ephemeral-plan-dependency", 6),
+        ("alphus/python/none/testing/ephemeral-plan-dependency", 7),
     ]
 
 
@@ -184,7 +184,7 @@ def test_module_file_root_and_pathlib_module_aliases_resolve_statically() -> Non
         " plan = ROOT / 'docs/plans/closure.md'\n"
         " assert plan.is_file()\n"
     )
-    assert scan(source) == [("test-quality.ephemeral-plan-dependency", 5)]
+    assert scan(source) == [("alphus/python/none/testing/ephemeral-plan-dependency", 5)]
 
 
 @pytest.mark.parametrize("mode", ["r", "rb", "r+"])
@@ -195,8 +195,8 @@ def test_read_modes_use_builtin_and_path_open(mode: str) -> None:
         f"def test_plan():\n read_file('PLAN.md', {mode!r})\n Path('PLAN.md').open(mode={mode!r})\n"
     )
     assert scan(source) == [
-        ("test-quality.ephemeral-plan-dependency", 4),
-        ("test-quality.ephemeral-plan-dependency", 5),
+        ("alphus/python/none/testing/ephemeral-plan-dependency", 4),
+        ("alphus/python/none/testing/ephemeral-plan-dependency", 5),
     ]
 
 
@@ -208,8 +208,8 @@ def test_module_open_alias_and_file_keyword_are_recognized() -> None:
         " open(file='PLAN.md')\n"
     )
     assert scan(source) == [
-        ("test-quality.ephemeral-plan-dependency", 3),
-        ("test-quality.ephemeral-plan-dependency", 4),
+        ("alphus/python/none/testing/ephemeral-plan-dependency", 3),
+        ("alphus/python/none/testing/ephemeral-plan-dependency", 4),
     ]
 
 
@@ -236,7 +236,7 @@ def test_read_before_fixture_creation_is_still_a_dependency() -> None:
         "def test_plan():\n plan = Path('PLAN.md')\n plan.read_bytes()\n"
         " plan.write_bytes(b'fixture')\n plan.read_bytes()\n"
     )
-    assert scan(source) == [("test-quality.ephemeral-plan-dependency", 4)]
+    assert scan(source) == [("alphus/python/none/testing/ephemeral-plan-dependency", 4)]
 
 
 def test_read_used_as_a_write_argument_is_observed_before_fixture_creation() -> None:
@@ -246,7 +246,7 @@ def test_read_used_as_a_write_argument_is_observed_before_fixture_creation() -> 
         " Path('PLAN.md').write_text(Path('PLAN.md').read_text())\n"
         " Path('PLAN.md').read_text()\n"
     )
-    assert scan(source) == [("test-quality.ephemeral-plan-dependency", 3)]
+    assert scan(source) == [("alphus/python/none/testing/ephemeral-plan-dependency", 3)]
 
 
 def test_stable_documents_strings_dynamic_paths_and_empty_patterns_are_ignored() -> (
@@ -292,7 +292,7 @@ def test_branch_created_fixture_is_not_assumed_to_exist_on_every_path() -> None:
         " if create_fixture:\n  plan.write_text('fixture')\n"
         " assert plan.read_text()\n"
     )
-    assert scan(source) == [("test-quality.ephemeral-plan-dependency", 6)]
+    assert scan(source) == [("alphus/python/none/testing/ephemeral-plan-dependency", 6)]
 
 
 def test_class_members_do_not_replace_method_global_bindings() -> None:
@@ -305,7 +305,7 @@ def test_class_members_do_not_replace_method_global_bindings() -> None:
         " from pathlib import Path as LocalPath\n"
         " def test_plan(self):\n  LocalPath('PLAN.md').read_text()\n"
     )
-    assert scan(source) == [("test-quality.ephemeral-plan-dependency", 5)]
+    assert scan(source) == [("alphus/python/none/testing/ephemeral-plan-dependency", 5)]
 
 
 def test_file_scope_and_exclusions_are_respected(tmp_path: Path) -> None:
@@ -330,7 +330,7 @@ def test_file_scope_and_exclusions_are_respected(tmp_path: Path) -> None:
     assert [
         (item.path, item.line, item.rule_id, item.severity) for item in findings
     ] == [
-        ("tests/test_plan.py", 2, "test-quality.ephemeral-plan-dependency", "warning")
+        ("tests/test_plan.py", 2, "alphus/python/none/testing/ephemeral-plan-dependency", "warning")
     ]
 
 

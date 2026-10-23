@@ -50,7 +50,7 @@ def test_self_check_enforces_review_and_repository_toml() -> None:
     )
     findings = python_findings(source, "tests/test_docs.py", policy)
     assert [item.rule_id for item in findings] == [
-        "test-quality.ephemeral-plan-dependency"
+        "alphus/python/none/testing/ephemeral-plan-dependency"
     ]
 
 

@@ -78,8 +78,9 @@ def _render_diagnostic(diagnostic: Diagnostic, output: TextIO) -> None:
         location = f"{location}:{diagnostic.line}" if location else str(diagnostic.line)
     suffix = f" {location}" if location else ""
     priority = f" [priority={diagnostic.priority}]" if diagnostic.priority else ""
+    owner = "" if diagnostic.source == "alphus" else f"{diagnostic.source} "
     print(
-        f"{diagnostic.severity.upper()} {diagnostic.source} "
+        f"{diagnostic.severity.upper()} {owner}"
         f"{diagnostic.rule_id}{suffix}{priority}: {diagnostic.message}",
         file=output,
         flush=True,
@@ -188,7 +189,7 @@ def run_orchestration(
                             findings.append(
                                 Diagnostic(
                                     source="alphus",
-                                    rule_id="orchestration.rule-execution",
+                                    rule_id="alphus/any/none/orchestration/rule-execution-failed",
                                     message=message,
                                 )
                             )
@@ -202,7 +203,7 @@ def run_orchestration(
                             findings.append(
                                 Diagnostic(
                                     source="alphus",
-                                    rule_id="orchestration.rule-execution",
+                                    rule_id="alphus/any/none/orchestration/rule-execution-failed",
                                     message=message,
                                 )
                             )
@@ -213,7 +214,7 @@ def run_orchestration(
                             findings.append(
                                 Diagnostic(
                                     source="alphus",
-                                    rule_id="orchestration.rule-execution",
+                                    rule_id="alphus/any/none/orchestration/rule-execution-failed",
                                     message=message,
                                 )
                             )
@@ -246,7 +247,7 @@ def run_orchestration(
                             findings.append(
                                 Diagnostic(
                                     source="alphus",
-                                    rule_id="orchestration.rule-execution",
+                                    rule_id="alphus/any/none/orchestration/rule-execution-failed",
                                     message=f"rule runner exited with status {exit_code}",
                                 )
                             )
@@ -285,7 +286,7 @@ def run_orchestration(
                             findings.append(
                                 Diagnostic(
                                     source=step.name,
-                                    rule_id="orchestration.command-exit",
+                                    rule_id="alphus/any/none/orchestration/command-exited-nonzero",
                                     message=f"command exited with status {exit_code}",
                                 )
                             )
@@ -301,9 +302,9 @@ def run_orchestration(
                 Diagnostic(
                     source="alphus" if isinstance(step, RuleRunStep) else step.name,
                     rule_id=(
-                        "orchestration.rule-execution"
+                        "alphus/any/none/orchestration/rule-execution-failed"
                         if isinstance(step, RuleRunStep)
-                        else "orchestration.command-launch"
+                        else "alphus/any/none/orchestration/command-launch-failed"
                     ),
                     message=message,
                 )

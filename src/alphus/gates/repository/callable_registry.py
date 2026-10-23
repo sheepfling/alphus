@@ -66,7 +66,7 @@ def check_callable_registry(
     if registry_path is None:
         return [
             Finding(
-                rule_id="registry.file-missing",
+                rule_id="alphus/python/none/architecture/callable-registry-file-missing",
                 path=policy.registry_path,
                 message=(
                     f"define a typed {policy.protocol_name} protocol and "
@@ -107,7 +107,7 @@ def check_callable_registry(
     ):
         findings.append(
             Finding(
-                rule_id="registry.protocol-untyped",
+                rule_id="alphus/python/none/typing/callable-protocol-untyped",
                 path=policy.registry_path,
                 message=f"{policy.protocol_name} must define a typed callable Protocol",
             )
@@ -115,7 +115,7 @@ def check_callable_registry(
     if registry is None or registry.value is None:
         findings.append(
             Finding(
-                rule_id="registry.mapping-missing",
+                rule_id="alphus/python/none/architecture/callable-mapping-missing",
                 path=policy.registry_path,
                 message=f"{policy.registry_name} must be an annotated registry",
             )
@@ -125,7 +125,7 @@ def check_callable_registry(
     if literal is None:
         findings.append(
             Finding(
-                rule_id="registry.mapping-not-literal",
+                rule_id="alphus/python/none/architecture/callable-mapping-not-literal",
                 path=policy.registry_path,
                 line=registry.lineno,
                 message=f"{policy.registry_name} must list its entries",
@@ -136,7 +136,7 @@ def check_callable_registry(
     if not _contains_name(registry.annotation, policy.protocol_name):
         findings.append(
             Finding(
-                rule_id="registry.mapping-untyped",
+                rule_id="alphus/python/none/typing/callable-mapping-untyped",
                 path=policy.registry_path,
                 line=registry.lineno,
                 message=f"annotate {policy.registry_name} with {policy.protocol_name}",
@@ -157,7 +157,7 @@ def check_callable_registry(
             ):
                 findings.append(
                     Finding(
-                        rule_id="registry.key-target-mismatch",
+                        rule_id="alphus/python/none/correctness/callable-key-target-mismatch",
                         path=policy.registry_path,
                         line=registry.lineno,
                         message=f"{key_name} must name callable {target_name}",
@@ -168,7 +168,7 @@ def check_callable_registry(
             case _:
                 findings.append(
                     Finding(
-                        rule_id="registry.key-not-literal",
+                        rule_id="alphus/python/none/correctness/callable-key-not-literal",
                         path=policy.registry_path,
                         line=registry.lineno,
                         message="registry keys must be literal names",
@@ -176,7 +176,7 @@ def check_callable_registry(
                 )
     findings.extend(
         Finding(
-            rule_id="registry.public-callable-unregistered",
+            rule_id="alphus/python/none/architecture/public-callable-unregistered",
             path=policy.registry_path,
             message=f"public callable {name} is not registered",
         )
@@ -184,7 +184,7 @@ def check_callable_registry(
     )
     findings.extend(
         Finding(
-            rule_id="registry.unknown-callable",
+            rule_id="alphus/python/none/correctness/unknown-callable",
             path=policy.registry_path,
             message=f"registry references unknown callable {name}",
         )
@@ -192,7 +192,7 @@ def check_callable_registry(
     )
     findings.extend(
         Finding(
-            rule_id="registry.callable-duplicate",
+            rule_id="alphus/python/none/correctness/duplicate-callable",
             path=policy.registry_path,
             message=f"public callable {name} is registered {count} times",
         )

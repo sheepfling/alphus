@@ -1,4 +1,5 @@
 schema_version = 1
+tools = ["eslint", "prettier-javascript"]
 
 [files]
 include = [
@@ -197,6 +198,16 @@ argv = [
 
 [[orchestration.steps]]
 kind = "command"
+name = "JavaScript tests"
+argv = ["npm", "test"]
+
+[[orchestration.steps]]
+kind = "command"
+name = "JavaScript types"
+argv = ["npm", "run", "typecheck"]
+
+[[orchestration.steps]]
+kind = "command"
 name = "Python package imports"
 argv = [
   "{python}", "-m", "alphus.gates.python.importability",
@@ -267,8 +278,12 @@ name = "json"
 steps = ["JSON syntax"]
 
 [[orchestration.profiles]]
+name = "javascript"
+steps = ["JavaScript tests", "JavaScript types"]
+
+[[orchestration.profiles]]
 name = "check"
-includes = ["python-policy", "toml", "python", "review"]
+includes = ["python-policy", "toml", "python", "review", "javascript"]
 
 [[orchestration.steps]]
 kind = "rule"

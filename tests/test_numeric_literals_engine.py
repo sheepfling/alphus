@@ -30,10 +30,10 @@ def test_math_catalog_reports_arithmetic_at_literal_source_lines() -> None:
     findings = numeric_literal_findings(source, _policy())
 
     assert [(finding.line, finding.rule_id) for finding in findings] == [
-        (1, "numeric-literals.inline-constant"),
-        (2, "numeric-literals.inline-constant"),
-        (3, "numeric-literals.inline-constant"),
-        (4, "numeric-literals.inline-constant"),
+        (1, "alphus/python/none/style/inline-constant"),
+        (2, "alphus/python/none/style/inline-constant"),
+        (3, "alphus/python/none/style/inline-constant"),
+        (4, "alphus/python/none/style/inline-constant"),
     ]
     assert all("possible inline" in finding.message for finding in findings)
     assert "math.pi" in findings[0].message
@@ -81,7 +81,7 @@ def test_math_catalog_can_be_disabled_without_disabling_custom_constants() -> No
     )
 
     assert [(finding.line, finding.rule_id) for finding in findings] == [
-        (2, "numeric-literals.inline-constant")
+        (2, "alphus/python/none/style/inline-constant")
     ]
     assert "STANDARD_GRAVITY" in findings[0].message
 
@@ -107,7 +107,7 @@ def test_explicit_conversion_requires_multiply_or_divide_and_a_unit_token() -> N
     findings = numeric_literal_findings(source, _policy(constants=(conversion,)))
 
     assert [(finding.line, finding.rule_id) for finding in findings] == [
-        (1, "numeric-literals.inline-conversion")
+        (1, "alphus/python/none/style/inline-conversion")
     ]
     assert "feet_to_metres(value)" in findings[0].message
 
@@ -151,7 +151,7 @@ def test_configured_factor_without_unit_tokens_is_explicitly_unrestricted() -> N
     )
 
     assert [finding.rule_id for finding in findings] == [
-        "numeric-literals.inline-conversion"
+        "alphus/python/none/style/inline-conversion"
     ]
 
 
@@ -211,7 +211,7 @@ def test_scanner_preserves_scope_paths_and_warning_severity(tmp_path: Path) -> N
         ("tests/test_geometry.py", 1, "warning"),
     ]
     assert all(
-        finding.rule_id == "numeric-literals.inline-constant" for finding in findings
+        finding.rule_id == "alphus/python/none/style/inline-constant" for finding in findings
     )
 
 
@@ -233,13 +233,13 @@ def test_augmented_arithmetic_is_also_reviewed() -> None:
         "def milliseconds_to_seconds(value):\n value /= 1000\n value *= 3.14\n", policy
     )
     assert [(finding.line, finding.rule_id) for finding in findings] == [
-        (2, "numeric-literals.inline-conversion"),
-        (3, "numeric-literals.inline-constant"),
+        (2, "alphus/python/none/style/inline-conversion"),
+        (3, "alphus/python/none/style/inline-constant"),
     ]
 
 
 def test_named_formula_does_not_exempt_its_inline_constant() -> None:
     findings = numeric_literal_findings("AREA = 3.14 * RADIUS ** 2\n", _policy())
     assert [(finding.line, finding.rule_id) for finding in findings] == [
-        (1, "numeric-literals.inline-constant"),
+        (1, "alphus/python/none/style/inline-constant"),
     ]

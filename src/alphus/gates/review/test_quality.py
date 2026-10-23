@@ -12,6 +12,7 @@ from pydantic import JsonValue, RootModel, ValidationError
 
 from alphus.config import TestQualityPolicy
 from alphus.contracts.findings import Finding
+from alphus.contracts.rule_tags import rule_tag
 from alphus.support.inventory import matches_path
 
 _PATH_READS = frozenset({"read_text", "read_bytes", "stat", "exists", "is_file"})
@@ -195,7 +196,13 @@ class _TestScanner:
 
     def add(self, category: str, line: int, message: str) -> None:
         self.findings.append(
-            Finding(f"test-quality.{category}", self.path, message, line, "warning")
+            Finding(
+                rule_tag("python", "none", "testing", category.replace("_", "-")),
+                self.path,
+                message,
+                line,
+                "warning",
+            )
         )
 
     def assertion(self, node: ast.Assert, scope: _Scope) -> None:

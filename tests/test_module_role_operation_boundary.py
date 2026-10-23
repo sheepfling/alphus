@@ -47,27 +47,27 @@ def test_operation_role_blocks_adapter_provider_and_io_dependencies(
         (finding.rule_id, finding.line, finding.message) for finding in findings
     ] == [
         (
-            "module-role.forbidden-import",
+            "alphus/python/none/architecture/forbidden-module-import",
             3,
             "operation role must not import 'fastapi'",
         ),
         (
-            "module-role.forbidden-import-pattern",
+            "alphus/python/none/architecture/forbidden-module-import-pattern",
             4,
             "operation role must not import a module matching '*_api'",
         ),
         (
-            "module-role.forbidden-import",
+            "alphus/python/none/architecture/forbidden-module-import",
             5,
             "operation role must not import 'application.plugins.runtime_provider'",
         ),
         (
-            "module-role.forbidden-import-pattern",
+            "alphus/python/none/architecture/forbidden-module-import-pattern",
             5,
             "operation role must not import a module matching '*_provider'",
         ),
         (
-            "module-role.forbidden-call",
+            "alphus/python/none/security/forbidden-module-call",
             8,
             "operation role must not call 'read_text'",
         ),

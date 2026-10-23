@@ -11,6 +11,7 @@ from types import MappingProxyType
 
 from alphus.config import SourceScanPolicy
 from alphus.contracts.findings import Finding, SourceFinding
+from alphus.contracts.rule_tags import rule_tag
 from alphus.support.inventory import matches_path
 
 DECODER_MODULES: frozenset[str] = frozenset({"json", "orjson", "ujson", "rapidjson"})
@@ -100,9 +101,12 @@ def check_json_structure(
             if suffix == ".py"
             else js_json_findings(source)
         )
+        scope = "python" if suffix == ".py" else "javascript"
         findings.extend(
             Finding(
-                rule_id="data.json-structure",
+                rule_id=rule_tag(
+                    scope, "none", "validation", "unvalidated-json-decode"
+                ),
                 path=name,
                 line=source_finding.line,
                 message=source_finding.message,

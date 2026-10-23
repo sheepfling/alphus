@@ -8,8 +8,8 @@ from alphus.config import RuntimeTypePolicy
 from alphus.gates.source.runtime_types import policy_issues, type_check_findings
 
 POLICY = RuntimeTypePolicy(
-    extensions=[".py"],
-    exclude=["**/tests/**", "tests/**", "**/test_*", "test_*"],
+    extensions=(".py",),
+    exclude=("**/tests/**", "tests/**", "**/test_*", "test_*"),
 )
 
 
@@ -57,3 +57,23 @@ def test_tests_are_outside_runtime_policy(tmp_path: Path) -> None:
         )
         == 1
     )
+
+
+def test_pydantic_json_value_allows_its_declared_union_members() -> None:
+    source = """
+from pydantic import JsonValue
+def typed(value: JsonValue) -> None:
+    if isinstance(value, (str, int, float, bool, list, dict)):
+        pass
+"""
+    assert type_check_findings(source) == []
+
+
+def test_alphus_json_value_alias_allows_its_declared_union_members() -> None:
+    source = """
+from alphus.support.data_access import JsonValue
+def typed(value: JsonValue) -> None:
+    if isinstance(value, (str, int, float, bool, list, dict)):
+        pass
+"""
+    assert type_check_findings(source) == []

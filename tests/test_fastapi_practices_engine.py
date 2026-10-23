@@ -29,10 +29,10 @@ def test_named_and_literal_statuses_in_known_fastapi_calls() -> None:
     assert [
         (item.rule_id, item.path, item.line, item.severity) for item in findings
     ] == [
-        ("fastapi-practices.literal-status", "src/api.py", 4, "warning"),
-        ("fastapi-practices.literal-status", "src/api.py", 6, "warning"),
-        ("fastapi-practices.literal-status", "src/api.py", 9, "warning"),
-        ("fastapi-practices.literal-status", "src/api.py", 10, "warning"),
+        ("alphus/python/fastapi/correctness/literal-http-status", "src/api.py", 4, "warning"),
+        ("alphus/python/fastapi/correctness/literal-http-status", "src/api.py", 6, "warning"),
+        ("alphus/python/fastapi/correctness/literal-http-status", "src/api.py", 9, "warning"),
+        ("alphus/python/fastapi/correctness/literal-http-status", "src/api.py", 10, "warning"),
     ]
 
 
@@ -65,8 +65,8 @@ def test_error_code_owners_are_consumer_configuration() -> None:
     findings = fastapi_practice_findings(source, policy)
 
     assert [(item.rule_id, item.line) for item in findings] == [
-        ("fastapi-practices.literal-error-code", 3),
-        ("fastapi-practices.literal-error-code", 4),
+        ("alphus/python/fastapi/correctness/literal-error-code", 3),
+        ("alphus/python/fastapi/correctness/literal-error-code", 4),
     ]
 
 
@@ -76,14 +76,14 @@ def test_http_exception_detail_code_requires_explicit_opt_in() -> None:
         "Failure(400, detail={'code': 'invalid', 'message': 'Review'})\n"
     )
     assert [item.rule_id for item in fastapi_practice_findings(source, _policy())] == [
-        "fastapi-practices.literal-status"
+        "alphus/python/fastapi/correctness/literal-http-status"
     ]
     findings = fastapi_practice_findings(
         source, _policy(check_http_exception_detail_codes=True)
     )
     assert [(item.rule_id, item.line) for item in findings] == [
-        ("fastapi-practices.literal-error-code", 2),
-        ("fastapi-practices.literal-status", 2),
+        ("alphus/python/fastapi/correctness/literal-error-code", 2),
+        ("alphus/python/fastapi/correctness/literal-http-status", 2),
     ]
 
 

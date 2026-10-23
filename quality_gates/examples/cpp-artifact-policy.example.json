@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "name": "example-cpp-artifact-budget",
+  "exclude": [],
+  "limits": {
+    "min_executable_count": 1,
+    "max_executable_bytes": 134217728,
+    "max_executable_debug_bytes": 67108864,
+    "max_total_executable_bytes": 4294967296
+  }
+}

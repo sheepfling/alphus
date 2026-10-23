@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Literal, NamedTuple, TypeAlias
 
+from alphus.contracts.rule_tags import RuleTag
+
 Severity: TypeAlias = Literal["error", "warning", "info"]
 RemediationPriority: TypeAlias = Literal["low", "normal", "high", "urgent"]
 
@@ -65,6 +67,8 @@ class Diagnostic:
             "urgent",
         }:
             raise ValueError(f"unsupported remediation priority: {self.priority!r}")
+        if self.source == "alphus" or self.rule_id.startswith("alphus/"):
+            RuleTag.parse(self.rule_id)
 
 
 class SourceFinding(NamedTuple):
@@ -87,6 +91,7 @@ class Finding:
     def __post_init__(self) -> None:
         if self.severity not in SEVERITY_ORDER:
             raise ValueError(f"unsupported finding severity: {self.severity!r}")
+        RuleTag.parse(str(self.rule_id))
 
     def as_diagnostic(self, *, source: str = "alphus") -> Diagnostic:
         """Add checker provenance while retaining the public finding fields."""

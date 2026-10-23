@@ -91,7 +91,7 @@ def test_invalid_script_reference_is_reported(
     )
     findings = check_package_boundaries(tmp_path, _policy())
     assert [(finding.rule_id, finding.path) for finding in findings] == [
-        ("package.entry-point", "distributions/workspace-core/pyproject.toml")
+        ("alphus/python/none/metadata/package-entry-point-invalid", "distributions/workspace-core/pyproject.toml")
     ]
 
 

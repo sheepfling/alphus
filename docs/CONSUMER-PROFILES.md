@@ -22,6 +22,48 @@ selects another profile. Use `--root` and `--config` when running from another
 directory or with a different filename. `--run` remains accepted in existing
 scripts. `alphus --help` shows every option.
 
+For common multi-language setups, select bundles instead of remembering each
+native tool name:
+
+```toml
+schema_version = 1
+languages = ["python", "markdown", "toml", "json", "javascript"]
+```
+
+This expands to the standard Python, Markdown, TOML, JSON, and JavaScript
+profiles. The compact [polyglot example](../examples/polyglot/quality-gates.toml)
+can be copied as a starting point. Use `tools = [...]` when you want only part
+of a bundle or one specific native tool. `languages` and `tools` are alternative
+selection forms. C++ remains project-specific because its build, test, and
+artifact commands depend on the repository's compiler and build setup.
+
+The default bundles are Python (Ruff, Pyright, pytest), Markdown (rumdl,
+mdrepo), TOML (Taplo), JSON (Prettier), and JavaScript (ESLint, Prettier).
+Install those tools in the consumer environment and configure each tool for the
+repository's source layout. The Python bundle runs the project's normal Ruff,
+Pyright, and pytest configuration; choose `tools` for a smaller selection.
+
+The short form composes with project profiles and split language files. Keep
+C++ checks in a local fragment, then include that profile in the root `check`:
+
+```toml
+schema_version = 1
+languages = ["python", "markdown", "toml", "json", "javascript"]
+orchestration_files = ["languages/cpp.toml"]
+
+[orchestration]
+
+[[orchestration.profiles]]
+name = "check"
+includes = ["cpp"]
+```
+
+The generated native checks run first, followed by included project profiles
+and any additional steps in their declared order. When a custom `check` profile
+is declared, the generated `native` profile groups the selected tools; each
+language also gets its own profile. Add `[checks]` and `[files]` when selecting
+Alphus portable rules or repository-specific thresholds.
+
 Add tools one step at a time. The
 [two-tool Markdown example](../examples/markdown/quality-gates.toml) pairs
 rumdl with mdrepo using `tools = ["rumdl", "mdrepo"]`. The shortcut also
@@ -54,13 +96,13 @@ name = "Python tests"
 argv = ["{python}", "-m", "pytest"]
 ```
 
-`check` runs selected tools first, then additional steps. `alphus --plan`
+`check` runs selected tools first, then additional steps. It can also extend
+named profiles while retaining that native-tool group. `alphus --plan`
 shows their resolved order, file matches, rollout, and fixability without
 running native commands. A scoped command with no matching files is shown as
-not applicable; an unscoped command still runs. Use the explicit
-policy when changing a selected tool's command or file scope, defining named
-profiles, or splitting steps into language files. The larger example below
-demonstrates that layout. Native-tool settings stay with each tool.
+not applicable; an unscoped command still runs. Use explicit command steps
+when changing a selected tool's command or file scope. Native-tool settings
+stay with each tool.
 
 The example policy at
 [`examples/consumer/quality-gates.toml`](../examples/consumer/quality-gates.toml)
@@ -86,7 +128,7 @@ activate gates. Ordinary Python repositories can combine `python` and
 | `stubs` | Build/install, API, typed examples, stubtest, smoke | Alphus and native checkers |
 | `toml` | TOML syntax and formatting | Python `tomllib` and Taplo |
 | `json` | JSON syntax and formatting | Python `json` and Prettier |
-| `javascript` | JS family lint and formatting | Alphus JavaScript policy, ESLint, and Prettier |
+| `javascript` | Lint and format for `.js`, `.jsx`, `.mjs`, and `.cjs`, plus repository tests and type checks | Alphus JavaScript policy, ESLint, Prettier, and consumer commands |
 | `python-policy` | Optional repository-specific source conventions | Explicit Alphus source policy |
 
 The reusable JavaScript configs and synthetic rule fixtures live in the
@@ -95,7 +137,9 @@ Prettier, and that package in the consumer's Node development environment. The
 [JavaScript example](../examples/javascript/quality-gates.toml) selects both
 scoped commands with `tools = ["eslint", "prettier-javascript"]`. Consumers
 own the repository-specific `tsconfig` include paths; the shared TypeScript
-base enables `allowJs`, `checkJs`, `strict`, and `noEmit`.
+base enables `allowJs`, `checkJs`, `strict`, and `noEmit`. Alphus invokes ESLint
+and Prettier through `npm exec`, so it resolves the consumer's local npm
+install without requiring global executables.
 
 Define each profile's steps in the consumer policy, then compose them:
 
@@ -147,9 +191,9 @@ JSON Lines and JSON with comments are distinct document formats. A consumer
 can add separate command steps for the formats it uses; their parsers, file
 patterns, and failure behavior should stay out of the Python-source
 `json-structure` rule.
-The same command-step mechanism lets a C++ or JavaScript consumer define its
-own native build, lint, and test profiles without changing the Python, stub,
-or Markdown selections.
+The same command-step mechanism lets a C++ consumer define its own native
+build, lint, and test profile without changing the Python, stub, or Markdown
+selections.
 
 ## Separate language files
 
@@ -201,11 +245,13 @@ rule requires its own complete `[checks.<name>]` section. Missing selected
 policies exit 2 before any profile command runs; declared malformed sections
 remain invalid even when unselected. No permissive policy defaults are added.
 
-Alphus's self-profile retains all ten established steps by including
-`python-policy` and `python`, then adds TOML syntax and the five review
-rules. Its Python profile also checks formatting. Composition does not remove runtime-type
-enforcement; see the [migration record](TEST-GATE-MIGRATION.md) for results
-at each revision and the [runtime-type contract](RUNTIME-TYPES.md).
+Alphus's self-profile coordinates its portable Python rules, Python tooling,
+TOML and JSON syntax, JavaScript lint, format, tests, and type checks, plus its
+review rules including Pydantic and FastAPI practice reviews, under one
+`check` profile. Language-specific pieces remain available as named profiles.
+Composition does not remove runtime-type enforcement; see the
+[migration record](TEST-GATE-MIGRATION.md) for results at each revision and the
+[runtime-type contract](RUNTIME-TYPES.md).
 
 ## One pinned local and hosted entrypoint
 
@@ -273,7 +319,8 @@ development environment. For example, use the repository's lockfile or
 development-dependency group to install mdrepo, rumdl, Taplo, Ruff, Pyright,
 pytest, and a pinned local Prettier package. mdrepo must be importable by the
 selected Python interpreter because the sample invokes `python -m mdrepo`;
-rumdl, Taplo, Prettier, and Pyright must be on `PATH`.
+rumdl, Taplo, and Pyright must be on `PATH`. The Prettier recipes use
+`npm exec` to resolve the consumer's local package.
 The example `mdrepo.toml` enables orphan checks with `README.md` as a graph
 root. Ordinary missing-target checks stay with rumdl when both tools run.
 

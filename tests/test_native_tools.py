@@ -40,6 +40,16 @@ def test_native_tool_shortcut_generates_ordered_checks_and_language_profiles() -
     for step in policy.steps:
         assert isinstance(step, CommandRunStep)
         assert step.fix_argv is not None and step.files is not None
+    json_step = policy.steps[-1]
+    assert isinstance(json_step, CommandRunStep)
+    assert json_step.argv == (
+        "npm",
+        "exec",
+        "--",
+        "prettier",
+        "--check",
+        "{files}",
+    )
 
 
 def test_javascript_shortcuts_share_a_scoped_language_profile() -> None:
@@ -55,15 +65,74 @@ def test_javascript_shortcuts_share_a_scoped_language_profile() -> None:
     assert check.steps == javascript.steps == expected
     lint, format_step = policy.steps
     assert isinstance(lint, CommandRunStep)
-    assert lint.argv == ("eslint", "{files}")
-    assert lint.fix_argv == ("eslint", "--fix", "{files}")
+    assert lint.argv == ("npm", "exec", "--", "eslint", "{files}")
+    assert lint.fix_argv == ("npm", "exec", "--", "eslint", "--fix", "{files}")
     assert isinstance(format_step, CommandRunStep)
-    assert format_step.argv == ("prettier", "--check", "{files}")
-    assert format_step.fix_argv == ("prettier", "--write", "{files}")
+    assert format_step.argv == (
+        "npm",
+        "exec",
+        "--",
+        "prettier",
+        "--check",
+        "{files}",
+    )
+    assert format_step.fix_argv == (
+        "npm",
+        "exec",
+        "--",
+        "prettier",
+        "--write",
+        "{files}",
+    )
     assert lint.files is not None and format_step.files is not None
     expected_scope = ("**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs")
     assert lint.files.include == expected_scope
     assert format_step.files.include == expected_scope
+
+
+def test_language_bundles_expand_to_ordered_native_profiles() -> None:
+    config = load_config_stream(
+        StringIO(
+            "schema_version = 1\nlanguages = "
+            '["javascript", "markdown", "python", "toml", "json"]\n'
+        )
+    )
+    policy = config.orchestration
+    assert policy is not None
+    check = policy.resolve_profile("check")
+    assert check is not None
+    assert check.steps == (
+        "JavaScript lint",
+        "JavaScript format",
+        "Markdown style",
+        "Markdown links and graph",
+        "Python lint",
+        "Python format",
+        "Python types",
+        "Python tests",
+        "TOML format",
+        "JSON format",
+    )
+    for language in ("javascript", "markdown", "python", "toml", "json"):
+        assert policy.resolve_profile(language) is not None
+
+
+def test_native_tools_compose_with_named_profiles_and_custom_steps() -> None:
+    config = load_config_stream(
+        StringIO(
+            'schema_version = 1\ntools = ["rumdl"]\n'
+            '[[orchestration.steps]]\nkind = "command"\n'
+            'name = "C++ build"\nargv = ["cmake", "--build", "build"]\n'
+            '[[orchestration.profiles]]\nname = "cpp"\nsteps = ["C++ build"]\n'
+            '[[orchestration.profiles]]\nname = "check"\nincludes = ["cpp"]\n'
+        )
+    )
+    policy = config.orchestration
+    assert policy is not None
+    check = policy.resolve_profile("check")
+    assert check is not None
+    assert check.steps == ("Markdown style", "C++ build")
+    assert check.profiles == ("native", "cpp", "check")
 
 
 def test_javascript_consumer_example_selects_the_shared_profile() -> None:
@@ -91,11 +160,12 @@ def test_javascript_consumer_example_selects_the_shared_profile() -> None:
             "cannot be combined",
         ),
         (
-            (
-                'schema_version = 1\ntools = ["rumdl"]\n'
-                '[[orchestration.profiles]]\nname = "check"\nsteps = ["Markdown style"]\n'
-            ),
-            "named profiles require explicit orchestration",
+            'schema_version = 1\nlanguages = ["cpp"]\n',
+            "unknown languages",
+        ),
+        (
+            'schema_version = 1\nlanguages = ["python"]\ntools = ["rumdl"]\n',
+            "choose either languages or tools",
         ),
     ],
 )
@@ -198,3 +268,32 @@ def test_python_shortcut_orders_lint_format_types_and_tests() -> None:
     assert types.files is None and types.fix_argv is None
     assert tests.argv == ("{python}", "-m", "pytest")
     assert tests.files is None and tests.fix_argv is None
+
+
+def test_language_bundles_compose_with_split_project_profiles(tmp_path: Path) -> None:
+    (tmp_path / "languages").mkdir()
+    (tmp_path / "languages/cpp.toml").write_text(
+        '[[orchestration.steps]]\nkind = "command"\nname = "C++ build"\n'
+        'argv = ["cmake", "--build", "build"]\n'
+        '[[orchestration.profiles]]\nname = "cpp"\nsteps = ["C++ build"]\n',
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "quality-gates.toml"
+    config_path.write_text(
+        'schema_version = 1\nlanguages = ["javascript", "markdown"]\n'
+        'orchestration_files = ["languages/cpp.toml"]\n'
+        "[orchestration]\n"
+        '[[orchestration.profiles]]\nname = "check"\nincludes = ["cpp"]\n',
+        encoding="utf-8",
+    )
+    policy = load_config(config_path).orchestration
+    assert policy is not None
+    check = policy.resolve_profile("check")
+    assert check is not None
+    assert check.steps == (
+        "JavaScript lint",
+        "JavaScript format",
+        "Markdown style",
+        "Markdown links and graph",
+        "C++ build",
+    )

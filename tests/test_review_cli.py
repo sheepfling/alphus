@@ -47,14 +47,14 @@ _CASES = (
         "source.py",
         "result = 3.14 * radius ** 2\n",
         '[checks.numeric_literals]\nextensions = [".py"]\n',
-        "numeric-literals.inline-constant",
+        "alphus/python/none/style/inline-constant",
     ),
     (
         "test-quality",
         "tests/test_report.py",
         f"def test_report():\n assert render() == {_PROSE!r}\n",
         '[checks.test_quality]\nextensions = [".py"]\n',
-        "test-quality.large-prose-assertion",
+        "alphus/python/none/testing/large-prose-assertion",
     ),
     (
         "test-quality",
@@ -67,28 +67,28 @@ _CASES = (
             '[checks.test_quality]\nextensions = [".py"]\n'
             'ephemeral_document_patterns = ["docs/plans/**"]\n'
         ),
-        "test-quality.ephemeral-plan-dependency",
+        "alphus/python/none/testing/ephemeral-plan-dependency",
     ),
     (
         "input-contracts",
         "source.py",
         "def add(values: list[str]):\n values.append('x')\n",
         '[checks.input_contracts]\nextensions = [".py"]\n',
-        "input-contracts.argument-mutation",
+        "alphus/python/none/correctness/argument-mutation",
     ),
     (
         "pydantic-practices",
         "source.py",
         "def output(model):\n return Model.model_validate(model.model_dump())\n",
         '[checks.pydantic_practices]\nextensions = [".py"]\n',
-        "pydantic-practices.dump-revalidation",
+        "alphus/python/pydantic/validation/dump-revalidation",
     ),
     (
         "fastapi-practices",
         "source.py",
         "from fastapi import HTTPException\nraise HTTPException(404)\n",
         '[checks.fastapi_practices]\nextensions = [".py"]\n',
-        "fastapi-practices.literal-status",
+        "alphus/python/fastapi/correctness/literal-http-status",
     ),
 )
 
@@ -182,7 +182,7 @@ steps = ["Numeric review"]
     assert payload["severity_counts"] == {"error": 0, "warning": 1, "info": 0}
     diagnostic = payload["steps"][0]["findings"][0]
     assert diagnostic["source"] == "alphus"
-    assert diagnostic["rule_id"] == "numeric-literals.inline-constant"
+    assert diagnostic["rule_id"] == "alphus/python/none/style/inline-constant"
     assert diagnostic["severity"] == "warning"
 
 

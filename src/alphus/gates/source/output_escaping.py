@@ -9,6 +9,7 @@ from pathlib import Path
 
 from alphus.config import SourceScanPolicy
 from alphus.contracts.findings import Finding
+from alphus.contracts.rule_tags import rule_tag
 from alphus.support.inventory import matches_path
 
 _OUTPUT_PUNCTUATION = frozenset("\\|*_<>&\"'{}[]#%$~^/")
@@ -107,9 +108,10 @@ def check_output_escaping(
             if suffix == ".py"
             else js_escape_findings(source)
         )
+        scope = "python" if suffix == ".py" else "javascript"
         findings.extend(
             Finding(
-                rule_id="output.manual-escaping",
+                rule_id=rule_tag(scope, "none", "security", "manual-output-escaping"),
                 path=name,
                 line=line,
                 message=f"{message}; use a library or tested shared utility",

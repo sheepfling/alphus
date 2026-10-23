@@ -131,7 +131,7 @@ def test_direct_cli_reports_file_and_line(
     assert main([*arguments, "--json"]) == 1
     output = json.loads(capsys.readouterr().out)
     assert [(item["path"], item["line"], item["rule_id"]) for item in output] == [
-        ("sample.py", 1, "hygiene.comment-marker")
+        ("sample.py", 1, "alphus/any/none/hygiene/comment-marker-found")
     ]
     assert main(arguments) == 1
     human = capsys.readouterr().out

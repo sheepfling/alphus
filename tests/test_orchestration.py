@@ -84,7 +84,7 @@ def test_provisional_gate_reports_findings_without_blocking_profile(
             findings=(
                 Diagnostic(
                     source="alphus",
-                    rule_id="source.line-length",
+                    rule_id="alphus/any/none/style/line-too-long",
                     path="src/example.py",
                     message="line is long",
                 ),
@@ -102,7 +102,7 @@ def test_provisional_gate_reports_findings_without_blocking_profile(
     assert report["provisional"] == {"passed": 0, "failed": 1}
     assert report["steps"][0]["status"] == "failed"
     assert report["steps"][0]["rollout"] == "provisional"
-    assert report["steps"][0]["findings"][0]["rule_id"] == "source.line-length"
+    assert report["steps"][0]["findings"][0]["rule_id"] == "alphus/any/none/style/line-too-long"
 
 
 def test_provisional_native_command_reports_failure_without_blocking_profile(
@@ -292,7 +292,7 @@ def test_json_profile_emits_one_structured_summary(
                         "line": None,
                         "message": "command exited with status 7",
                         "path": None,
-                        "rule_id": "orchestration.command-exit",
+                        "rule_id": "alphus/any/none/orchestration/command-exited-nonzero",
                         "severity": "error",
                         "source": "failing command",
                     }
@@ -311,7 +311,7 @@ def test_json_profile_emits_one_structured_summary(
                         "line": None,
                         "message": "rule runner exited with status 1",
                         "path": None,
-                        "rule_id": "orchestration.rule-execution",
+                        "rule_id": "alphus/any/none/orchestration/rule-execution-failed",
                         "severity": "error",
                         "source": "alphus",
                     }
@@ -351,7 +351,7 @@ def test_profile_applies_typed_severity_thresholds(
     )
     finding = Diagnostic(
         source="alphus",
-        rule_id="source.line-length",
+        rule_id="alphus/any/none/style/line-too-long",
         path="src/example.py",
         line=4,
         message="line exceeds configured limit",
@@ -373,7 +373,7 @@ def test_profile_applies_typed_severity_thresholds(
     assert payload["steps"][0]["findings"] == [
         {
             "source": "alphus",
-            "rule_id": "source.line-length",
+            "rule_id": "alphus/any/none/style/line-too-long",
             "message": "line exceeds configured limit",
             "severity": severity,
             "path": "src/example.py",
@@ -403,7 +403,7 @@ def test_mixed_profile_findings_keep_provenance_and_error_threshold(
     findings = (
         Diagnostic(
             source="alphus",
-            rule_id="source.line-length",
+            rule_id="alphus/any/none/style/line-too-long",
             path="src/example.py",
             line=4,
             message="advisory line length",
@@ -411,7 +411,7 @@ def test_mixed_profile_findings_keep_provenance_and_error_threshold(
         ),
         Diagnostic(
             source="alphus",
-            rule_id="source.file-size",
+            rule_id="alphus/any/none/maintainability/file-too-large",
             path="src/example.py",
             message="file exceeds hard limit",
         ),
@@ -432,7 +432,7 @@ def test_mixed_profile_findings_keep_provenance_and_error_threshold(
     assert payload["steps"][0]["findings"] == [
         {
             "source": "alphus",
-            "rule_id": "source.line-length",
+            "rule_id": "alphus/any/none/style/line-too-long",
             "message": "advisory line length",
             "severity": "warning",
             "path": "src/example.py",
@@ -440,7 +440,7 @@ def test_mixed_profile_findings_keep_provenance_and_error_threshold(
         },
         {
             "source": "alphus",
-            "rule_id": "source.file-size",
+            "rule_id": "alphus/any/none/maintainability/file-too-large",
             "message": "file exceeds hard limit",
             "severity": "error",
             "path": "src/example.py",

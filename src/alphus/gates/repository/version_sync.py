@@ -42,7 +42,7 @@ def check_version_sync(root: Path, policy: VersionSyncPolicy) -> list[Finding]:
         if version != reference_version:
             findings.append(
                 Finding(
-                    rule_id="metadata.version-mismatch",
+                    rule_id="alphus/repository/none/metadata/version-mismatch",
                     path=source.path,
                     message=(
                         f"version {version} differs from {reference_source.path} "

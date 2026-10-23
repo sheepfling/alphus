@@ -1,21 +1,49 @@
 # Future extensions, categories, and diagnostics
 
-This is a design proposal for Alphus. The current rules, selectors, and
-consumer policies remain the supported interface; the proposal does not add a
-plugin loader or change which checks run.
+This document records Alphus's diagnostic-tag contract and future extension
+design. It does not add a plugin loader or change which checks run.
 
 ## Current contracts
 
 Each portable checker receives an explicit repository root, validated policy,
 and selected files. Direct rule results keep the frozen `Finding` record with
-stable rule ID, repository-relative path, optional line, message, and severity.
-Profile aggregation now adapts Alphus-owned rule results into a named
-`Diagnostic` carrying source, rule ID, path, line, message, and severity; this
-does not rewrite the direct-rule JSON contract. Source-level helpers may return
-a named line and message before the checker adds its rule ID and path. Native
-command steps keep their own output and exit codes; Alphus retains their raw
-output and reports execution status without converting command text into
-Alphus findings.
+a canonical rule ID, repository-relative path, optional line, message, and
+severity. Profile aggregation adapts Alphus-owned results into a named
+`Diagnostic` carrying source, the same rule ID, path, line, message, and
+severity. Source helpers may return a line and message before the checker adds
+its rule ID and path. Native command steps keep their own output and exit
+codes; Alphus retains their raw output and reports execution status without
+converting native tool output into Alphus findings.
+
+### Rule-tag contract
+
+Every Alphus-owned finding uses this fixed identifier shape:
+
+    alphus/<scope>/<framework>/<category>/<complaint>
+
+Use lowercase kebab-case for each segment. The scope is a language, data format,
+any for a cross-language check, or repository for repository-wide rules.
+Use none when no framework applies; use a registered framework name such as
+pydantic or fastapi when a finding is framework-specific. Add framework names
+to the controlled set in alphus.contracts.rule_tags. Lint and format tools are
+producers, not frameworks. The category comes from the controlled
+list in alphus.contracts.rule_tags; the final segment names the specific
+complaint and stays independent of message wording.
+
+Examples:
+
+- alphus/python/none/style/line-too-long
+- alphus/python/pydantic/validation/dump-revalidation
+- alphus/javascript/none/security/manual-output-escaping
+- alphus/repository/none/architecture/edge-forbidden
+
+Diagnostic.source identifies the producer and is kept separate from the
+tag. Human output prints an Alphus tag once; it does not repeat alphus as a
+second prefix. External command output and native tool rule codes remain
+owned by those tools and are not rewritten into Alphus tags. Add new built-in
+findings with rule_tag(...) and extend the controlled scope/category
+vocabulary deliberately. Category labels classify findings; they do not yet
+select or enable groups of checks in policy.
 
 TOML selects current rules and ordered profiles. It contains consumer paths,
 thresholds, and command arguments, not executable Python callbacks. The
@@ -25,9 +53,9 @@ they do not add category-wide selectors or an independent enforcement-state
 model. Alphus does not currently discover third-party rule packages or expose
 pytest-style hooks.
 
-## Proposed category model
+## Proposed category selection model
 
-The six proposed categories are groupings for navigation and selection:
+The following broader categories remain a proposal for navigation and selection; they are separate from the controlled finding-tag categories:
 
 | Category | Candidate scope |
 | --- | --- |
@@ -122,7 +150,7 @@ language-specific check that warrants Python code.
 The internal `RuleSpec` catalog now gives every built-in selector one primary
 policy field and output shape; a matching runner table holds concrete checker
 dispatch. The next step is to migrate older rule outputs to common findings,
-then attach a category and typed checker callable to each specification. Keep
+then attach selector-group metadata and a typed checker callable to each specification. Those future groups are distinct from the diagnostic-tag category. Keep
 the current CLI selectors as adapters while that contract is exercised across
 existing rules.
 

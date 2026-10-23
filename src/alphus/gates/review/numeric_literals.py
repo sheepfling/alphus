@@ -15,6 +15,7 @@ from typing import NamedTuple
 
 from alphus.config import NumericLiteralPolicy, NumericLiteralSpec
 from alphus.contracts.findings import Finding
+from alphus.contracts.rule_tags import rule_tag
 from alphus.support.inventory import matches_path
 
 _MATH_CONSTANTS = (
@@ -195,7 +196,7 @@ class _NumericVisitor(ast.NodeVisitor):
                 self.findings.add(
                     NumericLiteralFinding(
                         line=line,
-                        rule_id=f"numeric-literals.inline-{spec.kind}",
+                        rule_id=rule_tag("python", "none", "style", f"inline-{spec.kind}"),
                         message=(
                             f"possible inline {spec.name} {spec.kind} literal {value!r}; "
                             f"review use of {spec.replacement}"

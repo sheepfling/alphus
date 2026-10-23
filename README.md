@@ -84,7 +84,8 @@ strict JavaScript type-check settings with consumer-neutral fixture tests.
 Install it from an immutable Alphus Git commit and use the `eslint` and
 `prettier-javascript` tools in `quality-gates.toml`. The profile supports
 `.js`, `.jsx`, `.mjs`, and `.cjs`; consumers still select their own source and
-test directories in their TypeScript configuration.
+test directories in their TypeScript configuration. Alphus resolves ESLint and
+Prettier through `npm exec`, using the consumer's local npm installation.
 
 For local development, point the other repository's development environment at
 the standalone package directory:
@@ -119,8 +120,19 @@ in the install command above. Ruff supplies lint and format steps;
 Pyright and pytest use the repository's native settings. Add `mdrepo`, `taplo`,
 or `prettier` only when those tools are installed and needed. Add a custom
 `[[orchestration.steps]]` beside `tools` when the repository needs another
-check; the [consumer guide](docs/CONSUMER-PROFILES.md) shows the full policy for
-named profiles and tool-command customization.
+check. For a quick multi-language start, select bundles with one `languages`
+line:
+
+```toml
+schema_version = 1
+languages = ["python", "markdown", "toml", "json", "javascript"]
+```
+
+This expands to generated language profiles plus a coordinated `check`.
+Custom profiles and `orchestration_files` compose with those bundles; C++
+build and artifact commands remain project-specific. The
+[consumer guide](docs/CONSUMER-PROFILES.md) covers profile composition and
+tool-command customization.
 
 From another directory, pass the repository and policy paths explicitly:
 

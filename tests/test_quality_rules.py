@@ -350,19 +350,19 @@ def test_source_rules_report_stable_locations_and_messages(tmp_path: Path) -> No
     files = candidate_files(tmp_path, config.files)
     line_findings = check_line_length(tmp_path, files, config)
     assert [(item.rule_id, item.path, item.line) for item in line_findings] == [
-        ("source.line-length", "docs/README.md", 1),
-        ("source.line-length", "src/long.py", 1),
-        ("source.line-length", "src/pkg/__init__.py", 1),
-        ("source.line-length", "vendor/lib.py", 1),
+        ("alphus/any/none/style/line-too-long", "docs/README.md", 1),
+        ("alphus/any/none/style/line-too-long", "src/long.py", 1),
+        ("alphus/any/none/style/line-too-long", "src/pkg/__init__.py", 1),
+        ("alphus/any/none/style/line-too-long", "vendor/lib.py", 1),
     ]
 
     size_findings = check_file_size(tmp_path, files, config)
     assert [(item.rule_id, item.path, item.line) for item in size_findings] == [
-        ("source.code-file-size", "src/oversized.py", None),
-        ("source.initializer-size", "src/pkg/__init__.py", None),
-        ("source.initializer-wildcard-import", "src/pkg/__init__.py", 1),
-        ("source.initializer-definition", "src/pkg/__init__.py", 3),
-        ("source.code-file-size", "src/pkg/__init__.py", None),
+        ("alphus/any/none/maintainability/code-file-too-large", "src/oversized.py", None),
+        ("alphus/python/none/maintainability/initializer-too-large", "src/pkg/__init__.py", None),
+        ("alphus/python/none/style/initializer-wildcard-import", "src/pkg/__init__.py", 1),
+        ("alphus/python/none/architecture/initializer-contains-definition", "src/pkg/__init__.py", 3),
+        ("alphus/any/none/maintainability/code-file-too-large", "src/pkg/__init__.py", None),
     ]
 
 
@@ -387,7 +387,7 @@ def test_cli_uses_an_explicit_root_and_emits_machine_readable_findings(
         == 1
     )
     output = capsys.readouterr().out
-    assert '"rule_id": "source.line-length"' in output
+    assert '"rule_id": "alphus/any/none/style/line-too-long"' in output
     assert '"path": "src/long.py"' in output
 
 
@@ -408,7 +408,7 @@ def test_json_cli_keeps_findings_and_report_exit_behavior(
 
     assert main(arguments) == 1
     assert capsys.readouterr().out == (
-        "src/decode.py:2: raw JSON decode; validate into a named model\n"
+        "ERROR alphus/python/none/validation/unvalidated-json-decode src/decode.py:2: raw JSON decode; validate into a named model\n"
         "JSON structure: 1 violation(s)\n"
     )
     assert main([*arguments, "--report"]) == 0
@@ -522,7 +522,7 @@ steps = ["line check"]
 
     assert main(arguments) == 0
     text_output = capsys.readouterr().out
-    assert "WARNING alphus source.line-length" in text_output
+    assert "WARNING alphus/any/none/style/line-too-long" in text_output
     assert "[priority=high]" in text_output
     assert "Diagnostic triage: 0 error(s), 1 warning(s), 0 info(s)" in text_output
 
@@ -535,7 +535,7 @@ def test_rule_profile_json_adapters_validate_each_owned_shape() -> None:
     assert style_findings == (
         Diagnostic(
             source="alphus",
-            rule_id="python-style.bare_containers",
+            rule_id="alphus/python/none/style/bare-containers",
             path="src/example.py",
             line=7,
             message="bare containers",
@@ -553,19 +553,19 @@ def test_rule_profile_json_adapters_validate_each_owned_shape() -> None:
         ),
     )
     assert [finding.rule_id for finding in shared_findings] == [
-        "shared-utilities.duplicate-helper",
-        "shared-utilities.file-hash-implementation",
+        "alphus/python/none/maintainability/duplicate-helper",
+        "alphus/python/none/maintainability/duplicate-file-hash-implementation",
     ]
 
     legacy_messages = diagnostics_from_json(
         "runtime-types", '["src/example.py:4: annotate the union"]'
     )
-    assert legacy_messages[0].rule_id == "alphus.runtime-types"
+    assert legacy_messages[0].rule_id == "alphus/python/none/typing/runtime-type-contract-violation"
     assert legacy_messages[0].message == "src/example.py:4: annotate the union"
 
     finding_records = diagnostics_from_json(
         "line-length",
-        '[{"rule_id":"source.line-length","path":"src/example.py",'
+        '[{"rule_id":"alphus/any/none/style/line-too-long","path":"src/example.py",'
         '"line":4,"message":"line is long","severity":"warning"}]',
     )
     assert finding_records[0].severity == "warning"
@@ -574,7 +574,7 @@ def test_rule_profile_json_adapters_validate_each_owned_shape() -> None:
 
 def test_rule_evaluation_validates_structured_output_before_rendering() -> None:
     finding = Finding(
-        rule_id="source.line-length",
+        rule_id="alphus/any/none/style/line-too-long",
         path="src/example.py",
         line=4,
         message="line is long",
@@ -615,7 +615,7 @@ steps = ["json check"]
     def warning_json_finding(*_args: object) -> list[Finding]:
         return [
             Finding(
-                "json.raw-decode",
+                "alphus/python/none/validation/unvalidated-json-decode",
                 "src/decode.py",
                 "validate raw JSON",
                 line=3,
@@ -639,11 +639,11 @@ steps = ["json check"]
 
     assert main(arguments) == 1
     output = capsys.readouterr().out
-    assert "WARNING alphus json.raw-decode src/decode.py:3: validate raw JSON" in output
+    assert "WARNING alphus/python/none/validation/unvalidated-json-decode src/decode.py:3: validate raw JSON" in output
     assert "Severity totals: 0 error(s), 1 warning(s), 0 info(s)" in output
 
     assert main([*arguments, "--report"]) == 0
-    assert "WARNING alphus json.raw-decode src/decode.py:3" in capsys.readouterr().out
+    assert "WARNING alphus/python/none/validation/unvalidated-json-decode src/decode.py:3" in capsys.readouterr().out
 
 
 def test_invalid_cli_policy_reports_validation_error_without_traceback(
@@ -729,7 +729,7 @@ def test_output_escaping_cli_renders_configured_scanner_findings(
         == 1
     )
     assert capsys.readouterr().out == (
-        "src/render.py:1: manual output escape replacement; "
+        "ERROR alphus/python/none/security/manual-output-escaping src/render.py:1: manual output escape replacement; "
         "use a library or tested shared utility\n"
         "Output escaping: 1 finding(s)\n"
     )
@@ -784,7 +784,7 @@ def test_runtime_type_cli_uses_configured_exclusions_and_report_mode(
 
     assert main(arguments) == 1
     assert capsys.readouterr().out == (
-        "src/runtime.py:2: runtime type check requires an explicit union annotation\n"
+        "alphus/python/none/typing/runtime-type-contract-violation: src/runtime.py:2: runtime type check requires an explicit union annotation\n"
         "Runtime type checks: 1 violation(s)\n"
     )
     assert main([*arguments, "--report"]) == 0

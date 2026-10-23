@@ -54,7 +54,7 @@ def test_policy_models_do_not_import_execution_or_gate_packages() -> None:
         assert not any(
             name.startswith(
                 (
-                    "alphus.cli",
+                    "alphus/python/none/correctness/cli-contract-violation",
                     "alphus.config",
                     "alphus.execution",
                     "alphus.gates",

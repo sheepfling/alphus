@@ -26,6 +26,9 @@ python = [
 alphus = "alphus.cli:main"
 alphus-typing-fixtures = "alphus.gates.stubs.typing_fixtures:main"
 alphus-stub-quality = "alphus.gates.stubs.verify:main"
+alphus-cpp-quality = "alphus.gates.cpp.cpp_common_quality:main"
+alphus-cpp-artifact-quality = "alphus.gates.cpp.cpp_artifact_quality:main"
+alphus-worktree-hygiene = "alphus.gates.cpp.worktree_hygiene:main"
 alphus-git-hygiene = "alphus.gates.repository.git_hygiene:main"
 
 [tool.setuptools]

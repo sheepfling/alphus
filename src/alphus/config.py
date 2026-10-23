@@ -24,7 +24,7 @@ from alphus.policy.base import (
     require_unique,
     validate_single_path,
 )
-from alphus.policy.native_tools import native_tool_policy
+from alphus.policy.native_tools import native_tool_policy, native_tools_for_languages
 from alphus.policy.orchestration import (
     CheckPolicies,
     CommandRunStep,
@@ -145,29 +145,34 @@ class QualityGateConfig(StrictModel):
     @classmethod
     def expand_native_tools(cls, value: Mapping[str, object] | None) -> object:
         """Keep the common-tool shortcut outside the full policy model."""
-        if not isinstance(value, Mapping) or "tools" not in value:
+        if not isinstance(value, Mapping) or not (
+            {"tools", "languages"} & value.keys()
+        ):
             return value
         if "orchestration_files" in value:
-            raise ValueError("tools cannot be combined with orchestration_files")
-        selected = TypeAdapter(list[str]).validate_python(value["tools"], strict=True)
-        native = native_tool_policy(selected)
-        declared = _PartialOrchestration.model_validate(value.get("orchestration", {}))
-        if declared.profiles:
             raise ValueError(
-                "tools can add custom steps, but named profiles require explicit orchestration"
+                "native shortcuts cannot be combined with orchestration_files"
             )
-        check = OrchestrationProfile(
-            name="check",
-            steps=tuple(step.name for step in (*native.steps, *declared.steps)),
+        if "tools" in value and "languages" in value:
+            raise ValueError("choose either languages or tools, not both")
+        if "languages" in value:
+            selected_languages = TypeAdapter(list[str]).validate_python(
+                value["languages"], strict=True
+            )
+            selected = native_tools_for_languages(selected_languages)
+            selection_key = "languages"
+        else:
+            selected = TypeAdapter(list[str]).validate_python(
+                value["tools"], strict=True
+            )
+            selection_key = "tools"
+        declared = _PartialOrchestration.model_validate(value.get("orchestration", {}))
+        orchestration = _compose_native_orchestration(
+            native_tool_policy(selected), declared
         )
         document = dict(value)
-        del document["tools"]
-        document["orchestration"] = OrchestrationPolicy(
-            steps=(*native.steps, *declared.steps),
-            profiles=(*native.profiles[:-1], check),
-            default_profile=declared.default_profile,
-            failure_threshold=declared.failure_threshold,
-        )
+        del document[selection_key]
+        document["orchestration"] = orchestration
         return document
 
 
@@ -185,9 +190,19 @@ class _SplitPolicy(StrictModel):
 
     schema_version: Literal[1]
     orchestration_files: tuple[str, ...]
+    tools: tuple[str, ...] | None = None
+    languages: tuple[str, ...] | None = None
     files: FileInventoryPolicy | None = None
     checks: Annotated[CheckPolicies, Field(default_factory=CheckPolicies)]
     orchestration: _PartialOrchestration
+
+    @model_validator(mode="after")
+    def validate_native_selection(self) -> _SplitPolicy:
+        if self.tools is not None and self.languages is not None:
+            raise ValueError("choose either languages or tools, not both")
+        if self.languages is not None:
+            native_tools_for_languages(self.languages)
+        return self
 
     @field_validator("orchestration_files")
     @classmethod
@@ -241,14 +256,86 @@ def load_config(path: Path) -> QualityGateConfig:
         )
         steps.extend(fragment.orchestration.steps)
         profiles.extend(fragment.orchestration.profiles)
+    declared = _PartialOrchestration(
+        steps=(*steps, *root.orchestration.steps),
+        profiles=(*profiles, *root.orchestration.profiles),
+        default_profile=root.orchestration.default_profile,
+        failure_threshold=root.orchestration.failure_threshold,
+    )
+    selected = (
+        native_tools_for_languages(root.languages)
+        if root.languages is not None
+        else root.tools
+    )
+    orchestration = (
+        _compose_native_orchestration(native_tool_policy(selected), declared)
+        if selected is not None
+        else OrchestrationPolicy(
+            steps=declared.steps,
+            profiles=declared.profiles,
+            default_profile=declared.default_profile,
+            failure_threshold=declared.failure_threshold,
+        )
+    )
     return QualityGateConfig(
         schema_version=root.schema_version,
         files=root.files,
         checks=root.checks,
-        orchestration=OrchestrationPolicy(
-            steps=(*steps, *root.orchestration.steps),
-            profiles=(*profiles, *root.orchestration.profiles),
-            default_profile=root.orchestration.default_profile,
-            failure_threshold=root.orchestration.failure_threshold,
-        ),
+        orchestration=orchestration,
+    )
+
+
+def _compose_native_orchestration(
+    native: OrchestrationPolicy, declared: _PartialOrchestration
+) -> OrchestrationPolicy:
+    """Combine generated tool recipes with root-owned steps and profiles."""
+    declared_profiles = declared.profiles
+    if any(profile.name == "check" for profile in declared_profiles):
+        native = _with_native_profile(native)
+    elif declared.steps:
+        declared_profiles = (
+            *declared_profiles,
+            OrchestrationProfile(
+                name="check", steps=tuple(step.name for step in declared.steps)
+            ),
+        )
+    return OrchestrationPolicy(
+        steps=(*native.steps, *declared.steps),
+        profiles=_merge_profiles(native.profiles, declared_profiles),
+        default_profile=declared.default_profile,
+        failure_threshold=declared.failure_threshold,
+    )
+
+
+def _merge_profiles(
+    generated: tuple[OrchestrationProfile, ...],
+    declared: tuple[OrchestrationProfile, ...],
+) -> tuple[OrchestrationProfile, ...]:
+    """Merge declared profiles into generated profiles, preserving order."""
+    merged = list(generated)
+    positions = {profile.name: index for index, profile in enumerate(merged)}
+    for profile in declared:
+        index = positions.get(profile.name)
+        if index is None:
+            positions[profile.name] = len(merged)
+            merged.append(profile)
+            continue
+        base = merged[index]
+        merged[index] = OrchestrationProfile(
+            name=base.name,
+            steps=tuple(dict.fromkeys((*base.steps, *profile.steps))),
+            includes=tuple(dict.fromkeys((*base.includes, *profile.includes))),
+        )
+    return tuple(merged)
+
+
+def _with_native_profile(policy: OrchestrationPolicy) -> OrchestrationPolicy:
+    """Expose native tools as a group when a declared check composes profiles."""
+    native = OrchestrationProfile(
+        name="native", steps=tuple(step.name for step in policy.steps)
+    )
+    check = OrchestrationProfile(name="check", includes=("native",))
+    return OrchestrationPolicy(
+        steps=policy.steps,
+        profiles=(*policy.profiles[:-1], native, check),
     )

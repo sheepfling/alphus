@@ -21,8 +21,8 @@ Native command failures still fail.
 
 ## Numeric literals
 
-Selector: `numeric-literals`. IDs: `numeric-literals.inline-constant` and
-`numeric-literals.inline-conversion`.
+Selector: `numeric-literals`. IDs: `alphus/python/none/style/inline-constant` and
+`alphus/python/none/style/inline-conversion`.
 
 The built-in catalog recognizes these exact values in binary or augmented
 arithmetic: pi (`3.14`, `3.14159`, `3.141592653589793`), e (`2.71828`,
@@ -73,8 +73,8 @@ authorities, and dimensional correctness remain outside this checker.
 
 ## Test quality
 
-Selector: `test-quality`. IDs: `test-quality.large-prose-assertion` and
-`test-quality.ephemeral-plan-dependency`.
+Selector: `test-quality`. IDs: `alphus/python/none/testing/large-prose-assertion` and
+`alphus/python/none/testing/ephemeral-plan-dependency`.
 
 ```toml
 [checks.test_quality]
@@ -117,8 +117,8 @@ file exclusion.
 
 ## Input contracts
 
-Selector: `input-contracts`. IDs: `input-contracts.argument-mutation` and
-`input-contracts.read-only-interface`.
+Selector: `input-contracts`. IDs: `alphus/python/none/correctness/argument-mutation` and
+`alphus/python/none/correctness/read-only-interface-violation`.
 
 ```toml
 [checks.input_contracts]
@@ -169,8 +169,8 @@ automatic source changes.
 
 ## Pydantic practices
 
-Selector: `pydantic-practices`. IDs: `pydantic-practices.dump-revalidation` and
-`pydantic-practices.implicit-mutability`.
+Selector: `pydantic-practices`. IDs: `alphus/python/pydantic/validation/dump-revalidation` and
+`alphus/python/pydantic/correctness/implicit-mutability`.
 
 ```toml
 [checks.pydantic_practices]
@@ -195,8 +195,8 @@ requirement. Imported parent classes and computed configuration are unresolved.
 
 ## FastAPI and Starlette practices
 
-Selector: `fastapi-practices`. IDs: `fastapi-practices.literal-status` and
-`fastapi-practices.literal-error-code`.
+Selector: `fastapi-practices`. IDs: `alphus/python/fastapi/correctness/literal-http-status` and
+`alphus/python/fastapi/correctness/literal-error-code`.
 
 ```toml
 [checks.fastapi_practices]

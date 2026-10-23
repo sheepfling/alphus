@@ -239,6 +239,20 @@ def annotation_shape(
                 ),
             )
     name = resolve(expression)
+    if name in {"pydantic.JsonValue", "alphus.support.data_access.JsonValue"}:
+        return ValueShape(
+            frozenset(
+                {
+                    "builtins.None",
+                    "builtins.bool",
+                    "builtins.int",
+                    "builtins.float",
+                    "builtins.str",
+                    "builtins.list",
+                    "builtins.dict",
+                }
+            )
+        )
     return named(name) if name is not None else UNKNOWN
 
 

@@ -12,6 +12,7 @@ from types import MappingProxyType
 
 from alphus.config import PathDiscoveryPolicy
 from alphus.contracts.findings import Finding, SourceFinding
+from alphus.contracts.rule_tags import rule_tag
 from alphus.support.inventory import matches_path
 
 JS_PATTERNS: Mapping[str, Pattern[str]] = MappingProxyType(
@@ -434,9 +435,12 @@ def check_path_discovery(
             else js_path_findings(source)
             + ([] if not inspect_strings else js_inspection_findings(source))
         )
+        scope = "python" if suffix == ".py" else "javascript"
         findings.extend(
             Finding(
-                rule_id="paths.implicit-discovery",
+                rule_id=rule_tag(
+                    scope, "none", "portability", "implicit-path-discovery"
+                ),
                 path=name,
                 line=source_finding.line,
                 message=source_finding.message,

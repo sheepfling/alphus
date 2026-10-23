@@ -688,7 +688,7 @@ def _function_findings(
                 )
                 findings.append(
                     Finding(
-                        rule_id="input-contracts.argument-mutation",
+                        rule_id="alphus/python/none/correctness/argument-mutation",
                         path=path,
                         line=mutation.line,
                         severity="warning",
@@ -718,7 +718,7 @@ def _function_findings(
                     continue
             findings.append(
                 Finding(
-                    rule_id="input-contracts.read-only-interface",
+                    rule_id="alphus/python/none/correctness/read-only-interface-violation",
                     path=path,
                     line=usage.line,
                     severity="warning",

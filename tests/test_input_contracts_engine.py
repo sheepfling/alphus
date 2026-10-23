@@ -39,7 +39,7 @@ def test_sequence_advice_follows_visible_operations(body: str, interface: str) -
     findings = analyze("def render(values: list[str]):\n " + body)
 
     assert len(findings) == 1
-    assert findings[0].rule_id == "input-contracts.read-only-interface"
+    assert findings[0].rule_id == "alphus/python/none/correctness/read-only-interface-violation"
     assert interface in findings[0].message
     assert findings[0].severity == "warning"
     assert findings[0].line == 1
@@ -54,8 +54,8 @@ def test_imported_list_and_dict_aliases_are_resolved() -> None:
     """)
 
     assert [finding.rule_id for finding in findings] == [
-        "input-contracts.read-only-interface",
-        "input-contracts.read-only-interface",
+        "alphus/python/none/correctness/read-only-interface-violation",
+        "alphus/python/none/correctness/read-only-interface-violation",
     ]
     assert any("Sequence[str]" in finding.message for finding in findings)
     assert any("Mapping[str, int]" in finding.message for finding in findings)
@@ -69,7 +69,7 @@ def test_direct_alias_mutation_is_reported_at_the_write() -> None:
     """)
 
     assert len(findings) == 1
-    assert findings[0].rule_id == "input-contracts.argument-mutation"
+    assert findings[0].rule_id == "alphus/python/none/correctness/argument-mutation"
     assert findings[0].line == 3
     assert "parameter values: append()" in findings[0].message
     assert "typed mutable contract" in findings[0].message
@@ -86,7 +86,7 @@ def test_item_deletion_and_augmented_assignment_preserve_typed_mutation() -> Non
 
     assert [finding.line for finding in findings] == [3, 4, 5]
     assert {finding.rule_id for finding in findings} == {
-        "input-contracts.argument-mutation"
+        "alphus/python/none/correctness/argument-mutation"
     }
 
 
@@ -177,8 +177,8 @@ def test_binary_buffers_report_writes_without_replacement_type_advice() -> None:
     """)
 
     assert [(item.rule_id, item.line) for item in findings] == [
-        ("input-contracts.argument-mutation", 2),
-        ("input-contracts.argument-mutation", 3),
+        ("alphus/python/none/correctness/argument-mutation", 2),
+        ("alphus/python/none/correctness/argument-mutation", 3),
     ]
     assert analyze("def inspect(data: bytearray):\n return len(data)\n") == []
 
@@ -283,7 +283,7 @@ def test_class_local_bindings_do_not_hide_a_later_caller_mutation() -> None:
             values.append('caller')
     """)
     assert len(findings) == 1
-    assert findings[0].rule_id == "input-contracts.argument-mutation"
+    assert findings[0].rule_id == "alphus/python/none/correctness/argument-mutation"
     assert findings[0].line == 5
 
 

@@ -19,7 +19,9 @@ Consumer policies can split orchestration steps and profiles into separate
 language TOML files through root-level `orchestration_files`. The loader
 combines them before validating unique names and profile references. The root
 policy owns optional built-in-rule file inventory and gate settings; language
-files only add steps and profiles.
+files only add steps and profiles. Common native tools can be selected with
+`languages` bundles or granularly with `tools`; generated profiles compose with
+project profiles and split files. C++ build commands remain project-owned.
 
 Alphus has two gate shapes. A portable rule inspects selected repository files
 and returns Alphus findings. A workflow gate coordinates tools and environments

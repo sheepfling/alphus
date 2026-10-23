@@ -23,6 +23,7 @@ from alphus.contracts.findings import (
     Finding,
     SeverityCounts,
 )
+from alphus.contracts.rule_tags import rule_tag
 from alphus.execution.dispatch import run_builtin_rule
 from alphus.execution.fixes import apply_fixes as apply_configured_fixes
 from alphus.execution.fixes import resolve_fix_plan
@@ -38,13 +39,10 @@ QualityRule = QualityRuleName
 
 
 def _render_finding(finding: Finding) -> None:
-    """Render a legacy finding line, marking advisory levels explicitly."""
+    """Render every finding with its canonical tag and location."""
     location = f"{finding.path}:{finding.line}" if finding.line else finding.path
-    if finding.severity == "error":
-        _human_print(f"{location}: {finding.message}")
-        return
     _human_print(
-        f"{finding.severity.upper()} alphus {finding.rule_id} "
+        f"{finding.severity.upper()} {finding.rule_id} "
         f"{location}: {finding.message}"
     )
 
@@ -136,10 +134,12 @@ def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
             )
             sample = ", ".join(str(line) for line in lines[:5])
             _human_print(
-                f"{name}: {count} lines exceed {limit} columns (example lines: {sample})"
+                f"{rule_tag('any', 'none', 'style', 'line-too-long')} {name}: "
+                f"{count} lines exceed {limit} columns (example lines: {sample})"
             )
         _human_print(
-            f"Line length: {len(findings)} violation(s) in {len(counts)} files"
+            f"{rule_tag('any', 'none', 'style', 'line-too-long')}: "
+            f"{len(findings)} violation(s) in {len(counts)} files"
         )
         _render_severity_totals(findings)
         return
@@ -180,13 +180,18 @@ def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
 
 
 def _render_shared_utilities(report: SharedUtilitiesReport) -> None:
-    """Keep the shared-utility report compatible with its repository command."""
+    """Render shared-utility findings with their canonical tags."""
+    duplicate_tag = rule_tag(
+        "python", "none", "maintainability", "duplicate-helper"
+    )
+    hash_tag = rule_tag(
+        "python", "none", "maintainability", "duplicate-file-hash-implementation"
+    )
     for locations in report.duplicate_groups:
-        _human_print(f"Duplicate Python helper: {', '.join(locations)}")
+        _human_print(f"{duplicate_tag}: {', '.join(locations)}")
     if len(report.file_hash_implementations) > 1:
         _human_print(
-            "Repeated file SHA-256 implementation: "
-            f"{', '.join(report.file_hash_implementations)}"
+            f"{hash_tag}: {', '.join(report.file_hash_implementations)}"
         )
     _human_print(f"Shared utilities: {len(report.duplicate_groups)} duplicate group(s)")
     _human_print(
@@ -203,6 +208,7 @@ def _render_python_style(findings: Mapping[str, StyleFindings]) -> int:
             if lines:
                 total += len(lines)
                 _human_print(
+                    f"{rule_tag('python', 'none', 'style', kind.replace('_', '-'))} "
                     f"{name}: {kind} at lines {lines[:8]} ({len(lines)} total)"
                 )
     _human_print(f"Python style: {total} violation(s) in {len(findings)} files")
@@ -212,14 +218,18 @@ def _render_python_style(findings: Mapping[str, StyleFindings]) -> int:
 def _render_runtime_types(issues: Sequence[str]) -> None:
     """Render every runtime type-narrowing finding."""
     for issue in issues:
-        _human_print(issue)
+        _human_print(
+            f"alphus/python/none/typing/runtime-type-contract-violation: {issue}"
+        )
     _human_print(f"Runtime type checks: {len(issues)} violation(s)")
 
 
 def _render_cli_policy(issues: Sequence[str]) -> None:
     """Render the CLI migration inventory and endpoint count."""
     for issue in issues:
-        _human_print(issue)
+        _human_print(
+            f"alphus/python/none/correctness/cli-contract-violation: {issue}"
+        )
     endpoints = {issue.partition(": ")[0] for issue in issues}
     _human_print(
         f"CLI policy: {len(issues)} violation(s) in {len(endpoints)} endpoint(s)"
@@ -257,7 +267,9 @@ def _python_style_categories(
 def _render_script_policy(issues: Sequence[str]) -> None:
     """Render the launcher-language inventory."""
     for issue in issues:
-        _human_print(issue)
+        _human_print(
+            f"alphus/python/none/security/script-policy-violation: {issue}"
+        )
     _human_print(f"Script policy: {len(issues)} violation(s)")
 
 

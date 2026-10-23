@@ -52,22 +52,22 @@ def test_import_patterns_block_current_and_future_route_module_names(
         (finding.rule_id, finding.line, finding.message) for finding in findings
     ] == [
         (
-            "module-role.forbidden-import-pattern",
+            "alphus/python/none/architecture/forbidden-module-import-pattern",
             2,
             "composition role must not import a module matching '*.api'",
         ),
         (
-            "module-role.forbidden-import-pattern",
+            "alphus/python/none/architecture/forbidden-module-import-pattern",
             3,
             "composition role must not import a module matching '*_api'",
         ),
         (
-            "module-role.forbidden-import-pattern",
+            "alphus/python/none/architecture/forbidden-module-import-pattern",
             4,
             "composition role must not import a module matching '*.api'",
         ),
         (
-            "module-role.forbidden-import-pattern",
+            "alphus/python/none/architecture/forbidden-module-import-pattern",
             5,
             "composition role must not import a module matching '*_api'",
         ),

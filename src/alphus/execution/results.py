@@ -14,6 +14,7 @@ from alphus.contracts.findings import (
     Severity,
     severity_meets_threshold,
 )
+from alphus.contracts.rule_tags import rule_tag
 from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
 from alphus.gates.source.python_style import StyleFindings
 from alphus.policy.base import QualityRuleName
@@ -39,6 +40,27 @@ _PYTHON_STYLE: TypeAdapter[PythonStyleOutput] = TypeAdapter(PythonStyleOutput)
 _SHARED_UTILITIES: TypeAdapter[_SharedUtilitiesWire] = TypeAdapter(_SharedUtilitiesWire)
 _SHARED_REPORT: TypeAdapter[SharedUtilitiesReport] = TypeAdapter(SharedUtilitiesReport)
 
+_MESSAGE_RULE_IDS: Mapping[QualityRuleName, str] = {
+    "runtime-types": "alphus/python/none/typing/runtime-type-contract-violation",
+    "cli": "alphus/python/none/correctness/cli-contract-violation",
+    "script-policy": "alphus/python/none/security/script-policy-violation",
+}
+
+
+def _message_diagnostics(
+    rule: QualityRuleName, messages: Sequence[str]
+) -> tuple[Diagnostic, ...]:
+    try:
+        rule_id = _MESSAGE_RULE_IDS[rule]
+    except KeyError as error:
+        raise ValueError(
+            f"no diagnostic tag registered for message rule {rule!r}"
+        ) from error
+    return tuple(
+        Diagnostic(source="alphus", rule_id=rule_id, message=message)
+        for message in messages
+    )
+
 
 def _style_diagnostics(
     payload: Mapping[str, Mapping[str, Sequence[int]]],
@@ -46,7 +68,7 @@ def _style_diagnostics(
     return tuple(
         Diagnostic(
             source="alphus",
-            rule_id=f"python-style.{category}",
+            rule_id=rule_tag("python", "none", "style", category.replace("_", "-")),
             path=path,
             line=line,
             message=category.replace("_", " "),
@@ -66,7 +88,7 @@ def _shared_diagnostics(
     diagnostics = [
         Diagnostic(
             source="alphus",
-            rule_id="shared-utilities.duplicate-helper",
+            rule_id="alphus/python/none/maintainability/duplicate-helper",
             message=f"Duplicate Python helper: {', '.join(group)}",
         )
         for group in groups
@@ -75,7 +97,7 @@ def _shared_diagnostics(
         diagnostics.append(
             Diagnostic(
                 source="alphus",
-                rule_id="shared-utilities.file-hash-implementation",
+                rule_id="alphus/python/none/maintainability/duplicate-file-hash-implementation",
                 message=(
                     "Repeated file SHA-256 implementation: "
                     f"{', '.join(hash_implementations)}"
@@ -86,7 +108,7 @@ def _shared_diagnostics(
         diagnostics.append(
             Diagnostic(
                 source="alphus",
-                rule_id="shared-utilities.failure",
+                rule_id="alphus/python/none/maintainability/shared-utilities-check-failed",
                 message="Shared utilities check reported failure without details.",
             )
         )
@@ -101,10 +123,7 @@ def diagnostics_from_output(
     if shape == "findings":
         return tuple(item.as_diagnostic() for item in _FINDINGS.validate_python(output))
     if shape == "messages":
-        return tuple(
-            Diagnostic(source="alphus", rule_id=f"alphus.{rule}", message=message)
-            for message in _MESSAGES.validate_python(output)
-        )
+        return _message_diagnostics(rule, _MESSAGES.validate_python(output))
     if shape == "python-style":
         payload = _PYTHON_STYLE.validate_python(output)
         return _style_diagnostics(payload)
@@ -124,10 +143,7 @@ def diagnostics_from_json(
     if shape == "findings":
         return tuple(item.as_diagnostic() for item in _FINDINGS.validate_json(encoded))
     if shape == "messages":
-        return tuple(
-            Diagnostic(source="alphus", rule_id=f"alphus.{rule}", message=message)
-            for message in _MESSAGES.validate_json(encoded)
-        )
+        return _message_diagnostics(rule, _MESSAGES.validate_json(encoded))
     if shape == "python-style":
         return _style_diagnostics(_PYTHON_STYLE.validate_json(encoded))
     report = _SHARED_UTILITIES.validate_json(encoded)

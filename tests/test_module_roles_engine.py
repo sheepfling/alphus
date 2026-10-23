@@ -73,7 +73,7 @@ def test_every_module_role_accepts_allowed_dependencies_and_rejects_reversed_edg
     findings = check_module_roles(tmp_path, policy)
     assert [(finding.rule_id, finding.message) for finding in findings] == [
         (
-            "module-role.forbidden-import",
+            "alphus/python/none/architecture/forbidden-module-import",
             f"{role} role must not import 'internal.transport'",
         )
     ]
@@ -113,11 +113,11 @@ def test_module_role_reports_reintroduced_calculation_imports_calls_and_helpers(
     findings = check_module_roles(tmp_path, _policy())
 
     assert [finding.rule_id for finding in findings] == [
-        "module-role.forbidden-import",
-        "module-role.forbidden-import",
-        "module-role.forbidden-definition",
-        "module-role.forbidden-call",
-        "module-role.forbidden-call",
+        "alphus/python/none/architecture/forbidden-module-import",
+        "alphus/python/none/architecture/forbidden-module-import",
+        "alphus/python/none/architecture/forbidden-module-definition",
+        "alphus/python/none/security/forbidden-module-call",
+        "alphus/python/none/security/forbidden-module-call",
     ]
     assert [finding.line for finding in findings] == [1, 2, 4, 5, 6]
 
@@ -160,17 +160,17 @@ def test_module_role_reports_forbidden_module_assignments(tmp_path: Path) -> Non
         (finding.rule_id, finding.line, finding.message) for finding in findings
     ] == [
         (
-            "module-role.forbidden-assignment",
+            "alphus/python/none/architecture/forbidden-module-assignment",
             2,
             "operation role must not assign module-level name 'RegistryProvider'",
         ),
         (
-            "module-role.forbidden-assignment",
+            "alphus/python/none/architecture/forbidden-module-assignment",
             3,
             "operation role must not assign module-level name 'ConfigurationProvider'",
         ),
         (
-            "module-role.forbidden-assignment",
+            "alphus/python/none/architecture/forbidden-module-assignment",
             5,
             "operation role must not assign module-level name 'OptionalProvider'",
         ),
@@ -237,7 +237,7 @@ def test_module_role_rejects_symlinked_source_outside_root(tmp_path: Path) -> No
 
     assert [(finding.rule_id, finding.message) for finding in findings] == [
         (
-            "module-role.path",
+            "alphus/python/none/configuration/module-role-path-invalid",
             "composition role configured module path contains a symlink",
         )
     ]
@@ -312,6 +312,6 @@ forbidden_module_assignments = ["RegistryProvider"]
     assert [
         (finding["rule_id"], finding["line"], finding["path"]) for finding in findings
     ] == [
-        ("module-role.forbidden-import", 1, "src/provider.py"),
-        ("module-role.forbidden-assignment", 2, "src/provider.py"),
+        ("alphus/python/none/architecture/forbidden-module-import", 1, "src/provider.py"),
+        ("alphus/python/none/architecture/forbidden-module-assignment", 2, "src/provider.py"),
     ]

@@ -155,7 +155,7 @@ def check_comment_markers(
         except (tokenize.TokenError, IndentationError) as error:
             findings.append(
                 Finding(
-                    rule_id="hygiene.comment-scan",
+                    rule_id="alphus/any/none/hygiene/comment-scan-failed",
                     path=name,
                     message=f"cannot scan Python comments: {error}",
                 )
@@ -163,7 +163,7 @@ def check_comment_markers(
             continue
         findings.extend(
             Finding(
-                rule_id="hygiene.comment-marker",
+                rule_id="alphus/any/none/hygiene/comment-marker-found",
                 path=name,
                 line=line,
                 message=f"temporary-work marker {match.group().upper()} in comment",

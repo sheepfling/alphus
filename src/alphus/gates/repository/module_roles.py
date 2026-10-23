@@ -131,7 +131,7 @@ def _inspect_source(rule: ModuleRoleRule, source: str) -> list[Finding]:
         return [
             _finding(
                 rule,
-                "module-role.syntax",
+                "alphus/python/none/correctness/module-syntax-invalid",
                 error.lineno,
                 "module could not be parsed",
             )
@@ -146,7 +146,7 @@ def _inspect_source(rule: ModuleRoleRule, source: str) -> list[Finding]:
                         findings.append(
                             _finding(
                                 rule,
-                                "module-role.forbidden-import",
+                                "alphus/python/none/architecture/forbidden-module-import",
                                 node.lineno,
                                 f"must not import '{forbidden}'",
                             )
@@ -156,7 +156,7 @@ def _inspect_source(rule: ModuleRoleRule, source: str) -> list[Finding]:
                         findings.append(
                             _finding(
                                 rule,
-                                "module-role.forbidden-import-pattern",
+                                "alphus/python/none/architecture/forbidden-module-import-pattern",
                                 node.lineno,
                                 f"must not import a module matching '{pattern}'",
                             )
@@ -167,7 +167,7 @@ def _inspect_source(rule: ModuleRoleRule, source: str) -> list[Finding]:
                     findings.append(
                         _finding(
                             rule,
-                            "module-role.forbidden-call",
+                            "alphus/python/none/security/forbidden-module-call",
                             node.lineno,
                             f"must not call '{name}'",
                         )
@@ -177,7 +177,7 @@ def _inspect_source(rule: ModuleRoleRule, source: str) -> list[Finding]:
                     findings.append(
                         _finding(
                             rule,
-                            "module-role.forbidden-definition",
+                            "alphus/python/none/architecture/forbidden-module-definition",
                             node.lineno,
                             f"must not define '{name}'",
                         )
@@ -187,7 +187,7 @@ def _inspect_source(rule: ModuleRoleRule, source: str) -> list[Finding]:
                     findings.append(
                         _finding(
                             rule,
-                            "module-role.forbidden-definition",
+                            "alphus/python/none/architecture/forbidden-module-definition",
                             node.lineno,
                             f"must not define '{name}'",
                         )
@@ -201,7 +201,7 @@ def _inspect_source(rule: ModuleRoleRule, source: str) -> list[Finding]:
         findings.append(
             _finding(
                 rule,
-                "module-role.forbidden-assignment",
+                "alphus/python/none/architecture/forbidden-module-assignment",
                 line,
                 f"must not assign module-level name '{name}'",
             )
@@ -245,7 +245,7 @@ def check_module_roles(root: Path, policy: ModuleRolePolicy) -> list[Finding]:
             findings.append(
                 _finding(
                     rule,
-                    "module-role.path",
+                    "alphus/python/none/configuration/module-role-path-invalid",
                     None,
                     module_path.error or "path is invalid",
                 )
@@ -257,7 +257,7 @@ def check_module_roles(root: Path, policy: ModuleRolePolicy) -> list[Finding]:
             findings.append(
                 _finding(
                     rule,
-                    "module-role.read",
+                    "alphus/python/none/configuration/module-role-file-unreadable",
                     None,
                     f"module could not be read ({type(error).__name__})",
                 )

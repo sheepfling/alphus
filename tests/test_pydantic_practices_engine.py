@@ -19,7 +19,7 @@ def test_dump_revalidation_follows_local_aliases_and_reports_source_line() -> No
 
     assert [
         (item.rule_id, item.path, item.line, item.severity) for item in findings
-    ] == [("pydantic-practices.dump-revalidation", "src/output.py", 4, "warning")]
+    ] == [("alphus/python/pydantic/validation/dump-revalidation", "src/output.py", 4, "warning")]
 
 
 def test_dump_revalidation_detects_inline_json_and_skips_plain_validation() -> None:
@@ -32,7 +32,7 @@ def test_dump_revalidation_detects_inline_json_and_skips_plain_validation() -> N
     findings = pydantic_practice_findings(source, _policy())
 
     assert [(item.rule_id, item.line) for item in findings] == [
-        ("pydantic-practices.dump-revalidation", 2)
+        ("alphus/python/pydantic/validation/dump-revalidation", 2)
     ]
 
 
@@ -65,7 +65,7 @@ def test_explicit_mutability_is_opt_in_and_handles_pydantic_aliases() -> None:
     assert pydantic_practice_findings(source, _policy()) == []
     findings = pydantic_practice_findings(source, _policy(require_explicit_frozen=True))
     assert [(item.rule_id, item.line) for item in findings] == [
-        ("pydantic-practices.implicit-mutability", 4)
+        ("alphus/python/pydantic/correctness/implicit-mutability", 4)
     ]
 
 

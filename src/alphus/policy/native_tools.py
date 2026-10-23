@@ -122,8 +122,8 @@ NATIVE_TOOLS = MappingProxyType(
             (
                 NativeStep(
                     "JSON format",
-                    ("prettier", "--check", "{files}"),
-                    ("prettier", "--write", "{files}"),
+                    ("npm", "exec", "--", "prettier", "--check", "{files}"),
+                    ("npm", "exec", "--", "prettier", "--write", "{files}"),
                     ("**/*.json",),
                 ),
             ),
@@ -133,8 +133,8 @@ NATIVE_TOOLS = MappingProxyType(
             (
                 NativeStep(
                     "JavaScript lint",
-                    ("eslint", "{files}"),
-                    ("eslint", "--fix", "{files}"),
+                    ("npm", "exec", "--", "eslint", "{files}"),
+                    ("npm", "exec", "--", "eslint", "--fix", "{files}"),
                     ("**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"),
                 ),
             ),
@@ -144,14 +144,39 @@ NATIVE_TOOLS = MappingProxyType(
             (
                 NativeStep(
                     "JavaScript format",
-                    ("prettier", "--check", "{files}"),
-                    ("prettier", "--write", "{files}"),
+                    ("npm", "exec", "--", "prettier", "--check", "{files}"),
+                    ("npm", "exec", "--", "prettier", "--write", "{files}"),
                     ("**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"),
                 ),
             ),
         ),
     }
 )
+
+LANGUAGE_TOOLS = MappingProxyType(
+    {
+        "python": ("ruff", "pyright", "pytest"),
+        "markdown": ("rumdl", "mdrepo"),
+        "toml": ("taplo",),
+        "json": ("prettier",),
+        "javascript": ("eslint", "prettier-javascript"),
+    }
+)
+
+
+def native_tools_for_languages(names: Sequence[str]) -> tuple[str, ...]:
+    """Expand common language selections into their standard native tools."""
+    if not names:
+        raise ValueError("languages must select at least one supported language")
+    if len(set(names)) != len(names):
+        raise ValueError("languages must not repeat a language")
+    unknown = sorted(set(names) - LANGUAGE_TOOLS.keys())
+    if unknown:
+        supported = ", ".join(sorted(LANGUAGE_TOOLS))
+        raise ValueError(
+            f"unknown languages: {', '.join(unknown)}; choose from {supported}"
+        )
+    return tuple(tool for name in names for tool in LANGUAGE_TOOLS[name])
 
 
 def native_tool_policy(names: Sequence[str]) -> OrchestrationPolicy:

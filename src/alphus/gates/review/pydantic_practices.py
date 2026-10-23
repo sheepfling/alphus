@@ -195,7 +195,7 @@ def pydantic_practice_findings(
     if policy.report_dump_revalidation:
         findings.extend(
             Finding(
-                rule_id="pydantic-practices.dump-revalidation",
+                rule_id="alphus/python/pydantic/validation/dump-revalidation",
                 path=path,
                 line=line,
                 severity="warning",
@@ -209,7 +209,7 @@ def pydantic_practice_findings(
     if policy.require_explicit_frozen:
         findings.extend(
             Finding(
-                rule_id="pydantic-practices.implicit-mutability",
+                rule_id="alphus/python/pydantic/correctness/implicit-mutability",
                 path=path,
                 line=line,
                 severity="warning",

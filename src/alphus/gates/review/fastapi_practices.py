@@ -141,7 +141,7 @@ def fastapi_practice_findings(
                     findings.add(
                         (
                             candidate.lineno,
-                            "fastapi-practices.literal-status",
+                            "alphus/python/fastapi/correctness/literal-http-status",
                             "literal HTTP status; consider a named status constant",
                         )
                     )
@@ -157,7 +157,7 @@ def fastapi_practice_findings(
                     findings.add(
                         (
                             value.lineno,
-                            "fastapi-practices.literal-error-code",
+                            "alphus/python/fastapi/correctness/literal-error-code",
                             "literal error code; use the consumer's named vocabulary",
                         )
                     )
@@ -171,7 +171,7 @@ def fastapi_practice_findings(
                         findings.add(
                             (
                                 value.lineno,
-                                "fastapi-practices.literal-error-code",
+                                "alphus/python/fastapi/correctness/literal-error-code",
                                 "literal error code; use the consumer's named vocabulary",
                             )
                         )
