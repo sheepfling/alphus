@@ -76,6 +76,32 @@ def test_javascript_consumer_example_selects_the_shared_profile() -> None:
     assert check.steps == javascript.steps == ("JavaScript lint", "JavaScript format")
 
 
+def test_framework_shortcuts_keep_typescript_and_templates_scoped() -> None:
+    config = load_config_stream(
+        StringIO(
+            'schema_version = 1\ntools = ["eslint-typescript", '
+            '"prettier-typescript", "eslint-angular-template"]\n'
+        )
+    )
+    policy = config.orchestration
+    assert policy is not None
+    typescript = policy.resolve_profile("typescript")
+    html = policy.resolve_profile("html")
+    assert typescript is not None
+    assert typescript.steps == ("TypeScript lint", "TypeScript format")
+    assert html is not None and html.steps == ("Angular template lint",)
+    lint, format_step, template = policy.steps
+    assert isinstance(lint, CommandRunStep)
+    assert isinstance(format_step, CommandRunStep)
+    assert isinstance(template, CommandRunStep)
+    typescript_scope = ("**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts")
+    assert lint.files is not None and lint.files.include == typescript_scope
+    assert (
+        format_step.files is not None and format_step.files.include == typescript_scope
+    )
+    assert template.files is not None and template.files.include == ("**/*.html",)
+
+
 @pytest.mark.parametrize(
     ("source", "message"),
     [

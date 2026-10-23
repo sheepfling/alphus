@@ -83,6 +83,8 @@ Install it from an immutable Alphus Git commit and use the `eslint` and
 `prettier-javascript` tools in `quality-gates.toml`. The profile supports
 `.js`, `.jsx`, `.mjs`, and `.cjs`; consumers still select their own source and
 test directories in their TypeScript configuration.
+Opt-in React and Angular ESLint exports and TypeScript and Angular template
+command scopes are documented in the JavaScript package guide.
 
 For local development, point the other repository's development environment at
 the standalone package directory:

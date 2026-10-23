@@ -139,6 +139,28 @@ NATIVE_TOOLS = MappingProxyType(
                 ),
             ),
         ),
+        "eslint-typescript": NativeTool(
+            "typescript",
+            (
+                NativeStep(
+                    "TypeScript lint",
+                    ("eslint", "{files}"),
+                    ("eslint", "--fix", "{files}"),
+                    ("**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"),
+                ),
+            ),
+        ),
+        "eslint-angular-template": NativeTool(
+            "html",
+            (
+                NativeStep(
+                    "Angular template lint",
+                    ("eslint", "{files}"),
+                    ("eslint", "--fix", "{files}"),
+                    ("**/*.html",),
+                ),
+            ),
+        ),
         "prettier-javascript": NativeTool(
             "javascript",
             (
@@ -147,6 +169,17 @@ NATIVE_TOOLS = MappingProxyType(
                     ("prettier", "--check", "{files}"),
                     ("prettier", "--write", "{files}"),
                     ("**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"),
+                ),
+            ),
+        ),
+        "prettier-typescript": NativeTool(
+            "typescript",
+            (
+                NativeStep(
+                    "TypeScript format",
+                    ("prettier", "--check", "{files}"),
+                    ("prettier", "--write", "{files}"),
+                    ("**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"),
                 ),
             ),
         ),

@@ -7,5 +7,5 @@
     "types": ["node"],
     "skipLibCheck": true
   },
-  "include": ["eslint.config.js", "prettier.config.js", "tests/**/*.mjs"]
+  "include": ["*.config.js", "tests/**/*.mjs"]
 }
