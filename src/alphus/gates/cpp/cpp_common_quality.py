@@ -168,6 +168,9 @@ class GateReport(TypedDict):
     findings: list[GateFinding]
     metrics: dict[str, JsonValue]
     manifest_sha256: NotRequired[str]
+    source_revision: NotRequired[str]
+    created_at_utc: NotRequired[str]
+    comparison_context: NotRequired[dict[str, JsonValue]]
 
 
 class LegacyException(TypedDict):
@@ -1100,7 +1103,32 @@ def check_impact(
                         path=row["path"],
                     )
                 )
-    return _report(
+    blast_radii = sorted(row["blast_radius"] for row in rows)
+    count = len(rows)
+    p90_index = max(0, math.ceil(count * 0.9) - 1)
+    impact_summary: dict[str, JsonValue] = {
+        "header_count": count,
+        "source_file_count": len(files),
+        "include_edge_count": edge_count,
+        "cycle_participant_count": cycle_participants,
+        "avg_blast_radius": (sum(blast_radii) / count if count else 0.0),
+        "p90_blast_radius": blast_radii[p90_index] if count else 0,
+        "max_blast_radius": blast_radii[-1] if count else 0,
+        "avg_heaviness": (
+            sum(row["heaviness"] for row in rows) / count if count else 0.0
+        ),
+        "max_hotspot_score": max((row["hotspot_score"] for row in rows), default=0),
+        "avg_include_amplification": (
+            sum(row["include_amplification"] for row in rows) / count if count else 0.0
+        ),
+        "avg_indirectness": (
+            sum(row["indirectness"] for row in rows) / count if count else 0.0
+        ),
+        "max_translation_unit_fanout": max(translation_units.values())
+        if translation_units
+        else None,
+    }
+    report = _report(
         "impact",
         findings,
         {
@@ -1121,9 +1149,12 @@ def check_impact(
                     )[:20]
                 ],
             ),
+            "impact_summary": impact_summary,
         },
         run_id,
     )
+    report["created_at_utc"] = datetime.now(UTC).isoformat()
+    return report
 
 
 class TestCasePolicy(TypedDict):
@@ -2841,7 +2872,26 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             report = check_verdict(args.config, section, args.run_id, args.manifest)
         if args.manifest and args.command != "verdict":
-            report["manifest_sha256"] = _manifest_binding(args.manifest, args.run_id)[1]
+            manifest, digest = _manifest_binding(args.manifest, args.run_id)
+            report["manifest_sha256"] = digest
+            report["source_revision"] = manifest["source"]["revision"]
+            if args.command == "impact":
+                source_root = Path(manifest["source"]["root"]).resolve()
+                inputs = []
+                for item in manifest["inputs"]:
+                    input_path = Path(item["path"]).resolve()
+                    try:
+                        relative_path = input_path.relative_to(source_root).as_posix()
+                    except ValueError:
+                        relative_path = input_path.name
+                    inputs.append({"path": relative_path, "sha256": item["sha256"]})
+                report["comparison_context"] = {
+                    "configuration": manifest["build"]["configuration"],
+                    "toolchain": manifest["build"]["toolchain"],
+                    "selected_targets": manifest["build"]["selected_targets"],
+                    "expected_executables": manifest["build"]["expected_executables"],
+                    "inputs": sorted(inputs, key=lambda item: item["path"]),
+                }
         return _emit(report, args.output, args.format)
     except (
         OSError,

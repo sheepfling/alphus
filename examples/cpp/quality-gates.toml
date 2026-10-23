@@ -28,6 +28,25 @@ argv = [
   "{root}/build", "--policy", "{root}/cpp-artifact-policy.json",
 ]
 
+[[orchestration.steps]]
+kind = "command"
+name = "C/C++ style candidates"
+argv = [
+  "{python}", "-m", "alphus.gates.cpp.cpp_advisory_quality", "style", "{root}",
+  "--output", "{root}/out/quality/cpp-style.json", "--fail-on-findings",
+]
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "command"
+name = "C++ include-impact trends"
+argv = [
+  "{python}", "-m", "alphus.gates.cpp.cpp_advisory_quality", "trend",
+  "{root}/out/quality/cpp-impact-snapshots", "--output",
+  "{root}/out/quality/cpp-impact-trend.json", "--fail-on-worsening",
+]
+rollout = "provisional"
+
 [[orchestration.profiles]]
 name = "cpp-source"
 steps = ["C++ source ownership"]
@@ -39,3 +58,15 @@ steps = ["C++ artifact budgets"]
 [[orchestration.profiles]]
 name = "cpp"
 includes = ["cpp-source", "cpp-artifacts"]
+
+[[orchestration.profiles]]
+name = "cpp-style"
+steps = ["C/C++ style candidates"]
+
+[[orchestration.profiles]]
+name = "cpp-trends"
+steps = ["C++ include-impact trends"]
+
+[[orchestration.profiles]]
+name = "cpp-advisory"
+includes = ["cpp-style", "cpp-trends"]

@@ -26,8 +26,9 @@ consumers calibrate their own thresholds from comparable baselines.
 These checks can help developers find cleanup opportunities, but their results
 do not prove a defect and should not fail CI by themselves:
 
-- Historical trends can identify worsening metrics once snapshots are bound to
-  the same profile, targets, toolchain, source revision, and run identity.
+- Historical trends can identify worsening metrics when snapshots use the same
+  configuration, targets, toolchain, and named input hashes. Each row records
+  its own source revision and run identity for traceability.
 - Include-name and token heuristics can suggest unused includes, but cannot
   account reliably for macros, templates, conditional compilation, or
   transitive declarations. Require a successful compile after removal.
@@ -36,9 +37,46 @@ do not prove a defect and should not fail CI by themselves:
 - Regex-based complexity estimates can miscount C++ syntax, comments, and
   macros. Use parser-backed metrics before making complexity a gate.
 
-Alphus does not currently provide a longitudinal trend contract or these
-heuristic reports. They remain possible follow-on utilities with report-only
-semantics.
+Alphus provides these as the `cpp_advisory_quality` command. Its `style`
+subcommand emits low-confidence findings with `severity: info` and
+`blocking: false`; the `trend` subcommand compares impact snapshots only when
+their build context matches. The `examples/cpp/quality-gates.toml` file exposes
+them through opt-in `cpp-style`, `cpp-trends`, and `cpp-advisory` profiles with
+`rollout = "provisional"`. A provisional failure is visible in the profile
+report and does not fail the aggregate run.
+
+Run the style review directly to write a report; it exits successfully by
+default even when candidates exist:
+
+```shell
+python -m alphus.gates.cpp.cpp_advisory_quality style . \
+  --output out/quality/cpp-style.json
+```
+
+To make candidates show as a provisional failure in an Alphus profile, pass
+`--fail-on-findings` and set the command step's `rollout` to `provisional`, as
+the example profile does. The candidates remain informational and do not fail
+the aggregate run.
+
+For trends, retain each `impact` report under one snapshot directory. Include
+the build manifest so Alphus records comparable build context:
+
+```shell
+python -m alphus.gates.cpp.cpp_common_quality impact . \
+  --config cpp-common-quality.json --run-id "$RUN_ID" \
+  --manifest out/quality/build-manifest.json \
+  --output "out/quality/cpp-impact-snapshots/$RUN_ID.json"
+python -m alphus.gates.cpp.cpp_advisory_quality trend \
+  out/quality/cpp-impact-snapshots \
+  --output out/quality/cpp-impact-trend.json
+```
+
+The trend command starts a new series when configuration, toolchain, selected
+targets, expected executables, or named input hashes change. Source revisions
+are expected to differ; the report records each revision and manifest digest.
+With fewer than two compatible snapshots it reports `insufficient-history`.
+`--fail-on-worsening` returns a provisional signal for increases in the latest
+snapshot pair.
 
 ## Consumer-owned architecture rules
 
@@ -52,6 +90,5 @@ in adapters without making them universal policy.
 ## Scope of the current change
 
 The current feature branch adds the deterministic include-impact gate and
-documents how it fits beside Alphus's existing generic C++ checks. It does not
-claim that every possible C/C++ advisory tool or architecture rule has been
-implemented.
+provisional style/trend utilities beside Alphus's existing generic C++ checks.
+Consumer-specific architecture rules remain in the consuming repository.

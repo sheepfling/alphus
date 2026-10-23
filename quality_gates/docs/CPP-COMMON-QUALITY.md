@@ -157,6 +157,11 @@ Stop after two consecutive flat batches, or when the remaining work requires
 intrusive API or ownership changes. Record the final measurements and follow-on
 plan. These batch stop rules keep metric-driven refactors bounded and reviewable.
 
+For low-confidence source review and historical trend signals, see the
+[provisional C/C++ utilities](CPP-QUALITY-GATE-COVERAGE.md). Keep their
+orchestration steps provisional until the consumer has reviewed candidate
+quality and established comparable snapshot history.
+
 ## Test selection and traceability
 
 Fill `tests.cases` with entries such as:
