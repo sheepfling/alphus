@@ -67,9 +67,11 @@ Alphus portable rules or repository-specific thresholds.
 Add tools one step at a time. The
 [two-tool Markdown example](../examples/markdown/quality-gates.toml) pairs
 rumdl with mdrepo using `tools = ["rumdl", "mdrepo"]`. The shortcut also
-accepts `ruff`, `pyright`, `pytest`, `taplo`, `prettier`, `eslint`, and
-`prettier-javascript`; selection order is
-execution and fix order. File-scoped lint and format steps pair a read-only
+accepts `ruff`, `pyright`, `pytest`, `taplo`, `prettier`, `eslint`,
+`prettier-javascript`, `eslint-typescript`, `prettier-typescript`, and
+`eslint-angular-template`, `html-validate`, `prettier-html`, `stylelint`, and
+`prettier-css`; selection order is execution and fix order.
+File-scoped lint and format steps pair a read-only
 check with an explicit fixer. Pyright and pytest run without a file scope or
 fixer. Alphus supplies a default `check` profile plus language profiles. The
 [two-line Python example](../examples/python/quality-gates.toml) selects Ruff
@@ -129,6 +131,9 @@ activate gates. Ordinary Python repositories can combine `python` and
 | `toml` | TOML syntax and formatting | Python `tomllib` and Taplo |
 | `json` | JSON syntax and formatting | Python `json` and Prettier |
 | `javascript` | JS lint, format, tests, and types | Alphus policy, ESLint, Prettier, consumer commands |
+| `typescript` | Opt-in TS/TSX lint and format | ESLint, Prettier |
+| `html` | Opt-in Angular or standard HTML checks | angular-eslint or HTML-validate, Prettier |
+| `css` | Opt-in CSS lint and format | Stylelint, Prettier |
 | `python-policy` | Optional repository-specific source conventions | Explicit Alphus source policy |
 
 The reusable JavaScript configs and synthetic rule fixtures live in the
@@ -138,8 +143,14 @@ Prettier, and that package in the consumer's Node development environment. The
 scoped commands with `tools = ["eslint", "prettier-javascript"]`. Consumers
 own the repository-specific `tsconfig` include paths; the shared TypeScript
 base enables `allowJs`, `checkJs`, `strict`, and `noEmit`. Alphus invokes ESLint
-and Prettier through `npm exec`, so it resolves the consumer's local npm
-install without requiring global executables.
+and Prettier through `npm exec`, resolving the consumer's local npm install.
+The package also exports opt-in React and Angular ESLint profiles. Select
+`eslint-typescript` for TS/TSX files and `eslint-angular-template` for external
+Angular HTML templates; the general `eslint` tool retains its JavaScript-only
+scope. See the JavaScript profile guide for plugin setup and composition.
+Standard HTML documents can select `html-validate` and `prettier-html`; CSS
+files can select `stylelint` and `prettier-css`. Keep the generic HTML tool
+off Angular template files.
 
 Define each profile's steps in the consumer policy, then compose them:
 

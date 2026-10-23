@@ -48,5 +48,14 @@ the policy. The `python` extra installs the Python recipe tools within the
 metadata ranges above. The consumer installs and pins rumdl, mdrepo, Taplo,
 Prettier, and any custom commands in its own development or CI environment.
 Alphus retains their output and exit status without claiming that all versions
-of those tools have identical behavior. See [Subtool composition](SUBTOOLS.md)
-for configuration ownership and fix commands.
+of those tools have identical behavior. The optional React and Angular ESLint
+profiles use peer plugins installed by the consumer; this package checks its
+React profile with `@eslint-react/eslint-plugin` 5.28 and
+`eslint-plugin-react-hooks` 7.1, and its Angular profile with
+`angular-eslint` 22.6. Match Angular's plugin to the consumer's Angular major.
+The standard HTML and CSS exports are exercised with `html-validate` 10.17,
+`stylelint` 17.16, and `stylelint-config-standard` 40. HTML-validate 10.x
+supports the package's Node 20 range; on Node 22 it needs 22.16 or newer.
+Its 11.x line requires newer Node.
+See [Subtool composition](SUBTOOLS.md) for configuration ownership and fix
+commands.

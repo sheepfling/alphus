@@ -145,6 +145,58 @@ def test_javascript_consumer_example_selects_the_shared_profile() -> None:
     assert check.steps == javascript.steps == ("JavaScript lint", "JavaScript format")
 
 
+def test_framework_shortcuts_keep_typescript_and_templates_scoped() -> None:
+    config = load_config_stream(
+        StringIO(
+            'schema_version = 1\ntools = ["eslint-typescript", '
+            '"prettier-typescript", "eslint-angular-template"]\n'
+        )
+    )
+    policy = config.orchestration
+    assert policy is not None
+    typescript = policy.resolve_profile("typescript")
+    html = policy.resolve_profile("html")
+    assert typescript is not None
+    assert typescript.steps == ("TypeScript lint", "TypeScript format")
+    assert html is not None and html.steps == ("Angular template lint",)
+    lint, format_step, template = policy.steps
+    assert isinstance(lint, CommandRunStep)
+    assert isinstance(format_step, CommandRunStep)
+    assert isinstance(template, CommandRunStep)
+    typescript_scope = ("**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts")
+    assert lint.files is not None and lint.files.include == typescript_scope
+    assert (
+        format_step.files is not None and format_step.files.include == typescript_scope
+    )
+    assert template.files is not None and template.files.include == ("**/*.html",)
+
+
+def test_html_and_css_shortcuts_keep_plain_markup_separate_from_angular() -> None:
+    config = load_config_stream(
+        StringIO(
+            'schema_version = 1\ntools = ["html-validate", "prettier-html", '
+            '"stylelint", "prettier-css"]\n'
+        )
+    )
+    policy = config.orchestration
+    assert policy is not None
+    html = policy.resolve_profile("html")
+    css = policy.resolve_profile("css")
+    assert html is not None and html.steps == ("HTML validation", "HTML format")
+    assert css is not None and css.steps == ("CSS lint", "CSS format")
+    validation, html_format, css_lint, css_format = policy.steps
+    assert all(
+        isinstance(step, CommandRunStep)
+        for step in (validation, html_format, css_lint, css_format)
+    )
+    assert validation.files is not None
+    assert validation.files.include == ("**/*.html",)
+    assert validation.fix_argv is None
+    assert css_lint.files is not None
+    assert css_lint.files.include == ("**/*.css",)
+    assert css_lint.fix_argv == ("npm", "exec", "--", "stylelint", "--fix", "{files}")
+
+
 @pytest.mark.parametrize(
     ("source", "message"),
     [

@@ -139,6 +139,71 @@ NATIVE_TOOLS = MappingProxyType(
                 ),
             ),
         ),
+        "eslint-typescript": NativeTool(
+            "typescript",
+            (
+                NativeStep(
+                    "TypeScript lint",
+                    ("npm", "exec", "--", "eslint", "{files}"),
+                    ("npm", "exec", "--", "eslint", "--fix", "{files}"),
+                    ("**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"),
+                ),
+            ),
+        ),
+        "eslint-angular-template": NativeTool(
+            "html",
+            (
+                NativeStep(
+                    "Angular template lint",
+                    ("npm", "exec", "--", "eslint", "{files}"),
+                    ("npm", "exec", "--", "eslint", "--fix", "{files}"),
+                    ("**/*.html",),
+                ),
+            ),
+        ),
+        "html-validate": NativeTool(
+            "html",
+            (
+                NativeStep(
+                    "HTML validation",
+                    ("npm", "exec", "--", "html-validate", "{files}"),
+                    include=("**/*.html",),
+                ),
+            ),
+        ),
+        "prettier-html": NativeTool(
+            "html",
+            (
+                NativeStep(
+                    "HTML format",
+                    ("npm", "exec", "--", "prettier", "--check", "{files}"),
+                    ("npm", "exec", "--", "prettier", "--write", "{files}"),
+                    ("**/*.html",),
+                ),
+            ),
+        ),
+        "stylelint": NativeTool(
+            "css",
+            (
+                NativeStep(
+                    "CSS lint",
+                    ("npm", "exec", "--", "stylelint", "{files}"),
+                    ("npm", "exec", "--", "stylelint", "--fix", "{files}"),
+                    ("**/*.css",),
+                ),
+            ),
+        ),
+        "prettier-css": NativeTool(
+            "css",
+            (
+                NativeStep(
+                    "CSS format",
+                    ("npm", "exec", "--", "prettier", "--check", "{files}"),
+                    ("npm", "exec", "--", "prettier", "--write", "{files}"),
+                    ("**/*.css",),
+                ),
+            ),
+        ),
         "prettier-javascript": NativeTool(
             "javascript",
             (
@@ -147,6 +212,17 @@ NATIVE_TOOLS = MappingProxyType(
                     ("npm", "exec", "--", "prettier", "--check", "{files}"),
                     ("npm", "exec", "--", "prettier", "--write", "{files}"),
                     ("**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"),
+                ),
+            ),
+        ),
+        "prettier-typescript": NativeTool(
+            "typescript",
+            (
+                NativeStep(
+                    "TypeScript format",
+                    ("npm", "exec", "--", "prettier", "--check", "{files}"),
+                    ("npm", "exec", "--", "prettier", "--write", "{files}"),
+                    ("**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"),
                 ),
             ),
         ),
