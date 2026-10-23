@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from alphus import cli, inventory, rule_execution
+from alphus import inventory, rule_execution
 from alphus.cli import main
 from alphus.config import (
     NodeCliPolicy,
@@ -21,8 +21,13 @@ from alphus.config import (
     load_config,
     load_config_stream,
 )
-from alphus.findings import Finding
+from alphus.findings import Diagnostic, Finding
 from alphus.inventory import candidate_files, matches_path, tracked_files
+from alphus.rule_results import (
+    RuleEvaluation,
+    diagnostics_from_json,
+    diagnostics_from_output,
+)
 from alphus.rules import check_file_size, check_line_length
 
 POLICY = """schema_version = 1
@@ -519,12 +524,12 @@ steps = ["line check"]
 
 
 def test_rule_profile_json_adapters_validate_each_owned_shape() -> None:
-    style_findings = cli._diagnostics_from_rule_json(
+    style_findings = diagnostics_from_json(
         "python-style",
         json.dumps({"src/example.py": {"bare_containers": [7]}}),
     )
     assert style_findings == (
-        cli.Diagnostic(
+        Diagnostic(
             source="alphus",
             rule_id="python-style.bare_containers",
             path="src/example.py",
@@ -533,7 +538,7 @@ def test_rule_profile_json_adapters_validate_each_owned_shape() -> None:
         ),
     )
 
-    shared_findings = cli._diagnostics_from_rule_json(
+    shared_findings = diagnostics_from_json(
         "shared-utilities",
         json.dumps(
             {
@@ -548,19 +553,36 @@ def test_rule_profile_json_adapters_validate_each_owned_shape() -> None:
         "shared-utilities.file-hash-implementation",
     ]
 
-    legacy_messages = cli._diagnostics_from_rule_json(
+    legacy_messages = diagnostics_from_json(
         "runtime-types", '["src/example.py:4: annotate the union"]'
     )
     assert legacy_messages[0].rule_id == "alphus.runtime-types"
     assert legacy_messages[0].message == "src/example.py:4: annotate the union"
 
-    finding_records = cli._diagnostics_from_rule_json(
+    finding_records = diagnostics_from_json(
         "line-length",
         '[{"rule_id":"source.line-length","path":"src/example.py",'
         '"line":4,"message":"line is long","severity":"warning"}]',
     )
     assert finding_records[0].severity == "warning"
     assert finding_records[0].source == "alphus"
+
+
+def test_rule_evaluation_validates_structured_output_before_rendering() -> None:
+    finding = Finding(
+        rule_id="source.line-length",
+        path="src/example.py",
+        line=4,
+        message="line is long",
+        severity="warning",
+    )
+    evaluation = RuleEvaluation.from_output("line-length", [finding], "warning")
+    assert evaluation.output == [finding]
+    assert evaluation.diagnostics == (finding.as_diagnostic(),)
+    assert evaluation.failed
+
+    with pytest.raises(ValidationError):
+        diagnostics_from_output("line-length", ["not a Finding"])
 
 
 def test_direct_rule_uses_threshold_and_report_mode_overrides_it(

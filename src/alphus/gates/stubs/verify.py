@@ -23,17 +23,19 @@ from alphus.gates.stubs.environments import (
 )
 
 ACTION_ROOT = Path(alphus_stub_quality.__file__).resolve().parent
-IGNORED_BUILD_PATHS = {
-    ".mypy_cache",
-    ".pytest_cache",
-    ".ruff_cache",
-    ".rumdl_cache",
-    "build",
-    "dist",
-    "__pycache__",
-    "venv",
-    ".venv",
-}
+IGNORED_BUILD_PATHS = frozenset(
+    {
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".rumdl_cache",
+        "build",
+        "dist",
+        "__pycache__",
+        "venv",
+        ".venv",
+    }
+)
 
 
 NonEmptyString = Annotated[str, Field(min_length=1)]

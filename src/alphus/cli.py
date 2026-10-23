@@ -12,64 +12,27 @@ from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import asdict
 from io import StringIO
 from pathlib import Path
-from typing import Annotated, TypeAlias, cast
+from typing import Annotated, NamedTuple, cast
 
 import typer
-from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
+from pydantic import ValidationError
 from rich.console import Console
 
 from alphus.config import QualityGateConfig, QualityRuleName, load_config
 from alphus.config_base import MissingPolicyError
 from alphus.findings import (
-    Diagnostic,
     Finding,
-    Severity,
     SeverityCounts,
-    severity_meets_threshold,
 )
 from alphus.inventory import candidate_files
 from alphus.orchestration import RuleRunResult, run_orchestration
 from alphus.python_style import StyleFindings
 from alphus.rule_catalog import RULE_SPECS
 from alphus.rule_execution import run_builtin_rule
+from alphus.rule_results import RuleEvaluation
 from alphus.shared_utilities import SharedUtilitiesReport
 
 QualityRule = QualityRuleName
-PythonStyleRuleOutput: TypeAlias = dict[str, dict[str, list[int]]]
-
-
-class _SharedUtilitiesRuleOutput(BaseModel):
-    """Validated wire shape emitted by the shared-utilities rule."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    duplicate_groups: tuple[tuple[str, ...], ...]
-    failed: bool
-    file_hash_implementations: tuple[str, ...]
-
-
-_FINDING_RULE_OUTPUT: TypeAdapter[list[Finding]] = TypeAdapter(list[Finding])
-_STRING_RULE_OUTPUT: TypeAdapter[list[str]] = TypeAdapter(list[str])
-_PYTHON_STYLE_RULE_OUTPUT: TypeAdapter[PythonStyleRuleOutput] = TypeAdapter(
-    PythonStyleRuleOutput
-)
-_SHARED_UTILITIES_RULE_OUTPUT: TypeAdapter[_SharedUtilitiesRuleOutput] = TypeAdapter(
-    _SharedUtilitiesRuleOutput
-)
-
-
-def _findings_fail(
-    findings: Sequence[Finding], threshold: Severity, *, report: bool
-) -> bool:
-    """Apply report mode and severity threshold to structured rule findings."""
-    return not report and any(
-        severity_meets_threshold(finding.severity, threshold) for finding in findings
-    )
-
-
-def _errors_fail(count: int, threshold: Severity, *, report: bool) -> bool:
-    """Treat legacy string findings as errors until their checkers return records."""
-    return not report and count > 0 and severity_meets_threshold("error", threshold)
 
 
 def _render_finding(finding: Finding) -> None:
@@ -248,23 +211,31 @@ def _render_cli_policy(issues: Sequence[str]) -> None:
     )
 
 
+class _StyleCategory(NamedTuple):
+    name: str
+    lines: list[int]
+
+
 def _python_style_categories(
     issues: StyleFindings,
-) -> tuple[tuple[str, list[int]], ...]:
+) -> tuple[_StyleCategory, ...]:
     """Keep the style categories statically typed while rendering summaries."""
     return (
-        ("bare_containers", issues["bare_containers"]),
-        ("bare_tuples", issues["bare_tuples"]),
-        ("concrete_inputs", issues["concrete_inputs"]),
-        ("local_imports", issues["local_imports"]),
-        ("opaque_mappings", issues["opaque_mappings"]),
-        ("unslotted_dataclasses", issues["unslotted_dataclasses"]),
-        ("quoted_types", issues["quoted_types"]),
-        ("type_checking_imports", issues["type_checking_imports"]),
-        ("os_path", issues["os_path"]),
-        ("main_module_imports", issues["main_module_imports"]),
-        ("legacy_pydantic_fields", issues["legacy_pydantic_fields"]),
-        ("pydantic_collection_contracts", issues["pydantic_collection_contracts"]),
+        _StyleCategory("bare_containers", issues["bare_containers"]),
+        _StyleCategory("bare_tuples", issues["bare_tuples"]),
+        _StyleCategory("concrete_inputs", issues["concrete_inputs"]),
+        _StyleCategory("local_imports", issues["local_imports"]),
+        _StyleCategory("opaque_mappings", issues["opaque_mappings"]),
+        _StyleCategory("unslotted_dataclasses", issues["unslotted_dataclasses"]),
+        _StyleCategory("quoted_types", issues["quoted_types"]),
+        _StyleCategory("type_checking_imports", issues["type_checking_imports"]),
+        _StyleCategory("os_path", issues["os_path"]),
+        _StyleCategory("main_module_imports", issues["main_module_imports"]),
+        _StyleCategory("legacy_pydantic_fields", issues["legacy_pydantic_fields"]),
+        _StyleCategory("mutable_module_constants", issues["mutable_module_constants"]),
+        _StyleCategory(
+            "pydantic_collection_contracts", issues["pydantic_collection_contracts"]
+        ),
     )
 
 
@@ -302,6 +273,33 @@ def _render_repository_layout(findings: Sequence[Finding]) -> None:
     _render_severity_totals(findings)
 
 
+def _evaluate_rule(
+    root: Path, config_path: Path, rule: QualityRule, verbose: bool
+) -> RuleEvaluation:
+    """Run a rule and retain structured output before any CLI rendering."""
+    checkout = root.resolve(strict=True)
+    resolved_config = (
+        config_path if config_path.is_absolute() else checkout / config_path
+    )
+    config = _load_policy(resolved_config)
+    threshold = (
+        config.orchestration.failure_threshold
+        if config.orchestration is not None
+        else "error"
+    )
+    try:
+        files = candidate_files(checkout, config.files)
+    except OSError as error:
+        raise typer.BadParameter(str(error), param_hint="--root") from error
+    if verbose:
+        _log_verbose(rule, checkout, len(files))
+    try:
+        output = run_builtin_rule(rule, checkout, files, config)
+    except MissingPolicyError as error:
+        raise typer.BadParameter(str(error)) from error
+    return RuleEvaluation.from_output(rule, output, threshold)
+
+
 def _execute(
     root: Path,
     config_path: Path,
@@ -310,26 +308,10 @@ def _execute(
     report: bool,
     verbose: bool,
 ) -> int:
-    """Run one configured gate against the caller-provided checkout root."""
-    root = root.resolve(strict=True)
-    config_path = config_path if config_path.is_absolute() else root / config_path
-    config = _load_policy(config_path)
-    failure_threshold = (
-        config.orchestration.failure_threshold
-        if config.orchestration is not None
-        else "error"
-    )
-    try:
-        files = candidate_files(root, config.files)
-    except OSError as error:
-        raise typer.BadParameter(str(error), param_hint="--root") from error
-    if verbose:
-        _log_verbose(rule, root, len(files))
-    try:
-        output = run_builtin_rule(rule, root, files, config)
-    except MissingPolicyError as error:
-        raise typer.BadParameter(str(error)) from error
-
+    """Render one structured rule evaluation for the requested CLI mode."""
+    evaluation = _evaluate_rule(root, config_path, rule, verbose)
+    output = evaluation.output
+    exit_code = int(evaluation.failed and not report)
     shape = RULE_SPECS[rule].output_shape
     if shape == "findings":
         findings = cast(list[Finding], output)
@@ -345,7 +327,7 @@ def _execute(
             _render_package_boundaries(findings)
         else:
             _render(rule, findings)
-        return int(_findings_fail(findings, failure_threshold, report=report))
+        return exit_code
 
     if shape == "messages":
         issues = cast(list[str], output)
@@ -359,20 +341,15 @@ def _execute(
             _render_runtime_types(issues)
         else:
             raise ValueError(f"rule {rule!r} has no message renderer")
-        return int(_errors_fail(len(issues), failure_threshold, report=report))
+        return exit_code
 
     if shape == "python-style":
         style_findings = cast(dict[str, StyleFindings], output)
-        total = sum(
-            len(lines)
-            for issues in style_findings.values()
-            for _, lines in _python_style_categories(issues)
-        )
         if json_output:
             typer.echo(json.dumps(style_findings, sort_keys=True))
         else:
-            total = _render_python_style(style_findings)
-        return int(_errors_fail(total, failure_threshold, report=report))
+            _render_python_style(style_findings)
+        return exit_code
 
     shared_report = cast(SharedUtilitiesReport, output)
     if json_output:
@@ -388,78 +365,7 @@ def _execute(
         )
     else:
         _render_shared_utilities(shared_report)
-    return int(
-        _errors_fail(int(shared_report.failed), failure_threshold, report=report)
-    )
-
-
-def _diagnostics_from_rule_json(
-    rule: QualityRule, encoded: str
-) -> tuple[Diagnostic, ...]:
-    """Validate Alphus-owned rule output before adding source provenance."""
-    output_shape = RULE_SPECS[rule].output_shape
-    if output_shape == "python-style":
-        style_payload = _PYTHON_STYLE_RULE_OUTPUT.validate_json(encoded)
-        diagnostics: list[Diagnostic] = []
-        for path, buckets in style_payload.items():
-            for category, lines in buckets.items():
-                diagnostics.extend(
-                    Diagnostic(
-                        source="alphus",
-                        rule_id=f"python-style.{category}",
-                        path=path,
-                        line=line,
-                        message=category.replace("_", " "),
-                    )
-                    for line in lines
-                )
-        return tuple(diagnostics)
-
-    if output_shape == "shared-utilities":
-        utilities_payload = _SHARED_UTILITIES_RULE_OUTPUT.validate_json(encoded)
-        diagnostics = []
-        for group in utilities_payload.duplicate_groups:
-            diagnostics.append(
-                Diagnostic(
-                    source="alphus",
-                    rule_id="shared-utilities.duplicate-helper",
-                    message=f"Duplicate Python helper: {', '.join(group)}",
-                )
-            )
-        if len(utilities_payload.file_hash_implementations) > 1:
-            diagnostics.append(
-                Diagnostic(
-                    source="alphus",
-                    rule_id="shared-utilities.file-hash-implementation",
-                    message=(
-                        "Repeated file SHA-256 implementation: "
-                        f"{', '.join(utilities_payload.file_hash_implementations)}"
-                    ),
-                )
-            )
-        if utilities_payload.failed and not diagnostics:
-            diagnostics.append(
-                Diagnostic(
-                    source="alphus",
-                    rule_id="shared-utilities.failure",
-                    message="Shared utilities check reported failure without details.",
-                )
-            )
-        return tuple(diagnostics)
-
-    if output_shape == "messages":
-        messages = _STRING_RULE_OUTPUT.validate_json(encoded)
-        return tuple(
-            Diagnostic(
-                source="alphus",
-                rule_id=f"alphus.{rule}",
-                message=message,
-            )
-            for message in messages
-        )
-
-    findings = _FINDING_RULE_OUTPUT.validate_json(encoded)
-    return tuple(finding.as_diagnostic() for finding in findings)
+    return exit_code
 
 
 def _execute_profile(
@@ -495,9 +401,7 @@ def _execute_profile(
         captured_error = StringIO()
         try:
             with redirect_stdout(captured_output), redirect_stderr(captured_error):
-                exit_code = _execute(
-                    checkout, resolved_config, rule, True, False, verbose
-                )
+                evaluation = _evaluate_rule(checkout, resolved_config, rule, verbose)
         except typer.BadParameter as error:
             return RuleRunResult(
                 execution_failure=str(error),
@@ -510,29 +414,21 @@ def _execute_profile(
                 exit_code=error.exit_code,
                 stderr=captured_error.getvalue(),
             )
-        try:
-            findings = _diagnostics_from_rule_json(rule, captured_output.getvalue())
         except (ValidationError, TypeError, ValueError) as error:
             return RuleRunResult(
-                execution_failure=f"Alphus rule output could not be decoded: {error}",
+                execution_failure=f"Alphus rule output could not be normalized: {error}",
                 exit_code=2,
                 stderr=captured_error.getvalue(),
             )
-        if exit_code not in {0, 1}:
+        if captured_output.getvalue():
             return RuleRunResult(
-                execution_failure=f"Alphus rule returned exit code {exit_code}.",
-                exit_code=exit_code,
-                stderr=captured_error.getvalue(),
-            )
-        if exit_code == 1 and not findings:
-            return RuleRunResult(
-                execution_failure="Alphus rule failed without structured findings.",
+                execution_failure="Alphus rule printed output instead of returning it.",
                 exit_code=2,
                 stderr=captured_error.getvalue(),
             )
         return RuleRunResult(
-            findings=findings,
-            exit_code=exit_code,
+            findings=evaluation.diagnostics,
+            exit_code=int(evaluation.failed),
             stderr=captured_error.getvalue(),
         )
 

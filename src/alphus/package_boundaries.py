@@ -309,17 +309,15 @@ def _dynamic_import_root(
 ) -> str | None:
     match node.func:
         case ast.Name(id="__import__"):
-            dynamic = True
+            pass
         case ast.Name(id=name) if name in function_aliases:
-            dynamic = True
+            pass
         case ast.Attribute(attr="import_module", value=ast.Name(id=name)) if (
             name in module_aliases
         ):
-            dynamic = True
+            pass
         case _:
-            dynamic = False
-    if not dynamic:
-        return None
+            return None
     match node.args:
         case [ast.Constant(value=str() as name), *_] if name and not name.startswith(
             "."

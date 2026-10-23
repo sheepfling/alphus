@@ -26,6 +26,12 @@ commands ship in the same `alphus` distribution. The separate
 helpers copied into the isolated target environment, plus legacy import
 adapters. This runtime boundary is why the helper package is separate; it is
 not a second distribution or a second quality framework.
+Keep language-specific workflow gates under `alphus.gates.<language>` in the
+same distribution while they share a release cycle and dependency set.
+Independent namespace distributions would add installation and compatibility
+coordination; introduce them only when a language gate needs its own release
+cycle or substantial optional dependencies. The core profile runner remains
+language neutral.
 
 Node and npm are optional. A repository that configures no Node-based command
 does not need `package.json`, Node.js, or npm. Consumers may keep established
@@ -49,10 +55,20 @@ metadata, and orchestration in separate modules. `alphus.config` re-exports
 those models as the compatibility import surface.
 `alphus.rule_catalog` records each built-in rule's required policy field and
 JSON output shape. Policy validation and profile diagnostic decoding share
-that catalog. `alphus.rule_execution` holds the built-in checker dispatch and
-validates each result against its declared shape. The package tests require
+that catalog. `alphus.rule_execution` holds the built-in checker dispatch, and
+`alphus.rule_results` validates each result against its declared shape while
+normalizing diagnostics. The package tests require
 both registries to cover every public rule selector. The CLI retains rendering
 adapters because some older rules have distinct direct-command output formats.
+`RuleEvaluation` keeps the checker output, normalized diagnostics, and threshold
+decision together before rendering. Direct CLI modes serialize that result to
+their established text or JSON formats; profiles consume its diagnostics
+directly, without parsing the CLI's own output.
+The Python structure rule rejects uppercase module constants initialized
+with mutable list, dict, or set values. Constant lookup tables use a read-only
+`Mapping` view, while fixed sequences and membership sets use tuples and
+`frozenset`. Lowercase module caches remain explicit mutable state.
+
 The package-boundary rule also validates console and GUI script entry-point
 reference syntax in project metadata, so malformed targets fail the self-check
 before an editable or wheel installation reaches the build backend. It does not

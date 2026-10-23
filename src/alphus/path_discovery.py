@@ -46,16 +46,18 @@ JS_INSPECTION_PATTERNS: Mapping[str, Pattern[str]] = MappingProxyType(
         ),
     }
 )
-SYS_PATH_MUTATORS = {
-    "append",
-    "clear",
-    "extend",
-    "insert",
-    "pop",
-    "remove",
-    "reverse",
-    "sort",
-}
+SYS_PATH_MUTATORS = frozenset(
+    {
+        "append",
+        "clear",
+        "extend",
+        "insert",
+        "pop",
+        "remove",
+        "reverse",
+        "sort",
+    }
+)
 _URL_SCHEME_SEPARATOR = ":" + "/" + "/"
 
 

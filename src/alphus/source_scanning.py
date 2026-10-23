@@ -43,7 +43,8 @@ def _imports(node: ast.Import | ast.ImportFrom) -> dict[str, _Binding | None]:
                 )
         case ast.ImportFrom(module=module, level=level, names=names):
             for alias in names:
-                bindings[alias.asname or alias.name] = (
+                local = alias.asname if alias.asname is not None else alias.name
+                bindings[local] = (
                     _Binding(f"{module}.{alias.name}")
                     if module is not None and level == 0 and alias.name != "*"
                     else None

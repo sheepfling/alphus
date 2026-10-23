@@ -714,6 +714,8 @@ def _function_findings(
                     interface = "Mapping"
                 case "set":
                     interface = "AbstractSet"
+                case _:
+                    continue
             findings.append(
                 Finding(
                     rule_id="input-contracts.read-only-interface",

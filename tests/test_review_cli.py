@@ -41,7 +41,7 @@ _PROSE = (
     "This report explains the project and its progress in ordinary narrative language. "
     * 8
 )
-_CASES = [
+_CASES = (
     (
         "numeric-literals",
         "source.py",
@@ -72,7 +72,7 @@ _CASES = [
         '[checks.input_contracts]\nextensions = [".py"]\n',
         "input-contracts.argument-mutation",
     ),
-]
+)
 
 
 def repository(root: Path, name: str, source: str, extra: str) -> list[str]:

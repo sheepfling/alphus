@@ -31,6 +31,19 @@ def _contains_name(expression: ast.expr, expected: str) -> bool:
     return False
 
 
+def _literal_registry(value: ast.expr) -> ast.Dict | None:
+    """Unwrap an optional MappingProxyType call around a literal registry."""
+    match value:
+        case ast.Call(
+            func=ast.Name(id="MappingProxyType"), args=[ast.Dict() as literal]
+        ):
+            return literal
+        case ast.Dict() as literal:
+            return literal
+        case _:
+            return None
+
+
 def check_callable_registry(
     root: Path, policy: CallableRegistryPolicy
 ) -> list[Finding]:
@@ -108,25 +121,18 @@ def check_callable_registry(
             )
         )
         return findings
-    value = registry.value
-    match value:
-        case ast.Call(func=ast.Name(id="MappingProxyType"), args=[mapping]):
-            value = mapping
-        case _:
-            pass
-    match value:
-        case ast.Dict(keys=keys, values=values):
-            pass
-        case _:
-            findings.append(
-                Finding(
-                    rule_id="registry.mapping-not-literal",
-                    path=policy.registry_path,
-                    line=registry.lineno,
-                    message=f"{policy.registry_name} must list its entries",
-                )
+    literal = _literal_registry(registry.value)
+    if literal is None:
+        findings.append(
+            Finding(
+                rule_id="registry.mapping-not-literal",
+                path=policy.registry_path,
+                line=registry.lineno,
+                message=f"{policy.registry_name} must list its entries",
             )
-            return findings
+        )
+        return findings
+    keys, values = literal.keys, literal.values
     if not _contains_name(registry.annotation, policy.protocol_name):
         findings.append(
             Finding(

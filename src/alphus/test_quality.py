@@ -217,6 +217,9 @@ class _TestScanner:
 
     def calls(self, expression: ast.expr, scope: _Scope) -> None:
         for child in _calls_in_order(expression):
+            path: _StaticPath | None = None
+            mode = "r"
+            writing = False
             match child:
                 case ast.Call(func=function) if _symbol(function, scope) in {
                     "builtins.open",

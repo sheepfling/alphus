@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from types import MappingProxyType
-from typing import TypeAlias
 
 from alphus.architecture_graph import check_architecture_graph
 from alphus.callable_registry import check_callable_registry
@@ -22,21 +21,17 @@ from alphus.numeric_literals import check_numeric_literals
 from alphus.output_escaping import check_output_escaping
 from alphus.package_boundaries import check_package_boundaries
 from alphus.path_discovery import check_path_discovery
-from alphus.python_style import StyleFindings
 from alphus.python_style import findings_for as python_style_findings
 from alphus.repository_layout import check_repository_layout
-from alphus.rule_catalog import RULE_SPECS
+from alphus.rule_results import RuleOutput
 from alphus.rules import check_file_size, check_line_length
 from alphus.runtime_types import policy_issues as runtime_type_issues
 from alphus.script_policy import policy_issues as script_policy_issues
-from alphus.shared_utilities import SharedUtilitiesReport, check_shared_utilities
+from alphus.shared_utilities import check_shared_utilities
 from alphus.test_quality import check_test_quality
 from alphus.version_sync import check_version_sync
 
-RuleOutput: TypeAlias = (
-    list[Finding] | list[str] | dict[str, StyleFindings] | SharedUtilitiesReport
-)
-RuleRunner: TypeAlias = Callable[[Path, Sequence[Path], QualityGateConfig], RuleOutput]
+RuleRunner = Callable[[Path, Sequence[Path], QualityGateConfig], RuleOutput]
 
 
 def _package_boundary_findings(
@@ -140,24 +135,4 @@ def run_builtin_rule(
 ) -> RuleOutput:
     """Run one selected checker after validating its required policy."""
     config.checks.require_rule(rule)
-    output: RuleOutput = RULE_RUNNERS[rule](root, files, config)
-    shape = RULE_SPECS[rule].output_shape
-    if shape == "findings":
-        if not isinstance(output, list):
-            raise TypeError(f"{rule} returned non-finding output")
-        for item in output:
-            candidate: Finding | str = item
-            if not isinstance(candidate, Finding):
-                raise TypeError(f"{rule} returned non-finding output")
-    if shape == "messages":
-        if not isinstance(output, list):
-            raise TypeError(f"{rule} returned non-message output")
-        for item in output:
-            message_candidate: Finding | str = item
-            if not isinstance(message_candidate, str):
-                raise TypeError(f"{rule} returned non-message output")
-    if shape == "python-style" and not isinstance(output, dict):
-        raise TypeError(f"{rule} returned non-style output")
-    if shape == "shared-utilities" and not isinstance(output, SharedUtilitiesReport):
-        raise TypeError(f"{rule} returned non-shared-utility output")
-    return output
+    return RULE_RUNNERS[rule](root, files, config)

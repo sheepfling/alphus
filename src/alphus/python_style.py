@@ -11,69 +11,75 @@ from typing import TypedDict
 from alphus.config import PythonStylePolicy
 from alphus.inventory import matches_path
 
-CONCRETE = {"list", "dict", "set", "List", "Dict"}
-BARE_CONTAINERS = {
-    "list",
-    "dict",
-    "set",
-    "frozenset",
-    "List",
-    "Dict",
-    "Set",
-    "FrozenSet",
-    "Mapping",
-    "MutableMapping",
-    "Sequence",
-    "MutableSequence",
-    "Iterable",
-    "Iterator",
-    "Collection",
-    "Container",
-    "AbstractSet",
-    "MutableSet",
-    "DefaultDict",
-    "Deque",
-    "defaultdict",
-    "deque",
-    "Counter",
-    "ChainMap",
-    "OrderedDict",
-    "KeysView",
-    "ValuesView",
-    "ItemsView",
-    "MappingView",
-    "Reversible",
-    "AsyncIterable",
-    "AsyncIterator",
-    "Generator",
-    "AsyncGenerator",
-}
-MAPPING_NAMES = {"dict", "Dict", "Mapping", "MutableMapping"}
-UNKNOWN_NAMES = {"Any", "object"}
-MUTABLE_PYDANTIC_COLLECTIONS = {
-    "list",
-    "dict",
-    "set",
-    "List",
-    "Dict",
-    "Set",
-    "MutableSequence",
-    "MutableMapping",
-    "MutableSet",
-    "DefaultDict",
-    "defaultdict",
-    "Deque",
-    "deque",
-    "Counter",
-    "ChainMap",
-    "OrderedDict",
-}
-ABSTRACT_PYDANTIC_COLLECTIONS = {
-    "Sequence",
-    "Mapping",
-    "MutableSequence",
-    "MutableMapping",
-}
+CONCRETE = frozenset({"list", "dict", "set", "List", "Dict"})
+BARE_CONTAINERS = frozenset(
+    {
+        "list",
+        "dict",
+        "set",
+        "frozenset",
+        "List",
+        "Dict",
+        "Set",
+        "FrozenSet",
+        "Mapping",
+        "MutableMapping",
+        "Sequence",
+        "MutableSequence",
+        "Iterable",
+        "Iterator",
+        "Collection",
+        "Container",
+        "AbstractSet",
+        "MutableSet",
+        "DefaultDict",
+        "Deque",
+        "defaultdict",
+        "deque",
+        "Counter",
+        "ChainMap",
+        "OrderedDict",
+        "KeysView",
+        "ValuesView",
+        "ItemsView",
+        "MappingView",
+        "Reversible",
+        "AsyncIterable",
+        "AsyncIterator",
+        "Generator",
+        "AsyncGenerator",
+    }
+)
+MAPPING_NAMES = frozenset({"dict", "Dict", "Mapping", "MutableMapping"})
+UNKNOWN_NAMES = frozenset({"Any", "object"})
+MUTABLE_PYDANTIC_COLLECTIONS = frozenset(
+    {
+        "list",
+        "dict",
+        "set",
+        "List",
+        "Dict",
+        "Set",
+        "MutableSequence",
+        "MutableMapping",
+        "MutableSet",
+        "DefaultDict",
+        "defaultdict",
+        "Deque",
+        "deque",
+        "Counter",
+        "ChainMap",
+        "OrderedDict",
+    }
+)
+ABSTRACT_PYDANTIC_COLLECTIONS = frozenset(
+    {
+        "Sequence",
+        "Mapping",
+        "MutableSequence",
+        "MutableMapping",
+    }
+)
 
 
 def type_name(node: ast.expr) -> str | None:
@@ -114,13 +120,14 @@ def has_concrete_input(
     node: ast.expr,
     typing_set_names: AbstractSet[str],
     typing_names: AbstractSet[str],
+    container_modules: AbstractSet[str],
     concrete_names: AbstractSet[str] = frozenset(CONCRETE),
 ) -> bool:
     """Find mutable collection annotations at any nesting depth."""
     return any(
         isinstance(child, ast.expr)
         and (
-            type_name(child) in concrete_names
+            is_container_type(child, concrete_names, container_modules)
             or isinstance(child, ast.Name)
             and child.id in typing_set_names
             or (
@@ -198,6 +205,20 @@ class StyleFindings(TypedDict):
     main_module_imports: list[int]
     legacy_pydantic_fields: list[int]
     pydantic_collection_contracts: list[int]
+    mutable_module_constants: list[int]
+
+
+def is_mutable_literal(node: ast.expr) -> bool:
+    """Recognize a mutable value assigned directly to a module constant."""
+    if isinstance(
+        node, (ast.List, ast.Dict, ast.Set, ast.ListComp, ast.DictComp, ast.SetComp)
+    ):
+        return True
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id in {"list", "dict", "set"}
+    )
 
 
 def has_bare_container(
@@ -235,20 +256,23 @@ def has_unknown_type(node: ast.AST, unknown_names: AbstractSet[str]) -> bool:
 
 
 def has_opaque_mapping(
-    node: ast.expr, mapping_names: AbstractSet[str], unknown_names: AbstractSet[str]
+    node: ast.expr,
+    mapping_names: AbstractSet[str],
+    unknown_names: AbstractSet[str],
+    modules: AbstractSet[str],
 ) -> bool:
     """Detect unparameterized mappings and mappings with unknown value types."""
     if isinstance(node, ast.Subscript):
-        if type_name(node.value) in mapping_names:
+        if is_container_type(node.value, mapping_names, modules):
             if not isinstance(node.slice, ast.Tuple) or len(node.slice.elts) != 2:
                 return True
             if has_unknown_type(node.slice.elts[1], unknown_names):
                 return True
-        return has_opaque_mapping(node.slice, mapping_names, unknown_names)
-    if isinstance(node, (ast.Name, ast.Attribute)) and type_name(node) in mapping_names:
+        return has_opaque_mapping(node.slice, mapping_names, unknown_names, modules)
+    if is_container_type(node, mapping_names, modules):
         return True
     return any(
-        has_opaque_mapping(child, mapping_names, unknown_names)
+        has_opaque_mapping(child, mapping_names, unknown_names, modules)
         for child in ast.iter_child_nodes(node)
         if isinstance(child, ast.expr)
     )
@@ -277,6 +301,7 @@ class StyleVisitor(ast.NodeVisitor):
             "main_module_imports": [],
             "legacy_pydantic_fields": [],
             "pydantic_collection_contracts": [],
+            "mutable_module_constants": [],
         }
         self.source_lines = source.splitlines()
         self.boundary_file = boundary_file
@@ -319,9 +344,34 @@ class StyleVisitor(ast.NodeVisitor):
     def check_opaque(self, annotation: ast.expr, line: int) -> None:
         """Record an opaque annotation unless its boundary is documented."""
         if has_opaque_mapping(
-            annotation, self.mapping_names, self.unknown_names
+            annotation,
+            self.mapping_names,
+            self.unknown_names,
+            self.container_modules,
         ) and not self.opaque_allowed(line):
             self.findings["opaque_mappings"].append(line)
+
+    def visit_Module(self, node: ast.Module) -> None:
+        """Treat uppercase module names as stable constants, not mutable stores."""
+        for statement in node.body:
+            if isinstance(statement, ast.Assign):
+                targets = statement.targets
+                value = statement.value
+            elif isinstance(statement, ast.AnnAssign):
+                targets = [statement.target]
+                value = statement.value
+            else:
+                continue
+            if (
+                value is not None
+                and is_mutable_literal(value)
+                and any(
+                    isinstance(target, ast.Name) and target.id.isupper()
+                    for target in targets
+                )
+            ):
+                self.findings["mutable_module_constants"].append(statement.lineno)
+        self.generic_visit(node)
 
     def is_type_checking(self, node: ast.expr) -> bool:
         """Recognize direct, aliased, and conjunctive typing guards."""
@@ -362,6 +412,7 @@ class StyleVisitor(ast.NodeVisitor):
                 arg.annotation,
                 self.typing_set_names,
                 self.typing_names,
+                self.container_modules,
                 self.concrete_input_names,
             ):
                 self.findings["concrete_inputs"].append(arg.lineno)
@@ -547,7 +598,10 @@ class StyleVisitor(ast.NodeVisitor):
                 if alias.name in BARE_CONTAINERS:
                     self.container_names.add(alias.asname or alias.name)
                 if alias.name == "Tuple":
-                    self.tuple_names.add(alias.asname or alias.name)
+                    tuple_name = (
+                        alias.asname if alias.asname is not None else alias.name
+                    )
+                    self.tuple_names.add(tuple_name)
                 if alias.name == "TYPE_CHECKING":
                     self.type_checking_names.add(alias.asname or alias.name)
                 elif alias.name == "Set":

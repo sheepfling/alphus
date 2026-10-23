@@ -206,6 +206,7 @@ def run_orchestration(
         skipped_empty_file_scope = False
         legacy_diagnostics: tuple[str, ...] = ()
         attempted_command: str | None = None
+        exit_code = 127
         try:
             match step:
                 case RuleRunStep(rule=rule):
@@ -222,7 +223,11 @@ def run_orchestration(
                                     source=item.source,
                                     rule_id=item.rule_id,
                                     message=item.message,
-                                    severity=step.severity or item.severity,
+                                    severity=(
+                                        step.severity
+                                        if step.severity is not None
+                                        else item.severity
+                                    ),
                                     path=item.path,
                                     line=item.line,
                                     priority=step.priority or item.priority,

@@ -3,23 +3,28 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from pathlib import Path
+from re import Pattern
+from types import MappingProxyType
 
 from alphus.config import ArchitectureGraphPolicy, PackageBoundaryPolicy
 from alphus.findings import Finding
 
-_EDGE_PATTERNS = {
-    "flowchart": re.compile(
-        r"^\s*(?P<origin>\w+)\s*(?:-->\s*(?:\|[^|]*\|\s*)?"
-        r"|--\s+[^\n]+?\s+-->\s*)(?P<target>\w+)\s*;?\s*$",
-        re.MULTILINE,
-    ),
-    "architecture": re.compile(
-        r"^\s*(?P<origin>\w+)(?:\{group\})?:[TBLR]\s+-->\s+"
-        r"[TBLR]:(?P<target>\w+)(?:\{group\})?\s*$",
-        re.MULTILINE,
-    ),
-}
+_EDGE_PATTERNS: Mapping[str, Pattern[str]] = MappingProxyType(
+    {
+        "flowchart": re.compile(
+            r"^\s*(?P<origin>\w+)\s*(?:-->\s*(?:\|[^|]*\|\s*)?"
+            r"|--\s+[^\n]+?\s+-->\s*)(?P<target>\w+)\s*;?\s*$",
+            re.MULTILINE,
+        ),
+        "architecture": re.compile(
+            r"^\s*(?P<origin>\w+)(?:\{group\})?:[TBLR]\s+-->\s+"
+            r"[TBLR]:(?P<target>\w+)(?:\{group\})?\s*$",
+            re.MULTILINE,
+        ),
+    }
+)
 
 
 def check_architecture_graph(

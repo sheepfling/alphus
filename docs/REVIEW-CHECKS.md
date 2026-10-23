@@ -33,6 +33,11 @@ expectations are left alone.
 Class constants, local uppercase assignments, and assignments under conditionals
 are not classified as module constant declarations.
 
+Scientific constants, including values published by SciPy, belong in that
+consumer catalog with units and provenance. Alphus matches the configured
+numeric literals without importing SciPy or assuming that a nearby number has
+the same physical meaning.
+
 Physical constants and unit factors require an explicit consumer catalog:
 
 ```toml

@@ -57,14 +57,13 @@ def _forbidden_import_pattern_match(
 def _imported_names(node: ast.Import | ast.ImportFrom) -> tuple[str, ...]:
     match node:
         case ast.Import(names=aliases):
-            imported_names = tuple(alias.name for alias in aliases)
+            return tuple(alias.name for alias in aliases)
         case ast.ImportFrom(module=module, names=aliases) if module is not None:
-            imported_names = (module, *(f"{module}.{alias.name}" for alias in aliases))
+            return (module, *(f"{module}.{alias.name}" for alias in aliases))
         case ast.ImportFrom(module=None, names=aliases):
-            imported_names = tuple(alias.name for alias in aliases)
+            return tuple(alias.name for alias in aliases)
         case _:
-            imported_names = ()
-    return imported_names
+            return ()
 
 
 def _assignment_names(target: ast.expr) -> tuple[str, ...]:

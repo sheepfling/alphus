@@ -67,6 +67,10 @@ document syntax. Each runs only when selected; a repository can add either to
 `check` when those files are part of its required gate. These document checks
 are separate from `json-structure`, which analyzes JSON parsing patterns in
 Python source.
+JSON Lines and JSON with comments are distinct document formats. A consumer
+can add separate command steps for the formats it uses; their parsers, file
+patterns, and failure behavior should stay out of the Python-source
+`json-structure` rule.
 The same command-step mechanism lets a C++ or JavaScript consumer define its
 own native build, lint, and test profiles without changing the Python, stub,
 or Markdown selections.

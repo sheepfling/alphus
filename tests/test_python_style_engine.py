@@ -150,6 +150,9 @@ def test_configured_application_entrypoint_imports_are_reported() -> None:
 
 
 def test_opaque_mapping_signatures_require_an_approved_boundary() -> None:
+    assert (
+        findings("import ast\ndef f(node: ast.Dict) -> ast.Dict | None: pass") == set()
+    )
     source = (
         "from typing import Any\ndef f(x: Mapping[str, Any]) -> dict[str, object]: pass"
     )
@@ -169,6 +172,14 @@ def test_opaque_mapping_signatures_require_an_approved_boundary() -> None:
     )
     assert findings(marked) == {"opaque_mappings"}
     assert findings(marked, boundary_file=True) == set()
+
+
+def test_mutable_module_constants_are_reported_without_flagging_local_values() -> None:
+    assert findings("NAMES = {'a', 'b'}") == {"mutable_module_constants"}
+    assert findings("NAMES: set[str] = set()") == {"mutable_module_constants"}
+    assert findings("NAMES = frozenset({'a', 'b'})") == set()
+    assert findings("def f():\n    NAMES = {'a'}") == set()
+    assert findings("cache = {}") == set()
 
 
 def test_opaque_boundary_paths_are_policy_data() -> None:
