@@ -72,6 +72,7 @@ def test_gate_themes_own_their_runner_mappings() -> None:
             REVIEW_RULE_RUNNERS,
             {
                 "numeric-literals",
+                "scipy-constants",
                 "test-quality",
                 "input-contracts",
                 "pydantic-practices",

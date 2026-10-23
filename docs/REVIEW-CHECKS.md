@@ -5,12 +5,12 @@ review of intent; they do not prove numeric correctness, test quality, or the
 absence of side effects. Existing policies remain valid without their optional
 sections. Ruff, Pyright, pytest, mdrepo, and rumdl retain their own checks.
 
-Alphus applies all five scanners to its real source/test inventory through the
+Alphus applies all six scanners to its real source/test inventory through the
 `review` profile and includes them in `check` with a warning failure threshold.
 Build/install the wheel using [the self-check guide](SELF-CHECK.md), then
 invoke the installed command from the temporary directory:
 
-```sh
+```shell
 "$work/venv/bin/alphus" --root "$repo" \
   --config "$repo/quality-gates.toml" --run --profile review
 ```
@@ -34,10 +34,8 @@ expectations are left alone.
 Class constants, local uppercase assignments, and assignments under conditionals
 are not classified as module constant declarations.
 
-Scientific constants, including values published by SciPy, belong in that
-consumer catalog with units and provenance. Alphus matches the configured
-numeric literals without importing SciPy or assuming that a nearby number has
-the same physical meaning.
+Scientific constants and unit factors can use the separate
+`scipy-constants` rule below. Consumer-specific factors remain configurable here.
 
 Physical constants and unit factors require an explicit consumer catalog:
 
@@ -70,6 +68,35 @@ target is an arithmetic operand. Ordinary `*1000`, `9.81`,
 ratios, scientific literals, and offset conversions have no inferred unit
 meaning. Evaluating formulas to infer units or derive factors, external constant
 authorities, and dimensional correctness remain outside this checker.
+
+## SciPy constants and conversions
+
+Selector: `scipy-constants`. IDs:
+`alphus/python/scipy/style/inline-constant` and
+`alphus/python/scipy/style/inline-conversion`.
+
+Enable the built-in catalog with one small section:
+
+```toml
+[checks.scipy_constants]
+extensions = [".py"]
+```
+
+The catalog reviews exact arithmetic literals for `speed_of_light`, `Planck`,
+`Boltzmann`, and `Avogadro`, plus the `inch`, `foot`, `mile`, `hour`, and
+`day` unit factors. It checks each unit factor and its reciprocal. Unit
+factors require a related identifier or enclosing function name, such as
+`inches` or `meters`. Dividing by a factor also matches; the direction of a
+conversion still needs human review. Add consumer-specific entries through
+`[[checks.scipy_constants.constants]]` using the same fields as the numeric
+catalog. Disable groups with `physical_constants = false`,
+`unit_conversions = false`, or `inverse_conversions = false`.
+
+The built-in symbols and units follow the
+[SciPy constants reference](https://docs.scipy.org/doc/scipy/reference/constants.html).
+Alphus does not import SciPy, compare floating-point values approximately, or
+infer physical dimensions. The gate is provisional in Alphus's own `review`
+profile, so its findings are visible without blocking the profile.
 
 ## Test quality
 

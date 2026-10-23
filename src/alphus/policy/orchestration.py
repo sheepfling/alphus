@@ -35,6 +35,7 @@ from alphus.policy.review import (
     InputContractPolicy,
     NumericLiteralPolicy,
     PydanticPracticePolicy,
+    ScipyConstantsPolicy,
     TestQualityPolicy,
 )
 from alphus.policy.sources import (
@@ -62,6 +63,7 @@ class CheckPolicies(StrictModel):
     output_escaping: SourceScanPolicy | None = None
     path_discovery: PathDiscoveryPolicy | None = None
     numeric_literals: NumericLiteralPolicy | None = None
+    scipy_constants: ScipyConstantsPolicy | None = None
     test_quality: TestQualityPolicy | None = None
     input_contracts: InputContractPolicy | None = None
     pydantic_practices: PydanticPracticePolicy | None = None

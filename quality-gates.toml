@@ -82,6 +82,13 @@ extensions = [".py"]
 exclude = []
 math_constants = true
 
+[checks.scipy_constants]
+extensions = [".py"]
+exclude = []
+physical_constants = true
+unit_conversions = true
+inverse_conversions = true
+
 [checks.test_quality]
 extensions = [".py"]
 exclude = []
@@ -369,6 +376,12 @@ rule = "numeric-literals"
 
 [[orchestration.steps]]
 kind = "rule"
+name = "SciPy constants review"
+rule = "scipy-constants"
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "rule"
 name = "Test review"
 rule = "test-quality"
 
@@ -390,6 +403,6 @@ rule = "fastapi-practices"
 [[orchestration.profiles]]
 name = "review"
 steps = [
-  "Numeric review", "Test review", "Input contract review",
+  "Numeric review", "SciPy constants review", "Test review", "Input contract review",
   "Pydantic practice review", "FastAPI practice review",
 ]

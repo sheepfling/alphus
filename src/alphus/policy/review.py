@@ -70,6 +70,23 @@ class NumericLiteralPolicy(PythonSourceScanPolicy):
         return self
 
 
+class ScipyConstantsPolicy(PythonSourceScanPolicy):
+    """Advisory SciPy physical and unit-factor catalog for Python source."""
+
+    physical_constants: bool = True
+    unit_conversions: bool = True
+    inverse_conversions: bool = True
+    constants: tuple[NumericLiteralSpec, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_constant_names(self) -> ScipyConstantsPolicy:
+        require_unique(
+            tuple(spec.name for spec in self.constants),
+            "SciPy catalog names must be unique",
+        )
+        return self
+
+
 class TestQualityPolicy(PythonSourceScanPolicy):
     """Advisory checks for exact prose assertions and declared transient documents."""
 

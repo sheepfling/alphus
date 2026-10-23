@@ -25,7 +25,7 @@ SCOPES = frozenset(
         "typescript",
     }
 )
-FRAMEWORKS = frozenset({"fastapi", "git", "none", "pydantic", "sqlalchemy"})
+FRAMEWORKS = frozenset({"fastapi", "git", "none", "pydantic", "scipy", "sqlalchemy"})
 CATEGORIES = frozenset(
     {
         "architecture",
