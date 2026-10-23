@@ -4,12 +4,17 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from enum import StrEnum
 from types import MappingProxyType
-from typing import Literal
 
 from alphus.policy.base import QualityRuleName
 
-RuleOutputShape = Literal["findings", "messages", "python-style", "shared-utilities"]
+
+class RuleOutputShape(StrEnum):
+    FINDINGS = "findings"
+    MESSAGES = "messages"
+    PYTHON_STYLE = "python-style"
+    SHARED_UTILITIES = "shared-utilities"
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,28 +28,32 @@ class RuleSpec:
 
 RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
     {
-        "file-size": RuleSpec("file_size", "findings"),
-        "comment-markers": RuleSpec("comment_markers", "findings"),
-        "line-length": RuleSpec("line_length", "findings"),
-        "json-structure": RuleSpec("json_structure", "findings"),
-        "output-escaping": RuleSpec("output_escaping", "findings"),
-        "path-discovery": RuleSpec("path_discovery", "findings"),
-        "shared-utilities": RuleSpec("shared_utilities", "shared-utilities"),
-        "module-roles": RuleSpec("module_roles", "findings"),
-        "python-style": RuleSpec("python_style", "python-style"),
-        "runtime-types": RuleSpec("runtime_types", "messages"),
-        "cli": RuleSpec("cli", "messages"),
-        "script-policy": RuleSpec("script_policy", "messages"),
-        "package-boundaries": RuleSpec("package_boundaries", "findings"),
-        "dependency-locks": RuleSpec("dependency_locks", "findings"),
-        "repository-layout": RuleSpec("repository_layout", "findings"),
-        "git-ignores": RuleSpec("git", "findings", requires_files=False),
-        "git-attributes": RuleSpec("git", "findings", requires_files=False),
-        "git-history": RuleSpec("git", "findings", requires_files=False),
-        "numeric-literals": RuleSpec("numeric_literals", "findings"),
-        "test-quality": RuleSpec("test_quality", "findings"),
-        "input-contracts": RuleSpec("input_contracts", "findings"),
-        "pydantic-practices": RuleSpec("pydantic_practices", "findings"),
-        "fastapi-practices": RuleSpec("fastapi_practices", "findings"),
+        "file-size": RuleSpec("file_size", RuleOutputShape.FINDINGS),
+        "comment-markers": RuleSpec("comment_markers", RuleOutputShape.FINDINGS),
+        "line-length": RuleSpec("line_length", RuleOutputShape.FINDINGS),
+        "json-structure": RuleSpec("json_structure", RuleOutputShape.FINDINGS),
+        "output-escaping": RuleSpec("output_escaping", RuleOutputShape.FINDINGS),
+        "path-discovery": RuleSpec("path_discovery", RuleOutputShape.FINDINGS),
+        "shared-utilities": RuleSpec(
+            "shared_utilities", RuleOutputShape.SHARED_UTILITIES
+        ),
+        "module-roles": RuleSpec("module_roles", RuleOutputShape.FINDINGS),
+        "python-style": RuleSpec("python_style", RuleOutputShape.PYTHON_STYLE),
+        "runtime-types": RuleSpec("runtime_types", RuleOutputShape.MESSAGES),
+        "cli": RuleSpec("cli", RuleOutputShape.MESSAGES),
+        "script-policy": RuleSpec("script_policy", RuleOutputShape.MESSAGES),
+        "package-boundaries": RuleSpec("package_boundaries", RuleOutputShape.FINDINGS),
+        "dependency-locks": RuleSpec("dependency_locks", RuleOutputShape.FINDINGS),
+        "repository-layout": RuleSpec("repository_layout", RuleOutputShape.FINDINGS),
+        "git-ignores": RuleSpec("git", RuleOutputShape.FINDINGS, requires_files=False),
+        "git-attributes": RuleSpec(
+            "git", RuleOutputShape.FINDINGS, requires_files=False
+        ),
+        "git-history": RuleSpec("git", RuleOutputShape.FINDINGS, requires_files=False),
+        "numeric-literals": RuleSpec("numeric_literals", RuleOutputShape.FINDINGS),
+        "test-quality": RuleSpec("test_quality", RuleOutputShape.FINDINGS),
+        "input-contracts": RuleSpec("input_contracts", RuleOutputShape.FINDINGS),
+        "pydantic-practices": RuleSpec("pydantic_practices", RuleOutputShape.FINDINGS),
+        "fastapi-practices": RuleSpec("fastapi_practices", RuleOutputShape.FINDINGS),
     }
 )

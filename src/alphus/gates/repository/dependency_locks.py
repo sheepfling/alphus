@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from collections.abc import Set as AbstractSet
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+from types import MappingProxyType
 
 from packaging.requirements import InvalidRequirement, Requirement
 from packaging.utils import canonicalize_name
@@ -15,9 +17,17 @@ from alphus.contracts.rule_tags import rule_tag
 from alphus.support.data_access import contained_file
 
 
+@dataclass(frozen=True, slots=True)
+class RequirementLoad:
+    """Requirements parsed from a lock input and any source findings."""
+
+    requirements: Mapping[str, Requirement]
+    findings: tuple[Finding, ...]
+
+
 def _include_path(root: Path, source: str, value: str) -> str | None:
     include = PurePosixPath(value)
-    source_path = PurePosixPath(source)
+    source_path = PurePosixPath(Path(source).as_posix())
     if not value or include.is_absolute() or "\\" in value:
         return None
     candidate = root.joinpath(*source_path.parent.parts, *include.parts)
@@ -31,28 +41,35 @@ def _include_path(root: Path, source: str, value: str) -> str | None:
 
 def _load_requirements(
     root: Path, relative: str, active: AbstractSet[str] = frozenset()
-) -> tuple[dict[str, Requirement], list[Finding]]:
+) -> RequirementLoad:
+    relative = Path(relative).as_posix()
     if relative in active:
-        return {}, [
-            Finding(
-                rule_id=rule_tag(
-                    "repository", "none", "dependencies", "lock-include-cycle"
+        return RequirementLoad(
+            MappingProxyType({}),
+            (
+                Finding(
+                    rule_id=rule_tag(
+                        "repository", "none", "dependencies", "lock-include-cycle"
+                    ),
+                    path=relative,
+                    message="requirement include cycle",
                 ),
-                path=relative,
-                message="requirement include cycle",
-            )
-        ]
+            ),
+        )
     path = contained_file(root, relative)
     if path is None:
-        return {}, [
-            Finding(
-                rule_id=rule_tag(
-                    "repository", "none", "dependencies", "lock-input-missing"
+        return RequirementLoad(
+            MappingProxyType({}),
+            (
+                Finding(
+                    rule_id=rule_tag(
+                        "repository", "none", "dependencies", "lock-input-missing"
+                    ),
+                    path=relative,
+                    message="requirement file is missing or resolves outside the repository",
                 ),
-                path=relative,
-                message="requirement file is missing or resolves outside the repository",
-            )
-        ]
+            ),
+        )
     result: dict[str, Requirement] = {}
     findings: list[Finding] = []
     current = active | {relative}
@@ -81,9 +98,9 @@ def _load_requirements(
                     )
                 )
                 continue
-            nested_values, nested_findings = _load_requirements(root, nested, current)
-            result.update(nested_values)
-            findings.extend(nested_findings)
+            nested_load = _load_requirements(root, nested, current)
+            result.update(nested_load.requirements)
+            findings.extend(nested_load.findings)
             continue
         try:
             requirement = Requirement(value)
@@ -100,7 +117,7 @@ def _load_requirements(
             )
             continue
         result[canonicalize_name(requirement.name)] = requirement
-    return result, findings
+    return RequirementLoad(MappingProxyType(result), tuple(findings))
 
 
 def _exact_pin_findings(
@@ -130,9 +147,11 @@ def _exact_pin_findings(
 
 
 def _pair_findings(root: Path, input_file: str, lock_file: str) -> list[Finding]:
-    declared, findings = _load_requirements(root, input_file)
-    pinned, lock_findings = _load_requirements(root, lock_file)
-    findings.extend(lock_findings)
+    declared_load = _load_requirements(root, input_file)
+    pinned_load = _load_requirements(root, lock_file)
+    declared = declared_load.requirements
+    pinned = pinned_load.requirements
+    findings = [*declared_load.findings, *pinned_load.findings]
     findings.extend(_exact_pin_findings(lock_file, pinned))
     for name, requirement in declared.items():
         resolved = pinned.get(name)
@@ -182,7 +201,7 @@ def check_dependency_locks(root: Path, policy: DependencyLockPolicy) -> list[Fin
     for pair in policy.pairs:
         findings.extend(_pair_findings(checkout, pair.input_file, pair.lock_file))
     for lock_file in policy.exact_pin_files:
-        requirements, issues = _load_requirements(checkout, lock_file)
-        findings.extend(issues)
-        findings.extend(_exact_pin_findings(lock_file, requirements))
+        load = _load_requirements(checkout, lock_file)
+        findings.extend(load.findings)
+        findings.extend(_exact_pin_findings(lock_file, load.requirements))
     return findings

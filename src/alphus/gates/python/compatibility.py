@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-import argparse
 import ast
 import keyword
 import re
-import sys
 import tomllib
-from collections.abc import Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import cast
 
@@ -20,6 +17,8 @@ _COMPATIBILITY_MARKER = re.compile(
     r"(?:imports?|re[- ]?exports?|forwarders?|shims?)\b",
     re.IGNORECASE,
 )
+_SCHEMA_VERSION_FIELD = "schema_version"
+_PACKAGE_ENTRY_FILES = frozenset({"__init__.py", "__main__.py"})
 _COMMENT_MARKER = re.compile(
     r"\b(?:compatibility|compat|legacy|deprecated)\s+"
     r"(?:imports?|re[- ]?exports?|forwarders?|shims?)\b",
@@ -53,10 +52,10 @@ def _valid_dotted_name(value: str) -> bool:
 
 
 def _valid_reference(value: str) -> bool:
-    module, separator, object_name = value.partition(":")
-    return _valid_dotted_name(module) and (
-        not separator or _valid_dotted_name(object_name)
-    )
+    parts = value.split(":")
+    if len(parts) > 2:
+        return False
+    return all(_valid_dotted_name(part) for part in parts)
 
 
 def _is_main_guard(node: ast.If, imported: AbstractSet[str]) -> bool:
@@ -147,7 +146,7 @@ def _forwarder_reason(tree: ast.Module, source: str, filename: str) -> str | Non
         return "marked compatibility import"
     if wildcard:
         return "wildcard import"
-    if filename in {"__init__.py", "__main__.py"}:
+    if filename in _PACKAGE_ENTRY_FILES:
         return None
     if all(
         type(node) in (ast.Import, ast.ImportFrom, ast.Pass)
@@ -195,9 +194,9 @@ def load_removal_plans(path: Path) -> tuple[dict[str, RemovalPlan], tuple[str, .
         return {}, (f"{path}: cannot read removal plan: {error}",)
     issues: list[str] = []
     if (
-        set(document) != {"schema_version", "forwarders"}
-        or type(document.get("schema_version")) is not int
-        or document["schema_version"] != 1
+        set(document) != {_SCHEMA_VERSION_FIELD, "forwarders"}
+        or type(document.get(_SCHEMA_VERSION_FIELD)) is not int
+        or document[_SCHEMA_VERSION_FIELD] != 1
     ):
         issues.append(f"{path}: expected schema_version = 1 and a forwarders list")
     entries = document.get("forwarders")
@@ -249,7 +248,7 @@ def check_forwarders(
     plans, plan_issues = (
         load_removal_plans(plan_path) if plan_path is not None else ({}, ())
     )
-    current = today or datetime.now(timezone.utc).date()
+    current = today or datetime.now(UTC).date()
     issues = [*discovery_issues, *plan_issues]
     planned: list[str] = []
     found_modules = {forwarder.module for forwarder in forwarders}
@@ -274,28 +273,3 @@ def check_forwarders(
             f"{module}: stale removal plan; forwarding module no longer exists"
         )
     return tuple(sorted(issues)), tuple(sorted(planned))
-
-
-def main(argv: Sequence[str] | None = None) -> int:
-    """Check forwarding modules and report their removal commitments."""
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source-root", required=True, type=Path)
-    parser.add_argument("--plan", type=Path)
-    options = parser.parse_args(argv)
-    try:
-        issues, planned = check_forwarders(options.source_root, options.plan)
-    except OSError as error:
-        print(f"Python compatibility imports: {error}", file=sys.stderr)
-        return 2
-    for entry in planned:
-        print(f"PLAN {entry}")
-    for issue in issues:
-        print(f"FAIL {issue}")
-    print(
-        f"Python compatibility imports: {len(planned)} planned, {len(issues)} issue(s)"
-    )
-    return 1 if issues else 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

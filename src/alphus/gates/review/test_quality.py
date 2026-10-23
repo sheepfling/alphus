@@ -10,7 +10,7 @@ from textwrap import dedent
 
 from pydantic import JsonValue, RootModel, ValidationError
 
-from alphus.config import TestQualityPolicy
+from alphus.config import TestQualityPolicy as _TestQualityPolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import rule_tag
 from alphus.support.inventory import matches_path
@@ -158,7 +158,7 @@ def _bound_names(statements: Sequence[ast.stmt]) -> set[str]:
     return names
 
 
-def _is_prose(value: str, policy: TestQualityPolicy) -> bool:
+def _is_prose(value: str, policy: _TestQualityPolicy) -> bool:
     if (
         len(value) < policy.large_prose_min_chars
         or len(value.split()) < policy.large_prose_min_words
@@ -189,7 +189,7 @@ def _calls_in_order(node: ast.AST) -> Iterable[ast.Call]:
 
 
 class _TestScanner:
-    def __init__(self, path: str, policy: TestQualityPolicy) -> None:
+    def __init__(self, path: str, policy: _TestQualityPolicy) -> None:
         self.path = path
         self.policy = policy
         self.findings: list[Finding] = []
@@ -421,7 +421,9 @@ class _TestScanner:
                     pass
 
 
-def python_findings(source: str, path: str, policy: TestQualityPolicy) -> list[Finding]:
+def python_findings(
+    source: str, path: str, policy: _TestQualityPolicy
+) -> list[Finding]:
     """Inspect a module without reading any document mentioned by its tests."""
     scanner = _TestScanner(path, policy)
     scanner.block(ast.parse(source, filename=path).body, _Scope(), testing=False)
@@ -432,7 +434,7 @@ def python_findings(source: str, path: str, policy: TestQualityPolicy) -> list[F
 
 
 def check_test_quality(
-    root: Path, paths: Iterable[Path], policy: TestQualityPolicy
+    root: Path, paths: Iterable[Path], policy: _TestQualityPolicy
 ) -> list[Finding]:
     """Inspect selected Python test files and return deterministic warnings."""
     findings: list[Finding] = []

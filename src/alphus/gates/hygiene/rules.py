@@ -28,17 +28,18 @@ def check_line_length(
         limit = policy.limit_for(relative.suffix.lower())
         if limit is None:
             continue
-        source = (checkout / relative).read_text(encoding="utf-8")
-        findings.extend(
-            Finding(
-                rule_id=rule_tag("any", "none", "style", "line-too-long"),
-                path=relative.as_posix(),
-                line=number,
-                message=f"line has {len(line)} columns (limit {limit})",
-            )
-            for number, line in enumerate(source.splitlines(), 1)
-            if len(line) > limit
-        )
+        with (checkout / relative).open(encoding="utf-8") as stream:
+            for number, physical_line in enumerate(stream, 1):
+                line = physical_line.rstrip("\r\n")
+                if len(line) > limit:
+                    findings.append(
+                        Finding(
+                            rule_id=rule_tag("any", "none", "style", "line-too-long"),
+                            path=relative.as_posix(),
+                            line=number,
+                            message=f"line has {len(line)} columns (limit {limit})",
+                        )
+                    )
     return findings
 
 
@@ -102,14 +103,17 @@ def check_file_size(
         ):
             continue
         path = checkout / relative
-        source = path.read_text(encoding="utf-8")
-        count = len(source.splitlines())
         if path.name == policy.initializer_name:
+            source = path.read_text(encoding="utf-8")
+            count = len(source.splitlines())
             findings.extend(
                 _initializer_findings(
                     source, relative.as_posix(), policy.initializer_limit
                 )
             )
+        else:
+            with path.open(encoding="utf-8") as stream:
+                count = sum(1 for _ in stream)
         if count > policy.hard_limit:
             findings.append(
                 Finding(

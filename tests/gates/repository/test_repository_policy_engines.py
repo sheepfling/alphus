@@ -61,10 +61,12 @@ def test_architecture_graph_matches_configured_package_edges(tmp_path: Path) -> 
         ("flowchart", "flowchart LR\nPlugin-->Core\nClient-->|http|Service\n"),
         (
             "architecture",
-            "architecture-beta\nservice Plugin(server)[Plugin]\n"
-            "service Core(server)[Core]\nservice Client(server)[Client]\n"
-            "service Service(server)[Service]\nPlugin:R --> L:Core\n"
-            "Client:R --> L:Service\n",
+            (
+                "architecture-beta\nservice Plugin(server)[Plugin]\n"
+                "service Core(server)[Core]\nservice Client(server)[Client]\n"
+                "service Service(server)[Service]\nPlugin:R --> L:Core\n"
+                "Client:R --> L:Service\n"
+            ),
         ),
     ],
 )
@@ -90,6 +92,10 @@ def test_architecture_graph_uses_configured_mermaid_syntax(
     guide.parent.mkdir()
     guide.write_text(f"```mermaid\n{diagram}```\n", encoding="utf-8")
 
+    assert check_architecture_graph(tmp_path, graph, policy) == []
+    guide.write_text(f"::: mermaid\n{diagram}:::\n", encoding="utf-8")
+    assert check_architecture_graph(tmp_path, graph, policy) == []
+    guide.write_text(f":::mermaid\n{diagram}:::\n", encoding="utf-8")
     assert check_architecture_graph(tmp_path, graph, policy) == []
     wrong_header = "flowchart LR" if syntax == "architecture" else "architecture-beta"
     guide.write_text(f"```mermaid\n{wrong_header}\n```\n", encoding="utf-8")

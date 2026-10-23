@@ -8,7 +8,7 @@ a source root and fails for forwarding modules without a removal plan.
 Run it directly:
 
 ```sh
-python -m alphus.gates.python.compatibility --source-root src
+python -m alphus.gates.python.compatibility_cli --source-root src
 ```
 
 The scanner recognizes import-only modules with optional `__all__` and a
@@ -25,7 +25,7 @@ When a consumer needs a transition window, put a plan in its repository and
 pass it to the gate:
 
 ```sh
-python -m alphus.gates.python.compatibility --source-root src --plan compatibility-imports.toml
+python -m alphus.gates.python.compatibility_cli --source-root src --plan compatibility-imports.toml
 ```
 
 ```toml

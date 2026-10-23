@@ -62,6 +62,11 @@ opaque_boundary_marker_prefix = "# opaque-boundary: "
 opaque_boundary_min_reason_chars = 12
 forbidden_main_imports = ["main"]
 semantic_rule_id_paths = ["src/alphus/**"]
+structured_reporting_paths = ["src/alphus/execution/orchestration.py"]
+repeated_literal_paths = [
+  "src/alphus/execution/orchestration.py",
+  "src/alphus/gates/python/compatibility.py",
+]
 
 [checks.runtime_types]
 extensions = [".py"]
@@ -281,7 +286,7 @@ argv = [
 kind = "command"
 name = "Python compatibility imports"
 argv = [
-  "{python}", "-m", "alphus.gates.python.compatibility",
+  "{python}", "-m", "alphus.gates.python.compatibility_cli",
   "--source-root", "src",
 ]
 

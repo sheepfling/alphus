@@ -69,15 +69,17 @@ target probe. The standalone fixture CLI also probes the target and rejects a
 conflicting explicit version. These flags override consumer language defaults.
 The checker's own version alone is not compatibility evidence.
 
-For a reusable POSIX local run, start in the consumer repository. Replace
-`/path/to/alphus.whl` with the reviewed wheel and choose each target interpreter:
+For a reusable POSIX local run, start in the consumer repository. Set
+`ALPHUS_WHEEL` to the reviewed wheel and choose each target interpreter:
 
-```sh
+```shell
+ALPHUS_WHEEL="$(find dist -maxdepth 1 -name 'alphus-*.whl' -print -quit)"
+test -n "$ALPHUS_WHEEL" || { echo 'Build an Alphus wheel in dist/ first' >&2; exit 1; }
 repo="$(pwd)"
 work="$(mktemp -d)"
 python3.12 -m venv "$work/checker"
 python3.10 -m venv "$work/target"
-"$work/checker/bin/python" -m pip install /path/to/alphus.whl \
+"$work/checker/bin/python" -m pip install "$ALPHUS_WHEEL" \
   'mypy>=2.3' 'pyright>=1.1.414' 'twine>=7.0'
 "$work/target/bin/python" -m pip install -r "$repo/requirements-target.txt" \
   -r "$repo/requirements-compat.txt"

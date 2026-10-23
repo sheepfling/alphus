@@ -11,8 +11,8 @@ from alphus.gates.python.compatibility import (
     check_forwarders,
     discover_forwarders,
     load_removal_plans,
-    main,
 )
+from alphus.gates.python.compatibility_cli import main
 
 
 def _source_root(tmp_path: Path) -> Path:
@@ -124,8 +124,10 @@ def test_valid_plan_reports_owner_replacement_and_removal_date(
 
     assert issues == ()
     assert planned == (
-        "sample.old -> sample.current:Thing; owner=package maintainers; "
-        "remove_by=2027-01-01",
+        (
+            "sample.old -> sample.current:Thing; owner=package maintainers; "
+            "remove_by=2027-01-01"
+        ),
     )
 
 

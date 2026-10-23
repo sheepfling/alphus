@@ -5,10 +5,16 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+PRODUCT_NAME = "Alphus"
+NAMESPACE = PRODUCT_NAME.lower()
+
 SCOPES = frozenset(
     {
         "any",
+        "c",
         "cpp",
+        "css",
+        "html",
         "java",
         "javascript",
         "json",
@@ -16,9 +22,10 @@ SCOPES = frozenset(
         "python",
         "repository",
         "toml",
+        "typescript",
     }
 )
-FRAMEWORKS = frozenset({"fastapi", "git", "none", "pydantic"})
+FRAMEWORKS = frozenset({"fastapi", "git", "none", "pydantic", "sqlalchemy"})
 CATEGORIES = frozenset(
     {
         "architecture",
@@ -38,6 +45,7 @@ CATEGORIES = frozenset(
     }
 )
 _SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
+_NAMESPACE_PREFIX = re.compile(rf"^{re.escape(NAMESPACE)}/")
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,16 +70,21 @@ class RuleTag:
     @property
     def rule_id(self) -> str:
         """Return the stable, namespace-first identifier."""
-        return f"alphus/{self.scope}/{self.framework}/{self.category}/{self.complaint}"
+        return f"{NAMESPACE}/{self.scope}/{self.framework}/{self.category}/{self.complaint}"
+
+    @staticmethod
+    def is_alphus_id(rule_id: str) -> bool:
+        """Recognize this namespace without parsing another producer's ID."""
+        return _NAMESPACE_PREFIX.match(rule_id) is not None
 
     @classmethod
     def parse(cls, rule_id: str) -> RuleTag:
         """Parse and validate a complete Alphus rule identifier."""
         parts = rule_id.split("/")
-        if len(parts) != 5 or parts[0] != "alphus":
+        if len(parts) != 5 or parts[0] != NAMESPACE:
             raise ValueError(
                 "Alphus rule IDs must use "
-                "alphus/<scope>/<framework>/<category>/<complaint>"
+                f"{NAMESPACE}/<scope>/<framework>/<category>/<complaint>"
             )
         tag = cls(*parts[1:])
         if tag.rule_id != rule_id:

@@ -74,7 +74,12 @@ class Fluent:
             )
             command[0] = checker.executable
             result = subprocess.run(
-                command, cwd=tmp_path, env=env, capture_output=True, text=True
+                command,
+                cwd=tmp_path,
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
             )
             output = result.stdout + result.stderr
             expect_failure = fixture == versioned and target.version[:2] == (3, 10)

@@ -5,12 +5,13 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Literal, NamedTuple, TypeAlias
+from typing import Literal, NamedTuple, TypeAlias, get_args
 
-from alphus.contracts.rule_tags import RuleTag
+from alphus.contracts.rule_tags import NAMESPACE, RuleTag
 
 Severity: TypeAlias = Literal["error", "warning", "info"]
 RemediationPriority: TypeAlias = Literal["low", "normal", "high", "urgent"]
+REMEDIATION_PRIORITIES: frozenset[str] = frozenset(get_args(RemediationPriority))
 
 SEVERITY_ORDER: Mapping[Severity, int] = MappingProxyType(
     {"info": 0, "warning": 100, "error": 200}
@@ -60,14 +61,9 @@ class Diagnostic:
     def __post_init__(self) -> None:
         if self.severity not in SEVERITY_ORDER:
             raise ValueError(f"unsupported diagnostic severity: {self.severity!r}")
-        if self.priority is not None and self.priority not in {
-            "low",
-            "normal",
-            "high",
-            "urgent",
-        }:
+        if self.priority is not None and self.priority not in REMEDIATION_PRIORITIES:
             raise ValueError(f"unsupported remediation priority: {self.priority!r}")
-        if self.source == "alphus" or self.rule_id.partition("/")[0] == "alphus":
+        if self.source == NAMESPACE or RuleTag.is_alphus_id(self.rule_id):
             RuleTag.parse(self.rule_id)
 
 
@@ -94,6 +90,8 @@ class FindingRollups:
         by_category: dict[str, list[Diagnostic]] = {}
         by_complaint: dict[str, list[Diagnostic]] = {}
         for diagnostic in diagnostics:
+            if not RuleTag.is_alphus_id(diagnostic.rule_id):
+                continue
             tag = RuleTag.parse(diagnostic.rule_id)
             by_scope.setdefault(tag.scope, []).append(diagnostic)
             by_category.setdefault(tag.category, []).append(diagnostic)

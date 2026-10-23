@@ -210,35 +210,43 @@ def test_reference_scanner_covers_decorators_annotations_and_calls() -> None:
             [3],
         ),
         (
-            "from target import check\n"
-            "def unrelated():\n"
-            "    from other import check\n"
-            "    check()\n"
-            "def sibling():\n"
-            "    check()\n"
-            "check()\n",
+            (
+                "from target import check\n"
+                "def unrelated():\n"
+                "    from other import check\n"
+                "    check()\n"
+                "def sibling():\n"
+                "    check()\n"
+                "check()\n"
+            ),
             [6, 7],
         ),
         (
-            "from target import check\n"
-            "def invoke(check, /, *args, **kwargs):\n"
-            "    check()\n"
-            "check()\n",
+            (
+                "from target import check\n"
+                "def invoke(check, /, *args, **kwargs):\n"
+                "    check()\n"
+                "check()\n"
+            ),
             [4],
         ),
         (
-            "from target import check\n"
-            "def invoke(*, check):\n"
-            "    check()\n"
-            "invoke = lambda check: check()\n"
-            "check()\n",
+            (
+                "from target import check\n"
+                "def invoke(*, check):\n"
+                "    check()\n"
+                "invoke = lambda check: check()\n"
+                "check()\n"
+            ),
             [5],
         ),
         (
-            "from target import check\n"
-            "def invoke():\n"
-            "    check()\n"
-            "    check = replacement\n",
+            (
+                "from target import check\n"
+                "def invoke():\n"
+                "    check()\n"
+                "    check = replacement\n"
+            ),
             [],
         ),
         (
@@ -250,35 +258,43 @@ def test_reference_scanner_covers_decorators_annotations_and_calls() -> None:
             [3, 4],
         ),
         (
-            "from target import check\n"
-            "class Consumer:\n"
-            "    from other import check\n"
-            "    check()\n"
-            "    def invoke(self):\n"
-            "        check()\n"
-            "check()\n",
+            (
+                "from target import check\n"
+                "class Consumer:\n"
+                "    from other import check\n"
+                "    check()\n"
+                "    def invoke(self):\n"
+                "        check()\n"
+                "check()\n"
+            ),
             [6, 7],
         ),
         (
-            "from target import check\n"
-            "def invoke():\n"
-            "    check()\n"
-            "check = replacement\n",
+            (
+                "from target import check\n"
+                "def invoke():\n"
+                "    check()\n"
+                "check = replacement\n"
+            ),
             [],
         ),
         (
-            "from target import check\n"
-            "if condition:\n"
-            "    check = replacement\n"
-            "check()\n"
-            "from target import check\n"
-            "check()\n",
+            (
+                "from target import check\n"
+                "if condition:\n"
+                "    check = replacement\n"
+                "check()\n"
+                "from target import check\n"
+                "check()\n"
+            ),
             [6],
         ),
         (
-            "from target import check\n"
-            "values = [check() for check in replacements]\n"
-            "check()\n",
+            (
+                "from target import check\n"
+                "values = [check() for check in replacements]\n"
+                "check()\n"
+            ),
             [3],
         ),
         (
@@ -286,10 +302,12 @@ def test_reference_scanner_covers_decorators_annotations_and_calls() -> None:
             [4],
         ),
         (
-            "from target import check\n"
-            "while check():\n"
-            "    check = replacement\n"
-            "check()\n",
+            (
+                "from target import check\n"
+                "while check():\n"
+                "    check = replacement\n"
+                "check()\n"
+            ),
             [],
         ),
     ],
@@ -407,44 +425,56 @@ def test_nested_registry_factory_import_does_not_bind_a_top_level_decorator() ->
     ("source", "expected"),
     [
         (
-            "from target import check\n"
-            "callbacks = [lambda: check() for check in replacements]\n"
-            "check()\n",
+            (
+                "from target import check\n"
+                "callbacks = [lambda: check() for check in replacements]\n"
+                "check()\n"
+            ),
             [3],
         ),
         (
-            "from target import check\n"
-            "pending = (check() for value in values)\n"
-            "check = replacement\n",
+            (
+                "from target import check\n"
+                "pending = (check() for value in values)\n"
+                "check = replacement\n"
+            ),
             [],
         ),
         (
-            "from target import check\n"
-            "class Consumer:\n"
-            "    from other import check\n"
-            "    values = [check() for value in values]\n",
+            (
+                "from target import check\n"
+                "class Consumer:\n"
+                "    from other import check\n"
+                "    values = [check() for value in values]\n"
+            ),
             [4],
         ),
         (
-            "from target import check\n"
-            "pending = (value for value in check())\n"
-            "check = replacement\n",
+            (
+                "from target import check\n"
+                "pending = (value for value in check())\n"
+                "check = replacement\n"
+            ),
             [2],
         ),
         (
-            "def outer():\n"
-            "    from target import check\n"
-            "    def inner():\n"
-            "        check()\n"
-            "    return inner\n",
+            (
+                "def outer():\n"
+                "    from target import check\n"
+                "    def inner():\n"
+                "        check()\n"
+                "    return inner\n"
+            ),
             [4],
         ),
         (
-            "from target import check\n"
-            "def inner():\n"
-            "    check()\n"
-            "    from target import check\n"
-            "    check()\n",
+            (
+                "from target import check\n"
+                "def inner():\n"
+                "    check()\n"
+                "    from target import check\n"
+                "    check()\n"
+            ),
             [5],
         ),
     ],

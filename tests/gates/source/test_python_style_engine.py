@@ -318,3 +318,30 @@ def test_literal_rule_ids_require_semantic_construction_when_selected() -> None:
     visitor = StyleVisitor(POLICY)
     visitor.visit(ast.parse(source))
     assert visitor.findings["literal_rule_ids"] == []
+
+
+def test_scoped_reporting_requires_logger_and_semantic_exit_codes() -> None:
+    source = (
+        "def run():\n    print('status')\n    exit_code = 127\n    return exit_code\n"
+    )
+    visitor = StyleVisitor(POLICY, structured_reporting=True)
+    visitor.visit(ast.parse(source))
+    assert visitor.findings["raw_reporting_prints"] == [2]
+    assert visitor.findings["magic_exit_codes"] == [3]
+    visitor = StyleVisitor(POLICY)
+    visitor.visit(ast.parse(source))
+    assert visitor.findings["raw_reporting_prints"] == []
+    assert visitor.findings["magic_exit_codes"] == []
+
+
+def test_scoped_repeated_literals_ignore_type_declarations() -> None:
+    source = (
+        "from typing import Literal\n"
+        "Status = Literal['ready', 'ready', 'ready']\n"
+        "A = 'repeated-value'\n"
+        "B = 'repeated-value'\n"
+        "C = 'repeated-value'\n"
+    )
+    visitor = StyleVisitor(POLICY, repeated_literals=True)
+    visitor.visit(ast.parse(source))
+    assert visitor.findings["repeated_literals"] == [3, 4, 5]

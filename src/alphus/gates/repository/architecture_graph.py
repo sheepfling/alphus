@@ -28,6 +28,25 @@ _EDGE_PATTERNS: Mapping[str, Pattern[str]] = MappingProxyType(
 )
 
 
+_MERMAID_OPEN = re.compile(
+    r"^(?:(?P<fence>`{3,})\s*mermaid|:::\s*mermaid)$", re.IGNORECASE
+)
+
+
+def _mermaid_diagram(source: str) -> str | None:
+    """Extract GitHub fences or Azure DevOps Mermaid containers."""
+    lines = source.splitlines()
+    for index, line in enumerate(lines):
+        opener = _MERMAID_OPEN.fullmatch(line.strip())
+        if opener is None:
+            continue
+        closing = opener.group("fence") or ":::"
+        for end in range(index + 1, len(lines)):
+            if lines[end].strip() == closing:
+                return "\n".join(lines[index + 1 : end])
+    return None
+
+
 def check_architecture_graph(
     root: Path,
     graph: ArchitectureGraphPolicy,
@@ -55,8 +74,8 @@ def check_architecture_graph(
             )
         ]
     source = path.read_text(encoding="utf-8")
-    parts = source.split("```mermaid\n", 1)
-    if len(parts) != 2 or "\n```" not in parts[1]:
+    diagram = _mermaid_diagram(source)
+    if diagram is None:
         return [
             Finding(
                 rule_id=rule_tag("repository", "none", "architecture", "graph-missing"),
@@ -64,7 +83,6 @@ def check_architecture_graph(
                 message="Mermaid graph is missing",
             )
         ]
-    diagram = parts[1].split("\n```", 1)[0]
     header = (
         r"architecture-beta\b"
         if graph.syntax == "architecture"

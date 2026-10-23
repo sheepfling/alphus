@@ -19,7 +19,7 @@ from alphus.contracts.rule_tags import rule_tag
 from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
 from alphus.gates.source.python_style import StyleFindings
 from alphus.policy.base import QualityRuleName
-from alphus.policy.catalog import RULE_SPECS
+from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
 
 RuleOutput: TypeAlias = (
     list[Finding] | list[str] | dict[str, StyleFindings] | SharedUtilitiesReport
@@ -146,11 +146,11 @@ def diagnostics_from_output(
 ) -> tuple[Diagnostic, ...]:
     """Normalize a checker result without serializing it through the CLI."""
     shape = RULE_SPECS[rule].output_shape
-    if shape == "findings":
+    if shape is RuleOutputShape.FINDINGS:
         return tuple(item.as_diagnostic() for item in _FINDINGS.validate_python(output))
-    if shape == "messages":
+    if shape is RuleOutputShape.MESSAGES:
         return _message_diagnostics(rule, _MESSAGES.validate_python(output))
-    if shape == "python-style":
+    if shape is RuleOutputShape.PYTHON_STYLE:
         payload = _PYTHON_STYLE.validate_python(output)
         return _style_diagnostics(payload)
     report = _SHARED_REPORT.validate_python(output)
@@ -167,11 +167,11 @@ def diagnostics_from_json(
 ) -> tuple[Diagnostic, ...]:
     """Validate the older direct-rule JSON shapes before normalization."""
     shape = RULE_SPECS[rule].output_shape
-    if shape == "findings":
+    if shape is RuleOutputShape.FINDINGS:
         return tuple(item.as_diagnostic() for item in _FINDINGS.validate_json(encoded))
-    if shape == "messages":
+    if shape is RuleOutputShape.MESSAGES:
         return _message_diagnostics(rule, _MESSAGES.validate_json(encoded))
-    if shape == "python-style":
+    if shape is RuleOutputShape.PYTHON_STYLE:
         return _style_diagnostics(_PYTHON_STYLE.validate_json(encoded))
     report = _SHARED_UTILITIES.validate_json(encoded)
     return _shared_diagnostics(

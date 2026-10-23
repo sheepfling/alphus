@@ -16,6 +16,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
 
+from alphus.gates.cpp import artifact_policy, artifact_scan
 from alphus.gates.cpp import cpp_artifact_quality as artifacts
 from alphus.gates.cpp import cpp_common_quality as quality
 from alphus.gates.cpp.cpp_common_quality import GateReport, ManifestSource
@@ -177,7 +178,9 @@ class EngineQualityFixture(unittest.TestCase):
             "package": quality.check_package(
                 self.root, self.package_policy, self.run_id
             ),
-            "artifacts": artifacts.scan_directory(self.build, measure_sections=False),
+            "artifacts": artifact_scan.scan_directory(
+                self.build, measure_sections=False
+            ),
             "build": {
                 "schema": 1,
                 "gate": "build",
@@ -186,7 +189,7 @@ class EngineQualityFixture(unittest.TestCase):
             },
         }
         self.reports["artifacts"]["run_id"] = self.run_id
-        self.reports["artifacts"]["gate"] = artifacts.evaluate(
+        self.reports["artifacts"]["gate"] = artifact_policy.evaluate(
             self.reports["artifacts"],
             {"name": "fixture", "limits": {"min_executable_count": 1}},
         )
@@ -533,8 +536,8 @@ class EngineQualityFixture(unittest.TestCase):
     def test_missing_artifact_tree(self) -> None:
         empty = self.base / "empty"
         empty.mkdir()
-        report = artifacts.scan_directory(empty, measure_sections=False)
-        gate = artifacts.evaluate(
+        report = artifact_scan.scan_directory(empty, measure_sections=False)
+        gate = artifact_policy.evaluate(
             report, {"name": "fixture", "limits": {"min_executable_count": 1}}
         )
         self.assertFalse(gate["passed"])
@@ -638,7 +641,7 @@ def test_native_artifact_classifier_returns_enumerated_kinds(tmp_path: Path) -> 
     archive.write_bytes(b"archive")
     assert artifact_kind(executable) is ArtifactKind.EXECUTABLE
     assert artifact_kind(archive) is ArtifactKind.STATIC_LIBRARY
-    report = artifacts.scan_directory(tmp_path, measure_sections=False)
+    report = artifact_scan.scan_directory(tmp_path, measure_sections=False)
     assert {item["kind"] for item in report["artifacts"]} == {
         ArtifactKind.EXECUTABLE,
         ArtifactKind.STATIC_LIBRARY,

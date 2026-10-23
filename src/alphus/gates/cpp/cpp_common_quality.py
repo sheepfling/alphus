@@ -39,17 +39,17 @@ from alphus.support.file_hash import sha256_file
 from alphus.support.git import git_output, run_git
 from alphus.support.reporting import OutputFormat, ReportLine, ReportView, emit_report
 
-FRAGMENT_SUFFIXES = frozenset({".inc", ".inl", ".ipp", ".tpp"})
-IMPLEMENTATION_SUFFIXES = frozenset({".c", ".cc", ".cpp", ".cxx"})
-HEADER_SUFFIXES = frozenset({".h", ".hh", ".hpp"})
-SOURCE_SUFFIXES = FRAGMENT_SUFFIXES | IMPLEMENTATION_SUFFIXES | HEADER_SUFFIXES
-OWNER_SUFFIXES = SOURCE_SUFFIXES - FRAGMENT_SUFFIXES
-INCLUDE_RE = re.compile(
+_FRAGMENT_SUFFIXES = frozenset({".inc", ".inl", ".ipp", ".tpp"})
+_IMPLEMENTATION_SUFFIXES = frozenset({".c", ".cc", ".cpp", ".cxx"})
+_HEADER_SUFFIXES = frozenset({".h", ".hh", ".hpp"})
+_SOURCE_SUFFIXES = _FRAGMENT_SUFFIXES | _IMPLEMENTATION_SUFFIXES | _HEADER_SUFFIXES
+_OWNER_SUFFIXES = _SOURCE_SUFFIXES - _FRAGMENT_SUFFIXES
+_INCLUDE_RE = re.compile(
     r'^\s*#\s*include\s*[<"]([^">]+\.(?:inc|inl|ipp|tpp|c|cc|cpp|cxx|h|hh|hpp))[>"]'
 )
-DEFAULT_SOURCE_INCLUDE = tuple(f"*{suffix}" for suffix in sorted(SOURCE_SUFFIXES))
-DEFAULT_SOURCE_EXCLUDE = (".git/*", "out/*", "build/*", "vendor/*", "third_party/*")
-SECTION_KEYS = MappingProxyType(
+_DEFAULT_SOURCE_INCLUDE = tuple(f"*{suffix}" for suffix in sorted(_SOURCE_SUFFIXES))
+_DEFAULT_SOURCE_EXCLUDE = (".git/*", "out/*", "build/*", "vendor/*", "third_party/*")
+_SECTION_KEYS = MappingProxyType(
     {
         "source": frozenset(
             {
@@ -209,14 +209,14 @@ def _source_policy(policy: Mapping[str, JsonValue]) -> SourcePolicy:
     includes = [
         require_json_string(item, "source include entries must be strings")
         for item in require_json_array(
-            policy.get("include", DEFAULT_SOURCE_INCLUDE),
+            policy.get("include", _DEFAULT_SOURCE_INCLUDE),
             "source.include must be an array",
         )
     ]
     excludes = [
         require_json_string(item, "source exclude entries must be strings")
         for item in require_json_array(
-            policy.get("exclude", DEFAULT_SOURCE_EXCLUDE),
+            policy.get("exclude", _DEFAULT_SOURCE_EXCLUDE),
             "source.exclude must be an array",
         )
     ]
@@ -404,7 +404,7 @@ def _config(path: Path, section: str) -> Mapping[str, JsonValue]:
         raise ValueError(f"expected schema 1 config: {path}")
     value = payload.get(section)
     value = require_json_object(value, f"config requires a {section} object: {path}")
-    unknown = set(value) - SECTION_KEYS[section]
+    unknown = set(value) - _SECTION_KEYS[section]
     if unknown:
         raise ValueError(
             f"unknown {section} config key(s): {', '.join(sorted(unknown))}"
@@ -506,7 +506,7 @@ def check_source(
         for path in _files(root)
         if path.is_file()
         and not path.is_symlink()
-        and path.suffix.lower() in SOURCE_SUFFIXES
+        and path.suffix.lower() in _SOURCE_SUFFIXES
         and _matches(path.relative_to(root).as_posix(), includes)
         and not _matches(path.relative_to(root).as_posix(), excludes)
     }
@@ -528,11 +528,11 @@ def check_source(
         bytes_by_file[path] = len(data)
         included: list[Path] = []
         for line in data.decode("utf-8", errors="replace").splitlines():
-            match = INCLUDE_RE.match(line)
+            match = _INCLUDE_RE.match(line)
             if match is None:
                 continue
             token = Path(match.group(1))
-            if token.suffix.lower() in IMPLEMENTATION_SUFFIXES:
+            if token.suffix.lower() in _IMPLEMENTATION_SUFFIXES:
                 findings.append(
                     _finding(
                         "included_source_file",
@@ -549,7 +549,7 @@ def check_source(
                 None,
             )
             if candidate is None:
-                if token.suffix.lower() in FRAGMENT_SUFFIXES:
+                if token.suffix.lower() in _FRAGMENT_SUFFIXES:
                     findings.append(
                         _finding(
                             "unresolved_fragment",
@@ -559,7 +559,10 @@ def check_source(
                     )
                 continue
             consumers[candidate].add(path)
-            if candidate.suffix.lower() in FRAGMENT_SUFFIXES | IMPLEMENTATION_SUFFIXES:
+            if (
+                candidate.suffix.lower()
+                in _FRAGMENT_SUFFIXES | _IMPLEMENTATION_SUFFIXES
+            ):
                 included.append(candidate)
         includes_by_file[path] = included
 
@@ -589,7 +592,7 @@ def check_source(
         physical = lines[path]
         effective, effective_bytes = (
             expanded(path)
-            if path.suffix.lower() in OWNER_SUFFIXES
+            if path.suffix.lower() in _OWNER_SUFFIXES
             else (physical, bytes_by_file[path])
         )
         largest.append(
@@ -666,7 +669,7 @@ def check_source(
                     path=relative,
                 )
             )
-        if path.suffix.lower() in FRAGMENT_SUFFIXES:
+        if path.suffix.lower() in _FRAGMENT_SUFFIXES:
             count = len(consumers[path])
             if count < 2:
                 waiver = fragment_exceptions.get(relative)
@@ -688,7 +691,7 @@ def check_source(
                         )
                     )
         if (
-            path.suffix.lower() in HEADER_SUFFIXES
+            path.suffix.lower() in _HEADER_SUFFIXES
             and physical >= source_policy["single_consumer_header_lines"]
             and len(consumers[path]) == 1
         ):
@@ -718,7 +721,9 @@ def check_source(
         findings,
         {
             "file_count": len(files),
-            "fragment_count": sum(p.suffix.lower() in FRAGMENT_SUFFIXES for p in files),
+            "fragment_count": sum(
+                p.suffix.lower() in _FRAGMENT_SUFFIXES for p in files
+            ),
             "largest": cast(JsonValue, [dict(item) for item in largest[:10]]),
         },
         run_id,

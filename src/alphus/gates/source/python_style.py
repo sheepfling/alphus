@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import re
+from collections import Counter
 from collections.abc import Sequence
 from collections.abc import Set as AbstractSet
 from pathlib import Path
@@ -224,6 +225,9 @@ class StyleFindings(TypedDict):
     pydantic_collection_contracts: list[int]
     mutable_module_constants: list[int]
     literal_rule_ids: list[int]
+    raw_reporting_prints: list[int]
+    magic_exit_codes: list[int]
+    repeated_literals: list[int]
 
 
 def is_mutable_literal(node: ast.expr) -> bool:
@@ -306,6 +310,8 @@ class StyleVisitor(ast.NodeVisitor):
         source: str = "",
         boundary_file: bool = False,
         semantic_rule_ids: bool = False,
+        structured_reporting: bool = False,
+        repeated_literals: bool = False,
     ) -> None:
         self.findings: StyleFindings = {
             "bare_containers": [],
@@ -322,10 +328,15 @@ class StyleVisitor(ast.NodeVisitor):
             "pydantic_collection_contracts": [],
             "mutable_module_constants": [],
             "literal_rule_ids": [],
+            "raw_reporting_prints": [],
+            "magic_exit_codes": [],
+            "repeated_literals": [],
         }
         self.source_lines = source.splitlines()
         self.boundary_file = boundary_file
         self.semantic_rule_ids = semantic_rule_ids
+        self.structured_reporting = structured_reporting
+        self.check_repeated_literals = repeated_literals
         self.boundary_marker_prefix = policy.opaque_boundary_marker_prefix
         self.boundary_min_reason_chars = policy.opaque_boundary_min_reason_chars
         self.forbidden_main_imports = set(policy.forbidden_main_imports)
@@ -385,7 +396,28 @@ class StyleVisitor(ast.NodeVisitor):
             self.findings["opaque_mappings"].append(line)
 
     def visit_Module(self, node: ast.Module) -> None:
-        """Treat uppercase module names as stable constants, not mutable stores."""
+        """Check module constants and selected repeated symbolic values."""
+        if self.check_repeated_literals:
+            type_literals = {
+                id(child)
+                for expression in ast.walk(node)
+                if isinstance(expression, ast.Subscript)
+                and type_name(expression.value) == "Literal"
+                for child in ast.walk(expression.slice)
+                if isinstance(child, ast.Constant)
+            }
+            strings = [
+                child
+                for child in ast.walk(node)
+                if isinstance(child, ast.Constant)
+                and id(child) not in type_literals
+                and isinstance(child.value, str)
+                and len(child.value) >= 8
+            ]
+            counts = Counter(child.value for child in strings)
+            self.findings["repeated_literals"].extend(
+                child.lineno for child in strings if counts[child.value] >= 3
+            )
         for statement in node.body:
             if isinstance(statement, ast.Assign):
                 targets = statement.targets
@@ -680,6 +712,30 @@ class StyleVisitor(ast.NodeVisitor):
 
     visit_ImportFrom = visit_Import
 
+    def visit_Call(self, node: ast.Call) -> None:
+        """Require scoped orchestration output to use the reporter."""
+        if (
+            self.structured_reporting
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "print"
+        ):
+            self.findings["raw_reporting_prints"].append(node.lineno)
+        self.generic_visit(node)
+
+    def visit_Assign(self, node: ast.Assign) -> None:
+        """Require names for process statuses at selected call sites."""
+        if (
+            self.structured_reporting
+            and isinstance(node.value, ast.Constant)
+            and type(node.value.value) is int
+            and any(
+                isinstance(target, ast.Name) and target.id == "exit_code"
+                for target in node.targets
+            )
+        ):
+            self.findings["magic_exit_codes"].append(node.lineno)
+        self.generic_visit(node)
+
     def visit_Attribute(self, node: ast.Attribute) -> None:
         """Prefer host-aware pathlib operations to os.path string functions."""
         if (
@@ -713,6 +769,14 @@ def findings_for(
             semantic_rule_ids=any(
                 matches_path(relative.as_posix(), pattern)
                 for pattern in policy.semantic_rule_id_paths
+            ),
+            structured_reporting=any(
+                matches_path(relative.as_posix(), pattern)
+                for pattern in policy.structured_reporting_paths
+            ),
+            repeated_literals=any(
+                matches_path(relative.as_posix(), pattern)
+                for pattern in policy.repeated_literal_paths
             ),
         )
         visitor.visit(ast.parse(source, filename=str(relative)))

@@ -20,33 +20,45 @@ from alphus_stub_quality.runtime_audit import visible_class_member
     "source, allowed",
     [
         (
-            "from typing import Optional\ndef f(value: Optional[str]):\n"
-            " return isinstance(value, str)",
+            (
+                "from typing import Optional\ndef f(value: Optional[str]):\n"
+                " return isinstance(value, str)"
+            ),
             True,
         ),
         (
-            "class C:\n def f(self):\n  self.value: int | str\n"
-            "  return isinstance(self.value, int)",
+            (
+                "class C:\n def f(self):\n  self.value: int | str\n"
+                "  return isinstance(self.value, int)"
+            ),
             False,
         ),
         (
-            "from typing_extensions import Any\ndef f(value: Any | int):\n"
-            " return isinstance(value, int)",
+            (
+                "from typing_extensions import Any\ndef f(value: Any | int):\n"
+                " return isinstance(value, int)"
+            ),
             False,
         ),
         (
-            "import ast\ndef f(value: ast.expr, name: str):\n"
-            " return isinstance(value, getattr(ast, name))",
+            (
+                "import ast\ndef f(value: ast.expr, name: str):\n"
+                " return isinstance(value, getattr(ast, name))"
+            ),
             False,
         ),
         (
-            "class C:\n def f(self, raw: object):\n  self.value: int | str\n"
-            "  self.value = raw\n  return isinstance(self.value, int)",
+            (
+                "class C:\n def f(self, raw: object):\n  self.value: int | str\n"
+                "  self.value = raw\n  return isinstance(self.value, int)"
+            ),
             False,
         ),
         (
-            "class C:\n def f(self, raw: object):\n  self.value: int | str\n"
-            "  self = raw\n  return isinstance(self.value, int)",
+            (
+                "class C:\n def f(self, raw: object):\n  self.value: int | str\n"
+                "  self = raw\n  return isinstance(self.value, int)"
+            ),
             False,
         ),
     ],

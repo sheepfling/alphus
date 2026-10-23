@@ -34,7 +34,7 @@ from alphus.execution.results import RuleEvaluation
 from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
 from alphus.gates.source.python_style import StyleFindings
 from alphus.policy.base import MissingPolicyError
-from alphus.policy.catalog import RULE_SPECS
+from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
 from alphus.support.inventory import candidate_files
 
 QualityRule = QualityRuleName
@@ -311,6 +311,9 @@ def _python_style_categories(
         _StyleCategory("legacy_pydantic_fields", issues["legacy_pydantic_fields"]),
         _StyleCategory("mutable_module_constants", issues["mutable_module_constants"]),
         _StyleCategory("literal_rule_ids", issues["literal_rule_ids"]),
+        _StyleCategory("raw_reporting_prints", issues["raw_reporting_prints"]),
+        _StyleCategory("magic_exit_codes", issues["magic_exit_codes"]),
+        _StyleCategory("repeated_literals", issues["repeated_literals"]),
         _StyleCategory(
             "pydantic_collection_contracts", issues["pydantic_collection_contracts"]
         ),
@@ -399,7 +402,7 @@ def _execute(
     output = evaluation.output
     exit_code = int(evaluation.failed and not report)
     shape = RULE_SPECS[rule].output_shape
-    if shape == "findings":
+    if shape is RuleOutputShape.FINDINGS:
         findings = cast(list[Finding], output)
         if json_output:
             typer.echo(
@@ -415,7 +418,7 @@ def _execute(
             _render(rule, findings)
         return exit_code
 
-    if shape == "messages":
+    if shape is RuleOutputShape.MESSAGES:
         issues = cast(list[str], output)
         if json_output:
             typer.echo(json.dumps(issues))
@@ -429,7 +432,7 @@ def _execute(
             raise ValueError(f"rule {rule!r} has no message renderer")
         return exit_code
 
-    if shape == "python-style":
+    if shape is RuleOutputShape.PYTHON_STYLE:
         style_findings = cast(dict[str, StyleFindings], output)
         if json_output:
             typer.echo(json.dumps(style_findings, sort_keys=True))
