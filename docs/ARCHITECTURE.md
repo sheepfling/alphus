@@ -33,6 +33,28 @@ coordination; introduce them only when a language gate needs its own release
 cycle or substantial optional dependencies. The core profile runner remains
 language neutral.
 
+## Package map
+
+- `alphus.support` owns shared file inventory, contained-file/JSON access, and
+  AST name resolution. These utilities do not emit findings or register rules.
+- `alphus.gates.review` owns numeric-literal, test-quality, and input-contract
+  checkers. Its `runners.py` binds their selectors to validated policies.
+- `alphus.gates.stubs` owns the installed stub-package workflow and fixture
+  controller.
+- `alphus.config*`, `alphus.rule_catalog`, `alphus.rule_execution`, and
+  `alphus.rule_results` own validated policy, selector catalog, runner
+  composition, and normalized results.
+- `alphus.cli` and `alphus.orchestration` own text/JSON presentation, profile
+  planning, native command execution, and exit status.
+- `alphus_stub_quality` contains small audit helpers copied into the Python
+  3.10 target environment.
+
+Existing root imports such as `alphus.numeric_literals` and
+`alphus.source_scanning` remain compatibility modules. New code in a gate
+theme imports shared mechanics from `alphus.support` directly. The remaining
+built-in checkers still live at the package root and can move by theme without
+changing their selectors or public result shapes.
+
 Node and npm are optional. A repository that configures no Node-based command
 does not need `package.json`, Node.js, or npm. Consumers may keep established
 commands in another launcher, such as `npm run check`, while delegating the

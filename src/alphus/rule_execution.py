@@ -13,11 +13,10 @@ from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.config_base import require_policy
 from alphus.dependency_locks import check_dependency_locks
 from alphus.findings import Finding
-from alphus.input_contracts import check_input_contracts
+from alphus.gates.review.runners import REVIEW_RULE_RUNNERS
 from alphus.inventory import tracked_files
 from alphus.json_structure import check_json_structure
 from alphus.module_roles import check_module_roles
-from alphus.numeric_literals import check_numeric_literals
 from alphus.output_escaping import check_output_escaping
 from alphus.package_boundaries import check_package_boundaries
 from alphus.path_discovery import check_path_discovery
@@ -28,7 +27,6 @@ from alphus.rules import check_file_size, check_line_length
 from alphus.runtime_types import policy_issues as runtime_type_issues
 from alphus.script_policy import policy_issues as script_policy_issues
 from alphus.shared_utilities import check_shared_utilities
-from alphus.test_quality import check_test_quality
 from alphus.version_sync import check_version_sync
 
 RuleRunner = Callable[[Path, Sequence[Path], QualityGateConfig], RuleOutput]
@@ -108,21 +106,7 @@ RULE_RUNNERS: Mapping[QualityRuleName, RuleRunner] = MappingProxyType(
             require_policy(config.checks.repository_layout, "repository_layout"),
             tracked_files(root),
         ),
-        "numeric-literals": lambda root, files, config: check_numeric_literals(
-            root,
-            files,
-            require_policy(config.checks.numeric_literals, "numeric_literals"),
-        ),
-        "test-quality": lambda root, files, config: check_test_quality(
-            root,
-            files,
-            require_policy(config.checks.test_quality, "test_quality"),
-        ),
-        "input-contracts": lambda root, files, config: check_input_contracts(
-            root,
-            files,
-            require_policy(config.checks.input_contracts, "input_contracts"),
-        ),
+        **REVIEW_RULE_RUNNERS,
     }
 )
 

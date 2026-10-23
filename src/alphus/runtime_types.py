@@ -25,7 +25,7 @@ from alphus.runtime_type_facts import (
     element,
     named,
 )
-from alphus.source_scanning import (
+from alphus.support.source_scanning import (
     ImportAliases,
     canonical_expression_name,
     import_aliases,

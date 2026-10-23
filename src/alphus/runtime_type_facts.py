@@ -155,19 +155,22 @@ def ast_field(shape: ValueShape, attribute: str) -> ValueShape:
                 values.append(
                     ValueShape(frozenset({"builtins.list"}), (named("ast.stmt"),))
                 )
-        elif attribute == "value" and name in {
-            "ast.Attribute",
-            "ast.Subscript",
-            "ast.Assign",
-            "ast.AnnAssign",
-            "ast.AugAssign",
-            "ast.Expr",
-            "ast.Return",
-            "ast.Yield",
-            "ast.YieldFrom",
-        }:
-            values.append(named("ast.expr"))
-        elif attribute in {"func", "target", "slice", "left", "right", "operand"}:
+        elif (
+            attribute == "value"
+            and name
+            in {
+                "ast.Attribute",
+                "ast.Subscript",
+                "ast.Assign",
+                "ast.AnnAssign",
+                "ast.AugAssign",
+                "ast.Expr",
+                "ast.Return",
+                "ast.Yield",
+                "ast.YieldFrom",
+            }
+            or attribute in {"func", "target", "slice", "left", "right", "operand"}
+        ):
             values.append(named("ast.expr"))
         elif attribute in {"targets", "elts", "bases", "decorator_list", "keywords"}:
             item = "ast.keyword" if attribute == "keywords" else "ast.expr"
