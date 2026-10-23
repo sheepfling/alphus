@@ -1,6 +1,6 @@
 # Fix plans and explicit application
 
-Alphus separates detection from file changes. The ordinary `--run` profile
+Alphus separates detection from file changes. The ordinary profile run
 never runs a fixer. A command step may declare `fix_argv`; Alphus then lists
 that step as fixable for profiles that select it. Built-in rules currently
 return findings only and have no mutation API.
@@ -29,7 +29,7 @@ formatter, TOML formatter, and JSON formatter are configured in the
 
 | Language | Read-only check | Explicit fixer |
 | --- | --- | --- |
-| Markdown | mdrepo graph check | None; links need review. |
+| Markdown | mdrepo `check` | mdrepo `fix` for supported safe link rewrites; remaining findings need review. |
 | Markdown | rumdl `check` | rumdl `fmt` for supported rules. |
 | TOML | `tomllib` syntax | None; malformed TOML needs review. |
 | TOML | Taplo `fmt --check` | Taplo `fmt`. |
@@ -46,11 +46,10 @@ regeneration also needs review for dependency changes.
 From a checkout with a configured profile:
 
 ```sh
-alphus --root . --config quality-gates.toml --fix-plan --profile check
-alphus --root . --config quality-gates.toml --fix-plan --profile check --json
-alphus --root . --config quality-gates.toml --apply-fixes \
-  --profile check --fix-step "Python format"
-alphus --root . --config quality-gates.toml --run --profile check
+alphus --fix-plan
+alphus --fix-plan --json
+alphus --apply-fixes --fix-step "Python format"
+alphus
 ```
 
 `--fix-plan` is read-only. It lists every selected step as `FIXABLE` or

@@ -53,7 +53,7 @@ portable and review rules to this source tree, validates TOML, then runs Ruff
 lint/format, strict Pyright, and the package tests:
 
 ```sh
-alphus --root . --config quality-gates.toml --run --profile check
+alphus
 ```
 
 For the installed-wheel version of this check, including the current self-profile
@@ -80,7 +80,9 @@ python -m pip install -e /path/to/alphus
 ```
 
 Keep that repository's file patterns and thresholds in its own
-`quality-gates.toml`, then pass both paths explicitly:
+`quality-gates.toml`. From the consumer repository root, run `alphus` for its
+default profile or `alphus --profile markdown` for a named profile. From
+elsewhere, pass the repository and policy paths explicitly:
 
 ```sh
 alphus --root /path/to/other-repository \
@@ -104,7 +106,9 @@ See the [package architecture](docs/ARCHITECTURE.md) for the reusable
 checker, policy, and orchestration boundaries. The
 [consumer profile guide](docs/CONSUMER-PROFILES.md) describes language-specific
 policy files and explicit composition of Markdown, TOML, JSON, Python, and
-stub-testing profiles. The
+stub-testing profiles. Start with its one-file example and add native tools as
+needed. The [subtool guide](docs/SUBTOOLS.md) explains how Alphus coordinates
+rumdl, mdrepo, Taplo, and Prettier. The
 [shared stub-package CI action](docs/STUB-PACKAGE-CI.md) hosts reusable
 PEP 561 build, checker, and runtime-compatibility gates without adding an
 Alphus dependency to published stub packages. The
@@ -169,12 +173,13 @@ alphus --root /path/to/repository \
   --rule file-size
 ```
 
-Run an ordered profile defined by `[orchestration]` in the same policy:
+Run the policy's default profile from the repository root with `alphus`. To
+select another profile from elsewhere:
 
 ```sh
 alphus --root /path/to/repository \
   --config /path/to/quality-gates.toml \
-  --run --profile check
+  --profile check
 ```
 
 Use `--fix-plan --profile check` to see which selected steps declare a fixer.

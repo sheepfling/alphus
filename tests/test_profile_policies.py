@@ -53,6 +53,50 @@ includes = ["markdown"]
     assert "native-output" in capsys.readouterr().out
 
 
+def test_default_command_uses_local_policy_without_global_files(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    (tmp_path / "quality-gates.toml").write_text(
+        "schema_version = 1\n"
+        '[[orchestration.steps]]\nkind = "command"\nname = "native"\n'
+        'argv = ["{python}", "-c", "print(\'native-output\')"]\n'
+        '[[orchestration.profiles]]\nname = "check"\nsteps = ["native"]\n'
+        '[[orchestration.profiles]]\nname = "docs"\nsteps = ["native"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    assert load_config(Path("quality-gates.toml")).files is None
+    assert main([]) == 0
+    assert "native-output" in capsys.readouterr().out
+    assert main(["--profile", "docs"]) == 0
+    assert "native-output" in capsys.readouterr().out
+
+
+def test_missing_global_files_for_rule_is_rejected_before_commands(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = tmp_path / "quality-gates.toml"
+    path.write_text(
+        "schema_version = 1\n"
+        '[checks.line_length.limits]\n".md" = 120\n'
+        "[orchestration]\n"
+        '[[orchestration.steps]]\nkind = "command"\nname = "side effect"\n'
+        'argv = ["{python}", "-c", "from pathlib import Path; Path(\'ran\').touch()"]\n'
+        '[[orchestration.steps]]\nkind = "rule"\nname = "lines"\n'
+        'rule = "line-length"\n'
+        '[[orchestration.profiles]]\nname = "check"\n'
+        'steps = ["side effect", "lines"]\n',
+        encoding="utf-8",
+    )
+    assert main(["--root", str(tmp_path)]) == 2
+    assert "top-level [files]" in capsys.readouterr().err
+    assert not (tmp_path / "ran").exists()
+    assert main(["--root", str(tmp_path), "--rule", "line-length"]) == 2
+    assert "top-level [files]" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize("rule", get_args(QualityRuleName))
 def test_each_selected_portable_rule_requires_its_policy(rule: QualityRuleName) -> None:
     with pytest.raises(MissingPolicyError, match=rule.replace("-", "_")):

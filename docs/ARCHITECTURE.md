@@ -168,7 +168,8 @@ The [extension and diagnostics proposal](EXTENSIBILITY.md) records how
 categories, findings, and future third-party hooks could evolve while current
 selectors remain stable.
 
-Profiles execute only when explicitly selected with `--run`. Review command
+The default profile runs when `alphus` is invoked in a repository with
+`quality-gates.toml`; `--profile` selects a different profile. Review command
 steps before running a policy from a repository that is not trusted, because
 those steps execute the configured programs.
 

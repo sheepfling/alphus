@@ -1,5 +1,36 @@
 # Consumer quality profiles
 
+## Start with one file
+
+Install Alphus and the native tool selected by your profile in the consumer's
+development environment. Copy
+[`examples/starter/quality-gates.toml`](../examples/starter/quality-gates.toml)
+to the repository root, install rumdl, and run:
+
+```sh
+alphus
+alphus --fix-plan
+```
+
+The starter policy contains one Markdown check and its explicit fixer. It needs
+no global `[files]`, `[checks]`, `[orchestration]`, or native config file.
+`quality-gates.toml` is the default policy name, the current directory is the
+default root, and `check` is the default profile. `alphus --profile <name>`
+selects another profile. Use `--root` and `--config` when running from another
+directory or with a different filename. `--run` remains accepted in existing
+scripts. `alphus --help` shows every option.
+
+Add tools one step at a time. The
+[two-tool Markdown example](../examples/markdown/quality-gates.toml) pairs
+rumdl with mdrepo. Add a `[files]` inventory when selecting an
+Alphus-owned `kind = "rule"` step; each file-scoped command declares its own
+`files` pattern beside its argv. The [subtool guide](SUBTOOLS.md) explains
+config ownership, file scope, check/fix pairing, and Markdown rule overlap.
+
+Use separate language files when a single policy becomes hard to read. The
+larger example below demonstrates that layout; the starter policy is fully
+supported without fragments.
+
 The example policy at
 [`examples/consumer/quality-gates.toml`](../examples/consumer/quality-gates.toml)
 shows a single local profile that coordinates portable Alphus rules with
@@ -47,7 +78,7 @@ includes = ["stubs", "python", "markdown"]
 ```
 
 Step names refer to the policy's existing `[[orchestration.steps]]` definitions.
-Run `--profile check` for the whole selection or select an individual profile.
+Run `alphus` for the default `check` profile or select an individual profile.
 The stub consumers build/install first so later tooling can inspect the
 installed consumer surface. A repository without stubs omits that profile.
 
@@ -105,8 +136,9 @@ includes = ["python", "markdown", "toml", "json"]
 Each listed file may contain only `[[orchestration.steps]]` and
 `[[orchestration.profiles]]`. Paths are relative to the root policy's directory,
 must stay inside it after symlink resolution, and are loaded in list order.
-Names must be unique across all files. The root owns shared `[checks]`, file
-inventory, the failure threshold, and the aggregate profile. This is policy
+Names must be unique across all files. The root owns shared `[checks]`, the
+optional built-in-rule `[files]` inventory, the failure threshold, and the
+aggregate profile. This is policy
 composition, not a new plugin or a separate language distribution. Stream-based
 policy loading accepts only self-contained policies because it has no path for
 resolving fragments.
@@ -121,7 +153,7 @@ tool command. Put new language-specific implementations in
 `alphus.gates.<language>` and keep the command runner language neutral.
 
 Portable policy sections are optional when their gates are unselected. A
-command-only Markdown consumer can omit `[checks]` entirely; see the
+command-only Markdown consumer can omit `[files]` and `[checks]` entirely; see the
 [minimal Markdown policy](../examples/markdown/quality-gates.toml) and its
 [native graph config](../examples/markdown/mdrepo.toml). A selected portable
 rule requires its own complete `[checks.<name>]` section. Missing selected
@@ -156,7 +188,7 @@ the distributed stub wheels remain unchanged. The profile owns Twine selection
 through its stub-verifier argv; the general action has no competing Twine flag.
 
 For a local run, install the consumer's `requirements-quality.txt` from that
-repository root, then use the same `alphus --run --profile check` command.
+repository root, then run `alphus`.
 A policy using `includes` requires an Alphus revision supporting composition;
 the immutable pin prevents accidentally using an older configuration schema.
 The [stub-only action](../ci/stub-quality/action.yml) supports separate checker
@@ -175,10 +207,11 @@ point. It selects one Alphus profile, which runs the owners in this order:
 1. **Alphus portable rules** enforce repository-selected Python and source
    conventions. Their paths, thresholds, and exclusions live in the consumer's
    TOML policy.
-2. **mdrepo** checks Markdown links and the repository document graph. Its
-   `mdrepo.toml` config and native rule IDs remain owned by mdrepo.
-3. **rumdl** checks Markdown style and offers `fmt` for fixable rules. Its
-   config and rule IDs remain owned by rumdl.
+2. **rumdl** checks Markdown style and ordinary local link targets and offers
+   `fmt` for fixable rules. Its config and rule IDs remain owned by rumdl.
+3. **mdrepo** checks portable repository links and the document graph. Its
+   native rule IDs and optional graph settings remain owned by mdrepo. Its
+   safe `fix` command is available through an explicit Alphus fix plan.
 4. **Taplo and Prettier** check TOML and JSON formatting. Each formatter has
    a separate write command selected through Alphus's fix plan.
 5. **Python tools** own Python lint, formatting, static typing, and tests. The example uses
@@ -200,20 +233,20 @@ development-dependency group to install mdrepo, rumdl, Taplo, Ruff, Pyright,
 pytest, and a pinned local Prettier package. mdrepo must be importable by the
 selected Python interpreter because the sample invokes `python -m mdrepo`;
 rumdl, Taplo, Prettier, and Pyright must be on `PATH`.
-The example `mdrepo.toml` explicitly enables missing-target and orphan checks;
-the tool defaults leave those checks disabled.
+The example `mdrepo.toml` enables orphan checks with `README.md` as a graph
+root. Ordinary missing-target checks stay with rumdl when both tools run.
 
-Run the whole profile from any directory by naming both repository and policy:
+Run the whole profile from the repository root with `alphus`. From any
+directory, name both repository and policy:
 
 ```sh
 alphus --root /path/to/repository \
-  --config /path/to/repository/quality-gates.toml \
-  --run --profile check
+  --config /path/to/repository/quality-gates.toml
 ```
 
 Run only the coordinated documentation checks with `--profile docs`. The
-rumdl step uses Alphus's Git-aware file inventory, including tracked and
-non-ignored untracked Markdown files. An empty scope is a successful skipped
+rumdl and mdrepo steps use Alphus's Git-aware file inventory, including tracked
+and non-ignored untracked Markdown files. An empty scope is a successful skipped
 step; otherwise file paths are passed as separate arguments.
 
 Human output shows each step, normalized Alphus findings, and its exit status.
@@ -253,14 +286,8 @@ format is parsed into Alphus findings.
 
 ## Tool configuration
 
-Keep each tool's configuration at the repository level it already owns:
-
-- `quality-gates.toml` selects Alphus checks, file scopes, and execution order.
-- `mdrepo.toml` owns document graph and link conventions.
-- rumdl's config owns Markdown lint and formatting options.
-- `pyproject.toml`, `pyrightconfig.json`, or the consumer's existing config
-  files own Ruff, Pyright, and pytest settings.
-
-The top-level runner coordinates these configs without merging their policy
-languages. The command arrays in the example can be changed to use a wrapper
-such as `npm run check:docs`, provided its scope and exit status remain clear.
+Keep Alphus selection and ordering in `quality-gates.toml`. Each native tool
+reads its own config or uses its defaults. See [Composing subtools](SUBTOOLS.md)
+for the rumdl/mdrepo boundary, Taplo and Prettier config locations, and the
+read-only check and explicit fixer contracts. Command arrays can also call a
+repository wrapper when its file scope and exit status remain clear.

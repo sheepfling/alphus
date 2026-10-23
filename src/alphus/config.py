@@ -128,7 +128,7 @@ class QualityGateConfig(StrictModel):
     """Validated repository policy consumed by generic checker engines."""
 
     schema_version: Literal[1]
-    files: FileInventoryPolicy
+    files: FileInventoryPolicy | None = None
     checks: Annotated[CheckPolicies, Field(default_factory=CheckPolicies)]
     orchestration: OrchestrationPolicy | None = None
 
@@ -147,7 +147,7 @@ class _SplitPolicy(StrictModel):
 
     schema_version: Literal[1]
     orchestration_files: tuple[str, ...]
-    files: FileInventoryPolicy
+    files: FileInventoryPolicy | None = None
     checks: Annotated[CheckPolicies, Field(default_factory=CheckPolicies)]
     orchestration: _PartialOrchestration
 

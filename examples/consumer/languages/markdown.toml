@@ -1,18 +1,23 @@
 [[orchestration.steps]]
 kind = "command"
-name = "Markdown links and graph"
-argv = [
-  "{python}", "-m", "mdrepo", "--root", "{root}", "--config",
-  "{root}/mdrepo.toml", "check",
-]
-
-[[orchestration.steps]]
-kind = "command"
 name = "Markdown style"
 argv = ["rumdl", "check", "--no-cache", "{files}"]
 fix_argv = ["rumdl", "fmt", "{files}"]
 files = { include = ["**/*.[mM][dD]", "*.[mM][dD]"] }
 
+[[orchestration.steps]]
+kind = "command"
+name = "Markdown links and graph"
+argv = [
+  "{python}", "-m", "mdrepo", "--root", "{root}", "--config",
+  "{root}/mdrepo.toml", "check", "{files}",
+]
+fix_argv = [
+  "{python}", "-m", "mdrepo", "--root", "{root}", "--config",
+  "{root}/mdrepo.toml", "fix", "{files}",
+]
+files = { include = ["**/*.[mM][dD]", "*.[mM][dD]"] }
+
 [[orchestration.profiles]]
 name = "markdown"
-steps = ["Markdown links and graph", "Markdown style"]
+steps = ["Markdown style", "Markdown links and graph"]

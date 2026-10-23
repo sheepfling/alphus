@@ -65,7 +65,7 @@ app = typer.Typer(
     name="alphus",
     help="Run portable, policy-driven repository quality checks.",
     add_completion=False,
-    no_args_is_help=True,
+    no_args_is_help=False,
 )
 
 
@@ -295,6 +295,10 @@ def _evaluate_rule(
         config_path if config_path.is_absolute() else checkout / config_path
     )
     config = _load_policy(resolved_config)
+    if config.files is None:
+        raise typer.BadParameter(
+            "a built-in rule requires a top-level [files] inventory in the policy"
+        )
     threshold = (
         config.orchestration.failure_threshold
         if config.orchestration is not None
@@ -404,6 +408,10 @@ def _execute_profile(
         try:
             for step in policy.steps:
                 if step.name in plan.steps and step.kind == "rule":
+                    if config.files is None:
+                        raise MissingPolicyError(
+                            "a selected built-in rule requires a top-level [files] inventory"
+                        )
                     config.checks.require_rule(step.rule)
         except MissingPolicyError as error:
             typer.echo(str(error), err=True)
@@ -532,11 +540,11 @@ def _command(
             resolve_path=True,
             help="Repository checkout to inspect.",
         ),
-    ],
+    ] = Path("."),
     config: Annotated[
         Path,
         typer.Option("--config", help="TOML policy file, relative to --root."),
-    ],
+    ] = Path("quality-gates.toml"),
     rule: Annotated[
         QualityRule | None,
         typer.Option("--rule", help="Run one quality rule."),
@@ -574,7 +582,7 @@ def _command(
         typer.Option("--fix-step", help="Name a step to fix; repeat as needed."),
     ] = None,
 ) -> None:
-    """Run one rule or a configured profile against an explicit repository root."""
+    """Run the default profile from this repository, or select a rule/profile."""
     if fix_plan or apply_fixes:
         if fix_plan and apply_fixes:
             raise typer.BadParameter("choose --fix-plan or --apply-fixes")
@@ -589,15 +597,15 @@ def _command(
         )
     if fix_step:
         raise typer.BadParameter("--fix-step requires --apply-fixes")
-    if run:
-        if rule is not None or report:
-            raise typer.BadParameter("--run cannot be combined with --rule or --report")
-        raise typer.Exit(_execute_profile(root, config, profile, json_output, verbose))
-    if profile is not None:
-        raise typer.BadParameter("--profile requires --run")
-    if rule is None:
-        raise typer.BadParameter("choose either --rule or --run")
-    raise typer.Exit(_execute(root, config, rule, json_output, report, verbose))
+    if rule is not None:
+        if run or profile is not None:
+            raise typer.BadParameter(
+                "--rule cannot be combined with --run or --profile"
+            )
+        raise typer.Exit(_execute(root, config, rule, json_output, report, verbose))
+    if report:
+        raise typer.BadParameter("--report requires --rule")
+    raise typer.Exit(_execute_profile(root, config, profile, json_output, verbose))
 
 
 app.callback(invoke_without_command=True)(_command)

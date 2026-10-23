@@ -164,6 +164,7 @@ def test_loaded_policy_collections_are_immutable(tmp_path: Path) -> None:
 
     config = load_config(tmp_path / "quality.toml")
 
+    assert config.files is not None
     assert isinstance(config.files.include, tuple)
     assert config.checks.file_size is not None
     assert config.checks.line_length is not None
@@ -289,6 +290,7 @@ def test_inventory_applies_policy_to_tracked_and_new_files(tmp_path: Path) -> No
     _write(tmp_path, "generated/output.py", "ignored = True\n")
     config = load_config(tmp_path / "quality.toml")
 
+    assert config.files is not None
     assert [path.as_posix() for path in candidate_files(tmp_path, config.files)] == [
         "src/new.py",
     ]
@@ -344,6 +346,7 @@ def test_source_rules_report_stable_locations_and_messages(tmp_path: Path) -> No
     )
     config = load_config(tmp_path / "quality.toml")
 
+    assert config.files is not None
     files = candidate_files(tmp_path, config.files)
     line_findings = check_line_length(tmp_path, files, config)
     assert [(item.rule_id, item.path, item.line) for item in line_findings] == [
@@ -648,7 +651,7 @@ def test_invalid_cli_policy_reports_validation_error_without_traceback(
 ) -> None:
     """Invalid policy input becomes a concise command error on stderr."""
     _repository(tmp_path)
-    (tmp_path / "quality.toml").write_text("schema_version = 1\n", encoding="utf-8")
+    (tmp_path / "quality.toml").write_text("schema_version = 2\n", encoding="utf-8")
     arguments = [
         "--root",
         str(tmp_path),

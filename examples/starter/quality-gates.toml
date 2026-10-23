@@ -1,0 +1,12 @@
+schema_version = 1
+
+[[orchestration.steps]]
+kind = "command"
+name = "Markdown style"
+argv = ["rumdl", "check", "{files}"]
+fix_argv = ["rumdl", "fmt", "{files}"]
+files = { include = ["*.md", "**/*.md"] }
+
+[[orchestration.profiles]]
+name = "check"
+steps = ["Markdown style"]
