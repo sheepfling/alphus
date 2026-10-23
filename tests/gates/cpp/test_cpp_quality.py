@@ -144,3 +144,28 @@ def test_cpp_artifact_profile_enforces_consumer_size_policy(tmp_path: Path) -> N
         item["code"] == "max_executable_bytes"
         for item in gate_report["gate"]["findings"]
     )
+
+
+def test_cpp_advisory_profile_runs_both_provisional_gates(tmp_path: Path) -> None:
+    root = tmp_path / "consumer"
+    (root / "src").mkdir(parents=True)
+    shutil.copyfile(_PROFILE, root / "quality-gates.toml")
+    (root / "src" / "main.cpp").write_text(
+        '#include "unused.hpp"\nint main() { return 0; }\n',
+        encoding="utf-8",
+    )
+
+    result = _run_profile(root, "cpp-advisory")
+
+    assert result.returncode == 0, result.stderr
+    profile = json.loads(result.stdout)
+    assert profile["provisional"] == {"passed": 1, "failed": 1}
+    style = json.loads(
+        (root / "out/quality/cpp-style.json").read_text(encoding="utf-8")
+    )
+    trend = json.loads(
+        (root / "out/quality/cpp-impact-trend.json").read_text(encoding="utf-8")
+    )
+    assert style["status"] == "provisional"
+    assert style["metrics"]["finding_count"] > 0
+    assert trend["status"] == "insufficient-history"

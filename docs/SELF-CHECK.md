@@ -89,7 +89,7 @@ The target-audit isolation rule checks that the four files copied into a
 Python 3.10 target environment do not import Alphus's Python 3.11 controller
 or its Pydantic, Rich, and Typer dependencies.
 
-The only non-empty rule exclusions are:
+The configured source exclusions are:
 
 - **Runtime type usage, `tests/**`:** tests deliberately exercise dynamic and
   broad runtime-type
@@ -103,6 +103,13 @@ The only non-empty rule exclusions are:
   verify which patterns the rule reports.
 - **Path inspection, `tests/**`:** test code asserts suspicious path strings to
   exercise the string-inspection heuristic; it is not application code.
+
+- **Shared utilities, `tests/**`:** test helpers intentionally define local hash
+  routines and run Git commands as fixtures; the canonical utility rule covers
+  application code.
+- **CLI contracts, `src/alphus/__main__.py`, `src/alphus/gates/**`,
+  `scripts/**`, and `tests/**`:** entry-point bootstrapping, rule implementations,
+  maintenance scripts, and test fixtures are outside the public CLI surface.
 
 Path handling has `exclude = []`; its `inspection_exclude = ["tests/**"]`
 suppresses only the string-inspection heuristic. Structural implicit-root
@@ -124,6 +131,26 @@ regressions cannot be silently accepted. The test scan covers `tests/**` and
 flags direct reads from `docs/**`; temporary fixtures and paths created by the
 test remain allowed. See [review checks](REVIEW-CHECKS.md) for exact behavior
 and current limits.
+
+## Optional gate execution
+
+The `check` self-profile runs the provisional SciPy rule and reports its status
+without blocking. Its positive and negative fixtures run in the package suite.
+The C++ advisory profile has a consumer integration test that exercises both
+style and trend steps, including a nonblocking finding and insufficient history.
+
+The separate optional-gates CI job provisions a Python 3.11 checker with Mypy
+and Pyright and a Python 3.10 target with SnakeMD and mdutils. It executes the
+native target integration test and the symlink boundary tests on Linux, then
+fails if any selected test skips. Local Windows runs may still skip symlink
+tests when the host disallows their creation. The monthly/manual Git history
+profile stays outside the fast pull-request self-profile; run
+alphus --profile repository-history to check it on demand.
+
+The configured source exclusions are rule scopes. An audit with the runtime,
+JSON, and shared-utility exclusions removed finds deliberate AST introspection
+and decoder fixtures in tests. Those rules retain focused tests of their
+finding behavior instead of treating test fixtures as application violations.
 
 ## Native Python checks
 

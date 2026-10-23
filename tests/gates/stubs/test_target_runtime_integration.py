@@ -49,7 +49,8 @@ def test_native_checkers_use_target_packages_and_language(
     )
     packages = tmp_path / "packages.py"
     packages.write_text(
-        "from snakemd import Document\nfrom mdutils import MdUtils\n"
+        "from snakemd import Document  # type: ignore[import-untyped]\n"
+        "from mdutils import MdUtils  # type: ignore[import-untyped]\n"
         'Document().add_paragraph("target-only package")\n'
         'MdUtils("target").new_line("target")\n',
         encoding="utf-8",

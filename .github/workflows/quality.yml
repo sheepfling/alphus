@@ -56,3 +56,44 @@ jobs:
           cache-dependency-path: pyproject.toml
       - name: Install declared dependency floors and run self-check
         run: python scripts/ci.py --root . --minimum
+
+  optional-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        id: target-python
+        with:
+          python-version: "3.10"
+      - uses: actions/setup-python@v7
+        id: checker-python
+        with:
+          python-version: "3.11"
+      - name: Provision separate native checker and target environments
+        shell: bash
+        run: |
+          "${{ steps.checker-python.outputs.python-path }}" -m venv "$RUNNER_TEMP/alphus-checker"
+          "${{ steps.target-python.outputs.python-path }}" -m venv "$RUNNER_TEMP/alphus-target"
+          "$RUNNER_TEMP/alphus-checker/bin/python" -m pip install --disable-pip-version-check -e '.[python]' 'mypy==2.4.0'
+          "$RUNNER_TEMP/alphus-target/bin/python" -m pip install --disable-pip-version-check 'snakemd==2.4.1' 'mdutils==1.8.1'
+      - name: Exercise optional gates and require no skipped cases
+        shell: bash
+        env:
+          ALPHUS_TEST_CHECKER_PYTHON: ${{ runner.temp }}/alphus-checker/bin/python
+          ALPHUS_TEST_TARGET_PYTHONS: ${{ runner.temp }}/alphus-target/bin/python
+        run: |
+          if ! output=$("$ALPHUS_TEST_CHECKER_PYTHON" -m pytest -q -rs \
+            tests/gates/stubs/test_target_runtime_integration.py \
+            tests/gates/python/test_module_roles_engine.py::test_module_role_rejects_symlinked_source_outside_root \
+            tests/gates/source/test_script_policy_engine.py::test_cmd_router_rejects_a_symlinked_module_outside_the_root \
+            tests/gates/cpp/test_cpp_quality.py::test_cpp_advisory_profile_runs_both_provisional_gates \
+            tests/gates/review/test_scipy_constants_engine.py \
+            tests/test_review_cli.py::test_scipy_direct_rule_uses_its_own_label 2>&1); then
+            printf '%s\n' "$output"
+            exit 1
+          fi
+          printf '%s\n' "$output"
+          if [[ "$output" =~ [0-9]+[[:space:]]skipped ]]; then
+            echo "Optional gate coverage skipped a selected test" >&2
+            exit 1
+          fi

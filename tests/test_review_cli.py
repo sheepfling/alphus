@@ -125,6 +125,22 @@ def test_new_review_rules_emit_structured_advisory_findings(
     assert payload[0]["line"] > 0
 
 
+def test_scipy_direct_rule_uses_its_own_label(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    arguments = repository(
+        tmp_path,
+        "physics.py",
+        "energy = frequency * 6.62607015e-34\n",
+        '[checks.scipy_constants]\nextensions = [".py"]\n',
+    )
+
+    assert main([*arguments, "--rule", "scipy-constants"]) == 0
+    output = capsys.readouterr().out
+    assert "SciPy constants: 1 finding(s)" in output
+    assert "File size:" not in output
+
+
 @pytest.mark.parametrize(
     "selector",
     [

@@ -162,6 +162,7 @@ def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
     """Keep concise text summaries while offering a stable JSON format."""
     review_labels = {
         "numeric-literals": "Numeric literals",
+        "scipy-constants": "SciPy constants",
         "test-quality": "Test quality",
         "input-contracts": "Input contracts",
         "pydantic-practices": "Pydantic practices",
