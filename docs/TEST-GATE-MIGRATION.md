@@ -4,15 +4,17 @@ The migration extracts the repeated checking mechanisms from
 SnakeMD and mdutils into the installed Alphus distribution. Consumer adapters
 retain package facts and behavioral assertions.
 
-The following modules are under `alphus_stub_quality`.
+The workflow modules are under `alphus.gates.stubs`. The pure audit helpers
+remain under `alphus_stub_quality` for the Python 3.10 target overlay. Both
+packages ship in the one `alphus` distribution.
 
 | Mechanism | Shared module | Consumer responsibility |
 | --- | --- | --- |
-| Positive/negative examples | `typing_fixtures` | Files, marker/count contracts, diagnostic fragments |
+| Positive/negative examples | `alphus.gates.stubs.typing_fixtures` | Fixture and diagnostic contracts |
 | AST inspection | `api_audit_support` | Module inventory and allowed annotation widenings |
 | Runtime facade matching | `runtime_audit` | Facade, non-API bindings, logger allowlist |
 | API and example coverage | `api_contracts.ApiCoverageTests` | Version, paths, runtime modules, exports, examples |
-| Isolated build/install | `verify` | Runtime pin, allowlist, API/runtime adapter modules |
+| Isolated build/install | `alphus.gates.stubs.verify` | Runtime pin, allowlist, API/runtime adapter modules |
 
 The installed entrypoints are `alphus-typing-fixtures` and
 `alphus-stub-quality`. The GitHub Action installs the same pinned Alphus code.

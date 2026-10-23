@@ -20,6 +20,9 @@ current editable packaging path; it does not establish a public-index install
 or a hosted CI result. The self-profile's package-boundary step now rejects
 malformed console and GUI entry-point references such as `alphus.:main` before
 a build backend is invoked.
+The entry-point paths above record that historical proof. The current source
+points those same console commands at `alphus.gates.stubs`; the old module
+paths remain compatibility imports.
 
 ## Python 3.11 wheel and runtime proof
 

@@ -11,13 +11,13 @@ from pathlib import Path
 
 import pytest
 
-from alphus_stub_quality import typing_fixtures, verify
-from alphus_stub_quality.environments import (
+from alphus.gates.stubs import typing_fixtures, verify
+from alphus.gates.stubs.environments import (
     PythonRuntime,
     child_environment,
     probe_python,
 )
-from alphus_stub_quality.typing_fixtures import CHECKERS, build_command
+from alphus.gates.stubs.typing_fixtures import CHECKERS, build_command
 
 
 def test_fixture_cli_rejects_language_version_that_disagrees_with_target(

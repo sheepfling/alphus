@@ -1,10 +1,10 @@
 # Shared CI checks for stub packages
 
 Alphus hosts the reusable PEP 561 stub-package verification action at
-[`ci/stub-quality`](../ci/stub-quality). The reusable gates and inspection
-helpers
-live in `src/alphus_stub_quality` and ship in the Alphus wheel. The action
-invokes that same implementation from its pinned checkout.
+[`ci/stub-quality`](../ci/stub-quality). The verifier and fixture runner live
+in `src/alphus/gates/stubs`; Python 3.10-compatible audit helpers live in
+`src/alphus_stub_quality`. Both ship in the one Alphus wheel. The action
+invokes the same verifier from its pinned checkout.
 Alphus is a verification tool; consumer distributions retain only their stubs
 and runtime requirements.
 
@@ -83,7 +83,7 @@ python3.10 -m venv "$work/target"
   -r "$repo/requirements-compat.txt"
 (
   cd "$work"
-  "$work/checker/bin/python" -m alphus_stub_quality.verify \
+  "$work/checker/bin/python" -m alphus.gates.stubs.verify \
     --root "$repo" --config stub-quality.json --with-twine \
     --target-python "$work/target/bin/python" --report "$work/result.json"
 )
@@ -119,7 +119,7 @@ version. The caller retains its trigger and permission policy.
 
 ## Generic gates and consumer adapters
 
-`alphus-typing-fixtures` (also `python -m alphus_stub_quality.typing_fixtures`)
+`alphus-typing-fixtures` (also `python -m alphus.gates.stubs.typing_fixtures`)
 checks positive and expected-negative examples through native Mypy and Pyright.
 Ty is available as an opt-in checker with `--checkers ty` after installing it
 in the checker environment. It uses concise diagnostics and accepts the same
@@ -162,8 +162,12 @@ positive and intentionally broken examples.
 
 The execution gates use the installed `alphus-typing-fixtures` and
 `alphus-stub-quality` entrypoints. They can be selected as command steps in an
-Alphus profile; they are not source-only `--rule` scanners. The GitHub Action
-installs the same pinned Alphus code as a verification tool.
+Alphus profile. They are workflow gates that coordinate native tools and
+environments, so they use the same command-step interface as other tools
+instead of the source-only `--rule` scanner interface. The GitHub Action
+installs the same pinned Alphus code as a verification tool. Legacy imports
+from `alphus_stub_quality.verify`, `.typing_fixtures`, and `.environments`
+remain available for existing consumers.
 
 The [migration record](TEST-GATE-MIGRATION.md) maps consumer ownership and
 records revision-specific acceptance evidence.

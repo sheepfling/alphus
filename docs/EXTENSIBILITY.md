@@ -77,8 +77,10 @@ Group built-in checks by their actual dependency and policy boundaries. A
 Python-specific checker can live in an ordinary `alphus` subpackage, while
 repository-wide and data-format checks remain separate from any one language.
 Keep the core inventory, orchestration, diagnostics, and rule IDs stable during
-such moves. The current `alphus_stub_quality` package already isolates the
-specialized stub workflow within the same distribution.
+such moves. The stub workflow's controller and fixture runner live under
+`alphus.gates.stubs`. The sibling `alphus_stub_quality` import package contains
+the small audit helpers that must run under a Python 3.10 target interpreter;
+it is shipped in the same Alphus distribution, not installed separately.
 
 Python namespace packages become useful if independently installed and
 versioned distributions need to share one import namespace. They are not needed

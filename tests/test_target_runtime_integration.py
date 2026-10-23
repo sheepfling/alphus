@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from alphus_stub_quality.environments import child_environment, probe_python
-from alphus_stub_quality.typing_fixtures import CHECKERS, build_command
+from alphus.gates.stubs.environments import child_environment, probe_python
+from alphus.gates.stubs.typing_fixtures import CHECKERS, build_command
 
 CHECKER = os.environ.get("ALPHUS_TEST_CHECKER_PYTHON")
 TARGETS = tuple(

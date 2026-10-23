@@ -8,10 +8,10 @@ from pathlib import Path
 
 import pytest
 
+from alphus.gates.stubs.typing_fixtures import check_result
+from alphus.gates.stubs.verify import read_config
 from alphus_stub_quality.api_audit_support import source_signature_shape
 from alphus_stub_quality.api_contracts import ApiCoverageTests
-from alphus_stub_quality.typing_fixtures import check_result
-from alphus_stub_quality.verify import read_config
 
 
 def configured_gate(tmp_path: Path, source: str, stub: str) -> ApiCoverageTests:

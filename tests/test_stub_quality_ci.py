@@ -10,6 +10,17 @@ from types import ModuleType
 
 import pytest
 
+from alphus.gates.stubs.typing_fixtures import (
+    CHECKERS,
+    OPTIONAL_CHECKERS,
+    Checker,
+    build_command,
+    check_result,
+    expected_error_lines,
+    observed_error_lines,
+    run_case,
+)
+from alphus.gates.stubs.verify import expand_path_arguments, read_config
 from alphus_stub_quality.api_audit_support import (
     ast_parameters,
     class_attributes,
@@ -29,17 +40,6 @@ from alphus_stub_quality.api_audit_support import (
     uses_typing_any,
 )
 from alphus_stub_quality.runtime_audit import validate_stub_tree
-from alphus_stub_quality.typing_fixtures import (
-    CHECKERS,
-    OPTIONAL_CHECKERS,
-    Checker,
-    build_command,
-    check_result,
-    expected_error_lines,
-    observed_error_lines,
-    run_case,
-)
-from alphus_stub_quality.verify import expand_path_arguments, read_config
 
 
 def test_negative_fixture_requires_exact_error_lines(tmp_path: Path) -> None:

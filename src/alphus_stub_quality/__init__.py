@@ -1,1 +1,1 @@
-"""Reusable installed Alphus gates for source, stub, and example contracts."""
+"""Python 3.10-compatible audit helpers and legacy stub-gate imports."""

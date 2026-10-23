@@ -15,6 +15,18 @@ Native language tools retain their own checks and run as configured argument
 vectors. Python owns ordering and aggregation without importing compiler,
 Java, or Node ecosystems.
 
+Alphus has two gate shapes. A portable rule inspects selected repository files
+and returns Alphus findings. A workflow gate coordinates tools and environments
+and enters a profile as a command step, with its exit status and native output
+retained by the orchestrator. The installed stub-package verifier is a workflow
+gate implemented in `alphus.gates.stubs`; it builds and installs a consumer
+wheel, runs typing fixtures, and checks runtime compatibility. Its console
+commands ship in the same `alphus` distribution. The separate
+`alphus_stub_quality` import package holds only Python 3.10-compatible audit
+helpers copied into the isolated target environment, plus legacy import
+adapters. This runtime boundary is why the helper package is separate; it is
+not a second distribution or a second quality framework.
+
 Node and npm are optional. A repository that configures no Node-based command
 does not need `package.json`, Node.js, or npm. Consumers may keep established
 commands in another launcher, such as `npm run check`, while delegating the

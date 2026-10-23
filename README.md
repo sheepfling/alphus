@@ -15,6 +15,8 @@ python -m pip install .
 
 Run that command from this directory. The package depends on Pydantic 2,
 `packaging`, Typer, and Rich, and installs the `alphus` command.
+The same install also provides `alphus-stub-quality` and
+`alphus-typing-fixtures`; there is no separate stubs package to install.
 
 ## Develop Alphus
 

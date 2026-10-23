@@ -24,8 +24,8 @@ dev = [
 
 [project.scripts]
 alphus = "alphus.cli:main"
-alphus-typing-fixtures = "alphus_stub_quality.typing_fixtures:main"
-alphus-stub-quality = "alphus_stub_quality.verify:main"
+alphus-typing-fixtures = "alphus.gates.stubs.typing_fixtures:main"
+alphus-stub-quality = "alphus.gates.stubs.verify:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

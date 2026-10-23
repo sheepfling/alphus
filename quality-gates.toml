@@ -82,6 +82,28 @@ require_import_packages = true
 alphus = []
 alphus_stub_quality = []
 
+[checks.module_roles]
+
+[[checks.module_roles.modules]]
+path = "src/alphus_stub_quality/__init__.py"
+role = "contract"
+forbidden_imports = ["alphus", "pydantic", "rich", "typer"]
+
+[[checks.module_roles.modules]]
+path = "src/alphus_stub_quality/api_audit_support.py"
+role = "contract"
+forbidden_imports = ["alphus", "pydantic", "rich", "typer"]
+
+[[checks.module_roles.modules]]
+path = "src/alphus_stub_quality/api_contracts.py"
+role = "contract"
+forbidden_imports = ["alphus", "pydantic", "rich", "typer"]
+
+[[checks.module_roles.modules]]
+path = "src/alphus_stub_quality/runtime_audit.py"
+role = "contract"
+forbidden_imports = ["alphus", "pydantic", "rich", "typer"]
+
 [orchestration]
 default_profile = "check"
 failure_threshold = "warning"
@@ -90,6 +112,11 @@ failure_threshold = "warning"
 kind = "rule"
 name = "Package boundaries"
 rule = "package-boundaries"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Target audit isolation"
+rule = "module-roles"
 
 [[orchestration.steps]]
 kind = "rule"
@@ -174,7 +201,7 @@ files = { include = ["**/*.json", "*.json"] }
 [[orchestration.profiles]]
 name = "python-policy"
 steps = [
-  "Package boundaries", "Python structure", "Runtime type usage",
+  "Package boundaries", "Target audit isolation", "Python structure", "Runtime type usage",
   "JSON structure", "Output escaping", "Path handling", "Line length",
   "File size",
 ]

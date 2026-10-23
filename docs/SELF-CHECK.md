@@ -45,7 +45,8 @@ unchanged; that correction adds no file exclusions or threshold relaxation.
 
 `quality-gates.toml` inventories `src/**/*.py`, `tests/**/*.py`, `README.md`,
 `docs/**/*.md`, and all repository TOML and JSON files. The profile retains
-the original eight portable rules and Python lint/package tests, then adds
+the eight original portable rules, the target-audit isolation rule, and Python
+lint/package tests, then adds
 TOML syntax, Python formatting, strict Pyright, Numeric review, Test review, and Input contract
 review. The separate `json` profile is available when JSON documents are
 added to this repository. The global
@@ -55,6 +56,9 @@ reference syntax in `pyproject.toml`; it catches an invalid module segment
 before an editable installation reaches the build backend.
 The package tests load every declared script target and require a callable,
 which also catches valid-looking references to missing modules or attributes.
+The target-audit isolation rule checks that the four files copied into a
+Python 3.10 target environment do not import Alphus's Python 3.11 controller
+or its Pydantic, Rich, and Typer dependencies.
 
 The only non-empty rule exclusions are:
 
