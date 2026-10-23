@@ -219,11 +219,11 @@ def has_undifferentiated_pattern_name(name: str, value: ast.expr) -> bool:
         and value.func.value.id == "re"
     ):
         return not name.endswith(("_REGEX", "_REGEXES"))
-    if isinstance(value, (ast.Tuple, ast.List)) and any(
+    if any(
         isinstance(item, ast.Constant)
         and isinstance(item.value, str)
         and any(character in item.value for character in "*?[")
-        for item in value.elts
+        for item in ast.walk(value)
     ):
         return not name.endswith(("_GLOB", "_GLOBS"))
     return False
@@ -247,6 +247,8 @@ def has_heterogeneous_tuple_result(annotation: ast.expr) -> bool:
             )
             and len({ast.dump(item) for item in items}) > 1
         )
+    if isinstance(annotation, ast.Subscript):
+        return has_heterogeneous_tuple_result(annotation.slice)
     return False
 
 
@@ -273,6 +275,8 @@ class StyleFindings(TypedDict):
     repeated_literals: list[int]
     heterogeneous_tuple_returns: list[int]
     undifferentiated_patterns: list[int]
+    concrete_classmethod_returns: list[int]
+    direct_text_reads: list[int]
 
 
 def is_mutable_literal(node: ast.expr) -> bool:
@@ -359,6 +363,8 @@ class StyleVisitor(ast.NodeVisitor):
         repeated_literals: bool = False,
         semantic_results: bool = False,
         pattern_kinds: bool = False,
+        self_returns: bool = False,
+        shared_text_readers: bool = False,
     ) -> None:
         self.findings: StyleFindings = {
             "bare_containers": [],
@@ -381,6 +387,8 @@ class StyleVisitor(ast.NodeVisitor):
             "repeated_literals": [],
             "heterogeneous_tuple_returns": [],
             "undifferentiated_patterns": [],
+            "concrete_classmethod_returns": [],
+            "direct_text_reads": [],
         }
         self.source_lines = source.splitlines()
         self.boundary_file = boundary_file
@@ -389,6 +397,8 @@ class StyleVisitor(ast.NodeVisitor):
         self.check_repeated_literals = repeated_literals
         self.semantic_results = semantic_results
         self.pattern_kinds = pattern_kinds
+        self.self_returns = self_returns
+        self.shared_text_readers = shared_text_readers
         self.boundary_marker_prefix = policy.opaque_boundary_marker_prefix
         self.boundary_min_reason_chars = policy.opaque_boundary_min_reason_chars
         self.forbidden_main_imports = set(policy.forbidden_main_imports)
@@ -670,6 +680,21 @@ class StyleVisitor(ast.NodeVisitor):
             self.pydantic_models.add(node.name)
         if frozen_model:
             self.frozen_pydantic_models.add(node.name)
+        if self.self_returns:
+            for statement in node.body:
+                if not isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                classmethod_decorators = {
+                    type_name(decorator) for decorator in statement.decorator_list
+                }
+                if (
+                    "classmethod" in classmethod_decorators
+                    and statement.returns is not None
+                    and type_name(statement.returns) == node.name
+                ):
+                    self.findings["concrete_classmethod_returns"].append(
+                        statement.lineno
+                    )
         self.pydantic_model_stack.append(is_pydantic_model)
         self.frozen_model_stack.append(frozen_model)
         for decorator in node.decorator_list:
@@ -784,6 +809,12 @@ class StyleVisitor(ast.NodeVisitor):
     def visit_Call(self, node: ast.Call) -> None:
         """Require symbolic rule dimensions and scoped reporting."""
         if (
+            self.shared_text_readers
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "read_text"
+        ):
+            self.findings["direct_text_reads"].append(node.lineno)
+        if (
             self.semantic_rule_ids
             and isinstance(node.func, ast.Name)
             and node.func.id == "rule_tag"
@@ -864,6 +895,14 @@ def findings_for(
             pattern_kinds=any(
                 matches_path(relative.as_posix(), pattern)
                 for pattern in policy.pattern_kind_paths
+            ),
+            self_returns=any(
+                matches_path(relative.as_posix(), pattern)
+                for pattern in policy.self_return_paths
+            ),
+            shared_text_readers=any(
+                matches_path(relative.as_posix(), pattern)
+                for pattern in policy.shared_text_reader_paths
             ),
         )
         visitor.visit(ast.parse(source, filename=str(relative)))

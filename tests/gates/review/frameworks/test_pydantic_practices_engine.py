@@ -1,7 +1,7 @@
 """Synthetic Pydantic source contracts for optional review findings."""
 
 from alphus.config import PydanticPracticePolicy
-from alphus.gates.review.pydantic_practices import pydantic_practice_findings
+from alphus.gates.review.frameworks.pydantic_practices import pydantic_practice_findings
 
 
 def _policy(**options: bool) -> PydanticPracticePolicy:

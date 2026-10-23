@@ -30,6 +30,7 @@ from alphus.support.source_scanning import (
     canonical_expression_name,
     import_aliases,
 )
+from alphus.support.source_text import read_python_source
 
 
 class _LocalNames(ast.NodeVisitor):
@@ -775,8 +776,6 @@ def policy_issues(
         if path.is_file():
             issues.extend(
                 f"{relative.as_posix()}:{line}: {reason}"
-                for line, reason in type_check_findings(
-                    path.read_text(encoding="utf-8-sig")
-                )
+                for line, reason in type_check_findings(read_python_source(path))
             )
     return issues

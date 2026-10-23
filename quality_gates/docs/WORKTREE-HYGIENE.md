@@ -11,7 +11,7 @@ Run the read-only inventory from the primary checkout:
 
 ```shell
 RUN_ID=$(date -u +%Y%m%dT%H%M%SZ)
-python -m alphus.gates.cpp.worktree_hygiene --repo . --base-ref HEAD --max-worktrees 16 --max-logical-gib 100 --run-id $RUN_ID --output out/build-metrics/worktree-hygiene.json
+python -m alphus.gates.vcs.worktree_hygiene --repo . --base-ref HEAD --max-worktrees 16 --max-logical-gib 100 --run-id $RUN_ID --output out/build-metrics/worktree-hygiene.json
 ```
 
 Add every dedicated worktree storage root to include folders no longer

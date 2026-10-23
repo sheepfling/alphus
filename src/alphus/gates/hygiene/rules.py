@@ -11,6 +11,7 @@ from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.policy.base import require_policy
 from alphus.support.inventory import matches_path
+from alphus.support.source_text import read_python_source
 
 
 def check_line_length(
@@ -115,7 +116,7 @@ def check_file_size(
             continue
         path = checkout / relative
         if path.name == policy.initializer_name:
-            source = path.read_text(encoding="utf-8")
+            source = read_python_source(path)
             count = len(source.splitlines())
             findings.extend(
                 _initializer_findings(

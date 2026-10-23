@@ -180,7 +180,7 @@ class EngineQualityFixture(unittest.TestCase):
             ),
             "artifacts": artifact_scan.scan_directory(
                 self.build, measure_sections=False
-            ),
+            ).to_wire(),
             "build": {
                 "schema": 1,
                 "gate": "build",
@@ -536,7 +536,7 @@ class EngineQualityFixture(unittest.TestCase):
     def test_missing_artifact_tree(self) -> None:
         empty = self.base / "empty"
         empty.mkdir()
-        report = artifact_scan.scan_directory(empty, measure_sections=False)
+        report = artifact_scan.scan_directory(empty, measure_sections=False).to_wire()
         gate = artifact_policy.evaluate(
             report, {"name": "fixture", "limits": {"min_executable_count": 1}}
         )
@@ -642,7 +642,7 @@ def test_native_artifact_classifier_returns_enumerated_kinds(tmp_path: Path) -> 
     assert artifact_kind(executable) is ArtifactKind.EXECUTABLE
     assert artifact_kind(archive) is ArtifactKind.STATIC_LIBRARY
     report = artifact_scan.scan_directory(tmp_path, measure_sections=False)
-    assert {item["kind"] for item in report["artifacts"]} == {
+    assert {item.kind for item in report.artifacts} == {
         ArtifactKind.EXECUTABLE,
         ArtifactKind.STATIC_LIBRARY,
     }

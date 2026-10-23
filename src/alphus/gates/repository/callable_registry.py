@@ -10,6 +10,7 @@ from alphus.config import CallableRegistryPolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.support.data_access import contained_file
+from alphus.support.source_text import read_python_source
 
 
 def _is_protocol(node: ast.ClassDef) -> bool:
@@ -53,7 +54,7 @@ def check_callable_registry(
     source_path = contained_file(checkout, policy.source_path)
     if source_path is None:
         return []
-    source_tree = ast.parse(source_path.read_text(encoding="utf-8"))
+    source_tree = ast.parse(read_python_source(source_path))
     public_functions: set[str] = set()
     for node in source_tree.body:
         match node:
@@ -80,7 +81,7 @@ def check_callable_registry(
                 ),
             )
         ]
-    tree = ast.parse(registry_path.read_text(encoding="utf-8"))
+    tree = ast.parse(read_python_source(registry_path))
     protocol: ast.ClassDef | None = None
     registry: ast.AnnAssign | None = None
     for node in tree.body:

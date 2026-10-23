@@ -11,14 +11,20 @@ from pathlib import Path
 from types import MappingProxyType
 
 from alphus.gates.cpp.artifact_contracts import (
-    ArtifactRow,
-    ArtifactScan,
-    DebugSignal,
-    KindTotals,
+    ArtifactInventory,
+    ArtifactReviewSignal,
+    ArtifactScanOptions,
+    ArtifactSummary,
+    KindCount,
+    ScannedArtifact,
     SectionInventory,
     SectionMetrics,
 )
-from alphus.support.native_artifacts import artifact_kind, is_unix_executable
+from alphus.support.native_artifacts import (
+    ArtifactKind,
+    artifact_kind,
+    is_unix_executable,
+)
 
 DEFAULT_INCLUDE_GLOBS = (
     "*.exe",
@@ -34,8 +40,6 @@ DEFAULT_INCLUDE_GLOBS = (
     "*.dSYM/Contents/Resources/DWARF/*",
 )
 SECTION_HEADER_REGEX = re.compile(r"^\s*\d+\s+(\S+)\s+([0-9a-fA-F]+)\s+", re.MULTILINE)
-DEBUG_DOMINANCE_MIN_BYTES = 64 * 1024 * 1024
-MAX_REVIEW_EXAMPLES = 8
 
 
 def _matches(path: str, patterns: Sequence[str]) -> bool:
@@ -54,7 +58,9 @@ def parse_objdump_sections(output: str) -> SectionInventory:
     return SectionInventory(MappingProxyType(sections))
 
 
-def _section_metrics(path: Path, section_tool: str | None) -> SectionMetrics:
+def _section_metrics(
+    path: Path, section_tool: str | None, *, timeout_seconds: float
+) -> SectionMetrics:
     if section_tool is None:
         return SectionMetrics("unavailable", error="objdump was not found")
     try:
@@ -64,14 +70,14 @@ def _section_metrics(path: Path, section_tool: str | None) -> SectionMetrics:
             text=True,
             encoding="utf-8",
             errors="replace",
-            timeout=30,
+            timeout=timeout_seconds,
             check=False,
         )
         if result.returncode:
-            raise ValueError(result.stderr.strip()[:240] or "objdump failed")
+            raise ValueError(result.stderr or "objdump failed")
         sections = parse_objdump_sections(result.stdout)
     except (OSError, ValueError, subprocess.TimeoutExpired) as error:
-        return SectionMetrics("error", error=str(error)[:240])
+        return SectionMetrics("error", error=str(error))
     return SectionMetrics("measured", sections.debug_bytes, sections.text_bytes)
 
 
@@ -83,7 +89,8 @@ def scan_directory(
     section_tool: str = "objdump",
     measure_sections: bool = True,
     include_unix_executables: bool = True,
-) -> ArtifactScan:
+    options: ArtifactScanOptions | None = None,
+) -> ArtifactInventory:
     """Scan a directory; includes and excludes are glob patterns, not regexes."""
     root = root.resolve()
     if not root.is_dir():
@@ -92,8 +99,9 @@ def scan_directory(
     excludes = tuple(excludes)
     if not includes:
         raise ValueError("at least one include pattern is required")
+    settings = options or ArtifactScanOptions()
     analyzer = shutil.which(section_tool) if measure_sections else None
-    artifacts: list[ArtifactRow] = []
+    artifacts: list[ScannedArtifact] = []
     for path in root.rglob("*"):
         if path.is_symlink() or not path.is_file():
             continue
@@ -104,83 +112,90 @@ def scan_directory(
         ) or _matches(relative, excludes):
             continue
         kind = artifact_kind(path)
-        item: ArtifactRow = {
-            "path": relative,
-            "kind": kind,
-            "bytes": path.stat().st_size,
-        }
-        if kind in {"executable", "shared_library"}:
-            metrics = (
-                _section_metrics(path, analyzer)
+        sections = None
+        if kind in {ArtifactKind.EXECUTABLE, ArtifactKind.SHARED_LIBRARY}:
+            sections = (
+                _section_metrics(
+                    path, analyzer, timeout_seconds=settings.section_timeout_seconds
+                )
                 if measure_sections
                 else SectionMetrics("skipped")
             )
-            item["section_status"] = metrics.status
-            item["debug_bytes"] = metrics.debug_bytes
-            item["text_bytes"] = metrics.text_bytes
-            if metrics.error is not None:
-                item["section_error"] = metrics.error
-        artifacts.append(item)
-    artifacts.sort(key=lambda item: item["path"])
-    executables = [item for item in artifacts if item["kind"] == "executable"]
-    static_libraries = [item for item in artifacts if item["kind"] == "static_library"]
-    by_kind: dict[str, KindTotals] = {}
+        artifacts.append(ScannedArtifact(relative, kind, path.stat().st_size, sections))
+    artifacts.sort(key=lambda item: item.path)
+    executables = [item for item in artifacts if item.kind is ArtifactKind.EXECUTABLE]
+    static_libraries = [
+        item for item in artifacts if item.kind is ArtifactKind.STATIC_LIBRARY
+    ]
+    by_kind: dict[ArtifactKind, KindCount] = {}
     for item in artifacts:
-        bucket = by_kind.setdefault(item["kind"], {"count": 0, "bytes": 0})
-        bucket["count"] += 1
-        bucket["bytes"] += item["bytes"]
+        bucket = by_kind.setdefault(item.kind, KindCount())
+        bucket.count += 1
+        bucket.bytes += item.bytes
     debug_dominant = [
         item
         for item in executables
-        if "debug_bytes" in item
-        and item["debug_bytes"] is not None
-        and item["debug_bytes"] >= DEBUG_DOMINANCE_MIN_BYTES
-        and item["debug_bytes"] * 2 >= item["bytes"]
+        if item.sections is not None
+        and item.sections.debug_bytes is not None
+        and item.sections.debug_bytes >= settings.debug_dominance_min_bytes
+        and item.sections.debug_bytes * 2 >= item.bytes
     ]
-    debug_dominant.sort(key=lambda item: item["debug_bytes"] or 0, reverse=True)
-    signals: list[DebugSignal] = []
+    debug_dominant.sort(
+        key=lambda item: (
+            item.sections.debug_bytes
+            if item.sections and item.sections.debug_bytes is not None
+            else 0
+        ),
+        reverse=True,
+    )
+    signals: list[ArtifactReviewSignal] = []
     if debug_dominant:
         signals.append(
-            {
-                "code": "debug_dominant_executables",
-                "count": len(debug_dominant),
-                "total_debug_bytes": sum(
-                    item["debug_bytes"] or 0 for item in debug_dominant
+            ArtifactReviewSignal(
+                code="debug_dominant_executables",
+                count=len(debug_dominant),
+                total_debug_bytes=sum(
+                    item.sections.debug_bytes
+                    for item in debug_dominant
+                    if item.sections is not None
+                    and item.sections.debug_bytes is not None
                 ),
-                "examples": [
-                    item["path"] for item in debug_dominant[:MAX_REVIEW_EXAMPLES]
+                examples=[
+                    item.path for item in debug_dominant[: settings.max_review_examples]
                 ],
-            }
+            )
         )
-    return {
-        "schema": 1,
-        "root": str(root),
-        "include": list(includes),
-        "exclude": list(excludes),
-        "include_unix_executables": include_unix_executables,
-        "section_tool": analyzer,
-        "artifacts": artifacts,
-        "totals": {
-            "count": len(artifacts),
-            "bytes": sum(item["bytes"] for item in artifacts),
-            "executable_count": len(executables),
-            "executable_paths": sorted(item["path"] for item in executables),
-            "executable_bytes": sum(item["bytes"] for item in executables),
-            "static_library_count": len(static_libraries),
-            "static_library_bytes": sum(item["bytes"] for item in static_libraries),
-            "measured_debug_bytes": sum(
-                item["debug_bytes"] or 0
-                for item in artifacts
-                if "debug_bytes" in item and item["debug_bytes"] is not None
-            ),
-            "section_measured_count": sum(
-                item.get("section_status") == "measured" for item in artifacts
-            ),
-            "section_unmeasured_count": sum(
-                item.get("section_status") in {"skipped", "unavailable", "error"}
-                for item in artifacts
-            ),
-            "by_kind": by_kind,
-        },
-        "review_signals": signals,
-    }
+    totals = ArtifactSummary(
+        count=len(artifacts),
+        bytes=sum(item.bytes for item in artifacts),
+        executable_count=len(executables),
+        executable_paths=[item.path for item in executables],
+        executable_bytes=sum(item.bytes for item in executables),
+        static_library_count=len(static_libraries),
+        static_library_bytes=sum(item.bytes for item in static_libraries),
+        measured_debug_bytes=sum(
+            item.sections.debug_bytes or 0
+            for item in artifacts
+            if item.sections is not None
+        ),
+        section_measured_count=sum(
+            item.sections is not None and item.sections.status == "measured"
+            for item in artifacts
+        ),
+        section_unmeasured_count=sum(
+            item.sections is not None
+            and item.sections.status in {"skipped", "unavailable", "error"}
+            for item in artifacts
+        ),
+        by_kind=by_kind,
+    )
+    return ArtifactInventory(
+        root,
+        list(includes),
+        list(excludes),
+        include_unix_executables,
+        analyzer,
+        artifacts,
+        totals,
+        signals,
+    )

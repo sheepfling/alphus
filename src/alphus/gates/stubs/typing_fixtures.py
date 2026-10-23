@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from alphus.gates.stubs.environments import child_environment, probe_python
+from alphus.support.source_text import read_python_source
 
 ERROR_LINE = re.compile(r"\berror(?::|\[[^\]]+\]:?)\s")
 
@@ -108,7 +109,7 @@ def check_result(
             )
         return issues
 
-    expected_lines = expected_error_lines(fixture.read_text(encoding="utf-8"))
+    expected_lines = expected_error_lines(read_python_source(fixture))
     observed_lines = observed_error_lines(output, fixture.name)
     if returncode == 0:
         issues.append("negative fixture unexpectedly passed")
@@ -253,7 +254,7 @@ def run_case(
         return invoke(actual_fixture, None)
 
     if expect_errors:
-        source = resolved_fixture.read_text(encoding="utf-8")
+        source = read_python_source(resolved_fixture)
         if not expected_error_lines(source) and expected_count is None:
             print(
                 "negative fixture has no markers or configured expected diagnostic count",

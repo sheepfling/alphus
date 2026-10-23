@@ -33,6 +33,25 @@ python -m alphus.gates.cpp.cpp_artifact_quality scan build/tests --output build/
 
 On Unix, the default scan also recognizes extensionless native executables with the executable bit set. Pass `--include` / `--exclude` glob patterns to narrow a scan; the scanner treats an explicit include list as authoritative. On Windows, `.exe` files are recognized by extension. The default inventory includes macOS `.dSYM` DWARF files. If `objdump` is not on `PATH`, pass `--objdump` with the tool's path. `--no-sections` gives a fast file-size-only inventory. A policy that sets `max_executable_debug_bytes` fails closed when section measurement is unavailable.
 
+The `scan` object in a policy can tune review evidence and the section-tool budget without changing gate limits:
+
+```json
+{
+  "schema": 1,
+  "name": "release-build",
+  "limits": { "min_executable_count": 1 },
+  "scan": {
+    "debug_dominance_min_bytes": 67108864,
+    "max_review_examples": 8,
+    "section_timeout_seconds": 30
+  }
+}
+```
+
+Use `--debug-dominance-min-bytes`, `--max-review-examples`, and
+`--section-timeout-seconds` to override those settings for one run. Scanner errors
+retain the full tool message in JSON; the terminal reporter decides how to display it.
+
 For an aggregate build verdict, pass the same `--run-id` and
 `--manifest path/to/build-manifest.json` used by the common gates. The artifact
 report then carries `manifest_sha256`. Its `totals.executable_paths` list can

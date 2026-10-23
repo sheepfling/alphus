@@ -77,6 +77,7 @@ from alphus.policy.sources import (
     SharedUtilitiesPolicy,
     SourceScanPolicy,
 )
+from alphus.support.source_text import read_utf8_text
 
 __all__ = [
     "ArchitectureGraphCheckPolicy",
@@ -254,7 +255,7 @@ def load_config_stream(stream: TextIO) -> QualityGateConfig:
 
 def load_config(path: Path) -> QualityGateConfig:
     """Read and validate a TOML quality policy at the caller-selected path."""
-    document = tomllib.loads(path.read_text(encoding="utf-8"))
+    document = tomllib.loads(read_utf8_text(path))
     if "orchestration_files" not in document:
         return QualityGateConfig.model_validate(document)
     root = _SplitPolicy.model_validate(document)
@@ -268,7 +269,7 @@ def load_config(path: Path) -> QualityGateConfig:
                 f"orchestration file must stay inside the policy directory: {name}"
             )
         fragment = _LanguagePolicy.model_validate(
-            tomllib.loads(fragment_path.read_text(encoding="utf-8"))
+            tomllib.loads(read_utf8_text(fragment_path))
         )
         steps.extend(fragment.orchestration.steps)
         profiles.extend(fragment.orchestration.profiles)

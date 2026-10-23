@@ -13,6 +13,7 @@ from alphus.config import SourceScanPolicy
 from alphus.contracts.findings import Finding, SourceFinding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.support.inventory import matches_path
+from alphus.support.source_text import read_python_source
 
 DECODER_MODULES: frozenset[str] = frozenset({"json", "orjson", "ujson", "rapidjson"})
 JS_DECODERS: Mapping[str, Pattern[str]] = MappingProxyType(
@@ -95,7 +96,7 @@ def check_json_structure(
         path = checkout / relative
         if not path.is_file():
             continue
-        source = path.read_text(encoding="utf-8-sig")
+        source = read_python_source(path)
         source_findings = (
             python_json_findings(source)
             if suffix == ".py"

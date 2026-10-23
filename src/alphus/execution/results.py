@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import TypeAlias
+from typing import Self, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, TypeAdapter
 
@@ -62,23 +62,23 @@ _MESSAGE_RULE_IDS: Mapping[QualityRuleName, str] = MappingProxyType(
 
 def _message_diagnostics(
     rule: QualityRuleName, messages: Sequence[str]
-) -> tuple[Diagnostic, ...]:
+) -> list[Diagnostic]:
     try:
         rule_id = _MESSAGE_RULE_IDS[rule]
     except KeyError as error:
         raise ValueError(
             f"no diagnostic tag registered for message rule {rule!r}"
         ) from error
-    return tuple(
+    return [
         Diagnostic(source="alphus", rule_id=rule_id, message=message)
         for message in messages
-    )
+    ]
 
 
 def _style_diagnostics(
     payload: Mapping[str, Mapping[str, Sequence[int]]],
-) -> tuple[Diagnostic, ...]:
-    return tuple(
+) -> list[Diagnostic]:
+    return [
         Diagnostic(
             source="alphus",
             rule_id=rule_tag(
@@ -91,7 +91,7 @@ def _style_diagnostics(
         for path, buckets in payload.items()
         for category, lines in buckets.items()
         for line in lines
-    )
+    ]
 
 
 def _shared_diagnostics(
@@ -100,7 +100,7 @@ def _shared_diagnostics(
     direct_git_calls: Sequence[str],
     *,
     failed: bool,
-) -> tuple[Diagnostic, ...]:
+) -> list[Diagnostic]:
     diagnostics = [
         Diagnostic(
             source="alphus",
@@ -156,16 +156,16 @@ def _shared_diagnostics(
                 message="Shared utilities check reported failure without details.",
             )
         )
-    return tuple(diagnostics)
+    return diagnostics
 
 
 def diagnostics_from_output(
     rule: QualityRuleName, output: RuleOutput
-) -> tuple[Diagnostic, ...]:
+) -> list[Diagnostic]:
     """Normalize a checker result without serializing it through the CLI."""
     shape = RULE_SPECS[rule].output_shape
     if shape is RuleOutputShape.FINDINGS:
-        return tuple(item.as_diagnostic() for item in _FINDINGS.validate_python(output))
+        return [item.as_diagnostic() for item in _FINDINGS.validate_python(output)]
     if shape is RuleOutputShape.MESSAGES:
         return _message_diagnostics(rule, _MESSAGES.validate_python(output))
     if shape is RuleOutputShape.PYTHON_STYLE:
@@ -180,13 +180,11 @@ def diagnostics_from_output(
     )
 
 
-def diagnostics_from_json(
-    rule: QualityRuleName, encoded: str
-) -> tuple[Diagnostic, ...]:
+def diagnostics_from_json(rule: QualityRuleName, encoded: str) -> list[Diagnostic]:
     """Validate the older direct-rule JSON shapes before normalization."""
     shape = RULE_SPECS[rule].output_shape
     if shape is RuleOutputShape.FINDINGS:
-        return tuple(item.as_diagnostic() for item in _FINDINGS.validate_json(encoded))
+        return [item.as_diagnostic() for item in _FINDINGS.validate_json(encoded)]
     if shape is RuleOutputShape.MESSAGES:
         return _message_diagnostics(rule, _MESSAGES.validate_json(encoded))
     if shape is RuleOutputShape.PYTHON_STYLE:
@@ -200,19 +198,19 @@ def diagnostics_from_json(
     )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class RuleEvaluation:
     """One rule's raw output, normalized diagnostics, and threshold decision."""
 
     rule: QualityRuleName
     output: RuleOutput
-    diagnostics: tuple[Diagnostic, ...]
+    diagnostics: list[Diagnostic]
     failed: bool
 
     @classmethod
     def from_output(
         cls, rule: QualityRuleName, output: RuleOutput, threshold: Severity
-    ) -> RuleEvaluation:
+    ) -> Self:
         diagnostics = diagnostics_from_output(rule, output)
         return cls(
             rule=rule,

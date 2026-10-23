@@ -14,7 +14,7 @@ from alphus.config import PathDiscoveryPolicy
 from alphus.contracts.findings import Finding, SourceFinding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.support.inventory import matches_path
-from alphus.support.source_text import read_python_source
+from alphus.support.source_text import read_python_source, read_utf8_sig_text
 
 JS_PATTERNS: Mapping[str, Pattern[str]] = MappingProxyType(
     {
@@ -467,9 +467,7 @@ def check_path_discovery(
         if not path.is_file():
             continue
         source = (
-            read_python_source(path)
-            if suffix == ".py"
-            else path.read_text(encoding="utf-8-sig")
+            read_python_source(path) if suffix == ".py" else read_utf8_sig_text(path)
         )
         inspect_strings = not any(
             matches_path(name, pattern) for pattern in policy.inspection_exclude

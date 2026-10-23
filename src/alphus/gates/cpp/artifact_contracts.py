@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from math import isfinite
+from pathlib import Path
 from typing import Literal, NotRequired, TypedDict
 
 from alphus.support.data_access import (
@@ -49,6 +51,124 @@ class SectionInventory:
         return sum(
             size for name, size in self.sizes.items() if name.startswith(".text")
         )
+
+
+@dataclass(slots=True)
+class ArtifactScanOptions:
+    """Review thresholds and subprocess budget for one artifact scan."""
+
+    debug_dominance_min_bytes: int = 64 * 1024 * 1024
+    max_review_examples: int = 8
+    section_timeout_seconds: float = 30.0
+
+    def __post_init__(self) -> None:
+        if self.debug_dominance_min_bytes < 0:
+            raise ValueError("debug_dominance_min_bytes must be nonnegative")
+        if self.max_review_examples < 0:
+            raise ValueError("max_review_examples must be nonnegative")
+        if (
+            not isfinite(self.section_timeout_seconds)
+            or self.section_timeout_seconds <= 0
+        ):
+            raise ValueError("section_timeout_seconds must be positive")
+
+
+@dataclass(slots=True)
+class ScannedArtifact:
+    path: str
+    kind: ArtifactKind
+    bytes: int
+    sections: SectionMetrics | None = None
+
+    def to_wire(self) -> ArtifactRow:
+        row: ArtifactRow = {"path": self.path, "kind": self.kind, "bytes": self.bytes}
+        if self.sections is not None:
+            row["section_status"] = self.sections.status
+            row["debug_bytes"] = self.sections.debug_bytes
+            row["text_bytes"] = self.sections.text_bytes
+            if self.sections.error is not None:
+                row["section_error"] = self.sections.error
+        return row
+
+
+@dataclass(slots=True)
+class KindCount:
+    count: int = 0
+    bytes: int = 0
+
+    def to_wire(self) -> KindTotals:
+        return {"count": self.count, "bytes": self.bytes}
+
+
+@dataclass(slots=True)
+class ArtifactSummary:
+    count: int
+    bytes: int
+    executable_count: int
+    executable_paths: list[str]
+    executable_bytes: int
+    static_library_count: int
+    static_library_bytes: int
+    measured_debug_bytes: int
+    section_measured_count: int
+    section_unmeasured_count: int
+    by_kind: dict[ArtifactKind, KindCount]
+
+    def to_wire(self) -> ArtifactTotals:
+        return {
+            "count": self.count,
+            "bytes": self.bytes,
+            "executable_count": self.executable_count,
+            "executable_paths": self.executable_paths,
+            "executable_bytes": self.executable_bytes,
+            "static_library_count": self.static_library_count,
+            "static_library_bytes": self.static_library_bytes,
+            "measured_debug_bytes": self.measured_debug_bytes,
+            "section_measured_count": self.section_measured_count,
+            "section_unmeasured_count": self.section_unmeasured_count,
+            "by_kind": {kind: count.to_wire() for kind, count in self.by_kind.items()},
+        }
+
+
+@dataclass(slots=True)
+class ArtifactReviewSignal:
+    code: str
+    count: int
+    total_debug_bytes: int
+    examples: list[str]
+
+    def to_wire(self) -> DebugSignal:
+        return {
+            "code": self.code,
+            "count": self.count,
+            "total_debug_bytes": self.total_debug_bytes,
+            "examples": self.examples,
+        }
+
+
+@dataclass(slots=True)
+class ArtifactInventory:
+    root: Path
+    include: list[str]
+    exclude: list[str]
+    include_unix_executables: bool
+    section_tool: str | None
+    artifacts: list[ScannedArtifact]
+    totals: ArtifactSummary
+    review_signals: list[ArtifactReviewSignal]
+
+    def to_wire(self) -> ArtifactScan:
+        return {
+            "schema": 1,
+            "root": str(self.root),
+            "include": self.include,
+            "exclude": self.exclude,
+            "include_unix_executables": self.include_unix_executables,
+            "section_tool": self.section_tool,
+            "artifacts": [artifact.to_wire() for artifact in self.artifacts],
+            "totals": self.totals.to_wire(),
+            "review_signals": [signal.to_wire() for signal in self.review_signals],
+        }
 
 
 class ArtifactRow(TypedDict):
@@ -142,6 +262,7 @@ class ArtifactPolicy(TypedDict):
     limits: dict[str, int]
     include: list[str]
     exclude: list[str]
+    scan: NotRequired[ArtifactScanOptions]
 
 
 def _artifact_row(value: JsonValue) -> ArtifactRow:

@@ -4,16 +4,21 @@ from __future__ import annotations
 
 import ast
 import tomllib
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
-from typing import cast
 
 from alphus.config import InstructionRouterPolicy, RepositoryLayoutPolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
-from alphus.support.data_access import nested_value, validate_json_value
+from alphus.support.data_access import (
+    contains_member,
+    is_nonempty_mapping,
+    nested_value,
+    validate_json_value,
+)
 from alphus.support.inventory import matches_path
+from alphus.support.source_text import read_python_source, read_utf8_text
 
 
 class LayoutRuleId(StrEnum):
@@ -95,22 +100,6 @@ def _safe_file(root: Path, relative: str) -> Path | None:
     return path if path is not None and path.is_file() else None
 
 
-def _contains_value(value: object, expected: str) -> bool:
-    match value:
-        case list():
-            return expected in cast(list[object], value)
-        case _:
-            return False
-
-
-def _is_nonempty_mapping(value: object) -> bool:
-    match value:
-        case Mapping():
-            return bool(cast(Mapping[str, object], value))
-        case _:
-            return False
-
-
 def _router_findings(root: Path, policy: InstructionRouterPolicy) -> list[Finding]:
     findings: list[Finding] = []
     instruction = _safe_file(root, policy.root_instruction_path)
@@ -131,7 +120,7 @@ def _router_findings(root: Path, policy: InstructionRouterPolicy) -> list[Findin
                 message=policy.missing_root_bridge_message,
             )
         )
-    elif policy.root_bridge_marker not in bridge.read_text(encoding="utf-8"):
+    elif policy.root_bridge_marker not in read_utf8_text(bridge):
         findings.append(
             Finding(
                 rule_id=LayoutRuleId.BRIDGE_ROOT_MARKER_MISSING,
@@ -163,7 +152,7 @@ def _router_findings(root: Path, policy: InstructionRouterPolicy) -> list[Findin
                 )
             )
             continue
-        contents = area_bridge.read_text(encoding="utf-8")
+        contents = read_utf8_text(area_bridge)
         if route.scope_marker not in contents:
             findings.append(
                 Finding(
@@ -240,13 +229,11 @@ def check_repository_layout(
     for rule in policy.required_json_array_values:
         path = _safe_file(checkout, rule.path)
         try:
-            value: object = (
-                validate_json_value(path.read_text(encoding="utf-8")) if path else None
-            )
+            value: object = validate_json_value(read_utf8_text(path)) if path else None
         except (OSError, ValueError):
             value = None
         array = nested_value(value, rule.key)
-        if not _contains_value(array, rule.value):
+        if not contains_member(array, rule.value):
             findings.append(
                 Finding(
                     rule_id=LayoutRuleId.JSON_ARRAY_VALUE_REQUIRED,
@@ -257,7 +244,7 @@ def check_repository_layout(
     for rule in policy.required_python_symbols:
         path = _safe_file(checkout, rule.path)
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8")) if path else None
+            tree = ast.parse(read_python_source(path)) if path else None
         except (OSError, SyntaxError):
             tree = None
         present = False
@@ -285,13 +272,11 @@ def check_repository_layout(
     for rule in policy.required_nonempty_toml_tables:
         path = _safe_file(checkout, rule.path)
         try:
-            value: object = (
-                tomllib.loads(path.read_text(encoding="utf-8")) if path else None
-            )
+            value: object = tomllib.loads(read_utf8_text(path)) if path else None
         except (OSError, tomllib.TOMLDecodeError):
             value = None
         table = nested_value(value, rule.key)
-        if not _is_nonempty_mapping(table):
+        if not is_nonempty_mapping(table):
             findings.append(
                 Finding(
                     rule_id=LayoutRuleId.TOML_TABLE_REQUIRED,

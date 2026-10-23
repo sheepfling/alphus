@@ -11,6 +11,7 @@ from pathlib import Path
 
 from alphus.config import SharedUtilitiesPolicy
 from alphus.support.inventory import matches_path
+from alphus.support.source_text import read_python_source
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,9 +100,7 @@ def duplicate_helpers(
         path = checkout / relative
         if not path.is_file():
             continue
-        module = ast.parse(
-            path.read_text(encoding="utf-8"), filename=relative.as_posix()
-        )
+        module = ast.parse(read_python_source(path), filename=relative.as_posix())
         for qualified_name, node in _function_definitions(module):
             body = _without_docstring(node.body)
             if (
@@ -167,9 +166,7 @@ def file_sha256_helpers(
         path = checkout / relative
         if not path.is_file():
             continue
-        module = ast.parse(
-            path.read_text(encoding="utf-8-sig"), filename=relative.as_posix()
-        )
+        module = ast.parse(read_python_source(path), filename=relative.as_posix())
         for qualified_name, node in _function_definitions(module):
             if (
                 relative.as_posix() == canonical_path
@@ -210,9 +207,7 @@ def direct_git_subprocesses(
         path = checkout / relative
         if not path.is_file():
             continue
-        module = ast.parse(
-            path.read_text(encoding="utf-8-sig"), filename=relative.as_posix()
-        )
+        module = ast.parse(read_python_source(path), filename=relative.as_posix())
         for node in ast.walk(module):
             match node:
                 case ast.Call(

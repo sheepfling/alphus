@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Self
 
 PRODUCT_NAME = "Alphus"
 NAMESPACE = PRODUCT_NAME.lower()
@@ -93,7 +94,7 @@ class RuleTag:
         return _NAMESPACE_PREFIX.match(rule_id) is not None
 
     @classmethod
-    def parse(cls, rule_id: str) -> RuleTag:
+    def parse(cls, rule_id: str) -> Self:
         """Parse and validate a complete Alphus rule identifier."""
         parts = rule_id.split("/")
         if len(parts) != 5 or parts[0] != NAMESPACE:

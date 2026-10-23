@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from alphus.config import ModuleRolePolicy
-from alphus.gates.repository.module_roles import check_module_roles
+from alphus.gates.python.module_roles import check_module_roles
 
 
 def test_operation_role_blocks_adapter_provider_and_io_dependencies(

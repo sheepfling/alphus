@@ -11,6 +11,7 @@ from alphus.config import SourceScanPolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.support.inventory import matches_path
+from alphus.support.source_text import read_utf8_sig_text
 
 _OUTPUT_PUNCTUATION = frozenset("\\|*_<>&\"'{}[]#%$~^/")
 _HTML_ENTITY = re.compile(r"&(?:[A-Za-z][A-Za-z0-9]+|#[0-9]+|#x[0-9A-Fa-f]+);")
@@ -102,7 +103,7 @@ def check_output_escaping(
         path = checkout / relative
         if not path.is_file():
             continue
-        source = path.read_text(encoding="utf-8-sig")
+        source = read_utf8_sig_text(path)
         source_findings = (
             python_escape_findings(source)
             if suffix == ".py"

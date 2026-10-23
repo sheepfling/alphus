@@ -38,17 +38,26 @@ from alphus.support.data_access import (
 from alphus.support.file_hash import sha256_file
 from alphus.support.git import git_output, run_git
 from alphus.support.reporting import OutputFormat, ReportLine, ReportView, emit_report
+from alphus.support.source_text import read_utf8_text
 
 _FRAGMENT_SUFFIXES = frozenset({".inc", ".inl", ".ipp", ".tpp"})
 _IMPLEMENTATION_SUFFIXES = frozenset({".c", ".cc", ".cpp", ".cxx"})
 _HEADER_SUFFIXES = frozenset({".h", ".hh", ".hpp"})
 _SOURCE_SUFFIXES = _FRAGMENT_SUFFIXES | _IMPLEMENTATION_SUFFIXES | _HEADER_SUFFIXES
 _OWNER_SUFFIXES = _SOURCE_SUFFIXES - _FRAGMENT_SUFFIXES
-_INCLUDE_RE = re.compile(
+_INCLUDE_REGEX = re.compile(
     r'^\s*#\s*include\s*[<"]([^">]+\.(?:inc|inl|ipp|tpp|c|cc|cpp|cxx|h|hh|hpp))[>"]'
 )
-_DEFAULT_SOURCE_INCLUDE = tuple(f"*{suffix}" for suffix in sorted(_SOURCE_SUFFIXES))
-_DEFAULT_SOURCE_EXCLUDE = (".git/*", "out/*", "build/*", "vendor/*", "third_party/*")
+_DEFAULT_SOURCE_INCLUDE_GLOBS = tuple(
+    f"*{suffix}" for suffix in sorted(_SOURCE_SUFFIXES)
+)
+_DEFAULT_SOURCE_EXCLUDE_GLOBS = (
+    ".git/*",
+    "out/*",
+    "build/*",
+    "vendor/*",
+    "third_party/*",
+)
 _SECTION_KEYS = MappingProxyType(
     {
         "source": frozenset(
@@ -209,14 +218,14 @@ def _source_policy(policy: Mapping[str, JsonValue]) -> SourcePolicy:
     includes = [
         require_json_string(item, "source include entries must be strings")
         for item in require_json_array(
-            policy.get("include", _DEFAULT_SOURCE_INCLUDE),
+            policy.get("include", _DEFAULT_SOURCE_INCLUDE_GLOBS),
             "source.include must be an array",
         )
     ]
     excludes = [
         require_json_string(item, "source exclude entries must be strings")
         for item in require_json_array(
-            policy.get("exclude", _DEFAULT_SOURCE_EXCLUDE),
+            policy.get("exclude", _DEFAULT_SOURCE_EXCLUDE_GLOBS),
             "source.exclude must be an array",
         )
     ]
@@ -394,7 +403,7 @@ def _graph_policy(policy: Mapping[str, JsonValue]) -> GraphPolicy:
 
 
 def _read_json(path: Path) -> Mapping[str, JsonValue]:
-    payload = validate_json_value(path.read_text(encoding="utf-8"))
+    payload = validate_json_value(read_utf8_text(path))
     return require_json_object(payload, f"expected a JSON object: {path}")
 
 
@@ -528,7 +537,7 @@ def check_source(
         bytes_by_file[path] = len(data)
         included: list[Path] = []
         for line in data.decode("utf-8", errors="replace").splitlines():
-            match = _INCLUDE_RE.match(line)
+            match = _INCLUDE_REGEX.match(line)
             if match is None:
                 continue
             token = Path(match.group(1))
@@ -1333,7 +1342,7 @@ def check_tests(
             if (
                 resolved.is_relative_to(root)
                 and resolved.is_file()
-                and anchor not in resolved.read_text(encoding="utf-8", errors="replace")
+                and anchor not in read_utf8_text(resolved, errors="replace")
             ):
                 findings.append(
                     _finding("source_anchor_not_found", anchor, path=source)
@@ -1449,7 +1458,7 @@ def _under(root: Path, value: str) -> Path:
 
 def _cache_values(path: Path) -> dict[str, str]:
     values: dict[str, str] = {}
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+    for line in read_utf8_text(path, errors="replace").splitlines():
         key_type, separator, value = line.partition("=")
         if separator and key_type[:1] != "#" and key_type[:2] != "//":
             values[key_type.partition(":")[0]] = value

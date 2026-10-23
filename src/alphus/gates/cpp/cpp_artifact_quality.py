@@ -8,11 +8,15 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from alphus.gates.cpp.artifact_contracts import parse_artifact_baseline
+from alphus.gates.cpp.artifact_contracts import (
+    ArtifactScanOptions,
+    parse_artifact_baseline,
+)
 from alphus.gates.cpp.artifact_policy import evaluate, load_policy, manifest_digest
 from alphus.gates.cpp.artifact_scan import DEFAULT_INCLUDE_GLOBS, scan_directory
 from alphus.support.data_access import validate_json_value
 from alphus.support.reporting import OutputFormat, ReportLine, ReportView, emit_report
+from alphus.support.source_text import read_utf8_text
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -25,6 +29,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         child.add_argument("--exclude", action="append")
         child.add_argument("--objdump", default="objdump")
         child.add_argument("--no-sections", action="store_true")
+        child.add_argument("--debug-dominance-min-bytes", type=int)
+        child.add_argument("--max-review-examples", type=int)
+        child.add_argument("--section-timeout-seconds", type=float)
         child.add_argument("--run-id")
         child.add_argument("--manifest", type=Path)
         child.add_argument("--output", type=Path)
@@ -48,15 +55,39 @@ def main(argv: Sequence[str] | None = None) -> int:
         excludes: Sequence[str] = arguments.exclude or (
             policy["exclude"] if policy is not None else []
         )
-        report = scan_directory(
+        defaults = (
+            policy.get("scan", ArtifactScanOptions())
+            if policy
+            else ArtifactScanOptions()
+        )
+        options = ArtifactScanOptions(
+            debug_dominance_min_bytes=(
+                arguments.debug_dominance_min_bytes
+                if arguments.debug_dominance_min_bytes is not None
+                else defaults.debug_dominance_min_bytes
+            ),
+            max_review_examples=(
+                arguments.max_review_examples
+                if arguments.max_review_examples is not None
+                else defaults.max_review_examples
+            ),
+            section_timeout_seconds=(
+                arguments.section_timeout_seconds
+                if arguments.section_timeout_seconds is not None
+                else defaults.section_timeout_seconds
+            ),
+        )
+        inventory = scan_directory(
             arguments.root,
             includes=includes,
             excludes=excludes,
             section_tool=arguments.objdump,
+            options=options,
             measure_sections=not arguments.no_sections,
             include_unix_executables=not arguments.include
             and not (policy and policy.get("include")),
         )
+        report = inventory.to_wire()
         report["run_id"] = arguments.run_id
         if arguments.manifest:
             report["manifest_sha256"] = manifest_digest(
@@ -65,7 +96,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if policy is not None:
             baseline = (
                 parse_artifact_baseline(
-                    validate_json_value(arguments.baseline.read_text(encoding="utf-8"))
+                    validate_json_value(read_utf8_text(arguments.baseline))
                 )
                 if arguments.baseline
                 else None

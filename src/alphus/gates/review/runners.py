@@ -9,10 +9,10 @@ from typing import TypeAlias
 
 from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.execution.results import RuleOutput
-from alphus.gates.review.fastapi_practices import check_fastapi_practices
+from alphus.gates.review.frameworks.fastapi_practices import check_fastapi_practices
+from alphus.gates.review.frameworks.pydantic_practices import check_pydantic_practices
 from alphus.gates.review.input_contracts import check_input_contracts
 from alphus.gates.review.numeric_literals import check_numeric_literals
-from alphus.gates.review.pydantic_practices import check_pydantic_practices
 from alphus.gates.review.scipy_constants import check_scipy_constants
 from alphus.gates.review.test_quality import check_test_quality
 from alphus.policy.base import require_policy

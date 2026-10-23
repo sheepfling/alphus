@@ -553,7 +553,7 @@ def test_rule_profile_json_adapters_validate_each_owned_shape() -> None:
         "python-style",
         json.dumps({"src/example.py": {"bare_containers": [7]}}),
     )
-    assert style_findings == (
+    assert style_findings == [
         Diagnostic(
             source="alphus",
             rule_id="alphus/python/none/style/bare-containers",
@@ -561,7 +561,7 @@ def test_rule_profile_json_adapters_validate_each_owned_shape() -> None:
             line=7,
             message="bare containers",
         ),
-    )
+    ]
 
     shared_findings = diagnostics_from_json(
         "shared-utilities",
@@ -606,7 +606,7 @@ def test_rule_evaluation_validates_structured_output_before_rendering() -> None:
     )
     evaluation = RuleEvaluation.from_output("line-length", [finding], "warning")
     assert evaluation.output == [finding]
-    assert evaluation.diagnostics == (finding.as_diagnostic(),)
+    assert evaluation.diagnostics == [finding.as_diagnostic()]
     assert evaluation.failed
 
     with pytest.raises(ValidationError):

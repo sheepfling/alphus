@@ -15,6 +15,7 @@ from alphus.config import DependencyLockPolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.support.data_access import contained_file
+from alphus.support.source_text import read_utf8_text
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,9 +80,7 @@ def _load_requirements(
     result: dict[str, Requirement] = {}
     findings: list[Finding] = []
     current = active | {relative}
-    for line_number, line in enumerate(
-        path.read_text(encoding="utf-8").splitlines(), 1
-    ):
+    for line_number, line in enumerate(read_utf8_text(path).splitlines(), 1):
         value = line.strip()
         if not value or value.startswith("#"):
             continue

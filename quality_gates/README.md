@@ -18,7 +18,7 @@ names remain consumer owned.
 python -m pip install -e /path/to/alphus
 python -m alphus.gates.cpp.cpp_common_quality --help
 python -m alphus.gates.cpp.cpp_artifact_quality --help
-python -m alphus.gates.cpp.worktree_hygiene --help
+python -m alphus.gates.vcs.worktree_hygiene --help
 ```
 
 From this checkout, run `python -m pytest tests/gates/cpp/test_cpp_quality_engine.py`

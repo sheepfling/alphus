@@ -10,6 +10,7 @@ from typing import NamedTuple
 from alphus.config import ModuleRolePolicy, ModuleRoleRule
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.support.source_text import read_python_source
 
 
 def _finding(
@@ -293,7 +294,7 @@ def check_module_roles(root: Path, policy: ModuleRolePolicy) -> list[Finding]:
             )
             continue
         try:
-            source = module_path.path.read_text(encoding="utf-8")
+            source = read_python_source(module_path.path)
         except (OSError, UnicodeError) as error:
             findings.append(
                 _finding(

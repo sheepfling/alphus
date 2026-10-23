@@ -9,13 +9,14 @@ from alphus.config import VersionSource, VersionSyncPolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.support.data_access import nested_value, validate_json_value
+from alphus.support.source_text import read_utf8_text
 
 
 def _read_version(root: Path, source: VersionSource) -> str | None:
     path = root / source.path
     try:
         path.resolve(strict=True).relative_to(root)
-        text = path.read_text(encoding="utf-8")
+        text = read_utf8_text(path)
         value = (
             validate_json_value(text)
             if source.format == "json"

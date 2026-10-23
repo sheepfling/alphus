@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from alphus.config import CliPolicy, NodeCliPolicy, PythonCliPolicy
 from alphus.support.inventory import matches_path
+from alphus.support.source_text import read_python_source
 
 
 class _NodePackageManifest(BaseModel):
@@ -187,7 +188,7 @@ def node_cli_files(
             relative in commands
             or re.search(
                 rf"\b{re.escape(policy.argument_access_marker)}\b",
-                (checkout / relative).read_text(encoding="utf-8"),
+                read_python_source(checkout / relative),
             )
             is not None
         )
@@ -205,7 +206,7 @@ def policy_issues(root: Path, paths: Iterable[Path], policy: CliPolicy) -> list[
             for exclusion in policy.python.exclude
         ):
             continue
-        source = (checkout / relative).read_text(encoding="utf-8-sig")
+        source = read_python_source(checkout / relative)
         for issue in python_cli_issues(source, policy.python):
             issues.append(f"{relative.as_posix()}: {issue}")
     if policy.node is not None:

@@ -11,15 +11,18 @@ from alphus.gates.cpp.artifact_contracts import (
     ArtifactGate,
     ArtifactPolicy,
     ArtifactScan,
+    ArtifactScanOptions,
     LimitFinding,
 )
 from alphus.support.data_access import (
     optional_json_integer,
+    optional_json_number,
     require_json_array,
     require_json_object,
     require_json_string,
     validate_json_value,
 )
+from alphus.support.source_text import read_utf8_text
 
 LIMIT_KEYS = frozenset(
     {
@@ -65,7 +68,7 @@ def manifest_digest(path: Path, run_id: str | None) -> str:
 
 def load_policy(path: Path) -> ArtifactPolicy:
     policy = require_json_object(
-        validate_json_value(path.read_text(encoding="utf-8")),
+        validate_json_value(read_utf8_text(path)),
         "policy must be a JSON object",
     )
     if policy.get("schema") != 1:
@@ -94,6 +97,37 @@ def load_policy(path: Path) -> ArtifactPolicy:
     name = policy.get("name")
     if name is not None:
         result["name"] = require_json_string(name, "policy name must be a string")
+    raw_scan = policy.get("scan")
+    if raw_scan is not None:
+        scan = require_json_object(raw_scan, "scan must be an object")
+        allowed_scan = {
+            "debug_dominance_min_bytes",
+            "max_review_examples",
+            "section_timeout_seconds",
+        }
+        unknown_scan = set(scan) - allowed_scan
+        if unknown_scan:
+            raise ValueError(
+                "unknown scan option(s): " + ", ".join(sorted(unknown_scan))
+            )
+        defaults = ArtifactScanOptions()
+        debug_min = optional_json_integer(
+            scan.get("debug_dominance_min_bytes", defaults.debug_dominance_min_bytes)
+        )
+        max_examples = optional_json_integer(
+            scan.get("max_review_examples", defaults.max_review_examples)
+        )
+        timeout = scan.get("section_timeout_seconds", defaults.section_timeout_seconds)
+        if debug_min is None or max_examples is None:
+            raise ValueError("scan byte and example settings must be integers")
+        timeout_number = optional_json_number(timeout)
+        if timeout_number is None:
+            raise ValueError("section_timeout_seconds must be a number")
+        result["scan"] = ArtifactScanOptions(
+            debug_dominance_min_bytes=debug_min,
+            max_review_examples=max_examples,
+            section_timeout_seconds=timeout_number,
+        )
     for field in ("include", "exclude"):
         if field in policy:
             patterns = [

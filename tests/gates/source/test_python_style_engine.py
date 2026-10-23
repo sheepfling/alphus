@@ -381,3 +381,28 @@ def test_scoped_pattern_declarations_name_globs_and_regexes() -> None:
     visitor = StyleVisitor(POLICY, pattern_kinds=True)
     visitor.visit(ast.parse(source))
     assert visitor.findings["undifferentiated_patterns"] == [2, 3]
+
+
+def test_scoped_classmethod_factory_uses_self_return() -> None:
+    source = (
+        "class Report:\n"
+        "    @classmethod\n"
+        "    def create(cls) -> Report: return cls()\n"
+        "    @staticmethod\n"
+        "    def empty() -> Report: return Report()\n"
+    )
+    visitor = StyleVisitor(POLICY, self_returns=True)
+    visitor.visit(ast.parse(source))
+    assert visitor.findings["concrete_classmethod_returns"] == [3]
+
+
+def test_scoped_semantic_results_check_nested_heterogeneous_tuples() -> None:
+    visitor = StyleVisitor(POLICY, semantic_results=True)
+    visitor.visit(ast.parse("def comments() -> list[tuple[int, str]]: return []"))
+    assert visitor.findings["heterogeneous_tuple_returns"] == [1]
+
+
+def test_scoped_text_reader_check_detects_direct_path_reads() -> None:
+    visitor = StyleVisitor(POLICY, shared_text_readers=True)
+    visitor.visit(ast.parse("content = path.read_text(encoding='utf-8')"))
+    assert visitor.findings["direct_text_reads"] == [1]

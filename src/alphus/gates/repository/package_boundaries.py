@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 from alphus.config import PackageBoundaryPolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.support.source_text import read_python_source, read_utf8_text
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,7 +141,7 @@ def _distributions(root: Path, policy: PackageBoundaryPolicy) -> _DistributionSc
             )
             continue
         try:
-            data = tomllib.loads(config.read_text(encoding="utf-8"))
+            data = tomllib.loads(read_utf8_text(config))
             project = _ProjectFile.model_validate(data).project
             name = _normalized_name(project.name)
         except (ValueError, tomllib.TOMLDecodeError) as error:
@@ -458,7 +459,7 @@ def _source_findings(
             if not _inside_root(checkout, source):
                 continue
             relative = source.relative_to(checkout).as_posix()
-            tree = ast.parse(source.read_text(encoding="utf-8"), filename=relative)
+            tree = ast.parse(read_python_source(source), filename=relative)
             module_aliases = {"importlib"}
             function_aliases: set[str] = set()
             path_aliases: set[str] = set()

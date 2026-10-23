@@ -7,26 +7,34 @@ import re
 import tokenize
 from collections.abc import Iterable
 from pathlib import Path
+from typing import NamedTuple
 
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.policy.sources import CommentMarkerPolicy
 from alphus.support.inventory import matches_path
+from alphus.support.source_text import read_utf8_sig_text
+
+
+class CommentLine(NamedTuple):
+    line: int
+    text: str
+
 
 _RAW_STRING = re.compile(r'R"(?P<delimiter>[^\s()\\"]{0,16})\(')
 
 
-def _python_comments(source: str) -> list[tuple[int, str]]:
+def _python_comments(source: str) -> list[CommentLine]:
     return [
-        (token.start[0], token.string[1:])
+        CommentLine(token.start[0], token.string[1:])
         for token in tokenize.generate_tokens(io.StringIO(source).readline)
         if token.type == tokenize.COMMENT
     ]
 
 
-def _toml_comments(source: str) -> list[tuple[int, str]]:
+def _toml_comments(source: str) -> list[CommentLine]:
     """Read hash comments while respecting single and multiline strings."""
-    comments: list[tuple[int, str]] = []
+    comments: list[CommentLine] = []
     quote = ""
     index = 0
     line = 1
@@ -56,7 +64,7 @@ def _toml_comments(source: str) -> list[tuple[int, str]]:
             end = source.find("\n", index)
             if end < 0:
                 end = len(source)
-            comments.append((line, source[index + 1 : end]))
+            comments.append(CommentLine(line, source[index + 1 : end]))
             index = end
         else:
             if character == "\n":
@@ -65,9 +73,9 @@ def _toml_comments(source: str) -> list[tuple[int, str]]:
     return comments
 
 
-def _slash_comments(source: str) -> list[tuple[int, str]]:
+def _slash_comments(source: str) -> list[CommentLine]:
     """Read ordinary C-family comments outside strings and C++ raw strings."""
-    comments: list[tuple[int, str]] = []
+    comments: list[CommentLine] = []
     index = 0
     line = 1
     while index < len(source):
@@ -84,7 +92,7 @@ def _slash_comments(source: str) -> list[tuple[int, str]]:
             end = source.find("\n", index)
             if end < 0:
                 end = len(source)
-            comments.append((line, source[index + 2 : end]))
+            comments.append(CommentLine(line, source[index + 2 : end]))
             index = end
             continue
         if source[index : index + 2] == "/*":
@@ -96,7 +104,8 @@ def _slash_comments(source: str) -> list[tuple[int, str]]:
                 next_index = end + 2
             body = source[index + 2 : end]
             comments.extend(
-                (line + offset, part) for offset, part in enumerate(body.split("\n"))
+                CommentLine(line + offset, part)
+                for offset, part in enumerate(body.split("\n"))
             )
             line += source.count("\n", index, next_index)
             index = next_index
@@ -145,7 +154,7 @@ def check_comment_markers(
             continue
         if not path.resolve(strict=True).is_relative_to(checkout):
             continue
-        source = path.read_text(encoding="utf-8-sig")
+        source = read_utf8_sig_text(path)
         try:
             if relative.suffix.lower() in {".py", ".pyi"}:
                 comments = _python_comments(source)

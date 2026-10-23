@@ -11,6 +11,7 @@ from types import MappingProxyType
 from alphus.config import ArchitectureGraphPolicy, PackageBoundaryPolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.support.source_text import read_utf8_text
 
 _EDGE_PATTERNS: Mapping[str, Pattern[str]] = MappingProxyType(
     {
@@ -83,7 +84,7 @@ def check_architecture_graph(
                 message="Mermaid graph is missing",
             )
         ]
-    source = path.read_text(encoding="utf-8")
+    source = read_utf8_text(path)
     diagram = _mermaid_diagram(source)
     if diagram is None:
         return [

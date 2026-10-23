@@ -67,8 +67,16 @@ repeated_literal_paths = [
   "src/alphus/execution/orchestration.py",
   "src/alphus/gates/python/compatibility.py",
 ]
-semantic_result_paths = ["src/alphus/gates/repository/**"]
-pattern_kind_paths = ["src/alphus/gates/cpp/artifact_scan.py"]
+semantic_result_paths = [
+  "src/alphus/gates/repository/**",
+  "src/alphus/gates/hygiene/comment_markers.py",
+]
+pattern_kind_paths = [
+  "src/alphus/gates/cpp/artifact_scan.py",
+  "src/alphus/gates/cpp/cpp_common_quality.py",
+]
+self_return_paths = ["src/alphus/**"]
+shared_text_reader_paths = ["src/alphus/config.py", "src/alphus/gates/**"]
 
 [checks.runtime_types]
 extensions = [".py"]

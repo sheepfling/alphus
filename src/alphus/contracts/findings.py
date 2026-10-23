@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Literal, NamedTuple, TypeAlias, get_args
+from typing import Literal, NamedTuple, Self, TypeAlias, get_args
 
 from alphus.contracts.rule_tags import NAMESPACE, RuleTag
 
@@ -32,7 +32,7 @@ class SeverityCounts:
     info: int = 0
 
     @classmethod
-    def from_diagnostics(cls, diagnostics: Iterable[Diagnostic]) -> SeverityCounts:
+    def from_diagnostics(cls, diagnostics: Iterable[Diagnostic]) -> Self:
         """Count diagnostic severities without classifying unstructured output."""
         errors = warnings = infos = 0
         for diagnostic in diagnostics:
@@ -85,7 +85,7 @@ class FindingRollups:
     complaints: tuple[FindingRollup, ...] = ()
 
     @classmethod
-    def from_diagnostics(cls, diagnostics: Iterable[Diagnostic]) -> FindingRollups:
+    def from_diagnostics(cls, diagnostics: Iterable[Diagnostic]) -> Self:
         by_scope: dict[str, list[Diagnostic]] = {}
         by_category: dict[str, list[Diagnostic]] = {}
         by_complaint: dict[str, list[Diagnostic]] = {}

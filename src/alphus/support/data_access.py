@@ -39,6 +39,26 @@ def contained_file(root: Path, relative: str) -> Path | None:
     return path if path.is_file() else None
 
 
+def contains_member(value: object, expected: object) -> bool:
+    """Check a sequence's contents, accepting both lists and tuples."""
+    match value:
+        case str() | bytes():
+            return False
+        case Sequence():
+            return expected in cast(Sequence[object], value)
+        case _:
+            return False
+
+
+def is_nonempty_mapping(value: object) -> bool:
+    """Recognize a nonempty mapping by interface, not concrete type."""
+    match value:
+        case Mapping():
+            return bool(cast(Mapping[object, object], value))
+        case _:
+            return False
+
+
 def nested_value(value: object, key: str) -> object:
     """Read a dotted key from a validated or decoded mapping without coercion."""
     current = value
@@ -74,6 +94,13 @@ def nested_json_value(payload: JsonValue, dotted: str) -> JsonValue:
 def optional_json_integer(value: JsonValue) -> int | None:
     """Return an integer JSON value, excluding booleans, or None otherwise."""
     return value if type(value) is int else None
+
+
+def optional_json_number(value: JsonValue) -> float | None:
+    """Return a JSON number as float, excluding booleans."""
+    if type(value) is int or type(value) is float:
+        return float(value)
+    return None
 
 
 def _json_type_name(value: JsonValue) -> str:

@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from alphus.config import ErrorCodeCallSpec, FastApiPracticePolicy
-from alphus.gates.review.fastapi_practices import fastapi_practice_findings
+from alphus.gates.review.frameworks.fastapi_practices import fastapi_practice_findings
 
 
 def _policy(**options: object) -> FastApiPracticePolicy:

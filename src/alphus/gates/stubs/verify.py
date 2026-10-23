@@ -21,6 +21,7 @@ from alphus.gates.stubs.environments import (
     child_environment,
     probe_python,
 )
+from alphus.support.source_text import read_utf8_text
 
 ACTION_ROOT = Path(alphus_stub_quality.__file__).resolve().parent
 IGNORED_BUILD_PATHS = frozenset(
@@ -109,7 +110,7 @@ def read_config(root: Path, config_path: Path) -> VerificationConfig:
     resolved = config_path if config_path.is_absolute() else root / config_path
     try:
         return VerificationDocument.model_validate_json(
-            resolved.read_text(encoding="utf-8")
+            read_utf8_text(resolved)
         ).verification
     except (OSError, ValidationError) as error:
         raise SystemExit(

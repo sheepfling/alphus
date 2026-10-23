@@ -332,6 +332,10 @@ def _python_style_categories(
             "undifferentiated_patterns", issues["undifferentiated_patterns"]
         ),
         _StyleCategory(
+            "concrete_classmethod_returns", issues["concrete_classmethod_returns"]
+        ),
+        _StyleCategory("direct_text_reads", issues["direct_text_reads"]),
+        _StyleCategory(
             "pydantic_collection_contracts", issues["pydantic_collection_contracts"]
         ),
     )
@@ -538,7 +542,7 @@ def _execute_profile(
                 stderr=captured_error.getvalue(),
             )
         return RuleRunResult(
-            findings=evaluation.diagnostics,
+            findings=tuple(evaluation.diagnostics),
             exit_code=int(evaluation.failed),
             stderr=captured_error.getvalue(),
         )
