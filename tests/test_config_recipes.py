@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from io import StringIO
 from pathlib import Path
 
@@ -61,6 +62,7 @@ def test_init_config_writes_and_requires_explicit_overwrite(tmp_path: Path) -> N
     assert target.read_text(encoding="utf-8") == render_recipe(
         "python", add_tools=("rumdl",)
     )
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     assert main(["--root", str(tmp_path), "--config", "gates.toml", "--plan"]) == 0
 
 
