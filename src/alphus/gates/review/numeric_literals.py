@@ -12,10 +12,8 @@ from pathlib import Path
 from alphus.config import NumericLiteralPolicy, NumericLiteralSpec
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Framework
-from alphus.gates.review.numeric_engine import (
-    NumericLiteralFinding,
-    scan_numeric_literals,
-)
+from alphus.gates.review.numeric_catalog import NumericLiteralFinding
+from alphus.gates.review.numeric_engine import scan_numeric_literals
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 

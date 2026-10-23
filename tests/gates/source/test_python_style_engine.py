@@ -1,9 +1,14 @@
 """Protect the Python structure gate against false positives and bypasses."""
 
 import ast
+from pathlib import Path
 
 from alphus.config import PythonStylePolicy
-from alphus.gates.source.python_style import StyleVisitor, is_boundary_file
+from alphus.gates.source.python_style import (
+    StyleVisitor,
+    findings_for,
+    is_boundary_file,
+)
 
 POLICY = PythonStylePolicy(
     extensions=[".py"],
@@ -406,3 +411,43 @@ def test_scoped_text_reader_check_detects_direct_path_reads() -> None:
     visitor = StyleVisitor(POLICY, shared_text_readers=True)
     visitor.visit(ast.parse("content = path.read_text(encoding='utf-8')"))
     assert visitor.findings["direct_text_reads"] == [1]
+
+
+def test_scoped_literal_alias_must_not_repeat_its_members() -> None:
+    source = (
+        "from typing import Literal, TypeAlias\n"
+        "Status: TypeAlias = Literal['ready', 'failed', 'pending']\n"
+        "if value in {'ready', 'failed', 'pending'}: pass\n"
+    )
+    visitor = StyleVisitor(POLICY, repeated_literals=True)
+    visitor.visit(ast.parse(source))
+    assert visitor.findings["duplicate_literal_catalogs"] == [3]
+
+
+def test_scoped_public_constants_need_an_external_import() -> None:
+    source = "EXPORTED = 1\nINTERNAL = 2\n_PRIVATE = 3\n"
+    visitor = StyleVisitor(
+        POLICY,
+        public_constants=True,
+        module_name="alphus.gates.cpp.sample",
+        imported_symbols=frozenset({"alphus.gates.cpp.sample.EXPORTED"}),
+    )
+    visitor.visit(ast.parse(source))
+    assert visitor.findings["unused_public_constants"] == [2]
+
+
+def test_public_constant_import_index_only_flags_unconsumed_symbols(
+    tmp_path: Path,
+) -> None:
+    source = Path("src/alphus/gates/cpp/sample.py")
+    consumer = Path("src/alphus/gates/cpp/consumer.py")
+    (tmp_path / source).parent.mkdir(parents=True)
+    (tmp_path / source).write_text("EXPORTED = 1\nINTERNAL = 2\n", encoding="utf-8")
+    (tmp_path / consumer).write_text(
+        "from alphus.gates.cpp.sample import EXPORTED\n", encoding="utf-8"
+    )
+    policy = POLICY.model_copy(
+        update={"public_constant_paths": ("src/alphus/gates/cpp/**",)}
+    )
+    result = findings_for(tmp_path, [source, consumer], policy)
+    assert result[source.as_posix()]["unused_public_constants"] == [2]

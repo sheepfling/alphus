@@ -10,6 +10,8 @@ from typing import Any, TypeAlias, cast
 from pydantic import JsonValue as PydanticJsonValue
 from pydantic import TypeAdapter
 
+from alphus.support.source_text import read_utf8_text
+
 # Pydantic accepts its recursive JsonValue union at runtime, but Pyright sees
 # that alias as a UnionType rather than as a TypeForm. Keep the adapter's result
 # concrete and cast only the schema argument accepted by Pydantic.
@@ -124,6 +126,13 @@ def _json_type_name(value: JsonValue) -> str:
 def json_values_same_type(left: JsonValue, right: JsonValue) -> bool:
     """Return whether two JSON values have the same JSON value category."""
     return _json_type_name(left) == _json_type_name(right)
+
+
+def load_json_object(path: Path) -> Mapping[str, JsonValue]:
+    """Read and validate a JSON object using the repository text policy."""
+    return require_json_object(
+        validate_json_value(read_utf8_text(path)), f"expected a JSON object: {path}"
+    )
 
 
 def require_json_object(value: JsonValue, context: str) -> Mapping[str, JsonValue]:

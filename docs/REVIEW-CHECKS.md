@@ -69,6 +69,15 @@ ratios, scientific literals, and offset conversions have no inferred unit
 meaning. Evaluating formulas to infer units or derive factors, external constant
 authorities, and dimensional correctness remain outside this checker.
 
+The exact catalog matcher in `alphus.gates.review.numeric_catalog` accepts
+`NumericUse` records with a value, line, arithmetic operation, and identifier
+context. The Python AST adapter in `numeric_engine` produces those records today.
+A C, C++, or JavaScript adapter can supply the same records after parsing its
+own syntax and use `match_numeric_uses(..., scope=...)` without importing Python
+AST nodes. Language adapters must exclude comments, strings, declarations, and
+non-arithmetic values according to their own grammar; the shared matcher only
+compares normalized evidence against configured catalogs.
+
 ## SciPy constants and conversions
 
 Selector: `scipy-constants`. IDs:

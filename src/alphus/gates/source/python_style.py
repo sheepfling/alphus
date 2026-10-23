@@ -252,6 +252,16 @@ def has_heterogeneous_tuple_result(annotation: ast.expr) -> bool:
     return False
 
 
+def literal_string_values(items: Sequence[ast.expr]) -> frozenset[str] | None:
+    """Read a string-only literal collection without evaluating expressions."""
+    values: list[str] = []
+    for item in items:
+        if not isinstance(item, ast.Constant) or not isinstance(item.value, str):
+            return None
+        values.append(item.value)
+    return frozenset(values)
+
+
 class StyleFindings(TypedDict):
     """Named Python-style finding categories with their source line numbers."""
 
@@ -277,6 +287,8 @@ class StyleFindings(TypedDict):
     undifferentiated_patterns: list[int]
     concrete_classmethod_returns: list[int]
     direct_text_reads: list[int]
+    duplicate_literal_catalogs: list[int]
+    unused_public_constants: list[int]
 
 
 def is_mutable_literal(node: ast.expr) -> bool:
@@ -365,6 +377,9 @@ class StyleVisitor(ast.NodeVisitor):
         pattern_kinds: bool = False,
         self_returns: bool = False,
         shared_text_readers: bool = False,
+        public_constants: bool = False,
+        module_name: str = "",
+        imported_symbols: AbstractSet[str] = frozenset(),
     ) -> None:
         self.findings: StyleFindings = {
             "bare_containers": [],
@@ -389,6 +404,8 @@ class StyleVisitor(ast.NodeVisitor):
             "undifferentiated_patterns": [],
             "concrete_classmethod_returns": [],
             "direct_text_reads": [],
+            "duplicate_literal_catalogs": [],
+            "unused_public_constants": [],
         }
         self.source_lines = source.splitlines()
         self.boundary_file = boundary_file
@@ -399,6 +416,9 @@ class StyleVisitor(ast.NodeVisitor):
         self.pattern_kinds = pattern_kinds
         self.self_returns = self_returns
         self.shared_text_readers = shared_text_readers
+        self.public_constants = public_constants
+        self.module_name = module_name
+        self.imported_symbols = imported_symbols
         self.boundary_marker_prefix = policy.opaque_boundary_marker_prefix
         self.boundary_min_reason_chars = policy.opaque_boundary_min_reason_chars
         self.forbidden_main_imports = set(policy.forbidden_main_imports)
@@ -480,6 +500,37 @@ class StyleVisitor(ast.NodeVisitor):
             self.findings["repeated_literals"].extend(
                 child.lineno for child in strings if counts[child.value] >= 3
             )
+            literal_aliases: set[frozenset[str]] = set()
+            alias_slices: set[int] = set()
+            for statement in node.body:
+                value = (
+                    statement.value
+                    if isinstance(statement, (ast.Assign, ast.AnnAssign))
+                    else None
+                )
+                if (
+                    not isinstance(value, ast.Subscript)
+                    or type_name(value.value) != "Literal"
+                ):
+                    continue
+                if not isinstance(value.slice, ast.Tuple):
+                    continue
+                names = literal_string_values(value.slice.elts)
+                if (
+                    names is not None
+                    and len(names) >= 3
+                    and len(names) == len(value.slice.elts)
+                ):
+                    literal_aliases.add(names)
+                    alias_slices.add(id(value.slice))
+            self.findings["duplicate_literal_catalogs"].extend(
+                expression.lineno
+                for expression in ast.walk(node)
+                if isinstance(expression, (ast.Set, ast.Tuple, ast.List))
+                and id(expression) not in alias_slices
+                and len(expression.elts) >= 3
+                and literal_string_values(expression.elts) in literal_aliases
+            )
         for statement in node.body:
             if isinstance(statement, ast.Assign):
                 targets = statement.targets
@@ -489,6 +540,15 @@ class StyleVisitor(ast.NodeVisitor):
                 value = statement.value
             else:
                 continue
+            if self.public_constants:
+                self.findings["unused_public_constants"].extend(
+                    statement.lineno
+                    for target in targets
+                    if isinstance(target, ast.Name)
+                    and target.id.isupper()
+                    and not target.id.startswith("_")
+                    and f"{self.module_name}.{target.id}" not in self.imported_symbols
+                )
             if (
                 self.pattern_kinds
                 and value is not None
@@ -863,6 +923,21 @@ def findings_for(
     """Parse selected Python source files, failing on syntax errors."""
     findings: dict[str, StyleFindings] = {}
     checkout = root.resolve(strict=True)
+    imported_symbols: set[str] = set()
+    if policy.public_constant_paths:
+        for relative in paths:
+            path = checkout / relative
+            if relative.suffix != ".py" or not path.is_file():
+                continue
+            tree = ast.parse(read_python_source(path), filename=str(relative))
+            imported_symbols.update(
+                f"{node.module}.{alias.name}"
+                for node in ast.walk(tree)
+                if isinstance(node, ast.ImportFrom)
+                and node.level == 0
+                and node.module is not None
+                for alias in node.names
+            )
     for relative in paths:
         if relative.suffix.lower() not in policy.extensions or any(
             matches_path(relative.as_posix(), pattern) for pattern in policy.exclude
@@ -904,6 +979,12 @@ def findings_for(
                 matches_path(relative.as_posix(), pattern)
                 for pattern in policy.shared_text_reader_paths
             ),
+            public_constants=any(
+                matches_path(relative.as_posix(), pattern)
+                for pattern in policy.public_constant_paths
+            ),
+            module_name=".".join(relative.with_suffix("").parts[1:]),
+            imported_symbols=frozenset(imported_symbols),
         )
         visitor.visit(ast.parse(source, filename=str(relative)))
         if any(visitor.findings.values()):

@@ -24,7 +24,7 @@ from alphus.support.data_access import (
 )
 from alphus.support.source_text import read_utf8_text
 
-LIMIT_KEYS = frozenset(
+_LIMIT_KEYS = frozenset(
     {
         "min_executable_count",
         "max_executable_count",
@@ -40,7 +40,7 @@ LIMIT_KEYS = frozenset(
         "max_total_executable_growth_bytes",
     }
 )
-BASELINE_LIMIT_KEYS = frozenset(
+_BASELINE_LIMIT_KEYS = frozenset(
     {
         "max_new_executable_bytes",
         "max_executable_growth_bytes",
@@ -79,7 +79,7 @@ def load_policy(path: Path) -> ArtifactPolicy:
     if not raw_limits:
         raise ValueError("policy requires a nonempty limits object")
     limits: dict[str, int] = {}
-    unknown = set(raw_limits) - LIMIT_KEYS
+    unknown = set(raw_limits) - _LIMIT_KEYS
     if unknown:
         raise ValueError("unknown policy limit(s): " + ", ".join(sorted(unknown)))
     for name, value in raw_limits.items():
@@ -161,7 +161,7 @@ def evaluate(
     baseline: ArtifactBaseline | None = None,
 ) -> ArtifactGate:
     limits = policy["limits"]
-    if BASELINE_LIMIT_KEYS.intersection(limits) and baseline is None:
+    if _BASELINE_LIMIT_KEYS.intersection(limits) and baseline is None:
         raise ValueError("growth limits require --baseline")
     if baseline is not None and (
         report["include"],

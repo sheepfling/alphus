@@ -19,6 +19,7 @@ from unittest import mock
 from alphus.gates.cpp import artifact_policy, artifact_scan
 from alphus.gates.cpp import cpp_artifact_quality as artifacts
 from alphus.gates.cpp import cpp_common_quality as quality
+from alphus.gates.cpp.cmake_file_api import load_codemodel
 from alphus.gates.cpp.cpp_common_quality import GateReport, ManifestSource
 from alphus.support.data_access import JsonValue
 from alphus.support.file_hash import sha256_file
@@ -583,6 +584,9 @@ class EngineQualityFixture(unittest.TestCase):
                 "dependencies": [],
             },
         )
+        codemodel = load_codemodel(self.build)
+        self.assertEqual(codemodel.configurations[0].name, "Debug")
+        self.assertEqual(codemodel.configurations[0].target_files, ["target.json"])
         report = quality.check_graph(
             self.build,
             {

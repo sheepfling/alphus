@@ -7,31 +7,34 @@ import re
 from dataclasses import dataclass
 
 from alphus.config import NumericLiteralSpec
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Framework, Scope
+from alphus.gates.review.numeric_catalog import (
+    NumericLiteralFinding,
+    NumericOperation,
+    NumericUse,
+    match_numeric_uses,
+)
 
 
-@dataclass(frozen=True, order=True, slots=True)
-class NumericLiteralFinding:
-    """An exact source location and stable category before adding a file path."""
-
+@dataclass(frozen=True, slots=True)
+class SourceNumber:
+    value: int | float
     line: int
-    rule_id: str
-    message: str
 
 
-def _literal_number(expression: ast.expr) -> tuple[int | float, int] | None:
+def _literal_number(expression: ast.expr) -> SourceNumber | None:
     """Read a signed numeric literal without evaluating a source expression."""
     match expression:
         case ast.Constant(value=bool()):
             return None
         case ast.Constant(value=int() | float() as value):
-            return value, expression.lineno
+            return SourceNumber(value, expression.lineno)
         case ast.UnaryOp(op=ast.UAdd(), operand=operand):
             return _literal_number(operand)
         case ast.UnaryOp(op=ast.USub(), operand=operand):
             literal = _literal_number(operand)
             if literal is not None:
-                return -literal[0], expression.lineno
+                return SourceNumber(-literal.value, expression.lineno)
         case _:
             pass
     return None
@@ -85,13 +88,9 @@ def _module_constant(statement: ast.stmt) -> bool:
 
 
 class _NumericVisitor(ast.NodeVisitor):
-    def __init__(
-        self, specs: tuple[NumericLiteralSpec, ...], framework: Framework
-    ) -> None:
-        self.specs = specs
-        self.framework = framework
+    def __init__(self) -> None:
         self.function_names: list[str] = []
-        self.findings: set[NumericLiteralFinding] = set()
+        self.uses: list[NumericUse] = []
 
     def visit_Module(self, node: ast.Module) -> None:
         for statement in node.body:
@@ -148,41 +147,29 @@ class _NumericVisitor(ast.NodeVisitor):
         tokens = _expression_tokens(node)
         if self.function_names:
             tokens.update(_identifier_tokens(self.function_names[-1]))
-        if isinstance(node, ast.BinOp):
-            operands = (node.left, node.right)
-        else:
-            operands = (node.target, node.value)
+        operations: dict[type[ast.operator], NumericOperation] = {
+            ast.Add: NumericOperation.ADD,
+            ast.Sub: NumericOperation.SUBTRACT,
+            ast.Mult: NumericOperation.MULTIPLY,
+            ast.Div: NumericOperation.DIVIDE,
+            ast.FloorDiv: NumericOperation.FLOOR_DIVIDE,
+            ast.Mod: NumericOperation.MODULO,
+            ast.Pow: NumericOperation.POWER,
+        }
+        operation = operations.get(type(node.op))
+        if operation is None:
+            return
+        operands = (
+            (node.left, node.right)
+            if isinstance(node, ast.BinOp)
+            else (node.target, node.value)
+        )
         for operand in operands:
             literal = _literal_number(operand)
-            if literal is None:
-                continue
-            value, line = literal
-            for spec in self.specs:
-                if value not in spec.values:
-                    continue
-                if spec.name_tokens and not tokens.intersection(
-                    token.casefold() for token in spec.name_tokens
-                ):
-                    continue
-                if spec.kind == "conversion":
-                    match node.op:
-                        case ast.Mult() | ast.Div():
-                            pass
-                        case _:
-                            continue
-                self.findings.add(
-                    NumericLiteralFinding(
-                        line=line,
-                        rule_id=rule_tag(
-                            Scope.PYTHON,
-                            self.framework,
-                            Category.STYLE,
-                            f"inline-{spec.kind}",
-                        ),
-                        message=(
-                            f"possible inline {spec.name} {spec.kind} literal {value!r}; "
-                            f"review use of {spec.replacement}"
-                        ),
+            if literal is not None:
+                self.uses.append(
+                    NumericUse(
+                        literal.value, literal.line, operation, frozenset(tokens)
                     )
                 )
 
@@ -194,6 +181,8 @@ def scan_numeric_literals(
     framework: Framework,
 ) -> list[NumericLiteralFinding]:
     """Scan arithmetic for exact catalog values without evaluating expressions."""
-    visitor = _NumericVisitor(specs, framework)
+    visitor = _NumericVisitor()
     visitor.visit(ast.parse(source))
-    return sorted(visitor.findings)
+    return match_numeric_uses(
+        visitor.uses, specs, scope=Scope.PYTHON, framework=framework
+    )

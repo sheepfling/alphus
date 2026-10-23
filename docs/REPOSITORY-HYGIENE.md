@@ -4,6 +4,12 @@ Alphus keeps Git-specific gates in `alphus.gates.vcs`. Portable repository
 layout, package, and metadata gates stay in `alphus.gates.repository`. This
 boundary gives another version-control system its own adapter and rule mapping
 without changing the portable rules or the normalized finding contract.
+`alphus.support.inventory.FileInventoryBackend` is the file-discovery seam:
+its `files(root)` and `tracked(root)` methods return safe repository-relative
+paths. Git is the default backend. A future SVN or other adapter can be passed
+to `candidate_files(..., backend=...)` and `tracked_files(..., backend=...)`;
+its VCS-specific checks belong in `alphus.gates.vcs` rather than in portable
+repository rules. The CLI currently selects the Git backend.
 
 | Rule | Reads | Cadence |
 | --- | --- | --- |

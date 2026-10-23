@@ -66,6 +66,7 @@ structured_reporting_paths = ["src/alphus/execution/orchestration.py"]
 repeated_literal_paths = [
   "src/alphus/execution/orchestration.py",
   "src/alphus/gates/python/compatibility.py",
+  "src/alphus/contracts/findings.py",
 ]
 semantic_result_paths = [
   "src/alphus/gates/repository/**",
@@ -77,6 +78,7 @@ pattern_kind_paths = [
 ]
 self_return_paths = ["src/alphus/**"]
 shared_text_reader_paths = ["src/alphus/config.py", "src/alphus/gates/**"]
+public_constant_paths = ["src/alphus/gates/cpp/**"]
 
 [checks.runtime_types]
 extensions = [".py"]

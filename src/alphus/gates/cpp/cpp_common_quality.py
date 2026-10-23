@@ -18,14 +18,17 @@ import time
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from types import MappingProxyType
 from typing import NotRequired, TypedDict, cast
 
+from alphus.gates.cpp.cmake_file_api import load_codemodel
 from alphus.support.data_access import (
     JsonValue,
     json_values_same_type,
+    load_json_object,
     nested_json_value,
     optional_json_integer,
     require_json_array,
@@ -159,7 +162,8 @@ class FragmentException(TypedDict):
     max_lines: int
 
 
-class SourcePolicy(TypedDict):
+@dataclass(slots=True)
+class SourcePolicy:
     include: list[str]
     exclude: list[str]
     include_roots: list[str]
@@ -303,18 +307,18 @@ def _source_policy(policy: Mapping[str, JsonValue]) -> SourcePolicy:
             hard_bytes_value, "source.hard_bytes must be an integer"
         )
     )
-    return {
-        "include": includes,
-        "exclude": excludes,
-        "include_roots": include_roots,
-        "min_files": integer("min_files", 1),
-        "soft_lines": integer("soft_lines", 3000),
-        "hard_lines": integer("hard_lines", 10000),
-        "hard_bytes": hard_bytes,
-        "single_consumer_header_lines": integer("single_consumer_header_lines", 500),
-        "legacy": legacy,
-        "fragment_exceptions": fragment_exceptions,
-    }
+    return SourcePolicy(
+        include=includes,
+        exclude=excludes,
+        include_roots=include_roots,
+        min_files=integer("min_files", 1),
+        soft_lines=integer("soft_lines", 3000),
+        hard_lines=integer("hard_lines", 10000),
+        hard_bytes=hard_bytes,
+        single_consumer_header_lines=integer("single_consumer_header_lines", 500),
+        legacy=legacy,
+        fragment_exceptions=fragment_exceptions,
+    )
 
 
 class ManifestSource(TypedDict):
@@ -402,13 +406,8 @@ def _graph_policy(policy: Mapping[str, JsonValue]) -> GraphPolicy:
     }
 
 
-def _read_json(path: Path) -> Mapping[str, JsonValue]:
-    payload = validate_json_value(read_utf8_text(path))
-    return require_json_object(payload, f"expected a JSON object: {path}")
-
-
 def _config(path: Path, section: str) -> Mapping[str, JsonValue]:
-    payload = _read_json(path)
+    payload = load_json_object(path)
     if payload.get("schema") != 1:
         raise ValueError(f"expected schema 1 config: {path}")
     value = payload.get(section)
@@ -496,14 +495,14 @@ def check_source(
     if not root.is_dir():
         raise ValueError(f"source root is not a directory: {root}")
     source_policy = _source_policy(policy)
-    includes = source_policy["include"]
-    excludes = source_policy["exclude"]
-    soft_lines = source_policy["soft_lines"]
-    hard_lines = source_policy["hard_lines"]
-    hard_bytes = source_policy["hard_bytes"]
-    legacy = source_policy["legacy"]
-    fragment_exceptions = source_policy["fragment_exceptions"]
-    include_roots = [root / item for item in source_policy["include_roots"]]
+    includes = source_policy.include
+    excludes = source_policy.exclude
+    soft_lines = source_policy.soft_lines
+    hard_lines = source_policy.hard_lines
+    hard_bytes = source_policy.hard_bytes
+    legacy = source_policy.legacy
+    fragment_exceptions = source_policy.fragment_exceptions
+    include_roots = [root / item for item in source_policy.include_roots]
     if (
         soft_lines < 0
         or hard_lines < soft_lines
@@ -520,7 +519,7 @@ def check_source(
         and not _matches(path.relative_to(root).as_posix(), excludes)
     }
     findings: list[GateFinding] = []
-    minimum_files = source_policy["min_files"]
+    minimum_files = source_policy.min_files
     if minimum_files < 1:
         raise ValueError("source.min_files must be at least 1")
     if len(files) < minimum_files:
@@ -701,7 +700,7 @@ def check_source(
                     )
         if (
             path.suffix.lower() in _HEADER_SUFFIXES
-            and physical >= source_policy["single_consumer_header_lines"]
+            and physical >= source_policy.single_consumer_header_lines
             and len(consumers[path]) == 1
         ):
             findings.append(
@@ -833,53 +832,12 @@ def _test_policy(policy: Mapping[str, JsonValue]) -> TestPolicy:
     }
 
 
-def _codemodel_reply(build: Path) -> tuple[Path, Mapping[str, JsonValue]]:
-    reply_dir = build / ".cmake" / "api" / "v1" / "reply"
-    indexes = sorted(
-        reply_dir.glob("index-*.json"), key=lambda path: path.stat().st_mtime
-    )
-    if not indexes:
-        raise ValueError(
-            "CMake File API codemodel is missing; create query/codemodel-v2 and reconfigure"
-        )
-    index = _read_json(indexes[-1])
-    reply_value = index.get("reply", {})
-    reply = require_json_object(
-        reply_value, "CMake File API index reply must be an object"
-    )
-    entry_value = reply.get("codemodel-v2")
-    entry: Mapping[str, JsonValue] | None = (
-        require_json_object(entry_value, "codemodel-v2 reply must be an object")
-        if entry_value is not None
-        else None
-    )
-    if entry is None:
-        for raw_item in require_json_array(
-            index.get("objects", []), "CMake File API objects must be an array"
-        ):
-            item = require_json_object(
-                raw_item, "CMake File API object must be an object"
-            )
-            version = require_json_object(
-                item.get("version", {}), "CMake object version must be an object"
-            )
-            if item.get("kind") == "codemodel" and version.get("major") == 2:
-                entry = item
-                break
-    if entry is None:
-        raise ValueError("latest CMake File API index has no codemodel-v2 reply")
-    json_file = require_json_string(
-        entry.get("jsonFile"), "codemodel-v2 reply needs jsonFile"
-    )
-    return reply_dir, _read_json(reply_dir / json_file)
-
-
 def _graph_targets(
     build: Path, policy: GraphPolicy, graph_report: Path | None
 ) -> tuple[dict[str, GraphTarget], str | None]:
     raw_targets: Sequence[Mapping[str, JsonValue]]
     if graph_report is not None:
-        graph = _read_json(graph_report)
+        graph = load_json_object(graph_report)
         if graph.get("schema") != 1:
             raise ValueError("graph report needs schema 1 and a targets array")
         raw_targets = [
@@ -899,41 +857,18 @@ def _graph_targets(
         if policy["configuration"] not in (None, configuration):
             raise ValueError("graph report has the wrong configuration")
     else:
-        reply_dir, codemodel = _codemodel_reply(build)
-        configurations = [
-            require_json_object(item, "CMake configuration must be an object")
-            for item in require_json_array(
-                codemodel.get("configurations", []),
-                "CMake configurations must be an array",
-            )
-        ]
+        codemodel = load_codemodel(build)
         selected = [
             item
-            for item in configurations
-            if policy["configuration"] is None
-            or item.get("name") == policy["configuration"]
+            for item in codemodel.configurations
+            if policy["configuration"] is None or item.name == policy["configuration"]
         ]
         if len(selected) != 1:
             raise ValueError("select exactly one CMake codemodel configuration")
-        configuration_value = selected[0].get("name")
-        configuration = (
-            None
-            if configuration_value is None
-            else require_json_string(
-                configuration_value, "CMake configuration name must be a string"
-            )
-        )
+        configuration = selected[0].name
         parsed_targets: list[Mapping[str, JsonValue]] = []
-        for entry_value in require_json_array(
-            selected[0].get("targets", []), "CMake targets must be an array"
-        ):
-            entry = require_json_object(
-                entry_value, "CMake target entry must be an object"
-            )
-            target_file = require_json_string(
-                entry.get("jsonFile"), "CMake target entry needs jsonFile"
-            )
-            target = _read_json(reply_dir / target_file)
+        for target_file in selected[0].target_files:
+            target = load_json_object(codemodel.reply_directory / target_file)
             target_id = require_json_string(target.get("id"), "CMake target needs id")
             target_name = require_json_string(
                 target.get("name"), "CMake target needs name"
@@ -1109,7 +1044,10 @@ def check_graph(
         raise ValueError("graph.max_evidence_age_seconds must be nonnegative")
     if graph_report is not None:
         evidence_path = graph_report
-        if run_id is not None and _read_json(graph_report).get("run_id") != run_id:
+        if (
+            run_id is not None
+            and load_json_object(graph_report).get("run_id") != run_id
+        ):
             findings.append(_finding("wrong_graph_run_id", str(graph_report)))
     else:
         indexes = list((build / ".cmake" / "api" / "v1" / "reply").glob("index-*.json"))
@@ -1175,7 +1113,7 @@ def check_graph(
         ):
             findings.append(_finding("missing_compile_report", "pass --compile-report"))
     else:
-        compile_data = _read_json(compile_report)
+        compile_data = load_json_object(compile_report)
         if time.time() - compile_report.stat().st_mtime > age_limit:
             findings.append(_finding("stale_compile_report", str(compile_report)))
         records = compile_data.get("records")
@@ -1256,7 +1194,7 @@ def _execution_cases(
 ) -> dict[str, list[str]]:
     results: dict[str, list[str]] = defaultdict(list)
     if normalized_json:
-        payload = _read_json(path)
+        payload = load_json_object(path)
         if payload.get("schema") != 1:
             raise ValueError("execution report needs schema 1 and a cases array")
         if run_id is not None and payload.get("run_id") != run_id:
@@ -1369,7 +1307,7 @@ def check_tests(
                     f"inventory is older than {age_limit} seconds",
                 )
             )
-        inventory_data = _read_json(inventory)
+        inventory_data = load_json_object(inventory)
         if (
             run_id is not None
             and "run_id" in inventory_data
@@ -1790,7 +1728,7 @@ def check_package(
         if binding_report is None:
             raise ValueError("package needs a cache or binding report")
         report_path = _under(root, binding_report)
-        raw_bindings = _read_json(report_path)
+        raw_bindings = load_json_object(report_path)
         if raw_bindings.get("schema") != 1:
             raise ValueError("binding report needs schema 1 and a bindings object")
         binding_map = require_json_object(

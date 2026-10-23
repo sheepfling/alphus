@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from fnmatch import fnmatchcase
 from functools import cache
 from pathlib import Path, PurePosixPath
+from typing import Protocol
 
 from alphus.config import FileInventoryPolicy
 from alphus.support.git import run_git
@@ -79,7 +81,7 @@ def git_files(root: Path) -> list[Path]:
     return sorted(selected)
 
 
-def tracked_files(root: Path) -> list[Path]:
+def _git_tracked_files(root: Path) -> list[Path]:
     """Return safe Git-index paths beneath the caller-provided checkout root."""
     checkout = root.resolve(strict=True)
     if not checkout.is_dir():
@@ -97,6 +99,61 @@ def tracked_files(root: Path) -> list[Path]:
     return sorted(selected)
 
 
-def candidate_files(root: Path, policy: FileInventoryPolicy) -> list[Path]:
-    """Return the configured subset of a safe Git file inventory."""
-    return [path for path in git_files(root) if _selected(path.as_posix(), policy)]
+class FileInventoryBackend(Protocol):
+    """Supply safe repository-relative files from a version-control backend."""
+
+    def files(self, root: Path) -> Sequence[Path]: ...
+
+    def tracked(self, root: Path) -> Sequence[Path]: ...
+
+
+class GitInventoryBackend:
+    """The default implementation using Git's working-tree and index views."""
+
+    def files(self, root: Path) -> Sequence[Path]:
+        return git_files(root)
+
+    def tracked(self, root: Path) -> Sequence[Path]:
+        return _git_tracked_files(root)
+
+
+_GIT_BACKEND = GitInventoryBackend()
+
+
+def _safe_backend_paths(root: Path, paths: Sequence[Path]) -> list[Path]:
+    """Reject absolute and escaping paths supplied by any inventory backend."""
+    checkout = root.resolve(strict=True)
+    selected: list[Path] = []
+    for path in paths:
+        name = path.as_posix()
+        if path.is_absolute() or ".." in path.parts or "\\" in name:
+            continue
+        if not (checkout / path).resolve().is_relative_to(checkout):
+            continue
+        selected.append(path)
+    return sorted(selected)
+
+
+def tracked_files(
+    root: Path, *, backend: FileInventoryBackend | None = None
+) -> list[Path]:
+    """Return safe tracked paths from the selected repository inventory backend."""
+    provider = backend or _GIT_BACKEND
+    return _safe_backend_paths(root, provider.tracked(root))
+
+
+def candidate_files(
+    root: Path,
+    policy: FileInventoryPolicy,
+    *,
+    backend: FileInventoryBackend | None = None,
+) -> list[Path]:
+    """Return the configured subset of safe repository inventory files."""
+    provider = backend or _GIT_BACKEND
+    return [
+        path
+        for path in _safe_backend_paths(root, provider.files(root))
+        if _selected(path.as_posix(), policy)
+        and (root / path).is_file()
+        and not (root / path).is_symlink()
+    ]

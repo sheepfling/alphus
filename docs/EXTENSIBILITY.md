@@ -112,7 +112,7 @@ added only with a clear resolved plan and unchanged default selection.
 
 ### Add a built-in theme today
 
-The `alphus.gates.review`, `source`, `repository`, and `hygiene` packages
+The `alphus.gates.review`, `source`, `python`, `repository`, `vcs`, and `hygiene` packages
 are working examples. Put checker implementations under `alphus.gates.<theme>`
 and put reusable parsing or file
 access in `alphus.support` only when more than one gate needs it. A portable

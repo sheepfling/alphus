@@ -336,6 +336,10 @@ def _python_style_categories(
         ),
         _StyleCategory("direct_text_reads", issues["direct_text_reads"]),
         _StyleCategory(
+            "duplicate_literal_catalogs", issues["duplicate_literal_catalogs"]
+        ),
+        _StyleCategory("unused_public_constants", issues["unused_public_constants"]),
+        _StyleCategory(
             "pydantic_collection_contracts", issues["pydantic_collection_contracts"]
         ),
     )

@@ -57,27 +57,29 @@ language neutral.
 - `alphus.support` owns shared file inventory, contained-file/JSON access,
   AST name resolution, and platform probes. These utilities do not emit
   findings or register rules.
-- `alphus.gates.review` owns numeric-literal, test-quality, input-contract,
-  Pydantic-practice, and FastAPI-practice checkers. Its `runners.py` binds their
-  selectors to validated policies.
+- `alphus.gates.review` owns numeric-literal, test-quality, and input-contract
+  checkers. `review.frameworks` contains the Pydantic and FastAPI practice
+  modules so each framework can grow independently. The theme's `runners.py`
+  binds their selectors to validated policies.
 - `alphus.gates.source` owns portable source and launcher checks for Python,
   JavaScript, and JSON. Its `runners.py` binds these selectors to validated
   policies. Language-specific analysis remains inside each checker.
-- `alphus.gates.repository` owns architecture, package, dependency-lock,
-  repository-layout, and Git-backed checks. Git ignores and history are
-  independent finding sources with separate fast and infrequent profiles. Its
-  runner mapping also adds graph, version, and callable-registry findings to
-  the package-boundary selector.
+- `alphus.gates.repository` owns architecture, package, dependency-lock, and
+  repository-layout checks. Its runner mapping also adds graph, version, and
+  callable-registry findings to the package-boundary selector.
+- `alphus.gates.vcs` owns Git ignore, attribute, history, and worktree checks.
+  Fast working-tree checks and infrequent history checks use separate profiles.
 - `alphus.gates.hygiene` owns file-size, line-length, comment-marker, and
   shared-utility checks. Comment markers use language-aware comment scanning
   while retaining one portable finding contract.
 - `alphus.gates.stubs` owns the installed stub-package workflow and fixture
   controller.
-- `alphus.gates.python` owns the installed-package import smoke workflow
-  and the [compatibility-import removal gate](COMPATIBILITY-IMPORTS.md).
-  The first maps every Python file to an import name and imports it from
-  the installed package; the second requires dated plans for forwarding
-  modules.
+- `alphus.gates.python` owns module-role boundaries, the installed-package
+  import smoke workflow, and the
+  [compatibility-import removal gate](COMPATIBILITY-IMPORTS.md).
+  The import smoke maps every Python file to an import name and imports it
+  from the installed package; the compatibility gate requires dated plans
+  for forwarding modules.
 - `alphus.contracts` owns finding records, severity, priority, and normalized
   diagnostic types shared by policies and execution.
 - `alphus.policy` owns validated policy models and the built-in selector

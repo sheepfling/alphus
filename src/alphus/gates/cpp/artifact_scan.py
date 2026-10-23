@@ -39,7 +39,7 @@ DEFAULT_INCLUDE_GLOBS = (
     "*.dwp",
     "*.dSYM/Contents/Resources/DWARF/*",
 )
-SECTION_HEADER_REGEX = re.compile(r"^\s*\d+\s+(\S+)\s+([0-9a-fA-F]+)\s+", re.MULTILINE)
+_SECTION_HEADER_REGEX = re.compile(r"^\s*\d+\s+(\S+)\s+([0-9a-fA-F]+)\s+", re.MULTILINE)
 
 
 def _matches(path: str, patterns: Sequence[str]) -> bool:
@@ -51,7 +51,7 @@ def _matches(path: str, patterns: Sequence[str]) -> bool:
 def parse_objdump_sections(output: str) -> SectionInventory:
     """Return section sizes in bytes from GNU/LLVM objdump -h output."""
     sections: dict[str, int] = {}
-    for name, hexadecimal_size in SECTION_HEADER_REGEX.findall(output):
+    for name, hexadecimal_size in _SECTION_HEADER_REGEX.findall(output):
         sections[name] = sections.get(name, 0) + int(hexadecimal_size, 16)
     if not sections:
         raise ValueError("objdump returned no section headers")
