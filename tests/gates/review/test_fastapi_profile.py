@@ -86,9 +86,7 @@ def test_native_profile_reports_framework_async_typing_and_security_findings(
     repeated_status, repeated_findings = _ruff_report(example, "fixtures/violations.py")
     codes = {finding["code"] for finding in findings}
     b008_lines = {
-        finding["location"]["row"]
-        for finding in findings
-        if finding["code"] == "B008"
+        finding["location"]["row"] for finding in findings if finding["code"] == "B008"
     }
     fixture_lines = (
         (example / "fixtures/violations.py").read_text(encoding="utf-8").splitlines()
