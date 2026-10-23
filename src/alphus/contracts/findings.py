@@ -2,16 +2,39 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Literal, NamedTuple, Self, TypeAlias, TypeVar, get_args
+from typing import Literal, NamedTuple, Self, TypeAlias, TypedDict, TypeVar, get_args
 
 from alphus.contracts.rule_tags import NAMESPACE, Category, RuleTag, Scope
 
 Severity: TypeAlias = Literal["error", "warning", "info"]
 RemediationPriority: TypeAlias = Literal["low", "normal", "high", "urgent"]
 REMEDIATION_PRIORITIES: frozenset[str] = frozenset(get_args(RemediationPriority))
+
+
+class DiagnosticWire(TypedDict):
+    """Stable public JSON shape for one normalized diagnostic."""
+
+    source: str
+    rule_id: str
+    message: str
+    severity: Severity
+    path: str | None
+    line: int | None
+    priority: RemediationPriority | None
+
+
+class FindingWire(TypedDict):
+    """Stable public JSON shape for one direct rule finding."""
+
+    rule_id: str
+    path: str
+    message: str
+    line: int | None
+    severity: Severity
+
 
 SEVERITY_ORDER: Mapping[Severity, int] = MappingProxyType(
     {"info": 0, "warning": 100, "error": 200}
@@ -83,7 +106,7 @@ class Diagnostic:
         """Match a finding by its typed category without parsing its wire ID."""
         return self._rule_tag is not None and self._rule_tag.category is category
 
-    def to_wire(self) -> dict[str, object]:
+    def to_wire(self) -> DiagnosticWire:
         """Serialize only the established public diagnostic fields."""
         return {
             "source": self.source,
@@ -138,12 +161,8 @@ class FindingRollups:
 
         def rows(
             groups: Mapping[_RollupKey, Sequence[Diagnostic]],
+            wire_key: Callable[[_RollupKey], str],
         ) -> tuple[FindingRollup, ...]:
-            def wire_key(key: _RollupKey) -> str:
-                if isinstance(key, _ComplaintKey):
-                    return f"{key.category}/{key.complaint}"
-                return str(key)
-
             return tuple(
                 FindingRollup(
                     wire_key(key), len(items), SeverityCounts.from_diagnostics(items)
@@ -153,7 +172,11 @@ class FindingRollups:
                 )
             )
 
-        return cls(rows(by_scope), rows(by_category), rows(by_complaint))
+        return cls(
+            rows(by_scope, str),
+            rows(by_category, str),
+            rows(by_complaint, lambda key: f"{key.category}/{key.complaint}"),
+        )
 
 
 class SourceFinding(NamedTuple):
@@ -184,7 +207,7 @@ class Finding:
         """Return the validated semantic identity for internal consumers."""
         return self._rule_tag
 
-    def to_wire(self) -> dict[str, object]:
+    def to_wire(self) -> FindingWire:
         """Serialize only the established public finding fields."""
         return {
             "rule_id": self.rule_id,
