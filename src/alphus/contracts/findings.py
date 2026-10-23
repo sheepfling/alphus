@@ -101,7 +101,9 @@ class FindingRollups:
                 diagnostic
             )
 
-        def rows(groups: Mapping[str, Sequence[Diagnostic]]) -> tuple[FindingRollup, ...]:
+        def rows(
+            groups: Mapping[str, Sequence[Diagnostic]],
+        ) -> tuple[FindingRollup, ...]:
             return tuple(
                 FindingRollup(key, len(items), SeverityCounts.from_diagnostics(items))
                 for key, items in sorted(groups.items())
