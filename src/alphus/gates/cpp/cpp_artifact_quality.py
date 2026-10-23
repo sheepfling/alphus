@@ -5,8 +5,9 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import cast
 
 from alphus.gates.cpp.artifact_contracts import (
     ArtifactScanOptions,
@@ -15,7 +16,12 @@ from alphus.gates.cpp.artifact_contracts import (
 )
 from alphus.gates.cpp.artifact_policy import evaluate, load_policy, manifest_digest
 from alphus.gates.cpp.artifact_scan import DEFAULT_INCLUDE_GLOBS, scan_directory
-from alphus.support.data_access import validate_json_value
+from alphus.gates.cpp.report_history import (
+    add_history_argument,
+    capture_cpp_run,
+    write_cpp_history,
+)
+from alphus.support.data_access import JsonValue, validate_json_value
 from alphus.support.reporting import OutputFormat, ReportLine, ReportView, emit_report
 from alphus.support.source_text import read_utf8_text
 
@@ -36,6 +42,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         child.add_argument("--run-id")
         child.add_argument("--manifest", type=Path)
         child.add_argument("--output", type=Path)
+        add_history_argument(child)
         child.add_argument(
             "--format",
             type=OutputFormat,
@@ -47,6 +54,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             child.add_argument("--baseline", type=Path)
     arguments = parser.parse_args(argv)
     try:
+        history_context = (
+            capture_cpp_run(arguments.history_root or arguments.root)
+            if arguments.history_dir is not None
+            else None
+        )
         policy = load_policy(arguments.policy) if arguments.command == "check" else None
         includes: Sequence[str] = arguments.include or (
             policy["include"]
@@ -124,7 +136,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                 for finding in gate_findings
             ),
         )
+        saved = write_cpp_history(
+            cast(Mapping[str, JsonValue], report),
+            arguments.history_dir,
+            history_context,
+            f"cpp-artifact-{arguments.command}",
+        )
         emit_report(report, view, arguments.output, arguments.format)
+        if saved is not None:
+            print(f"history={saved}", file=sys.stderr)
         return 0 if report.get("gate", {}).get("passed", True) else 1
     except (OSError, ValueError, KeyError, json.JSONDecodeError) as error:
         print(f"artifact quality: {error}", file=sys.stderr)

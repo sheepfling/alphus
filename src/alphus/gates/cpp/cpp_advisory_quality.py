@@ -21,6 +21,12 @@ from pathlib import Path
 from typing import TypedDict
 
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.gates.cpp.report_history import (
+    CppRunContext,
+    add_history_argument,
+    capture_cpp_run,
+    write_cpp_history,
+)
 from alphus.support.data_access import (
     JsonValue,
     load_json_object,
@@ -233,6 +239,10 @@ class ImpactSnapshot(TypedDict):
     metrics: dict[str, float]
     source_revision: JsonValue
     manifest_sha256: JsonValue
+    branch: str | None
+    worktree: str | None
+    actor: str | None
+    record_id: str | None
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -252,13 +262,18 @@ def _parser() -> argparse.ArgumentParser:
     style.add_argument("--max-complexity", type=int, default=80)
     style.add_argument("--max-findings", type=int, default=400)
     style.add_argument("--output", type=Path)
+    add_history_argument(style)
     style.add_argument("--fail-on-findings", action="store_true")
 
     trend = commands.add_parser("trend", help="summarize compatible impact snapshots")
-    trend.add_argument("snapshot_dir", type=Path)
+    trend.add_argument("snapshot_dir", type=Path, nargs="?")
     trend.add_argument("--window", type=int, default=50)
     trend.add_argument("--top-events", type=int, default=20)
+    trend.add_argument("--branch")
+    trend.add_argument("--worktree", type=Path)
+    trend.add_argument("--actor")
     trend.add_argument("--output", type=Path)
+    add_history_argument(trend)
     trend.add_argument("--fail-on-worsening", action="store_true")
     return parser
 
@@ -590,13 +605,24 @@ def _read_json_object(path: Path) -> dict[str, JsonValue]:
 
 
 def _timestamp(value: JsonValue, path: Path) -> datetime:
-    if isinstance(value, str):
-        try:
-            parsed = datetime.fromisoformat(value)
-            return parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed
-        except ValueError:
-            pass
-    return datetime.fromtimestamp(path.stat().st_mtime, UTC)
+    timestamp = require_json_string(
+        value, f"impact snapshot needs an explicit UTC timestamp: {path}"
+    )
+    try:
+        parsed = datetime.fromisoformat(timestamp)
+    except ValueError as error:
+        raise ValueError(f"invalid impact snapshot timestamp: {path}") from error
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError(f"impact snapshot timestamp needs a UTC offset: {path}")
+    return parsed.astimezone(UTC)
+
+
+def _optional_history_text(value: JsonValue, label: str, path: Path) -> str | None:
+    return (
+        require_json_string(value, f"C++ history {label} must be text: {path}")
+        if value is not None
+        else None
+    )
 
 
 def _numeric(value: JsonValue) -> float | None:
@@ -613,14 +639,60 @@ def _load_impact_snapshots(
         raise ValueError(f"snapshot path is not a directory: {snapshot_dir}")
     snapshots: list[ImpactSnapshot] = []
     missing_context = 0
-    for path in sorted(snapshot_dir.glob("*.json")):
-        if path.is_symlink() or not path.is_file():
+    for path in sorted(snapshot_dir.rglob("*.json")):
+        if path.is_symlink() or not path.is_file() or path.name.startswith(".pending-"):
             continue
-        payload = _read_json_object(path)
+        outer = _read_json_object(path)
+        archive = outer.get("kind") == "alphus-cpp-report-history"
+        provenance: Mapping[str, JsonValue] = {}
+        branch: str | None = None
+        worktree: str | None = None
+        actor: str | None = None
+        record_id: str | None = None
+        timestamp_value = outer.get("created_at_utc")
+        payload = outer
+        if archive:
+            payload = dict(
+                require_json_object(
+                    outer.get("report"), f"C++ history record needs a report: {path}"
+                )
+            )
+            if payload.get("gate") != "impact":
+                continue
+            expected_hash = require_json_string(
+                outer.get("report_sha256"), f"C++ history record needs a digest: {path}"
+            )
+            actual_hash = hashlib.sha256(
+                json.dumps(
+                    payload,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    ensure_ascii=False,
+                    allow_nan=False,
+                ).encode("utf-8")
+            ).hexdigest()
+            if actual_hash != expected_hash:
+                raise ValueError(f"C++ history record digest mismatch: {path}")
+            provenance = require_json_object(
+                outer.get("provenance"), f"C++ history record needs provenance: {path}"
+            )
+            branch = _optional_history_text(provenance.get("branch"), "branch", path)
+            worktree = _optional_history_text(
+                provenance.get("worktree"), "worktree", path
+            )
+            actor = _optional_history_text(provenance.get("actor"), "actor", path)
+            record_id = require_json_string(
+                outer.get("record_id"), f"C++ history record needs an ID: {path}"
+            )
+            timestamp_value = outer.get("completed_at_utc")
         if payload.get("gate") != "impact":
             continue
-        run_id = payload.get("run_id")
-        if not isinstance(run_id, str) or not run_id:
+        raw_run_id = payload.get("run_id")
+        run_id = require_json_string(
+            raw_run_id if raw_run_id is not None else record_id,
+            f"impact snapshot needs a nonempty run_id: {path}",
+        )
+        if not run_id:
             raise ValueError(f"impact snapshot needs a nonempty run_id: {path}")
         context_raw = payload.get("comparison_context")
         summary_raw = require_json_object(
@@ -698,32 +770,64 @@ def _load_impact_snapshots(
             {
                 "path": str(path),
                 "run_id": run_id,
-                "created_at_utc": _timestamp(payload.get("created_at_utc"), path),
+                "created_at_utc": _timestamp(timestamp_value, path),
                 "comparison_context": normalized_context,
                 "context_key": json.dumps(
-                    normalized_context, sort_keys=True, separators=(",", ":")
+                    {
+                        "build": {
+                            "configuration": configuration,
+                            "toolchain": toolchain,
+                            "selected_targets": sorted(selected_targets),
+                            "expected_executables": sorted(expected_executables),
+                            "input_paths": sorted(row["path"] for row in inputs),
+                        },
+                        "branch": branch
+                        if branch is not None
+                        else (
+                            f"@detached:{provenance.get('revision')}"
+                            if archive
+                            else "@legacy"
+                        ),
+                    },
+                    sort_keys=True,
+                    separators=(",", ":"),
                 ),
                 "metrics": metrics,
-                "source_revision": payload.get("source_revision"),
+                "source_revision": payload.get("source_revision")
+                or provenance.get("revision"),
                 "manifest_sha256": payload.get("manifest_sha256"),
+                "branch": branch,
+                "worktree": worktree,
+                "actor": actor,
+                "record_id": record_id,
             }
         )
     snapshots.sort(key=lambda row: (row["created_at_utc"], row["run_id"]))
-    run_ids = [row["run_id"] for row in snapshots]
-    if len(run_ids) != len(set(run_ids)):
-        raise ValueError("impact snapshot directory contains duplicate run IDs")
+    identities = [row["record_id"] or row["run_id"] for row in snapshots]
+    if len(identities) != len(set(identities)):
+        raise ValueError("impact snapshot directory contains duplicate snapshot IDs")
     return snapshots, missing_context
 
 
 def _trend_report(args: argparse.Namespace) -> dict[str, JsonValue]:
     if args.window < 2 or args.top_events < 1:
         raise ValueError("trend window must be >= 2 and top-events must be positive")
-    snapshots, missing_context = _load_impact_snapshots(args.snapshot_dir.resolve())
-    series: list[ImpactSnapshot] = []
-    for snapshot in snapshots:
-        if series and snapshot["context_key"] != series[-1]["context_key"]:
-            series = []
-        series.append(snapshot)
+    snapshot_dir = (
+        args.snapshot_dir
+        or args.history_dir
+        or Path("out/quality/cpp-impact-snapshots")
+    )
+    snapshots, missing_context = _load_impact_snapshots(snapshot_dir.resolve())
+    total_snapshots = len(snapshots)
+    if args.branch is not None:
+        snapshots = [row for row in snapshots if row["branch"] == args.branch]
+    if args.worktree is not None:
+        selected_worktree = str(args.worktree.resolve())
+        snapshots = [row for row in snapshots if row["worktree"] == selected_worktree]
+    if args.actor is not None:
+        snapshots = [row for row in snapshots if row["actor"] == args.actor]
+    latest_key = snapshots[-1]["context_key"] if snapshots else None
+    series = [row for row in snapshots if row["context_key"] == latest_key]
     rows = series[-args.window :]
     metrics: list[dict[str, JsonValue]] = []
     events: list[dict[str, JsonValue]] = []
@@ -768,6 +872,9 @@ def _trend_report(args: argparse.Namespace) -> dict[str, JsonValue]:
                 event: dict[str, JsonValue] = {
                     "run_id": rows[index]["run_id"],
                     "timestamp_utc": rows[index]["created_at_utc"].isoformat(),
+                    "branch": rows[index]["branch"],
+                    "worktree": rows[index]["worktree"],
+                    "actor": rows[index]["actor"],
                     "metric": key,
                     "previous": before,
                     "current": after,
@@ -804,6 +911,11 @@ def _trend_report(args: argparse.Namespace) -> dict[str, JsonValue]:
             "created_at_utc": row["created_at_utc"].isoformat(),
             "source_revision": row["source_revision"],
             "manifest_sha256": row["manifest_sha256"],
+            "inputs": row["comparison_context"]["inputs"],
+            "branch": row["branch"],
+            "worktree": row["worktree"],
+            "actor": row["actor"],
+            "record_id": row["record_id"],
         }
         for row in rows
     ]
@@ -818,6 +930,7 @@ def _trend_report(args: argparse.Namespace) -> dict[str, JsonValue]:
         "metrics": {
             "snapshot_count": len(rows),
             "available_snapshot_count": len(snapshots),
+            "total_snapshot_count": total_snapshots,
             "discarded_context_snapshot_count": len(snapshots) - len(series),
             "missing_context_snapshot_count": missing_context,
             "window": args.window,
@@ -833,10 +946,20 @@ def _trend_report(args: argparse.Namespace) -> dict[str, JsonValue]:
     }
 
 
-def _emit(report: Mapping[str, JsonValue], output: Path | None) -> None:
+def _emit(
+    report: Mapping[str, JsonValue],
+    output: Path | None,
+    history_dir: Path | None = None,
+    history_context: CppRunContext | None = None,
+) -> None:
+    saved = write_cpp_history(
+        report, history_dir, history_context, str(report.get("gate", "advisory"))
+    )
     encoded = json.dumps(report, indent=2, sort_keys=True) + "\n"
     if output is None:
         print(encoded, end="")
+        if saved is not None:
+            print(f"history={saved}", file=sys.stderr)
         return
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(encoded, encoding="utf-8")
@@ -853,14 +976,28 @@ def _emit(report: Mapping[str, JsonValue], output: Path | None) -> None:
         f"{report.get('gate')}: {report.get('status')}; "
         f"findings={finding_count}; report={output}"
     )
+    if saved is not None:
+        print(f"history={saved}", file=sys.stderr)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
+        history_context = (
+            capture_cpp_run(
+                args.history_root
+                or (
+                    args.root
+                    if args.command == "style"
+                    else args.snapshot_dir or args.history_dir
+                )
+            )
+            if args.history_dir is not None
+            else None
+        )
         if args.command == "style":
             report = _style_report(args)
-            _emit(report, args.output)
+            _emit(report, args.output, args.history_dir, history_context)
             metrics = report.get("metrics")
             metric_values = require_json_object(metrics, "style report needs metrics")
             raw_count = optional_json_integer(metric_values.get("finding_count"))
@@ -870,7 +1007,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 else 0
             )
         report = _trend_report(args)
-        _emit(report, args.output)
+        _emit(report, args.output, args.history_dir, history_context)
         metrics = report.get("metrics")
         metric_values = require_json_object(metrics, "trend report needs metrics")
         raw_count = optional_json_integer(metric_values.get("latest_worsening_count"))

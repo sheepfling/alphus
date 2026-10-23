@@ -42,7 +42,7 @@ kind = "command"
 name = "C++ include-impact trends"
 argv = [
   "{python}", "-m", "alphus.gates.cpp.cpp_advisory_quality", "trend",
-  "{root}/out/quality/cpp-impact-snapshots", "--output",
+  "--history-root", "{root}", "--output",
   "{root}/out/quality/cpp-impact-trend.json", "--fail-on-worsening",
 ]
 rollout = "provisional"

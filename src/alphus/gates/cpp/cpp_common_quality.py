@@ -27,6 +27,12 @@ from types import MappingProxyType
 from typing import NotRequired, TypedDict, cast
 
 from alphus.gates.cpp.cmake_file_api import load_codemodel
+from alphus.gates.cpp.report_history import (
+    CppRunContext,
+    add_history_argument,
+    capture_cpp_run,
+    write_cpp_history,
+)
 from alphus.support.data_access import (
     JsonValue,
     json_values_same_type,
@@ -514,6 +520,8 @@ def _emit(
     report: GateReport,
     output: Path | None,
     format: OutputFormat = OutputFormat.AUTO,
+    history_dir: Path | None = None,
+    history_context: CppRunContext | None = None,
 ) -> int:
     view = ReportView(
         report["gate"],
@@ -529,7 +537,15 @@ def _emit(
             for item in report["findings"][:20]
         ),
     )
+    saved = write_cpp_history(
+        cast(Mapping[str, JsonValue], report),
+        history_dir,
+        history_context,
+        report["gate"],
+    )
     emit_report(report, view, output, format)
+    if saved is not None:
+        print(f"history={saved}", file=sys.stderr)
     return 0 if report["passed"] else 1
 
 
@@ -2691,6 +2707,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     manifest_command.add_argument("--input", action="append", required=True)
     manifest_command.add_argument("--require-clean", action="store_true")
     manifest_command.add_argument("--output", required=True, type=Path)
+    add_history_argument(manifest_command)
     manifest_command.add_argument(
         "--format",
         type=OutputFormat,
@@ -2702,6 +2719,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     build_command.add_argument("--run-id", required=True)
     build_command.add_argument("--cwd", type=Path, default=Path("."))
     build_command.add_argument("--output", required=True, type=Path)
+    add_history_argument(build_command)
     build_command.add_argument(
         "--format",
         type=OutputFormat,
@@ -2721,6 +2739,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         child.add_argument("--config", required=True, type=Path)
         child.add_argument("--output", type=Path)
+        add_history_argument(child)
         child.add_argument(
             "--format",
             type=OutputFormat,
@@ -2743,6 +2762,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         if args.command == "manifest":
+            history_root = args.source_root
+        elif args.command == "run-build":
+            history_root = args.cwd
+        elif args.command == "verdict":
+            history_root = args.config.parent
+        else:
+            history_root = args.root
+        history_context = (
+            capture_cpp_run(args.history_root or history_root)
+            if args.history_dir is not None
+            else None
+        )
+        if args.command == "manifest":
             manifest = create_manifest(
                 args.source_root,
                 args.run_id,
@@ -2754,12 +2786,20 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.require_clean,
                 args.artifact_root,
             )
+            saved = write_cpp_history(
+                cast(Mapping[str, JsonValue], manifest),
+                args.history_dir,
+                history_context,
+                "manifest",
+            )
             emit_report(
                 manifest,
                 ReportView("manifest", True, "created"),
                 args.output,
                 args.format,
             )
+            if saved is not None:
+                print(f"history={saved}", file=sys.stderr)
             return 0
         if args.command == "run-build":
             command = args.build_command
@@ -2784,7 +2824,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.run_id,
             )
             report["manifest_sha256"] = manifest_digest
-            return _emit(report, args.output, args.format)
+            return _emit(
+                report, args.output, args.format, args.history_dir, history_context
+            )
         section = _config(args.config, args.command)
         if args.command == "source":
             report = check_source(args.root, section, args.run_id)
@@ -2828,7 +2870,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "expected_executables": manifest["build"]["expected_executables"],
                     "inputs": sorted(inputs, key=lambda item: item["path"]),
                 }
-        return _emit(report, args.output, args.format)
+        return _emit(
+            report, args.output, args.format, args.history_dir, history_context
+        )
     except (
         OSError,
         ValueError,
