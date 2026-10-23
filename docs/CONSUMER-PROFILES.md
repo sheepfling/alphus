@@ -13,7 +13,8 @@ alphus --fix-plan
 ```
 
 The starter policy contains one Markdown check and its explicit fixer. It needs
-no global `[files]`, `[checks]`, `[orchestration]`, or native config file.
+only two lines: `schema_version = 1` and `tools = ["rumdl"]`. It needs no
+global `[files]`, `[checks]`, `[orchestration]`, or native config file.
 `quality-gates.toml` is the default policy name, the current directory is the
 default root, and `check` is the default profile. `alphus --profile <name>`
 selects another profile. Use `--root` and `--config` when running from another
@@ -22,14 +23,32 @@ scripts. `alphus --help` shows every option.
 
 Add tools one step at a time. The
 [two-tool Markdown example](../examples/markdown/quality-gates.toml) pairs
-rumdl with mdrepo. Add a `[files]` inventory when selecting an
+rumdl with mdrepo using `tools = ["rumdl", "mdrepo"]`. The shortcut also
+accepts `taplo` and `prettier`; selection order is execution and fix order.
+Each selected tool gets a scoped read-only command and an explicit fixer.
+Alphus supplies a default `check` profile plus language profiles. Install
+only the tools you select. Add a `[files]` inventory when selecting an
 Alphus-owned `kind = "rule"` step; each file-scoped command declares its own
 `files` pattern beside its argv. The [subtool guide](SUBTOOLS.md) explains
 config ownership, file scope, check/fix pairing, and Markdown rule overlap.
 
-Use separate language files when a single policy becomes hard to read. The
-larger example below demonstrates that layout; the starter policy is fully
-supported without fragments.
+The `tools` shortcut is for standard invocations. Add a project-specific
+check without repeating those tool commands:
+
+```toml
+schema_version = 1
+tools = ["rumdl"]
+
+[[orchestration.steps]]
+kind = "command"
+name = "Python tests"
+argv = ["{python}", "-m", "pytest"]
+```
+
+`check` runs selected tools first, then additional steps. Use the explicit
+policy when changing a selected tool's command or file scope, defining named
+profiles, or splitting steps into language files. The larger example below
+demonstrates that layout. Native-tool settings stay with each tool.
 
 The example policy at
 [`examples/consumer/quality-gates.toml`](../examples/consumer/quality-gates.toml)

@@ -79,10 +79,23 @@ the standalone package directory:
 python -m pip install -e /path/to/alphus
 ```
 
-Keep that repository's file patterns and thresholds in its own
-`quality-gates.toml`. From the consumer repository root, run `alphus` for its
-default profile or `alphus --profile markdown` for a named profile. From
-elsewhere, pass the repository and policy paths explicitly:
+For a Markdown consumer, add this `quality-gates.toml` to its repository root:
+
+```toml
+schema_version = 1
+tools = ["rumdl"]
+```
+
+Install rumdl in that repository's development environment, then run `alphus`
+from the root. `alphus --profile markdown` selects the generated language
+profile, and `alphus --fix-plan` shows its available fixer. The selected native
+tool keeps its own configuration. Add `mdrepo`, `taplo`, or `prettier` to the
+list only when those tools are installed and needed. Add a custom
+`[[orchestration.steps]]` beside `tools` when the repository needs another
+check; the [consumer guide](docs/CONSUMER-PROFILES.md) shows the full policy for
+named profiles and tool-command customization.
+
+From another directory, pass the repository and policy paths explicitly:
 
 ```sh
 alphus --root /path/to/other-repository \

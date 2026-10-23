@@ -46,7 +46,7 @@ inspection_exclude = ["tests/**"]
 [checks.python_style]
 extensions = [".py"]
 exclude = []
-opaque_boundary_paths = []
+opaque_boundary_paths = ["src/alphus/config.py"]
 opaque_boundary_marker_prefix = "# opaque-boundary: "
 opaque_boundary_min_reason_chars = 12
 forbidden_main_imports = ["main"]

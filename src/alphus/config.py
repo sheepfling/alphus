@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import tomllib
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Annotated, Literal, TextIO
 
-from pydantic import Field, field_validator
+from pydantic import Field, TypeAdapter, field_validator, model_validator
 
 from alphus.contracts.findings import Severity
 from alphus.policy.architecture import (
@@ -23,6 +24,7 @@ from alphus.policy.base import (
     require_unique,
     validate_single_path,
 )
+from alphus.policy.native_tools import native_tool_policy
 from alphus.policy.orchestration import (
     CheckPolicies,
     CommandRunStep,
@@ -131,6 +133,36 @@ class QualityGateConfig(StrictModel):
     files: FileInventoryPolicy | None = None
     checks: Annotated[CheckPolicies, Field(default_factory=CheckPolicies)]
     orchestration: OrchestrationPolicy | None = None
+
+    # opaque-boundary: raw TOML mapping before policy model validation
+    @model_validator(mode="before")
+    @classmethod
+    def expand_native_tools(cls, value: Mapping[str, object] | None) -> object:
+        """Keep the common-tool shortcut outside the full policy model."""
+        if not isinstance(value, Mapping) or "tools" not in value:
+            return value
+        if "orchestration_files" in value:
+            raise ValueError("tools cannot be combined with orchestration_files")
+        selected = TypeAdapter(list[str]).validate_python(value["tools"], strict=True)
+        native = native_tool_policy(selected)
+        declared = _PartialOrchestration.model_validate(value.get("orchestration", {}))
+        if declared.profiles:
+            raise ValueError(
+                "tools can add custom steps, but named profiles require explicit orchestration"
+            )
+        check = OrchestrationProfile(
+            name="check",
+            steps=tuple(step.name for step in (*native.steps, *declared.steps)),
+        )
+        document = dict(value)
+        del document["tools"]
+        document["orchestration"] = OrchestrationPolicy(
+            steps=(*native.steps, *declared.steps),
+            profiles=(*native.profiles[:-1], check),
+            default_profile=declared.default_profile,
+            failure_threshold=declared.failure_threshold,
+        )
+        return document
 
 
 class _PartialOrchestration(StrictModel):

@@ -7,8 +7,8 @@ fix it. Start with one `quality-gates.toml`; split language steps into
 
 ## One place for each setting
 
-- `quality-gates.toml` selects steps, profiles, rollout, file scope, and fixers.
-  The [starter](../examples/starter/quality-gates.toml) needs only this file.
+- `quality-gates.toml` selects the native tools or explicit steps to run.
+  The [starter](../examples/starter/quality-gates.toml) needs only two lines.
 - rumdl owns Markdown style and ordinary local links (`MD057`, `MD051`). Add
   `[tool.rumdl]` in `pyproject.toml` only when changing its defaults.
 - mdrepo owns portable repository links and the document graph. Add
@@ -24,6 +24,26 @@ normal development or CI dependency setup. Alphus does not install native
 tools as runtime dependencies. Use `{python} -m <tool>` for a Python tool that
 must run in Alphus's interpreter, and a project-pinned executable for tools
 that are not Python packages. A missing executable fails its step visibly.
+
+For standard commands, select tools by name in the repository's
+`quality-gates.toml`:
+
+```toml
+schema_version = 1
+tools = ["rumdl", "mdrepo", "taplo", "prettier"]
+```
+
+Only selected tools run. Their check and fixer commands use file scopes for
+Markdown, TOML, or JSON; the list order controls execution and fix order.
+Alphus creates `check` plus `markdown`, `toml`, and `json` profiles for the
+languages selected. Use `alphus --fix-plan` to see the actual commands before
+applying a named fixer. Native tools still discover their own configuration.
+Add project-specific `[[orchestration.steps]]` beside `tools`; `check`
+runs them after the selected native tools. A custom step may be provisional.
+For named profile composition, split language files, or changes to a selected
+tool's command or file scope, use the explicit
+[consumer example](../examples/consumer/quality-gates.toml). Keep the root
+policy focused on selection and ordering; rule settings remain with each tool.
 
 The command runner starts in the repository root by default. A step may set
 `working_directory` to a path inside that root; configuration discovery by

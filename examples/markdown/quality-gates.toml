@@ -1,26 +1,2 @@
 schema_version = 1
-
-[orchestration]
-default_profile = "check"
-
-[[orchestration.steps]]
-kind = "command"
-name = "Markdown style"
-argv = ["rumdl", "check", "{files}"]
-fix_argv = ["rumdl", "fmt", "{files}"]
-files = { include = ["*.md", "**/*.md"] }
-
-[[orchestration.steps]]
-kind = "command"
-name = "Markdown links and graph"
-argv = ["{python}", "-m", "mdrepo", "--root", "{root}", "check", "{files}"]
-fix_argv = ["{python}", "-m", "mdrepo", "--root", "{root}", "fix", "{files}"]
-files = { include = ["*.md", "**/*.md"] }
-
-[[orchestration.profiles]]
-name = "markdown"
-steps = ["Markdown style", "Markdown links and graph"]
-
-[[orchestration.profiles]]
-name = "check"
-includes = ["markdown"]
+tools = ["rumdl", "mdrepo"]
