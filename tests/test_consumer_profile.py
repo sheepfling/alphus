@@ -88,6 +88,7 @@ def test_consumer_example_composes_portable_rules_and_native_tools() -> None:
         "-m",
         "ruff",
         "check",
+        "--force-exclude",
         "{files}",
     )
     assert steps["Python lint"].fix_argv == (
@@ -96,8 +97,11 @@ def test_consumer_example_composes_portable_rules_and_native_tools() -> None:
         "ruff",
         "check",
         "--fix",
+        "--force-exclude",
         "{files}",
     )
+    assert "--force-exclude" in steps["Python format"].argv
+    assert "--force-exclude" in steps["Python format"].fix_argv
     assert steps["Python types"].argv == (
         "pyright",
         "--pythonpath",

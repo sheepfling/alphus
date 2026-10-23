@@ -32,6 +32,8 @@ def test_self_check_enforces_review_and_repository_toml() -> None:
         assert command.kind == "command"
         assert command.fix_argv is not None
         assert command.files is not None
+        assert "--force-exclude" in command.argv
+        assert "--force-exclude" in command.fix_argv
 
     policy = config.checks.test_quality
     assert policy is not None

@@ -36,15 +36,15 @@ rule = "file-size"
 [[orchestration.steps]]
 kind = "command"
 name = "Python lint"
-argv = ["{python}", "-m", "ruff", "check", "{files}"]
-fix_argv = ["{python}", "-m", "ruff", "check", "--fix", "{files}"]
+argv = ["{python}", "-m", "ruff", "check", "--force-exclude", "{files}"]
+fix_argv = ["{python}", "-m", "ruff", "check", "--fix", "--force-exclude", "{files}"]
 files = { include = ["src/**/*.py", "tests/**/*.py"] }
 
 [[orchestration.steps]]
 kind = "command"
 name = "Python format"
-argv = ["{python}", "-m", "ruff", "format", "--check", "{files}"]
-fix_argv = ["{python}", "-m", "ruff", "format", "{files}"]
+argv = ["{python}", "-m", "ruff", "format", "--check", "--force-exclude", "{files}"]
+fix_argv = ["{python}", "-m", "ruff", "format", "--force-exclude", "{files}"]
 files = { include = ["src/**/*.py", "tests/**/*.py"] }
 
 [[orchestration.steps]]
