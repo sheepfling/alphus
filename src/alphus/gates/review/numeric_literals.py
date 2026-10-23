@@ -196,7 +196,9 @@ class _NumericVisitor(ast.NodeVisitor):
                 self.findings.add(
                     NumericLiteralFinding(
                         line=line,
-                        rule_id=rule_tag("python", "none", "style", f"inline-{spec.kind}"),
+                        rule_id=rule_tag(
+                            "python", "none", "style", f"inline-{spec.kind}"
+                        ),
                         message=(
                             f"possible inline {spec.name} {spec.kind} literal {value!r}; "
                             f"review use of {spec.replacement}"

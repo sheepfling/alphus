@@ -67,7 +67,7 @@ class Diagnostic:
             "urgent",
         }:
             raise ValueError(f"unsupported remediation priority: {self.priority!r}")
-        if self.source == "alphus" or self.rule_id.startswith("alphus/"):
+        if self.source == "alphus" or self.rule_id.partition("/")[0] == "alphus":
             RuleTag.parse(self.rule_id)
 
 

@@ -102,7 +102,10 @@ def test_provisional_gate_reports_findings_without_blocking_profile(
     assert report["provisional"] == {"passed": 0, "failed": 1}
     assert report["steps"][0]["status"] == "failed"
     assert report["steps"][0]["rollout"] == "provisional"
-    assert report["steps"][0]["findings"][0]["rule_id"] == "alphus/any/none/style/line-too-long"
+    assert (
+        report["steps"][0]["findings"][0]["rule_id"]
+        == "alphus/any/none/style/line-too-long"
+    )
 
 
 def test_provisional_native_command_reports_failure_without_blocking_profile(

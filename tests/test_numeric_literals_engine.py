@@ -211,7 +211,8 @@ def test_scanner_preserves_scope_paths_and_warning_severity(tmp_path: Path) -> N
         ("tests/test_geometry.py", 1, "warning"),
     ]
     assert all(
-        finding.rule_id == "alphus/python/none/style/inline-constant" for finding in findings
+        finding.rule_id == "alphus/python/none/style/inline-constant"
+        for finding in findings
     )
 
 

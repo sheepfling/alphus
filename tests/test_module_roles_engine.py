@@ -312,6 +312,14 @@ forbidden_module_assignments = ["RegistryProvider"]
     assert [
         (finding["rule_id"], finding["line"], finding["path"]) for finding in findings
     ] == [
-        ("alphus/python/none/architecture/forbidden-module-import", 1, "src/provider.py"),
-        ("alphus/python/none/architecture/forbidden-module-assignment", 2, "src/provider.py"),
+        (
+            "alphus/python/none/architecture/forbidden-module-import",
+            1,
+            "src/provider.py",
+        ),
+        (
+            "alphus/python/none/architecture/forbidden-module-assignment",
+            2,
+            "src/provider.py",
+        ),
     ]

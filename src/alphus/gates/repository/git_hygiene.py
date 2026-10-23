@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import subprocess
 from collections.abc import Sequence
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -57,11 +58,15 @@ def _git(root: Path, *args: str, input_data: bytes | None = None) -> bytes:
 
 
 def _checkout(root: Path) -> Path:
-    root = root.resolve()
-    top = Path(_git(root, "rev-parse", "--show-toplevel").decode().strip()).resolve()
-    if top != root:
-        raise OSError(f"pass the Git checkout root: {top}")
-    return top
+    checkout = root.resolve(strict=True)
+    if not checkout.is_dir():
+        raise OSError(f"Git checkout root is not a directory: {checkout}")
+    if _git(checkout, "rev-parse", "--is-inside-work-tree").strip() != b"true":
+        raise OSError(f"not a Git working tree: {checkout}")
+    prefix = _git(checkout, "rev-parse", "--show-prefix").decode().strip()
+    if prefix:
+        raise OSError(f"pass the Git checkout root, not a nested path: {checkout}")
+    return checkout
 
 
 def _tracked(root: Path) -> set[str]:
@@ -72,7 +77,7 @@ def _tracked(root: Path) -> set[str]:
     }
 
 
-def _selected_languages(paths: set[str]) -> set[str]:
+def _selected_languages(paths: AbstractSet[str]) -> set[str]:
     selected: set[str] = set()
     if any(p.endswith(".py") or p == "pyproject.toml" for p in paths):
         selected.add("python")

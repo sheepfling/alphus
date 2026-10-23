@@ -39,7 +39,10 @@ def test_sequence_advice_follows_visible_operations(body: str, interface: str) -
     findings = analyze("def render(values: list[str]):\n " + body)
 
     assert len(findings) == 1
-    assert findings[0].rule_id == "alphus/python/none/correctness/read-only-interface-violation"
+    assert (
+        findings[0].rule_id
+        == "alphus/python/none/correctness/read-only-interface-violation"
+    )
     assert interface in findings[0].message
     assert findings[0].severity == "warning"
     assert findings[0].line == 1

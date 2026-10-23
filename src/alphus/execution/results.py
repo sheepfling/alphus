@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import TypeAlias
 
 from pydantic import BaseModel, ConfigDict, TypeAdapter
@@ -40,11 +41,13 @@ _PYTHON_STYLE: TypeAdapter[PythonStyleOutput] = TypeAdapter(PythonStyleOutput)
 _SHARED_UTILITIES: TypeAdapter[_SharedUtilitiesWire] = TypeAdapter(_SharedUtilitiesWire)
 _SHARED_REPORT: TypeAdapter[SharedUtilitiesReport] = TypeAdapter(SharedUtilitiesReport)
 
-_MESSAGE_RULE_IDS: Mapping[QualityRuleName, str] = {
-    "runtime-types": "alphus/python/none/typing/runtime-type-contract-violation",
-    "cli": "alphus/python/none/correctness/cli-contract-violation",
-    "script-policy": "alphus/python/none/security/script-policy-violation",
-}
+_MESSAGE_RULE_IDS: Mapping[QualityRuleName, str] = MappingProxyType(
+    {
+        "runtime-types": "alphus/python/none/typing/runtime-type-contract-violation",
+        "cli": "alphus/python/none/correctness/cli-contract-violation",
+        "script-policy": "alphus/python/none/security/script-policy-violation",
+    }
+)
 
 
 def _message_diagnostics(

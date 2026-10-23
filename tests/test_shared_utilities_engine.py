@@ -253,7 +253,10 @@ def test_shared_utilities_cli_reports_groups_and_machine_readable_metrics(
 
     assert main(arguments) == 1
     output = capsys.readouterr().out
-    assert "alphus/python/none/maintainability/duplicate-file-hash-implementation:" in output
+    assert (
+        "alphus/python/none/maintainability/duplicate-file-hash-implementation:"
+        in output
+    )
     assert "File SHA-256 copies outside the shared helper: 2" in output
 
     assert main([*arguments, "--report", "--json"]) == 0

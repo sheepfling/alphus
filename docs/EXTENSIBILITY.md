@@ -55,7 +55,8 @@ pytest-style hooks.
 
 ## Proposed category selection model
 
-The following broader categories remain a proposal for navigation and selection; they are separate from the controlled finding-tag categories:
+The broader categories below remain a proposal for navigation and selection.
+They are separate from the controlled finding-tag categories:
 
 | Category | Candidate scope |
 | --- | --- |
@@ -150,7 +151,8 @@ language-specific check that warrants Python code.
 The internal `RuleSpec` catalog now gives every built-in selector one primary
 policy field and output shape; a matching runner table holds concrete checker
 dispatch. The next step is to migrate older rule outputs to common findings,
-then attach selector-group metadata and a typed checker callable to each specification. Those future groups are distinct from the diagnostic-tag category. Keep
+then attach selector-group metadata and a typed checker callable to each
+specification. Those groups are distinct from diagnostic-tag categories. Keep
 the current CLI selectors as adapters while that contract is exercised across
 existing rules.
 

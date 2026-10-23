@@ -29,10 +29,30 @@ def test_named_and_literal_statuses_in_known_fastapi_calls() -> None:
     assert [
         (item.rule_id, item.path, item.line, item.severity) for item in findings
     ] == [
-        ("alphus/python/fastapi/correctness/literal-http-status", "src/api.py", 4, "warning"),
-        ("alphus/python/fastapi/correctness/literal-http-status", "src/api.py", 6, "warning"),
-        ("alphus/python/fastapi/correctness/literal-http-status", "src/api.py", 9, "warning"),
-        ("alphus/python/fastapi/correctness/literal-http-status", "src/api.py", 10, "warning"),
+        (
+            "alphus/python/fastapi/correctness/literal-http-status",
+            "src/api.py",
+            4,
+            "warning",
+        ),
+        (
+            "alphus/python/fastapi/correctness/literal-http-status",
+            "src/api.py",
+            6,
+            "warning",
+        ),
+        (
+            "alphus/python/fastapi/correctness/literal-http-status",
+            "src/api.py",
+            9,
+            "warning",
+        ),
+        (
+            "alphus/python/fastapi/correctness/literal-http-status",
+            "src/api.py",
+            10,
+            "warning",
+        ),
     ]
 
 

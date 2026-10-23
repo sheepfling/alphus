@@ -20,16 +20,24 @@ class LayoutRuleId(StrEnum):
 
     ROUTER_ROOT_MISSING = "alphus/repository/none/configuration/router-root-missing"
     BRIDGE_ROOT_MISSING = "alphus/repository/none/configuration/bridge-root-missing"
-    BRIDGE_ROOT_MARKER_MISSING = "alphus/repository/none/configuration/bridge-root-marker-missing"
+    BRIDGE_ROOT_MARKER_MISSING = (
+        "alphus/repository/none/configuration/bridge-root-marker-missing"
+    )
     ROUTER_AREA_MISSING = "alphus/repository/none/configuration/router-area-missing"
     BRIDGE_AREA_MISSING = "alphus/repository/none/configuration/bridge-area-missing"
     BRIDGE_SCOPE_MISSING = "alphus/repository/none/configuration/bridge-scope-missing"
-    BRIDGE_ROUTER_IMPORT_MISSING = "alphus/repository/none/configuration/bridge-router-import-missing"
+    BRIDGE_ROUTER_IMPORT_MISSING = (
+        "alphus/repository/none/configuration/bridge-router-import-missing"
+    )
     PATH_REQUIRED = "alphus/repository/none/configuration/path-required"
     PATH_FORBIDDEN = "alphus/repository/none/configuration/path-forbidden"
     GLOB_FORBIDDEN = "alphus/repository/none/configuration/glob-forbidden"
-    JSON_ARRAY_VALUE_REQUIRED = "alphus/repository/none/configuration/json-array-value-required"
-    PYTHON_SYMBOL_REQUIRED = "alphus/repository/none/configuration/python-symbol-required"
+    JSON_ARRAY_VALUE_REQUIRED = (
+        "alphus/repository/none/configuration/json-array-value-required"
+    )
+    PYTHON_SYMBOL_REQUIRED = (
+        "alphus/repository/none/configuration/python-symbol-required"
+    )
     TOML_TABLE_REQUIRED = "alphus/repository/none/configuration/toml-table-required"
     TRACKED_SUFFIX_FORBIDDEN = "alphus/repository/none/hygiene/tracked-suffix-forbidden"
     TRACKED_PATH_FORBIDDEN = "alphus/repository/none/hygiene/tracked-path-forbidden"

@@ -21,7 +21,7 @@ class GitRepositoryPolicy(StrictModel):
     """Shared settings for fast Git ignores and infrequent history audits."""
 
     languages: tuple[Literal["python", "javascript", "cpp"], ...] = ()
-    max_blob_mib: float = Field(default=5.0, gt=0)
+    max_blob_mib: Annotated[float, Field(gt=0)] = 5.0
 
     @field_validator("languages")
     @classmethod

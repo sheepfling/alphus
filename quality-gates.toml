@@ -1,6 +1,4 @@
 schema_version = 1
-tools = ["eslint", "prettier-javascript"]
-
 [files]
 include = [
   "src/**/*.py", "tests/**/*.py", "README.md", "docs/**/*.md",
@@ -304,7 +302,7 @@ steps = ["Git history"]
 
 [[orchestration.profiles]]
 name = "check"
-includes = ["python-policy", "toml", "python", "review", "javascript", "git"]
+includes = ["python-policy", "toml", "python", "review", "git"]
 
 [[orchestration.steps]]
 kind = "rule"

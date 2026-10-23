@@ -19,7 +19,14 @@ def test_dump_revalidation_follows_local_aliases_and_reports_source_line() -> No
 
     assert [
         (item.rule_id, item.path, item.line, item.severity) for item in findings
-    ] == [("alphus/python/pydantic/validation/dump-revalidation", "src/output.py", 4, "warning")]
+    ] == [
+        (
+            "alphus/python/pydantic/validation/dump-revalidation",
+            "src/output.py",
+            4,
+            "warning",
+        )
+    ]
 
 
 def test_dump_revalidation_detects_inline_json_and_skips_plain_validation() -> None:

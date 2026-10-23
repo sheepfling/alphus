@@ -330,7 +330,12 @@ def test_file_scope_and_exclusions_are_respected(tmp_path: Path) -> None:
     assert [
         (item.path, item.line, item.rule_id, item.severity) for item in findings
     ] == [
-        ("tests/test_plan.py", 2, "alphus/python/none/testing/ephemeral-plan-dependency", "warning")
+        (
+            "tests/test_plan.py",
+            2,
+            "alphus/python/none/testing/ephemeral-plan-dependency",
+            "warning",
+        )
     ]
 
 

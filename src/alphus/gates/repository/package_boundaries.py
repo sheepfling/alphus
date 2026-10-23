@@ -487,7 +487,10 @@ def _source_findings(
                             if imported == "<dynamic>":
                                 findings.append(
                                     Finding(
-                                        rule_id="alphus/python/none/architecture/opaque-dynamic-import",
+                                        rule_id=(
+                                            "alphus/python/none/architecture/"
+                                            "opaque-dynamic-import"
+                                        ),
                                         path=relative,
                                         line=node.lineno,
                                         message="opaque dynamic import",
@@ -500,7 +503,10 @@ def _source_findings(
                         if call_name in policy.file_loader_calls:
                             findings.append(
                                 Finding(
-                                    rule_id="alphus/python/none/architecture/file-backed-module-loading",
+                                    rule_id=(
+                                        "alphus/python/none/architecture/"
+                                        "file-backed-module-loading"
+                                    ),
                                     path=relative,
                                     line=node.lineno,
                                     message="file-backed module loading",

@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-
 SCOPES = frozenset(
     {
         "any",
@@ -63,10 +62,7 @@ class RuleTag:
     @property
     def rule_id(self) -> str:
         """Return the stable, namespace-first identifier."""
-        return (
-            f"alphus/{self.scope}/{self.framework}/"
-            f"{self.category}/{self.complaint}"
-        )
+        return f"alphus/{self.scope}/{self.framework}/{self.category}/{self.complaint}"
 
     @classmethod
     def parse(cls, rule_id: str) -> RuleTag:

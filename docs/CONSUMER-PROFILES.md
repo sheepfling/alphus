@@ -128,7 +128,7 @@ activate gates. Ordinary Python repositories can combine `python` and
 | `stubs` | Build/install, API, typed examples, stubtest, smoke | Alphus and native checkers |
 | `toml` | TOML syntax and formatting | Python `tomllib` and Taplo |
 | `json` | JSON syntax and formatting | Python `json` and Prettier |
-| `javascript` | Lint and format for `.js`, `.jsx`, `.mjs`, and `.cjs`, plus repository tests and type checks | Alphus JavaScript policy, ESLint, Prettier, and consumer commands |
+| `javascript` | JS lint, format, tests, and types | Alphus policy, ESLint, Prettier, consumer commands |
 | `python-policy` | Optional repository-specific source conventions | Explicit Alphus source policy |
 
 The reusable JavaScript configs and synthetic rule fixtures live in the
