@@ -307,3 +307,14 @@ def test_imported_concrete_list_and_dict_aliases_do_not_hide_input_contracts() -
         "from typing import List as L, Dict as D\n"
         "def f(x: L[str], y: D[str, int]): pass"
     ) == {"concrete_inputs"}
+
+
+def test_literal_rule_ids_require_semantic_construction_when_selected() -> None:
+    source = 'RULE = "alphus/python/none/style/line-too-long"'
+    visitor = StyleVisitor(POLICY, semantic_rule_ids=True)
+    visitor.visit(ast.parse(source))
+    assert visitor.findings["literal_rule_ids"] == [1]
+
+    visitor = StyleVisitor(POLICY)
+    visitor.visit(ast.parse(source))
+    assert visitor.findings["literal_rule_ids"] == []

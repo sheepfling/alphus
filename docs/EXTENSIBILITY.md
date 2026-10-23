@@ -37,6 +37,13 @@ Examples:
 - alphus/javascript/none/security/manual-output-escaping
 - alphus/repository/none/architecture/edge-forbidden
 
+`RuleTag.parse()` exposes scope, framework, category, and complaint as
+validated fields. `rule_tag(...)` constructs IDs in Alphus-owned source, and
+the self-profile's Python structure gate flags complete raw tag literals in
+`src/alphus/**`. Profile JSON includes `finding_rollups`: scope totals,
+category totals, and category/complaint totals. These aggregate normalized
+Alphus diagnostics across languages, with severity counts for each group.
+
 Diagnostic.source identifies the producer and is kept separate from the
 tag. Human output prints an Alphus tag once; it does not repeat alphus as a
 second prefix. External command output and native tool rule codes remain

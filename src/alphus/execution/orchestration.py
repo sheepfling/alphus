@@ -20,10 +20,12 @@ from alphus.config import (
 )
 from alphus.contracts.findings import (
     Diagnostic,
+    FindingRollups,
     Severity,
     SeverityCounts,
     severity_meets_threshold,
 )
+from alphus.contracts.rule_tags import rule_tag
 from alphus.execution.commands import (
     command_arguments,
     step_directory,
@@ -69,6 +71,7 @@ class OrchestrationResult:
     failure_threshold: Severity = "error"
     severity_counts: SeverityCounts = field(default_factory=SeverityCounts)
     not_applicable: int = 0
+    finding_rollups: FindingRollups = field(default_factory=FindingRollups)
 
 
 def _render_diagnostic(diagnostic: Diagnostic, output: TextIO) -> None:
@@ -189,7 +192,12 @@ def run_orchestration(
                             findings.append(
                                 Diagnostic(
                                     source="alphus",
-                                    rule_id="alphus/any/none/orchestration/rule-execution-failed",
+                                    rule_id=rule_tag(
+                                        "any",
+                                        "none",
+                                        "orchestration",
+                                        "rule-execution-failed",
+                                    ),
                                     message=message,
                                 )
                             )
@@ -203,7 +211,12 @@ def run_orchestration(
                             findings.append(
                                 Diagnostic(
                                     source="alphus",
-                                    rule_id="alphus/any/none/orchestration/rule-execution-failed",
+                                    rule_id=rule_tag(
+                                        "any",
+                                        "none",
+                                        "orchestration",
+                                        "rule-execution-failed",
+                                    ),
                                     message=message,
                                 )
                             )
@@ -214,7 +227,12 @@ def run_orchestration(
                             findings.append(
                                 Diagnostic(
                                     source="alphus",
-                                    rule_id="alphus/any/none/orchestration/rule-execution-failed",
+                                    rule_id=rule_tag(
+                                        "any",
+                                        "none",
+                                        "orchestration",
+                                        "rule-execution-failed",
+                                    ),
                                     message=message,
                                 )
                             )
@@ -247,7 +265,12 @@ def run_orchestration(
                             findings.append(
                                 Diagnostic(
                                     source="alphus",
-                                    rule_id="alphus/any/none/orchestration/rule-execution-failed",
+                                    rule_id=rule_tag(
+                                        "any",
+                                        "none",
+                                        "orchestration",
+                                        "rule-execution-failed",
+                                    ),
                                     message=f"rule runner exited with status {exit_code}",
                                 )
                             )
@@ -286,7 +309,12 @@ def run_orchestration(
                             findings.append(
                                 Diagnostic(
                                     source=step.name,
-                                    rule_id="alphus/any/none/orchestration/command-exited-nonzero",
+                                    rule_id=rule_tag(
+                                        "any",
+                                        "none",
+                                        "orchestration",
+                                        "command-exited-nonzero",
+                                    ),
                                     message=f"command exited with status {exit_code}",
                                 )
                             )
@@ -302,9 +330,13 @@ def run_orchestration(
                 Diagnostic(
                     source="alphus" if isinstance(step, RuleRunStep) else step.name,
                     rule_id=(
-                        "alphus/any/none/orchestration/rule-execution-failed"
+                        rule_tag(
+                            "any", "none", "orchestration", "rule-execution-failed"
+                        )
                         if isinstance(step, RuleRunStep)
-                        else "alphus/any/none/orchestration/command-launch-failed"
+                        else rule_tag(
+                            "any", "none", "orchestration", "command-launch-failed"
+                        )
                     ),
                     message=message,
                 )
@@ -401,6 +433,7 @@ def run_orchestration(
             threshold,
             SeverityCounts.from_diagnostics(all_findings),
             not_applicable,
+            FindingRollups.from_diagnostics(all_findings),
         )
         payload = asdict(result)
         if not not_applicable:

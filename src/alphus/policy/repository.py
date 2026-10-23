@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from typing import Annotated, Literal
 
@@ -17,11 +18,39 @@ from alphus.policy.base import (
 )
 
 
+class GitAttributeRequirement(StrictModel):
+    """Expected effective Git attribute for one representative repository path."""
+
+    path: str
+    attribute: str
+    value: str
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, path: str) -> str:
+        return validate_single_path(path, "Git attribute sample path")
+
+    @field_validator("attribute")
+    @classmethod
+    def validate_attribute(cls, attribute: str) -> str:
+        if re.fullmatch(r"[A-Za-z][A-Za-z0-9-]*", attribute) is None:
+            raise ValueError("Git attribute names must be simple identifiers")
+        return attribute
+
+    @field_validator("value")
+    @classmethod
+    def validate_value(cls, value: str) -> str:
+        if not value or "\n" in value or "\r" in value or "\x00" in value:
+            raise ValueError("Git attribute values must be one non-empty line")
+        return value
+
+
 class GitRepositoryPolicy(StrictModel):
     """Shared settings for fast Git ignores and infrequent history audits."""
 
     languages: tuple[Literal["python", "javascript", "cpp"], ...] = ()
     max_blob_mib: Annotated[float, Field(gt=0)] = 5.0
+    attributes: tuple[GitAttributeRequirement, ...] = ()
 
     @field_validator("languages")
     @classmethod
@@ -30,6 +59,17 @@ class GitRepositoryPolicy(StrictModel):
     ) -> tuple[Literal["python", "javascript", "cpp"], ...]:
         require_unique(languages, "Git languages must be unique")
         return languages
+
+    @field_validator("attributes")
+    @classmethod
+    def validate_attributes(
+        cls, attributes: tuple[GitAttributeRequirement, ...]
+    ) -> tuple[GitAttributeRequirement, ...]:
+        require_unique(
+            tuple((item.path, item.attribute) for item in attributes),
+            "Git attribute requirements must not repeat a path and attribute",
+        )
+        return attributes
 
 
 class PathRule(StrictModel):

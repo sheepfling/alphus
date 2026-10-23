@@ -44,9 +44,13 @@ _SHARED_REPORT: TypeAdapter[SharedUtilitiesReport] = TypeAdapter(SharedUtilities
 
 _MESSAGE_RULE_IDS: Mapping[QualityRuleName, str] = MappingProxyType(
     {
-        "runtime-types": "alphus/python/none/typing/runtime-type-contract-violation",
-        "cli": "alphus/python/none/correctness/cli-contract-violation",
-        "script-policy": "alphus/python/none/security/script-policy-violation",
+        "runtime-types": rule_tag(
+            "python", "none", "typing", "runtime-type-contract-violation"
+        ),
+        "cli": rule_tag("python", "none", "correctness", "cli-contract-violation"),
+        "script-policy": rule_tag(
+            "python", "none", "security", "script-policy-violation"
+        ),
     }
 )
 
@@ -93,7 +97,7 @@ def _shared_diagnostics(
     diagnostics = [
         Diagnostic(
             source="alphus",
-            rule_id="alphus/python/none/maintainability/duplicate-helper",
+            rule_id=rule_tag("python", "none", "maintainability", "duplicate-helper"),
             message=f"Duplicate Python helper: {', '.join(group)}",
         )
         for group in groups
@@ -102,7 +106,12 @@ def _shared_diagnostics(
         diagnostics.append(
             Diagnostic(
                 source="alphus",
-                rule_id="alphus/python/none/maintainability/duplicate-file-hash-implementation",
+                rule_id=rule_tag(
+                    "python",
+                    "none",
+                    "maintainability",
+                    "duplicate-file-hash-implementation",
+                ),
                 message=(
                     "Repeated file SHA-256 implementation: "
                     f"{', '.join(hash_implementations)}"
@@ -112,7 +121,9 @@ def _shared_diagnostics(
     diagnostics.extend(
         Diagnostic(
             source="alphus",
-            rule_id="alphus/python/none/maintainability/direct-git-subprocess",
+            rule_id=rule_tag(
+                "python", "none", "maintainability", "direct-git-subprocess"
+            ),
             message=f"Git subprocess bypasses shared adapter: {location}",
         )
         for location in direct_git_calls
@@ -121,7 +132,9 @@ def _shared_diagnostics(
         diagnostics.append(
             Diagnostic(
                 source="alphus",
-                rule_id="alphus/python/none/maintainability/shared-utilities-check-failed",
+                rule_id=rule_tag(
+                    "python", "none", "maintainability", "shared-utilities-check-failed"
+                ),
                 message="Shared utilities check reported failure without details.",
             )
         )

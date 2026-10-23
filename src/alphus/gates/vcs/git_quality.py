@@ -1,4 +1,4 @@
-"""Git-backed quality rules for current ignores and reachable history."""
+"""Git-backed quality rules for ignores, attributes, and reachable history."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from pathlib import Path
 
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import rule_tag
+from alphus.policy.repository import GitAttributeRequirement
 from alphus.support.git import git_output as _git
 from alphus.support.git import run_git
 from alphus.support.inventory import matches_path
@@ -123,6 +124,57 @@ def check_ignores(root: Path, languages: Sequence[str] = ()) -> list[Finding]:
                     )
                 )
                 break
+    return findings
+
+
+def check_attributes(
+    root: Path, requirements: Sequence[GitAttributeRequirement] = ()
+) -> list[Finding]:
+    """Check committed root attributes and each declared effective attribute."""
+    root = _checkout(root)
+    tracked = _tracked(root)
+    findings: list[Finding] = []
+    if ".gitattributes" not in tracked:
+        findings.append(
+            Finding(
+                rule_id=rule_tag(
+                    "repository", "git", "hygiene", "attributes-file-untracked"
+                ),
+                path=".gitattributes",
+                message="Root .gitattributes must be tracked",
+            )
+        )
+    for requirement in requirements:
+        result = run_git(
+            root,
+            "check-attr",
+            "-z",
+            requirement.attribute,
+            "--",
+            requirement.path,
+        )
+        if result.returncode:
+            raise OSError(
+                "git check-attr failed: "
+                + result.stderr.decode("utf-8", "replace").strip()
+            )
+        fields = result.stdout.split(b"\0")
+        if len(fields) != 4 or fields[-1] != b"":
+            raise OSError("git check-attr returned an unexpected response")
+        actual = fields[2].decode("utf-8", "replace")
+        if actual != requirement.value:
+            findings.append(
+                Finding(
+                    rule_id=rule_tag(
+                        "repository", "git", "hygiene", "attribute-mismatch"
+                    ),
+                    path=requirement.path,
+                    message=(
+                        f"Git attribute {requirement.attribute} is {actual!r}; "
+                        f"expected {requirement.value!r}"
+                    ),
+                )
+            )
     return findings
 
 

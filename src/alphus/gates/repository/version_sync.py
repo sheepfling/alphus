@@ -7,6 +7,7 @@ from pathlib import Path
 
 from alphus.config import VersionSource, VersionSyncPolicy
 from alphus.contracts.findings import Finding
+from alphus.contracts.rule_tags import rule_tag
 from alphus.support.data_access import nested_value, validate_json_value
 
 
@@ -42,7 +43,9 @@ def check_version_sync(root: Path, policy: VersionSyncPolicy) -> list[Finding]:
         if version != reference_version:
             findings.append(
                 Finding(
-                    rule_id="alphus/repository/none/metadata/version-mismatch",
+                    rule_id=rule_tag(
+                        "repository", "none", "metadata", "version-mismatch"
+                    ),
                     path=source.path,
                     message=(
                         f"version {version} differs from {reference_source.path} "

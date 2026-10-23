@@ -29,7 +29,7 @@ the Python 3.10 target cannot import the Python 3.11+ checker. See the
 
 ## Install
 
-Use Python 3.11 through 3.14:
+Use Python 3.11 through 3.15:
 
 ```sh
 python -m pip install .

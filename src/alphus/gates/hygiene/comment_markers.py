@@ -9,6 +9,7 @@ from collections.abc import Iterable
 from pathlib import Path
 
 from alphus.contracts.findings import Finding
+from alphus.contracts.rule_tags import rule_tag
 from alphus.policy.sources import CommentMarkerPolicy
 from alphus.support.inventory import matches_path
 
@@ -155,7 +156,7 @@ def check_comment_markers(
         except (tokenize.TokenError, IndentationError) as error:
             findings.append(
                 Finding(
-                    rule_id="alphus/any/none/hygiene/comment-scan-failed",
+                    rule_id=rule_tag("any", "none", "hygiene", "comment-scan-failed"),
                     path=name,
                     message=f"cannot scan Python comments: {error}",
                 )
@@ -163,7 +164,7 @@ def check_comment_markers(
             continue
         findings.extend(
             Finding(
-                rule_id="alphus/any/none/hygiene/comment-marker-found",
+                rule_id=rule_tag("any", "none", "hygiene", "comment-marker-found"),
                 path=name,
                 line=line,
                 message=f"temporary-work marker {match.group().upper()} in comment",

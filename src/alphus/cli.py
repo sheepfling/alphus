@@ -255,6 +255,7 @@ def _python_style_categories(
         _StyleCategory("main_module_imports", issues["main_module_imports"]),
         _StyleCategory("legacy_pydantic_fields", issues["legacy_pydantic_fields"]),
         _StyleCategory("mutable_module_constants", issues["mutable_module_constants"]),
+        _StyleCategory("literal_rule_ids", issues["literal_rule_ids"]),
         _StyleCategory(
             "pydantic_collection_contracts", issues["pydantic_collection_contracts"]
         ),

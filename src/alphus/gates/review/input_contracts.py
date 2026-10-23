@@ -11,6 +11,7 @@ from typing import Literal
 
 from alphus.config import InputContractPolicy
 from alphus.contracts.findings import Finding
+from alphus.contracts.rule_tags import rule_tag
 from alphus.support.inventory import matches_path
 from alphus.support.source_scanning import (
     ImportAliases,
@@ -688,7 +689,9 @@ def _function_findings(
                 )
                 findings.append(
                     Finding(
-                        rule_id="alphus/python/none/correctness/argument-mutation",
+                        rule_id=rule_tag(
+                            "python", "none", "correctness", "argument-mutation"
+                        ),
                         path=path,
                         line=mutation.line,
                         severity="warning",
@@ -718,7 +721,9 @@ def _function_findings(
                     continue
             findings.append(
                 Finding(
-                    rule_id="alphus/python/none/correctness/read-only-interface-violation",
+                    rule_id=rule_tag(
+                        "python", "none", "correctness", "read-only-interface-violation"
+                    ),
                     path=path,
                     line=usage.line,
                     severity="warning",

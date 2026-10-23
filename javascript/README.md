@@ -35,6 +35,20 @@ The shared package tests use synthetic source fixtures. They cover each source
 suffix, JSDoc requirements, CommonJS parsing, formatter settings, and strict
 JavaScript compiler options without depending on any consumer repository.
 
+## Results alongside other languages
+
+The Alphus profile result has one JSON envelope for every step. Alphus-owned
+findings carry a validated `RuleTag`, so the `finding_rollups` section groups
+them by scope, category, and category/complaint across languages. For example,
+`style/line-too-long` has one total even if Python and JavaScript emit it from
+separate gates. Each rollup includes severity counts. Use `alphus --json` to
+consume this envelope.
+
+Native ESLint and Prettier output remains in each step's `stdout` and `stderr`;
+Alphus records their pass/fail status without guessing that their rule codes
+are Alphus complaint tags. A future native adapter can add structured findings
+while preserving this same result schema.
+
 ## React
 
 Install `@eslint-react/eslint-plugin`, `eslint-plugin-react-hooks`, and

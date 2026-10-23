@@ -1,60 +1,63 @@
-# Git-backed repository quality gates
+# Git repository quality gates
 
-Git is another Alphus finding source. The repository gate package owns two built-in rules.
-They return the same structured findings as source rules.
+Alphus keeps Git-specific gates in `alphus.gates.vcs`. Portable repository
+layout, package, and metadata gates stay in `alphus.gates.repository`. This
+boundary gives another version-control system its own adapter and rule mapping
+without changing the portable rules or the normalized finding contract.
 
 | Rule | Reads | Cadence |
 | --- | --- | --- |
-| git-ignores | Effective ignore rules and tracked files | Every change |
-| git-history | Reachable refs, blob sizes, and committed names | Monthly or manual |
+| `git-ignores` | Effective ignore rules and tracked generated paths | Every change |
+| `git-attributes` | Tracked root `.gitattributes` and effective attributes | Every change |
+| `git-history` | Reachable refs, blob sizes, and committed names | Monthly or manual |
 
-A consumer needs only this policy to run either rule directly:
+A consumer can start with one policy and invoke a rule directly:
 
-    schema_version = 1
-    [checks.git]
+```toml
+schema_version = 1
+[checks.git]
+attributes = [
+  { path = "src/example.py", attribute = "eol", value = "lf" },
+]
+```
 
-Run alphus --rule git-ignores or alphus --rule git-history. These rules need no [files]
-inventory or extra console command. The self-profile shows optional git and
-repository-history profiles. Its default check profile includes the fast git profile;
-the history profile remains separate.
+```shell
+alphus --rule git-ignores
+alphus --rule git-attributes
+alphus --rule git-history
+```
 
-The ignore rule detects Python, JavaScript/TypeScript, and C/C++ from tracked source.
-To check a language before its source is committed, list it under [checks.git]:
+The fast `git` profile runs ignores and attributes. The separate
+`repository-history` profile runs the slower history audit. None of these
+rules requires a `[files]` inventory.
 
-    languages = ["python", "javascript", "cpp"]
+The ignore rule detects Python, JavaScript/TypeScript, and C/C++ from tracked
+source. To check a language before its source is committed, list it under
+`[checks.git]`:
 
-Common rules cover .env and .pypirc. Python rules cover virtual environments, caches,
-distribution output, and Streamlit secrets. JavaScript rules cover node_modules,
-TypeScript build state, and ESLint cache. C/C++ rules cover CMake and compiler outputs.
-JSON, TOML, and Markdown have no universal generated artifacts to require; add rules
-for tool-specific caches only when a tool is introduced.
+```toml
+languages = ["python", "javascript", "cpp"]
+```
 
-The ignore gate asks Git whether representative generated paths at the root and in a nested directory are ignored.
-It also reports generated paths already tracked, because adding .gitignore does not
-untrack them. A local global ignore can satisfy this rule, while clean CI confirms
-repository coverage. Review a tracked finding before removing it from the index;
-a deliberately committed fixture may need a narrower rule.
+Common ignore rules cover `.env` and `.pypirc`. Language rules cover Python
+virtual environments and caches, JavaScript dependencies and build state, and
+C/C++ build outputs. The gate also reports generated paths already tracked;
+adding `.gitignore` does not untrack them. A local global ignore can satisfy
+the rule, while clean CI confirms repository coverage.
 
-The history gate defaults to a 5 MiB blob threshold. Configure max_blob_mib in
-[checks.git] when needed. It measures Git objects without reading file content and
-reports paths matching generated-file patterns, including .env. This is a filename
-and size audit, not secret-content scanning. Historical findings need human review:
-a new deletion commit does not erase old objects, and rewriting shared history
-affects collaborators.
+The attributes rule requires the root `.gitattributes` to be tracked. Each
+configured row checks the *effective* value for its representative path using
+`git check-attr`, including nested attributes. `value = "set"` checks a boolean
+attribute such as `text`; `value = "lf"` checks `eol=lf`. Paths can be
+representative names that do not exist yet. This keeps the policy small while
+checking Git's interpretation rather than reimplementing its pattern grammar.
 
-The workflow in .github/workflows/repository-hygiene.yml runs alphus --profile git
-on pull requests and pushes to main. It runs alphus --profile repository-history
-on the first day of each month at 04:23 UTC and by manual dispatch, using a full
-checkout. The scheduled job becomes active after the workflow reaches the default
-branch. Local history audits include only refs available in that checkout; fetch
-the refs you intend to inspect first.
+The history gate defaults to a 5 MiB blob threshold. Set `max_blob_mib` under
+`[checks.git]` to change it. It inspects object sizes and generated path names,
+not secret contents. A deletion commit does not erase reachable history;
+review findings before rewriting shared history.
 
-Cadence belongs to CI or a scheduler, not individual rule configuration. Keep quick
-deterministic gates in the ordinary profile. Put more expensive checks in separate
-nightly, weekly, or monthly profiles as their cost warrants. This avoids adding
-scheduling fields to quality-gates.toml.
-
-To add another language, add representative generated paths and tracked-file
-patterns to RULES and extend language detection in
-src/alphus/gates/repository/git_hygiene.py. Keep rules specific to generated
-output; source files and lockfiles should remain trackable.
+`.github/workflows/repository-hygiene.yml` runs the fast profile on pull
+requests and pushes, and schedules the history profile monthly. Cadence lives
+in CI or a scheduler, not in individual rule settings. A local history audit
+covers only refs available in that checkout.

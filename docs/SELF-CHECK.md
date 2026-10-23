@@ -5,16 +5,19 @@ runs Alphus portable rules, shared-utility analysis, the comment-marker and revi
 import smoke and compatibility-import removal checks, native Ruff lint and
 format checks, strict Pyright, and the package tests.
 The repository's GitHub Actions quality workflow runs this profile on Python
-3.11 through 3.14 for pull requests and main-branch pushes. It checks editable
+3.11 through 3.15 for pull requests and main-branch pushes. It checks editable
 installation, builds and installs a wheel, then invokes the installed package.
 An additional Python 3.11 job runs the profile with every direct runtime and
 `python` extra dependency at its declared minimum version. The
 `python scripts/ci.py --root .` runner derives those floors from `pyproject.toml`,
-so the workflow contains no second list of dependency versions.
+so the workflow contains no second list of dependency versions. The runner
+labels every stage and prints its command, exit code, duration, and captured
+output. Use `python scripts/ci.py --root . --output json` for one compact JSON
+event per stage; a failed stage includes its full stdout and stderr.
 
 ## Run the installed wheel against this checkout
 
-Use Python 3.11 through 3.14. From anywhere inside the Alphus Git checkout,
+Use Python 3.11 through 3.15. From anywhere inside the Alphus Git checkout,
 build a wheel, install it with
 the project's declared development dependencies in a temporary environment,
 then run its installed `alphus` command from outside the checkout. The

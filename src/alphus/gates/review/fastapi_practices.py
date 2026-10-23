@@ -9,6 +9,7 @@ from pathlib import Path
 
 from alphus.config import FastApiPracticePolicy
 from alphus.contracts.findings import Finding
+from alphus.contracts.rule_tags import rule_tag
 from alphus.support.inventory import matches_path
 from alphus.support.source_scanning import (
     ImportAliases,
@@ -141,7 +142,12 @@ def fastapi_practice_findings(
                     findings.add(
                         (
                             candidate.lineno,
-                            "alphus/python/fastapi/correctness/literal-http-status",
+                            rule_tag(
+                                "python",
+                                "fastapi",
+                                "correctness",
+                                "literal-http-status",
+                            ),
                             "literal HTTP status; consider a named status constant",
                         )
                     )
@@ -157,7 +163,9 @@ def fastapi_practice_findings(
                     findings.add(
                         (
                             value.lineno,
-                            "alphus/python/fastapi/correctness/literal-error-code",
+                            rule_tag(
+                                "python", "fastapi", "correctness", "literal-error-code"
+                            ),
                             "literal error code; use the consumer's named vocabulary",
                         )
                     )
@@ -171,7 +179,12 @@ def fastapi_practice_findings(
                         findings.add(
                             (
                                 value.lineno,
-                                "alphus/python/fastapi/correctness/literal-error-code",
+                                rule_tag(
+                                    "python",
+                                    "fastapi",
+                                    "correctness",
+                                    "literal-error-code",
+                                ),
                                 "literal error code; use the consumer's named vocabulary",
                             )
                         )

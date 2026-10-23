@@ -10,6 +10,7 @@ from alphus.gates.hygiene.runners import HYGIENE_RULE_RUNNERS
 from alphus.gates.repository.runners import REPOSITORY_RULE_RUNNERS
 from alphus.gates.review.runners import REVIEW_RULE_RUNNERS
 from alphus.gates.source.runners import SOURCE_RULE_RUNNERS
+from alphus.gates.vcs.runners import VCS_RULE_RUNNERS
 
 
 def test_shared_support_modules_do_not_import_gate_implementations() -> None:
@@ -96,9 +97,11 @@ def test_gate_themes_own_their_runner_mappings() -> None:
                 "package-boundaries",
                 "dependency-locks",
                 "repository-layout",
-                "git-ignores",
-                "git-history",
             },
+        ),
+        (
+            VCS_RULE_RUNNERS,
+            {"git-ignores", "git-attributes", "git-history"},
         ),
         (
             HYGIENE_RULE_RUNNERS,

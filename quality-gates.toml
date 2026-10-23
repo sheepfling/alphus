@@ -1,3 +1,4 @@
+# Root policy for checks and profile composition; optional orchestration_files can split language steps.
 schema_version = 1
 [files]
 include = [
@@ -60,6 +61,7 @@ opaque_boundary_paths = ["src/alphus/config.py"]
 opaque_boundary_marker_prefix = "# opaque-boundary: "
 opaque_boundary_min_reason_chars = 12
 forbidden_main_imports = ["main"]
+semantic_rule_id_paths = ["src/alphus/**"]
 
 [checks.runtime_types]
 extensions = [".py"]
@@ -94,6 +96,11 @@ extensions = [".py"]
 exclude = []
 
 [checks.git]
+attributes = [
+  { path = "javascript/example.js", attribute = "eol", value = "lf" },
+  { path = "package.json", attribute = "text", value = "set" },
+  { path = "package-lock.json", attribute = "eol", value = "lf" },
+]
 
 [checks.package_boundaries]
 metadata_patterns = ["pyproject.toml"]
@@ -196,6 +203,11 @@ rule = "comment-markers"
 kind = "rule"
 name = "Git ignore policy"
 rule = "git-ignores"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Git attributes"
+rule = "git-attributes"
 
 [[orchestration.steps]]
 kind = "rule"
@@ -308,7 +320,7 @@ steps = ["JavaScript tests", "JavaScript types"]
 
 [[orchestration.profiles]]
 name = "git"
-steps = ["Git ignore policy"]
+steps = ["Git ignore policy", "Git attributes"]
 
 [[orchestration.profiles]]
 name = "repository-history"

@@ -18,7 +18,7 @@ SCOPES = frozenset(
         "toml",
     }
 )
-FRAMEWORKS = frozenset({"fastapi", "none", "pydantic"})
+FRAMEWORKS = frozenset({"fastapi", "git", "none", "pydantic"})
 CATEGORIES = frozenset(
     {
         "architecture",

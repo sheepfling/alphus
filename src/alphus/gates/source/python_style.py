@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import re
 from collections.abc import Sequence
 from collections.abc import Set as AbstractSet
 from pathlib import Path
@@ -222,6 +223,7 @@ class StyleFindings(TypedDict):
     legacy_pydantic_fields: list[int]
     pydantic_collection_contracts: list[int]
     mutable_module_constants: list[int]
+    literal_rule_ids: list[int]
 
 
 def is_mutable_literal(node: ast.expr) -> bool:
@@ -303,6 +305,7 @@ class StyleVisitor(ast.NodeVisitor):
         *,
         source: str = "",
         boundary_file: bool = False,
+        semantic_rule_ids: bool = False,
     ) -> None:
         self.findings: StyleFindings = {
             "bare_containers": [],
@@ -318,9 +321,11 @@ class StyleVisitor(ast.NodeVisitor):
             "legacy_pydantic_fields": [],
             "pydantic_collection_contracts": [],
             "mutable_module_constants": [],
+            "literal_rule_ids": [],
         }
         self.source_lines = source.splitlines()
         self.boundary_file = boundary_file
+        self.semantic_rule_ids = semantic_rule_ids
         self.boundary_marker_prefix = policy.opaque_boundary_marker_prefix
         self.boundary_min_reason_chars = policy.opaque_boundary_min_reason_chars
         self.forbidden_main_imports = set(policy.forbidden_main_imports)
@@ -346,6 +351,18 @@ class StyleVisitor(ast.NodeVisitor):
         self.frozen_model_stack: list[bool] = []
         self.mutable_pydantic_collection_names = set(MUTABLE_PYDANTIC_COLLECTIONS)
         self.abstract_pydantic_collection_names = set(ABSTRACT_PYDANTIC_COLLECTIONS)
+
+    def visit_Constant(self, node: ast.Constant) -> None:
+        """Require semantic construction of canonical finding IDs in selected code."""
+        if (
+            self.semantic_rule_ids
+            and isinstance(node.value, str)
+            and re.fullmatch(
+                r"alphus/[a-z]+/[a-z]+/[a-z]+/[a-z0-9]+(?:-[a-z0-9]+)*",
+                node.value,
+            )
+        ):
+            self.findings["literal_rule_ids"].append(node.lineno)
 
     def opaque_allowed(self, line: int) -> bool:
         """Require a reason directly above an approved boundary declaration."""
@@ -693,6 +710,10 @@ def findings_for(
             policy,
             source=source,
             boundary_file=is_boundary_file(relative.as_posix(), policy),
+            semantic_rule_ids=any(
+                matches_path(relative.as_posix(), pattern)
+                for pattern in policy.semantic_rule_id_paths
+            ),
         )
         visitor.visit(ast.parse(source, filename=str(relative)))
         if any(visitor.findings.values()):

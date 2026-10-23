@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Literal, NamedTuple, TypeAlias
@@ -69,6 +69,45 @@ class Diagnostic:
             raise ValueError(f"unsupported remediation priority: {self.priority!r}")
         if self.source == "alphus" or self.rule_id.partition("/")[0] == "alphus":
             RuleTag.parse(self.rule_id)
+
+
+@dataclass(frozen=True, slots=True)
+class FindingRollup:
+    """Severity totals for one semantic tag dimension."""
+
+    key: str
+    count: int
+    severity_counts: SeverityCounts
+
+
+@dataclass(frozen=True, slots=True)
+class FindingRollups:
+    """Cross-language indexes over normalized Alphus diagnostics."""
+
+    scopes: tuple[FindingRollup, ...] = ()
+    categories: tuple[FindingRollup, ...] = ()
+    complaints: tuple[FindingRollup, ...] = ()
+
+    @classmethod
+    def from_diagnostics(cls, diagnostics: Iterable[Diagnostic]) -> FindingRollups:
+        by_scope: dict[str, list[Diagnostic]] = {}
+        by_category: dict[str, list[Diagnostic]] = {}
+        by_complaint: dict[str, list[Diagnostic]] = {}
+        for diagnostic in diagnostics:
+            tag = RuleTag.parse(diagnostic.rule_id)
+            by_scope.setdefault(tag.scope, []).append(diagnostic)
+            by_category.setdefault(tag.category, []).append(diagnostic)
+            by_complaint.setdefault(f"{tag.category}/{tag.complaint}", []).append(
+                diagnostic
+            )
+
+        def rows(groups: Mapping[str, Sequence[Diagnostic]]) -> tuple[FindingRollup, ...]:
+            return tuple(
+                FindingRollup(key, len(items), SeverityCounts.from_diagnostics(items))
+                for key, items in sorted(groups.items())
+            )
+
+        return cls(rows(by_scope), rows(by_category), rows(by_complaint))
 
 
 class SourceFinding(NamedTuple):

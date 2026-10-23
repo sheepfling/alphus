@@ -10,6 +10,7 @@ from types import MappingProxyType
 
 from alphus.config import ArchitectureGraphPolicy, PackageBoundaryPolicy
 from alphus.contracts.findings import Finding
+from alphus.contracts.rule_tags import rule_tag
 
 _EDGE_PATTERNS: Mapping[str, Pattern[str]] = MappingProxyType(
     {
@@ -40,7 +41,7 @@ def check_architecture_graph(
     except (OSError, ValueError):
         return [
             Finding(
-                rule_id="alphus/repository/none/architecture/graph-missing",
+                rule_id=rule_tag("repository", "none", "architecture", "graph-missing"),
                 path=graph.path,
                 message="Mermaid graph is missing",
             )
@@ -48,7 +49,7 @@ def check_architecture_graph(
     if not path.is_file():
         return [
             Finding(
-                rule_id="alphus/repository/none/architecture/graph-missing",
+                rule_id=rule_tag("repository", "none", "architecture", "graph-missing"),
                 path=graph.path,
                 message="Mermaid graph is missing",
             )
@@ -58,7 +59,7 @@ def check_architecture_graph(
     if len(parts) != 2 or "\n```" not in parts[1]:
         return [
             Finding(
-                rule_id="alphus/repository/none/architecture/graph-missing",
+                rule_id=rule_tag("repository", "none", "architecture", "graph-missing"),
                 path=graph.path,
                 message="Mermaid graph is missing",
             )
@@ -72,7 +73,9 @@ def check_architecture_graph(
     if re.match(header, diagram.lstrip()) is None:
         return [
             Finding(
-                rule_id="alphus/repository/none/architecture/graph-syntax-mismatch",
+                rule_id=rule_tag(
+                    "repository", "none", "architecture", "graph-syntax-mismatch"
+                ),
                 path=graph.path,
                 message=f"Mermaid graph must use {graph.syntax} syntax",
             )
@@ -86,7 +89,7 @@ def check_architecture_graph(
     missing_nodes = set(allowed) - node_names.keys()
     findings = [
         Finding(
-            rule_id="alphus/repository/none/architecture/node-missing",
+            rule_id=rule_tag("repository", "none", "architecture", "node-missing"),
             path=graph.path,
             message=f"no Mermaid node for {name}",
         )
@@ -101,7 +104,7 @@ def check_architecture_graph(
     expected.update(graph.extra_edges)
     findings.extend(
         Finding(
-            rule_id="alphus/repository/none/architecture/edge-missing",
+            rule_id=rule_tag("repository", "none", "architecture", "edge-missing"),
             path=graph.path,
             message=f"Mermaid graph lacks {origin} -> {target}",
         )
@@ -109,7 +112,7 @@ def check_architecture_graph(
     )
     findings.extend(
         Finding(
-            rule_id="alphus/repository/none/architecture/edge-forbidden",
+            rule_id=rule_tag("repository", "none", "architecture", "edge-forbidden"),
             path=graph.path,
             message=f"Mermaid graph has forbidden {origin} -> {target}",
         )

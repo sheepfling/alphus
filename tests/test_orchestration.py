@@ -286,6 +286,34 @@ def test_json_profile_emits_one_structured_summary(
         "profile": "check",
         "failure_threshold": "info",
         "severity_counts": {"error": 2, "warning": 0, "info": 0},
+        "finding_rollups": {
+            "scopes": [
+                {
+                    "key": "any",
+                    "count": 2,
+                    "severity_counts": {"error": 2, "warning": 0, "info": 0},
+                },
+            ],
+            "categories": [
+                {
+                    "key": "orchestration",
+                    "count": 2,
+                    "severity_counts": {"error": 2, "warning": 0, "info": 0},
+                },
+            ],
+            "complaints": [
+                {
+                    "key": "orchestration/command-exited-nonzero",
+                    "count": 1,
+                    "severity_counts": {"error": 1, "warning": 0, "info": 0},
+                },
+                {
+                    "key": "orchestration/rule-execution-failed",
+                    "count": 1,
+                    "severity_counts": {"error": 1, "warning": 0, "info": 0},
+                },
+            ],
+        },
         "steps": [
             {
                 "diagnostics": ["diagnostic"],

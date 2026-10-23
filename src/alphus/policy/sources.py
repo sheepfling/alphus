@@ -241,8 +241,9 @@ class PythonStylePolicy(PythonSourceScanPolicy):
     opaque_boundary_marker_prefix: str
     opaque_boundary_min_reason_chars: Annotated[int, Field(gt=0)]
     forbidden_main_imports: Annotated[tuple[str, ...], Field(default_factory=tuple)]
+    semantic_rule_id_paths: Annotated[tuple[str, ...], Field(default_factory=tuple)]
 
-    @field_validator("opaque_boundary_paths")
+    @field_validator("opaque_boundary_paths", "semantic_rule_id_paths")
     @classmethod
     def validate_boundary_paths(cls, patterns: Sequence[str]) -> tuple[str, ...]:
         return validate_patterns(patterns)

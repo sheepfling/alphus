@@ -1,5 +1,10 @@
+import json
+import subprocess
 from pathlib import Path
 
+import pytest
+
+from scripts import ci
 from scripts.ci import dependency_floors
 
 
@@ -13,3 +18,39 @@ def test_ci_dependency_floors_follow_package_metadata() -> None:
         "pytest==8",
         "ruff==0.16",
     )
+
+
+def test_ci_stage_failure_has_context_in_json(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(
+        ci.subprocess,
+        "run",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            ["python", "-m", "alphus"], 3, "profile output", "missing tool"
+        ),
+    )
+    with pytest.raises(subprocess.CalledProcessError):
+        ci.run(Path("."), "python", "-m", "alphus", stage="Self profile", output="json")
+    events = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert events[0]["stage"] == "Self profile"
+    assert events[1]["exit_code"] == 3
+    assert events[1]["stderr"] == "missing tool"
+    assert events[1]["stdout"] == "profile output"
+
+
+def test_ci_stage_success_is_readable(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(
+        ci.subprocess,
+        "run",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            ["python"], 0, "ok\n", ""
+        ),
+    )
+    ci.run(Path("."), "python", stage="Import", output="plain")
+    output = capsys.readouterr().out
+    assert "==> Import:" in output
+    assert "ok\n" in output
+    assert "PASS Import (exit 0" in output

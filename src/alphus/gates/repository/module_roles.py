@@ -9,6 +9,7 @@ from typing import NamedTuple
 
 from alphus.config import ModuleRolePolicy, ModuleRoleRule
 from alphus.contracts.findings import Finding
+from alphus.contracts.rule_tags import rule_tag
 
 
 def _finding(
@@ -131,7 +132,7 @@ def _inspect_source(rule: ModuleRoleRule, source: str) -> list[Finding]:
         return [
             _finding(
                 rule,
-                "alphus/python/none/correctness/module-syntax-invalid",
+                rule_tag("python", "none", "correctness", "module-syntax-invalid"),
                 error.lineno,
                 "module could not be parsed",
             )
@@ -146,7 +147,12 @@ def _inspect_source(rule: ModuleRoleRule, source: str) -> list[Finding]:
                         findings.append(
                             _finding(
                                 rule,
-                                "alphus/python/none/architecture/forbidden-module-import",
+                                rule_tag(
+                                    "python",
+                                    "none",
+                                    "architecture",
+                                    "forbidden-module-import",
+                                ),
                                 node.lineno,
                                 f"must not import '{forbidden}'",
                             )
@@ -156,7 +162,12 @@ def _inspect_source(rule: ModuleRoleRule, source: str) -> list[Finding]:
                         findings.append(
                             _finding(
                                 rule,
-                                "alphus/python/none/architecture/forbidden-module-import-pattern",
+                                rule_tag(
+                                    "python",
+                                    "none",
+                                    "architecture",
+                                    "forbidden-module-import-pattern",
+                                ),
                                 node.lineno,
                                 f"must not import a module matching '{pattern}'",
                             )
@@ -167,7 +178,9 @@ def _inspect_source(rule: ModuleRoleRule, source: str) -> list[Finding]:
                     findings.append(
                         _finding(
                             rule,
-                            "alphus/python/none/security/forbidden-module-call",
+                            rule_tag(
+                                "python", "none", "security", "forbidden-module-call"
+                            ),
                             node.lineno,
                             f"must not call '{name}'",
                         )
@@ -177,7 +190,12 @@ def _inspect_source(rule: ModuleRoleRule, source: str) -> list[Finding]:
                     findings.append(
                         _finding(
                             rule,
-                            "alphus/python/none/architecture/forbidden-module-definition",
+                            rule_tag(
+                                "python",
+                                "none",
+                                "architecture",
+                                "forbidden-module-definition",
+                            ),
                             node.lineno,
                             f"must not define '{name}'",
                         )
@@ -187,7 +205,12 @@ def _inspect_source(rule: ModuleRoleRule, source: str) -> list[Finding]:
                     findings.append(
                         _finding(
                             rule,
-                            "alphus/python/none/architecture/forbidden-module-definition",
+                            rule_tag(
+                                "python",
+                                "none",
+                                "architecture",
+                                "forbidden-module-definition",
+                            ),
                             node.lineno,
                             f"must not define '{name}'",
                         )
@@ -201,7 +224,9 @@ def _inspect_source(rule: ModuleRoleRule, source: str) -> list[Finding]:
         findings.append(
             _finding(
                 rule,
-                "alphus/python/none/architecture/forbidden-module-assignment",
+                rule_tag(
+                    "python", "none", "architecture", "forbidden-module-assignment"
+                ),
                 line,
                 f"must not assign module-level name '{name}'",
             )
@@ -245,7 +270,9 @@ def check_module_roles(root: Path, policy: ModuleRolePolicy) -> list[Finding]:
             findings.append(
                 _finding(
                     rule,
-                    "alphus/python/none/configuration/module-role-path-invalid",
+                    rule_tag(
+                        "python", "none", "configuration", "module-role-path-invalid"
+                    ),
                     None,
                     module_path.error or "path is invalid",
                 )
@@ -257,7 +284,9 @@ def check_module_roles(root: Path, policy: ModuleRolePolicy) -> list[Finding]:
             findings.append(
                 _finding(
                     rule,
-                    "alphus/python/none/configuration/module-role-file-unreadable",
+                    rule_tag(
+                        "python", "none", "configuration", "module-role-file-unreadable"
+                    ),
                     None,
                     f"module could not be read ({type(error).__name__})",
                 )

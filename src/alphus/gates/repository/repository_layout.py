@@ -11,6 +11,7 @@ from typing import cast
 
 from alphus.config import InstructionRouterPolicy, RepositoryLayoutPolicy
 from alphus.contracts.findings import Finding
+from alphus.contracts.rule_tags import rule_tag
 from alphus.support.data_access import nested_value, validate_json_value
 from alphus.support.inventory import matches_path
 
@@ -18,30 +19,48 @@ from alphus.support.inventory import matches_path
 class LayoutRuleId(StrEnum):
     """Stable identifiers emitted by repository layout checks."""
 
-    ROUTER_ROOT_MISSING = "alphus/repository/none/configuration/router-root-missing"
-    BRIDGE_ROOT_MISSING = "alphus/repository/none/configuration/bridge-root-missing"
-    BRIDGE_ROOT_MARKER_MISSING = (
-        "alphus/repository/none/configuration/bridge-root-marker-missing"
+    ROUTER_ROOT_MISSING = rule_tag(
+        "repository", "none", "configuration", "router-root-missing"
     )
-    ROUTER_AREA_MISSING = "alphus/repository/none/configuration/router-area-missing"
-    BRIDGE_AREA_MISSING = "alphus/repository/none/configuration/bridge-area-missing"
-    BRIDGE_SCOPE_MISSING = "alphus/repository/none/configuration/bridge-scope-missing"
-    BRIDGE_ROUTER_IMPORT_MISSING = (
-        "alphus/repository/none/configuration/bridge-router-import-missing"
+    BRIDGE_ROOT_MISSING = rule_tag(
+        "repository", "none", "configuration", "bridge-root-missing"
     )
-    PATH_REQUIRED = "alphus/repository/none/configuration/path-required"
-    PATH_FORBIDDEN = "alphus/repository/none/configuration/path-forbidden"
-    GLOB_FORBIDDEN = "alphus/repository/none/configuration/glob-forbidden"
-    JSON_ARRAY_VALUE_REQUIRED = (
-        "alphus/repository/none/configuration/json-array-value-required"
+    BRIDGE_ROOT_MARKER_MISSING = rule_tag(
+        "repository", "none", "configuration", "bridge-root-marker-missing"
     )
-    PYTHON_SYMBOL_REQUIRED = (
-        "alphus/repository/none/configuration/python-symbol-required"
+    ROUTER_AREA_MISSING = rule_tag(
+        "repository", "none", "configuration", "router-area-missing"
     )
-    TOML_TABLE_REQUIRED = "alphus/repository/none/configuration/toml-table-required"
-    TRACKED_SUFFIX_FORBIDDEN = "alphus/repository/none/hygiene/tracked-suffix-forbidden"
-    TRACKED_PATH_FORBIDDEN = "alphus/repository/none/hygiene/tracked-path-forbidden"
-    ROOT_DOCUMENT_FORBIDDEN = "alphus/repository/none/hygiene/root-document-forbidden"
+    BRIDGE_AREA_MISSING = rule_tag(
+        "repository", "none", "configuration", "bridge-area-missing"
+    )
+    BRIDGE_SCOPE_MISSING = rule_tag(
+        "repository", "none", "configuration", "bridge-scope-missing"
+    )
+    BRIDGE_ROUTER_IMPORT_MISSING = rule_tag(
+        "repository", "none", "configuration", "bridge-router-import-missing"
+    )
+    PATH_REQUIRED = rule_tag("repository", "none", "configuration", "path-required")
+    PATH_FORBIDDEN = rule_tag("repository", "none", "configuration", "path-forbidden")
+    GLOB_FORBIDDEN = rule_tag("repository", "none", "configuration", "glob-forbidden")
+    JSON_ARRAY_VALUE_REQUIRED = rule_tag(
+        "repository", "none", "configuration", "json-array-value-required"
+    )
+    PYTHON_SYMBOL_REQUIRED = rule_tag(
+        "repository", "none", "configuration", "python-symbol-required"
+    )
+    TOML_TABLE_REQUIRED = rule_tag(
+        "repository", "none", "configuration", "toml-table-required"
+    )
+    TRACKED_SUFFIX_FORBIDDEN = rule_tag(
+        "repository", "none", "hygiene", "tracked-suffix-forbidden"
+    )
+    TRACKED_PATH_FORBIDDEN = rule_tag(
+        "repository", "none", "hygiene", "tracked-path-forbidden"
+    )
+    ROOT_DOCUMENT_FORBIDDEN = rule_tag(
+        "repository", "none", "hygiene", "root-document-forbidden"
+    )
 
 
 def _safe_path(root: Path, relative: str) -> Path | None:

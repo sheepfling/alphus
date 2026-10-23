@@ -12,6 +12,7 @@ from alphus.gates.hygiene.runners import HYGIENE_RULE_RUNNERS
 from alphus.gates.repository.runners import REPOSITORY_RULE_RUNNERS
 from alphus.gates.review.runners import REVIEW_RULE_RUNNERS
 from alphus.gates.source.runners import SOURCE_RULE_RUNNERS
+from alphus.gates.vcs.runners import VCS_RULE_RUNNERS
 
 RuleRunner = Callable[[Path, Sequence[Path], QualityGateConfig], RuleOutput]
 
@@ -21,6 +22,7 @@ RULE_RUNNERS: Mapping[QualityRuleName, RuleRunner] = MappingProxyType(
         **REPOSITORY_RULE_RUNNERS,
         **REVIEW_RULE_RUNNERS,
         **SOURCE_RULE_RUNNERS,
+        **VCS_RULE_RUNNERS,
     }
 )
 
