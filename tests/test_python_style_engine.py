@@ -3,7 +3,7 @@
 import ast
 
 from alphus.config import PythonStylePolicy
-from alphus.python_style import StyleVisitor, is_boundary_file
+from alphus.gates.source.python_style import StyleVisitor, is_boundary_file
 
 POLICY = PythonStylePolicy(
     extensions=[".py"],

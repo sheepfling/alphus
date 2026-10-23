@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from alphus.config import SourceScanPolicy
-from alphus.output_escaping import (
+from alphus.gates.source.output_escaping import (
     check_output_escaping,
     js_escape_findings,
     python_escape_findings,

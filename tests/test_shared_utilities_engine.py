@@ -9,7 +9,7 @@ import pytest
 
 from alphus.cli import main
 from alphus.config import SharedUtilitiesPolicy
-from alphus.shared_utilities import (
+from alphus.gates.hygiene.shared_utilities import (
     check_shared_utilities,
     duplicate_helpers,
     file_sha256_helpers,

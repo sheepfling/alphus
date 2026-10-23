@@ -3,7 +3,10 @@
 from pathlib import Path
 
 from alphus.config import NumericLiteralPolicy, NumericLiteralSpec
-from alphus.numeric_literals import check_numeric_literals, numeric_literal_findings
+from alphus.gates.review.numeric_literals import (
+    check_numeric_literals,
+    numeric_literal_findings,
+)
 
 
 def _policy(

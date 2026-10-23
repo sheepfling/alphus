@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from alphus.config import SourceScanPolicy
-from alphus.json_structure import (
+from alphus.gates.source.json_structure import (
     DECODER_MODULES,
     JS_DECODERS,
     check_json_structure,

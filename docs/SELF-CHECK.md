@@ -1,8 +1,9 @@
 # Self-checking Alphus
 
 The `check` profile validates the package against its own repository policy. It
-runs Alphus portable rules, the review rules, TOML syntax, native Ruff lint
-and format checks, strict Pyright, and the package tests.
+runs Alphus portable rules, the review rules, TOML syntax, an installed-package
+import smoke check, native Ruff lint and format checks, strict Pyright, and
+the package tests.
 The repository's GitHub Actions quality workflow runs this profile on Python
 3.11 and 3.12 for pull requests and main-branch pushes. It checks editable
 installation, builds and installs a wheel, then invokes the installed package.
@@ -59,6 +60,12 @@ reference syntax in `pyproject.toml`; it catches an invalid module segment
 before an editable installation reaches the build backend.
 The package tests load every declared script target and require a callable,
 which also catches valid-looking references to missing modules or attributes.
+The `Python package imports` command discovers every `.py` file under `src`,
+requires regular package membership and initializers, and imports
+each module in a fresh interpreter. It removes
+`PYTHONPATH` from each child so the CI run checks the installed wheel rather
+than importing directly from `src`. This includes `__main__.py`; command
+entry modules therefore need a main guard.
 The target-audit isolation rule checks that the four files copied into a
 Python 3.10 target environment do not import Alphus's Python 3.11 controller
 or its Pydantic, Rich, and Typer dependencies.

@@ -50,6 +50,9 @@ language neutral.
   checks.
 - `alphus.gates.stubs` owns the installed stub-package workflow and fixture
   controller.
+- `alphus.gates.python` owns the installed-package import smoke workflow. It
+  maps every Python file under the source root to an import name and
+  imports each name in a fresh interpreter.
 - `alphus.config*`, `alphus.rule_catalog`, `alphus.rule_execution`, and
   `alphus.rule_results` own validated policy, selector catalog, runner
   composition, and normalized results.
@@ -58,12 +61,13 @@ language neutral.
 - `alphus_stub_quality` contains small audit helpers copied into the Python
   3.10 target environment.
 
-Existing root imports such as `alphus.numeric_literals`, `alphus.python_style`,
-and `alphus.repository_layout` remain compatibility modules. Their
-implementations live under `alphus.gates`; shared mechanics live under
-`alphus.support`. New code imports these owning packages directly. The root
-modules preserve existing import paths while the package remains on its
-current public API version.
+Import checker implementations from their owning `alphus.gates.<theme>`
+package and shared mechanics from `alphus.support`. Former root module
+forwarders have been removed. For example, replace `alphus.numeric_literals`
+with `alphus.gates.review.numeric_literals`, `alphus.python_style` with
+`alphus.gates.source.python_style`, and `alphus.repository_layout` with
+`alphus.gates.repository.repository_layout`. The `alphus` package still exports
+its documented core configuration, finding, inventory, and checker functions.
 
 Node and npm are optional. A repository that configures no Node-based command
 does not need `package.json`, Node.js, or npm. Consumers may keep established

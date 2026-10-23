@@ -5,7 +5,7 @@ from importlib.metadata import EntryPoint
 from pathlib import Path
 
 from alphus.config import load_config
-from alphus.test_quality import python_findings
+from alphus.gates.review.test_quality import python_findings
 
 
 def test_self_check_enforces_review_and_repository_toml() -> None:
@@ -19,6 +19,7 @@ def test_self_check_enforces_review_and_repository_toml() -> None:
         "TOML syntax",
         "Python format",
         "Python types",
+        "Python package imports",
         "Numeric review",
         "Test review",
         "Input contract review",

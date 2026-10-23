@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from alphus.config import PathDiscoveryPolicy
-from alphus.path_discovery import (
+from alphus.gates.source.path_discovery import (
     JS_INSPECTION_PATTERNS,
     JS_PATTERNS,
     check_path_discovery,

@@ -12,9 +12,9 @@ from pydantic import ValidationError
 from alphus.cli import main
 from alphus.config import CheckPolicies, QualityRuleName, load_config
 from alphus.config_base import MissingPolicyError
+from alphus.gates.hygiene.rules import check_file_size, check_line_length
 from alphus.rule_catalog import RULE_SPECS
 from alphus.rule_execution import RULE_RUNNERS
-from alphus.rules import check_file_size, check_line_length
 
 
 def repository(tmp_path: Path, extra: str = "") -> Path:

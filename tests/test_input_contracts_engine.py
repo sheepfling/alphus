@@ -7,7 +7,10 @@ import pytest
 
 from alphus.config import InputContractPolicy
 from alphus.findings import Finding
-from alphus.input_contracts import check_input_contracts, input_contract_findings
+from alphus.gates.review.input_contracts import (
+    check_input_contracts,
+    input_contract_findings,
+)
 
 POLICY = InputContractPolicy(extensions=[".py"], exclude=[])
 

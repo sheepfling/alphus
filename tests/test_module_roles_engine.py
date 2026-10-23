@@ -12,7 +12,7 @@ from pydantic import ValidationError
 
 from alphus.cli import main
 from alphus.config import ModuleRolePolicy
-from alphus.module_roles import check_module_roles
+from alphus.gates.repository.module_roles import check_module_roles
 
 
 def _policy(

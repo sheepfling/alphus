@@ -25,7 +25,7 @@ from alphus.findings import (
     SeverityCounts,
     severity_meets_threshold,
 )
-from alphus.inventory import candidate_files
+from alphus.support.inventory import candidate_files
 from alphus.support.platform_utils import is_windows
 
 

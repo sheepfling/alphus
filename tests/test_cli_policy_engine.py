@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from alphus.cli_policy import policy_issues, python_cli_issues
 from alphus.config import CliPolicy, NodeCliPolicy, PythonCliPolicy
+from alphus.gates.source.cli_policy import policy_issues, python_cli_issues
 
 POLICY = CliPolicy(
     python=PythonCliPolicy(

@@ -7,7 +7,7 @@ from typing import get_type_hints
 
 import pytest
 
-from alphus.runtime_types import type_check_findings
+from alphus.gates.source.runtime_types import type_check_findings
 from alphus_stub_quality.api_audit_support import (
     runtime_decorators,
     runtime_default,

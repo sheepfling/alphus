@@ -7,19 +7,20 @@ loads file scopes, thresholds, and repository conventions from TOML.
 
 ## Source layout
 
-`src/alphus/gates/` contains the checks: `source` for source and launcher
-analysis, `review` for advisory review rules, `repository` for architecture
-and packaging policy, `hygiene` for size and duplicate-helper rules, and
-`stubs` for the installed stub-package workflow. Each portable theme owns a
-`runners.py` that binds selectors to validated policy.
+`src/alphus/gates/` groups the checks by theme: `source` for source and
+launcher analysis, `review` for advisory rules, `repository` for architecture
+and packaging policy, `hygiene` for size and duplicate-helper rules,
+`stubs` for installed stub-package verification, and `python` for the
+package-import smoke gate. Portable themes own a `runners.py` that binds
+selectors to validated policy.
 
 `src/alphus/support/` contains file inventory, safe data access, AST name
 resolution, and platform probes shared by checks. The top-level `config*.py`,
 `findings.py`, `rule_*.py`, `orchestration.py`, and `cli.py` form the policy,
-result, execution, and presentation layers. Many other top-level modules
-are small compatibility imports for older callers; new code should import
-the implementation from its gate theme or `support` directly. See the
-[architecture guide](docs/ARCHITECTURE.md) for the full boundary map.
+result, execution, and presentation layers. Gate implementations live under
+their owning theme; shared utilities live under `support`. Import them
+directly. See the [architecture guide](docs/ARCHITECTURE.md) for the full
+boundary map.
 
 ## Install
 
@@ -120,8 +121,8 @@ Node-based checks, not just because a repository contains JavaScript.
 
 ## Python AST query API
 
-`alphus.source_scanning` provides small, policy-free queries over an already
-parsed Python `ast.Module`. The caller owns file discovery, parsing, scope,
+`alphus.support.source_scanning` provides small, policy-free queries over
+an already parsed Python `ast.Module`. The caller owns file discovery, parsing, scope,
 diagnostic wording, and the decision to reject a pattern. The query module
 does not load a repository, import inspected source, or read files.
 
@@ -139,7 +140,7 @@ For example, a stored class-method reference is visible even without a call:
 ```python
 import ast
 
-from alphus.source_scanning import qualified_reference_lines
+from alphus.support.source_scanning import qualified_reference_lines
 
 tree = ast.parse("from datetime import datetime as Clock\nparse = Clock.fromisoformat\n")
 assert qualified_reference_lines(tree, "datetime.datetime.fromisoformat") == [2]

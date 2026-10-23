@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from alphus.data_access import validate_json_value
+from alphus.support.data_access import validate_json_value
 
 
 def test_validate_json_value_returns_nested_json_values() -> None:

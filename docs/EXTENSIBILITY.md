@@ -88,8 +88,8 @@ mapping in `alphus.rule_execution`. Add the output adapter in
 `alphus.rule_results` only if it has a new shape. Add direct CLI and profile
 tests, then select the gate in a consumer profile. The registry completeness
 test catches missing selectors, and Alphus's `check` profile exercises the
-rule and native tooling together. Existing root import modules can forward
-old callers while implementations move to their theme package.
+rule and native tooling together. Import each implementation from its owning
+theme package; removed root module forwarders are not extension points.
 
 ### Package layout for additional languages
 

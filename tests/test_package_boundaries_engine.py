@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from alphus.config import PackageBoundaryPolicy
-from alphus.package_boundaries import check_package_boundaries
+from alphus.gates.repository.package_boundaries import check_package_boundaries
 
 
 def _policy() -> PackageBoundaryPolicy:

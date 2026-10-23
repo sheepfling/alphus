@@ -11,7 +11,7 @@ from types import SimpleNamespace
 import pytest
 from pydantic import ValidationError
 
-from alphus import orchestration, platform_utils
+from alphus import orchestration
 from alphus.config import (
     CommandRunStep,
     FileInventoryPolicy,
@@ -25,7 +25,7 @@ from alphus.orchestration import (
     _windows_shell_required,
     run_orchestration,
 )
-from alphus.support import platform_utils as support_platform_utils
+from alphus.support import platform_utils
 
 
 def _policy() -> OrchestrationPolicy:
@@ -165,9 +165,7 @@ def test_platform_probes(
     platform: str,
     expected: tuple[bool, bool, bool],
 ) -> None:
-    monkeypatch.setattr(
-        support_platform_utils, "sys", SimpleNamespace(platform=platform)
-    )
+    monkeypatch.setattr(platform_utils, "sys", SimpleNamespace(platform=platform))
     assert (
         platform_utils.is_windows(),
         platform_utils.is_linux(),

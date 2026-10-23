@@ -11,7 +11,6 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from alphus import inventory
 from alphus.cli import main
 from alphus.config import (
     NodeCliPolicy,
@@ -22,14 +21,15 @@ from alphus.config import (
     load_config_stream,
 )
 from alphus.findings import Diagnostic, Finding
+from alphus.gates.hygiene.rules import check_file_size, check_line_length
 from alphus.gates.source import runners as source_runners
-from alphus.inventory import candidate_files, matches_path, tracked_files
 from alphus.rule_results import (
     RuleEvaluation,
     diagnostics_from_json,
     diagnostics_from_output,
 )
-from alphus.rules import check_file_size, check_line_length
+from alphus.support import inventory
+from alphus.support.inventory import candidate_files, matches_path, tracked_files
 
 POLICY = """schema_version = 1
 

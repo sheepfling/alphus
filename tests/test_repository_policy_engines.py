@@ -5,8 +5,6 @@ from pathlib import Path
 
 import pytest
 
-from alphus.architecture_graph import check_architecture_graph
-from alphus.callable_registry import check_callable_registry
 from alphus.config import (
     ArchitectureGraphPolicy,
     CallableRegistryPolicy,
@@ -14,8 +12,10 @@ from alphus.config import (
     RepositoryLayoutPolicy,
     VersionSyncPolicy,
 )
-from alphus.repository_layout import check_repository_layout
-from alphus.version_sync import check_version_sync
+from alphus.gates.repository.architecture_graph import check_architecture_graph
+from alphus.gates.repository.callable_registry import check_callable_registry
+from alphus.gates.repository.repository_layout import check_repository_layout
+from alphus.gates.repository.version_sync import check_version_sync
 
 
 def test_architecture_graph_matches_configured_package_edges(tmp_path: Path) -> None:

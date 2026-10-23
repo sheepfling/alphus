@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from alphus.config import TestQualityPolicy as Policy
-from alphus.test_quality import check_test_quality, python_findings
+from alphus.gates.review.test_quality import check_test_quality, python_findings
 
 POLICY = Policy(
     extensions=[".py"],

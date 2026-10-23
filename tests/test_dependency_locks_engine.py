@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from alphus.config import DependencyLockPolicy
-from alphus.dependency_locks import check_dependency_locks
+from alphus.gates.repository.dependency_locks import check_dependency_locks
 
 
 def _policy() -> DependencyLockPolicy:

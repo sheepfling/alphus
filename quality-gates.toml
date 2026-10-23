@@ -170,6 +170,14 @@ argv = [
 
 [[orchestration.steps]]
 kind = "command"
+name = "Python package imports"
+argv = [
+  "{python}", "-m", "alphus.gates.python.importability",
+  "--source-root", "src",
+]
+
+[[orchestration.steps]]
+kind = "command"
 name = "Python format"
 argv = ["{python}", "-m", "ruff", "format", "--check", "src", "tests"]
 
@@ -208,7 +216,7 @@ steps = [
 
 [[orchestration.profiles]]
 name = "python"
-steps = ["Python lint", "Python format", "Python types", "Package tests"]
+steps = ["Python lint", "Python format", "Python types", "Python package imports", "Package tests"]
 
 [[orchestration.profiles]]
 name = "toml"
