@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import tomllib
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Annotated, Literal, TextIO
 
@@ -155,25 +155,26 @@ class QualityGateConfig(StrictModel):
             raise ValueError(
                 "native shortcuts cannot be combined with orchestration_files"
             )
-        if "tools" in value and "languages" in value:
-            raise ValueError("choose either languages or tools, not both")
-        if "languages" in value:
-            selected_languages = TypeAdapter(list[str]).validate_python(
-                value["languages"], strict=True
-            )
-            selected = native_tools_for_languages(selected_languages)
-            selection_key = "languages"
-        else:
-            selected = TypeAdapter(list[str]).validate_python(
-                value["tools"], strict=True
-            )
-            selection_key = "tools"
+        selected_languages = (
+            TypeAdapter(list[str]).validate_python(value["languages"], strict=True)
+            if "languages" in value
+            else None
+        )
+        selected_tools = (
+            TypeAdapter(list[str]).validate_python(value["tools"], strict=True)
+            if "tools" in value
+            else None
+        )
+        selected = _selected_native_tools(selected_languages, selected_tools)
+        if selected is None:
+            raise ValueError("native shortcut selection is empty")
         declared = _PartialOrchestration.model_validate(value.get("orchestration", {}))
         orchestration = _compose_native_orchestration(
             native_tool_policy(selected), declared
         )
         document = dict(value)
-        del document[selection_key]
+        document.pop("languages", None)
+        document.pop("tools", None)
         document["orchestration"] = orchestration
         return document
 
@@ -200,10 +201,9 @@ class _SplitPolicy(StrictModel):
 
     @model_validator(mode="after")
     def validate_native_selection(self) -> _SplitPolicy:
-        if self.tools is not None and self.languages is not None:
-            raise ValueError("choose either languages or tools, not both")
-        if self.languages is not None:
-            native_tools_for_languages(self.languages)
+        selected = _selected_native_tools(self.languages, self.tools)
+        if selected is not None:
+            native_tool_policy(selected)
         return self
 
     @field_validator("orchestration_files")
@@ -226,6 +226,18 @@ class _LanguagePolicy(StrictModel):
     """A language file contributes steps and profiles only."""
 
     orchestration: _LanguageOrchestration
+
+
+def _selected_native_tools(
+    languages: Sequence[str] | None, tools: Sequence[str] | None
+) -> tuple[str, ...] | None:
+    """Expand bundles first, then append individual native tools."""
+    if languages is None and tools is None:
+        return None
+    expanded = native_tools_for_languages(languages) if languages is not None else ()
+    if tools is not None and not tools:
+        raise ValueError("tools must select at least one native tool")
+    return (*expanded, *(tools or ()))
 
 
 def _parse_config(text: str) -> QualityGateConfig:
@@ -264,11 +276,7 @@ def load_config(path: Path) -> QualityGateConfig:
         default_profile=root.orchestration.default_profile,
         failure_threshold=root.orchestration.failure_threshold,
     )
-    selected = (
-        native_tools_for_languages(root.languages)
-        if root.languages is not None
-        else root.tools
-    )
+    selected = _selected_native_tools(root.languages, root.tools)
     orchestration = (
         _compose_native_orchestration(native_tool_policy(selected), declared)
         if selected is not None

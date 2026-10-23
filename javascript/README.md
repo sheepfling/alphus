@@ -7,8 +7,9 @@ add framework rules and TypeScript parsing. Consumers own repository paths,
 TypeScript module settings, and application-specific rules.
 
 Install this package and the consumer's selected command tools in the Node
-development environment. Alphus invokes the selected tools through local
-`npm exec`. Then compose the shared ESLint policy with local rules:
+development environment. Alphus invokes the selected tools through
+`npm exec --no`, which fails if a selected package is missing locally.
+Then compose the shared ESLint policy with local rules:
 
 ```js
 import alphusJavaScript from "@alphus/javascript-quality/eslint";
@@ -116,5 +117,8 @@ React projects with TypeScript can add `eslint-typescript` and
 `eslint-angular-template` for external HTML templates. The extra tools are
 opt-in, so a plain JavaScript consumer need not install a framework parser or
 lint plugin. The `typescript` and `html` Alphus profiles can run these scopes
-independently, while `check` runs all selected tools. Standard HTML and CSS
-projects can select the separate tools above; `css` is a distinct profile.
+independently, while `check` runs all selected tools. Plain TypeScript,
+HTML, and CSS can use `languages = ["typescript", "html", "css"]`; the `html`
+bundle uses HTML-validate. Angular templates should select
+`eslint-angular-template` instead. In mixed repositories, use explicit
+file-scoped steps to separate Angular templates from ordinary HTML pages.

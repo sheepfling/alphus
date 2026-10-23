@@ -20,8 +20,15 @@ language TOML files through root-level `orchestration_files`. The loader
 combines them before validating unique names and profile references. The root
 policy owns optional built-in-rule file inventory and gate settings; language
 files only add steps and profiles. Common native tools can be selected with
-`languages` bundles or granularly with `tools`; generated profiles compose with
-project profiles and split files. C++ build commands remain project-owned.
+`languages` bundles and granular `tools` together; bundles expand first.
+Generated profiles compose with project profiles and split files. C++ build
+commands remain project-owned.
+
+The optional `@alphus/javascript-quality` npm package holds reusable
+ESLint, HTML-validate, Stylelint, Prettier, and TypeScript presets because
+their consumers install these tools with Node. It is a configuration package;
+Alphus remains the sole gate runner and policy entrypoint. JavaScript,
+TypeScript, HTML, and CSS keep distinct profiles and file scopes.
 
 Alphus has two gate shapes. A portable rule inspects selected repository files
 and returns Alphus findings. A workflow gate coordinates tools and environments

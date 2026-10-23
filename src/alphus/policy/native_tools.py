@@ -122,8 +122,8 @@ NATIVE_TOOLS = MappingProxyType(
             (
                 NativeStep(
                     "JSON format",
-                    ("npm", "exec", "--", "prettier", "--check", "{files}"),
-                    ("npm", "exec", "--", "prettier", "--write", "{files}"),
+                    ("npm", "exec", "--no", "--", "prettier", "--check", "{files}"),
+                    ("npm", "exec", "--no", "--", "prettier", "--write", "{files}"),
                     ("**/*.json",),
                 ),
             ),
@@ -133,8 +133,8 @@ NATIVE_TOOLS = MappingProxyType(
             (
                 NativeStep(
                     "JavaScript lint",
-                    ("npm", "exec", "--", "eslint", "{files}"),
-                    ("npm", "exec", "--", "eslint", "--fix", "{files}"),
+                    ("npm", "exec", "--no", "--", "eslint", "{files}"),
+                    ("npm", "exec", "--no", "--", "eslint", "--fix", "{files}"),
                     ("**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"),
                 ),
             ),
@@ -144,8 +144,8 @@ NATIVE_TOOLS = MappingProxyType(
             (
                 NativeStep(
                     "TypeScript lint",
-                    ("npm", "exec", "--", "eslint", "{files}"),
-                    ("npm", "exec", "--", "eslint", "--fix", "{files}"),
+                    ("npm", "exec", "--no", "--", "eslint", "{files}"),
+                    ("npm", "exec", "--no", "--", "eslint", "--fix", "{files}"),
                     ("**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"),
                 ),
             ),
@@ -155,8 +155,8 @@ NATIVE_TOOLS = MappingProxyType(
             (
                 NativeStep(
                     "Angular template lint",
-                    ("npm", "exec", "--", "eslint", "{files}"),
-                    ("npm", "exec", "--", "eslint", "--fix", "{files}"),
+                    ("npm", "exec", "--no", "--", "eslint", "{files}"),
+                    ("npm", "exec", "--no", "--", "eslint", "--fix", "{files}"),
                     ("**/*.html",),
                 ),
             ),
@@ -166,7 +166,7 @@ NATIVE_TOOLS = MappingProxyType(
             (
                 NativeStep(
                     "HTML validation",
-                    ("npm", "exec", "--", "html-validate", "{files}"),
+                    ("npm", "exec", "--no", "--", "html-validate", "{files}"),
                     include=("**/*.html",),
                 ),
             ),
@@ -176,8 +176,8 @@ NATIVE_TOOLS = MappingProxyType(
             (
                 NativeStep(
                     "HTML format",
-                    ("npm", "exec", "--", "prettier", "--check", "{files}"),
-                    ("npm", "exec", "--", "prettier", "--write", "{files}"),
+                    ("npm", "exec", "--no", "--", "prettier", "--check", "{files}"),
+                    ("npm", "exec", "--no", "--", "prettier", "--write", "{files}"),
                     ("**/*.html",),
                 ),
             ),
@@ -187,8 +187,8 @@ NATIVE_TOOLS = MappingProxyType(
             (
                 NativeStep(
                     "CSS lint",
-                    ("npm", "exec", "--", "stylelint", "{files}"),
-                    ("npm", "exec", "--", "stylelint", "--fix", "{files}"),
+                    ("npm", "exec", "--no", "--", "stylelint", "{files}"),
+                    ("npm", "exec", "--no", "--", "stylelint", "--fix", "{files}"),
                     ("**/*.css",),
                 ),
             ),
@@ -198,8 +198,8 @@ NATIVE_TOOLS = MappingProxyType(
             (
                 NativeStep(
                     "CSS format",
-                    ("npm", "exec", "--", "prettier", "--check", "{files}"),
-                    ("npm", "exec", "--", "prettier", "--write", "{files}"),
+                    ("npm", "exec", "--no", "--", "prettier", "--check", "{files}"),
+                    ("npm", "exec", "--no", "--", "prettier", "--write", "{files}"),
                     ("**/*.css",),
                 ),
             ),
@@ -209,8 +209,8 @@ NATIVE_TOOLS = MappingProxyType(
             (
                 NativeStep(
                     "JavaScript format",
-                    ("npm", "exec", "--", "prettier", "--check", "{files}"),
-                    ("npm", "exec", "--", "prettier", "--write", "{files}"),
+                    ("npm", "exec", "--no", "--", "prettier", "--check", "{files}"),
+                    ("npm", "exec", "--no", "--", "prettier", "--write", "{files}"),
                     ("**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"),
                 ),
             ),
@@ -220,8 +220,8 @@ NATIVE_TOOLS = MappingProxyType(
             (
                 NativeStep(
                     "TypeScript format",
-                    ("npm", "exec", "--", "prettier", "--check", "{files}"),
-                    ("npm", "exec", "--", "prettier", "--write", "{files}"),
+                    ("npm", "exec", "--no", "--", "prettier", "--check", "{files}"),
+                    ("npm", "exec", "--no", "--", "prettier", "--write", "{files}"),
                     ("**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"),
                 ),
             ),
@@ -236,6 +236,9 @@ LANGUAGE_TOOLS = MappingProxyType(
         "toml": ("taplo",),
         "json": ("prettier",),
         "javascript": ("eslint", "prettier-javascript"),
+        "typescript": ("eslint-typescript", "prettier-typescript"),
+        "html": ("html-validate", "prettier-html"),
+        "css": ("stylelint", "prettier-css"),
     }
 )
 

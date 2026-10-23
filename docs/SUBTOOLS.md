@@ -36,27 +36,27 @@ the [README](../README.md). Other native tools remain individually selected.
 Use `{python} -m <tool>` for a Python tool that
 must run in Alphus's interpreter, and a project-pinned executable for tools
 that are not Python packages. A missing executable fails its step visibly.
+Node recipes use
+`npm exec --no` so they use the consumer's installed local tools and do not
+fetch missing packages during a quality run.
 
 For standard commands, select tools by name in the repository's
 `quality-gates.toml`:
 
 ```toml
 schema_version = 1
-tools = [
-  "ruff", "pyright", "pytest", "rumdl", "mdrepo", "taplo", "prettier",
-  "eslint", "prettier-javascript", "eslint-typescript",
-  "prettier-typescript", "eslint-angular-template",
-  "html-validate", "prettier-html", "stylelint", "prettier-css",
-]
+languages = ["python", "markdown", "toml", "json", "javascript", "typescript", "css"]
+tools = ["eslint-angular-template"]
 ```
 
-Only selected tools run. Ruff contributes lint and format steps; rumdl,
-mdrepo, Taplo, and Prettier contribute one each. These use file scopes and
-explicit fixers. Pyright and pytest run without an Alphus file scope so their
-native configuration controls discovery; they have no automatic fixer. The
-list order controls execution and fix order. Alphus creates `check` plus
-`python`, `markdown`, `toml`, `json`, `javascript`, `typescript`, `html`, and `css`
-profiles for the languages selected.
+Only selected tools run. Bundles expand first, then individual tools.
+Ruff contributes lint and format steps; Pyright and pytest use native project
+discovery and have no fixer. The declared order controls execution and fix
+order. Alphus creates `check` plus profiles for the selected languages.
+The `html` bundle means standard HTML validation and formatting; Angular
+template lint is opt-in, as shown above. Use explicit command steps with
+different file scopes if both kinds of HTML occur in one repository.
+
 Use `alphus --plan` to inspect resolved order, command
 arguments, file matches, rollout, and fixability without running tools. Use
 `alphus --fix-plan` before applying a named fixer. Native tools still discover

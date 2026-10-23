@@ -85,7 +85,7 @@ Install it from an immutable Alphus Git commit and use the `eslint` and
 `prettier-javascript` tools in `quality-gates.toml`. The profile supports
 `.js`, `.jsx`, `.mjs`, and `.cjs`; consumers still select their own source and
 test directories in their TypeScript configuration. Alphus resolves ESLint and
-Prettier through `npm exec`, using the consumer's local npm installation.
+Prettier through `npm exec --no`, using installed local packages.
 Opt-in React and Angular ESLint exports, TypeScript and Angular template
 commands, standard HTML validation, CSS linting, and HTML/CSS formatting are
 documented in the JavaScript package guide.
@@ -132,8 +132,11 @@ languages = ["python", "markdown", "toml", "json", "javascript"]
 ```
 
 This expands to generated language profiles plus a coordinated `check`.
-Custom profiles and `orchestration_files` compose with those bundles; C++
-build and artifact commands remain project-specific. The
+Plain TypeScript, HTML, and CSS have bundles too. Add `tools = [...]` for
+individual opt-in checks alongside the bundles; for example, Angular template
+lint can accompany the TypeScript bundle without selecting standard HTML
+validation. Custom profiles and `orchestration_files` compose with those
+bundles. C++ build and artifact commands remain project-specific. The
 [consumer guide](docs/CONSUMER-PROFILES.md) covers profile composition and
 tool-command customization.
 

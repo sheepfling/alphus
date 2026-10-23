@@ -11,8 +11,8 @@ files = { include = ["**/*.json", "*.json"] }
 [[orchestration.steps]]
 kind = "command"
 name = "JSON format"
-argv = ["prettier", "--check", "{files}"]
-fix_argv = ["prettier", "--write", "{files}"]
+argv = ["npm", "exec", "--no", "--", "prettier", "--check", "{files}"]
+fix_argv = ["npm", "exec", "--no", "--", "prettier", "--write", "{files}"]
 files = { include = ["**/*.json", "*.json"] }
 
 [[orchestration.profiles]]

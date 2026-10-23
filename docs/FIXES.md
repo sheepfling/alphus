@@ -24,9 +24,10 @@ The portable rules without fixers are `file-size`, `line-length`,
 an individual
 `line-length` finding, but Alphus does not promise that result.
 
-Other consumers can add fix commands for their own native tools. A Markdown
-formatter, TOML formatter, and JSON formatter are configured in the
-[consumer example](../examples/consumer/quality-gates.toml):
+Native recipes expose their supported fixers. Consumers can add fix
+commands for project-specific tools. The
+[consumer example](../examples/consumer/quality-gates.toml) configures
+Markdown, TOML, and JSON steps:
 
 | Language | Read-only check | Explicit fixer |
 | --- | --- | --- |
@@ -36,6 +37,13 @@ formatter, TOML formatter, and JSON formatter are configured in the
 | TOML | Taplo `fmt --check` | Taplo `fmt`. |
 | JSON | `json` syntax | None; malformed JSON needs review. |
 | JSON | Prettier `--check` | Prettier `--write`. |
+| JavaScript and TypeScript | ESLint | ESLint `--fix` for supported rules. |
+| JavaScript and TypeScript | Prettier `--check` | Prettier `--write`. |
+| Angular templates | ESLint | ESLint `--fix` for supported rules. |
+| Plain HTML | HTML-validate | None; invalid markup needs review. |
+| Plain HTML | Prettier `--check` | Prettier `--write`. |
+| CSS | Stylelint | Stylelint `--fix` for supported rules. |
+| CSS | Prettier `--check` | Prettier `--write`. |
 
 The example keeps these steps in separate language files. Tools must be
 installed and pinned by the consumer. Applying a formatter may change many

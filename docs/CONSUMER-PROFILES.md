@@ -32,16 +32,29 @@ languages = ["python", "markdown", "toml", "json", "javascript"]
 
 This expands to the standard Python, Markdown, TOML, JSON, and JavaScript
 profiles. The compact [polyglot example](../examples/polyglot/quality-gates.toml)
-can be copied as a starting point. Use `tools = [...]` when you want only part
-of a bundle or one specific native tool. `languages` and `tools` are alternative
-selection forms. C++ remains project-specific because its build, test, and
-artifact commands depend on the repository's compiler and build setup.
+can be copied as a starting point. Plain TypeScript, HTML, and CSS also have
+bundles. C++ remains project-specific because its build, test, and artifact
+commands depend on the repository's compiler and build setup.
 
 The default bundles are Python (Ruff, Pyright, pytest), Markdown (rumdl,
-mdrepo), TOML (Taplo), JSON (Prettier), and JavaScript (ESLint, Prettier).
-Install those tools in the consumer environment and configure each tool for the
-repository's source layout. The Python bundle runs the project's normal Ruff,
-Pyright, and pytest configuration; choose `tools` for a smaller selection.
+mdrepo), TOML (Taplo), JSON (Prettier), JavaScript and TypeScript (ESLint,
+Prettier), plain HTML (HTML-validate, Prettier), and CSS (Stylelint, Prettier).
+Install and pin the selected tools in the consumer environment and configure
+each tool for the repository's source layout. The Python bundle runs the
+project's normal Ruff, Pyright, and pytest configuration. Select individual
+`tools` for a smaller set, or add them after `languages` for an opt-in check:
+
+```toml
+schema_version = 1
+languages = ["python", "markdown", "typescript"]
+tools = ["eslint-angular-template"]
+```
+
+Bundles run first in listed order, followed by individual tools in listed
+order. Repeating a tool already selected by a bundle is a configuration error.
+The `html` bundle checks ordinary HTML documents. For Angular templates,
+select `eslint-angular-template` instead of the `html` bundle. A repository
+with both kinds of HTML needs explicit file scopes to keep them separate.
 
 The short form composes with project profiles and split language files. Keep
 C++ checks in a local fragment, then include that profile in the root `check`:
@@ -143,7 +156,7 @@ Prettier, and that package in the consumer's Node development environment. The
 scoped commands with `tools = ["eslint", "prettier-javascript"]`. Consumers
 own the repository-specific `tsconfig` include paths; the shared TypeScript
 base enables `allowJs`, `checkJs`, `strict`, and `noEmit`. Alphus invokes ESLint
-and Prettier through `npm exec`, resolving the consumer's local npm install.
+and Prettier through `npm exec --no`, using installed local tools only.
 The package also exports opt-in React and Angular ESLint profiles. Select
 `eslint-typescript` for TS/TSX files and `eslint-angular-template` for external
 Angular HTML templates; the general `eslint` tool retains its JavaScript-only
@@ -256,10 +269,10 @@ rule requires its own complete `[checks.<name>]` section. Missing selected
 policies exit 2 before any profile command runs; declared malformed sections
 remain invalid even when unselected. No permissive policy defaults are added.
 
-Alphus's self-profile coordinates its portable Python rules, Python tooling,
-TOML and JSON syntax, JavaScript lint, format, tests, and type checks, plus its
-review rules including Pydantic and FastAPI practice reviews, under one
-`check` profile. Language-specific pieces remain available as named profiles.
+Alphus's self-profile coordinates portable Python rules, Python tooling,
+TOML and JSON syntax, Git ignore policy, and review rules under one `check`
+profile. The JavaScript profile runs in its own CI job after npm setup.
+Language-specific pieces remain available as named profiles.
 Composition does not remove runtime-type enforcement; see the
 [migration record](TEST-GATE-MIGRATION.md) for results at each revision and the
 [runtime-type contract](RUNTIME-TYPES.md).

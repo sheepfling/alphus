@@ -146,6 +146,14 @@ def test_consumer_data_formats_have_separate_profiles_with_format_fixers() -> No
     assert isinstance(steps["TOML format"], CommandRunStep)
     assert steps["TOML format"].fix_argv == ("taplo", "fmt", "{files}")
     assert isinstance(steps["JSON format"], CommandRunStep)
-    assert steps["JSON format"].fix_argv == ("prettier", "--write", "{files}")
+    assert steps["JSON format"].fix_argv == (
+        "npm",
+        "exec",
+        "--no",
+        "--",
+        "prettier",
+        "--write",
+        "{files}",
+    )
     assert steps["TOML syntax"].fix_argv is None
     assert steps["JSON syntax"].fix_argv is None

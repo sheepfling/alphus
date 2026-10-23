@@ -45,6 +45,7 @@ def test_native_tool_shortcut_generates_ordered_checks_and_language_profiles() -
     assert json_step.argv == (
         "npm",
         "exec",
+        "--no",
         "--",
         "prettier",
         "--check",
@@ -65,12 +66,13 @@ def test_javascript_shortcuts_share_a_scoped_language_profile() -> None:
     assert check.steps == javascript.steps == expected
     lint, format_step = policy.steps
     assert isinstance(lint, CommandRunStep)
-    assert lint.argv == ("npm", "exec", "--", "eslint", "{files}")
-    assert lint.fix_argv == ("npm", "exec", "--", "eslint", "--fix", "{files}")
+    assert lint.argv == ("npm", "exec", "--no", "--", "eslint", "{files}")
+    assert lint.fix_argv == ("npm", "exec", "--no", "--", "eslint", "--fix", "{files}")
     assert isinstance(format_step, CommandRunStep)
     assert format_step.argv == (
         "npm",
         "exec",
+        "--no",
         "--",
         "prettier",
         "--check",
@@ -79,6 +81,7 @@ def test_javascript_shortcuts_share_a_scoped_language_profile() -> None:
     assert format_step.fix_argv == (
         "npm",
         "exec",
+        "--no",
         "--",
         "prettier",
         "--write",
@@ -115,6 +118,55 @@ def test_language_bundles_expand_to_ordered_native_profiles() -> None:
     )
     for language in ("javascript", "markdown", "python", "toml", "json"):
         assert policy.resolve_profile(language) is not None
+
+
+def test_plain_web_language_bundles_share_check_and_language_profiles() -> None:
+    config = load_config_stream(
+        StringIO('schema_version = 1\nlanguages = ["typescript", "html", "css"]\n')
+    )
+    policy = config.orchestration
+    assert policy is not None
+    check = policy.resolve_profile("check")
+    assert check is not None
+    assert check.steps == (
+        "TypeScript lint",
+        "TypeScript format",
+        "HTML validation",
+        "HTML format",
+        "CSS lint",
+        "CSS format",
+    )
+    for language in ("typescript", "html", "css"):
+        assert policy.resolve_profile(language) is not None
+    for step in policy.steps:
+        assert isinstance(step, CommandRunStep)
+        assert step.argv[:4] == ("npm", "exec", "--no", "--")
+        if step.fix_argv is not None:
+            assert step.fix_argv[:4] == ("npm", "exec", "--no", "--")
+
+
+def test_language_bundles_and_extra_tools_compose_in_order() -> None:
+    config = load_config_stream(
+        StringIO(
+            'schema_version = 1\nlanguages = ["python", "markdown"]\n'
+            'tools = ["eslint-typescript"]\n'
+        )
+    )
+    policy = config.orchestration
+    assert policy is not None
+    check = policy.resolve_profile("check")
+    assert check is not None
+    assert check.steps == (
+        "Python lint",
+        "Python format",
+        "Python types",
+        "Python tests",
+        "Markdown style",
+        "Markdown links and graph",
+        "TypeScript lint",
+    )
+    typescript = policy.resolve_profile("typescript")
+    assert typescript is not None and typescript.steps == ("TypeScript lint",)
 
 
 def test_native_tools_compose_with_named_profiles_and_custom_steps() -> None:
@@ -194,7 +246,15 @@ def test_html_and_css_shortcuts_keep_plain_markup_separate_from_angular() -> Non
     assert validation.fix_argv is None
     assert css_lint.files is not None
     assert css_lint.files.include == ("**/*.css",)
-    assert css_lint.fix_argv == ("npm", "exec", "--", "stylelint", "--fix", "{files}")
+    assert css_lint.fix_argv == (
+        "npm",
+        "exec",
+        "--no",
+        "--",
+        "stylelint",
+        "--fix",
+        "{files}",
+    )
 
 
 @pytest.mark.parametrize(
@@ -216,8 +276,8 @@ def test_html_and_css_shortcuts_keep_plain_markup_separate_from_angular() -> Non
             "unknown languages",
         ),
         (
-            'schema_version = 1\nlanguages = ["python"]\ntools = ["rumdl"]\n',
-            "choose either languages or tools",
+            'schema_version = 1\nlanguages = ["javascript"]\ntools = ["eslint"]\n',
+            "must not repeat a native tool",
         ),
     ],
 )
@@ -333,6 +393,7 @@ def test_language_bundles_compose_with_split_project_profiles(tmp_path: Path) ->
     config_path = tmp_path / "quality-gates.toml"
     config_path.write_text(
         'schema_version = 1\nlanguages = ["javascript", "markdown"]\n'
+        'tools = ["eslint-typescript"]\n'
         'orchestration_files = ["languages/cpp.toml"]\n'
         "[orchestration]\n"
         '[[orchestration.profiles]]\nname = "check"\nincludes = ["cpp"]\n',
@@ -347,5 +408,6 @@ def test_language_bundles_compose_with_split_project_profiles(tmp_path: Path) ->
         "JavaScript format",
         "Markdown style",
         "Markdown links and graph",
+        "TypeScript lint",
         "C++ build",
     )
