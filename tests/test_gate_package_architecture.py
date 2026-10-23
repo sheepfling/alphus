@@ -6,14 +6,25 @@ import ast
 from importlib.resources import files
 
 from alphus import (
+    architecture_graph,
     input_contracts,
     json_structure,
     numeric_literals,
+    platform_utils,
     python_style,
+    repository_layout,
+    rules,
     runtime_types,
+    shared_utilities,
     source_scanning,
     test_quality,
 )
+from alphus.gates.hygiene import rules as hygiene_rules
+from alphus.gates.hygiene import shared_utilities as hygiene_shared_utilities
+from alphus.gates.hygiene.runners import HYGIENE_RULE_RUNNERS
+from alphus.gates.repository import architecture_graph as repository_architecture_graph
+from alphus.gates.repository import repository_layout as repository_repository_layout
+from alphus.gates.repository.runners import REPOSITORY_RULE_RUNNERS
 from alphus.gates.review import input_contracts as review_input_contracts
 from alphus.gates.review import numeric_literals as review_numeric_literals
 from alphus.gates.review import test_quality as review_test_quality
@@ -23,6 +34,7 @@ from alphus.gates.source import python_style as source_python_style
 from alphus.gates.source import runtime_types as source_runtime_types
 from alphus.gates.source.runners import SOURCE_RULE_RUNNERS
 from alphus.rule_execution import RULE_RUNNERS
+from alphus.support import platform_utils as support_platform_utils
 from alphus.support import source_scanning as support_source_scanning
 
 
@@ -91,3 +103,40 @@ def test_source_theme_owns_its_runners_and_old_imports_remain_valid() -> None:
     )
     assert python_style.findings_for is source_python_style.findings_for
     assert runtime_types.policy_issues is source_runtime_types.policy_issues
+
+
+def test_repository_theme_owns_its_runners_and_old_imports_remain_valid() -> None:
+    assert set(REPOSITORY_RULE_RUNNERS) == {
+        "module-roles",
+        "package-boundaries",
+        "dependency-locks",
+        "repository-layout",
+    }
+    assert all(
+        RULE_RUNNERS[name] is runner for name, runner in REPOSITORY_RULE_RUNNERS.items()
+    )
+    assert (
+        architecture_graph.check_architecture_graph
+        is repository_architecture_graph.check_architecture_graph
+    )
+    assert (
+        repository_layout.check_repository_layout
+        is repository_repository_layout.check_repository_layout
+    )
+
+
+def test_hygiene_theme_owns_its_runners_and_old_imports_remain_valid() -> None:
+    assert set(HYGIENE_RULE_RUNNERS) == {
+        "file-size",
+        "line-length",
+        "shared-utilities",
+    }
+    assert all(
+        RULE_RUNNERS[name] is runner for name, runner in HYGIENE_RULE_RUNNERS.items()
+    )
+    assert rules.check_file_size is hygiene_rules.check_file_size
+    assert (
+        shared_utilities.check_shared_utilities
+        is hygiene_shared_utilities.check_shared_utilities
+    )
+    assert platform_utils.is_windows is support_platform_utils.is_windows

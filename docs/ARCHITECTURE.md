@@ -35,13 +35,19 @@ language neutral.
 
 ## Package map
 
-- `alphus.support` owns shared file inventory, contained-file/JSON access, and
-  AST name resolution. These utilities do not emit findings or register rules.
+- `alphus.support` owns shared file inventory, contained-file/JSON access,
+  AST name resolution, and platform probes. These utilities do not emit
+  findings or register rules.
 - `alphus.gates.review` owns numeric-literal, test-quality, and input-contract
   checkers. Its `runners.py` binds their selectors to validated policies.
 - `alphus.gates.source` owns portable source and launcher checks for Python,
   JavaScript, and JSON. Its `runners.py` binds these selectors to validated
   policies. Language-specific analysis remains inside each checker.
+- `alphus.gates.repository` owns architecture, package, dependency-lock, and
+  repository-layout checks. Its runner mapping adds related graph, version,
+  and callable-registry findings to the package-boundary selector.
+- `alphus.gates.hygiene` owns file-size, line-length, and shared-utility
+  checks.
 - `alphus.gates.stubs` owns the installed stub-package workflow and fixture
   controller.
 - `alphus.config*`, `alphus.rule_catalog`, `alphus.rule_execution`, and
@@ -53,10 +59,11 @@ language neutral.
   3.10 target environment.
 
 Existing root imports such as `alphus.numeric_literals`, `alphus.python_style`,
-and `alphus.source_scanning` remain compatibility modules. New code in a gate
-theme imports shared mechanics from `alphus.support` directly. Repository and
-general hygiene checkers still live at the package root and can move by theme
-without changing their selectors or public result shapes.
+and `alphus.repository_layout` remain compatibility modules. Their
+implementations live under `alphus.gates`; shared mechanics live under
+`alphus.support`. New code imports these owning packages directly. The root
+modules preserve existing import paths while the package remains on its
+current public API version.
 
 Node and npm are optional. A repository that configures no Node-based command
 does not need `package.json`, Node.js, or npm. Consumers may keep established

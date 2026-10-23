@@ -26,7 +26,7 @@ from alphus.findings import (
     severity_meets_threshold,
 )
 from alphus.inventory import candidate_files
-from alphus.platform_utils import is_windows
+from alphus.support.platform_utils import is_windows
 
 
 @dataclass(frozen=True, slots=True)

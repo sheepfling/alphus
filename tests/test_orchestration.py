@@ -25,6 +25,7 @@ from alphus.orchestration import (
     _windows_shell_required,
     run_orchestration,
 )
+from alphus.support import platform_utils as support_platform_utils
 
 
 def _policy() -> OrchestrationPolicy:
@@ -164,7 +165,9 @@ def test_platform_probes(
     platform: str,
     expected: tuple[bool, bool, bool],
 ) -> None:
-    monkeypatch.setattr(platform_utils, "sys", SimpleNamespace(platform=platform))
+    monkeypatch.setattr(
+        support_platform_utils, "sys", SimpleNamespace(platform=platform)
+    )
     assert (
         platform_utils.is_windows(),
         platform_utils.is_linux(),

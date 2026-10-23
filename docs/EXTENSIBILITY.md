@@ -73,9 +73,9 @@ unless a consumer explicitly changes its configuration.
 
 ### Add a built-in theme today
 
-The `alphus.gates.review` and `alphus.gates.source` packages are working
-examples. Put the checker
-implementation under `alphus.gates.<theme>`, and put reusable parsing or file
+The `alphus.gates.review`, `source`, `repository`, and `hygiene` packages
+are working examples. Put checker implementations under `alphus.gates.<theme>`
+and put reusable parsing or file
 access in `alphus.support` only when more than one gate needs it. A portable
 checker receives an explicit root, selected files, and its validated policy;
 it returns findings or a typed report. A workflow gate such as the stub
@@ -101,6 +101,11 @@ such moves. The stub workflow's controller and fixture runner live under
 `alphus.gates.stubs`. The sibling `alphus_stub_quality` import package contains
 the small audit helpers that must run under a Python 3.10 target interpreter;
 it is shipped in the same Alphus distribution, not installed separately.
+
+Possible future rules include JSONC/JSONL parsing and broader numeric
+constant recognition. Define those formats and precision policies explicitly
+before adding dependencies such as SciPy. Git inventory failures also need
+a typed operational error contract before introducing recovery policy.
 
 Python namespace packages become useful if independently installed and
 versioned distributions need to share one import namespace. They are not needed

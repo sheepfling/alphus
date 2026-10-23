@@ -1,20 +1,13 @@
-"""Small platform probes shared by portable rule implementations."""
+"""Compatibility imports for the support platform_utils module."""
 
-from __future__ import annotations
+from alphus.support.platform_utils import (
+    is_linux,
+    is_macos,
+    is_windows,
+)
 
-import sys
-
-
-def is_windows() -> bool:
-    """Return whether the current Python process is running on Windows."""
-    return sys.platform == "win32"
-
-
-def is_linux() -> bool:
-    """Return whether the current Python process is running on Linux."""
-    return sys.platform == "linux"
-
-
-def is_macos() -> bool:
-    """Return whether the current Python process is running on macOS."""
-    return sys.platform == "darwin"
+__all__ = [
+    "is_linux",
+    "is_macos",
+    "is_windows",
+]

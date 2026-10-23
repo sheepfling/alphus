@@ -5,6 +5,22 @@ the river Heracles put to work on the Augean stables.
 The package keeps rule implementations independent of a project's layout and
 loads file scopes, thresholds, and repository conventions from TOML.
 
+## Source layout
+
+`src/alphus/gates/` contains the checks: `source` for source and launcher
+analysis, `review` for advisory review rules, `repository` for architecture
+and packaging policy, `hygiene` for size and duplicate-helper rules, and
+`stubs` for the installed stub-package workflow. Each portable theme owns a
+`runners.py` that binds selectors to validated policy.
+
+`src/alphus/support/` contains file inventory, safe data access, AST name
+resolution, and platform probes shared by checks. The top-level `config*.py`,
+`findings.py`, `rule_*.py`, `orchestration.py`, and `cli.py` form the policy,
+result, execution, and presentation layers. Many other top-level modules
+are small compatibility imports for older callers; new code should import
+the implementation from its gate theme or `support` directly. See the
+[architecture guide](docs/ARCHITECTURE.md) for the full boundary map.
+
 ## Install
 
 Use Python 3.11 or newer:
