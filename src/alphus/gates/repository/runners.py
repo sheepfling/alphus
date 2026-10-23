@@ -8,8 +8,8 @@ from types import MappingProxyType
 from typing import TypeAlias
 
 from alphus.config import QualityGateConfig, QualityRuleName
-from alphus.config_base import require_policy
-from alphus.findings import Finding
+from alphus.contracts.findings import Finding
+from alphus.execution.results import RuleOutput
 from alphus.gates.repository.architecture_graph import check_architecture_graph
 from alphus.gates.repository.callable_registry import check_callable_registry
 from alphus.gates.repository.dependency_locks import check_dependency_locks
@@ -17,7 +17,7 @@ from alphus.gates.repository.module_roles import check_module_roles
 from alphus.gates.repository.package_boundaries import check_package_boundaries
 from alphus.gates.repository.repository_layout import check_repository_layout
 from alphus.gates.repository.version_sync import check_version_sync
-from alphus.rule_results import RuleOutput
+from alphus.policy.base import require_policy
 from alphus.support.inventory import tracked_files
 
 RepositoryRunner: TypeAlias = Callable[

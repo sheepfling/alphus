@@ -14,7 +14,7 @@ from typing import cast
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from alphus.config import PackageBoundaryPolicy
-from alphus.findings import Finding
+from alphus.contracts.findings import Finding
 
 
 @dataclass(frozen=True, slots=True)

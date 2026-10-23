@@ -81,11 +81,11 @@ checker receives an explicit root, selected files, and its validated policy;
 it returns findings or a typed report. A workflow gate such as the stub
 verifier runs through a command step instead.
 
-For a new built-in selector, add its policy model to the appropriate
-`config_*` module, add the selector and policy field to `QualityRuleName` and
-`RULE_SPECS`, register its runner in the theme package, and compose that
-mapping in `alphus.rule_execution`. Add the output adapter in
-`alphus.rule_results` only if it has a new shape. Add direct CLI and profile
+For a new built-in selector, add its policy model under `alphus.policy`,
+add the selector to `alphus.policy.base.QualityRuleName` and its policy field
+to `alphus.policy.catalog.RULE_SPECS`, register its runner in the theme package,
+and compose that mapping in `alphus.execution.dispatch`. Add an output adapter
+in `alphus.execution.results` only if it has a new shape. Add direct CLI and profile
 tests, then select the gate in a consumer profile. The registry completeness
 test catches missing selectors, and Alphus's `check` profile exercises the
 rule and native tooling together. Import each implementation from its owning

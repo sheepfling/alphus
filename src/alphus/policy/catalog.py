@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Literal
 
-from alphus.config_base import QualityRuleName
+from alphus.policy.base import QualityRuleName
 
 RuleOutputShape = Literal["findings", "messages", "python-style", "shared-utilities"]
 

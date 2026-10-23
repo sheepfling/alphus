@@ -6,7 +6,7 @@ import tomllib
 from pathlib import Path
 
 from alphus.config import VersionSource, VersionSyncPolicy
-from alphus.findings import Finding
+from alphus.contracts.findings import Finding
 from alphus.support.data_access import nested_value, validate_json_value
 
 

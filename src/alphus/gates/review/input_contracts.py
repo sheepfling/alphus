@@ -10,7 +10,7 @@ from types import MappingProxyType
 from typing import Literal
 
 from alphus.config import InputContractPolicy
-from alphus.findings import Finding
+from alphus.contracts.findings import Finding
 from alphus.support.inventory import matches_path
 from alphus.support.source_scanning import (
     ImportAliases,

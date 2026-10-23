@@ -14,13 +14,17 @@ and packaging policy, `hygiene` for size and duplicate-helper rules,
 package-import smoke gate. Portable themes own a `runners.py` that binds
 selectors to validated policy.
 
-`src/alphus/support/` contains file inventory, safe data access, AST name
-resolution, and platform probes shared by checks. The top-level `config*.py`,
-`findings.py`, `rule_*.py`, `orchestration.py`, and `cli.py` form the policy,
-result, execution, and presentation layers. Gate implementations live under
-their owning theme; shared utilities live under `support`. Import them
-directly. See the [architecture guide](docs/ARCHITECTURE.md) for the full
-boundary map.
+`src/alphus/contracts/` owns shared finding and diagnostic types.
+`src/alphus/policy/` owns validated settings and the built-in rule catalog.
+`src/alphus/execution/` owns rule dispatch, results, and profiles.
+`src/alphus/support/` contains shared file inventory, data access, AST queries,
+and platform probes. The root has only `config.py` and `cli.py` as public
+boundaries, plus package metadata and the module entry point.
+
+`src/alphus_stub_quality/` contains the small Python 3.10 audit helpers copied
+into isolated target environments. It ships in the same Alphus wheel because
+the Python 3.10 target cannot import the Python 3.11+ checker. See the
+[architecture guide](docs/ARCHITECTURE.md) for the dependency map.
 
 ## Install
 

@@ -11,7 +11,6 @@ from types import SimpleNamespace
 import pytest
 from pydantic import ValidationError
 
-from alphus import orchestration
 from alphus.config import (
     CommandRunStep,
     FileInventoryPolicy,
@@ -19,8 +18,9 @@ from alphus.config import (
     OrchestrationProfile,
     RuleRunStep,
 )
-from alphus.findings import SEVERITY_ORDER, Diagnostic, Severity
-from alphus.orchestration import (
+from alphus.contracts.findings import SEVERITY_ORDER, Diagnostic, Severity
+from alphus.execution import orchestration
+from alphus.execution.orchestration import (
     RuleRunResult,
     _windows_shell_required,
     run_orchestration,

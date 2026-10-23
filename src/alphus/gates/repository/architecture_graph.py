@@ -9,7 +9,7 @@ from re import Pattern
 from types import MappingProxyType
 
 from alphus.config import ArchitectureGraphPolicy, PackageBoundaryPolicy
-from alphus.findings import Finding
+from alphus.contracts.findings import Finding
 
 _EDGE_PATTERNS: Mapping[str, Pattern[str]] = MappingProxyType(
     {

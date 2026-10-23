@@ -11,7 +11,7 @@ from textwrap import dedent
 from pydantic import JsonValue, RootModel, ValidationError
 
 from alphus.config import TestQualityPolicy
-from alphus.findings import Finding
+from alphus.contracts.findings import Finding
 from alphus.support.inventory import matches_path
 
 _PATH_READS = frozenset({"read_text", "read_bytes", "stat", "exists", "is_file"})

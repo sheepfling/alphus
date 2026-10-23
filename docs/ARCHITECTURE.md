@@ -23,9 +23,10 @@ gate implemented in `alphus.gates.stubs`; it builds and installs a consumer
 wheel, runs typing fixtures, and checks runtime compatibility. Its console
 commands ship in the same `alphus` distribution. The separate
 `alphus_stub_quality` import package holds only Python 3.10-compatible audit
-helpers copied into the isolated target environment, plus legacy import
-adapters. This runtime boundary is why the helper package is separate; it is
-not a second distribution or a second quality framework.
+helpers copied into the isolated target environment. The target cannot import
+`alphus` because the main checker requires Python 3.11 and its dependencies.
+Both import packages ship in one wheel; the sibling is not a separate
+distribution or framework.
 Keep language-specific workflow gates under `alphus.gates.<language>` in the
 same distribution while they share a release cycle and dependency set.
 Independent namespace distributions would add installation and compatibility
@@ -53,12 +54,15 @@ language neutral.
 - `alphus.gates.python` owns the installed-package import smoke workflow. It
   maps every Python file under the source root to an import name and
   imports each name in a fresh interpreter.
-- `alphus.config*`, `alphus.rule_catalog`, `alphus.rule_execution`, and
-  `alphus.rule_results` own validated policy, selector catalog, runner
-  composition, and normalized results.
-- `alphus.cli` and `alphus.orchestration` own text/JSON presentation, profile
-  planning, native command execution, and exit status.
-- `alphus_stub_quality` contains small audit helpers copied into the Python
+- `alphus.contracts` owns finding records, severity, priority, and normalized
+  diagnostic types shared by policies and execution.
+- `alphus.policy` owns validated policy models and the built-in selector
+  catalog. It does not import execution or gate implementations.
+- `alphus.execution` owns rule dispatch, normalized results, profile planning,
+  native command execution, and exit status.
+- `alphus.config` and `alphus.cli` are the stable public configuration and
+  command boundaries at the package root.
+- `alphus_stub_quality` contains only the audit helpers copied into the Python
   3.10 target environment.
 
 Import checker implementations from their owning `alphus.gates.<theme>`
@@ -68,6 +72,25 @@ with `alphus.gates.review.numeric_literals`, `alphus.python_style` with
 `alphus.gates.source.python_style`, and `alphus.repository_layout` with
 `alphus.gates.repository.repository_layout`. The `alphus` package still exports
 its documented core configuration, finding, inventory, and checker functions.
+
+The internal import paths changed with this layout:
+
+| Former path | Owning path |
+| --- | --- |
+| `alphus.config_architecture` | `alphus.policy.architecture` |
+| `alphus.config_base` | `alphus.policy.base` |
+| `alphus.config_orchestration` | `alphus.policy.orchestration` |
+| `alphus.config_repository` | `alphus.policy.repository` |
+| `alphus.config_review` | `alphus.policy.review` |
+| `alphus.config_sources` | `alphus.policy.sources` |
+| `alphus.rule_catalog` | `alphus.policy.catalog` |
+| `alphus.findings` | `alphus.contracts.findings` |
+| `alphus.rule_execution` | `alphus.execution.dispatch` |
+| `alphus.rule_results` | `alphus.execution.results` |
+| `alphus.orchestration` | `alphus.execution.orchestration` |
+
+The `alphus.config` model and loader imports and the `alphus.cli` command entry
+point remain at the package root.
 
 Node and npm are optional. A repository that configures no Node-based command
 does not need `package.json`, Node.js, or npm. Consumers may keep established
@@ -86,15 +109,15 @@ repository-relative arguments. Empty scopes pass without starting the command.
 Each checker receives an explicit root, validated rule policy, and selected
 files. It returns typed findings or a typed report; it does not print, start
 processes, or discover a checkout from the current directory or module path.
-Policy models are grouped by source scanning, architecture, repository
-metadata, and orchestration in separate modules. `alphus.config` re-exports
-those models as the compatibility import surface.
-`alphus.rule_catalog` records each built-in rule's required policy field and
+Policy models are grouped under `alphus.policy` by source scanning,
+architecture, repository metadata, and orchestration. `alphus.config`
+re-exports the public models and TOML loader.
+`alphus.policy.catalog` records each built-in rule's required policy field and
 JSON output shape. Policy validation and profile diagnostic decoding share
 that catalog. Theme packages own their runner mappings;
-`alphus.rule_execution` composes the built-in checker dispatch, and
-`alphus.rule_results` validates each result against its declared shape while
-normalizing diagnostics. The package tests require
+`alphus.execution.dispatch` composes the built-in checker dispatch, and
+`alphus.execution.results` validates each result against its declared shape
+while normalizing diagnostics. The package tests require
 both registries to cover every public rule selector. The CLI retains rendering
 adapters because some older rules have distinct direct-command output formats.
 `RuleEvaluation` keeps the checker output, normalized diagnostics, and threshold

@@ -8,7 +8,7 @@ from pathlib import Path, PurePosixPath
 from typing import NamedTuple
 
 from alphus.config import ModuleRolePolicy, ModuleRoleRule
-from alphus.findings import Finding
+from alphus.contracts.findings import Finding
 
 
 def _finding(

@@ -165,9 +165,9 @@ The execution gates use the installed `alphus-typing-fixtures` and
 Alphus profile. They are workflow gates that coordinate native tools and
 environments, so they use the same command-step interface as other tools
 instead of the source-only `--rule` scanner interface. The GitHub Action
-installs the same pinned Alphus code as a verification tool. Legacy imports
-from `alphus_stub_quality.verify`, `.typing_fixtures`, and `.environments`
-remain available for existing consumers.
+installs the same pinned Alphus code as a verification tool. The former
+stub helper forwarders have been removed; import controller APIs from
+`alphus.gates.stubs` and target audit helpers from `alphus_stub_quality`.
 
 The [migration record](TEST-GATE-MIGRATION.md) maps consumer ownership and
 records revision-specific acceptance evidence.

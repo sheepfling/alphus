@@ -8,13 +8,14 @@ from typing import Annotated, Literal, NamedTuple, cast
 
 from pydantic import Field, field_validator, model_validator
 
-from alphus.config_architecture import (
+from alphus.contracts.findings import RemediationPriority, Severity
+from alphus.policy.architecture import (
     ArchitectureGraphCheckPolicy,
     CallableRegistryPolicy,
     ModuleRolePolicy,
     PackageBoundaryPolicy,
 )
-from alphus.config_base import (
+from alphus.policy.base import (
     QualityRuleName,
     StrictModel,
     require_policy,
@@ -22,17 +23,18 @@ from alphus.config_base import (
     validate_one_line_message,
     validate_single_path,
 )
-from alphus.config_repository import (
+from alphus.policy.catalog import RULE_SPECS
+from alphus.policy.repository import (
     DependencyLockPolicy,
     RepositoryLayoutPolicy,
     VersionSyncPolicy,
 )
-from alphus.config_review import (
+from alphus.policy.review import (
     InputContractPolicy,
     NumericLiteralPolicy,
     TestQualityPolicy,
 )
-from alphus.config_sources import (
+from alphus.policy.sources import (
     CliPolicy,
     FileInventoryPolicy,
     FileSizePolicy,
@@ -44,8 +46,6 @@ from alphus.config_sources import (
     SharedUtilitiesPolicy,
     SourceScanPolicy,
 )
-from alphus.findings import RemediationPriority, Severity
-from alphus.rule_catalog import RULE_SPECS
 
 
 class CheckPolicies(StrictModel):

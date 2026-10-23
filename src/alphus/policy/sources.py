@@ -8,7 +8,7 @@ from typing import Annotated, cast
 
 from pydantic import Field, field_validator
 
-from alphus.config_base import (
+from alphus.policy.base import (
     StrictModel,
     validate_extensions,
     validate_patterns,

@@ -10,7 +10,7 @@ from pathlib import Path, PurePosixPath
 from typing import cast
 
 from alphus.config import InstructionRouterPolicy, RepositoryLayoutPolicy
-from alphus.findings import Finding
+from alphus.contracts.findings import Finding
 from alphus.support.data_access import nested_value, validate_json_value
 from alphus.support.inventory import matches_path
 

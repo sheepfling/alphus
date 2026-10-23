@@ -14,7 +14,7 @@ from alphus.config import (
     OrchestrationProfile,
     RuleRunStep,
 )
-from alphus.orchestration import run_orchestration
+from alphus.execution.orchestration import run_orchestration
 
 
 def known_step() -> RuleRunStep:

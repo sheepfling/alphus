@@ -1,7 +1,7 @@
 """Portable repository quality gates driven by validated TOML policy."""
 
 from alphus.config import QualityGateConfig, load_config
-from alphus.findings import Finding
+from alphus.contracts.findings import Finding
 from alphus.gates.hygiene.rules import check_file_size, check_line_length
 from alphus.gates.source.json_structure import check_json_structure
 from alphus.gates.source.output_escaping import check_output_escaping

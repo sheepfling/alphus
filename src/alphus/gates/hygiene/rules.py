@@ -7,8 +7,8 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from alphus.config import QualityGateConfig
-from alphus.config_base import require_policy
-from alphus.findings import Finding
+from alphus.contracts.findings import Finding
+from alphus.policy.base import require_policy
 from alphus.support.inventory import matches_path
 
 

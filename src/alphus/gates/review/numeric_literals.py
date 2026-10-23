@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 from alphus.config import NumericLiteralPolicy, NumericLiteralSpec
-from alphus.findings import Finding
+from alphus.contracts.findings import Finding
 from alphus.support.inventory import matches_path
 
 _MATH_CONSTANTS = (

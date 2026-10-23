@@ -10,7 +10,7 @@ from re import Pattern
 from types import MappingProxyType
 
 from alphus.config import SourceScanPolicy
-from alphus.findings import Finding, SourceFinding
+from alphus.contracts.findings import Finding, SourceFinding
 from alphus.support.inventory import matches_path
 
 DECODER_MODULES: frozenset[str] = frozenset({"json", "orjson", "ujson", "rapidjson"})

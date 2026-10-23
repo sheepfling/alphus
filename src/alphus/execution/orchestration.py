@@ -19,7 +19,7 @@ from alphus.config import (
     QualityRuleName,
     RuleRunStep,
 )
-from alphus.findings import (
+from alphus.contracts.findings import (
     Diagnostic,
     Severity,
     SeverityCounts,

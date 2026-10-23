@@ -8,7 +8,7 @@ from typing import Annotated, Literal, TextIO
 
 from pydantic import Field
 
-from alphus.config_architecture import (
+from alphus.policy.architecture import (
     ArchitectureGraphCheckPolicy,
     ArchitectureGraphPolicy,
     CallableRegistryPolicy,
@@ -16,11 +16,11 @@ from alphus.config_architecture import (
     ModuleRoleRule,
     PackageBoundaryPolicy,
 )
-from alphus.config_base import (
+from alphus.policy.base import (
     QualityRuleName,
     StrictModel,
 )
-from alphus.config_orchestration import (
+from alphus.policy.orchestration import (
     CheckPolicies,
     CommandRunStep,
     OrchestrationPolicy,
@@ -29,7 +29,7 @@ from alphus.config_orchestration import (
     ProfilePlan,
     RuleRunStep,
 )
-from alphus.config_repository import (
+from alphus.policy.repository import (
     DependencyLockPolicy,
     GlobRule,
     InstructionRouterPolicy,
@@ -45,13 +45,13 @@ from alphus.config_repository import (
     VersionSource,
     VersionSyncPolicy,
 )
-from alphus.config_review import (
+from alphus.policy.review import (
     InputContractPolicy,
     NumericLiteralPolicy,
     NumericLiteralSpec,
     TestQualityPolicy,
 )
-from alphus.config_sources import (
+from alphus.policy.sources import (
     CliPolicy,
     FileInventoryPolicy,
     FileSizePolicy,

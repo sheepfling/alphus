@@ -19,17 +19,17 @@ from pydantic import ValidationError
 from rich.console import Console
 
 from alphus.config import QualityGateConfig, QualityRuleName, load_config
-from alphus.config_base import MissingPolicyError
-from alphus.findings import (
+from alphus.contracts.findings import (
     Finding,
     SeverityCounts,
 )
+from alphus.execution.dispatch import run_builtin_rule
+from alphus.execution.orchestration import RuleRunResult, run_orchestration
+from alphus.execution.results import RuleEvaluation
 from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
 from alphus.gates.source.python_style import StyleFindings
-from alphus.orchestration import RuleRunResult, run_orchestration
-from alphus.rule_catalog import RULE_SPECS
-from alphus.rule_execution import run_builtin_rule
-from alphus.rule_results import RuleEvaluation
+from alphus.policy.base import MissingPolicyError
+from alphus.policy.catalog import RULE_SPECS
 from alphus.support.inventory import candidate_files
 
 QualityRule = QualityRuleName

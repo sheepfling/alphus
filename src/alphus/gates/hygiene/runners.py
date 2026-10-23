@@ -8,10 +8,10 @@ from types import MappingProxyType
 from typing import TypeAlias
 
 from alphus.config import QualityGateConfig, QualityRuleName
-from alphus.config_base import require_policy
+from alphus.execution.results import RuleOutput
 from alphus.gates.hygiene.rules import check_file_size, check_line_length
 from alphus.gates.hygiene.shared_utilities import check_shared_utilities
-from alphus.rule_results import RuleOutput
+from alphus.policy.base import require_policy
 
 HygieneRunner: TypeAlias = Callable[
     [Path, Sequence[Path], QualityGateConfig], RuleOutput

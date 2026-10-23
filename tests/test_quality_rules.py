@@ -20,14 +20,14 @@ from alphus.config import (
     load_config,
     load_config_stream,
 )
-from alphus.findings import Diagnostic, Finding
-from alphus.gates.hygiene.rules import check_file_size, check_line_length
-from alphus.gates.source import runners as source_runners
-from alphus.rule_results import (
+from alphus.contracts.findings import Diagnostic, Finding
+from alphus.execution.results import (
     RuleEvaluation,
     diagnostics_from_json,
     diagnostics_from_output,
 )
+from alphus.gates.hygiene.rules import check_file_size, check_line_length
+from alphus.gates.source import runners as source_runners
 from alphus.support import inventory
 from alphus.support.inventory import candidate_files, matches_path, tracked_files
 

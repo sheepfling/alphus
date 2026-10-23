@@ -7,7 +7,7 @@ from collections import Counter
 from pathlib import Path
 
 from alphus.config import CallableRegistryPolicy
-from alphus.findings import Finding
+from alphus.contracts.findings import Finding
 from alphus.support.data_access import contained_file
 
 

@@ -10,7 +10,7 @@ from packaging.requirements import InvalidRequirement, Requirement
 from packaging.utils import canonicalize_name
 
 from alphus.config import DependencyLockPolicy
-from alphus.findings import Finding
+from alphus.contracts.findings import Finding
 from alphus.support.data_access import contained_file
 
 

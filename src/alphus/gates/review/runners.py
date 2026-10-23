@@ -8,11 +8,11 @@ from types import MappingProxyType
 from typing import TypeAlias
 
 from alphus.config import QualityGateConfig, QualityRuleName
-from alphus.config_base import require_policy
+from alphus.execution.results import RuleOutput
 from alphus.gates.review.input_contracts import check_input_contracts
 from alphus.gates.review.numeric_literals import check_numeric_literals
 from alphus.gates.review.test_quality import check_test_quality
-from alphus.rule_results import RuleOutput
+from alphus.policy.base import require_policy
 
 ReviewRunner: TypeAlias = Callable[
     [Path, Sequence[Path], QualityGateConfig], RuleOutput

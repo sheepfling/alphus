@@ -11,7 +11,7 @@ from re import Pattern
 from types import MappingProxyType
 
 from alphus.config import PathDiscoveryPolicy
-from alphus.findings import Finding, SourceFinding
+from alphus.contracts.findings import Finding, SourceFinding
 from alphus.support.inventory import matches_path
 
 JS_PATTERNS: Mapping[str, Pattern[str]] = MappingProxyType(

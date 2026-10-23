@@ -7,11 +7,11 @@ from pathlib import Path
 from types import MappingProxyType
 
 from alphus.config import QualityGateConfig, QualityRuleName
+from alphus.execution.results import RuleOutput
 from alphus.gates.hygiene.runners import HYGIENE_RULE_RUNNERS
 from alphus.gates.repository.runners import REPOSITORY_RULE_RUNNERS
 from alphus.gates.review.runners import REVIEW_RULE_RUNNERS
 from alphus.gates.source.runners import SOURCE_RULE_RUNNERS
-from alphus.rule_results import RuleOutput
 
 RuleRunner = Callable[[Path, Sequence[Path], QualityGateConfig], RuleOutput]
 

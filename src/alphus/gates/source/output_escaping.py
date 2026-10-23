@@ -8,7 +8,7 @@ from collections.abc import Iterable
 from pathlib import Path
 
 from alphus.config import SourceScanPolicy
-from alphus.findings import Finding
+from alphus.contracts.findings import Finding
 from alphus.support.inventory import matches_path
 
 _OUTPUT_PUNCTUATION = frozenset("\\|*_<>&\"'{}[]#%$~^/")

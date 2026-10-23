@@ -1,15 +1,15 @@
-"""Keep gate implementations in their themes and support separate from policy."""
+"""Keep policy and shared support independent of gate execution."""
 
 from __future__ import annotations
 
 import ast
 from importlib.resources import files
 
+from alphus.execution.dispatch import RULE_RUNNERS
 from alphus.gates.hygiene.runners import HYGIENE_RULE_RUNNERS
 from alphus.gates.repository.runners import REPOSITORY_RULE_RUNNERS
 from alphus.gates.review.runners import REVIEW_RULE_RUNNERS
 from alphus.gates.source.runners import SOURCE_RULE_RUNNERS
-from alphus.rule_execution import RULE_RUNNERS
 
 
 def test_shared_support_modules_do_not_import_gate_implementations() -> None:
@@ -30,8 +30,36 @@ def test_shared_support_modules_do_not_import_gate_implementations() -> None:
             for alias in node.names
         )
         assert not any(
+            name.startswith(("alphus.gates", "alphus.execution")) for name in imported
+        ), source.name
+
+
+def test_policy_models_do_not_import_execution_or_gate_packages() -> None:
+    policy = files("alphus.policy")
+    for source in policy.iterdir():
+        if not source.name.endswith(".py"):
+            continue
+        tree = ast.parse(source.read_text(encoding="utf-8"))
+        imported = [
+            node.module
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom) and node.module is not None
+        ]
+        imported.extend(
+            alias.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Import)
+            for alias in node.names
+        )
+        assert not any(
             name.startswith(
-                ("alphus.gates", "alphus.rule_execution", "alphus.findings")
+                (
+                    "alphus.cli",
+                    "alphus.config",
+                    "alphus.execution",
+                    "alphus.gates",
+                    "alphus.support",
+                )
             )
             for name in imported
         ), source.name
@@ -68,32 +96,23 @@ def test_gate_themes_own_their_runner_mappings() -> None:
         assert all(RULE_RUNNERS[name] is runner for name, runner in runners.items())
 
 
-def test_root_compatibility_modules_have_been_removed() -> None:
+def test_root_contains_only_public_configuration_and_cli_boundaries() -> None:
     root = files("alphus")
-    old_modules = (
-        "architecture_graph",
-        "callable_registry",
-        "cli_policy",
-        "data_access",
-        "dependency_locks",
-        "input_contracts",
-        "inventory",
-        "json_structure",
-        "module_roles",
-        "numeric_literals",
-        "output_escaping",
-        "package_boundaries",
-        "path_discovery",
-        "platform_utils",
-        "python_style",
-        "repository_layout",
-        "rules",
-        "runtime_type_facts",
-        "runtime_types",
-        "script_policy",
-        "shared_utilities",
-        "source_scanning",
-        "test_quality",
-        "version_sync",
-    )
-    assert all(not (root / f"{name}.py").is_file() for name in old_modules)
+    modules = {
+        source.name
+        for source in root.iterdir()
+        if source.is_file() and source.name.endswith(".py")
+    }
+    assert modules == {"__init__.py", "__main__.py", "cli.py", "config.py"}
+
+
+def test_target_audit_package_contains_only_python_310_helpers() -> None:
+    root = files("alphus_stub_quality")
+    modules = {source.name for source in root.iterdir() if source.is_file()}
+    assert modules == {
+        "__init__.py",
+        "api_audit_support.py",
+        "api_contracts.py",
+        "runtime_audit.py",
+        "py.typed",
+    }
