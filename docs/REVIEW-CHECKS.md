@@ -205,8 +205,14 @@ automatic source changes.
 
 ## Pydantic practices
 
-Selector: `pydantic-practices`. IDs: `alphus/python/pydantic/validation/dump-revalidation` and
-`alphus/python/pydantic/correctness/implicit-mutability`.
+Selector: `pydantic-practices`. IDs: `alphus/python/pydantic/validation/dump-revalidation`,
+`alphus/python/pydantic/correctness/implicit-mutability`,
+`alphus/python/pydantic/correctness/deprecated-v1-api`,
+`alphus/python/pydantic/validation/unvalidated-construct`,
+`alphus/python/pydantic/validation/unvalidated-copy-update`,
+`alphus/python/pydantic/correctness/validator-fallthrough`,
+`alphus/python/pydantic/style/field-positional-default`, and
+`alphus/python/pydantic/metadata/external-schema-documentation`.
 
 ```toml
 [checks.pydantic_practices]
@@ -214,6 +220,21 @@ extensions = [".py"]
 exclude = []
 report_dump_revalidation = true
 require_explicit_frozen = false
+report_deprecated_v1_apis = false
+report_unvalidated_construct = false
+report_unvalidated_copy_update = false
+report_validator_fallthrough = false
+report_field_positional_default = false
+report_external_model_docs = false
+external_model_names = []
+```
+
+To include one model exposed by another interface, set
+`report_external_model_docs = true` and add its class name, for example:
+
+```toml
+report_external_model_docs = true
+external_model_names = ["PublicRequest"]
 ```
 
 The dump/revalidation check follows direct local assignments and simple aliases
@@ -228,6 +249,47 @@ and their locally declared children. It asks each to declare a literal
 `frozen=True` or `frozen=False` through `ConfigDict`, a literal `model_config`
 dictionary, or a class keyword. This is a consumer convention, not a Pydantic
 requirement. Imported parent classes and computed configuration are unresolved.
+
+The five migration and declaration checks are independently opt-in. The v1
+check recognizes imported `validator`/`root_validator` decorators, legacy
+`Config` classes, and legacy methods on locally declared models or annotated
+model parameters. The construct and copy checks cover calls on locally
+declared model classes and annotated model parameters; both APIs can be valid
+for trusted data. The validator check reports only simple validator bodies
+with an implicit path to the end; complex control flow is left unreported.
+The Field style check recognizes imported `pydantic.Field` calls with a
+positional default and reports informational advice. All checks are source
+only and never import consumer modules. Model identity, aliases through
+complex control flow, dynamic decorators, and computed values are not
+inferred. Straight-line local aliases in functions are followed; ambiguous
+rebindings are skipped.
+
+`field-positional-default` is also reported by Flake8-Pydantic as `PYD001`.
+If a consumer already enables that plugin, leave the Alphus style flag off to
+avoid duplicate diagnostics. Alphus keeps the check optional and does not
+require Flake8 or the plugin. Strict Pyright may also report a missing return
+for annotated validators; the validator finding is Pydantic-specific and stays
+advisory.
+
+`report_external_model_docs` emits informational findings for external models
+without a model description or field descriptions. It identifies models used
+by locally declared FastAPI routes (route parameter/return annotations and
+`response_model`) and their nested local model fields. Add names to
+`external_model_names` for models declared in a scanned file whose route or
+other external use is in another module or framework. The checker does not
+load imported model definitions across files. For a local model, a class
+docstring or literal model-level JSON Schema description satisfies the
+model check; `Field(description=...)` or field-level
+`json_schema_extra={"description": ...}` satisfies a field check. Dynamic
+schema customizations are treated as unknown and skipped. This is advisory:
+Pydantic uses these descriptions in its
+[generated JSON Schema](https://pydantic.dev/docs/validation/latest/concepts/json_schema/),
+which FastAPI includes in its
+[OpenAPI documentation](https://fastapi.tiangolo.com/tutorial/response-model/).
+They are not needed for validation or runtime correctness.
+
+See the [runnable Pydantic consumer example](../examples/consumer/pydantic-practices/README.md)
+for a complete opt-in policy, plan command, and JSON findings run.
 
 ## FastAPI and Starlette practices
 
