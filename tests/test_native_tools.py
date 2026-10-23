@@ -117,3 +117,46 @@ def test_native_tools_compose_with_custom_steps_without_repeating_commands() -> 
     assert check.steps == ("Markdown style", "Python tests")
     markdown = policy.resolve_profile("markdown")
     assert markdown is not None and markdown.steps == ("Markdown style",)
+
+
+def test_python_shortcut_orders_lint_format_types_and_tests() -> None:
+    config = load_config(Path("examples/python/quality-gates.toml"))
+    policy = config.orchestration
+    assert policy is not None
+    check = policy.resolve_profile("check")
+    python = policy.resolve_profile("python")
+    assert check is not None and python is not None
+    expected = ("Python lint", "Python format", "Python types", "Python tests")
+    assert check.steps == expected
+    assert python.steps == expected
+    lint, format_step, types, tests = policy.steps
+    assert isinstance(lint, CommandRunStep)
+    assert isinstance(format_step, CommandRunStep)
+    assert isinstance(types, CommandRunStep)
+    assert isinstance(tests, CommandRunStep)
+    assert lint.argv == (
+        "{python}",
+        "-m",
+        "ruff",
+        "check",
+        "--force-exclude",
+        "{files}",
+    )
+    assert lint.fix_argv is not None and "--fix" in lint.fix_argv
+    assert format_step.argv == (
+        "{python}",
+        "-m",
+        "ruff",
+        "format",
+        "--force-exclude",
+        "--check",
+        "{files}",
+    )
+    assert format_step.fix_argv is not None
+    assert "--check" not in format_step.fix_argv
+    assert lint.files is not None and format_step.files is not None
+    assert lint.files.include == ("**/*.py", "**/*.pyi")
+    assert types.argv == ("{python}", "-m", "pyright", "--pythonpath", "{python}")
+    assert types.files is None and types.fix_argv is None
+    assert tests.argv == ("{python}", "-m", "pytest")
+    assert tests.files is None and tests.fix_argv is None

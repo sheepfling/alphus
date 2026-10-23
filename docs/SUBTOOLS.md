@@ -18,6 +18,10 @@ fix it. Start with one `quality-gates.toml`; split language steps into
   keep it in the repository or pass `--config`.
 - Prettier owns JSON formatting. Add the repository's Prettier config only
   when changing defaults.
+- Ruff owns Python lint and format rules. Its recipe uses `--force-exclude` so
+  native exclusions still apply to Alphus-selected paths.
+- Pyright owns type-check scope and settings; pytest owns test discovery and
+  settings. Both run from the repository root and read native project config.
 
 Install and pin the tools named by the selected profile through the consumer's
 normal development or CI dependency setup. Alphus does not install native
@@ -30,13 +34,16 @@ For standard commands, select tools by name in the repository's
 
 ```toml
 schema_version = 1
-tools = ["rumdl", "mdrepo", "taplo", "prettier"]
+tools = ["ruff", "pyright", "pytest", "rumdl", "mdrepo", "taplo", "prettier"]
 ```
 
-Only selected tools run. Their check and fixer commands use file scopes for
-Markdown, TOML, or JSON; the list order controls execution and fix order.
-Alphus creates `check` plus `markdown`, `toml`, and `json` profiles for the
-languages selected. Use `alphus --plan` to inspect resolved order, command
+Only selected tools run. Ruff contributes lint and format steps; rumdl,
+mdrepo, Taplo, and Prettier contribute one each. These use file scopes and
+explicit fixers. Pyright and pytest run without an Alphus file scope so their
+native configuration controls discovery; they have no automatic fixer. The
+list order controls execution and fix order. Alphus creates `check` plus
+`python`, `markdown`, `toml`, and `json` profiles for the languages selected.
+Use `alphus --plan` to inspect resolved order, command
 arguments, file matches, rollout, and fixability without running tools. Use
 `alphus --fix-plan` before applying a named fixer. Native tools still discover
 their own configuration.

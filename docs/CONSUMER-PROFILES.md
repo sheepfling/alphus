@@ -25,9 +25,13 @@ scripts. `alphus --help` shows every option.
 Add tools one step at a time. The
 [two-tool Markdown example](../examples/markdown/quality-gates.toml) pairs
 rumdl with mdrepo using `tools = ["rumdl", "mdrepo"]`. The shortcut also
-accepts `taplo` and `prettier`; selection order is execution and fix order.
-Each selected tool gets a scoped read-only command and an explicit fixer.
-Alphus supplies a default `check` profile plus language profiles. Install
+accepts `ruff`, `pyright`, `pytest`, `taplo`, and `prettier`; selection order is
+execution and fix order. File-scoped lint and format steps pair a read-only
+check with an explicit fixer. Pyright and pytest run without a file scope or
+fixer. Alphus supplies a default `check` profile plus language profiles. The
+[two-line Python example](../examples/python/quality-gates.toml) selects Ruff
+lint and format, Pyright, and pytest. Ruff's file-scoped invocations honor its
+native exclusions; Pyright and pytest use their project configuration. Install
 only the tools you select. Add a `[files]` inventory when selecting an
 Alphus-owned `kind = "rule"` step; each file-scoped command declares its own
 `files` pattern beside its argv. The [subtool guide](SUBTOOLS.md) explains
@@ -114,8 +118,9 @@ threshold, scope or severity. Existing flat profiles retain their behavior and
 JSON shape; composed results add `profiles` with the resolved profile order.
 Later steps continue after a failure, and any failed step fails the aggregate.
 
-The names above express consumer policy, not a fixed registry. There is no
-plugin import, category rewrite, or automatic type detection. Package-specific
+Profile names express consumer policy; the `tools` shortcut recognizes only
+its documented built-in recipes. Other tools use explicit command steps. There
+is no plugin import, category rewrite, or automatic type detection. Package-specific
 API expectations and runtime assertions remain in each stub repository.
 The shared checking algorithms and their unit tests live in Alphus.
 

@@ -15,43 +15,118 @@ from alphus.policy.sources import FileInventoryPolicy
 
 
 @dataclass(frozen=True, slots=True)
+class NativeStep:
+    name: str
+    argv: tuple[str, ...]
+    fix_argv: tuple[str, ...] | None = None
+    include: tuple[str, ...] | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class NativeTool:
     language: str
-    step: str
-    argv: tuple[str, ...]
-    fix_argv: tuple[str, ...]
-    include: tuple[str, ...]
+    steps: tuple[NativeStep, ...]
 
 
 NATIVE_TOOLS = MappingProxyType(
     {
+        "ruff": NativeTool(
+            "python",
+            (
+                NativeStep(
+                    "Python lint",
+                    ("{python}", "-m", "ruff", "check", "--force-exclude", "{files}"),
+                    (
+                        "{python}",
+                        "-m",
+                        "ruff",
+                        "check",
+                        "--force-exclude",
+                        "--fix",
+                        "{files}",
+                    ),
+                    ("**/*.py", "**/*.pyi"),
+                ),
+                NativeStep(
+                    "Python format",
+                    (
+                        "{python}",
+                        "-m",
+                        "ruff",
+                        "format",
+                        "--force-exclude",
+                        "--check",
+                        "{files}",
+                    ),
+                    ("{python}", "-m", "ruff", "format", "--force-exclude", "{files}"),
+                    ("**/*.py", "**/*.pyi"),
+                ),
+            ),
+        ),
+        "pyright": NativeTool(
+            "python",
+            (
+                NativeStep(
+                    "Python types",
+                    ("{python}", "-m", "pyright", "--pythonpath", "{python}"),
+                ),
+            ),
+        ),
+        "pytest": NativeTool(
+            "python",
+            (NativeStep("Python tests", ("{python}", "-m", "pytest")),),
+        ),
         "rumdl": NativeTool(
             "markdown",
-            "Markdown style",
-            ("rumdl", "check", "{files}"),
-            ("rumdl", "fmt", "{files}"),
-            ("**/*.md",),
+            (
+                NativeStep(
+                    "Markdown style",
+                    ("rumdl", "check", "{files}"),
+                    ("rumdl", "fmt", "{files}"),
+                    ("**/*.md",),
+                ),
+            ),
         ),
         "mdrepo": NativeTool(
             "markdown",
-            "Markdown links and graph",
-            ("{python}", "-m", "mdrepo", "--root", "{root}", "check", "{files}"),
-            ("{python}", "-m", "mdrepo", "--root", "{root}", "fix", "{files}"),
-            ("**/*.md",),
+            (
+                NativeStep(
+                    "Markdown links and graph",
+                    (
+                        "{python}",
+                        "-m",
+                        "mdrepo",
+                        "--root",
+                        "{root}",
+                        "check",
+                        "{files}",
+                    ),
+                    ("{python}", "-m", "mdrepo", "--root", "{root}", "fix", "{files}"),
+                    ("**/*.md",),
+                ),
+            ),
         ),
         "taplo": NativeTool(
             "toml",
-            "TOML format",
-            ("taplo", "fmt", "--check", "{files}"),
-            ("taplo", "fmt", "{files}"),
-            ("**/*.toml",),
+            (
+                NativeStep(
+                    "TOML format",
+                    ("taplo", "fmt", "--check", "{files}"),
+                    ("taplo", "fmt", "{files}"),
+                    ("**/*.toml",),
+                ),
+            ),
         ),
         "prettier": NativeTool(
             "json",
-            "JSON format",
-            ("prettier", "--check", "{files}"),
-            ("prettier", "--write", "{files}"),
-            ("**/*.json",),
+            (
+                NativeStep(
+                    "JSON format",
+                    ("prettier", "--check", "{files}"),
+                    ("prettier", "--write", "{files}"),
+                    ("**/*.json",),
+                ),
+            ),
         ),
     }
 )
@@ -74,16 +149,21 @@ def native_tool_policy(names: Sequence[str]) -> OrchestrationPolicy:
     languages: dict[str, list[str]] = {}
     for name in names:
         tool = NATIVE_TOOLS[name]
-        steps.append(
-            CommandRunStep(
-                kind="command",
-                name=tool.step,
-                argv=tool.argv,
-                fix_argv=tool.fix_argv,
-                files=FileInventoryPolicy(include=tool.include, exclude=()),
+        for recipe in tool.steps:
+            steps.append(
+                CommandRunStep(
+                    kind="command",
+                    name=recipe.name,
+                    argv=recipe.argv,
+                    fix_argv=recipe.fix_argv,
+                    files=(
+                        FileInventoryPolicy(include=recipe.include, exclude=())
+                        if recipe.include is not None
+                        else None
+                    ),
+                )
             )
-        )
-        languages.setdefault(tool.language, []).append(tool.step)
+            languages.setdefault(tool.language, []).append(recipe.name)
 
     profiles = [
         OrchestrationProfile(name=language, steps=tuple(selected))

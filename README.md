@@ -90,8 +90,12 @@ Install rumdl in that repository's development environment, then run `alphus`
 from the root. `alphus --profile markdown` selects the generated language
 profile. `alphus --plan` previews the resolved steps and file matches;
 `alphus --fix-plan` shows available fixers. The selected native
-tool keeps its own configuration. Add `mdrepo`, `taplo`, or `prettier` to the
-list only when those tools are installed and needed. Add a custom
+tool keeps its own configuration. A Python repository can start with
+[`examples/python/quality-gates.toml`](examples/python/quality-gates.toml):
+`tools = ["ruff", "pyright", "pytest"]`. Install those tools in the
+consumer's development environment. Ruff supplies lint and format steps;
+Pyright and pytest use the repository's native settings. Add `mdrepo`, `taplo`,
+or `prettier` only when those tools are installed and needed. Add a custom
 `[[orchestration.steps]]` beside `tools` when the repository needs another
 check; the [consumer guide](docs/CONSUMER-PROFILES.md) shows the full policy for
 named profiles and tool-command customization.
