@@ -19,10 +19,10 @@ from alphus.config import (
     RuleRunStep,
 )
 from alphus.contracts.findings import SEVERITY_ORDER, Diagnostic, Severity
-from alphus.execution import orchestration
+from alphus.execution import commands
+from alphus.execution.commands import windows_shell_required
 from alphus.execution.orchestration import (
     RuleRunResult,
-    _windows_shell_required,
     run_orchestration,
 )
 from alphus.support import platform_utils
@@ -144,12 +144,12 @@ def test_provisional_native_command_reports_failure_without_blocking_profile(
 def test_windows_batch_detection_uses_the_shared_platform_probe(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(orchestration, "is_windows", lambda: False)
-    assert not _windows_shell_required(("npm.cmd",))
+    monkeypatch.setattr(commands, "is_windows", lambda: False)
+    assert not windows_shell_required(("npm.cmd",))
 
-    monkeypatch.setattr(orchestration, "is_windows", lambda: True)
-    monkeypatch.setattr(orchestration.shutil, "which", lambda _: "npm.cmd")
-    assert _windows_shell_required(("npm.cmd",))
+    monkeypatch.setattr(commands, "is_windows", lambda: True)
+    monkeypatch.setattr(commands.shutil, "which", lambda _: "npm.cmd")
+    assert windows_shell_required(("npm.cmd",))
 
 
 @pytest.mark.parametrize(

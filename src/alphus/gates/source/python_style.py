@@ -141,6 +141,22 @@ def has_concrete_input(
     )
 
 
+def is_typer_option_input(node: ast.expr) -> bool:
+    """Recognize a framework-owned CLI collection converted at the boundary."""
+    if not isinstance(node, ast.Subscript) or type_name(node.value) != "Annotated":
+        return False
+    if not isinstance(node.slice, ast.Tuple):
+        return False
+    return any(
+        isinstance(item, ast.Call)
+        and isinstance(item.func, ast.Attribute)
+        and isinstance(item.func.value, ast.Name)
+        and item.func.value.id == "typer"
+        and item.func.attr == "Option"
+        for item in node.slice.elts[1:]
+    )
+
+
 def is_container_type(
     node: ast.expr, names: AbstractSet[str], modules: AbstractSet[str]
 ) -> bool:
@@ -414,7 +430,7 @@ class StyleVisitor(ast.NodeVisitor):
                 self.typing_names,
                 self.container_modules,
                 self.concrete_input_names,
-            ):
+            ) and not is_typer_option_input(arg.annotation):
                 self.findings["concrete_inputs"].append(arg.lineno)
             if has_quoted_type(arg.annotation):
                 self.findings["quoted_types"].append(arg.lineno)

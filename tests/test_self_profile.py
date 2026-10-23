@@ -26,6 +26,12 @@ def test_self_check_enforces_review_and_repository_toml() -> None:
         "Test review",
         "Input contract review",
     }.issubset(check.steps)
+    steps = {step.name: step for step in orchestration.steps}
+    for name in ("Python lint", "Python format"):
+        command = steps[name]
+        assert command.kind == "command"
+        assert command.fix_argv is not None
+        assert command.files is not None
 
     policy = config.checks.test_quality
     assert policy is not None

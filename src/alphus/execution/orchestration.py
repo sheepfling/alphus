@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import json
-import shutil
 import subprocess
 import sys
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import asdict, dataclass, field
 from io import StringIO
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Literal, TextIO
 
 from alphus.config import (
@@ -25,8 +24,12 @@ from alphus.contracts.findings import (
     SeverityCounts,
     severity_meets_threshold,
 )
+from alphus.execution.commands import (
+    command_arguments,
+    step_directory,
+    windows_shell_required,
+)
 from alphus.support.inventory import candidate_files
-from alphus.support.platform_utils import is_windows
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,67 +68,6 @@ class OrchestrationResult:
     steps: tuple[OrchestrationStepResult, ...]
     failure_threshold: Severity = "error"
     severity_counts: SeverityCounts = field(default_factory=SeverityCounts)
-
-
-def _step_directory(root: Path, working_directory: str) -> Path:
-    """Resolve one configured step directory without leaving the checkout."""
-    if working_directory == ".":
-        return root
-    relative = PurePosixPath(working_directory)
-    directory = root.joinpath(*relative.parts).resolve(strict=True)
-    if not directory.is_dir() or not directory.is_relative_to(root):
-        raise ValueError(
-            f"step working directory must resolve inside the checkout: {working_directory}"
-        )
-    return directory
-
-
-def _arguments(
-    step: CommandRunStep,
-    root: Path,
-    config_path: Path,
-    files: Sequence[Path] = (),
-    directory: Path | None = None,
-) -> list[str]:
-    """Expand only the documented runner placeholders in an argv vector."""
-    replacements = {
-        "{python}": sys.executable,
-        "{root}": str(root),
-        "{config}": str(config_path),
-    }
-    arguments: list[str] = []
-    for configured_argument in step.argv:
-        if configured_argument == "{files}":
-            arguments.extend(
-                _relative_file_argument(root, directory or root, path) for path in files
-            )
-            continue
-        argument = configured_argument
-        for token, value in replacements.items():
-            argument = argument.replace(token, value)
-        arguments.append(argument)
-    return arguments
-
-
-def _relative_file_argument(root: Path, directory: Path, path: Path) -> str:
-    """Name an inventoried file relative to the command's working directory."""
-    base_parts = directory.relative_to(root).parts
-    file_parts = path.parts
-    common = 0
-    for base_part, file_part in zip(base_parts, file_parts):
-        if base_part != file_part:
-            break
-        common += 1
-    parts = ("..",) * (len(base_parts) - common) + file_parts[common:]
-    return PurePosixPath(*parts).as_posix()
-
-
-def _windows_shell_required(arguments: Sequence[str]) -> bool:
-    """Allow Windows batch launchers such as npm.cmd without shell snippets."""
-    if not is_windows():
-        return False
-    executable = shutil.which(arguments[0])
-    return Path(executable or arguments[0]).suffix.casefold() in {".cmd", ".bat"}
 
 
 def _render_diagnostic(diagnostic: Diagnostic, output: TextIO) -> None:
@@ -316,8 +258,8 @@ def run_orchestration(
                         skipped_empty_file_scope = True
                         exit_code = 0
                     else:
-                        directory = _step_directory(checkout, working_directory)
-                        arguments = _arguments(
+                        directory = step_directory(checkout, working_directory)
+                        arguments = command_arguments(
                             step, checkout, resolved_config, selected_files, directory
                         )
                         attempted_command = arguments[0]
@@ -325,7 +267,7 @@ def run_orchestration(
                             arguments,
                             cwd=directory,
                             check=False,
-                            shell=_windows_shell_required(arguments),
+                            shell=windows_shell_required(arguments),
                             capture_output=True,
                             text=True,
                         )

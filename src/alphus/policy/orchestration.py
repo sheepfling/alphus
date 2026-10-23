@@ -103,6 +103,7 @@ class CommandRunStep(StrictModel):
     kind: Literal["command"]
     name: str
     argv: Annotated[tuple[str, ...], Field(min_length=1)]
+    fix_argv: Annotated[tuple[str, ...] | None, Field(min_length=1)] = None
     working_directory: str = "."
     files: FileInventoryPolicy | None = None
     rollout: Literal["mainline", "provisional"] = "mainline"
@@ -112,9 +113,11 @@ class CommandRunStep(StrictModel):
     def validate_name(cls, name: str) -> str:
         return validate_one_line_message(name)
 
-    @field_validator("argv")
+    @field_validator("argv", "fix_argv")
     @classmethod
-    def validate_arguments(cls, argv: Sequence[str]) -> tuple[str, ...]:
+    def validate_arguments(cls, argv: Sequence[str] | None) -> tuple[str, ...] | None:
+        if argv is None:
+            return None
         if any(not argument or "\x00" in argument for argument in argv):
             raise ValueError("command arguments must be non-empty and contain no NUL")
         return tuple(argv)
@@ -140,6 +143,17 @@ class CommandRunStep(StrictModel):
             raise ValueError(
                 "a command-step files policy requires one {files} argument"
             )
+        if self.fix_argv is not None:
+            fix_placeholders = sum(argument == "{files}" for argument in self.fix_argv)
+            if self.files is None or fix_placeholders != 1:
+                raise ValueError(
+                    "fix_argv requires a files policy and one {files} argument"
+                )
+            if any(
+                "{files}" in argument and argument != "{files}"
+                for argument in self.fix_argv
+            ):
+                raise ValueError("{files} must occupy one complete fix argument")
         return self
 
 

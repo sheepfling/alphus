@@ -177,6 +177,11 @@ alphus --root /path/to/repository \
   --run --profile check
 ```
 
+Use `--fix-plan --profile check` to see which selected steps declare a fixer.
+Applying one requires `--apply-fixes --fix-step "Step name"`; the ordinary
+check never edits files. See [fix plans](docs/FIXES.md) for the current
+fixability inventory and the file-scoped command contract.
+
 Profiles can mix portable rules with native tools configured as argument
 arrays. A policy that has no Node-based command steps does not require npm or
 Node.js. A command step may select a scoped file inventory with a `files`

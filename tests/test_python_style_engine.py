@@ -34,6 +34,21 @@ def test_concrete_collection_inputs_and_quoted_types_are_detected() -> None:
     }
 
 
+def test_typer_option_collection_is_a_framework_boundary() -> None:
+    assert (
+        findings(
+            "import typer\n"
+            "from typing import Annotated\n"
+            "def cli(names: Annotated[list[str], typer.Option('--name')]): pass"
+        )
+        == set()
+    )
+    assert findings(
+        "from typing import Annotated\n"
+        "def internal(names: Annotated[list[str], 'ordinary metadata']): pass"
+    ) == {"concrete_inputs"}
+
+
 def test_covariant_abstract_set_and_literal_values_are_allowed() -> None:
     source = (
         "from collections.abc import Set\n"

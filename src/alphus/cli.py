@@ -24,6 +24,8 @@ from alphus.contracts.findings import (
     SeverityCounts,
 )
 from alphus.execution.dispatch import run_builtin_rule
+from alphus.execution.fixes import apply_fixes as apply_configured_fixes
+from alphus.execution.fixes import resolve_fix_plan
 from alphus.execution.orchestration import RuleRunResult, run_orchestration
 from alphus.execution.results import RuleEvaluation
 from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
@@ -448,6 +450,71 @@ def _execute_profile(
     )
 
 
+def _execute_fix_profile(
+    root: Path,
+    config_path: Path,
+    profile_name: str | None,
+    json_output: bool,
+    apply: bool,
+    fix_steps: tuple[str, ...],
+) -> int:
+    """List or explicitly run the selected profile's declared fix commands."""
+    checkout = root.resolve(strict=True)
+    resolved_config = (
+        config_path if config_path.is_absolute() else checkout / config_path
+    )
+    config = _load_policy(resolved_config)
+    policy = config.orchestration
+    if policy is None:
+        typer.echo("The selected policy has no [orchestration] section.", err=True)
+        return 2
+    selected_profile = profile_name or policy.default_profile
+    try:
+        entries = resolve_fix_plan(checkout, resolved_config, policy, selected_profile)
+        if apply:
+            if json_output:
+                raise ValueError("--json is only available with --fix-plan")
+            return apply_configured_fixes(
+                checkout, entries, fix_steps, sys.stdout, sys.stderr
+            )
+        if fix_steps:
+            raise ValueError("--fix-step requires --apply-fixes")
+    except (OSError, ValueError) as error:
+        typer.echo(str(error), err=True)
+        return 2
+    if json_output:
+        typer.echo(
+            json.dumps(
+                {
+                    "profile": selected_profile,
+                    "steps": [
+                        {
+                            "name": entry.name,
+                            "kind": entry.kind,
+                            "fixable": entry.fixable,
+                            "fix_argv": entry.fix_argv,
+                            "working_directory": entry.working_directory,
+                            "files": entry.files,
+                        }
+                        for entry in entries
+                    ],
+                },
+                sort_keys=True,
+            )
+        )
+    else:
+        typer.echo(f"Fix plan for profile {selected_profile}:")
+        for entry in entries:
+            if entry.fixable:
+                typer.echo(
+                    f"FIXABLE {entry.name}: {len(entry.files)} file(s); "
+                    f"argv={json.dumps(entry.fix_argv)}"
+                )
+            else:
+                typer.echo(f"NO FIXER {entry.name}")
+    return 0
+
+
 def _command(
     root: Annotated[
         Path,
@@ -489,8 +556,34 @@ def _command(
         bool,
         typer.Option("--verbose", help="Write rule diagnostics to stderr."),
     ] = False,
+    fix_plan: Annotated[
+        bool,
+        typer.Option("--fix-plan", help="Show fixable steps in a profile."),
+    ] = False,
+    apply_fixes: Annotated[
+        bool,
+        typer.Option("--apply-fixes", help="Apply named, configured fix commands."),
+    ] = False,
+    fix_step: Annotated[
+        list[str] | None,
+        typer.Option("--fix-step", help="Name a step to fix; repeat as needed."),
+    ] = None,
 ) -> None:
     """Run one rule or a configured profile against an explicit repository root."""
+    if fix_plan or apply_fixes:
+        if fix_plan and apply_fixes:
+            raise typer.BadParameter("choose --fix-plan or --apply-fixes")
+        if run or rule is not None or report or verbose:
+            raise typer.BadParameter(
+                "fix operations cannot be combined with --run, --rule, --report, or --verbose"
+            )
+        raise typer.Exit(
+            _execute_fix_profile(
+                root, config, profile, json_output, apply_fixes, tuple(fix_step or ())
+            )
+        )
+    if fix_step:
+        raise typer.BadParameter("--fix-step requires --apply-fixes")
     if run:
         if rule is not None or report:
             raise typer.BadParameter("--run cannot be combined with --rule or --report")

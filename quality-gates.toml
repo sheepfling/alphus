@@ -171,9 +171,13 @@ rule = "comment-markers"
 kind = "command"
 name = "Python lint"
 argv = [
-  "{python}", "-m", "ruff", "check", "src", "tests", "--select",
-  "E4,E7,E9,F,ANN,I",
+  "{python}", "-m", "ruff", "check", "--select", "E4,E7,E9,F,ANN,I", "{files}",
 ]
+fix_argv = [
+  "{python}", "-m", "ruff", "check", "--fix", "--select", "E4,E7,E9,F,ANN,I",
+  "{files}",
+]
+files = { include = ["src/**/*.py", "src/**/*.pyi", "tests/**/*.py"] }
 
 [[orchestration.steps]]
 kind = "command"
@@ -201,7 +205,9 @@ argv = [
 [[orchestration.steps]]
 kind = "command"
 name = "Python format"
-argv = ["{python}", "-m", "ruff", "format", "--check", "src", "tests"]
+argv = ["{python}", "-m", "ruff", "format", "--check", "{files}"]
+fix_argv = ["{python}", "-m", "ruff", "format", "{files}"]
+files = { include = ["src/**/*.py", "src/**/*.pyi", "tests/**/*.py"] }
 
 [[orchestration.steps]]
 kind = "command"

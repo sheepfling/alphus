@@ -132,6 +132,12 @@ contract as built-in checks. Loading a plugin executes Python code, so a policy
 file should not silently import arbitrary modules. Native tools should remain
 available as command steps without requiring a Python plugin.
 
+Fixability is separate from diagnostic severity, remediation priority, and
+gate rollout. Command steps can already declare an explicit, file-scoped
+`fix_argv`; see [fix plans](FIXES.md). Built-in rule fixers need typed edit
+proposals with stale-content and conflict checks before they should be exposed
+through the same apply workflow.
+
 ## Migration sequence
 
 1. Keep the built-in selector catalog complete while mapping current rules to

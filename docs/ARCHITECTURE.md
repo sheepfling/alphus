@@ -62,7 +62,7 @@ language neutral.
 - `alphus.policy` owns validated policy models and the built-in selector
   catalog. It does not import execution or gate implementations.
 - `alphus.execution` owns rule dispatch, normalized results, profile planning,
-  native command execution, and exit status.
+  native command execution, explicit fix plans, and exit status.
 - `alphus.config` and `alphus.cli` are the stable public configuration and
   command boundaries at the package root.
 - `alphus_stub_quality` contains only the audit helpers copied into the Python
@@ -127,6 +127,9 @@ adapters because some older rules have distinct direct-command output formats.
 decision together before rendering. Direct CLI modes serialize that result to
 their established text or JSON formats; profiles consume its diagnostics
 directly, without parsing the CLI's own output.
+Selected command steps can separately declare a file-scoped `fix_argv`.
+The [fix plan](FIXES.md) lists those commands without running them; applying
+fixes requires explicit step names and remains separate from profile checks.
 The Python structure rule rejects uppercase module constants initialized
 with mutable list, dict, or set values. Constant lookup tables use a read-only
 `Mapping` view, while fixed sequences and membership sets use tuples and

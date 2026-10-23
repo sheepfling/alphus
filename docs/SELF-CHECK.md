@@ -40,6 +40,9 @@ wheel="$(find "$work/wheels" -maxdepth 1 -name 'alphus-*.whl' -print -quit)"
 The Pyright, pytest, and Ruff version ranges match the `dev` extra in `pyproject.toml`.
 Pip installs the wheel's runtime requirements alongside those tools. The
 profile includes Ruff lint, formatting, strict Pyright, and pytest.
+Its Ruff lint and format steps also declare file-scoped fix commands. They
+are visible through `--fix-plan` and run only through `--apply-fixes` with
+named steps; see [fix plans](FIXES.md).
 
 The [runtime-type contract](RUNTIME-TYPES.md) describes typed AST dispatch and
 explicit reflection-value annotations. The existing exclusions below remain
