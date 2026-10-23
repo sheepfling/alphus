@@ -1,8 +1,14 @@
 """Alphus must apply its own policy and package contracts."""
 
+import ast
+import re
 import tomllib
 from importlib.metadata import EntryPoint
 from pathlib import Path
+
+from packaging.requirements import Requirement
+from packaging.specifiers import SpecifierSet
+from packaging.version import Version
 
 from alphus.config import load_config
 from alphus.gates.review.test_quality import python_findings
@@ -59,3 +65,40 @@ def test_declared_script_entry_points_resolve_to_callables() -> None:
         for name, reference in project.get(table, {}).items():
             target = EntryPoint(name=name, value=reference, group=group).load()
             assert callable(target), f"{group} entry point {name!r} is not callable"
+
+
+def test_checker_python_range_matches_hosted_matrix() -> None:
+    metadata = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    workflow = Path(".github/workflows/quality.yml").read_text(encoding="utf-8")
+    match = re.search(r"^\s+python-version: (\[[^\n]+\])$", workflow, re.MULTILINE)
+    assert match is not None
+
+    limits = SpecifierSet(metadata["project"]["requires-python"])
+    lower = Version(next(item.version for item in limits if item.operator == ">="))
+    upper = Version(next(item.version for item in limits if item.operator == "<"))
+    assert lower.major == upper.major == 3
+    expected = {f"3.{minor}" for minor in range(lower.minor, upper.minor)}
+    assert set(ast.literal_eval(match.group(1))) == expected
+
+
+def test_hosted_dependency_floor_matches_package_metadata() -> None:
+    metadata = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    workflow = Path(".github/workflows/quality.yml").read_text(encoding="utf-8")
+    floor_job = workflow.split("  minimum-dependencies:", 1)[1]
+    pins = {
+        name: Version(version)
+        for name, version in re.findall(r"'([a-z0-9-]+)==([^']+)'", floor_job)
+    }
+    requirements = (
+        metadata["project"]["dependencies"]
+        + metadata["project"]["optional-dependencies"]["python"]
+    )
+    lower_bounds = {
+        requirement.name: Version(
+            next(
+                item.version for item in requirement.specifier if item.operator == ">="
+            )
+        )
+        for requirement in map(Requirement, requirements)
+    }
+    assert pins == lower_bounds
