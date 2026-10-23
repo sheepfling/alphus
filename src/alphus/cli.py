@@ -528,6 +528,89 @@ def _execute_fix_profile(
     return 0
 
 
+def _execute_plan_profile(
+    root: Path,
+    config_path: Path,
+    profile_name: str | None,
+    json_output: bool,
+) -> int:
+    """Show resolved profile steps and scopes without running native tools."""
+    checkout = root.resolve(strict=True)
+    resolved_config = (
+        config_path if config_path.is_absolute() else checkout / config_path
+    )
+    config = _load_policy(resolved_config)
+    policy = config.orchestration
+    if policy is None:
+        typer.echo("The selected policy has no [orchestration] section.", err=True)
+        return 2
+    selected_profile = profile_name or policy.default_profile
+    plan = policy.resolve_profile(selected_profile)
+    if plan is None:
+        typer.echo(f"Unknown orchestration profile: {selected_profile}", err=True)
+        return 2
+    try:
+        for step in policy.steps:
+            if step.name in plan.steps and step.kind == "rule":
+                if config.files is None:
+                    raise MissingPolicyError(
+                        "a selected built-in rule requires a top-level [files] inventory"
+                    )
+                config.checks.require_rule(step.rule)
+        entries = resolve_fix_plan(checkout, resolved_config, policy, selected_profile)
+    except (MissingPolicyError, OSError, ValueError) as error:
+        typer.echo(str(error), err=True)
+        return 2
+
+    by_name = {step.name: step for step in policy.steps}
+    if json_output:
+        details: list[object] = []
+        for entry in entries:
+            step = by_name[entry.name]
+            detail = step.model_dump(mode="json", exclude_none=True)
+            detail["fixable"] = entry.fixable
+            if step.kind == "command":
+                detail["selected_files"] = entry.files
+                detail["applicable"] = step.files is None or bool(entry.files)
+                if entry.check_argv is not None:
+                    detail["expanded_argv"] = entry.check_argv
+            details.append(detail)
+        typer.echo(
+            json.dumps(
+                {
+                    "profile": selected_profile,
+                    "profiles": plan.profiles,
+                    "failure_threshold": policy.failure_threshold,
+                    "steps": details,
+                },
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    typer.echo(
+        f"Execution plan for profile {selected_profile} "
+        f"(failure threshold={policy.failure_threshold}):"
+    )
+    if len(plan.profiles) > 1:
+        typer.echo(f"Profiles: {', '.join(plan.profiles)}")
+    for entry in entries:
+        step = by_name[entry.name]
+        if step.kind == "rule":
+            typer.echo(f"{step.rollout.upper()} RULE {step.name}: {step.rule}")
+            continue
+        scope = "unscoped" if step.files is None else f"{len(entry.files)} file(s)"
+        label = (
+            "NOT APPLICABLE"
+            if step.files is not None and not entry.files
+            else step.rollout.upper()
+        )
+        fixer = ", fixer available" if entry.fixable else ""
+        typer.echo(f"{label} COMMAND {step.name}: {scope}{fixer}")
+        typer.echo(f"  check={json.dumps(step.argv)}")
+    return 0
+
+
 def _command(
     root: Annotated[
         Path,
@@ -569,6 +652,10 @@ def _command(
         bool,
         typer.Option("--verbose", help="Write rule diagnostics to stderr."),
     ] = False,
+    plan: Annotated[
+        bool,
+        typer.Option("--plan", help="Show resolved checks without running them."),
+    ] = False,
     fix_plan: Annotated[
         bool,
         typer.Option("--fix-plan", help="Show fixable steps in a profile."),
@@ -583,6 +670,20 @@ def _command(
     ] = None,
 ) -> None:
     """Run the default profile from this repository, or select a rule/profile."""
+    if plan:
+        if (
+            fix_plan
+            or apply_fixes
+            or run
+            or rule is not None
+            or report
+            or verbose
+            or fix_step
+        ):
+            raise typer.BadParameter(
+                "--plan cannot be combined with run, rule, report, verbose, or fix options"
+            )
+        raise typer.Exit(_execute_plan_profile(root, config, profile, json_output))
     if fix_plan or apply_fixes:
         if fix_plan and apply_fixes:
             raise typer.BadParameter("choose --fix-plan or --apply-fixes")

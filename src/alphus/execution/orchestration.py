@@ -37,7 +37,7 @@ class OrchestrationStepResult:
     """Machine-readable outcome for one configured profile step."""
 
     name: str
-    status: Literal["passed", "failed"]
+    status: Literal["passed", "failed", "not_applicable"]
     exit_code: int
     diagnostics: tuple[str, ...] = ()
     findings: tuple[Diagnostic, ...] = ()
@@ -68,6 +68,7 @@ class OrchestrationResult:
     steps: tuple[OrchestrationStepResult, ...]
     failure_threshold: Severity = "error"
     severity_counts: SeverityCounts = field(default_factory=SeverityCounts)
+    not_applicable: int = 0
 
 
 def _render_diagnostic(diagnostic: Diagnostic, output: TextIO) -> None:
@@ -128,6 +129,7 @@ def run_orchestration(
     failed = 0
     provisional_passed = 0
     provisional_failed = 0
+    not_applicable = 0
     completed = 0
     results: list[OrchestrationStepResult] = []
     all_findings: list[Diagnostic] = []
@@ -314,7 +316,24 @@ def run_orchestration(
 
         completed += 1
         provisional = step.rollout == "provisional"
-        if exit_code == 0:
+        if skipped_empty_file_scope:
+            not_applicable += 1
+            results.append(
+                OrchestrationStepResult(
+                    step.name,
+                    "not_applicable",
+                    exit_code,
+                    diagnostics=("No files matched the configured command scope.",),
+                    rollout=step.rollout,
+                )
+            )
+            if not json_output:
+                print(
+                    f"NOT APPLICABLE {step.name}: no files matched",
+                    file=output,
+                    flush=True,
+                )
+        elif exit_code == 0:
             if provisional:
                 provisional_passed += 1
             results.append(
@@ -322,14 +341,7 @@ def run_orchestration(
                     step.name,
                     "passed",
                     exit_code,
-                    diagnostics=(
-                        legacy_diagnostics
-                        or (
-                            ("No files matched the configured command scope.",)
-                            if skipped_empty_file_scope
-                            else ()
-                        )
-                    ),
+                    diagnostics=legacy_diagnostics,
                     findings=tuple(findings),
                     stdout=step_stdout,
                     stderr=step_stderr,
@@ -342,9 +354,8 @@ def run_orchestration(
                 for finding in findings:
                     _render_diagnostic(finding, output)
             if not json_output:
-                details = " (no files matched)" if skipped_empty_file_scope else ""
                 prefix = "PROVISIONAL PASS" if provisional else "PASS"
-                print(f"{prefix} {step.name}{details}", file=output, flush=True)
+                print(f"{prefix} {step.name}", file=output, flush=True)
         else:
             if provisional:
                 provisional_failed += 1
@@ -375,7 +386,9 @@ def run_orchestration(
         if json_output and step_stderr:
             print(step_stderr, end="", file=errors, flush=True)
 
-    passed = completed - failed - provisional_passed - provisional_failed
+    passed = (
+        completed - failed - provisional_passed - provisional_failed - not_applicable
+    )
     exit_code = 1 if failed else 0
     if json_output:
         result = OrchestrationResult(
@@ -386,8 +399,11 @@ def run_orchestration(
             tuple(results),
             threshold,
             SeverityCounts.from_diagnostics(all_findings),
+            not_applicable,
         )
         payload = asdict(result)
+        if not not_applicable:
+            del payload["not_applicable"]
         for step_payload in payload["steps"]:
             if step_payload["rollout"] == "mainline":
                 del step_payload["rollout"]
@@ -404,6 +420,8 @@ def run_orchestration(
         print(json.dumps(payload, sort_keys=True), file=output, flush=True)
     else:
         summary = f"Quality profile {profile_name}: {passed} passed, {failed} failed"
+        if not_applicable:
+            summary += f", {not_applicable} not applicable"
         if provisional_passed or provisional_failed:
             summary += (
                 f", {provisional_passed} provisional passed, "

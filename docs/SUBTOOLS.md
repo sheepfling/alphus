@@ -36,8 +36,10 @@ tools = ["rumdl", "mdrepo", "taplo", "prettier"]
 Only selected tools run. Their check and fixer commands use file scopes for
 Markdown, TOML, or JSON; the list order controls execution and fix order.
 Alphus creates `check` plus `markdown`, `toml`, and `json` profiles for the
-languages selected. Use `alphus --fix-plan` to see the actual commands before
-applying a named fixer. Native tools still discover their own configuration.
+languages selected. Use `alphus --plan` to inspect resolved order, command
+arguments, file matches, rollout, and fixability without running tools. Use
+`alphus --fix-plan` before applying a named fixer. Native tools still discover
+their own configuration.
 Add project-specific `[[orchestration.steps]]` beside `tools`; `check`
 runs them after the selected native tools. A custom step may be provisional.
 For named profile composition, split language files, or changes to a selected
@@ -52,8 +54,9 @@ checkout path, `{config}` is the Alphus policy path, and `{python}` is the
 running interpreter. `{files}` expands to separate relative path arguments.
 It requires a `files = { include = [...] }` inventory on that command step.
 Alphus selects Git tracked and non-ignored untracked files for this inventory.
-An empty selection skips the command. An unscoped command runs once even when
-there are no matching files. The global `[files]` section is needed only for
+An empty selection reports `not_applicable` and does not count as a passed
+check. An unscoped command runs once even when there are no matching files.
+The global `[files]` section is needed only for
 Alphus-owned `kind = "rule"` steps.
 
 ## Keep Markdown checks distinct

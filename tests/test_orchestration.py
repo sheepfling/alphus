@@ -717,7 +717,26 @@ def test_file_scoped_command_skips_when_no_files_match(tmp_path: Path) -> None:
 
     assert result == 0
     assert not (tmp_path / "should-not-exist").exists()
-    assert "PASS Markdown formatter (no files matched)" in output.getvalue()
+    assert "NOT APPLICABLE Markdown formatter: no files matched" in output.getvalue()
+    json_output = StringIO()
+    assert (
+        run_orchestration(
+            tmp_path,
+            config_path,
+            policy,
+            "markdown",
+            lambda rule: 0,
+            json_output=True,
+            stdout=json_output,
+            stderr=StringIO(),
+        )
+        == 0
+    )
+    payload = json.loads(json_output.getvalue())
+    assert payload["passed"] == 0
+    assert payload["failed"] == 0
+    assert payload["not_applicable"] == 1
+    assert payload["steps"][0]["status"] == "not_applicable"
 
 
 def test_command_file_policy_requires_one_complete_files_argument() -> None:

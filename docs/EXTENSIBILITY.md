@@ -63,11 +63,13 @@ evaluated. Provisional steps run and retain their pass or fail status and
 diagnostics, but their failures do not fail the overall profile. Profile
 summaries count provisional outcomes separately; the default is `mainline`.
 
-The fuller execution model should report `passed`, `failed`, `not applicable`,
-and `not run` separately. A disabled, unselected, or inapplicable check must
-not be presented as a successful check. Category and rule overrides should
-resolve to a printed plan before execution, with existing behavior preserved
-unless a consumer explicitly changes its configuration.
+The current `alphus --plan` command prints resolved profile order, steps,
+file matches, rollout, and fixability before execution. A file-scoped command
+with no matching files now reports `not_applicable` instead of `passed` in
+human and JSON output. Broader execution states still need a typed contract:
+`not run` for disabled or unselected checks, and `not applicable` for built-in
+rules whose prerequisites are absent. Category and rule overrides should be
+added only with a clear resolved plan and unchanged default selection.
 
 ## Future extension hooks
 
@@ -142,8 +144,8 @@ through the same apply workflow.
 
 1. Keep the built-in selector catalog complete while mapping current rules to
    categories without changing defaults.
-2. Add a resolved selection plan and explicit pass, fail, not-applicable, and
-   not-run outcomes while preserving existing command behavior.
+2. Extend the existing `--plan` and file-scoped `not_applicable` result to
+   built-in prerequisites, disabled checks, and explicit `not run` outcomes.
 3. Migrate checkers to the shared rule specification one at a time, comparing
    normalized findings and JSON output with the existing contracts.
 4. Design and version third-party hooks only when an actual consumer requires

@@ -13,6 +13,7 @@ from alphus.execution.commands import (
     step_directory,
     windows_shell_required,
 )
+from alphus.policy.base import QualityRuleName
 from alphus.policy.orchestration import CommandRunStep, OrchestrationPolicy, RuleRunStep
 from alphus.support.inventory import candidate_files
 
@@ -23,6 +24,10 @@ class FixPlanEntry:
 
     name: str
     kind: Literal["rule", "command"]
+    rollout: Literal["mainline", "provisional"] = "mainline"
+    rule: QualityRuleName | None = None
+    argv: tuple[str, ...] | None = None
+    check_argv: tuple[str, ...] | None = None
     fix_argv: tuple[str, ...] | None = None
     expanded_argv: tuple[str, ...] | None = None
     working_directory: str | None = None
@@ -39,7 +44,7 @@ def resolve_fix_plan(
     policy: OrchestrationPolicy,
     profile_name: str,
 ) -> tuple[FixPlanEntry, ...]:
-    """Show every selected step and resolve only declared file-scoped fixers."""
+    """Resolve selected checks and fixers without executing any tool."""
     checkout = root.resolve(strict=True)
     plan = policy.resolve_profile(profile_name)
     if plan is None:
@@ -49,32 +54,55 @@ def resolve_fix_plan(
     for name in plan.steps:
         step: CommandRunStep | RuleRunStep = steps[name]
         if not isinstance(step, CommandRunStep):
-            entries.append(FixPlanEntry(name=name, kind=step.kind))
+            entries.append(
+                FixPlanEntry(
+                    name=name, kind=step.kind, rollout=step.rollout, rule=step.rule
+                )
+            )
             continue
         selected = (
             candidate_files(checkout, step.files) if step.files is not None else []
         )
         scoped_files = tuple(path.as_posix() for path in selected)
-        if step.fix_argv is None:
-            entries.append(FixPlanEntry(name=name, kind="command", files=scoped_files))
+        if step.files is not None and not selected:
+            entries.append(
+                FixPlanEntry(
+                    name=name,
+                    kind="command",
+                    rollout=step.rollout,
+                    argv=step.argv,
+                    fix_argv=step.fix_argv,
+                    working_directory=step.working_directory,
+                )
+            )
             continue
-        if step.files is None:
-            raise ValueError(f"fixer {name!r} has no file scope")
         directory = step_directory(checkout, step.working_directory)
-        arguments = command_arguments(
-            step,
-            checkout,
-            config_path,
-            selected,
-            directory,
-            argv=step.fix_argv,
+        check_arguments = command_arguments(
+            step, checkout, config_path, selected, directory
         )
+        fix_arguments: tuple[str, ...] | None = None
+        if step.fix_argv is not None:
+            if step.files is None:
+                raise ValueError(f"fixer {name!r} has no file scope")
+            fix_arguments = tuple(
+                command_arguments(
+                    step,
+                    checkout,
+                    config_path,
+                    selected,
+                    directory,
+                    argv=step.fix_argv,
+                )
+            )
         entries.append(
             FixPlanEntry(
                 name=name,
                 kind="command",
+                rollout=step.rollout,
+                argv=step.argv,
+                check_argv=tuple(check_arguments),
                 fix_argv=step.fix_argv,
-                expanded_argv=tuple(arguments),
+                expanded_argv=fix_arguments,
                 working_directory=step.working_directory,
                 files=scoped_files,
             )

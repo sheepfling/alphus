@@ -88,7 +88,8 @@ tools = ["rumdl"]
 
 Install rumdl in that repository's development environment, then run `alphus`
 from the root. `alphus --profile markdown` selects the generated language
-profile, and `alphus --fix-plan` shows its available fixer. The selected native
+profile. `alphus --plan` previews the resolved steps and file matches;
+`alphus --fix-plan` shows available fixers. The selected native
 tool keeps its own configuration. Add `mdrepo`, `taplo`, or `prettier` to the
 list only when those tools are installed and needed. Add a custom
 `[[orchestration.steps]]` beside `tools` when the repository needs another

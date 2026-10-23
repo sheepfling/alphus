@@ -8,6 +8,7 @@ development environment. Copy
 to the repository root, install rumdl, and run:
 
 ```sh
+alphus --plan
 alphus
 alphus --fix-plan
 ```
@@ -45,7 +46,10 @@ name = "Python tests"
 argv = ["{python}", "-m", "pytest"]
 ```
 
-`check` runs selected tools first, then additional steps. Use the explicit
+`check` runs selected tools first, then additional steps. `alphus --plan`
+shows their resolved order, file matches, rollout, and fixability without
+running native commands. A scoped command with no matching files is shown as
+not applicable; an unscoped command still runs. Use the explicit
 policy when changing a selected tool's command or file scope, defining named
 profiles, or splitting steps into language files. The larger example below
 demonstrates that layout. Native-tool settings stay with each tool.
@@ -265,8 +269,8 @@ alphus --root /path/to/repository \
 
 Run only the coordinated documentation checks with `--profile docs`. The
 rumdl and mdrepo steps use Alphus's Git-aware file inventory, including tracked
-and non-ignored untracked Markdown files. An empty scope is a successful skipped
-step; otherwise file paths are passed as separate arguments.
+and non-ignored untracked Markdown files. An empty scope reports `not_applicable`
+without failing the profile; otherwise file paths are passed as separate arguments.
 
 Human output shows each step, normalized Alphus findings, and its exit status.
 `--json` writes one summary to stdout with per-step findings, raw command
