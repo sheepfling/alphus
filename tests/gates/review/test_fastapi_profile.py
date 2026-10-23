@@ -7,16 +7,25 @@ import json
 import subprocess
 import sys
 import tomllib
+from collections.abc import Sequence
 from pathlib import Path
-from typing import cast
+from typing import TypedDict, cast
+
+import pytest
 
 from alphus.config import CommandRunStep, load_config
 
-ROOT = Path(__file__).resolve().parents[3]
-EXAMPLE = ROOT / "examples/consumer/fastapi"
+
+class _RuffLocation(TypedDict):
+    row: int
 
 
-def _ruff_report(source: str) -> tuple[int, list[dict[str, object]]]:
+class _RuffFinding(TypedDict):
+    code: str
+    location: _RuffLocation
+
+
+def _ruff_report(example: Path, source: str) -> tuple[int, Sequence[_RuffFinding]]:
     result = subprocess.run(
         [
             sys.executable,
@@ -29,26 +38,21 @@ def _ruff_report(source: str) -> tuple[int, list[dict[str, object]]]:
             "json",
             source,
         ],
-        cwd=EXAMPLE,
+        cwd=example,
         capture_output=True,
         check=False,
         text=True,
     )
     findings = json.loads(result.stdout)
     assert isinstance(findings, list)
-    return result.returncode, cast(list[dict[str, object]], findings)
+    return result.returncode, cast(Sequence[_RuffFinding], findings)
 
 
-def _diagnostic_row(finding: dict[str, object]) -> int | None:
-    location = finding.get("location")
-    if not isinstance(location, dict):
-        return None
-    row = location.get("row")
-    return row if isinstance(row, int) else None
-
-
-def test_fastapi_profile_is_opt_in_and_does_not_offer_fixes() -> None:
-    config = load_config(EXAMPLE / "quality-gates.toml")
+def test_fastapi_profile_is_opt_in_and_does_not_offer_fixes(
+    pytestconfig: pytest.Config,
+) -> None:
+    example = pytestconfig.rootpath / "examples/consumer/fastapi"
+    config = load_config(example / "quality-gates.toml")
     orchestration = config.orchestration
     assert orchestration is not None
     profile = orchestration.resolve_profile("fastapi")
@@ -64,23 +68,31 @@ def test_fastapi_profile_is_opt_in_and_does_not_offer_fixes() -> None:
     assert config.checks.fastapi_practices is not None
 
 
-def test_native_profile_accepts_valid_fastapi_fixture() -> None:
-    status, findings = _ruff_report("src/routes.py")
+def test_native_profile_accepts_valid_fastapi_fixture(
+    pytestconfig: pytest.Config,
+) -> None:
+    example = pytestconfig.rootpath / "examples/consumer/fastapi"
+    status, findings = _ruff_report(example, "src/routes.py")
 
     assert status == 0
     assert findings == []
 
 
-def test_native_profile_reports_framework_async_typing_and_security_findings() -> None:
-    status, findings = _ruff_report("fixtures/violations.py")
-    repeated_status, repeated_findings = _ruff_report("fixtures/violations.py")
-    codes = {str(item["code"]) for item in findings}
+def test_native_profile_reports_framework_async_typing_and_security_findings(
+    pytestconfig: pytest.Config,
+) -> None:
+    example = pytestconfig.rootpath / "examples/consumer/fastapi"
+    status, findings = _ruff_report(example, "fixtures/violations.py")
+    repeated_status, repeated_findings = _ruff_report(example, "fixtures/violations.py")
+    codes = {finding["code"] for finding in findings}
     b008_lines = {
-        _diagnostic_row(item) for item in findings if item.get("code") == "B008"
+        finding["location"]["row"]
+        for finding in findings
+        if finding["code"] == "B008"
     }
-    fixture_lines = (EXAMPLE / "fixtures/violations.py").read_text(
-        encoding="utf-8"
-    ).splitlines()
+    fixture_lines = (
+        (example / "fixtures/violations.py").read_text(encoding="utf-8").splitlines()
+    )
     default_line = next(
         index
         for index, line in enumerate(fixture_lines, start=1)
@@ -109,15 +121,18 @@ def test_native_profile_reports_framework_async_typing_and_security_findings() -
     assert b008_lines == {default_line}
 
 
-def test_fastapi_source_checker_does_not_import_optional_frameworks() -> None:
-    metadata = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+def test_fastapi_source_checker_does_not_import_optional_frameworks(
+    pytestconfig: pytest.Config,
+) -> None:
+    root = pytestconfig.rootpath
+    metadata = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
     runtime_dependencies = metadata["project"]["dependencies"]
     assert all(
         not dependency.lower().startswith(("fastapi", "starlette", "httpx"))
         for dependency in runtime_dependencies
     )
 
-    source = ROOT / "src/alphus/gates/review/frameworks/fastapi_practices.py"
+    source = root / "src/alphus/gates/review/frameworks/fastapi_practices.py"
     module = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
     imported_roots = {
         alias.name.split(".", maxsplit=1)[0]
