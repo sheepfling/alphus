@@ -13,7 +13,8 @@ An additional Python 3.11 job runs the profile with every direct runtime and
 so the workflow contains no second list of dependency versions. The runner
 labels every stage and prints its command, exit code, duration, and captured
 output. Use `python scripts/ci.py --root . --output json` for one compact JSON
-event per stage; a failed stage includes its full stdout and stderr.
+event per stage; a failed stage includes the final 8,192 characters of stdout and stderr
+with truncation flags.
 
 ## Run the installed wheel against this checkout
 
@@ -105,7 +106,7 @@ The only non-empty rule exclusions are:
 
 Path handling has `exclude = []`; its `inspection_exclude = ["tests/**"]`
 suppresses only the string-inspection heuristic. Structural implicit-root
-checks still cover tests. `tests/test_path_discovery_engine.py` verifies that a
+checks still cover tests. `tests/gates/source/test_path_discovery_engine.py` verifies that a
 test file's `Path(__file__).resolve().parents[1]` finding remains while its
 `startswith("/")` inspection finding is suppressed.
 
@@ -143,7 +144,7 @@ diagnostics; Alphus does not duplicate or reinterpret them.
 ## C++ and Markdown self-checks
 
 The C++ engine fixtures now import the installed `alphus.gates.cpp` modules
-from `tests/test_cpp_quality_engine.py`. No duplicate executable scripts are
+from `tests/gates/cpp/test_cpp_quality_engine.py`. No duplicate executable scripts are
 kept in `quality_gates/bin`. The self-profile also runs the shared-utilities
 rule, which flags duplicate helpers, extra file hash implementations, and
 direct Git subprocess calls outside `alphus.support.git`. The path rule flags

@@ -21,6 +21,6 @@ python -m alphus.gates.cpp.cpp_artifact_quality --help
 python -m alphus.gates.cpp.worktree_hygiene --help
 ```
 
-From this checkout, run `python -m pytest tests/test_cpp_quality_engine.py`
-for the engine fixtures and `python -m pytest tests/test_cpp_quality.py`
+From this checkout, run `python -m pytest tests/gates/cpp/test_cpp_quality_engine.py`
+for the engine fixtures and `python -m pytest tests/gates/cpp/test_cpp_quality.py`
 for profile integration.

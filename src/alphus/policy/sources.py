@@ -7,7 +7,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import PurePosixPath
 from typing import Annotated, cast
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from alphus.policy.base import (
     StrictModel,
@@ -280,6 +280,9 @@ class PythonCliPolicy(PythonSourceScanPolicy):
     json_option: str
     json_serializers: Annotated[tuple[str, ...], Field(min_length=1)]
     verbose_option: str
+    output_option: str = "--output"
+    rich_output: str = "rich"
+    plain_output: str = "plain"
 
     @field_validator("typer_package", "rich_package")
     @classmethod
@@ -295,7 +298,7 @@ class PythonCliPolicy(PythonSourceScanPolicy):
             raise ValueError("CLI call names must be Python identifiers")
         return tuple(names)
 
-    @field_validator("json_option", "verbose_option")
+    @field_validator("json_option", "verbose_option", "output_option")
     @classmethod
     def validate_cli_options(cls, option: str) -> str:
         if not option.startswith("--") or any(
@@ -303,6 +306,19 @@ class PythonCliPolicy(PythonSourceScanPolicy):
         ):
             raise ValueError("CLI options must be long flags without whitespace")
         return option
+
+    @field_validator("rich_output", "plain_output")
+    @classmethod
+    def validate_output_styles(cls, style: str) -> str:
+        if not style or any(character.isspace() for character in style):
+            raise ValueError("CLI output styles must be non-empty tokens")
+        return style
+
+    @model_validator(mode="after")
+    def validate_distinct_output_styles(self) -> PythonCliPolicy:
+        if self.rich_output.casefold() == self.plain_output.casefold():
+            raise ValueError("Rich and plain CLI output styles must differ")
+        return self
 
 
 class NodeCliPolicy(SourceScanPolicy):

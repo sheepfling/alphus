@@ -20,6 +20,11 @@ python -m alphus.gates.cpp.cpp_artifact_quality check build/tests --policy quali
 
 Run the executable check after the full build to enforce fleet totals. A policy should be copied into the consuming project and calibrated for each build profile; the example's 512 MiB archive, 128 MiB executable, and 64 MiB debug limits are starting values, not universal limits. Use separate policies for Debug, RelWithDebInfo, and release or distribution builds. The check exits `0` on pass, `1` on a budget violation, and `2` on invalid input or a scanning error. An unavailable debug measurement violates any debug byte limit, so it fails closed with exit `1`. The checker prints each failed budget even when writing JSON to a file. Put these commands in CI after their respective build steps; CI should fail on either nonzero exit code.
 
+Add `--format rich` for a terminal table, `--format plain` for unstyled
+human output, or `--format json` for machine output. The default remains JSON
+without `--output` and plain when writing a JSON report artifact. The same
+report data and exit status are used in each mode.
+
 For a first look without a policy:
 
 ```shell

@@ -37,6 +37,7 @@ from alphus.support.data_access import (
 )
 from alphus.support.file_hash import sha256_file
 from alphus.support.git import git_output, run_git
+from alphus.support.reporting import OutputFormat, ReportLine, ReportView, emit_report
 
 FRAGMENT_SUFFIXES = frozenset({".inc", ".inl", ".ipp", ".tpp"})
 IMPLEMENTATION_SUFFIXES = frozenset({".c", ".cc", ".cpp", ".cxx"})
@@ -441,22 +442,26 @@ def _report(
     }
 
 
-def _emit(report: GateReport, output: Path | None) -> int:
-    encoded = json.dumps(report, indent=2, sort_keys=True) + "\n"
-    if output is None:
-        print(encoded, end="")
-    else:
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(encoded, encoding="utf-8")
-        print(
-            f"{report['gate']}: {'PASS' if report['passed'] else 'FAIL'}; "
-            f"findings={len(report['findings'])}; report={output}"
-        )
-        for item in report["findings"][:20]:
-            print(
-                f"  {item['severity'].upper()} {item['code']}: "
-                f"{item.get('path', '')} {item['detail']}"
+def _emit(
+    report: GateReport,
+    output: Path | None,
+    format: OutputFormat = OutputFormat.AUTO,
+) -> int:
+    view = ReportView(
+        report["gate"],
+        report["passed"],
+        f"findings={len(report['findings'])}",
+        tuple(
+            ReportLine(
+                code=item["code"],
+                message=item["detail"],
+                path=item.get("path", ""),
+                severity=item["severity"],
             )
+            for item in report["findings"][:20]
+        ),
+    )
+    emit_report(report, view, output, format)
     return 0 if report["passed"] else 1
 
 
@@ -2316,11 +2321,23 @@ def main(argv: Sequence[str] | None = None) -> int:
     manifest_command.add_argument("--input", action="append", required=True)
     manifest_command.add_argument("--require-clean", action="store_true")
     manifest_command.add_argument("--output", required=True, type=Path)
+    manifest_command.add_argument(
+        "--format",
+        type=OutputFormat,
+        choices=list(OutputFormat),
+        default=OutputFormat.AUTO,
+    )
     build_command = commands.add_parser("run-build")
     build_command.add_argument("--manifest", required=True, type=Path)
     build_command.add_argument("--run-id", required=True)
     build_command.add_argument("--cwd", type=Path, default=Path("."))
     build_command.add_argument("--output", required=True, type=Path)
+    build_command.add_argument(
+        "--format",
+        type=OutputFormat,
+        choices=list(OutputFormat),
+        default=OutputFormat.AUTO,
+    )
     build_command.add_argument("build_command", nargs=argparse.REMAINDER)
     for name in ("source", "graph", "tests", "package", "verdict"):
         child = commands.add_parser(name)
@@ -2334,6 +2351,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         child.add_argument("--config", required=True, type=Path)
         child.add_argument("--output", type=Path)
+        child.add_argument(
+            "--format",
+            type=OutputFormat,
+            choices=list(OutputFormat),
+            default=OutputFormat.AUTO,
+        )
         child.add_argument("--run-id")
         child.add_argument("--manifest", type=Path)
         if name == "tests":
@@ -2359,12 +2382,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.require_clean,
                 args.artifact_root,
             )
-            args.output.parent.mkdir(parents=True, exist_ok=True)
-            args.output.write_text(
-                json.dumps(manifest, indent=2, sort_keys=True) + "\n",
-                encoding="utf-8",
+            emit_report(
+                manifest,
+                ReportView("manifest", True, "created"),
+                args.output,
+                args.format,
             )
-            print(f"manifest: {args.output}")
             return 0
         if args.command == "run-build":
             command = args.build_command
@@ -2389,7 +2412,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.run_id,
             )
             report["manifest_sha256"] = manifest_digest
-            return _emit(report, args.output)
+            return _emit(report, args.output, args.format)
         section = _config(args.config, args.command)
         if args.command == "source":
             report = check_source(args.root, section, args.run_id)
@@ -2412,7 +2435,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             report = check_verdict(args.config, section, args.run_id, args.manifest)
         if args.manifest and args.command != "verdict":
             report["manifest_sha256"] = _manifest_binding(args.manifest, args.run_id)[1]
-        return _emit(report, args.output)
+        return _emit(report, args.output, args.format)
     except (
         OSError,
         ValueError,

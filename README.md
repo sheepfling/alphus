@@ -193,14 +193,14 @@ an already parsed Python `ast.Module`. The caller owns file discovery, parsing,
 scope, diagnostic wording, and the decision to reject a pattern. The query module
 does not load a repository, import inspected source, or read files.
 
-| API | Contract |
-| --- | --- |
-| `ImportAliases` | Frozen record with read-only module and symbol mappings |
-| `import_aliases` | Collect import spellings, including nested imports |
-| `canonical_expression_name` | Resolve a dotted expression using those mappings |
-| `qualified_call_lines` | Find calls to one canonical function or class |
-| `qualified_reference_lines` | Find matching Name/Attribute occurrences; sorted unique lines |
-| `registry_decorated_function_lines` | Find top-level sync/async callbacks for a registry factory |
+| API                                 | Contract                                                      |
+| ----------------------------------- | ------------------------------------------------------------- |
+| `ImportAliases`                     | Frozen record with read-only module and symbol mappings       |
+| `import_aliases`                    | Collect import spellings, including nested imports            |
+| `canonical_expression_name`         | Resolve a dotted expression using those mappings              |
+| `qualified_call_lines`              | Find calls to one canonical function or class                 |
+| `qualified_reference_lines`         | Find matching Name/Attribute occurrences; sorted unique lines |
+| `registry_decorated_function_lines` | Find top-level sync/async callbacks for a registry factory    |
 
 For example, a stored class-method reference is visible even without a call:
 
@@ -269,8 +269,9 @@ argv = ["ruff", "format", "--check", "{files}"]
 files = { include = ["**/*.py"], exclude = ["**/vendor/**"] }
 ```
 
-Add `--verbose` to write diagnostics to stderr. Human reports use Rich;
-`--json` emits one plain JSON value on stdout.
+Add `--verbose` to write diagnostics to stderr. Human reports use Rich by
+default; pass `--output plain` for unstyled text. `--json` emits one plain JSON
+value on stdout and is independent of the human output style.
 
 The generic Markdown checks include configured line-length and hard file-size
 limits. Python files support those checks plus the AST-based policy rules.

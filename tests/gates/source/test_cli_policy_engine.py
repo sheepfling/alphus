@@ -41,11 +41,13 @@ def test_python_cli_requires_every_contract_element() -> None:
         "    argparse.ArgumentParser().parse_args()\n"
     )
     issues = python_cli_issues(source, POLICY.python)
-    assert len(issues) == 5
+    assert len(issues) == 7
     assert any("Typer" in issue for issue in issues)
     assert any("Rich" in issue for issue in issues)
     assert any("--json" in issue for issue in issues)
     assert any("--verbose" in issue for issue in issues)
+    assert any("--output" in issue for issue in issues)
+    assert any("'rich'" in issue and "'plain'" in issue for issue in issues)
 
 
 def test_complete_python_cli_passes_static_contract() -> None:
@@ -55,8 +57,10 @@ def test_complete_python_cli_passes_static_contract() -> None:
         "import typer\n"
         "from rich.console import Console\n"
         "app = typer.Typer()\n"
+        'OUTPUT_STYLES = ["rich", "plain"]\n'
         'def main(json_output: bool = typer.Option(False, "--json"), '
-        'verbose: bool = typer.Option(False, "--verbose")) -> None:\n'
+        'verbose: bool = typer.Option(False, "--verbose"), '
+        'output: str = typer.Option("rich", "--output")) -> None:\n'
         "    if json_output:\n"
         '        typer.echo(json.dumps({"ok": True}))\n'
         "    else:\n"
@@ -65,6 +69,22 @@ def test_complete_python_cli_passes_static_contract() -> None:
         "    app()\n"
     )
     assert python_cli_issues(source, POLICY.python) == []
+
+
+def test_python_cli_must_offer_both_human_output_styles() -> None:
+    source = (
+        "import typer\n"
+        "app = typer.Typer()\n"
+        'def main(output: str = typer.Option("rich", "--output")) -> None:\n'
+        "    print(output)\n"
+        'if __name__ == "__main__":\n'
+        "    app()\n"
+    )
+
+    issues = python_cli_issues(source, POLICY.python)
+
+    assert "offer an explicit --output human output option" not in issues
+    assert any("'plain'" in issue for issue in issues)
 
 
 def test_importable_module_without_cli_is_not_flagged() -> None:

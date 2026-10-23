@@ -54,3 +54,20 @@ def test_ci_stage_success_is_readable(
     assert "==> Import:" in output
     assert "ok\n" in output
     assert "PASS Import (exit 0" in output
+
+
+def test_json_ci_failure_bounds_captured_logs(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(
+        ci.subprocess,
+        "run",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            ["tool"], 1, "x" * (ci.JSON_CAPTURE_LIMIT + 3), ""
+        ),
+    )
+    with pytest.raises(subprocess.CalledProcessError):
+        ci.run(Path("."), "tool", stage="Large failure", output="json")
+    event = json.loads(capsys.readouterr().out.splitlines()[-1])
+    assert len(event["stdout"]) == ci.JSON_CAPTURE_LIMIT
+    assert event["stdout_truncated"] is True

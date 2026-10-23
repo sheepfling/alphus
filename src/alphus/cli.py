@@ -9,14 +9,16 @@ import tomllib
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from contextlib import redirect_stderr, redirect_stdout
+from contextvars import ContextVar
 from dataclasses import asdict
 from io import StringIO
 from pathlib import Path
-from typing import Annotated, NamedTuple, cast
+from typing import Annotated, NamedTuple, TextIO, cast
 
 import typer
 from pydantic import ValidationError
 from rich.console import Console
+from rich.text import Text
 
 from alphus.config import QualityGateConfig, QualityRuleName, load_config
 from alphus.contracts.findings import (
@@ -36,6 +38,7 @@ from alphus.policy.catalog import RULE_SPECS
 from alphus.support.inventory import candidate_files
 
 QualityRule = QualityRuleName
+_OUTPUT_FORMAT: ContextVar[str] = ContextVar("alphus_output_format", default="rich")
 
 
 def _render_finding(finding: Finding) -> None:
@@ -67,8 +70,60 @@ app = typer.Typer(
 
 
 def _human_print(message: str) -> None:
-    """Render one human-facing line through Rich without markup interpretation."""
-    Console(markup=False, highlight=False, soft_wrap=True).print(message)
+    """Render one human-facing line in the selected terminal style."""
+    if _OUTPUT_FORMAT.get() == "plain":
+        print(message)
+        return
+    console = Console(
+        markup=False,
+        highlight=False,
+        soft_wrap=True,
+        color_system="auto" if _OUTPUT_FORMAT.get() == "rich" else None,
+    )
+    text = Text(message)
+    if _OUTPUT_FORMAT.get() == "rich":
+        first_word = message.partition(" ")[0].rstrip(":")
+        style = {
+            "ERROR": "bold red",
+            "FAIL": "bold red",
+            "WARNING": "bold yellow",
+            "CLEAN": "bold green",
+            "PASSED": "bold green",
+        }.get(first_word)
+        if style:
+            text.stylize(style, 0, len(first_word))
+    console.print(text)
+
+
+def _human_error(message: str) -> None:
+    """Render an unstyled diagnostic on stderr."""
+    Console(stderr=True, markup=False, highlight=False).print(message)
+
+
+class _HumanStream:
+    """Adapt orchestration's line-oriented text output to the Rich renderer."""
+
+    def __init__(self, *, stderr: bool = False) -> None:
+        self.stderr = stderr
+        self.pending = ""
+
+    def write(self, value: str) -> int:
+        self.pending += value
+        while "\n" in self.pending:
+            line, self.pending = self.pending.split("\n", maxsplit=1)
+            self._print(line)
+        return len(value)
+
+    def flush(self) -> None:
+        if self.pending:
+            self._print(self.pending)
+            self.pending = ""
+
+    def _print(self, message: str) -> None:
+        if self.stderr:
+            _human_error(message)
+        else:
+            _human_print(message)
 
 
 def _log_verbose(rule: QualityRule, root: Path, file_count: int) -> None:
@@ -99,7 +154,7 @@ def _load_policy(path: Path) -> QualityGateConfig:
         ValidationError,
         ValueError,
     ) as error:
-        typer.echo(f"Invalid quality policy {path}: {error}", err=True)
+        _human_error(f"Invalid quality policy {path}: {error}")
         raise typer.Exit(2) from error
 
 
@@ -415,7 +470,7 @@ def _execute_profile(
     config = _load_policy(resolved_config)
     policy = config.orchestration
     if policy is None:
-        typer.echo("The selected policy has no [orchestration] section.", err=True)
+        _human_error("The selected policy has no [orchestration] section.")
         return 2
     selected_profile = profile_name or policy.default_profile
     plan = policy.resolve_profile(selected_profile)
@@ -429,7 +484,7 @@ def _execute_profile(
                         )
                     config.checks.require_rule(step.rule)
         except MissingPolicyError as error:
-            typer.echo(str(error), err=True)
+            _human_error(str(error))
             return 2
 
     def run_rule(rule: QualityRule) -> RuleRunResult:
@@ -475,6 +530,16 @@ def _execute_profile(
         selected_profile,
         run_rule,
         json_output=json_output,
+        stdout=(
+            cast(TextIO, _HumanStream())
+            if _OUTPUT_FORMAT.get() == "rich" and not json_output
+            else sys.stdout
+        ),
+        stderr=(
+            cast(TextIO, _HumanStream(stderr=True))
+            if _OUTPUT_FORMAT.get() == "rich" and not json_output
+            else sys.stderr
+        ),
     )
 
 
@@ -494,7 +559,7 @@ def _execute_fix_profile(
     config = _load_policy(resolved_config)
     policy = config.orchestration
     if policy is None:
-        typer.echo("The selected policy has no [orchestration] section.", err=True)
+        _human_error("The selected policy has no [orchestration] section.")
         return 2
     selected_profile = profile_name or policy.default_profile
     try:
@@ -508,7 +573,7 @@ def _execute_fix_profile(
         if fix_steps:
             raise ValueError("--fix-step requires --apply-fixes")
     except (OSError, ValueError) as error:
-        typer.echo(str(error), err=True)
+        _human_error(str(error))
         return 2
     if json_output:
         typer.echo(
@@ -531,15 +596,15 @@ def _execute_fix_profile(
             )
         )
     else:
-        typer.echo(f"Fix plan for profile {selected_profile}:")
+        _human_print(f"Fix plan for profile {selected_profile}:")
         for entry in entries:
             if entry.fixable:
-                typer.echo(
+                _human_print(
                     f"FIXABLE {entry.name}: {len(entry.files)} file(s); "
                     f"argv={json.dumps(entry.fix_argv)}"
                 )
             else:
-                typer.echo(f"NO FIXER {entry.name}")
+                _human_print(f"NO FIXER {entry.name}")
     return 0
 
 
@@ -557,12 +622,12 @@ def _execute_plan_profile(
     config = _load_policy(resolved_config)
     policy = config.orchestration
     if policy is None:
-        typer.echo("The selected policy has no [orchestration] section.", err=True)
+        _human_error("The selected policy has no [orchestration] section.")
         return 2
     selected_profile = profile_name or policy.default_profile
     plan = policy.resolve_profile(selected_profile)
     if plan is None:
-        typer.echo(f"Unknown orchestration profile: {selected_profile}", err=True)
+        _human_error(f"Unknown orchestration profile: {selected_profile}")
         return 2
     try:
         for step in policy.steps:
@@ -574,7 +639,7 @@ def _execute_plan_profile(
                 config.checks.require_rule(step.rule)
         entries = resolve_fix_plan(checkout, resolved_config, policy, selected_profile)
     except (MissingPolicyError, OSError, ValueError) as error:
-        typer.echo(str(error), err=True)
+        _human_error(str(error))
         return 2
 
     by_name = {step.name: step for step in policy.steps}
@@ -603,16 +668,16 @@ def _execute_plan_profile(
         )
         return 0
 
-    typer.echo(
+    _human_print(
         f"Execution plan for profile {selected_profile} "
         f"(failure threshold={policy.failure_threshold}):"
     )
     if len(plan.profiles) > 1:
-        typer.echo(f"Profiles: {', '.join(plan.profiles)}")
+        _human_print(f"Profiles: {', '.join(plan.profiles)}")
     for entry in entries:
         step = by_name[entry.name]
         if step.kind == "rule":
-            typer.echo(f"{step.rollout.upper()} RULE {step.name}: {step.rule}")
+            _human_print(f"{step.rollout.upper()} RULE {step.name}: {step.rule}")
             continue
         scope = "unscoped" if step.files is None else f"{len(entry.files)} file(s)"
         label = (
@@ -621,8 +686,8 @@ def _execute_plan_profile(
             else step.rollout.upper()
         )
         fixer = ", fixer available" if entry.fixable else ""
-        typer.echo(f"{label} COMMAND {step.name}: {scope}{fixer}")
-        typer.echo(f"  check={json.dumps(step.argv)}")
+        _human_print(f"{label} COMMAND {step.name}: {scope}{fixer}")
+        _human_print(f"  check={json.dumps(step.argv)}")
     return 0
 
 
@@ -659,6 +724,14 @@ def _command(
         bool,
         typer.Option("--json", help="Emit one plain JSON value on stdout."),
     ] = False,
+    output_format: Annotated[
+        str,
+        typer.Option(
+            "--output",
+            help="Human-readable output style: rich (default) or plain.",
+            case_sensitive=False,
+        ),
+    ] = "rich",
     report: Annotated[
         bool,
         typer.Option("--report", help="Report findings without failing."),
@@ -685,6 +758,9 @@ def _command(
     ] = None,
 ) -> None:
     """Run the default profile from this repository, or select a rule/profile."""
+    if output_format.lower() not in {"rich", "plain"}:
+        raise typer.BadParameter("--output must be rich or plain")
+    _OUTPUT_FORMAT.set(output_format.lower())
     if plan:
         if (
             fix_plan
@@ -729,6 +805,7 @@ app.callback(invoke_without_command=True)(_command)
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the Typer command and return its process exit status."""
+    _OUTPUT_FORMAT.set("rich")
     try:
         app(args=list(argv) if argv is not None else None)
     except SystemExit as error:
@@ -738,6 +815,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return int(error.code)
         except (TypeError, ValueError):
             return 1
+    finally:
+        _OUTPUT_FORMAT.set("rich")
     return 0
 
 

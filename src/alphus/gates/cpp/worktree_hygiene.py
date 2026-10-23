@@ -7,7 +7,6 @@ insufficient evidence that a worktree can be discarded.
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import subprocess
 import sys
@@ -19,6 +18,7 @@ from pathlib import Path
 from typing import TypedDict
 
 from alphus.support.git import run_git
+from alphus.support.reporting import OutputFormat, ReportLine, ReportView, emit_report
 
 
 class WorktreeRecord(TypedDict):
@@ -281,6 +281,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--skip-size", action="store_true")
     parser.add_argument("--run-id", help="optional CI or local audit run identifier")
     parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--format",
+        type=OutputFormat,
+        choices=list(OutputFormat),
+        default=OutputFormat.AUTO,
+    )
     arguments = parser.parse_args(argv)
     try:
         repo = arguments.repo.resolve()
@@ -388,31 +394,23 @@ def main(argv: Sequence[str] | None = None) -> int:
             "unregistered_directories": unregistered,
             "worktrees": inspected,
         }
-        if arguments.output:
-            arguments.output.parent.mkdir(parents=True, exist_ok=True)
-            arguments.output.write_text(
-                json.dumps(report, indent=2) + "\n", encoding="utf-8"
-            )
-        print(
-            f"worktrees: {'PASS' if report['passed'] else 'FAIL'}; "
-            f"secondary={len(inspected)}; unregistered={len(unregistered)}; "
+        metrics = f"secondary={len(inspected)}; unregistered={len(unregistered)}; " + (
             f"logical GiB={total_bytes / 2**30:.2f}"
             if not arguments.skip_size
-            else f"worktrees: {'PASS' if report['passed'] else 'FAIL'}; "
-            f"secondary={len(inspected)}; unregistered={len(unregistered)}; size=skipped"
+            else "size=skipped"
         )
-        print(
-            f"scopes={report['metrics']['counts_by_scope']}; "
-            f"status={report['metrics']['counts_by_status']}"
-        )
-        for finding in findings:
-            print(f"ERROR {finding['code']}: {finding['detail']}")
+        details = [
+            (
+                f"scopes={report['metrics']['counts_by_scope']}; "
+                f"status={report['metrics']['counts_by_status']}"
+            )
+        ]
         for item in sorted(
             inspected, key=lambda value: value["logical_bytes"] or 0, reverse=True
         )[:10]:
             largest = next(iter(item["largest_top_level"].items()), None)
             dominant = f"; {largest[0]}={largest[1] / 2**30:.2f} GiB" if largest else ""
-            print(
+            details.append(
                 f"{(item['logical_bytes'] or 0) / 2**30:6.2f} GiB "
                 f"{item['status']:<7} reachable={item['head_reachable_from_base']} "
                 f"{item['path']}{dominant}"
@@ -420,10 +418,29 @@ def main(argv: Sequence[str] | None = None) -> int:
         for item in sorted(
             unregistered, key=lambda value: value["logical_bytes"] or 0, reverse=True
         )[:5]:
-            print(
+            details.append(
                 f"unregistered {(item['logical_bytes'] or 0) / 2**30:.2f} GiB "
                 f"git-marker={item['git_marker']} {item['path']}"
             )
+        emit_report(
+            report,
+            ReportView(
+                "worktrees",
+                report["passed"],
+                metrics,
+                tuple(
+                    ReportLine(
+                        code=finding["code"],
+                        message=finding["detail"],
+                        severity=finding["severity"],
+                    )
+                    for finding in findings
+                ),
+                tuple(details),
+            ),
+            arguments.output,
+            arguments.format,
+        )
         return 0 if report["passed"] else 1
     except (OSError, ValueError, RuntimeError) as error:
         print(f"worktree hygiene: {error}", file=sys.stderr)

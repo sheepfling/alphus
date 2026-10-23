@@ -253,3 +253,11 @@ Build and install the wheel outside the source checkout, then run it against a
 generic fixture. A Python-only profile must work without Node or npm. Native
 tool dependencies belong to the consumer's development setup, not to the
 `alphus` runtime dependencies.
+
+## Test layout
+
+Focused tests mirror the code they exercise: `tests/gates/source`,
+`tests/gates/repository`, `tests/gates/vcs`, and the other gate themes sit beside
+`tests/execution`, `tests/contracts`, and `tests/support`. Root-level tests
+cover integration across packages, self-profile behavior, and the CI runner.
+Run all of them with `python -m pytest tests`.

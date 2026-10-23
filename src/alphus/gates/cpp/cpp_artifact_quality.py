@@ -34,6 +34,7 @@ from alphus.support.native_artifacts import (
     artifact_kind,
     is_unix_executable,
 )
+from alphus.support.reporting import OutputFormat, ReportLine, ReportView, emit_report
 
 DEFAULT_INCLUDES = (
     "*.exe",
@@ -648,6 +649,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         child.add_argument("--run-id")
         child.add_argument("--manifest", type=Path)
         child.add_argument("--output", type=Path)
+        child.add_argument(
+            "--format",
+            type=OutputFormat,
+            choices=list(OutputFormat),
+            default=OutputFormat.AUTO,
+        )
         if command == "check":
             child.add_argument("--policy", required=True, type=Path)
             child.add_argument("--baseline", type=Path)
@@ -685,26 +692,27 @@ def main(argv: Sequence[str] | None = None) -> int:
                 else None
             )
             report["gate"] = evaluate(report, policy, baseline)
-        output = json.dumps(report, indent=2, sort_keys=True) + "\n"
-        if arguments.output:
-            arguments.output.parent.mkdir(parents=True, exist_ok=True)
-            arguments.output.write_text(output, encoding="utf-8")
-            totals = report["totals"]
-            gate = report.get("gate")
-            gate_findings = gate["findings"] if gate is not None else []
-            print(
+        totals = report["totals"]
+        gate = report.get("gate")
+        gate_findings = gate["findings"] if gate is not None else []
+        passed = gate["passed"] if gate is not None else True
+        view = ReportView(
+            "artifacts",
+            passed,
+            (
                 f"artifacts={totals['count']} executables={totals['executable_count']} "
-                f"bytes={totals['bytes']} "
-                f"findings={len(gate_findings)} report={arguments.output}"
-            )
-            for finding in gate_findings:
-                location = f" {finding['path']}" if "path" in finding else ""
-                print(
-                    f"FAIL {finding['code']}{location}: "
-                    f"observed={finding['observed']} limit={finding['limit']}"
+                f"bytes={totals['bytes']} findings={len(gate_findings)}"
+            ),
+            tuple(
+                ReportLine(
+                    code=finding["code"],
+                    message=f"observed={finding['observed']} limit={finding['limit']}",
+                    path=finding.get("path", ""),
                 )
-        else:
-            print(output, end="")
+                for finding in gate_findings
+            ),
+        )
+        emit_report(report, view, arguments.output, arguments.format)
         return 0 if report.get("gate", {}).get("passed", True) else 1
     except (OSError, ValueError, KeyError, json.JSONDecodeError) as error:
         print(f"artifact quality: {error}", file=sys.stderr)

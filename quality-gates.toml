@@ -95,6 +95,27 @@ exclude = []
 extensions = [".py"]
 exclude = []
 
+[checks.cli]
+
+[checks.cli.python]
+extensions = [".py"]
+exclude = [
+  "src/alphus/__main__.py",
+  "src/alphus/gates/**",
+  "scripts/**",
+  "tests/**",
+]
+typer_package = "typer"
+typer_calls = ["Typer", "run"]
+rich_package = "rich"
+rich_calls = ["Console", "print"]
+json_option = "--json"
+json_serializers = ["dumps", "model_dump_json"]
+verbose_option = "--verbose"
+output_option = "--output"
+rich_output = "rich"
+plain_output = "plain"
+
 [checks.git]
 attributes = [
   { path = "javascript/example.js", attribute = "eol", value = "lf" },
@@ -168,6 +189,11 @@ rule = "shared-utilities"
 kind = "rule"
 name = "Runtime type usage"
 rule = "runtime-types"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "CLI contracts"
+rule = "cli"
 
 [[orchestration.steps]]
 kind = "rule"
@@ -295,7 +321,7 @@ files = { include = ["**/*.json", "*.json"] }
 name = "python-policy"
 steps = [
   "Package boundaries", "Target audit isolation", "Python structure", "Shared utilities", "Runtime type usage",
-  "JSON structure", "Output escaping", "Path handling", "Line length",
+  "CLI contracts", "JSON structure", "Output escaping", "Path handling", "Line length",
   "File size", "Comment markers",
 ]
 

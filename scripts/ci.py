@@ -38,6 +38,7 @@ def dependency_floors(pyproject: Path) -> tuple[str, ...]:
 
 
 OutputMode = Literal["plain", "json"]
+JSON_CAPTURE_LIMIT = 8192
 
 
 def _record(mode: OutputMode, event: str, **fields: object) -> None:
@@ -80,14 +81,16 @@ def run(root: Path, *arguments: str, stage: str, output: OutputMode) -> None:
             print(result.stdout, end="", flush=True)
         if result.stderr:
             print(result.stderr, end="", file=sys.stderr, flush=True)
-    fields: dict[str, str | int | float] = {
+    fields: dict[str, str | int | float | bool] = {
         "stage": stage,
         "exit_code": result.returncode,
         "duration_seconds": duration,
     }
     if result.returncode and output == "json":
-        fields["stdout"] = result.stdout
-        fields["stderr"] = result.stderr
+        fields["stdout"] = result.stdout[-JSON_CAPTURE_LIMIT:]
+        fields["stderr"] = result.stderr[-JSON_CAPTURE_LIMIT:]
+        fields["stdout_truncated"] = len(result.stdout) > JSON_CAPTURE_LIMIT
+        fields["stderr_truncated"] = len(result.stderr) > JSON_CAPTURE_LIMIT
     _record(output, "finish", **fields)
     if result.returncode:
         raise subprocess.CalledProcessError(result.returncode, arguments)

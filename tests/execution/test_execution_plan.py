@@ -44,12 +44,16 @@ def test_plan_shows_native_and_custom_steps_without_running_them(
     assert smoke["fixable"] is False
     assert not (tmp_path / "ran").exists()
 
-    assert main(arguments) == 0
+    assert main([*arguments, "--output", "plain"]) == 0
     human = capsys.readouterr().out
     assert "MAINLINE COMMAND Markdown style: 1 file(s), fixer available" in human
     assert "NOT APPLICABLE COMMAND JSON format: 0 file(s)" in human
     assert "MAINLINE COMMAND Local smoke: unscoped" in human
     assert not (tmp_path / "ran").exists()
+
+
+def test_output_option_rejects_unknown_human_format() -> None:
+    assert main(["--output", "compact"]) == 2
 
 
 def test_plan_rejects_missing_selected_rule_policy(

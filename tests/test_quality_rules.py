@@ -843,5 +843,5 @@ def test_cli_policy_cli_uses_configured_contract_and_manifest(
     ]
 
     assert main(arguments) == 1
-    assert len(json.loads(capsys.readouterr().out)) == 5
+    assert len(json.loads(capsys.readouterr().out)) == 7
     assert main([*arguments, "--report"]) == 0

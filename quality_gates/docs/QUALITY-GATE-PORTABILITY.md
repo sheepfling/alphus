@@ -63,7 +63,7 @@ use `run-build` to capture the real build exit code, or emit the same report
 from its CI runner. Each consumer still needs its actual selected targets and
 an adapter fixture using its own build and test output formats.
 
-Run `python -m pytest tests/test_cpp_quality_engine.py` before changing the
+Run `python -m pytest tests/gates/cpp/test_cpp_quality_engine.py` before changing the
 checker. The fixtures cover normalized reports, CMake File API, CMake cache,
 CTest/JUnit input, the build-command wrapper, and missing or contradictory
 evidence. They use a synthetic source-state provider so they can run without

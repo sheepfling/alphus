@@ -33,6 +33,16 @@ The composed `cpp` profile runs both. `--json` retains each checker report in
 the command step's `stdout`, reports each exit code, and returns a combined
 profile status. A nonzero native gate exit fails the profile.
 
+Each installed C++ command supports `--format plain`, `--format rich`, and
+`--format json`. Without an explicit format, commands print JSON when no
+`--output` artifact path is given and a plain summary when a JSON artifact is
+written. All three modes use the same report data and exit status. For example:
+
+```shell
+python -m alphus.gates.cpp.cpp_artifact_quality scan build --no-sections --format rich
+python -m alphus.gates.cpp.cpp_artifact_quality scan build --no-sections --format json
+```
+
 The supplied source gate checks C/C++ file ownership, expanded implementation
 size, and single-consumer fragments. The artifact gate inventories executables
 and libraries and can enforce size budgets, debug-section limits, and
@@ -67,6 +77,6 @@ portability guide describes CMake File API, CTest/JUnit, installed-package,
 and verdict inputs, including the evidence required for them to pass.
 
 The C++ engine fixture suite tests the installed modules directly. Run it with
-`python -m pytest tests/test_cpp_quality_engine.py` from the
+`python -m pytest tests/gates/cpp/test_cpp_quality_engine.py` from the
 Alphus checkout. The Alphus integration tests exercise positive and negative
 source and artifact profiles against consumer fixtures.
