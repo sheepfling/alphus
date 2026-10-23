@@ -24,8 +24,16 @@ fix it. Start with one `quality-gates.toml`; split language steps into
   settings. Both run from the repository root and read native project config.
 
 Install and pin the tools named by the selected profile through the consumer's
-normal development or CI dependency setup. Alphus does not install native
-tools as runtime dependencies. Use `{python} -m <tool>` for a Python tool that
+normal development or CI dependency setup. For the standard Python recipe,
+the `python` extra installs Ruff, Pyright, and pytest alongside Alphus:
+
+```sh
+python -m pip install -e "/path/to/alphus[python]"
+```
+
+For a Git install, pin the Alphus commit and request the same extra as shown in
+the [README](../README.md). Other native tools remain individually selected.
+Use `{python} -m <tool>` for a Python tool that
 must run in Alphus's interpreter, and a project-pinned executable for tools
 that are not Python packages. A missing executable fails its step visibly.
 

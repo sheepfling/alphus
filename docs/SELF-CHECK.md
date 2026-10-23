@@ -26,7 +26,7 @@ mkdir -p "$work/wheels"
 python3 -m pip wheel --no-deps --wheel-dir "$work/wheels" "$repo"
 python3 -m venv "$work/venv"
 wheel="$(find "$work/wheels" -maxdepth 1 -name 'alphus-*.whl' -print -quit)"
-"$work/venv/bin/python" -m pip install "$wheel" 'pyright>=1.1.414,<2' 'pytest>=8,<10' 'ruff>=0.16,<1'
+"$work/venv/bin/python" -m pip install "$wheel[python]"
 
 (
   cd "$work"
@@ -37,8 +37,8 @@ wheel="$(find "$work/wheels" -maxdepth 1 -name 'alphus-*.whl' -print -quit)"
 )
 ```
 
-The Pyright, pytest, and Ruff version ranges match the `dev` extra in `pyproject.toml`.
-Pip installs the wheel's runtime requirements alongside those tools. The
+The `python` extra supplies Pyright, pytest, and Ruff in the same environment as
+the installed wheel. Pip also installs the wheel's runtime requirements. The
 profile includes Ruff lint, formatting, strict Pyright, and pytest.
 Its Ruff lint and format steps also declare file-scoped fix commands. They
 are visible through `--fix-plan` and run only through `--apply-fixes` with

@@ -41,11 +41,11 @@ The same install also provides `alphus-stub-quality` and
 
 ## Develop Alphus
 
-Install the package and its Python-only development tools in your active
+Install the package and its Python quality tools in your active
 environment:
 
 ```sh
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[python]"
 ```
 
 Run the self-check profile from the repository root. It applies Alphus's
@@ -92,8 +92,16 @@ profile. `alphus --plan` previews the resolved steps and file matches;
 `alphus --fix-plan` shows available fixers. The selected native
 tool keeps its own configuration. A Python repository can start with
 [`examples/python/quality-gates.toml`](examples/python/quality-gates.toml):
-`tools = ["ruff", "pyright", "pytest"]`. Install those tools in the
-consumer's development environment. Ruff supplies lint and format steps;
+`tools = ["ruff", "pyright", "pytest"]`. Install the Python bundle in the
+consumer's development environment from a local checkout:
+
+```sh
+python -m pip install -e "/path/to/alphus[python]"
+```
+
+For a pinned Git install, use
+`"alphus[python] @ git+https://github.com/sheepfling/alphus.git@<commit-sha>"`
+in the install command above. Ruff supplies lint and format steps;
 Pyright and pytest use the repository's native settings. Add `mdrepo`, `taplo`,
 or `prettier` only when those tools are installed and needed. Add a custom
 `[[orchestration.steps]]` beside `tools` when the repository needs another

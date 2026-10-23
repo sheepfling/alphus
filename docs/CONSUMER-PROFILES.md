@@ -32,7 +32,10 @@ fixer. Alphus supplies a default `check` profile plus language profiles. The
 [two-line Python example](../examples/python/quality-gates.toml) selects Ruff
 lint and format, Pyright, and pytest. Ruff's file-scoped invocations honor its
 native exclusions; Pyright and pytest use their project configuration. Install
-only the tools you select. Add a `[files]` inventory when selecting an
+the Python set with `python -m pip install -e "/path/to/alphus[python]"`
+from a local checkout. The extra installs Ruff, Pyright, and pytest into
+Alphus's interpreter; the repository can still pin them to narrower versions.
+Install only the tools you select. Add a `[files]` inventory when selecting an
 Alphus-owned `kind = "rule"` step; each file-scoped command declares its own
 `files` pattern beside its argv. The [subtool guide](SUBTOOLS.md) explains
 config ownership, file scope, check/fix pairing, and Markdown rule overlap.
