@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 QualityRuleName: TypeAlias = Literal[
     "file-size",
+    "comment-markers",
     "line-length",
     "json-structure",
     "output-escaping",

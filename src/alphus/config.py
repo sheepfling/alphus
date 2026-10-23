@@ -53,6 +53,7 @@ from alphus.policy.review import (
 )
 from alphus.policy.sources import (
     CliPolicy,
+    CommentMarkerPolicy,
     FileInventoryPolicy,
     FileSizePolicy,
     LineLengthPolicy,
@@ -73,6 +74,7 @@ __all__ = [
     "CallableRegistryPolicy",
     "CheckPolicies",
     "CliPolicy",
+    "CommentMarkerPolicy",
     "CommandRunStep",
     "DependencyLockPolicy",
     "FileInventoryPolicy",

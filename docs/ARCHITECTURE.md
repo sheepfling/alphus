@@ -47,8 +47,9 @@ language neutral.
 - `alphus.gates.repository` owns architecture, package, dependency-lock, and
   repository-layout checks. Its runner mapping adds related graph, version,
   and callable-registry findings to the package-boundary selector.
-- `alphus.gates.hygiene` owns file-size, line-length, and shared-utility
-  checks.
+- `alphus.gates.hygiene` owns file-size, line-length, comment-marker, and
+  shared-utility checks. Comment markers use language-aware comment scanning
+  while retaining one portable finding contract.
 - `alphus.gates.stubs` owns the installed stub-package workflow and fixture
   controller.
 - `alphus.gates.python` owns the installed-package import smoke workflow

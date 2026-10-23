@@ -23,6 +23,7 @@ class RuleSpec:
 RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
     {
         "file-size": RuleSpec("file_size", "findings"),
+        "comment-markers": RuleSpec("comment_markers", "findings"),
         "line-length": RuleSpec("line_length", "findings"),
         "json-structure": RuleSpec("json_structure", "findings"),
         "output-escaping": RuleSpec("output_escaping", "findings"),

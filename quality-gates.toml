@@ -15,6 +15,14 @@ initializer_name = "__init__.py"
 initializer_limit = 100
 exclude = []
 
+[checks.comment_markers]
+extensions = [
+  ".py", ".pyi", ".toml", ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx",
+  ".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".java",
+]
+markers = ["TODO", "FIXME", "HACK", "XXX", "XXXX"]
+exclude = []
+
 [checks.line_length]
 exclude = []
 
@@ -155,6 +163,11 @@ name = "File size"
 rule = "file-size"
 
 [[orchestration.steps]]
+kind = "rule"
+name = "Comment markers"
+rule = "comment-markers"
+
+[[orchestration.steps]]
 kind = "command"
 name = "Python lint"
 argv = [
@@ -220,7 +233,7 @@ name = "python-policy"
 steps = [
   "Package boundaries", "Target audit isolation", "Python structure", "Runtime type usage",
   "JSON structure", "Output escaping", "Path handling", "Line length",
-  "File size",
+  "File size", "Comment markers",
 ]
 
 [[orchestration.profiles]]

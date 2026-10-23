@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from pathlib import PurePosixPath
 from typing import Annotated, cast
@@ -24,6 +25,64 @@ class FileInventoryPolicy(StrictModel):
     @field_validator("include", "exclude")
     @classmethod
     def validate_patterns(cls, patterns: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(patterns)
+
+
+class CommentMarkerPolicy(StrictModel):
+    """Comment syntaxes and temporary-work words selected by a consumer."""
+
+    extensions: Annotated[tuple[str, ...], Field(min_length=1)]
+    markers: Annotated[tuple[str, ...], Field(min_length=1)]
+    exclude: Annotated[tuple[str, ...], Field(default_factory=tuple)]
+
+    @field_validator("extensions")
+    @classmethod
+    def validate_extensions(cls, extensions: Sequence[str]) -> tuple[str, ...]:
+        selected = validate_extensions(
+            extensions,
+            "comment-marker extensions must be lowercase suffixes",
+            require_one=True,
+        )
+        supported = {
+            ".py",
+            ".pyi",
+            ".toml",
+            ".js",
+            ".jsx",
+            ".mjs",
+            ".cjs",
+            ".ts",
+            ".tsx",
+            ".c",
+            ".cc",
+            ".cpp",
+            ".cxx",
+            ".h",
+            ".hh",
+            ".hpp",
+            ".hxx",
+            ".java",
+        }
+        if any(extension not in supported for extension in selected):
+            raise ValueError(
+                "comment-marker extensions must use a supported comment syntax"
+            )
+        return selected
+
+    @field_validator("markers")
+    @classmethod
+    def validate_markers(cls, markers: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", marker) is None for marker in markers
+        ):
+            raise ValueError("comment markers must be non-empty identifier-like words")
+        if len({marker.casefold() for marker in markers}) != len(markers):
+            raise ValueError("comment markers must be unique ignoring case")
+        return tuple(markers)
+
+    @field_validator("exclude")
+    @classmethod
+    def validate_exclusions(cls, patterns: Sequence[str]) -> tuple[str, ...]:
         return validate_patterns(patterns)
 
 

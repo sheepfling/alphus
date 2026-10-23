@@ -36,6 +36,7 @@ from alphus.policy.review import (
 )
 from alphus.policy.sources import (
     CliPolicy,
+    CommentMarkerPolicy,
     FileInventoryPolicy,
     FileSizePolicy,
     LineLengthPolicy,
@@ -52,6 +53,7 @@ class CheckPolicies(StrictModel):
     """Settings for the currently available source gates."""
 
     file_size: FileSizePolicy | None = None
+    comment_markers: CommentMarkerPolicy | None = None
     line_length: LineLengthPolicy | None = None
     json_structure: SourceScanPolicy | None = None
     output_escaping: SourceScanPolicy | None = None

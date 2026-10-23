@@ -21,6 +21,7 @@ def test_self_check_enforces_review_and_repository_toml() -> None:
         "Python types",
         "Python package imports",
         "Python compatibility imports",
+        "Comment markers",
         "Numeric review",
         "Test review",
         "Input contract review",

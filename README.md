@@ -198,6 +198,14 @@ Add `--verbose` to write diagnostics to stderr. Human reports use Rich;
 
 The generic Markdown checks include configured line-length and hard file-size
 limits. Python files support those checks plus the AST-based policy rules.
+The `comment-markers` rule can reject configurable temporary-work words in
+Python, TOML, JavaScript, TypeScript, C/C++, and Java comments. It ignores
+strings and reports file and line; add its `[checks.comment_markers]` policy
+and a rule step to a profile to enable it. Alphus selects this rule in its own
+`check` profile.
+Python comments use Python's tokenizer. The JavaScript and C/C++ scanner is
+lexical; it does not fully parse regex literals or template interpolation, so
+native language lint remains useful alongside this gate.
 Markdown link checkers and formatters can be configured as command steps with
 their native arguments and file patterns; reusable support stays in this
 package, while each repository supplies its own tool selection and scope.

@@ -89,7 +89,10 @@ def test_gate_themes_own_their_runner_mappings() -> None:
                 "repository-layout",
             },
         ),
-        (HYGIENE_RULE_RUNNERS, {"file-size", "line-length", "shared-utilities"}),
+        (
+            HYGIENE_RULE_RUNNERS,
+            {"file-size", "line-length", "shared-utilities", "comment-markers"},
+        ),
     )
     for runners, expected in themes:
         assert set(runners) == expected

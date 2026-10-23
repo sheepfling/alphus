@@ -158,6 +158,12 @@ def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
         _human_print(f"Module roles: {len(findings)} violation(s)")
         _render_severity_totals(findings)
         return
+    if rule == "comment-markers":
+        for finding in findings:
+            _render_finding(finding)
+        _human_print(f"Comment markers: {len(findings)} violation(s)")
+        _render_severity_totals(findings)
+        return
     for finding in findings:
         _render_finding(finding)
     _human_print(f"File size: {len(findings)} violation(s)")
