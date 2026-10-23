@@ -114,10 +114,25 @@ class InputContractPolicy(PythonSourceScanPolicy):
 
 
 class PydanticPracticePolicy(PythonSourceScanPolicy):
-    """Opt-in review of model mutability and dump/revalidation flows."""
+    """Opt-in review of Pydantic model validation and declaration practices."""
 
     require_explicit_frozen: bool = False
     report_dump_revalidation: bool = True
+    report_deprecated_v1_apis: bool = False
+    report_unvalidated_construct: bool = False
+    report_unvalidated_copy_update: bool = False
+    report_validator_fallthrough: bool = False
+    report_field_positional_default: bool = False
+    report_external_model_docs: bool = False
+    external_model_names: tuple[str, ...] = ()
+
+    @field_validator("external_model_names")
+    @classmethod
+    def validate_external_model_names(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("external model names must be Python identifiers")
+        require_unique(values, "external model names must be unique")
+        return tuple(values)
 
 
 class ErrorCodeCallSpec(StrictModel):

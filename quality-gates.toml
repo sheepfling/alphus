@@ -112,6 +112,15 @@ exclude = []
 [checks.pydantic_practices]
 extensions = [".py"]
 exclude = []
+report_dump_revalidation = true
+require_explicit_frozen = false
+report_deprecated_v1_apis = false
+report_unvalidated_construct = false
+report_unvalidated_copy_update = false
+report_validator_fallthrough = false
+report_field_positional_default = false
+report_external_model_docs = false
+external_model_names = []
 
 [checks.fastapi_practices]
 extensions = [".py"]

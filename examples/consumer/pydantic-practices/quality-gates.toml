@@ -1,0 +1,31 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py"]
+exclude = []
+
+[checks.pydantic_practices]
+extensions = [".py"]
+exclude = []
+report_dump_revalidation = true
+require_explicit_frozen = false
+report_deprecated_v1_apis = true
+report_unvalidated_construct = true
+report_unvalidated_copy_update = true
+report_validator_fallthrough = true
+report_field_positional_default = true
+report_external_model_docs = true
+external_model_names = ["PublicRequest"]
+
+[orchestration]
+default_profile = "pydantic"
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Pydantic practices"
+rule = "pydantic-practices"
+
+[[orchestration.profiles]]
+name = "pydantic"
+steps = ["Pydantic practices"]
