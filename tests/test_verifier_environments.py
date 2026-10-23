@@ -18,6 +18,7 @@ from alphus.gates.stubs.environments import (
     probe_python,
 )
 from alphus.gates.stubs.typing_fixtures import CHECKERS, build_command
+from alphus.support.platform_utils import is_windows
 
 
 def test_fixture_cli_rejects_language_version_that_disagrees_with_target(
@@ -134,7 +135,7 @@ def test_probe_preserves_virtualenv_instead_of_resolving_python_symlink(
     subprocess.run(
         [sys.executable, "-m", "venv", "--without-pip", str(venv)], check=True
     )
-    binary = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    binary = venv / ("Scripts/python.exe" if is_windows() else "bin/python")
     runtime = probe_python(str(binary))
     assert Path(runtime.prefix).samefile(venv)
     assert Path(runtime.executable).parent.samefile(binary.parent)

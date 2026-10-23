@@ -43,7 +43,7 @@ pythonpath = ["src"]
 known-first-party = ["alphus", "alphus_stub_quality"]
 
 [tool.pyright]
-include = ["src"]
+include = ["src", "scripts"]
 extraPaths = ["src"]
 pythonVersion = "3.11"
 typeCheckingMode = "strict"

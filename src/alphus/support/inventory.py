@@ -2,33 +2,26 @@
 
 from __future__ import annotations
 
-import subprocess
 from fnmatch import fnmatchcase
 from functools import cache
 from pathlib import Path, PurePosixPath
 
 from alphus.config import FileInventoryPolicy
+from alphus.support.git import run_git
 
 
 def _git_ls_files(checkout: Path, *options: str) -> bytes:
     """Read Git's inventory or explain why it cannot be read."""
     try:
-        result = subprocess.run(
-            ["git", "ls-files", *options, "-z"],
-            cwd=checkout,
-            capture_output=True,
-            check=True,
-        )
-    except FileNotFoundError as error:
+        result = run_git(checkout, "ls-files", *options, "-z")
+    except OSError as error:
         raise OSError(
             "Git is required for Alphus file inventory; install Git or use a "
             "profile without Git-backed rules"
         ) from error
-    except subprocess.CalledProcessError as error:
-        detail = (error.stderr or b"").decode("utf-8", errors="replace").strip()
-        raise OSError(
-            f"Git file inventory failed for {checkout}: {detail or error}"
-        ) from error
+    if result.returncode:
+        detail = result.stderr.decode("utf-8", errors="replace").strip()
+        raise OSError(f"Git file inventory failed for {checkout}: {detail}")
     return result.stdout
 
 

@@ -18,6 +18,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TypedDict
 
+from alphus.support.git import run_git
+
 
 class WorktreeRecord(TypedDict):
     path: str
@@ -83,12 +85,7 @@ class WorktreeReport(TypedDict):
 def _git(
     repo: Path, *arguments: str, cwd: Path | None = None
 ) -> subprocess.CompletedProcess[bytes]:
-    return subprocess.run(
-        ["git", *arguments],
-        cwd=cwd or repo,
-        capture_output=True,
-        check=False,
-    )
+    return run_git(cwd or repo, *arguments)
 
 
 def _registered(repo: Path) -> list[WorktreeRecord]:

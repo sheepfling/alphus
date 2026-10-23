@@ -28,7 +28,7 @@ from alphus.execution.results import (
 )
 from alphus.gates.hygiene.rules import check_file_size, check_line_length
 from alphus.gates.source import runners as source_runners
-from alphus.support import inventory
+from alphus.support import git, inventory
 from alphus.support.inventory import candidate_files, matches_path, tracked_files
 
 POLICY = """schema_version = 1
@@ -320,7 +320,7 @@ def test_inventory_explains_missing_git(
     def missing_git(*_args: object, **_kwargs: object) -> None:
         raise FileNotFoundError("git")
 
-    monkeypatch.setattr(inventory.subprocess, "run", missing_git)
+    monkeypatch.setattr(git.subprocess, "run", missing_git)
     with pytest.raises(OSError, match="Git is required for Alphus file inventory"):
         reader(tmp_path)
 

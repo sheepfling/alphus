@@ -24,6 +24,7 @@ boundaries, plus package metadata and the module entry point.
 `src/alphus_stub_quality/` contains the small Python 3.10 audit helpers copied
 into isolated target environments. It ships in the same Alphus wheel because
 the Python 3.10 target cannot import the Python 3.11+ checker. See the
+[documentation map](docs/README.md) for the guides and the
 [architecture guide](docs/ARCHITECTURE.md) for the dependency map.
 
 ## Install

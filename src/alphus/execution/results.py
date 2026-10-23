@@ -33,6 +33,7 @@ class _SharedUtilitiesWire(BaseModel):
     duplicate_groups: tuple[tuple[str, ...], ...]
     failed: bool
     file_hash_implementations: tuple[str, ...]
+    direct_git_calls: tuple[str, ...] = ()
 
 
 _FINDINGS: TypeAdapter[list[Finding]] = TypeAdapter(list[Finding])
@@ -85,6 +86,7 @@ def _style_diagnostics(
 def _shared_diagnostics(
     groups: Sequence[Sequence[str]],
     hash_implementations: Sequence[str],
+    direct_git_calls: Sequence[str],
     *,
     failed: bool,
 ) -> tuple[Diagnostic, ...]:
@@ -107,6 +109,14 @@ def _shared_diagnostics(
                 ),
             )
         )
+    diagnostics.extend(
+        Diagnostic(
+            source="alphus",
+            rule_id="alphus/python/none/maintainability/direct-git-subprocess",
+            message=f"Git subprocess bypasses shared adapter: {location}",
+        )
+        for location in direct_git_calls
+    )
     if failed and not diagnostics:
         diagnostics.append(
             Diagnostic(
@@ -134,6 +144,7 @@ def diagnostics_from_output(
     return _shared_diagnostics(
         report.duplicate_groups,
         report.file_hash_implementations,
+        report.direct_git_calls,
         failed=report.failed,
     )
 
@@ -153,6 +164,7 @@ def diagnostics_from_json(
     return _shared_diagnostics(
         report.duplicate_groups,
         report.file_hash_implementations,
+        report.direct_git_calls,
         failed=report.failed,
     )
 

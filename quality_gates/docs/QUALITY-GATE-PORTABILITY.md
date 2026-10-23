@@ -1,24 +1,23 @@
 # Porting the quality gates to another C++ consumer
 
-The reusable checkers are `quality_gates/bin/cpp_artifact_quality.py`,
-`quality_gates/bin/cpp_common_quality.py`, and `quality_gates/bin/worktree_hygiene.py`. They use the
-Python standard library and accept consumer supplied evidence and policies.
-Copy them with calibrated copies of
+The reusable checkers ship in the Alphus distribution under
+`alphus.gates.cpp`. Install Alphus in the consumer quality environment and
+copy calibrated copies of
 [`cpp-artifact-policy.example.json`](../examples/cpp-artifact-policy.example.json),
 [`cpp-static-archive-policy.example.json`](../examples/cpp-static-archive-policy.example.json),
 and [`cpp-common-quality.example.json`](../examples/cpp-common-quality.example.json).
 The examples intentionally fail until the consumer supplies real evidence,
 paths, and limits. Keep each consumer's build, test, and package adapters outside this directory.
 
-| Gate | Portable input | Consumer supplies |
-| --- | --- | --- |
-| Source ownership | Repository root and source policy | Include scope, size limits, documented growth guards |
-| Artifact size | Output directory, optional `objdump`, size policy | Profile-specific byte and count budgets, comparable baseline |
-| Build graph | Normalized target JSON, or CMake File API | Target IDs, types, compiled source counts, dependency IDs, optional compile fanout report |
-| Test traceability | Case manifest, discovered-name JSON, JUnit or normalized execution JSON | Real selectors, source anchors, mapping IDs or internal classification |
-| Installed package | Install prefix, binding JSON or CMake cache, consumer result | Required files, package path keys, unchanged binary hash and result evidence |
-| Worktree hygiene | Git repository and labeled dedicated storage roots | Workstation count and byte budgets, known checkout locations, owner-specific archive procedure |
-| Verdict | Required gate reports and build manifest | Build/test outcome report, run ID, source root, freshness window, exact coverage comparisons |
+| Gate              | Portable input                                                          | Consumer supplies                                                                              |
+| ----------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Source ownership  | Repository root and source policy                                       | Include scope, size limits, documented growth guards                                           |
+| Artifact size     | Output directory, optional `objdump`, size policy                       | Profile-specific byte and count budgets, comparable baseline                                   |
+| Build graph       | Normalized target JSON, or CMake File API                               | Target IDs, types, compiled source counts, dependency IDs, optional compile fanout report      |
+| Test traceability | Case manifest, discovered-name JSON, JUnit or normalized execution JSON | Real selectors, source anchors, mapping IDs or internal classification                         |
+| Installed package | Install prefix, binding JSON or CMake cache, consumer result            | Required files, package path keys, unchanged binary hash and result evidence                   |
+| Worktree hygiene  | Git repository and labeled dedicated storage roots                      | Workstation count and byte budgets, known checkout locations, owner-specific archive procedure |
+| Verdict           | Required gate reports and build manifest                                | Build/test outcome report, run ID, source root, freshness window, exact coverage comparisons   |
 
 All policy checks report `schema: 1` and a pass result. The common and worktree
 checkers use top-level `passed`, `findings`, `metrics`, and `run_id`. The
@@ -57,14 +56,14 @@ The owning app or a deliberate Git closeout handles preservation and cleanup.
 
 ## Hardening sequence
 
-The portable checker now binds reports to a build manifest and compares exact
+The installed checker binds reports to a build manifest and compares exact
 executable and test-selection sets in the aggregate verdict. Its small fixture
 suite exercises the generic pass path and adversarial evidence. A consumer can
 use `run-build` to capture the real build exit code, or emit the same report
 from its CI runner. Each consumer still needs its actual selected targets and
 an adapter fixture using its own build and test output formats.
 
-Run `python -m unittest quality_gates.tests.test_cpp_quality_portable` before copying or changing the
+Run `python -m pytest tests/test_cpp_quality_engine.py` before changing the
 checker. The fixtures cover normalized reports, CMake File API, CMake cache,
 CTest/JUnit input, the build-command wrapper, and missing or contradictory
 evidence. They use a synthetic source-state provider so they can run without

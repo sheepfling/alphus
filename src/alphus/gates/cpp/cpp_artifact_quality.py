@@ -11,7 +11,6 @@ import argparse
 import fnmatch
 import hashlib
 import json
-import os
 import re
 import shutil
 import subprocess
@@ -29,6 +28,11 @@ from alphus.support.data_access import (
     require_json_object,
     require_json_string,
     validate_json_value,
+)
+from alphus.support.native_artifacts import (
+    ArtifactKind,
+    artifact_kind,
+    is_unix_executable,
 )
 
 DEFAULT_INCLUDES = (
@@ -79,7 +83,7 @@ class SectionMetrics(TypedDict):
 
 class ArtifactRow(TypedDict):
     path: str
-    kind: str
+    kind: ArtifactKind
     bytes: int
     section_status: NotRequired[str]
     section_error: NotRequired[str]
@@ -174,8 +178,8 @@ def _artifact_row(value: JsonValue) -> ArtifactRow:
         "path": require_json_string(
             source.get("path"), "artifact path must be a string"
         ),
-        "kind": require_json_string(
-            source.get("kind"), "artifact kind must be a string"
+        "kind": ArtifactKind(
+            require_json_string(source.get("kind"), "artifact kind must be a string")
         ),
         "bytes": require_json_integer(
             source.get("bytes"), "artifact bytes must be an integer"
@@ -238,40 +242,6 @@ def _artifact_baseline(value: JsonValue) -> ArtifactBaseline:
 def _matches(path: str, patterns: Sequence[str]) -> bool:
     folded = path.casefold()
     return any(fnmatch.fnmatchcase(folded, pattern.casefold()) for pattern in patterns)
-
-
-def _kind(path: Path) -> str:
-    name = path.name.casefold()
-    if ".dsym/contents/resources/dwarf/" in path.as_posix().casefold():
-        return "symbols"
-    if name.endswith(".exe"):
-        return "executable"
-    if name.endswith((".dll", ".dylib", ".so")) or ".so." in name:
-        return "shared_library"
-    if name.endswith((".a", ".lib")):
-        return "static_library"
-    if name.endswith((".pdb", ".debug", ".dwp")):
-        return "symbols"
-    with path.open("rb") as binary:
-        magic = binary.read(4)
-    if (
-        magic.startswith(b"MZ")
-        or magic == b"\x7fELF"
-        or magic
-        in {
-            b"\xfe\xed\xfa\xce",
-            b"\xce\xfa\xed\xfe",
-            b"\xfe\xed\xfa\xcf",
-            b"\xcf\xfa\xed\xfe",
-        }
-    ):
-        return "executable"
-    return "other"
-
-
-def _default_unix_executable(path: Path) -> bool:
-    """Include extensionless native executables on Unix without reading all files."""
-    return os.name != "nt" and os.access(path, os.X_OK) and _kind(path) == "executable"
 
 
 def parse_objdump_sections(output: str) -> dict[str, int]:
@@ -352,10 +322,10 @@ def scan_directory(
         relative = path.relative_to(root).as_posix()
         if (
             not _matches(relative, includes)
-            and not (include_unix_executables and _default_unix_executable(path))
+            and not (include_unix_executables and is_unix_executable(path))
         ) or _matches(relative, excludes):
             continue
-        kind = _kind(path)
+        kind = artifact_kind(path)
         item: ArtifactRow = {
             "path": relative,
             "kind": kind,

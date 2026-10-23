@@ -6,7 +6,6 @@ import tomllib
 from importlib.metadata import EntryPoint
 from pathlib import Path
 
-from packaging.requirements import Requirement
 from packaging.specifiers import SpecifierSet
 from packaging.version import Version
 
@@ -81,24 +80,7 @@ def test_checker_python_range_matches_hosted_matrix() -> None:
     assert set(ast.literal_eval(match.group(1))) == expected
 
 
-def test_hosted_dependency_floor_matches_package_metadata() -> None:
-    metadata = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+def test_hosted_dependency_floor_uses_package_metadata() -> None:
     workflow = Path(".github/workflows/quality.yml").read_text(encoding="utf-8")
     floor_job = workflow.split("  minimum-dependencies:", 1)[1]
-    pins = {
-        name: Version(version)
-        for name, version in re.findall(r"'([a-z0-9-]+)==([^']+)'", floor_job)
-    }
-    requirements = (
-        metadata["project"]["dependencies"]
-        + metadata["project"]["optional-dependencies"]["python"]
-    )
-    lower_bounds = {
-        requirement.name: Version(
-            next(
-                item.version for item in requirement.specifier if item.operator == ">="
-            )
-        )
-        for requirement in map(Requirement, requirements)
-    }
-    assert pins == lower_bounds
+    assert "python scripts/ci.py --root . --minimum" in floor_job

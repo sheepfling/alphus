@@ -216,6 +216,13 @@ def python_path_findings(source: str) -> list[SourceFinding]:
                         node.lineno, "module __file__ used to infer a parent root"
                     )
                 )
+            case ast.Attribute(attr="name", value=ast.Name(id="os")):
+                findings.add(
+                    SourceFinding(
+                        node.lineno,
+                        "raw os.name comparison; use a shared platform probe",
+                    )
+                )
             case _:
                 pass
         match node:

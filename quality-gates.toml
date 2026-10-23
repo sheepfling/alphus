@@ -1,7 +1,8 @@
 schema_version = 1
 [files]
 include = [
-  "src/**/*.py", "tests/**/*.py", "README.md", "docs/**/*.md",
+  "src/**/*.py", "tests/**/*.py", "scripts/**/*.py",
+  "README.md", "docs/**/*.md",
   "javascript/**/*.js", "javascript/**/*.mjs", "javascript/**/*.d.ts",
   "**/*.toml", "*.toml", "**/*.json", "*.json",
 ]
@@ -42,6 +43,15 @@ exclude = []
 extensions = [".py"]
 exclude = []
 inspection_exclude = ["tests/**"]
+
+[checks.shared_utilities]
+extensions = [".py"]
+exclude = ["tests/**"]
+canonical_file_hash_path = "src/alphus/support/file_hash.py"
+canonical_file_hash_function = "sha256_file"
+canonical_git_path = "src/alphus/support/git.py"
+minimum_body_statements = 3
+minimum_ast_nodes = 15
 
 [checks.python_style]
 extensions = [".py"]
@@ -144,6 +154,11 @@ rule = "python-style"
 
 [[orchestration.steps]]
 kind = "rule"
+name = "Shared utilities"
+rule = "shared-utilities"
+
+[[orchestration.steps]]
+kind = "rule"
 name = "Runtime type usage"
 rule = "runtime-types"
 
@@ -197,7 +212,7 @@ fix_argv = [
   "{python}", "-m", "ruff", "check", "--fix", "--force-exclude", "--select", "E4,E7,E9,F,ANN,I",
   "{files}",
 ]
-files = { include = ["src/**/*.py", "src/**/*.pyi", "tests/**/*.py"] }
+files = { include = ["src/**/*.py", "src/**/*.pyi", "tests/**/*.py", "scripts/**/*.py"] }
 
 [[orchestration.steps]]
 kind = "command"
@@ -237,12 +252,12 @@ kind = "command"
 name = "Python format"
 argv = ["{python}", "-m", "ruff", "format", "--check", "--force-exclude", "{files}"]
 fix_argv = ["{python}", "-m", "ruff", "format", "--force-exclude", "{files}"]
-files = { include = ["src/**/*.py", "src/**/*.pyi", "tests/**/*.py"] }
+files = { include = ["src/**/*.py", "src/**/*.pyi", "tests/**/*.py", "scripts/**/*.py"] }
 
 [[orchestration.steps]]
 kind = "command"
 name = "Python types"
-argv = ["{python}", "-m", "pyright", "--pythonpath", "{python}", "src"]
+argv = ["{python}", "-m", "pyright", "--pythonpath", "{python}", "src", "scripts"]
 
 [[orchestration.steps]]
 kind = "command"
@@ -267,7 +282,7 @@ files = { include = ["**/*.json", "*.json"] }
 [[orchestration.profiles]]
 name = "python-policy"
 steps = [
-  "Package boundaries", "Target audit isolation", "Python structure", "Runtime type usage",
+  "Package boundaries", "Target audit isolation", "Python structure", "Shared utilities", "Runtime type usage",
   "JSON structure", "Output escaping", "Path handling", "Line length",
   "File size", "Comment markers",
 ]

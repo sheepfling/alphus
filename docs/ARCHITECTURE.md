@@ -1,5 +1,8 @@
 # Alphus architecture
 
+See the [documentation map](README.md) for consumer setup, rule ownership,
+C++ examples, and self-check verification.
+
 Alphus is a Python package for running policy-driven quality checks
 against Git repositories. Each consumer owns its TOML policy. The package
 contains reusable policy models, file inventory, checkers, typed findings,
@@ -96,19 +99,19 @@ its documented core configuration, finding, inventory, and checker functions.
 
 The internal import paths changed with this layout:
 
-| Former path | Owning path |
-| --- | --- |
-| `alphus.config_architecture` | `alphus.policy.architecture` |
-| `alphus.config_base` | `alphus.policy.base` |
-| `alphus.config_orchestration` | `alphus.policy.orchestration` |
-| `alphus.config_repository` | `alphus.policy.repository` |
-| `alphus.config_review` | `alphus.policy.review` |
-| `alphus.config_sources` | `alphus.policy.sources` |
-| `alphus.rule_catalog` | `alphus.policy.catalog` |
-| `alphus.findings` | `alphus.contracts.findings` |
-| `alphus.rule_execution` | `alphus.execution.dispatch` |
-| `alphus.rule_results` | `alphus.execution.results` |
-| `alphus.orchestration` | `alphus.execution.orchestration` |
+| Former path                   | Owning path                      |
+| ----------------------------- | -------------------------------- |
+| `alphus.config_architecture`  | `alphus.policy.architecture`     |
+| `alphus.config_base`          | `alphus.policy.base`             |
+| `alphus.config_orchestration` | `alphus.policy.orchestration`    |
+| `alphus.config_repository`    | `alphus.policy.repository`       |
+| `alphus.config_review`        | `alphus.policy.review`           |
+| `alphus.config_sources`       | `alphus.policy.sources`          |
+| `alphus.rule_catalog`         | `alphus.policy.catalog`          |
+| `alphus.findings`             | `alphus.contracts.findings`      |
+| `alphus.rule_execution`       | `alphus.execution.dispatch`      |
+| `alphus.rule_results`         | `alphus.execution.results`       |
+| `alphus.orchestration`        | `alphus.execution.orchestration` |
 
 The `alphus.config` model and loader imports and the `alphus.cli` command entry
 point remain at the package root.

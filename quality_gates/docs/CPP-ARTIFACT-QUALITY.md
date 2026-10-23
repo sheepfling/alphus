@@ -2,28 +2,28 @@
 
 For source ownership, build-graph, test-selection, package-provenance, and aggregate checks, see [Common C++ quality checks](CPP-COMMON-QUALITY.md).
 
-`quality_gates/bin/cpp_artifact_quality.py` is a standalone, standard-library Python checker. It has no project imports or build-system dependency. Copy it and a calibrated policy into another C++ repository, or invoke it by absolute path. It inventories executables, shared and static libraries, and separate symbol files under any build directory. File size is always measured; `objdump -h` measures debug and text sections when available.
+`alphus.gates.cpp.cpp_artifact_quality` is the installed C++ artifact checker. Install Alphus in the consumer environment and supply a calibrated policy. It inventories executables, shared and static libraries, and separate symbol files under any build directory. File size is always measured; `objdump -h` measures debug and text sections when available.
 
 ## Add the gate to a build
 
 After the main static library is built, run the archive policy on its output directory. This catches excessive archive growth before any executable links:
 
-```powershell
-python quality_gates/bin/cpp_artifact_quality.py check build/lib --policy quality_gates/examples/cpp-static-archive-policy.example.json --output build/archive-quality.json
+```shell
+python -m alphus.gates.cpp.cpp_artifact_quality check build/lib --policy quality_gates/examples/cpp-static-archive-policy.example.json --output build/archive-quality.json
 ```
 
 After the **first representative executable** links, run the executable policy on its output directory:
 
-```powershell
-python quality_gates/bin/cpp_artifact_quality.py check build/tests --policy quality_gates/examples/cpp-artifact-policy.example.json --output build/artifact-quality.json
+```shell
+python -m alphus.gates.cpp.cpp_artifact_quality check build/tests --policy quality_gates/examples/cpp-artifact-policy.example.json --output build/artifact-quality.json
 ```
 
 Run the executable check after the full build to enforce fleet totals. A policy should be copied into the consuming project and calibrated for each build profile; the example's 512 MiB archive, 128 MiB executable, and 64 MiB debug limits are starting values, not universal limits. Use separate policies for Debug, RelWithDebInfo, and release or distribution builds. The check exits `0` on pass, `1` on a budget violation, and `2` on invalid input or a scanning error. An unavailable debug measurement violates any debug byte limit, so it fails closed with exit `1`. The checker prints each failed budget even when writing JSON to a file. Put these commands in CI after their respective build steps; CI should fail on either nonzero exit code.
 
 For a first look without a policy:
 
-```powershell
-python quality_gates/bin/cpp_artifact_quality.py scan build/tests --output build/artifact-inventory.json
+```shell
+python -m alphus.gates.cpp.cpp_artifact_quality scan build/tests --output build/artifact-inventory.json
 ```
 
 On Unix, the default scan also recognizes extensionless native executables with the executable bit set. Pass `--include` / `--exclude` glob patterns to narrow a scan; the scanner treats an explicit include list as authoritative. On Windows, `.exe` files are recognized by extension. The default inventory includes macOS `.dSYM` DWARF files. If `objdump` is not on `PATH`, pass `--objdump` with the tool's path. `--no-sections` gives a fast file-size-only inventory. A policy that sets `max_executable_debug_bytes` fails closed when section measurement is unavailable.
@@ -38,13 +38,13 @@ The JSON report contains artifact paths and byte counts, debug and text section 
 
 Policy values are nonnegative integer bytes, except count limits. The schema 1 `limits` object accepts:
 
-| Limit | Scope |
-| --- | --- |
-| `min_executable_count`, `max_executable_count` | Detect a missing output tree or target proliferation |
-| `min_static_library_count` | Detect a missing prelink archive |
-| `max_static_library_bytes`, `max_total_static_library_bytes` | Bound one archive and all archives |
-| `max_executable_bytes`, `max_executable_debug_bytes` | Bound one executable and its measured debug sections |
-| `max_total_executable_bytes`, `max_total_artifact_bytes` | Bound the executable fleet and all inventoried artifacts |
+| Limit                                                        | Scope                                                    |
+| ------------------------------------------------------------ | -------------------------------------------------------- |
+| `min_executable_count`, `max_executable_count`               | Detect a missing output tree or target proliferation     |
+| `min_static_library_count`                                   | Detect a missing prelink archive                         |
+| `max_static_library_bytes`, `max_total_static_library_bytes` | Bound one archive and all archives                       |
+| `max_executable_bytes`, `max_executable_debug_bytes`         | Bound one executable and its measured debug sections     |
+| `max_total_executable_bytes`, `max_total_artifact_bytes`     | Bound the executable fleet and all inventoried artifacts |
 
 An archive budget measures archive file bytes; it does not attribute those bytes to debug sections. Inspect representative member objects or their build flags before claiming a cause.
 
@@ -52,15 +52,15 @@ An archive budget measures archive file bytes; it does not attribute those bytes
 
 Store a report from a known good run as a CI artifact and compare a new run with `--baseline path/to/baseline.json`. Add any of these integer byte limits to the policy:
 
-| Limit | Detects |
-| --- | --- |
-| `max_new_executable_bytes` | A newly introduced executable that is unexpectedly large |
-| `max_executable_growth_bytes` | Growth in an executable with the same relative path |
-| `max_total_executable_growth_bytes` | Growth across the whole executable fleet |
+| Limit                               | Detects                                                  |
+| ----------------------------------- | -------------------------------------------------------- |
+| `max_new_executable_bytes`          | A newly introduced executable that is unexpectedly large |
+| `max_executable_growth_bytes`       | Growth in an executable with the same relative path      |
+| `max_total_executable_growth_bytes` | Growth across the whole executable fleet                 |
 
 Absolute caps remain useful even with a baseline: a baseline from an already oversized build must not bless the problem. Use `min_executable_count` so a missing or wrong output directory cannot silently pass. Keep baseline and current scan patterns identical. Compare equivalent profiles, platforms, toolchains, and output trees; a changed build configuration needs its own baseline. A baseline is an artifact report, not a policy check result requirement.
 
-Project adapters can record executable count, executable bytes, all artifact bytes, and the largest executables beside compile and link timing history. Run `cpp_artifact_quality.py` when section attribution or a hard budget is needed. Keep the adapter in the consuming repository.
+Project adapters can record executable count, executable bytes, all artifact bytes, and the largest executables beside compile and link timing history. Run `python -m alphus.gates.cpp.cpp_artifact_quality` when section attribution or a hard budget is needed. Keep the adapter in the consuming repository.
 
 ## Common C++ quality sequence
 

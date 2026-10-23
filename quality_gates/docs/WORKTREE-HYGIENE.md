@@ -9,9 +9,9 @@ that its detached commit is already preserved on the primary branch.
 
 Run the read-only inventory from the primary checkout:
 
-```powershell
-$runId = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')
-python quality_gates/bin/worktree_hygiene.py --repo . --base-ref HEAD --max-worktrees 16 --max-logical-gib 100 --run-id $runId --output out\build-metrics\worktree-hygiene.json
+```shell
+RUN_ID=$(date -u +%Y%m%dT%H%M%SZ)
+python -m alphus.gates.cpp.worktree_hygiene --repo . --base-ref HEAD --max-worktrees 16 --max-logical-gib 100 --run-id $RUN_ID --output out/build-metrics/worktree-hygiene.json
 ```
 
 Add every dedicated worktree storage root to include folders no longer

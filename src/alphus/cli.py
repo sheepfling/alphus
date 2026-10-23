@@ -184,6 +184,11 @@ def _render_shared_utilities(report: SharedUtilitiesReport) -> None:
     hash_tag = rule_tag(
         "python", "none", "maintainability", "duplicate-file-hash-implementation"
     )
+    for location in report.direct_git_calls:
+        _human_print(
+            "alphus/python/none/maintainability/direct-git-subprocess: "
+            f"{location}"
+        )
     for locations in report.duplicate_groups:
         _human_print(f"{duplicate_tag}: {', '.join(locations)}")
     if len(report.file_hash_implementations) > 1:
@@ -382,6 +387,7 @@ def _execute(
         typer.echo(
             json.dumps(
                 {
+                    "direct_git_calls": shared_report.direct_git_calls,
                     "duplicate_groups": shared_report.duplicate_groups,
                     "failed": shared_report.failed,
                     "file_hash_implementations": shared_report.file_hash_implementations,

@@ -244,3 +244,8 @@ def test_test_assertions_are_outside_path_inspection_gate(tmp_path: Path) -> Non
     assert [(item.path, item.line, item.message) for item in findings] == [
         ("tests/test_paths.py", 1, "module __file__ used to infer a parent root")
     ]
+
+
+def test_raw_os_name_is_flagged() -> None:
+    findings = python_path_findings('import os\nwindows = os.name == "nt"\n')
+    assert findings == [(2, "raw os.name comparison; use a shared platform probe")]

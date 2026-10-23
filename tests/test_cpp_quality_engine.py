@@ -1,4 +1,4 @@
-"""Small adversarial fixtures for the portable C++ quality gates."""
+"""Small adversarial fixtures for the installed C++ quality gates."""
 
 from __future__ import annotations
 
@@ -11,24 +11,29 @@ import sys
 import tempfile
 import time
 import unittest
+from collections.abc import Mapping, Sequence
 from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
 
-from quality_gates.bin import cpp_artifact_quality as artifacts
-from quality_gates.bin import cpp_common_quality as quality
+from alphus.gates.cpp import cpp_artifact_quality as artifacts
+from alphus.gates.cpp import cpp_common_quality as quality
+from alphus.gates.cpp.cpp_common_quality import GateReport, ManifestSource
+from alphus.support.data_access import JsonValue
+from alphus.support.file_hash import sha256_file
+from alphus.support.native_artifacts import ArtifactKind, artifact_kind
 
 
-def _write_json(path: Path, payload: dict) -> None:
+def _write_json(path: Path, payload: Mapping[str, JsonValue]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
-def _codes(report: dict) -> set[str]:
+def _codes(report: Mapping[str, Sequence[Mapping[str, str]]]) -> set[str]:
     return {finding["code"] for finding in report["findings"]}
 
 
-class PortableQualityFixture(unittest.TestCase):
+class EngineQualityFixture(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
@@ -147,7 +152,7 @@ class PortableQualityFixture(unittest.TestCase):
             "require_consumer_smoke": True,
             "consumer": {
                 "executable": str(self.executable),
-                "expected_sha256": quality._sha256_file(self.executable),
+                "expected_sha256": sha256_file(self.executable),
                 "result_json": str(smoke),
             },
         }
@@ -182,7 +187,8 @@ class PortableQualityFixture(unittest.TestCase):
         }
         self.reports["artifacts"]["run_id"] = self.run_id
         self.reports["artifacts"]["gate"] = artifacts.evaluate(
-            self.reports["artifacts"], {"limits": {"min_executable_count": 1}}
+            self.reports["artifacts"],
+            {"name": "fixture", "limits": {"min_executable_count": 1}},
         )
         for name, report in self.reports.items():
             report["manifest_sha256"] = self.digest
@@ -263,7 +269,7 @@ class PortableQualityFixture(unittest.TestCase):
             digest.update((self.root / relative).read_bytes())
         return digest.hexdigest()
 
-    def _fixture_source_state(self, root: Path) -> dict:
+    def _fixture_source_state(self, root: Path) -> ManifestSource:
         current_digest = self._fixture_source_digest()
         return {
             "root": str(root.resolve()),
@@ -272,7 +278,7 @@ class PortableQualityFixture(unittest.TestCase):
             "state_sha256": current_digest,
         }
 
-    def verdict(self) -> dict:
+    def verdict(self) -> GateReport:
         return quality.check_verdict(
             self.config_path, self.verdict_policy, self.run_id, self.manifest_path
         )
@@ -528,7 +534,9 @@ class PortableQualityFixture(unittest.TestCase):
         empty = self.base / "empty"
         empty.mkdir()
         report = artifacts.scan_directory(empty, measure_sections=False)
-        gate = artifacts.evaluate(report, {"limits": {"min_executable_count": 1}})
+        gate = artifacts.evaluate(
+            report, {"name": "fixture", "limits": {"min_executable_count": 1}}
+        )
         self.assertFalse(gate["passed"])
 
     def test_wrong_package_binding(self) -> None:
@@ -621,3 +629,17 @@ class PortableQualityFixture(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_native_artifact_classifier_returns_enumerated_kinds(tmp_path: Path) -> None:
+    executable = tmp_path / "consumer.exe"
+    executable.write_bytes(b"MZ fixture executable")
+    archive = tmp_path / "libconsumer.a"
+    archive.write_bytes(b"archive")
+    assert artifact_kind(executable) is ArtifactKind.EXECUTABLE
+    assert artifact_kind(archive) is ArtifactKind.STATIC_LIBRARY
+    report = artifacts.scan_directory(tmp_path, measure_sections=False)
+    assert {item["kind"] for item in report["artifacts"]} == {
+        ArtifactKind.EXECUTABLE,
+        ArtifactKind.STATIC_LIBRARY,
+    }

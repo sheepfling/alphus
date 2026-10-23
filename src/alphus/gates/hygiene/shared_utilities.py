@@ -19,11 +19,16 @@ class SharedUtilitiesReport:
 
     duplicate_groups: tuple[tuple[str, ...], ...]
     file_hash_implementations: tuple[str, ...]
+    direct_git_calls: tuple[str, ...]
 
     @property
     def failed(self) -> bool:
         """Return whether duplicate helpers or multiple file hashers were found."""
-        return bool(self.duplicate_groups) or len(self.file_hash_implementations) > 1
+        return (
+            bool(self.duplicate_groups)
+            or len(self.file_hash_implementations) > 1
+            or bool(self.direct_git_calls)
+        )
 
 
 def _selected_python_files(
@@ -193,13 +198,49 @@ def file_sha256_helpers(
     return sorted(locations)
 
 
+def direct_git_subprocesses(
+    root: Path, paths: Iterable[Path], policy: SharedUtilitiesPolicy
+) -> tuple[str, ...]:
+    """Find direct Git process launches outside the configured shared adapter."""
+    checkout = root.resolve(strict=True)
+    locations: list[str] = []
+    for relative in _selected_python_files(paths, policy):
+        if relative.as_posix() == policy.canonical_git_path:
+            continue
+        path = checkout / relative
+        if not path.is_file():
+            continue
+        module = ast.parse(
+            path.read_text(encoding="utf-8-sig"), filename=relative.as_posix()
+        )
+        for node in ast.walk(module):
+            match node:
+                case ast.Call(
+                    func=ast.Attribute(
+                        value=ast.Name(id="subprocess"),
+                        attr="run" | "Popen" | "check_call" | "check_output",
+                    ),
+                    args=[
+                        ast.List(elts=[ast.Constant(value="git"), *_])
+                        | ast.Tuple(elts=[ast.Constant(value="git"), *_]),
+                        *_,
+                    ],
+                ):
+                    locations.append(f"{relative.as_posix()}:{node.lineno}")
+                case _:
+                    pass
+    return tuple(sorted(locations))
+
+
 def check_shared_utilities(
     root: Path, paths: Iterable[Path], policy: SharedUtilitiesPolicy
 ) -> SharedUtilitiesReport:
     """Return stable duplicate groups and file-hash implementation locations."""
     duplicates = duplicate_helpers(root, paths, policy)
     file_hashes = file_sha256_helpers(root, paths, policy)
+    git_calls = direct_git_subprocesses(root, paths, policy)
     return SharedUtilitiesReport(
         duplicate_groups=tuple(tuple(group) for group in duplicates.values()),
         file_hash_implementations=tuple(file_hashes),
+        direct_git_calls=git_calls,
     )

@@ -1,14 +1,16 @@
 # Self-checking Alphus
 
 The `check` profile validates the package against its own repository policy. It
-runs Alphus portable rules, the comment-marker and review rules, TOML syntax, installed-package
+runs Alphus portable rules, shared-utility analysis, the comment-marker and review rules, TOML syntax, installed-package
 import smoke and compatibility-import removal checks, native Ruff lint and
 format checks, strict Pyright, and the package tests.
 The repository's GitHub Actions quality workflow runs this profile on Python
 3.11 through 3.14 for pull requests and main-branch pushes. It checks editable
 installation, builds and installs a wheel, then invokes the installed package.
 An additional Python 3.11 job runs the profile with every direct runtime and
-`python` extra dependency at its declared minimum version.
+`python` extra dependency at its declared minimum version. The
+`python scripts/ci.py --root .` runner derives those floors from `pyproject.toml`,
+so the workflow contains no second list of dependency versions.
 
 ## Run the installed wheel against this checkout
 
@@ -134,3 +136,17 @@ These commands are the self-profile's native Python steps. The Pyright
 command uses the repository's strict mode from
 `pyproject.toml`. Native tools retain ownership of lint, formatting, and type
 diagnostics; Alphus does not duplicate or reinterpret them.
+
+## C++ and Markdown self-checks
+
+The C++ engine fixtures now import the installed `alphus.gates.cpp` modules
+from `tests/test_cpp_quality_engine.py`. No duplicate executable scripts are
+kept in `quality_gates/bin`. The self-profile also runs the shared-utilities
+rule, which flags duplicate helpers, extra file hash implementations, and
+direct Git subprocess calls outside `alphus.support.git`. The path rule flags
+raw `os.name` checks so code uses the shared platform probe.
+
+The JavaScript CI job checks formatting of `quality_gates/**/*.md` with the
+locally installed Prettier package. Run `npm run format:markdown` to fix those
+files, then `npm run format:markdown:check` to verify. Formatting is an
+explicit fix action; ordinary checks do not rewrite documentation.

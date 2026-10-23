@@ -1,28 +1,26 @@
-# Portable quality gates
+# C++ quality gate examples
 
-This directory is the reusable unit. Copy the entire `quality_gates/` tree into
-another repository, or invoke the scripts from this checkout. It contains only
-standard-library Python checkers, example policies, their fixtures, and
-consumer-neutral documentation.
+Alphus installs the C++ engines under `alphus.gates.cpp`. This directory holds
+example policies and detailed evidence contracts; it contains no second copy
+of the engines. Install Alphus in the consumer quality environment, then copy
+and calibrate the JSON policies for that consumer. C++ build outputs and target
+names remain consumer owned.
 
-| Path | Contents |
-| --- | --- |
-| `bin/` | Artifact, source/build/test/package, and worktree checkers |
-| `examples/` | Illustrative policies that each consumer must calibrate |
-| `docs/` | Input contracts, gate behavior, and integration guidance |
-| `tests/` | Portable adversarial fixtures |
+| Path                               | Purpose                                                   |
+| ---------------------------------- | --------------------------------------------------------- |
+| `examples/`                        | Policy examples that require consumer limits and evidence |
+| `docs/CPP-COMMON-QUALITY.md`       | Source, graph, test, package, and verdict inputs          |
+| `docs/CPP-ARTIFACT-QUALITY.md`     | Binary artifact budgets and baselines                     |
+| `docs/WORKTREE-HYGIENE.md`         | Local worktree inventory and budgets                      |
+| `docs/QUALITY-GATE-PORTABILITY.md` | Consumer adapter and report contracts                     |
 
-From a repository root containing this directory:
-
-```powershell
-python quality_gates/bin/cpp_common_quality.py --help
-python quality_gates/bin/cpp_artifact_quality.py --help
-python quality_gates/bin/worktree_hygiene.py --help
-python -m unittest quality_gates.tests.test_cpp_quality_portable
+```shell
+python -m pip install -e /path/to/alphus
+python -m alphus.gates.cpp.cpp_common_quality --help
+python -m alphus.gates.cpp.cpp_artifact_quality --help
+python -m alphus.gates.cpp.worktree_hygiene --help
 ```
 
-Start with the [porting contract](docs/QUALITY-GATE-PORTABILITY.md). Keep
-consumer-specific adapters, target names, test selectors, thresholds, CI
-wiring, and generated reports outside this directory. The example policies
-are templates; their paths and budgets are not ready-made approvals for a
-new project.
+From this checkout, run `python -m pytest tests/test_cpp_quality_engine.py`
+for the engine fixtures and `python -m pytest tests/test_cpp_quality.py`
+for profile integration.

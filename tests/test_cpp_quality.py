@@ -1,4 +1,4 @@
-"""Keep the C++ quality engines portable and usable through Alphus profiles."""
+"""Exercise installed C++ quality gates through Alphus profiles."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ from pathlib import Path
 from alphus.config import CommandRunStep, load_config
 
 _PROFILE = Path("examples/cpp/quality-gates.toml")
-_ENGINE_DIR = Path("quality_gates/bin")
 
 
 def test_cpp_profile_example_selects_independent_opt_in_profiles() -> None:

@@ -201,12 +201,15 @@ class SharedUtilitiesPolicy(PythonSourceScanPolicy):
 
     canonical_file_hash_path: str
     canonical_file_hash_function: str
+    canonical_git_path: str | None = None
     minimum_body_statements: Annotated[int, Field(gt=0)]
     minimum_ast_nodes: Annotated[int, Field(gt=0)]
 
-    @field_validator("canonical_file_hash_path")
+    @field_validator("canonical_file_hash_path", "canonical_git_path")
     @classmethod
-    def validate_canonical_path(cls, path: str) -> str:
+    def validate_canonical_path(cls, path: str | None) -> str | None:
+        if path is None:
+            return None
         path_value = PurePosixPath(path)
         if (
             not path

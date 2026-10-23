@@ -220,6 +220,7 @@ def test_report_exposes_success_metrics_and_failure_state(tmp_path: Path) -> Non
 
     assert report.duplicate_groups == ()
     assert report.file_hash_implementations == ("src/one.py:2:checksum",)
+    assert report.direct_git_calls == ()
     assert not report.failed
 
 
@@ -261,7 +262,19 @@ def test_shared_utilities_cli_reports_groups_and_machine_readable_metrics(
 
     assert main([*arguments, "--report", "--json"]) == 0
     assert capsys.readouterr().out == (
-        '{"duplicate_groups": [], "failed": true, '
+        '{"direct_git_calls": [], "duplicate_groups": [], "failed": true, '
         '"file_hash_implementations": ["src/first.py:2:direct", '
         '"src/second.py:2:streamed"]}\n'
     )
+
+
+def test_shared_utilities_reports_direct_git_launches(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "src/raw.py",
+        "import subprocess\ndef revision(root):\n"
+        '    return subprocess.run(["git", "status"], cwd=root)\n',
+    )
+    report = check_shared_utilities(tmp_path, [Path("src/raw.py")], POLICY)
+    assert report.direct_git_calls == ("src/raw.py:3",)
+    assert report.failed

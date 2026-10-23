@@ -35,6 +35,8 @@ from alphus.support.data_access import (
     require_json_string,
     validate_json_value,
 )
+from alphus.support.file_hash import sha256_file
+from alphus.support.git import git_output, run_git
 
 FRAGMENT_SUFFIXES = frozenset({".inc", ".inl", ".ipp", ".tpp"})
 IMPLEMENTATION_SUFFIXES = frozenset({".c", ".cc", ".cpp", ".cxx"})
@@ -460,25 +462,14 @@ def _emit(report: GateReport, output: Path | None) -> int:
 
 def _files(root: Path) -> list[Path]:
     try:
-        result = subprocess.run(
-            [
-                "git",
-                "-C",
-                str(root),
-                "ls-files",
-                "-z",
-                "--cached",
-                "--others",
-                "--exclude-standard",
-            ],
-            capture_output=True,
-            check=False,
+        result = run_git(
+            root, "ls-files", "-z", "--cached", "--others", "--exclude-standard"
         )
         if result.returncode == 0:
             return [
                 root / os.fsdecode(raw) for raw in result.stdout.split(b"\0") if raw
             ]
-    except FileNotFoundError:
+    except OSError:
         pass
     # A Git checkout is not required when the checker is copied into another build.
     return [path for path in root.rglob("*") if path.is_file()]
@@ -1455,29 +1446,12 @@ def _cache_values(path: Path) -> dict[str, str]:
     return values
 
 
-def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as binary:
-        for chunk in iter(lambda: binary.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _git_bytes(root: Path, *arguments: str) -> bytes:
-    result = subprocess.run(
-        ["git", "-C", str(root), *arguments], capture_output=True, check=False
-    )
-    if result.returncode:
-        raise ValueError(result.stderr.decode(errors="replace").strip())
-    return result.stdout
-
-
 def _source_state(root: Path) -> ManifestSource:
     root = root.resolve()
-    revision = _git_bytes(root, "rev-parse", "HEAD").decode().strip()
-    status = _git_bytes(root, "status", "--porcelain=v1", "-z", "--untracked-files=all")
-    diff = _git_bytes(root, "diff", "--binary", "HEAD", "--")
-    untracked = _git_bytes(root, "ls-files", "--others", "--exclude-standard", "-z")
+    revision = git_output(root, "rev-parse", "HEAD").decode().strip()
+    status = git_output(root, "status", "--porcelain=v1", "-z", "--untracked-files=all")
+    diff = git_output(root, "diff", "--binary", "HEAD", "--")
+    untracked = git_output(root, "ls-files", "--others", "--exclude-standard", "-z")
     digest = hashlib.sha256()
 
     def add(data: bytes) -> None:
@@ -1492,7 +1466,7 @@ def _source_state(root: Path) -> ManifestSource:
         if path.is_symlink():
             add(os.fsencode(os.readlink(path)))
         elif path.is_file():
-            add(bytes.fromhex(_sha256_file(path)))
+            add(bytes.fromhex(sha256_file(path)))
         else:
             raise ValueError(f"untracked input disappeared: {path}")
     return {
@@ -1533,7 +1507,7 @@ def create_manifest(
         if path in seen or not path.is_file():
             raise ValueError(f"manifest input is absent or duplicated: {path}")
         seen.add(path)
-        input_rows.append({"path": str(path), "sha256": _sha256_file(path)})
+        input_rows.append({"path": str(path), "sha256": sha256_file(path)})
     return {
         "schema": 1,
         "kind": "cpp-quality-build-manifest",
@@ -1658,7 +1632,7 @@ def _manifest_findings(manifest: BuildManifest) -> list[GateFinding]:
         if path in seen:
             raise ValueError(f"manifest repeats input: {path}")
         seen.add(path)
-        if not path.is_file() or _sha256_file(path) != item["sha256"].lower():
+        if not path.is_file() or sha256_file(path) != item["sha256"].lower():
             findings.append(_finding("manifest_input_changed", str(path)))
     return findings
 
@@ -1871,7 +1845,7 @@ def check_package(
                 )
             )
         else:
-            digest = _sha256_file(executable)
+            digest = sha256_file(executable)
             if digest.casefold() != expected_digest.casefold():
                 findings.append(
                     _finding(

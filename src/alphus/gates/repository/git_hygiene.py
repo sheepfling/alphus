@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import subprocess
 from collections.abc import Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
@@ -10,6 +9,8 @@ from pathlib import Path
 
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import rule_tag
+from alphus.support.git import git_output as _git
+from alphus.support.git import run_git
 from alphus.support.inventory import matches_path
 
 
@@ -42,19 +43,6 @@ RULES = (
     IgnoreRule("cpp", "main.exe", "**/*.exe"),
     IgnoreRule("cpp", "libmain.a", "**/*.a"),
 )
-
-
-def _git(root: Path, *args: str, input_data: bytes | None = None) -> bytes:
-    try:
-        result = subprocess.run(
-            ["git", *args], cwd=root, input=input_data, capture_output=True, check=False
-        )
-    except FileNotFoundError as error:
-        raise OSError("Git is required for repository quality rules") from error
-    if result.returncode:
-        detail = result.stderr.decode("utf-8", "replace").strip()
-        raise OSError(f"git {' '.join(args)} failed: {detail}")
-    return result.stdout
 
 
 def _checkout(root: Path) -> Path:
@@ -104,15 +92,9 @@ def check_ignores(root: Path, languages: Sequence[str] = ()) -> list[Finding]:
     findings: list[Finding] = []
     for rule in rules:
         for sample in (rule.sample, f"nested/{rule.sample}"):
-            try:
-                result = subprocess.run(
-                    ["git", "check-ignore", "--quiet", "--no-index", "--", sample],
-                    cwd=root,
-                    capture_output=True,
-                    check=False,
-                )
-            except FileNotFoundError as error:
-                raise OSError("Git is required for repository quality rules") from error
+            result = run_git(
+                root, "check-ignore", "--quiet", "--no-index", "--", sample
+            )
             if result.returncode == 1:
                 findings.append(
                     Finding(

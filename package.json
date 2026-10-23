@@ -40,7 +40,9 @@
     "test": "node --test javascript/tests/*.test.mjs",
     "lint": "eslint javascript",
     "format:check": "prettier --check javascript package.json",
-    "typecheck": "tsc -p javascript/tsconfig.check.json"
+    "typecheck": "tsc -p javascript/tsconfig.check.json",
+    "format:markdown:check": "prettier --check \"quality_gates/**/*.md\"",
+    "format:markdown": "prettier --write \"quality_gates/**/*.md\""
   },
   "dependencies": {
     "@eslint/js": "^10.0.1",

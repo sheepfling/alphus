@@ -1,16 +1,14 @@
 # C++ quality gates
 
 Alphus includes reusable C++ source/build/test/package and binary-artifact
-checkers in the standalone [`quality_gates/`](../quality_gates/) bundle. The
-engines have no third-party dependencies. Alphus's language-neutral profile
-runner coordinates these scripts as command steps, keeping their machine-
+checkers in `alphus.gates.cpp`. The language-neutral profile
+runner coordinates their module entry points as command steps, keeping their machine-
 readable reports and exit codes intact while C++ policy stays separate from
 the TOML profile policy.
 
 ## Start with source and artifact profiles
 
-Copy `examples/cpp/quality-gates.toml` and the
-`quality_gates/bin/` directory into the C++ repository. Copy and calibrate
+Install Alphus, then copy `examples/cpp/quality-gates.toml` into the C++ repository. Copy and calibrate
 `quality_gates/examples/cpp-common-quality.example.json` as
 `cpp-common-quality.json`, and
 `quality_gates/examples/cpp-artifact-policy.example.json` as
@@ -57,7 +55,7 @@ consumer can add a step like this:
 kind = "command"
 name = "C++ target graph"
 argv = [
-  "{python}", "{root}/quality_gates/bin/cpp_common_quality.py", "graph",
+  "{python}", "-m", "alphus.gates.cpp.cpp_common_quality", "graph",
   "{root}/build", "--config", "{root}/cpp-common-quality.json",
   "--manifest", "{root}/out/quality/build-manifest.json",
   "--output", "{root}/out/quality/graph.json",
@@ -68,7 +66,7 @@ Use one run ID and the same manifest across evidence-producing steps. The
 portability guide describes CMake File API, CTest/JUnit, installed-package,
 and verdict inputs, including the evidence required for them to pass.
 
-The portable fixture suite tests the scripts directly. Run it with
-`python -m unittest quality_gates.tests.test_cpp_quality_portable` from the
+The C++ engine fixture suite tests the installed modules directly. Run it with
+`python -m pytest tests/test_cpp_quality_engine.py` from the
 Alphus checkout. The Alphus integration tests exercise positive and negative
 source and artifact profiles against consumer fixtures.
