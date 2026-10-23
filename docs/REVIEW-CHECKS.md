@@ -293,6 +293,10 @@ for a complete opt-in policy, plan command, and JSON findings run.
 
 ## FastAPI and Starlette practices
 
+This is the existing warning-only source rule. The opt-in native Ruff profile
+and deferred route/OpenAPI scope are described in the
+[FastAPI quality guide](FASTAPI-QUALITY.md).
+
 Selector: `fastapi-practices`. IDs: `alphus/python/fastapi/correctness/literal-http-status` and
 `alphus/python/fastapi/correctness/literal-error-code`.
 
