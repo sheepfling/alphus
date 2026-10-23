@@ -85,6 +85,8 @@ exclude = []
 extensions = [".py"]
 exclude = []
 
+[checks.git]
+
 [checks.package_boundaries]
 metadata_patterns = ["pyproject.toml"]
 source_directory = "src"
@@ -176,6 +178,16 @@ rule = "file-size"
 kind = "rule"
 name = "Comment markers"
 rule = "comment-markers"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Git ignore policy"
+rule = "git-ignores"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Git history"
+rule = "git-history"
 
 [[orchestration.steps]]
 kind = "command"
@@ -282,8 +294,17 @@ name = "javascript"
 steps = ["JavaScript tests", "JavaScript types"]
 
 [[orchestration.profiles]]
+name = "git"
+steps = ["Git ignore policy"]
+
+[[orchestration.profiles]]
+name = "repository-history"
+includes = ["git"]
+steps = ["Git history"]
+
+[[orchestration.profiles]]
 name = "check"
-includes = ["python-policy", "toml", "python", "review", "javascript"]
+includes = ["python-policy", "toml", "python", "review", "javascript", "git"]
 
 [[orchestration.steps]]
 kind = "rule"

@@ -1,18 +1,18 @@
-"""Git ignore and infrequent full-history hygiene audits."""
+"""Git-backed quality rules for current ignores and reachable history."""
 
 from __future__ import annotations
 
-import argparse
 import subprocess
-import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from alphus.contracts.findings import Finding
+from alphus.contracts.rule_tags import rule_tag
 from alphus.support.inventory import matches_path
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class IgnoreRule:
     language: str
     sample: str
@@ -20,13 +20,15 @@ class IgnoreRule:
 
 
 RULES = (
-    IgnoreRule("common", ".env", "**/.env"),
+    IgnoreRule("repository", ".env", "**/.env"),
+    IgnoreRule("repository", ".pypirc", "**/.pypirc"),
     IgnoreRule("python", ".venv/pyvenv.cfg", "**/.venv/**"),
     IgnoreRule("python", "__pycache__/module.pyc", "**/__pycache__/**"),
     IgnoreRule("python", ".pytest_cache/v/cache/nodeids", "**/.pytest_cache/**"),
     IgnoreRule("python", ".mypy_cache/3.11/module.data.json", "**/.mypy_cache/**"),
     IgnoreRule("python", ".ruff_cache/content", "**/.ruff_cache/**"),
     IgnoreRule("python", "dist/package.whl", "**/dist/**"),
+    IgnoreRule("python", ".streamlit/secrets.toml", "**/.streamlit/secrets.toml"),
     IgnoreRule("javascript", "node_modules/pkg/index.js", "**/node_modules/**"),
     IgnoreRule("javascript", "project.tsbuildinfo", "**/*.tsbuildinfo"),
     IgnoreRule("javascript", ".eslintcache", "**/.eslintcache"),
@@ -39,7 +41,6 @@ RULES = (
     IgnoreRule("cpp", "main.exe", "**/*.exe"),
     IgnoreRule("cpp", "libmain.a", "**/*.a"),
 )
-LANGUAGES = ("python", "javascript", "cpp")
 
 
 def _git(root: Path, *args: str, input_data: bytes | None = None) -> bytes:
@@ -48,10 +49,10 @@ def _git(root: Path, *args: str, input_data: bytes | None = None) -> bytes:
             ["git", *args], cwd=root, input=input_data, capture_output=True, check=False
         )
     except FileNotFoundError as error:
-        raise RuntimeError("Git is required for repository hygiene checks") from error
+        raise OSError("Git is required for repository quality rules") from error
     if result.returncode:
         detail = result.stderr.decode("utf-8", "replace").strip()
-        raise RuntimeError(f"git {' '.join(args)} failed: {detail}")
+        raise OSError(f"git {' '.join(args)} failed: {detail}")
     return result.stdout
 
 
@@ -59,7 +60,7 @@ def _checkout(root: Path) -> Path:
     root = root.resolve()
     top = Path(_git(root, "rev-parse", "--show-toplevel").decode().strip()).resolve()
     if top != root:
-        raise RuntimeError(f"pass the Git checkout root: {top}")
+        raise OSError(f"pass the Git checkout root: {top}")
     return top
 
 
@@ -89,41 +90,60 @@ def _selected_languages(paths: set[str]) -> set[str]:
     return selected
 
 
-def check_ignores(root: Path, languages: set[str] | None = None) -> list[str]:
+def check_ignores(root: Path, languages: Sequence[str] = ()) -> list[Finding]:
     """Check effective ignore rules and generated files already in the index."""
     root = _checkout(root)
     tracked = _tracked(root)
-    selected = _selected_languages(tracked) if languages is None else languages
-    rules = [r for r in RULES if r.language == "common" or r.language in selected]
-    issues: list[str] = []
+    selected = set(languages) if languages else _selected_languages(tracked)
+    rules = [r for r in RULES if r.language == "repository" or r.language in selected]
+    findings: list[Finding] = []
     for rule in rules:
-        result = subprocess.run(
-            ["git", "check-ignore", "--quiet", "--no-index", "--", rule.sample],
-            cwd=root,
-            capture_output=True,
-            check=False,
-        )
+        try:
+            result = subprocess.run(
+                ["git", "check-ignore", "--quiet", "--no-index", "--", rule.sample],
+                cwd=root,
+                capture_output=True,
+                check=False,
+            )
+        except FileNotFoundError as error:
+            raise OSError("Git is required for repository quality rules") from error
         if result.returncode == 1:
-            issues.append(f"{rule.language}: add an ignore rule for {rule.sample}")
+            findings.append(
+                Finding(
+                    rule_id=rule_tag(
+                        rule.language, "git", "hygiene", "missing-ignore-rule"
+                    ),
+                    path=rule.sample,
+                    message=f"Generated {rule.language} path is not ignored by Git",
+                )
+            )
         elif result.returncode:
-            raise RuntimeError(
+            raise OSError(
                 "git check-ignore failed: "
                 + result.stderr.decode("utf-8", "replace").strip()
             )
-        for path in sorted(tracked):
+    for path in sorted(tracked):
+        for rule in rules:
             if matches_path(path, rule.pattern):
-                issues.append(
-                    f"{rule.language}: {path} is tracked; an ignore rule does not untrack it"
+                findings.append(
+                    Finding(
+                        rule_id=rule_tag(
+                            rule.language, "git", "hygiene", "tracked-generated-file"
+                        ),
+                        path=path,
+                        message="Generated path is tracked; an ignore rule does not untrack it",
+                    )
                 )
-    return issues
+                break
+    return findings
 
 
-def check_history(root: Path, max_blob_mib: float = 5.0) -> list[str]:
+def check_history(root: Path, max_blob_mib: float = 5.0) -> list[Finding]:
     """Inspect all reachable refs for large blobs and generated-file paths."""
     root = _checkout(root)
     if max_blob_mib <= 0:
         raise ValueError("max_blob_mib must be positive")
-    issues: list[str] = []
+    findings: list[Finding] = []
     objects: dict[bytes, str] = {}
     for line in _git(root, "rev-list", "--objects", "--all").splitlines():
         oid, _, path = line.partition(b" ")
@@ -139,9 +159,17 @@ def check_history(root: Path, max_blob_mib: float = 5.0) -> list[str]:
         for line in batch.splitlines():
             oid, kind, size = line.split()
             if kind == b"blob" and int(size) >= limit:
-                issues.append(
-                    f"large historical blob: {int(size) / 1048576:.1f} MiB "
-                    f"{objects[oid]} ({oid.decode()[:12]})"
+                findings.append(
+                    Finding(
+                        rule_id=rule_tag(
+                            "repository", "git", "hygiene", "large-historical-blob"
+                        ),
+                        path=objects[oid] or ".",
+                        message=(
+                            f"{int(size) / 1048576:.1f} MiB blob in Git history "
+                            f"({oid.decode()[:12]})"
+                        ),
+                    )
                 )
     paths = {
         raw.strip(b"\n").decode("utf-8", "replace")
@@ -153,40 +181,14 @@ def check_history(root: Path, max_blob_mib: float = 5.0) -> list[str]:
     for path in sorted(paths):
         for rule in RULES:
             if matches_path(path, rule.pattern):
-                issues.append(f"historical {rule.language} artifact: {path}")
+                findings.append(
+                    Finding(
+                        rule_id=rule_tag(
+                            rule.language, "git", "hygiene", "historical-artifact"
+                        ),
+                        path=path,
+                        message="Generated path was committed in reachable Git history",
+                    )
+                )
                 break
-    return issues
-
-
-def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        description="Audit Git ignores or reachable history"
-    )
-    parser.add_argument(
-        "--root", type=Path, default=Path.cwd(), help="Git checkout root"
-    )
-    commands = parser.add_subparsers(dest="command", required=True)
-    ignore = commands.add_parser("ignore", help="fast current-checkout ignore audit")
-    ignore.add_argument("--languages", nargs="+", choices=LANGUAGES)
-    history = commands.add_parser("history", help="infrequent all-ref history audit")
-    history.add_argument("--max-blob-mib", type=float, default=5.0)
-    args = parser.parse_args(argv)
-    try:
-        if args.command == "ignore":
-            issues = check_ignores(
-                args.root, set(args.languages) if args.languages else None
-            )
-        else:
-            issues = check_history(args.root, args.max_blob_mib)
-    except (OSError, RuntimeError, ValueError) as error:
-        print(f"Git hygiene audit failed: {error}", file=sys.stderr)
-        return 2
-    for issue in issues:
-        print(issue)
-    if not issues:
-        print(f"Git {args.command} audit passed")
-    return 1 if issues else 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+    return findings

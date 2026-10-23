@@ -1,28 +1,31 @@
-# Repository hygiene and check cadence
+# Git-backed repository quality gates
 
-Alphus has two Git hygiene commands. They use no quality-gates.toml settings:
+Git is another Alphus finding source. The repository gate package owns two built-in rules, and they return the same structured findings as source rules:
 
-| Command | Scope | When to run |
+| Rule | What it reads | Normal cadence |
 | --- | --- | --- |
-| alphus-git-hygiene ignore | Effective ignore rules and files already tracked in the index | Every pull request and push to main |
-| alphus-git-hygiene history | All reachable refs: large blobs and generated-file paths ever committed | Monthly and on demand |
+| git-ignores | Effective Git ignore rules and the tracked-file index | Every change |
+| git-history | All locally reachable refs, blob sizes, and committed path names | Monthly or manual |
 
-The cadence belongs to CI or a scheduler, not to each rule's configuration. A small, deterministic check should run for each change; slower checks can run nightly or weekly when they become too expensive for pull requests. Checks that traverse all Git history belong on a monthly or manual cadence. This keeps the ordinary Alphus profile fast and avoids adding scheduling fields to quality-gates.toml.
+A consumer only needs this policy to run either rule directly:
 
-The ignore command detects Python, JavaScript/TypeScript, and C/C++ from tracked source. Select a policy explicitly when preparing a new language area:
+    schema_version = 1
+    [checks.git]
 
-    alphus-git-hygiene ignore --languages python javascript cpp
+Then run alphus --rule git-ignores or alphus --rule git-history. No [files] inventory or extra console command is required. The self-profile in quality-gates.toml shows optional git and repository-history profiles. Its default check profile includes the fast git profile; the history profile remains separate.
 
-Common rules cover .env. Python rules cover virtual environments, caches, and distribution output. JavaScript rules cover node_modules, TypeScript build state, and ESLint cache. C/C++ rules cover CMake and compiler outputs. JSON, TOML, and Markdown have no generic generated artifacts to require; their tool-specific caches should be added only when a tool is introduced.
+The ignore rule detects Python, JavaScript/TypeScript, and C/C++ from tracked source. To check a language before its source is committed, list it under [checks.git]:
 
-The ignore command asks Git whether representative paths are *effectively* ignored. It also checks the index because adding .gitignore does not remove files already tracked. If a generated file is tracked, remove it from the index deliberately after checking whether it is a source fixture. A global ignore may satisfy the local command; CI runs from a clean checkout and checks the repository policy.
+    languages = ["python", "javascript", "cpp"]
 
-The history command uses the default 5 MiB blob threshold:
+Common rules cover .env and .pypirc. Python rules cover virtual environments, caches, distribution output, and Streamlit secrets. JavaScript rules cover node_modules, TypeScript build state, and ESLint cache. C/C++ rules cover CMake and compiler outputs. JSON, TOML, and Markdown have no universal generated artifacts to require; add rules for tool-specific caches only when a tool is introduced.
 
-    alphus-git-hygiene history --max-blob-mib 5
+The ignore gate asks Git whether representative generated paths are effectively ignored. It also reports generated paths already tracked, because adding .gitignore does not untrack them. A local global ignore can satisfy this rule, while clean CI confirms repository coverage. Review a tracked finding before removing it from the index; a deliberately committed fixture may need a narrower rule.
 
-It inspects Git object sizes without reading file content. It reports historical paths matching the same generated-file patterns, including .env. It is a filename and size audit, not secret-content scanning. A history finding needs human review: deleting a file in a new commit does not erase it from history, and rewriting shared history affects collaborators.
+The history gate defaults to a 5 MiB blob threshold. Configure max_blob_mib in [checks.git] when needed. It measures Git objects without reading file content and reports paths matching generated-file patterns, including .env. This is a filename and size audit, not secret-content scanning. Historical findings need human review: a new deletion commit does not erase old objects, and rewriting shared history affects collaborators.
 
-The workflow in .github/workflows/repository-hygiene.yml runs the fast command on pull requests and pushes to main. It runs the full-history command on the first day of each month at 04:23 UTC and by manual dispatch. The scheduled job becomes active when that workflow reaches the default branch. It uses a full Git checkout so all branch and tag history is available. For a local audit, fetch the refs you want to include before running history.
+The workflow in .github/workflows/repository-hygiene.yml runs alphus --profile git on pull requests and pushes to main. It runs alphus --profile repository-history on the first day of each month at 04:23 UTC and by manual dispatch, using a full checkout. The scheduled job becomes active after the workflow reaches the default branch. Local history audits include only refs available in that checkout; fetch the refs you intend to inspect first.
 
-To add another language's ignore policy, add representative generated paths and matching tracked-file patterns to RULES in src/alphus/gates/repository/git_hygiene.py, then add language detection and a CLI choice. Keep rules specific to generated output; source files and lockfiles should remain trackable.
+Cadence belongs to CI or a scheduler, not individual rule configuration. Keep quick deterministic gates in the ordinary profile. Put more expensive checks in separate nightly, weekly, or monthly profiles as their cost warrants. This avoids adding scheduling fields to quality-gates.toml.
+
+To add another language, add representative generated paths and tracked-file patterns to RULES and extend language detection in src/alphus/gates/repository/git_hygiene.py. Keep rules specific to generated output; source files and lockfiles should remain trackable.

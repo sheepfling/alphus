@@ -17,6 +17,21 @@ from alphus.policy.base import (
 )
 
 
+class GitRepositoryPolicy(StrictModel):
+    """Shared settings for fast Git ignores and infrequent history audits."""
+
+    languages: tuple[Literal["python", "javascript", "cpp"], ...] = ()
+    max_blob_mib: float = Field(default=5.0, gt=0)
+
+    @field_validator("languages")
+    @classmethod
+    def validate_languages(
+        cls, languages: tuple[Literal["python", "javascript", "cpp"], ...]
+    ) -> tuple[Literal["python", "javascript", "cpp"], ...]:
+        require_unique(languages, "Git languages must be unique")
+        return languages
+
+
 class PathRule(StrictModel):
     """One required or forbidden repository path and its finding text."""
 

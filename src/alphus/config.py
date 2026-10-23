@@ -36,6 +36,7 @@ from alphus.policy.orchestration import (
 )
 from alphus.policy.repository import (
     DependencyLockPolicy,
+    GitRepositoryPolicy,
     GlobRule,
     InstructionRouterPolicy,
     InstructionRouterRoute,
@@ -89,6 +90,7 @@ __all__ = [
     "FastApiPracticePolicy",
     "FileInventoryPolicy",
     "FileSizePolicy",
+    "GitRepositoryPolicy",
     "GlobRule",
     "InputContractPolicy",
     "InstructionRouterPolicy",

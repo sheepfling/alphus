@@ -53,9 +53,11 @@ language neutral.
 - `alphus.gates.source` owns portable source and launcher checks for Python,
   JavaScript, and JSON. Its `runners.py` binds these selectors to validated
   policies. Language-specific analysis remains inside each checker.
-- `alphus.gates.repository` owns architecture, package, dependency-lock, and
-  repository-layout checks. Its runner mapping adds related graph, version,
-  and callable-registry findings to the package-boundary selector.
+- `alphus.gates.repository` owns architecture, package, dependency-lock,
+  repository-layout, and Git-backed checks. Git ignores and history are
+  independent finding sources with separate fast and infrequent profiles. Its
+  runner mapping also adds graph, version, and callable-registry findings to
+  the package-boundary selector.
 - `alphus.gates.hygiene` owns file-size, line-length, comment-marker, and
   shared-utility checks. Comment markers use language-aware comment scanning
   while retaining one portable finding contract.

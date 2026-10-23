@@ -13,6 +13,7 @@ from alphus.execution.results import RuleOutput
 from alphus.gates.repository.architecture_graph import check_architecture_graph
 from alphus.gates.repository.callable_registry import check_callable_registry
 from alphus.gates.repository.dependency_locks import check_dependency_locks
+from alphus.gates.repository.git_hygiene import check_history, check_ignores
 from alphus.gates.repository.module_roles import check_module_roles
 from alphus.gates.repository.package_boundaries import check_package_boundaries
 from alphus.gates.repository.repository_layout import check_repository_layout
@@ -56,6 +57,12 @@ REPOSITORY_RULE_RUNNERS: Mapping[QualityRuleName, RepositoryRunner] = MappingPro
             root,
             require_policy(config.checks.repository_layout, "repository_layout"),
             tracked_files(root),
+        ),
+        "git-ignores": lambda root, _files, config: check_ignores(
+            root, require_policy(config.checks.git, "git").languages
+        ),
+        "git-history": lambda root, _files, config: check_history(
+            root, require_policy(config.checks.git, "git").max_blob_mib
         ),
     }
 )

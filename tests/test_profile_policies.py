@@ -99,7 +99,7 @@ def test_missing_global_files_for_rule_is_rejected_before_commands(
 
 @pytest.mark.parametrize("rule", get_args(QualityRuleName))
 def test_each_selected_portable_rule_requires_its_policy(rule: QualityRuleName) -> None:
-    with pytest.raises(MissingPolicyError, match=rule.replace("-", "_")):
+    with pytest.raises(MissingPolicyError, match=RULE_SPECS[rule].policy_field):
         CheckPolicies().require_rule(rule)
 
 
@@ -117,7 +117,7 @@ def test_direct_rule_without_policy_is_usage_error_even_with_no_files(
 ) -> None:
     path = repository(tmp_path)
     assert main(["--root", str(tmp_path), "--config", str(path), "--rule", rule]) == 2
-    assert f"checks.{rule.replace('-', '_')}" in capsys.readouterr().err
+    assert f"checks.{RULE_SPECS[rule].policy_field}" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("rule", ["file-size", "line-length"])

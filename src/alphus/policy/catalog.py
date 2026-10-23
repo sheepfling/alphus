@@ -18,6 +18,7 @@ class RuleSpec:
 
     policy_field: str
     output_shape: RuleOutputShape
+    requires_files: bool = True
 
 
 RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
@@ -37,6 +38,8 @@ RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
         "package-boundaries": RuleSpec("package_boundaries", "findings"),
         "dependency-locks": RuleSpec("dependency_locks", "findings"),
         "repository-layout": RuleSpec("repository_layout", "findings"),
+        "git-ignores": RuleSpec("git", "findings", requires_files=False),
+        "git-history": RuleSpec("git", "findings", requires_files=False),
         "numeric-literals": RuleSpec("numeric_literals", "findings"),
         "test-quality": RuleSpec("test_quality", "findings"),
         "input-contracts": RuleSpec("input_contracts", "findings"),

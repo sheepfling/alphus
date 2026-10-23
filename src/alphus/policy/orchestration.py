@@ -26,6 +26,7 @@ from alphus.policy.base import (
 from alphus.policy.catalog import RULE_SPECS
 from alphus.policy.repository import (
     DependencyLockPolicy,
+    GitRepositoryPolicy,
     RepositoryLayoutPolicy,
     VersionSyncPolicy,
 )
@@ -77,6 +78,7 @@ class CheckPolicies(StrictModel):
     version_sync: VersionSyncPolicy | None = None
     callable_registry: CallableRegistryPolicy | None = None
     dependency_locks: DependencyLockPolicy | None = None
+    git: GitRepositoryPolicy | None = None
 
     def require_rule(self, rule: QualityRuleName) -> None:
         """Validate only the primary policy needed by a selected rule."""

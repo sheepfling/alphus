@@ -26,6 +26,8 @@ QualityRuleName: TypeAlias = Literal[
     "package-boundaries",
     "dependency-locks",
     "repository-layout",
+    "git-ignores",
+    "git-history",
     "numeric-literals",
     "test-quality",
     "input-contracts",

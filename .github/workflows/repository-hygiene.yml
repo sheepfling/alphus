@@ -13,6 +13,7 @@ permissions:
 
 jobs:
   ignore-policy:
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -22,7 +23,7 @@ jobs:
       - name: Install Alphus
         run: python -m pip install --disable-pip-version-check -e .
       - name: Check language-specific ignores and tracked artifacts
-        run: alphus-git-hygiene ignore --languages python javascript cpp
+        run: alphus --profile git
 
   history-audit:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -37,4 +38,4 @@ jobs:
       - name: Install Alphus
         run: python -m pip install --disable-pip-version-check -e .
       - name: Audit all reachable Git history
-        run: alphus-git-hygiene history --max-blob-mib 5
+        run: alphus --profile repository-history

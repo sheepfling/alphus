@@ -42,8 +42,7 @@ def _render_finding(finding: Finding) -> None:
     """Render every finding with its canonical tag and location."""
     location = f"{finding.path}:{finding.line}" if finding.line else finding.path
     _human_print(
-        f"{finding.severity.upper()} {finding.rule_id} "
-        f"{location}: {finding.message}"
+        f"{finding.severity.upper()} {finding.rule_id} {location}: {finding.message}"
     )
 
 
@@ -181,18 +180,14 @@ def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
 
 def _render_shared_utilities(report: SharedUtilitiesReport) -> None:
     """Render shared-utility findings with their canonical tags."""
-    duplicate_tag = rule_tag(
-        "python", "none", "maintainability", "duplicate-helper"
-    )
+    duplicate_tag = rule_tag("python", "none", "maintainability", "duplicate-helper")
     hash_tag = rule_tag(
         "python", "none", "maintainability", "duplicate-file-hash-implementation"
     )
     for locations in report.duplicate_groups:
         _human_print(f"{duplicate_tag}: {', '.join(locations)}")
     if len(report.file_hash_implementations) > 1:
-        _human_print(
-            f"{hash_tag}: {', '.join(report.file_hash_implementations)}"
-        )
+        _human_print(f"{hash_tag}: {', '.join(report.file_hash_implementations)}")
     _human_print(f"Shared utilities: {len(report.duplicate_groups)} duplicate group(s)")
     _human_print(
         "File SHA-256 copies outside the shared helper: "
@@ -227,9 +222,7 @@ def _render_runtime_types(issues: Sequence[str]) -> None:
 def _render_cli_policy(issues: Sequence[str]) -> None:
     """Render the CLI migration inventory and endpoint count."""
     for issue in issues:
-        _human_print(
-            f"alphus/python/none/correctness/cli-contract-violation: {issue}"
-        )
+        _human_print(f"alphus/python/none/correctness/cli-contract-violation: {issue}")
     endpoints = {issue.partition(": ")[0] for issue in issues}
     _human_print(
         f"CLI policy: {len(issues)} violation(s) in {len(endpoints)} endpoint(s)"
@@ -267,9 +260,7 @@ def _python_style_categories(
 def _render_script_policy(issues: Sequence[str]) -> None:
     """Render the launcher-language inventory."""
     for issue in issues:
-        _human_print(
-            f"alphus/python/none/security/script-policy-violation: {issue}"
-        )
+        _human_print(f"alphus/python/none/security/script-policy-violation: {issue}")
     _human_print(f"Script policy: {len(issues)} violation(s)")
 
 
@@ -309,7 +300,7 @@ def _evaluate_rule(
         config_path if config_path.is_absolute() else checkout / config_path
     )
     config = _load_policy(resolved_config)
-    if config.files is None:
+    if config.files is None and RULE_SPECS[rule].requires_files:
         raise typer.BadParameter(
             "a built-in rule requires a top-level [files] inventory in the policy"
         )
@@ -319,7 +310,9 @@ def _evaluate_rule(
         else "error"
     )
     try:
-        files = candidate_files(checkout, config.files)
+        files = (
+            candidate_files(checkout, config.files) if config.files is not None else []
+        )
     except OSError as error:
         raise typer.BadParameter(str(error), param_hint="--root") from error
     if verbose:
@@ -328,6 +321,8 @@ def _evaluate_rule(
         output = run_builtin_rule(rule, checkout, files, config)
     except MissingPolicyError as error:
         raise typer.BadParameter(str(error)) from error
+    except (OSError, RuntimeError) as error:
+        raise typer.BadParameter(str(error), param_hint="--root") from error
     return RuleEvaluation.from_output(rule, output, threshold)
 
 
@@ -422,7 +417,7 @@ def _execute_profile(
         try:
             for step in policy.steps:
                 if step.name in plan.steps and step.kind == "rule":
-                    if config.files is None:
+                    if config.files is None and RULE_SPECS[step.rule].requires_files:
                         raise MissingPolicyError(
                             "a selected built-in rule requires a top-level [files] inventory"
                         )
@@ -566,7 +561,7 @@ def _execute_plan_profile(
     try:
         for step in policy.steps:
             if step.name in plan.steps and step.kind == "rule":
-                if config.files is None:
+                if config.files is None and RULE_SPECS[step.rule].requires_files:
                     raise MissingPolicyError(
                         "a selected built-in rule requires a top-level [files] inventory"
                     )

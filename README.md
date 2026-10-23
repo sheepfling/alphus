@@ -282,7 +282,7 @@ package, while each repository supplies its own tool selection and scope.
 Available rules are `file-size`, `line-length`, `json-structure`,
 `output-escaping`, `path-discovery`, `shared-utilities`, `python-style`,
 `runtime-types`, `cli`, `script-policy`, `module-roles`, `package-boundaries`,
-`dependency-locks`, and `repository-layout`. Package boundaries also check
+`dependency-locks`, `repository-layout`, `git-ignores`, and `git-history`. Package boundaries also check
 the configured architecture graph, metadata versions, and callable registry.
 The architecture graph policy accepts `syntax = "flowchart"` (the default)
 or `syntax = "architecture"` for Mermaid's `architecture-beta` diagrams.
@@ -297,9 +297,12 @@ Repository layout checks configured paths, tracked files, and instruction
 routers. `--report` prints findings with a successful exit status; `--json`
 emits machine-readable findings.
 
-The root must be a Git working tree. Checks receive files selected by the
+The root must be a Git working tree. Source checks receive files selected by
 `[files]` include and exclude patterns. The inventory includes tracked and
 non-ignored untracked files, and skips symlinks and paths that escape the root.
+Git-backed rules read ignore policy, the index, or reachable history directly;
+they need `[checks.git]` but no `[files]` inventory. See the
+[repository hygiene guide](docs/REPOSITORY-HYGIENE.md) for scope and cadence.
 
 ## Minimal policy
 

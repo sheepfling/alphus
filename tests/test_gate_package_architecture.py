@@ -96,6 +96,8 @@ def test_gate_themes_own_their_runner_mappings() -> None:
                 "package-boundaries",
                 "dependency-locks",
                 "repository-layout",
+                "git-ignores",
+                "git-history",
             },
         ),
         (
