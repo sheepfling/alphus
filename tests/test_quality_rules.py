@@ -563,6 +563,23 @@ def test_rule_profile_json_adapters_validate_each_owned_shape() -> None:
         ),
     ]
 
+    advisory_findings = diagnostics_from_json(
+        "python-style",
+        json.dumps(
+            {
+                "src/example.py": {
+                    "bare_containers": [],
+                    "heterogeneous_tuple_returns": [8],
+                    "opaque_mappings": [12],
+                }
+            }
+        ),
+    )
+    assert [(item.rule_id, item.severity) for item in advisory_findings] == [
+        ("alphus/python/none/style/heterogeneous-tuple-returns", "warning"),
+        ("alphus/python/none/style/opaque-mappings", "warning"),
+    ]
+
     shared_findings = diagnostics_from_json(
         "shared-utilities",
         json.dumps(

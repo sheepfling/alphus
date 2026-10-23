@@ -45,6 +45,18 @@ from alphus.support.inventory import candidate_files
 
 QualityRule = QualityRuleName
 _OUTPUT_FORMAT: ContextVar[str] = ContextVar("alphus_output_format", default="rich")
+_DIRECT_GIT_SUBPROCESS_TAG = rule_tag(
+    Scope.PYTHON, Framework.NONE, Category.MAINTAINABILITY, "direct-git-subprocess"
+)
+_RUNTIME_TYPE_TAG = rule_tag(
+    Scope.PYTHON, Framework.NONE, Category.TYPING, "runtime-type-contract-violation"
+)
+_CLI_CONTRACT_TAG = rule_tag(
+    Scope.PYTHON, Framework.NONE, Category.CORRECTNESS, "cli-contract-violation"
+)
+_SCRIPT_POLICY_TAG = rule_tag(
+    Scope.PYTHON, Framework.NONE, Category.SECURITY, "script-policy-violation"
+)
 
 
 def _render_finding(finding: Finding) -> None:
@@ -252,9 +264,7 @@ def _render_shared_utilities(report: SharedUtilitiesReport) -> None:
         "duplicate-file-hash-implementation",
     )
     for location in report.direct_git_calls:
-        _human_print(
-            f"alphus/python/none/maintainability/direct-git-subprocess: {location}"
-        )
+        _human_print(f"{_DIRECT_GIT_SUBPROCESS_TAG}: {location}")
     for locations in report.duplicate_groups:
         _human_print(f"{duplicate_tag}: {', '.join(locations)}")
     if len(report.file_hash_implementations) > 1:
@@ -289,16 +299,14 @@ def _render_python_style(findings: Mapping[str, StyleFindings]) -> int:
 def _render_runtime_types(issues: Sequence[str]) -> None:
     """Render every runtime type-narrowing finding."""
     for issue in issues:
-        _human_print(
-            f"alphus/python/none/typing/runtime-type-contract-violation: {issue}"
-        )
+        _human_print(f"{_RUNTIME_TYPE_TAG}: {issue}")
     _human_print(f"Runtime type checks: {len(issues)} violation(s)")
 
 
 def _render_cli_policy(issues: Sequence[str]) -> None:
     """Render the CLI migration inventory and endpoint count."""
     for issue in issues:
-        _human_print(f"alphus/python/none/correctness/cli-contract-violation: {issue}")
+        _human_print(f"{_CLI_CONTRACT_TAG}: {issue}")
     endpoints = {issue.partition(": ")[0] for issue in issues}
     _human_print(
         f"CLI policy: {len(issues)} violation(s) in {len(endpoints)} endpoint(s)"
@@ -355,7 +363,7 @@ def _python_style_categories(
 def _render_script_policy(issues: Sequence[str]) -> None:
     """Render the launcher-language inventory."""
     for issue in issues:
-        _human_print(f"alphus/python/none/security/script-policy-violation: {issue}")
+        _human_print(f"{_SCRIPT_POLICY_TAG}: {issue}")
     _human_print(f"Script policy: {len(issues)} violation(s)")
 
 

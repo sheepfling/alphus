@@ -324,6 +324,16 @@ def test_literal_rule_ids_require_semantic_construction_when_selected() -> None:
     visitor.visit(ast.parse(source))
     assert visitor.findings["literal_rule_ids"] == []
 
+    formatted = 'def report(issue): return f"alphus/python/none/style/{issue}"'
+    visitor = StyleVisitor(POLICY, semantic_rule_ids=True)
+    visitor.visit(ast.parse(formatted))
+    assert visitor.findings["literal_rule_ids"] == [1]
+
+    serialized = 'def report(finding): return f"{finding.rule_id}: {finding.message}"'
+    visitor = StyleVisitor(POLICY, semantic_rule_ids=True)
+    visitor.visit(ast.parse(serialized))
+    assert visitor.findings["literal_rule_ids"] == []
+
 
 def test_scoped_reporting_requires_logger_and_semantic_exit_codes() -> None:
     source = (
@@ -405,6 +415,47 @@ def test_scoped_semantic_results_check_nested_heterogeneous_tuples() -> None:
     visitor = StyleVisitor(POLICY, semantic_results=True)
     visitor.visit(ast.parse("def comments() -> list[tuple[int, str]]: return []"))
     assert visitor.findings["heterogeneous_tuple_returns"] == [1]
+
+
+def test_scoped_semantic_results_preserve_named_and_wire_contracts() -> None:
+    source = (
+        "from typing import NamedTuple, TypedDict\n"
+        "class Pair(NamedTuple):\n    count: int\n    name: str\n"
+        "class WireRow(TypedDict):\n    count: int\n    name: str\n"
+        "def pair() -> Pair: ...\n"
+        "def wire() -> WireRow: ...\n"
+        "def coordinates() -> tuple[int, int]: ...\n"
+        "def tags() -> tuple[str, ...]: ...\n"
+        "def json_row() -> dict[str, int | str]: ...\n"
+    )
+    visitor = StyleVisitor(POLICY, semantic_results=True)
+    visitor.visit(ast.parse(source))
+    assert visitor.findings["heterogeneous_tuple_returns"] == []
+    assert visitor.findings["opaque_mappings"] == []
+
+
+def test_semantic_result_paths_are_opt_in_and_respect_exclusions(
+    tmp_path: Path,
+) -> None:
+    relative = Path("src/results.py")
+    target = tmp_path / relative
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        "def load() -> tuple[dict[str, int], list[str]]: return {}, []\n",
+        encoding="utf-8",
+    )
+
+    disabled = findings_for(tmp_path, [relative], POLICY)
+    assert (
+        disabled.get(relative.as_posix(), {}).get("heterogeneous_tuple_returns") is None
+    )
+
+    enabled = POLICY.model_copy(update={"semantic_result_paths": ["src/**"]})
+    selected = findings_for(tmp_path, [relative], enabled)
+    assert selected[relative.as_posix()]["heterogeneous_tuple_returns"] == [1]
+
+    excluded = enabled.model_copy(update={"exclude": ["src/**"]})
+    assert findings_for(tmp_path, [relative], excluded) == {}
 
 
 def test_scoped_text_reader_check_detects_direct_path_reads() -> None:

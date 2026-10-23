@@ -41,6 +41,9 @@ _MESSAGES: TypeAdapter[list[str]] = TypeAdapter(list[str])
 _PYTHON_STYLE: TypeAdapter[PythonStyleOutput] = TypeAdapter(PythonStyleOutput)
 _SHARED_UTILITIES: TypeAdapter[_SharedUtilitiesWire] = TypeAdapter(_SharedUtilitiesWire)
 _SHARED_REPORT: TypeAdapter[SharedUtilitiesReport] = TypeAdapter(SharedUtilitiesReport)
+_ADVISORY_STYLE_CATEGORIES = frozenset(
+    {"opaque_mappings", "heterogeneous_tuple_returns"}
+)
 
 _MESSAGE_RULE_IDS: Mapping[QualityRuleName, str] = MappingProxyType(
     {
@@ -87,6 +90,7 @@ def _style_diagnostics(
             path=path,
             line=line,
             message=category.replace("_", " "),
+            severity=("warning" if category in _ADVISORY_STYLE_CATEGORIES else "error"),
         )
         for path, buckets in payload.items()
         for category, lines in buckets.items()

@@ -11,14 +11,38 @@ import os
 import subprocess
 import sys
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TypedDict
+from types import MappingProxyType
+from typing import NamedTuple, TypedDict
 
 from alphus.support.git import run_git
 from alphus.support.reporting import OutputFormat, ReportLine, ReportView, emit_report
+
+
+@dataclass(frozen=True, slots=True)
+class DirectorySize:
+    """Named, immutable metrics collected for one directory tree."""
+
+    total_bytes: int
+    file_count: int
+    largest_top_level: Mapping[str, int]
+    errors: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "largest_top_level", MappingProxyType(dict(self.largest_top_level))
+        )
+
+
+class ScanRoot(NamedTuple):
+    """One named directory scope, retaining lightweight pair unpacking."""
+
+    label: str
+    path: Path
 
 
 class WorktreeRecord(TypedDict):
@@ -116,7 +140,7 @@ def _registered(repo: Path) -> list[WorktreeRecord]:
     return rows
 
 
-def _logical_size(root: Path) -> tuple[int, int, dict[str, int], list[str]]:
+def _logical_size(root: Path) -> DirectorySize:
     total = 0
     files = 0
     top_level: Counter[str] = Counter()
@@ -143,11 +167,16 @@ def _logical_size(root: Path) -> tuple[int, int, dict[str, int], list[str]]:
                         errors.append(f"{item.path}: {error}")
         except OSError as error:
             errors.append(f"{directory}: {error}")
-    return total, files, dict(top_level.most_common(5)), errors[:10]
+    return DirectorySize(
+        total,
+        files,
+        dict(top_level.most_common(5)),
+        tuple(errors[:10]),
+    )
 
 
-def _scan_roots(values: Sequence[str]) -> list[tuple[str, Path]]:
-    roots: list[tuple[str, Path]] = []
+def _scan_roots(values: Sequence[str]) -> list[ScanRoot]:
+    roots: list[ScanRoot] = []
     labels: set[str] = set()
     paths: set[Path] = set()
     for number, value in enumerate(values, start=1):
@@ -159,11 +188,11 @@ def _scan_roots(values: Sequence[str]) -> list[tuple[str, Path]]:
             raise ValueError("--scan-root needs a unique LABEL=PATH or a path")
         labels.add(label)
         paths.add(path)
-        roots.append((label, path))
+        roots.append(ScanRoot(label, path))
     return roots
 
 
-def _scope(checkout: Path, roots: Sequence[tuple[str, Path]]) -> str:
+def _scope(checkout: Path, roots: Sequence[ScanRoot]) -> str:
     matches = [
         (len(root.parts), label)
         for label, root in roots
@@ -177,7 +206,7 @@ def _inspect(
     row: WorktreeRecord,
     base_ref: str | None,
     measure_size: bool,
-    roots: Sequence[tuple[str, Path]],
+    roots: Sequence[ScanRoot],
 ) -> WorktreeInspection:
     checkout = Path(row["path"])
     exists = checkout.is_dir()
@@ -186,27 +215,27 @@ def _inspect(
     file_count: int | None = None
     largest_top_level: dict[str, int] = {}
     head_reachable_from_base: bool | None = None
-    errors: list[str] = []
+    inspection_errors: list[str] = []
     if exists:
         status = _git(
             repo, "status", "--porcelain", "--untracked-files=normal", cwd=checkout
         )
         if status.returncode:
-            errors.append(status.stderr.decode(errors="replace").strip())
+            inspection_errors.append(status.stderr.decode(errors="replace").strip())
         else:
             status_name = "dirty" if status.stdout.strip() else "clean"
         if measure_size:
-            size, files, top_level, errors = _logical_size(checkout)
-            logical_bytes = size
-            file_count = files
-            largest_top_level = top_level
-            errors.extend(errors)
+            size = _logical_size(checkout)
+            logical_bytes = size.total_bytes
+            file_count = size.file_count
+            largest_top_level = dict(size.largest_top_level)
+            inspection_errors.extend(size.errors)
     if base_ref and row["head"]:
         reachable = _git(repo, "merge-base", "--is-ancestor", row["head"], base_ref)
         if reachable.returncode in (0, 1):
             head_reachable_from_base = reachable.returncode == 0
         else:
-            errors.append(reachable.stderr.decode(errors="replace").strip())
+            inspection_errors.append(reachable.stderr.decode(errors="replace").strip())
     return {
         **row,
         "scope": _scope(checkout, roots),
@@ -216,7 +245,7 @@ def _inspect(
         "file_count": file_count,
         "largest_top_level": largest_top_level,
         "head_reachable_from_base": head_reachable_from_base,
-        "errors": errors,
+        "errors": inspection_errors,
     }
 
 
@@ -239,9 +268,7 @@ def _unregistered(
             if child in seen:
                 continue
             seen.add(child)
-            size, files, top_level, errors = (
-                _logical_size(child) if measure_size else (None, None, {}, [])
-            )
+            size = _logical_size(child) if measure_size else None
             unknown.append(
                 {
                     "path": str(child),
@@ -251,10 +278,12 @@ def _unregistered(
                         for entry in child.iterdir()
                         if entry.is_dir()
                     ),
-                    "logical_bytes": size,
-                    "file_count": files,
-                    "largest_top_level": top_level,
-                    "errors": errors,
+                    "logical_bytes": None if size is None else size.total_bytes,
+                    "file_count": None if size is None else size.file_count,
+                    "largest_top_level": (
+                        {} if size is None else dict(size.largest_top_level)
+                    ),
+                    "errors": [] if size is None else list(size.errors),
                 }
             )
 

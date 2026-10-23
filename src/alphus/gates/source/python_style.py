@@ -457,6 +457,20 @@ class StyleVisitor(ast.NodeVisitor):
         ):
             self.findings["literal_rule_ids"].append(node.lineno)
 
+    def visit_JoinedStr(self, node: ast.JoinedStr) -> None:
+        """Reject manually formatted Alphus IDs, preserving ID-string boundaries."""
+        if self.semantic_rule_ids and any(
+            isinstance(value, ast.Constant)
+            and isinstance(value.value, str)
+            and re.search(
+                r"alphus/(?:[a-z]+/){3}",
+                value.value,
+            )
+            for value in node.values
+        ):
+            self.findings["literal_rule_ids"].append(node.lineno)
+        self.generic_visit(node)
+
     def opaque_allowed(self, line: int) -> bool:
         """Require a reason directly above an approved boundary declaration."""
         if not self.boundary_file or not 1 < line <= len(self.source_lines) + 1:
