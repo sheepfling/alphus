@@ -139,6 +139,7 @@ without blocking. Its positive and negative fixtures run in the package suite.
 The C++ advisory profile has a consumer integration test that exercises both
 style and trend steps, including a nonblocking finding and insufficient history.
 
+CI also invokes the standalone JavaScript and JSON orchestration profiles.
 The separate optional-gates CI job provisions a Python 3.11 checker with Mypy
 and Pyright and a Python 3.10 target with SnakeMD and mdutils. It executes the
 native target integration test and the symlink boundary tests on Linux, then
