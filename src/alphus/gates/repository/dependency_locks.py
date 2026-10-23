@@ -13,7 +13,7 @@ from packaging.utils import canonicalize_name
 
 from alphus.config import DependencyLockPolicy
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import rule_tag
+from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.support.data_access import contained_file
 
 
@@ -49,7 +49,10 @@ def _load_requirements(
             (
                 Finding(
                     rule_id=rule_tag(
-                        "repository", "none", "dependencies", "lock-include-cycle"
+                        Scope.REPOSITORY,
+                        Framework.NONE,
+                        Category.DEPENDENCIES,
+                        "lock-include-cycle",
                     ),
                     path=relative,
                     message="requirement include cycle",
@@ -63,7 +66,10 @@ def _load_requirements(
             (
                 Finding(
                     rule_id=rule_tag(
-                        "repository", "none", "dependencies", "lock-input-missing"
+                        Scope.REPOSITORY,
+                        Framework.NONE,
+                        Category.DEPENDENCIES,
+                        "lock-input-missing",
                     ),
                     path=relative,
                     message="requirement file is missing or resolves outside the repository",
@@ -90,7 +96,10 @@ def _load_requirements(
                 findings.append(
                     Finding(
                         rule_id=rule_tag(
-                            "repository", "none", "dependencies", "lock-include-invalid"
+                            Scope.REPOSITORY,
+                            Framework.NONE,
+                            Category.DEPENDENCIES,
+                            "lock-include-invalid",
                         ),
                         path=relative,
                         line=line_number,
@@ -108,7 +117,10 @@ def _load_requirements(
             findings.append(
                 Finding(
                     rule_id=rule_tag(
-                        "repository", "none", "dependencies", "requirement-invalid"
+                        Scope.REPOSITORY,
+                        Framework.NONE,
+                        Category.DEPENDENCIES,
+                        "requirement-invalid",
                     ),
                     path=relative,
                     line=line_number,
@@ -134,9 +146,9 @@ def _exact_pin_findings(
             findings.append(
                 Finding(
                     rule_id=rule_tag(
-                        "repository",
-                        "none",
-                        "dependencies",
+                        Scope.REPOSITORY,
+                        Framework.NONE,
+                        Category.DEPENDENCIES,
                         "requirement-pin-not-exact",
                     ),
                     path=path,
@@ -159,7 +171,10 @@ def _pair_findings(root: Path, input_file: str, lock_file: str) -> list[Finding]
             findings.append(
                 Finding(
                     rule_id=rule_tag(
-                        "repository", "none", "dependencies", "requirement-unlocked"
+                        Scope.REPOSITORY,
+                        Framework.NONE,
+                        Category.DEPENDENCIES,
+                        "requirement-unlocked",
                     ),
                     path=lock_file,
                     message=f"missing declared requirement {name} from {input_file}",
@@ -170,7 +185,10 @@ def _pair_findings(root: Path, input_file: str, lock_file: str) -> list[Finding]
                 findings.append(
                     Finding(
                         rule_id=rule_tag(
-                            "repository", "none", "dependencies", "lock-source-mismatch"
+                            Scope.REPOSITORY,
+                            Framework.NONE,
+                            Category.DEPENDENCIES,
+                            "lock-source-mismatch",
                         ),
                         path=lock_file,
                         message=f"{name} source differs from {input_file}",
@@ -182,9 +200,9 @@ def _pair_findings(root: Path, input_file: str, lock_file: str) -> list[Finding]
             findings.append(
                 Finding(
                     rule_id=rule_tag(
-                        "repository",
-                        "none",
-                        "dependencies",
+                        Scope.REPOSITORY,
+                        Framework.NONE,
+                        Category.DEPENDENCIES,
                         "requirement-pin-unsatisfied",
                     ),
                     path=lock_file,

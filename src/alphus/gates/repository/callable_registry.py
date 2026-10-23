@@ -8,7 +8,7 @@ from pathlib import Path
 
 from alphus.config import CallableRegistryPolicy
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import rule_tag
+from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.support.data_access import contained_file
 
 
@@ -68,7 +68,10 @@ def check_callable_registry(
         return [
             Finding(
                 rule_id=rule_tag(
-                    "python", "none", "architecture", "callable-registry-file-missing"
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.ARCHITECTURE,
+                    "callable-registry-file-missing",
                 ),
                 path=policy.registry_path,
                 message=(
@@ -111,7 +114,10 @@ def check_callable_registry(
         findings.append(
             Finding(
                 rule_id=rule_tag(
-                    "python", "none", "typing", "callable-protocol-untyped"
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.TYPING,
+                    "callable-protocol-untyped",
                 ),
                 path=policy.registry_path,
                 message=f"{policy.protocol_name} must define a typed callable Protocol",
@@ -121,7 +127,10 @@ def check_callable_registry(
         findings.append(
             Finding(
                 rule_id=rule_tag(
-                    "python", "none", "architecture", "callable-mapping-missing"
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.ARCHITECTURE,
+                    "callable-mapping-missing",
                 ),
                 path=policy.registry_path,
                 message=f"{policy.registry_name} must be an annotated registry",
@@ -133,7 +142,10 @@ def check_callable_registry(
         findings.append(
             Finding(
                 rule_id=rule_tag(
-                    "python", "none", "architecture", "callable-mapping-not-literal"
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.ARCHITECTURE,
+                    "callable-mapping-not-literal",
                 ),
                 path=policy.registry_path,
                 line=registry.lineno,
@@ -146,7 +158,10 @@ def check_callable_registry(
         findings.append(
             Finding(
                 rule_id=rule_tag(
-                    "python", "none", "typing", "callable-mapping-untyped"
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.TYPING,
+                    "callable-mapping-untyped",
                 ),
                 path=policy.registry_path,
                 line=registry.lineno,
@@ -169,9 +184,9 @@ def check_callable_registry(
                 findings.append(
                     Finding(
                         rule_id=rule_tag(
-                            "python",
-                            "none",
-                            "correctness",
+                            Scope.PYTHON,
+                            Framework.NONE,
+                            Category.CORRECTNESS,
                             "callable-key-target-mismatch",
                         ),
                         path=policy.registry_path,
@@ -185,7 +200,10 @@ def check_callable_registry(
                 findings.append(
                     Finding(
                         rule_id=rule_tag(
-                            "python", "none", "correctness", "callable-key-not-literal"
+                            Scope.PYTHON,
+                            Framework.NONE,
+                            Category.CORRECTNESS,
+                            "callable-key-not-literal",
                         ),
                         path=policy.registry_path,
                         line=registry.lineno,
@@ -195,7 +213,10 @@ def check_callable_registry(
     findings.extend(
         Finding(
             rule_id=rule_tag(
-                "python", "none", "architecture", "public-callable-unregistered"
+                Scope.PYTHON,
+                Framework.NONE,
+                Category.ARCHITECTURE,
+                "public-callable-unregistered",
             ),
             path=policy.registry_path,
             message=f"public callable {name} is not registered",
@@ -204,7 +225,9 @@ def check_callable_registry(
     )
     findings.extend(
         Finding(
-            rule_id=rule_tag("python", "none", "correctness", "unknown-callable"),
+            rule_id=rule_tag(
+                Scope.PYTHON, Framework.NONE, Category.CORRECTNESS, "unknown-callable"
+            ),
             path=policy.registry_path,
             message=f"registry references unknown callable {name}",
         )
@@ -212,7 +235,9 @@ def check_callable_registry(
     )
     findings.extend(
         Finding(
-            rule_id=rule_tag("python", "none", "correctness", "duplicate-callable"),
+            rule_id=rule_tag(
+                Scope.PYTHON, Framework.NONE, Category.CORRECTNESS, "duplicate-callable"
+            ),
             path=policy.registry_path,
             message=f"public callable {name} is registered {count} times",
         )

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from alphus.config import VersionSource, VersionSyncPolicy
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import rule_tag
+from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.support.data_access import nested_value, validate_json_value
 
 
@@ -44,7 +44,10 @@ def check_version_sync(root: Path, policy: VersionSyncPolicy) -> list[Finding]:
             findings.append(
                 Finding(
                     rule_id=rule_tag(
-                        "repository", "none", "metadata", "version-mismatch"
+                        Scope.REPOSITORY,
+                        Framework.NONE,
+                        Category.METADATA,
+                        "version-mismatch",
                     ),
                     path=source.path,
                     message=(

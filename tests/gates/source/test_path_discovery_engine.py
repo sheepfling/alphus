@@ -249,3 +249,16 @@ def test_test_assertions_are_outside_path_inspection_gate(tmp_path: Path) -> Non
 def test_raw_os_name_is_flagged() -> None:
     findings = python_path_findings('import os\nwindows = os.name == "nt"\n')
     assert findings == [(2, "raw os.name comparison; use a shared platform probe")]
+
+
+def test_python_path_comparisons_require_posix_conversion() -> None:
+    source = (
+        "if str(path) == expected: pass\n"
+        "if str(Path('src')) in entries: pass\n"
+        "if relative_path.as_posix() == expected: pass\n"
+        "if str(status) == expected: pass\n"
+    )
+    assert python_inspection_findings(source) == [
+        (1, "path string comparison; use as_posix() at the boundary"),
+        (2, "path string comparison; use as_posix() at the boundary"),
+    ]

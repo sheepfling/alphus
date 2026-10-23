@@ -25,7 +25,7 @@ from alphus.contracts.findings import (
     Finding,
     SeverityCounts,
 )
-from alphus.contracts.rule_tags import rule_tag
+from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.execution.dispatch import run_builtin_rule
 from alphus.execution.fixes import apply_fixes as apply_configured_fixes
 from alphus.execution.fixes import resolve_fix_plan
@@ -188,11 +188,11 @@ def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
             )
             sample = ", ".join(str(line) for line in lines[:5])
             _human_print(
-                f"{rule_tag('any', 'none', 'style', 'line-too-long')} {name}: "
+                f"{rule_tag(Scope.ANY, Framework.NONE, Category.STYLE, 'line-too-long')} {name}: "
                 f"{count} lines exceed {limit} columns (example lines: {sample})"
             )
         _human_print(
-            f"{rule_tag('any', 'none', 'style', 'line-too-long')}: "
+            f"{rule_tag(Scope.ANY, Framework.NONE, Category.STYLE, 'line-too-long')}: "
             f"{len(findings)} violation(s) in {len(counts)} files"
         )
         _render_severity_totals(findings)
@@ -235,9 +235,14 @@ def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
 
 def _render_shared_utilities(report: SharedUtilitiesReport) -> None:
     """Render shared-utility findings with their canonical tags."""
-    duplicate_tag = rule_tag("python", "none", "maintainability", "duplicate-helper")
+    duplicate_tag = rule_tag(
+        Scope.PYTHON, Framework.NONE, Category.MAINTAINABILITY, "duplicate-helper"
+    )
     hash_tag = rule_tag(
-        "python", "none", "maintainability", "duplicate-file-hash-implementation"
+        Scope.PYTHON,
+        Framework.NONE,
+        Category.MAINTAINABILITY,
+        "duplicate-file-hash-implementation",
     )
     for location in report.direct_git_calls:
         _human_print(
@@ -261,9 +266,14 @@ def _render_python_style(findings: Mapping[str, StyleFindings]) -> int:
         for kind, lines in _python_style_categories(issues):
             if lines:
                 total += len(lines)
+                tag = rule_tag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.STYLE,
+                    kind.replace("_", "-"),
+                )
                 _human_print(
-                    f"{rule_tag('python', 'none', 'style', kind.replace('_', '-'))} "
-                    f"{name}: {kind} at lines {lines[:8]} ({len(lines)} total)"
+                    f"{tag} {name}: {kind} at lines {lines[:8]} ({len(lines)} total)"
                 )
     _human_print(f"Python style: {total} violation(s) in {len(findings)} files")
     return total
@@ -311,9 +321,16 @@ def _python_style_categories(
         _StyleCategory("legacy_pydantic_fields", issues["legacy_pydantic_fields"]),
         _StyleCategory("mutable_module_constants", issues["mutable_module_constants"]),
         _StyleCategory("literal_rule_ids", issues["literal_rule_ids"]),
+        _StyleCategory("literal_rule_dimensions", issues["literal_rule_dimensions"]),
         _StyleCategory("raw_reporting_prints", issues["raw_reporting_prints"]),
         _StyleCategory("magic_exit_codes", issues["magic_exit_codes"]),
         _StyleCategory("repeated_literals", issues["repeated_literals"]),
+        _StyleCategory(
+            "heterogeneous_tuple_returns", issues["heterogeneous_tuple_returns"]
+        ),
+        _StyleCategory(
+            "undifferentiated_patterns", issues["undifferentiated_patterns"]
+        ),
         _StyleCategory(
             "pydantic_collection_contracts", issues["pydantic_collection_contracts"]
         ),

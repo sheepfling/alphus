@@ -12,8 +12,9 @@ from types import MappingProxyType
 
 from alphus.config import PathDiscoveryPolicy
 from alphus.contracts.findings import Finding, SourceFinding
-from alphus.contracts.rule_tags import rule_tag
+from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.support.inventory import matches_path
+from alphus.support.source_text import read_python_source
 
 JS_PATTERNS: Mapping[str, Pattern[str]] = MappingProxyType(
     {
@@ -344,12 +345,46 @@ def js_path_findings(source: str) -> list[SourceFinding]:
     return sorted(findings)
 
 
+def _stringified_path_in_comparison(expression: ast.AST) -> bool:
+    """Recognize stringification of path-like expressions used as a key or value."""
+    for node in ast.walk(expression):
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "str"
+            and len(node.args) == 1
+        ):
+            continue
+        match node.args[0]:
+            case ast.Name(id=name) if name == "path" or name.endswith("_path"):
+                return True
+            case ast.Call(func=ast.Name(id=constructor)) if constructor in {
+                "Path",
+                "PurePath",
+                "PurePosixPath",
+                "PureWindowsPath",
+            }:
+                return True
+            case _:
+                pass
+    return False
+
+
 def python_inspection_findings(source: str) -> list[SourceFinding]:
     """Find path and URL interpretation through raw string operations."""
     tree = ast.parse(source)
     findings: set[SourceFinding] = set()
     for node in ast.walk(tree):
         match node:
+            case ast.Compare() as comparison if _stringified_path_in_comparison(
+                comparison
+            ):
+                findings.add(
+                    SourceFinding(
+                        comparison.lineno,
+                        "path string comparison; use as_posix() at the boundary",
+                    )
+                )
             case ast.Call(func=ast.Attribute(attr=method), args=arguments) as call:
                 values: list[str] = []
                 for argument in arguments:
@@ -431,7 +466,11 @@ def check_path_discovery(
         path = checkout / relative
         if not path.is_file():
             continue
-        source = path.read_text(encoding="utf-8-sig")
+        source = (
+            read_python_source(path)
+            if suffix == ".py"
+            else path.read_text(encoding="utf-8-sig")
+        )
         inspect_strings = not any(
             matches_path(name, pattern) for pattern in policy.inspection_exclude
         )
@@ -442,11 +481,14 @@ def check_path_discovery(
             else js_path_findings(source)
             + ([] if not inspect_strings else js_inspection_findings(source))
         )
-        scope = "python" if suffix == ".py" else "javascript"
+        scope = Scope.PYTHON if suffix == ".py" else Scope.JAVASCRIPT
         findings.extend(
             Finding(
                 rule_id=rule_tag(
-                    scope, "none", "portability", "implicit-path-discovery"
+                    scope,
+                    Framework.NONE,
+                    Category.PORTABILITY,
+                    "implicit-path-discovery",
                 ),
                 path=name,
                 line=source_finding.line,

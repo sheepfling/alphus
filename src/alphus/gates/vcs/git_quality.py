@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import rule_tag
+from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.policy.repository import GitAttributeRequirement
 from alphus.support.git import git_output as _git
 from alphus.support.git import run_git
@@ -100,7 +100,10 @@ def check_ignores(root: Path, languages: Sequence[str] = ()) -> list[Finding]:
                 findings.append(
                     Finding(
                         rule_id=rule_tag(
-                            rule.language, "git", "hygiene", "missing-ignore-rule"
+                            Scope(rule.language),
+                            Framework.GIT,
+                            Category.HYGIENE,
+                            "missing-ignore-rule",
                         ),
                         path=sample,
                         message=f"Generated {rule.language} path is not ignored by Git",
@@ -117,7 +120,10 @@ def check_ignores(root: Path, languages: Sequence[str] = ()) -> list[Finding]:
                 findings.append(
                     Finding(
                         rule_id=rule_tag(
-                            rule.language, "git", "hygiene", "tracked-generated-file"
+                            Scope(rule.language),
+                            Framework.GIT,
+                            Category.HYGIENE,
+                            "tracked-generated-file",
                         ),
                         path=path,
                         message="Generated path is tracked; an ignore rule does not untrack it",
@@ -138,7 +144,10 @@ def check_attributes(
         findings.append(
             Finding(
                 rule_id=rule_tag(
-                    "repository", "git", "hygiene", "attributes-file-untracked"
+                    Scope.REPOSITORY,
+                    Framework.GIT,
+                    Category.HYGIENE,
+                    "attributes-file-untracked",
                 ),
                 path=".gitattributes",
                 message="Root .gitattributes must be tracked",
@@ -166,7 +175,10 @@ def check_attributes(
             findings.append(
                 Finding(
                     rule_id=rule_tag(
-                        "repository", "git", "hygiene", "attribute-mismatch"
+                        Scope.REPOSITORY,
+                        Framework.GIT,
+                        Category.HYGIENE,
+                        "attribute-mismatch",
                     ),
                     path=requirement.path,
                     message=(
@@ -202,7 +214,10 @@ def check_history(root: Path, max_blob_mib: float = 5.0) -> list[Finding]:
                 findings.append(
                     Finding(
                         rule_id=rule_tag(
-                            "repository", "git", "hygiene", "large-historical-blob"
+                            Scope.REPOSITORY,
+                            Framework.GIT,
+                            Category.HYGIENE,
+                            "large-historical-blob",
                         ),
                         path=objects[oid] or ".",
                         message=(
@@ -224,7 +239,10 @@ def check_history(root: Path, max_blob_mib: float = 5.0) -> list[Finding]:
                 findings.append(
                     Finding(
                         rule_id=rule_tag(
-                            rule.language, "git", "hygiene", "historical-artifact"
+                            Scope(rule.language),
+                            Framework.GIT,
+                            Category.HYGIENE,
+                            "historical-artifact",
                         ),
                         path=path,
                         message="Generated path was committed in reachable Git history",

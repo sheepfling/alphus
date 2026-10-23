@@ -9,7 +9,7 @@ from pathlib import Path
 
 from alphus.config import PydanticPracticePolicy
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import rule_tag
+from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.support.inventory import matches_path
 from alphus.support.source_scanning import (
     ImportAliases,
@@ -198,7 +198,10 @@ def pydantic_practice_findings(
         findings.extend(
             Finding(
                 rule_id=rule_tag(
-                    "python", "pydantic", "validation", "dump-revalidation"
+                    Scope.PYTHON,
+                    Framework.PYDANTIC,
+                    Category.VALIDATION,
+                    "dump-revalidation",
                 ),
                 path=path,
                 line=line,
@@ -214,7 +217,10 @@ def pydantic_practice_findings(
         findings.extend(
             Finding(
                 rule_id=rule_tag(
-                    "python", "pydantic", "correctness", "implicit-mutability"
+                    Scope.PYTHON,
+                    Framework.PYDANTIC,
+                    Category.CORRECTNESS,
+                    "implicit-mutability",
                 ),
                 path=path,
                 line=line,

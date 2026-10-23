@@ -4,46 +4,57 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from enum import StrEnum
 
 PRODUCT_NAME = "Alphus"
 NAMESPACE = PRODUCT_NAME.lower()
 
-SCOPES = frozenset(
-    {
-        "any",
-        "c",
-        "cpp",
-        "css",
-        "html",
-        "java",
-        "javascript",
-        "json",
-        "markdown",
-        "python",
-        "repository",
-        "toml",
-        "typescript",
-    }
-)
-FRAMEWORKS = frozenset({"fastapi", "git", "none", "pydantic", "scipy", "sqlalchemy"})
-CATEGORIES = frozenset(
-    {
-        "architecture",
-        "configuration",
-        "correctness",
-        "dependencies",
-        "hygiene",
-        "maintainability",
-        "metadata",
-        "orchestration",
-        "portability",
-        "security",
-        "style",
-        "testing",
-        "typing",
-        "validation",
-    }
-)
+
+class Scope(StrEnum):
+    ANY = "any"
+    C = "c"
+    CPP = "cpp"
+    CSS = "css"
+    HTML = "html"
+    JAVA = "java"
+    JAVASCRIPT = "javascript"
+    JSON = "json"
+    MARKDOWN = "markdown"
+    PYTHON = "python"
+    REPOSITORY = "repository"
+    TOML = "toml"
+    TYPESCRIPT = "typescript"
+
+
+class Framework(StrEnum):
+    FASTAPI = "fastapi"
+    GIT = "git"
+    NONE = "none"
+    PYDANTIC = "pydantic"
+    SCIPY = "scipy"
+    SQLALCHEMY = "sqlalchemy"
+
+
+class Category(StrEnum):
+    ARCHITECTURE = "architecture"
+    CONFIGURATION = "configuration"
+    CORRECTNESS = "correctness"
+    DEPENDENCIES = "dependencies"
+    HYGIENE = "hygiene"
+    MAINTAINABILITY = "maintainability"
+    METADATA = "metadata"
+    ORCHESTRATION = "orchestration"
+    PORTABILITY = "portability"
+    SECURITY = "security"
+    STYLE = "style"
+    TESTING = "testing"
+    TYPING = "typing"
+    VALIDATION = "validation"
+
+
+SCOPES = frozenset(Scope)
+FRAMEWORKS = frozenset(Framework)
+CATEGORIES = frozenset(Category)
 _SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 _NAMESPACE_PREFIX = re.compile(rf"^{re.escape(NAMESPACE)}/")
 
@@ -52,18 +63,22 @@ _NAMESPACE_PREFIX = re.compile(rf"^{re.escape(NAMESPACE)}/")
 class RuleTag:
     """The four classification dimensions of an Alphus finding."""
 
-    scope: str
-    framework: str
-    category: str
+    scope: Scope
+    framework: Framework
+    category: Category
     complaint: str
 
     def __post_init__(self) -> None:
-        if self.scope not in SCOPES:
-            raise ValueError(f"unsupported rule-tag scope: {self.scope!r}")
-        if self.framework not in FRAMEWORKS:
-            raise ValueError(f"unsupported rule-tag framework: {self.framework!r}")
-        if self.category not in CATEGORIES:
-            raise ValueError(f"unsupported rule-tag category: {self.category!r}")
+        for field, enum_type in (
+            ("scope", Scope),
+            ("framework", Framework),
+            ("category", Category),
+        ):
+            value = getattr(self, field)
+            try:
+                object.__setattr__(self, field, enum_type(value))
+            except ValueError as error:
+                raise ValueError(f"unsupported rule-tag {field}: {value!r}") from error
         if not _SLUG.fullmatch(self.complaint):
             raise ValueError(f"invalid rule-tag complaint: {self.complaint!r}")
 
@@ -86,12 +101,14 @@ class RuleTag:
                 "Alphus rule IDs must use "
                 f"{NAMESPACE}/<scope>/<framework>/<category>/<complaint>"
             )
-        tag = cls(*parts[1:])
+        tag = cls(Scope(parts[1]), Framework(parts[2]), Category(parts[3]), parts[4])
         if tag.rule_id != rule_id:
             raise ValueError(f"non-canonical Alphus rule ID: {rule_id!r}")
         return tag
 
 
-def rule_tag(scope: str, framework: str, category: str, complaint: str) -> str:
+def rule_tag(
+    scope: Scope, framework: Framework, category: Category, complaint: str
+) -> str:
     """Build a validated, canonical Alphus rule identifier."""
     return RuleTag(scope, framework, category, complaint).rule_id

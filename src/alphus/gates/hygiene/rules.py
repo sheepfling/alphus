@@ -8,7 +8,7 @@ from pathlib import Path
 
 from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import rule_tag
+from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.policy.base import require_policy
 from alphus.support.inventory import matches_path
 
@@ -34,7 +34,12 @@ def check_line_length(
                 if len(line) > limit:
                     findings.append(
                         Finding(
-                            rule_id=rule_tag("any", "none", "style", "line-too-long"),
+                            rule_id=rule_tag(
+                                Scope.ANY,
+                                Framework.NONE,
+                                Category.STYLE,
+                                "line-too-long",
+                            ),
                             path=relative.as_posix(),
                             line=number,
                             message=f"line has {len(line)} columns (limit {limit})",
@@ -51,7 +56,10 @@ def _initializer_findings(source: str, name: str, limit: int) -> list[Finding]:
         findings.append(
             Finding(
                 rule_id=rule_tag(
-                    "python", "none", "maintainability", "initializer-too-large"
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.MAINTAINABILITY,
+                    "initializer-too-large",
                 ),
                 path=name,
                 message=f"{Path(name).name} has {len(lines)} lines (limit {limit})",
@@ -63,9 +71,9 @@ def _initializer_findings(source: str, name: str, limit: int) -> list[Finding]:
                 findings.append(
                     Finding(
                         rule_id=rule_tag(
-                            "python",
-                            "none",
-                            "architecture",
+                            Scope.PYTHON,
+                            Framework.NONE,
+                            Category.ARCHITECTURE,
                             "initializer-contains-definition",
                         ),
                         path=name,
@@ -78,7 +86,10 @@ def _initializer_findings(source: str, name: str, limit: int) -> list[Finding]:
                     findings.append(
                         Finding(
                             rule_id=rule_tag(
-                                "python", "none", "style", "initializer-wildcard-import"
+                                Scope.PYTHON,
+                                Framework.NONE,
+                                Category.STYLE,
+                                "initializer-wildcard-import",
                             ),
                             path=name,
                             line=node.lineno,
@@ -118,7 +129,10 @@ def check_file_size(
             findings.append(
                 Finding(
                     rule_id=rule_tag(
-                        "any", "none", "maintainability", "file-exceeds-hard-limit"
+                        Scope.ANY,
+                        Framework.NONE,
+                        Category.MAINTAINABILITY,
+                        "file-exceeds-hard-limit",
                     ),
                     path=relative.as_posix(),
                     message=f"{count} lines exceeds the absolute {policy.hard_limit}-line cap",
@@ -130,7 +144,10 @@ def check_file_size(
             findings.append(
                 Finding(
                     rule_id=rule_tag(
-                        "any", "none", "maintainability", "code-file-too-large"
+                        Scope.ANY,
+                        Framework.NONE,
+                        Category.MAINTAINABILITY,
+                        "code-file-too-large",
                     ),
                     path=relative.as_posix(),
                     message=f"{count} lines exceeds the {policy.code_limit}-line limit",

@@ -26,7 +26,14 @@ from alphus.contracts.findings import (
     severity_meets_threshold,
 )
 from alphus.contracts.process import ExitCode
-from alphus.contracts.rule_tags import NAMESPACE, PRODUCT_NAME, rule_tag
+from alphus.contracts.rule_tags import (
+    NAMESPACE,
+    PRODUCT_NAME,
+    Category,
+    Framework,
+    Scope,
+    rule_tag,
+)
 from alphus.execution.commands import (
     command_arguments,
     step_directory,
@@ -35,15 +42,15 @@ from alphus.execution.commands import (
 from alphus.execution.profile_reporting import ProfileReporter
 from alphus.support.inventory import candidate_files
 
-_ORCHESTRATION_CATEGORY = "orchestration"
+_ORCHESTRATION_CATEGORY = Category.ORCHESTRATION
 _RULE_EXECUTION_FAILED = rule_tag(
-    "any", "none", _ORCHESTRATION_CATEGORY, "rule-execution-failed"
+    Scope.ANY, Framework.NONE, _ORCHESTRATION_CATEGORY, "rule-execution-failed"
 )
 _COMMAND_EXITED_NONZERO = rule_tag(
-    "any", "none", _ORCHESTRATION_CATEGORY, "command-exited-nonzero"
+    Scope.ANY, Framework.NONE, _ORCHESTRATION_CATEGORY, "command-exited-nonzero"
 )
 _COMMAND_LAUNCH_FAILED = rule_tag(
-    "any", "none", _ORCHESTRATION_CATEGORY, "command-launch-failed"
+    Scope.ANY, Framework.NONE, _ORCHESTRATION_CATEGORY, "command-launch-failed"
 )
 
 

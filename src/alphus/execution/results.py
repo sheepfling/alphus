@@ -15,7 +15,7 @@ from alphus.contracts.findings import (
     Severity,
     severity_meets_threshold,
 )
-from alphus.contracts.rule_tags import rule_tag
+from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
 from alphus.gates.source.python_style import StyleFindings
 from alphus.policy.base import QualityRuleName
@@ -45,11 +45,16 @@ _SHARED_REPORT: TypeAdapter[SharedUtilitiesReport] = TypeAdapter(SharedUtilities
 _MESSAGE_RULE_IDS: Mapping[QualityRuleName, str] = MappingProxyType(
     {
         "runtime-types": rule_tag(
-            "python", "none", "typing", "runtime-type-contract-violation"
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.TYPING,
+            "runtime-type-contract-violation",
         ),
-        "cli": rule_tag("python", "none", "correctness", "cli-contract-violation"),
+        "cli": rule_tag(
+            Scope.PYTHON, Framework.NONE, Category.CORRECTNESS, "cli-contract-violation"
+        ),
         "script-policy": rule_tag(
-            "python", "none", "security", "script-policy-violation"
+            Scope.PYTHON, Framework.NONE, Category.SECURITY, "script-policy-violation"
         ),
     }
 )
@@ -76,7 +81,9 @@ def _style_diagnostics(
     return tuple(
         Diagnostic(
             source="alphus",
-            rule_id=rule_tag("python", "none", "style", category.replace("_", "-")),
+            rule_id=rule_tag(
+                Scope.PYTHON, Framework.NONE, Category.STYLE, category.replace("_", "-")
+            ),
             path=path,
             line=line,
             message=category.replace("_", " "),
@@ -97,7 +104,12 @@ def _shared_diagnostics(
     diagnostics = [
         Diagnostic(
             source="alphus",
-            rule_id=rule_tag("python", "none", "maintainability", "duplicate-helper"),
+            rule_id=rule_tag(
+                Scope.PYTHON,
+                Framework.NONE,
+                Category.MAINTAINABILITY,
+                "duplicate-helper",
+            ),
             message=f"Duplicate Python helper: {', '.join(group)}",
         )
         for group in groups
@@ -107,9 +119,9 @@ def _shared_diagnostics(
             Diagnostic(
                 source="alphus",
                 rule_id=rule_tag(
-                    "python",
-                    "none",
-                    "maintainability",
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.MAINTAINABILITY,
                     "duplicate-file-hash-implementation",
                 ),
                 message=(
@@ -122,7 +134,10 @@ def _shared_diagnostics(
         Diagnostic(
             source="alphus",
             rule_id=rule_tag(
-                "python", "none", "maintainability", "direct-git-subprocess"
+                Scope.PYTHON,
+                Framework.NONE,
+                Category.MAINTAINABILITY,
+                "direct-git-subprocess",
             ),
             message=f"Git subprocess bypasses shared adapter: {location}",
         )
@@ -133,7 +148,10 @@ def _shared_diagnostics(
             Diagnostic(
                 source="alphus",
                 rule_id=rule_tag(
-                    "python", "none", "maintainability", "shared-utilities-check-failed"
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.MAINTAINABILITY,
+                    "shared-utilities-check-failed",
                 ),
                 message="Shared utilities check reported failure without details.",
             )

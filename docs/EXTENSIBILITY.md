@@ -25,10 +25,10 @@ Use lowercase kebab-case for each segment. The scope is a language, data format,
 any for a cross-language check, or repository for repository-wide rules.
 Use none when no framework applies; use a registered framework name such as
 pydantic or fastapi when a finding is framework-specific. Add framework names
-to the controlled set in alphus.contracts.rule_tags. Lint and format tools are
-producers, not frameworks. The category comes from the controlled
-list in alphus.contracts.rule_tags; the final segment names the specific
-complaint and stays independent of message wording.
+to the `Framework` enum in `alphus.contracts.rule_tags`. Lint and format
+tools are producers, not frameworks. Add languages to `Scope` and complaint
+categories to `Category` in the same module. The final segment names the
+specific complaint and stays independent of message wording.
 
 Examples:
 
@@ -38,8 +38,9 @@ Examples:
 - alphus/repository/none/architecture/edge-forbidden
 
 `RuleTag.parse()` exposes scope, framework, category, and complaint as
-validated fields. `rule_tag(...)` constructs IDs in Alphus-owned source, and
-the self-profile's Python structure gate flags complete raw tag literals in
+validated fields. Construct owned IDs with `rule_tag(Scope.PYTHON,
+Framework.NONE, Category.STYLE, "line-too-long")`. The self-profile's Python
+structure gate flags complete raw tag literals and literal tag dimensions in
 `src/alphus/**`. Profile JSON includes `finding_rollups`: scope totals,
 category totals, and category/complaint totals. These aggregate normalized
 Alphus diagnostics across languages, with severity counts for each group.

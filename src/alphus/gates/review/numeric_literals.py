@@ -11,6 +11,7 @@ from pathlib import Path
 
 from alphus.config import NumericLiteralPolicy, NumericLiteralSpec
 from alphus.contracts.findings import Finding
+from alphus.contracts.rule_tags import Framework
 from alphus.gates.review.numeric_engine import (
     NumericLiteralFinding,
     scan_numeric_literals,
@@ -42,7 +43,7 @@ def numeric_literal_findings(
 ) -> list[NumericLiteralFinding]:
     """Review exact configured literals in arithmetic without guessing dimensions."""
     specs = (*(_MATH_CONSTANTS if policy.math_constants else ()), *policy.constants)
-    return scan_numeric_literals(source, specs, framework="none")
+    return scan_numeric_literals(source, specs, framework=Framework.NONE)
 
 
 def check_numeric_literals(

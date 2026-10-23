@@ -11,6 +11,7 @@ from pathlib import Path
 
 from alphus.config import NumericLiteralSpec, ScipyConstantsPolicy
 from alphus.contracts.findings import Finding
+from alphus.contracts.rule_tags import Framework
 from alphus.gates.review.numeric_engine import (
     NumericLiteralFinding,
     scan_numeric_literals,
@@ -74,7 +75,7 @@ def scipy_literal_findings(
         *(_unit_specs(policy.inverse_conversions) if policy.unit_conversions else ()),
         *policy.constants,
     )
-    return scan_numeric_literals(source, specs, framework="scipy")
+    return scan_numeric_literals(source, specs, framework=Framework.SCIPY)
 
 
 def check_scipy_constants(

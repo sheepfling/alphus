@@ -11,7 +11,7 @@ from typing import cast
 
 from alphus.config import InstructionRouterPolicy, RepositoryLayoutPolicy
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import rule_tag
+from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.support.data_access import nested_value, validate_json_value
 from alphus.support.inventory import matches_path
 
@@ -20,46 +20,64 @@ class LayoutRuleId(StrEnum):
     """Stable identifiers emitted by repository layout checks."""
 
     ROUTER_ROOT_MISSING = rule_tag(
-        "repository", "none", "configuration", "router-root-missing"
+        Scope.REPOSITORY, Framework.NONE, Category.CONFIGURATION, "router-root-missing"
     )
     BRIDGE_ROOT_MISSING = rule_tag(
-        "repository", "none", "configuration", "bridge-root-missing"
+        Scope.REPOSITORY, Framework.NONE, Category.CONFIGURATION, "bridge-root-missing"
     )
     BRIDGE_ROOT_MARKER_MISSING = rule_tag(
-        "repository", "none", "configuration", "bridge-root-marker-missing"
+        Scope.REPOSITORY,
+        Framework.NONE,
+        Category.CONFIGURATION,
+        "bridge-root-marker-missing",
     )
     ROUTER_AREA_MISSING = rule_tag(
-        "repository", "none", "configuration", "router-area-missing"
+        Scope.REPOSITORY, Framework.NONE, Category.CONFIGURATION, "router-area-missing"
     )
     BRIDGE_AREA_MISSING = rule_tag(
-        "repository", "none", "configuration", "bridge-area-missing"
+        Scope.REPOSITORY, Framework.NONE, Category.CONFIGURATION, "bridge-area-missing"
     )
     BRIDGE_SCOPE_MISSING = rule_tag(
-        "repository", "none", "configuration", "bridge-scope-missing"
+        Scope.REPOSITORY, Framework.NONE, Category.CONFIGURATION, "bridge-scope-missing"
     )
     BRIDGE_ROUTER_IMPORT_MISSING = rule_tag(
-        "repository", "none", "configuration", "bridge-router-import-missing"
+        Scope.REPOSITORY,
+        Framework.NONE,
+        Category.CONFIGURATION,
+        "bridge-router-import-missing",
     )
-    PATH_REQUIRED = rule_tag("repository", "none", "configuration", "path-required")
-    PATH_FORBIDDEN = rule_tag("repository", "none", "configuration", "path-forbidden")
-    GLOB_FORBIDDEN = rule_tag("repository", "none", "configuration", "glob-forbidden")
+    PATH_REQUIRED = rule_tag(
+        Scope.REPOSITORY, Framework.NONE, Category.CONFIGURATION, "path-required"
+    )
+    PATH_FORBIDDEN = rule_tag(
+        Scope.REPOSITORY, Framework.NONE, Category.CONFIGURATION, "path-forbidden"
+    )
+    GLOB_FORBIDDEN = rule_tag(
+        Scope.REPOSITORY, Framework.NONE, Category.CONFIGURATION, "glob-forbidden"
+    )
     JSON_ARRAY_VALUE_REQUIRED = rule_tag(
-        "repository", "none", "configuration", "json-array-value-required"
+        Scope.REPOSITORY,
+        Framework.NONE,
+        Category.CONFIGURATION,
+        "json-array-value-required",
     )
     PYTHON_SYMBOL_REQUIRED = rule_tag(
-        "repository", "none", "configuration", "python-symbol-required"
+        Scope.REPOSITORY,
+        Framework.NONE,
+        Category.CONFIGURATION,
+        "python-symbol-required",
     )
     TOML_TABLE_REQUIRED = rule_tag(
-        "repository", "none", "configuration", "toml-table-required"
+        Scope.REPOSITORY, Framework.NONE, Category.CONFIGURATION, "toml-table-required"
     )
     TRACKED_SUFFIX_FORBIDDEN = rule_tag(
-        "repository", "none", "hygiene", "tracked-suffix-forbidden"
+        Scope.REPOSITORY, Framework.NONE, Category.HYGIENE, "tracked-suffix-forbidden"
     )
     TRACKED_PATH_FORBIDDEN = rule_tag(
-        "repository", "none", "hygiene", "tracked-path-forbidden"
+        Scope.REPOSITORY, Framework.NONE, Category.HYGIENE, "tracked-path-forbidden"
     )
     ROOT_DOCUMENT_FORBIDDEN = rule_tag(
-        "repository", "none", "hygiene", "root-document-forbidden"
+        Scope.REPOSITORY, Framework.NONE, Category.HYGIENE, "root-document-forbidden"
     )
 
 

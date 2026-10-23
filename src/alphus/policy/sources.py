@@ -244,12 +244,16 @@ class PythonStylePolicy(PythonSourceScanPolicy):
     semantic_rule_id_paths: Annotated[tuple[str, ...], Field(default_factory=tuple)]
     structured_reporting_paths: Annotated[tuple[str, ...], Field(default_factory=tuple)]
     repeated_literal_paths: Annotated[tuple[str, ...], Field(default_factory=tuple)]
+    semantic_result_paths: Annotated[tuple[str, ...], Field(default_factory=tuple)]
+    pattern_kind_paths: Annotated[tuple[str, ...], Field(default_factory=tuple)]
 
     @field_validator(
         "opaque_boundary_paths",
         "semantic_rule_id_paths",
         "structured_reporting_paths",
         "repeated_literal_paths",
+        "semantic_result_paths",
+        "pattern_kind_paths",
     )
     @classmethod
     def validate_boundary_paths(cls, patterns: Sequence[str]) -> tuple[str, ...]:

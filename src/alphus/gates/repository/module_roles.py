@@ -9,7 +9,7 @@ from typing import NamedTuple
 
 from alphus.config import ModuleRolePolicy, ModuleRoleRule
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import rule_tag
+from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 
 
 def _finding(
@@ -132,7 +132,12 @@ def _inspect_source(rule: ModuleRoleRule, source: str) -> list[Finding]:
         return [
             _finding(
                 rule,
-                rule_tag("python", "none", "correctness", "module-syntax-invalid"),
+                rule_tag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.CORRECTNESS,
+                    "module-syntax-invalid",
+                ),
                 error.lineno,
                 "module could not be parsed",
             )
@@ -148,9 +153,9 @@ def _inspect_source(rule: ModuleRoleRule, source: str) -> list[Finding]:
                             _finding(
                                 rule,
                                 rule_tag(
-                                    "python",
-                                    "none",
-                                    "architecture",
+                                    Scope.PYTHON,
+                                    Framework.NONE,
+                                    Category.ARCHITECTURE,
                                     "forbidden-module-import",
                                 ),
                                 node.lineno,
@@ -163,9 +168,9 @@ def _inspect_source(rule: ModuleRoleRule, source: str) -> list[Finding]:
                             _finding(
                                 rule,
                                 rule_tag(
-                                    "python",
-                                    "none",
-                                    "architecture",
+                                    Scope.PYTHON,
+                                    Framework.NONE,
+                                    Category.ARCHITECTURE,
                                     "forbidden-module-import-pattern",
                                 ),
                                 node.lineno,
@@ -179,7 +184,10 @@ def _inspect_source(rule: ModuleRoleRule, source: str) -> list[Finding]:
                         _finding(
                             rule,
                             rule_tag(
-                                "python", "none", "security", "forbidden-module-call"
+                                Scope.PYTHON,
+                                Framework.NONE,
+                                Category.SECURITY,
+                                "forbidden-module-call",
                             ),
                             node.lineno,
                             f"must not call '{name}'",
@@ -191,9 +199,9 @@ def _inspect_source(rule: ModuleRoleRule, source: str) -> list[Finding]:
                         _finding(
                             rule,
                             rule_tag(
-                                "python",
-                                "none",
-                                "architecture",
+                                Scope.PYTHON,
+                                Framework.NONE,
+                                Category.ARCHITECTURE,
                                 "forbidden-module-definition",
                             ),
                             node.lineno,
@@ -206,9 +214,9 @@ def _inspect_source(rule: ModuleRoleRule, source: str) -> list[Finding]:
                         _finding(
                             rule,
                             rule_tag(
-                                "python",
-                                "none",
-                                "architecture",
+                                Scope.PYTHON,
+                                Framework.NONE,
+                                Category.ARCHITECTURE,
                                 "forbidden-module-definition",
                             ),
                             node.lineno,
@@ -225,7 +233,10 @@ def _inspect_source(rule: ModuleRoleRule, source: str) -> list[Finding]:
             _finding(
                 rule,
                 rule_tag(
-                    "python", "none", "architecture", "forbidden-module-assignment"
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.ARCHITECTURE,
+                    "forbidden-module-assignment",
                 ),
                 line,
                 f"must not assign module-level name '{name}'",
@@ -271,7 +282,10 @@ def check_module_roles(root: Path, policy: ModuleRolePolicy) -> list[Finding]:
                 _finding(
                     rule,
                     rule_tag(
-                        "python", "none", "configuration", "module-role-path-invalid"
+                        Scope.PYTHON,
+                        Framework.NONE,
+                        Category.CONFIGURATION,
+                        "module-role-path-invalid",
                     ),
                     None,
                     module_path.error or "path is invalid",
@@ -285,7 +299,10 @@ def check_module_roles(root: Path, policy: ModuleRolePolicy) -> list[Finding]:
                 _finding(
                     rule,
                     rule_tag(
-                        "python", "none", "configuration", "module-role-file-unreadable"
+                        Scope.PYTHON,
+                        Framework.NONE,
+                        Category.CONFIGURATION,
+                        "module-role-file-unreadable",
                     ),
                     None,
                     f"module could not be read ({type(error).__name__})",

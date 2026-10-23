@@ -9,7 +9,7 @@ from pathlib import Path
 
 from alphus.config import FastApiPracticePolicy
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import rule_tag
+from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.support.inventory import matches_path
 from alphus.support.source_scanning import (
     ImportAliases,
@@ -144,9 +144,9 @@ def fastapi_practice_findings(
                         (
                             candidate.lineno,
                             rule_tag(
-                                "python",
-                                "fastapi",
-                                "correctness",
+                                Scope.PYTHON,
+                                Framework.FASTAPI,
+                                Category.CORRECTNESS,
                                 "literal-http-status",
                             ),
                             "literal HTTP status; consider a named status constant",
@@ -165,7 +165,10 @@ def fastapi_practice_findings(
                         (
                             value.lineno,
                             rule_tag(
-                                "python", "fastapi", "correctness", "literal-error-code"
+                                Scope.PYTHON,
+                                Framework.FASTAPI,
+                                Category.CORRECTNESS,
+                                "literal-error-code",
                             ),
                             "literal error code; use the consumer's named vocabulary",
                         )
@@ -181,9 +184,9 @@ def fastapi_practice_findings(
                             (
                                 value.lineno,
                                 rule_tag(
-                                    "python",
-                                    "fastapi",
-                                    "correctness",
+                                    Scope.PYTHON,
+                                    Framework.FASTAPI,
+                                    Category.CORRECTNESS,
                                     "literal-error-code",
                                 ),
                                 "literal error code; use the consumer's named vocabulary",

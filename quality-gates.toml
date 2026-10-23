@@ -67,6 +67,8 @@ repeated_literal_paths = [
   "src/alphus/execution/orchestration.py",
   "src/alphus/gates/python/compatibility.py",
 ]
+semantic_result_paths = ["src/alphus/gates/repository/**"]
+pattern_kind_paths = ["src/alphus/gates/cpp/artifact_scan.py"]
 
 [checks.runtime_types]
 extensions = [".py"]

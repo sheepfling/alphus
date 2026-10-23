@@ -345,3 +345,39 @@ def test_scoped_repeated_literals_ignore_type_declarations() -> None:
     visitor = StyleVisitor(POLICY, repeated_literals=True)
     visitor.visit(ast.parse(source))
     assert visitor.findings["repeated_literals"] == [3, 4, 5]
+
+
+def test_literal_rule_dimensions_require_canonical_enums() -> None:
+    raw = "rule_tag('python', 'none', 'style', 'line-too-long')"
+    visitor = StyleVisitor(POLICY, semantic_rule_ids=True)
+    visitor.visit(ast.parse(raw))
+    assert visitor.findings["literal_rule_dimensions"] == [1]
+
+    symbolic = "rule_tag(Scope.PYTHON, Framework.NONE, Category.STYLE, 'line-too-long')"
+    visitor = StyleVisitor(POLICY, semantic_rule_ids=True)
+    visitor.visit(ast.parse(symbolic))
+    assert visitor.findings["literal_rule_dimensions"] == []
+
+
+def test_scoped_semantic_results_require_named_heterogeneous_records() -> None:
+    source = (
+        "def load() -> tuple[dict[str, int], list[str]]: pass\n"
+        "def count() -> tuple[int, int]: pass\n"
+        "def many() -> tuple[str, ...]: pass\n"
+    )
+    visitor = StyleVisitor(POLICY, semantic_results=True)
+    visitor.visit(ast.parse(source))
+    assert visitor.findings["heterogeneous_tuple_returns"] == [1]
+
+
+def test_scoped_pattern_declarations_name_globs_and_regexes() -> None:
+    source = (
+        "import re\n"
+        "DEFAULT_INCLUDES = ('*.exe',)\n"
+        "SECTION_RE = re.compile('x')\n"
+        "DEFAULT_INCLUDE_GLOBS = ('*.dll',)\n"
+        "SECTION_REGEX = re.compile('y')\n"
+    )
+    visitor = StyleVisitor(POLICY, pattern_kinds=True)
+    visitor.visit(ast.parse(source))
+    assert visitor.findings["undifferentiated_patterns"] == [2, 3]

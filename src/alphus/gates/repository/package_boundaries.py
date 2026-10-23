@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 from alphus.config import PackageBoundaryPolicy
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import rule_tag
+from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,6 +27,14 @@ class _Distribution:
     name: str
     dependencies: frozenset[str]
     import_roots: frozenset[str]
+
+
+@dataclass(frozen=True, slots=True)
+class _DistributionScan:
+    """Named package records and metadata findings from one source inventory."""
+
+    distributions: tuple[_Distribution, ...]
+    findings: tuple[Finding, ...]
 
 
 class _ProjectMetadata(BaseModel):
@@ -103,9 +111,7 @@ def _inside_root(root: Path, path: Path) -> bool:
     return True
 
 
-def _distributions(
-    root: Path, policy: PackageBoundaryPolicy
-) -> tuple[list[_Distribution], list[Finding]]:
+def _distributions(root: Path, policy: PackageBoundaryPolicy) -> _DistributionScan:
     checkout = root.resolve(strict=True)
     configs = sorted(
         {
@@ -123,7 +129,10 @@ def _distributions(
             findings.append(
                 Finding(
                     rule_id=rule_tag(
-                        "python", "none", "metadata", "package-metadata-path-invalid"
+                        Scope.PYTHON,
+                        Framework.NONE,
+                        Category.METADATA,
+                        "package-metadata-path-invalid",
                     ),
                     path=relative_config,
                     message="distribution metadata resolves outside the repository root",
@@ -138,7 +147,10 @@ def _distributions(
             findings.append(
                 Finding(
                     rule_id=rule_tag(
-                        "python", "none", "metadata", "package-metadata-invalid"
+                        Scope.PYTHON,
+                        Framework.NONE,
+                        Category.METADATA,
+                        "package-metadata-invalid",
                     ),
                     path=relative_config,
                     message=f"invalid project metadata ({type(error).__name__})",
@@ -154,9 +166,9 @@ def _distributions(
                     findings.append(
                         Finding(
                             rule_id=rule_tag(
-                                "python",
-                                "none",
-                                "metadata",
+                                Scope.PYTHON,
+                                Framework.NONE,
+                                Category.METADATA,
                                 "package-entry-point-invalid",
                             ),
                             path=relative_config,
@@ -200,7 +212,7 @@ def _distributions(
                 frozenset(imports),
             )
         )
-    return distributions, findings
+    return _DistributionScan(tuple(distributions), tuple(findings))
 
 
 def _metadata_findings(
@@ -219,7 +231,10 @@ def _metadata_findings(
             findings.append(
                 Finding(
                     rule_id=rule_tag(
-                        "python", "none", "configuration", "package-contract-missing"
+                        Scope.PYTHON,
+                        Framework.NONE,
+                        Category.CONFIGURATION,
+                        "package-contract-missing",
                     ),
                     path=metadata_path,
                     message=f"distribution {name} has no boundary contract",
@@ -229,7 +244,10 @@ def _metadata_findings(
             findings.append(
                 Finding(
                     rule_id=rule_tag(
-                        "python", "none", "configuration", "package-import-root-missing"
+                        Scope.PYTHON,
+                        Framework.NONE,
+                        Category.CONFIGURATION,
+                        "package-import-root-missing",
                     ),
                     path=metadata_path,
                     message="distribution has no installed import package",
@@ -244,9 +262,9 @@ def _metadata_findings(
                     findings.append(
                         Finding(
                             rule_id=rule_tag(
-                                "python",
-                                "none",
-                                "dependencies",
+                                Scope.PYTHON,
+                                Framework.NONE,
+                                Category.DEPENDENCIES,
                                 "forbidden-package-dependency",
                             ),
                             path=metadata_path,
@@ -257,9 +275,9 @@ def _metadata_findings(
                     findings.append(
                         Finding(
                             rule_id=rule_tag(
-                                "python",
-                                "none",
-                                "dependencies",
+                                Scope.PYTHON,
+                                Framework.NONE,
+                                Category.DEPENDENCIES,
                                 "missing-package-dependency",
                             ),
                             path=metadata_path,
@@ -270,9 +288,9 @@ def _metadata_findings(
                 findings.append(
                     Finding(
                         rule_id=rule_tag(
-                            "python",
-                            "none",
-                            "dependencies",
+                            Scope.PYTHON,
+                            Framework.NONE,
+                            Category.DEPENDENCIES,
                             "unknown-package-dependency",
                         ),
                         path=metadata_path,
@@ -314,7 +332,10 @@ def _cycle_findings(
     return [
         Finding(
             rule_id=rule_tag(
-                "python", "none", "dependencies", "package-dependency-cycle"
+                Scope.PYTHON,
+                Framework.NONE,
+                Category.DEPENDENCIES,
+                "package-dependency-cycle",
             ),
             path="package metadata",
             message=f"dependency cycle {' -> '.join(cycle)}",
@@ -408,9 +429,9 @@ def _source_findings(
                 findings.append(
                     Finding(
                         rule_id=rule_tag(
-                            "python",
-                            "none",
-                            "configuration",
+                            Scope.PYTHON,
+                            Framework.NONE,
+                            Category.CONFIGURATION,
                             "duplicate-package-import-root",
                         ),
                         path="package metadata",
@@ -474,7 +495,10 @@ def _source_findings(
                         findings.append(
                             Finding(
                                 rule_id=rule_tag(
-                                    "python", "none", "architecture", "forbidden-import"
+                                    Scope.PYTHON,
+                                    Framework.NONE,
+                                    Category.ARCHITECTURE,
+                                    "forbidden-import",
                                 ),
                                 path=source_relative,
                                 line=line,
@@ -485,9 +509,9 @@ def _source_findings(
                         findings.append(
                             Finding(
                                 rule_id=rule_tag(
-                                    "python",
-                                    "none",
-                                    "architecture",
+                                    Scope.PYTHON,
+                                    Framework.NONE,
+                                    Category.ARCHITECTURE,
                                     "undeclared-import",
                                 ),
                                 path=source_relative,
@@ -502,7 +526,10 @@ def _source_findings(
                     findings.append(
                         Finding(
                             rule_id=rule_tag(
-                                "python", "none", "architecture", "loose-module-import"
+                                Scope.PYTHON,
+                                Framework.NONE,
+                                Category.ARCHITECTURE,
+                                "loose-module-import",
                             ),
                             path=source_relative,
                             line=line,
@@ -513,9 +540,9 @@ def _source_findings(
                     findings.append(
                         Finding(
                             rule_id=rule_tag(
-                                "python",
-                                "none",
-                                "architecture",
+                                Scope.PYTHON,
+                                Framework.NONE,
+                                Category.ARCHITECTURE,
                                 "forbidden-import-root",
                             ),
                             path=source_relative,
@@ -539,9 +566,9 @@ def _source_findings(
                                     Finding(
                                         rule_id=(
                                             rule_tag(
-                                                "python",
-                                                "none",
-                                                "architecture",
+                                                Scope.PYTHON,
+                                                Framework.NONE,
+                                                Category.ARCHITECTURE,
                                                 "opaque-dynamic-import",
                                             )
                                         ),
@@ -559,9 +586,9 @@ def _source_findings(
                                 Finding(
                                     rule_id=(
                                         rule_tag(
-                                            "python",
-                                            "none",
-                                            "architecture",
+                                            Scope.PYTHON,
+                                            Framework.NONE,
+                                            Category.ARCHITECTURE,
                                             "file-backed-module-loading",
                                         )
                                     ),
@@ -578,9 +605,9 @@ def _source_findings(
                             findings.append(
                                 Finding(
                                     rule_id=rule_tag(
-                                        "python",
-                                        "none",
-                                        "architecture",
+                                        Scope.PYTHON,
+                                        Framework.NONE,
+                                        Category.ARCHITECTURE,
                                         "opaque-dynamic-import",
                                     ),
                                     path=relative,
@@ -603,9 +630,9 @@ def _source_findings(
                             findings.append(
                                 Finding(
                                     rule_id=rule_tag(
-                                        "python",
-                                        "none",
-                                        "security",
+                                        Scope.PYTHON,
+                                        Framework.NONE,
+                                        Category.SECURITY,
                                         "python-path-mutation",
                                     ),
                                     path=relative,
@@ -623,7 +650,9 @@ def check_package_boundaries(
 ) -> list[Finding]:
     """Report metadata and source imports that violate configured package edges."""
     checkout = root.resolve(strict=True)
-    distributions, findings = _distributions(checkout, policy)
+    scan = _distributions(checkout, policy)
+    distributions = scan.distributions
+    findings = list(scan.findings)
     allowed = {
         _normalized_name(name): frozenset(
             _normalized_name(dependency) for dependency in dependencies

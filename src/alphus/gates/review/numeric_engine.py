@@ -7,7 +7,7 @@ import re
 from dataclasses import dataclass
 
 from alphus.config import NumericLiteralSpec
-from alphus.contracts.rule_tags import rule_tag
+from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 
 
 @dataclass(frozen=True, order=True, slots=True)
@@ -85,7 +85,9 @@ def _module_constant(statement: ast.stmt) -> bool:
 
 
 class _NumericVisitor(ast.NodeVisitor):
-    def __init__(self, specs: tuple[NumericLiteralSpec, ...], framework: str) -> None:
+    def __init__(
+        self, specs: tuple[NumericLiteralSpec, ...], framework: Framework
+    ) -> None:
         self.specs = specs
         self.framework = framework
         self.function_names: list[str] = []
@@ -172,7 +174,10 @@ class _NumericVisitor(ast.NodeVisitor):
                     NumericLiteralFinding(
                         line=line,
                         rule_id=rule_tag(
-                            "python", self.framework, "style", f"inline-{spec.kind}"
+                            Scope.PYTHON,
+                            self.framework,
+                            Category.STYLE,
+                            f"inline-{spec.kind}",
                         ),
                         message=(
                             f"possible inline {spec.name} {spec.kind} literal {value!r}; "
@@ -186,7 +191,7 @@ def scan_numeric_literals(
     source: str,
     specs: tuple[NumericLiteralSpec, ...],
     *,
-    framework: str,
+    framework: Framework,
 ) -> list[NumericLiteralFinding]:
     """Scan arithmetic for exact catalog values without evaluating expressions."""
     visitor = _NumericVisitor(specs, framework)

@@ -209,6 +209,47 @@ def has_abstract_pydantic_collection(node: ast.expr, names: AbstractSet[str]) ->
     return isinstance(node, (ast.Name, ast.Attribute)) and type_name(node) in names
 
 
+def has_undifferentiated_pattern_name(name: str, value: ast.expr) -> bool:
+    """Require scoped module pattern constants to identify glob or regex syntax."""
+    if (
+        isinstance(value, ast.Call)
+        and type_name(value.func) == "compile"
+        and isinstance(value.func, ast.Attribute)
+        and isinstance(value.func.value, ast.Name)
+        and value.func.value.id == "re"
+    ):
+        return not name.endswith(("_REGEX", "_REGEXES"))
+    if isinstance(value, (ast.Tuple, ast.List)) and any(
+        isinstance(item, ast.Constant)
+        and isinstance(item.value, str)
+        and any(character in item.value for character in "*?[")
+        for item in value.elts
+    ):
+        return not name.endswith(("_GLOB", "_GLOBS"))
+    return False
+
+
+def has_heterogeneous_tuple_result(annotation: ast.expr) -> bool:
+    """Require a named record when a tuple return carries distinct meanings."""
+    if isinstance(annotation, ast.BinOp) and isinstance(annotation.op, ast.BitOr):
+        return has_heterogeneous_tuple_result(
+            annotation.left
+        ) or has_heterogeneous_tuple_result(annotation.right)
+    if isinstance(annotation, ast.Subscript) and type_name(annotation.value) == "tuple":
+        if not isinstance(annotation.slice, ast.Tuple):
+            return False
+        items = annotation.slice.elts
+        return (
+            len(items) >= 2
+            and not any(
+                isinstance(item, ast.Constant) and item.value is Ellipsis
+                for item in items
+            )
+            and len({ast.dump(item) for item in items}) > 1
+        )
+    return False
+
+
 class StyleFindings(TypedDict):
     """Named Python-style finding categories with their source line numbers."""
 
@@ -226,9 +267,12 @@ class StyleFindings(TypedDict):
     pydantic_collection_contracts: list[int]
     mutable_module_constants: list[int]
     literal_rule_ids: list[int]
+    literal_rule_dimensions: list[int]
     raw_reporting_prints: list[int]
     magic_exit_codes: list[int]
     repeated_literals: list[int]
+    heterogeneous_tuple_returns: list[int]
+    undifferentiated_patterns: list[int]
 
 
 def is_mutable_literal(node: ast.expr) -> bool:
@@ -313,6 +357,8 @@ class StyleVisitor(ast.NodeVisitor):
         semantic_rule_ids: bool = False,
         structured_reporting: bool = False,
         repeated_literals: bool = False,
+        semantic_results: bool = False,
+        pattern_kinds: bool = False,
     ) -> None:
         self.findings: StyleFindings = {
             "bare_containers": [],
@@ -329,15 +375,20 @@ class StyleVisitor(ast.NodeVisitor):
             "pydantic_collection_contracts": [],
             "mutable_module_constants": [],
             "literal_rule_ids": [],
+            "literal_rule_dimensions": [],
             "raw_reporting_prints": [],
             "magic_exit_codes": [],
             "repeated_literals": [],
+            "heterogeneous_tuple_returns": [],
+            "undifferentiated_patterns": [],
         }
         self.source_lines = source.splitlines()
         self.boundary_file = boundary_file
         self.semantic_rule_ids = semantic_rule_ids
         self.structured_reporting = structured_reporting
         self.check_repeated_literals = repeated_literals
+        self.semantic_results = semantic_results
+        self.pattern_kinds = pattern_kinds
         self.boundary_marker_prefix = policy.opaque_boundary_marker_prefix
         self.boundary_min_reason_chars = policy.opaque_boundary_min_reason_chars
         self.forbidden_main_imports = set(policy.forbidden_main_imports)
@@ -429,6 +480,17 @@ class StyleVisitor(ast.NodeVisitor):
             else:
                 continue
             if (
+                self.pattern_kinds
+                and value is not None
+                and any(
+                    isinstance(target, ast.Name)
+                    and target.id.isupper()
+                    and has_undifferentiated_pattern_name(target.id, value)
+                    for target in targets
+                )
+            ):
+                self.findings["undifferentiated_patterns"].append(statement.lineno)
+            if (
                 value is not None
                 and is_mutable_literal(value)
                 and any(
@@ -493,6 +555,12 @@ class StyleVisitor(ast.NodeVisitor):
             ):
                 self.findings["bare_containers"].append(arg.lineno)
             self.check_opaque(arg.annotation, declaration_line)
+        if (
+            self.semantic_results
+            and node.returns is not None
+            and has_heterogeneous_tuple_result(node.returns)
+        ):
+            self.findings["heterogeneous_tuple_returns"].append(node.lineno)
         if node.returns is not None and has_quoted_type(node.returns):
             self.findings["quoted_types"].append(node.lineno)
         if node.returns is not None:
@@ -714,7 +782,17 @@ class StyleVisitor(ast.NodeVisitor):
     visit_ImportFrom = visit_Import
 
     def visit_Call(self, node: ast.Call) -> None:
-        """Require scoped orchestration output to use the reporter."""
+        """Require symbolic rule dimensions and scoped reporting."""
+        if (
+            self.semantic_rule_ids
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "rule_tag"
+            and any(
+                isinstance(argument, ast.Constant) and isinstance(argument.value, str)
+                for argument in node.args[:3]
+            )
+        ):
+            self.findings["literal_rule_dimensions"].append(node.lineno)
         if (
             self.structured_reporting
             and isinstance(node.func, ast.Name)
@@ -778,6 +856,14 @@ def findings_for(
             repeated_literals=any(
                 matches_path(relative.as_posix(), pattern)
                 for pattern in policy.repeated_literal_paths
+            ),
+            semantic_results=any(
+                matches_path(relative.as_posix(), pattern)
+                for pattern in policy.semantic_result_paths
+            ),
+            pattern_kinds=any(
+                matches_path(relative.as_posix(), pattern)
+                for pattern in policy.pattern_kind_paths
             ),
         )
         visitor.visit(ast.parse(source, filename=str(relative)))

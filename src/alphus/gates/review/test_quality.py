@@ -12,7 +12,7 @@ from pydantic import JsonValue, RootModel, ValidationError
 
 from alphus.config import TestQualityPolicy as _TestQualityPolicy
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import rule_tag
+from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 
@@ -198,7 +198,12 @@ class _TestScanner:
     def add(self, category: str, line: int, message: str) -> None:
         self.findings.append(
             Finding(
-                rule_tag("python", "none", "testing", category.replace("_", "-")),
+                rule_tag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.TESTING,
+                    category.replace("_", "-"),
+                ),
                 self.path,
                 message,
                 line,
