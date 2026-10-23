@@ -20,6 +20,18 @@
     "max_header_fanout": 200,
     "max_evidence_age_seconds": 21600
   },
+  "impact": {
+    "include_roots": ["include", "src"],
+    "min_files": 1,
+    "max_blast_radius": 500,
+    "max_heaviness": 250,
+    "max_hotspot_score": 100000,
+    "max_indirectness": 20,
+    "max_include_amplification": 40,
+    "max_translation_unit_fanout": 200,
+    "min_measured_translation_units": 1,
+    "max_evidence_age_seconds": 21600
+  },
   "tests": {
     "min_cases": 1,
     "allow_extra_tests": false,
@@ -37,7 +49,7 @@
     "max_evidence_age_seconds": 21600
   },
   "verdict": {
-    "min_reports": 6,
+    "min_reports": 7,
     "max_age_seconds": 21600,
     "require_manifest": true,
     "require_clean_source": true,
@@ -45,6 +57,7 @@
     "reports": [
       {"name": "source", "path": "../../out/quality/source.json", "expected_schema": 1, "expected_gate": "source"},
       {"name": "graph", "path": "../../out/quality/graph.json", "expected_schema": 1, "expected_gate": "graph"},
+      {"name": "impact", "path": "../../out/quality/impact.json", "expected_schema": 1, "expected_gate": "impact"},
       {"name": "tests", "path": "../../out/quality/tests.json", "expected_schema": 1, "expected_gate": "tests"},
       {"name": "package", "path": "../../out/quality/package.json", "expected_schema": 1, "expected_gate": "package"},
       {"name": "artifacts", "path": "../../out/quality/artifacts.json", "expected_schema": 1, "pass_field": "gate.passed"},

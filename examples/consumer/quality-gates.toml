@@ -29,6 +29,7 @@ exclude = []
 ".md" = 120
 
 [checks.json_structure]
+# Extensions are literal suffixes; list each one separately. Excludes are globs.
 extensions = [".py"]
 exclude = ["tests/**"]
 

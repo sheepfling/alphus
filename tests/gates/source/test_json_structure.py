@@ -110,6 +110,20 @@ def test_source_scanner_extensions_are_consumer_configurable(tmp_path: Path) -> 
         SourceScanPolicy(extensions=[".VUE"], exclude=[])
 
 
+def test_extension_sets_use_literal_suffixes_and_paths_use_globs() -> None:
+    policy = SourceScanPolicy(
+        extensions=[".c", ".cpp", ".cxx"],
+        exclude=["vendor/**"],
+    )
+    assert policy.extensions == (".c", ".cpp", ".cxx")
+    assert policy.exclude == ("vendor/**",)
+
+    with pytest.raises(ValueError, match="not glob or regex syntax"):
+        SourceScanPolicy(extensions=[".(c|cpp|cxx)"], exclude=[])
+    with pytest.raises(ValueError, match="not glob or regex syntax"):
+        SourceScanPolicy(extensions=["*.cpp"], exclude=[])
+
+
 def test_decoder_tables_are_immutable() -> None:
     assert isinstance(DECODER_MODULES, frozenset)
     with pytest.raises(AttributeError):

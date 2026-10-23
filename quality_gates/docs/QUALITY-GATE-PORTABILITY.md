@@ -1,5 +1,8 @@
 # Porting the quality gates to another C++ consumer
 
+For an overview of portable checks, advisory signals, and consumer-owned
+architecture rules, see the [C/C++ quality-gate coverage map](CPP-QUALITY-GATE-COVERAGE.md).
+
 The reusable checkers ship in the Alphus distribution under
 `alphus.gates.cpp`. Install Alphus in the consumer quality environment and
 copy calibrated copies of
@@ -9,15 +12,18 @@ and [`cpp-common-quality.example.json`](../examples/cpp-common-quality.example.j
 The examples intentionally fail until the consumer supplies real evidence,
 paths, and limits. Keep each consumer's build, test, and package adapters outside this directory.
 
-| Gate              | Portable input                                                          | Consumer supplies                                                                              |
-| ----------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Source ownership  | Repository root and source policy                                       | Include scope, size limits, documented growth guards                                           |
-| Artifact size     | Output directory, optional `objdump`, size policy                       | Profile-specific byte and count budgets, comparable baseline                                   |
-| Build graph       | Normalized target JSON, or CMake File API                               | Target IDs, types, compiled source counts, dependency IDs, optional compile fanout report      |
-| Test traceability | Case manifest, discovered-name JSON, JUnit or normalized execution JSON | Real selectors, source anchors, mapping IDs or internal classification                         |
-| Installed package | Install prefix, binding JSON or CMake cache, consumer result            | Required files, package path keys, unchanged binary hash and result evidence                   |
-| Worktree hygiene  | Git repository and labeled dedicated storage roots                      | Workstation count and byte budgets, known checkout locations, owner-specific archive procedure |
-| Verdict           | Required gate reports and build manifest                                | Build/test outcome report, run ID, source root, freshness window, exact coverage comparisons   |
+| Gate               | Portable input                                                            | Consumer supplies                                                                                               |
+| ------------------ | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Source ownership   | Repository root and source policy                                         | Include scope, size limits, documented growth guards                                                            |
+| Artifact size      | Output directory, optional `objdump`, size policy                         | Profile-specific byte and count budgets, comparable baseline                                                    |
+| Build graph        | Normalized target JSON, or CMake File API                                 | Target IDs, types, compiled source counts, dependency IDs, optional compile fanout report                       |
+| Include impact     | Selected source inventory, literal include edges, optional compile report | Source scope and calibrated caps for transitive dependents, dependency weight, hotspots, and measured TU fanout |
+| C/C++ style review | Source inventory and local text                                           | Provisional include candidates, repeated text windows, file size, and regex complexity signals                  |
+| Include trends     | Directory of impact reports bound to build manifests                      | Comparable configuration, toolchain, selected targets, and named input hashes                                   |
+| Test traceability  | Case manifest, discovered-name JSON, JUnit or normalized execution JSON   | Real selectors, source anchors, mapping IDs or internal classification                                          |
+| Installed package  | Install prefix, binding JSON or CMake cache, consumer result              | Required files, package path keys, unchanged binary hash and result evidence                                    |
+| Worktree hygiene   | Git repository and labeled dedicated storage roots                        | Workstation count and byte budgets, known checkout locations, owner-specific archive procedure                  |
+| Verdict            | Required gate reports and build manifest                                  | Build/test outcome report, run ID, source root, freshness window, exact coverage comparisons                    |
 
 All policy checks report `schema: 1` and a pass result. The common and worktree
 checkers use top-level `passed`, `findings`, `metrics`, and `run_id`. The
@@ -25,6 +31,12 @@ artifact policy result is currently under `gate.passed`; set that dotted
 `pass_field` in the verdict policy. Exit codes are `0` for pass, `1` for a
 quality finding, and `2` for invalid input or unreadable evidence. Treat `2`
 as a failed pipeline step too.
+
+The provisional C/C++ review commands are separate from pass/fail policy
+checks. They emit `status: "provisional"`, informational findings, and
+`blocking: false`; direct invocation exits successfully by default. Their
+optional nonzero-on-finding flags belong in orchestration steps marked
+`rollout = "provisional"`.
 
 ## Consumer adapter boundary
 
@@ -78,6 +90,6 @@ The next increments are:
 2. Add a verifier for non-Git source systems before claiming live source-state
    validation there. A dirty Git checkout is tracked by content hash, but a
    clean CI checkout remains the easiest reproducible baseline.
-3. Add trend and anomaly review after deterministic coverage is trustworthy.
-   Compare the same profile, target set, and toolchain; treat an AI explanation
-   as a hypothesis until a measurement confirms it.
+3. Build richer anomaly review on top of the provisional impact trend report.
+   Keep configuration, targets, toolchain, and named inputs comparable; treat
+   an explanation as a hypothesis until a measurement confirms it.

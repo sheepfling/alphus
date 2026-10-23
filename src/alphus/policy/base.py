@@ -120,7 +120,9 @@ def validate_extensions(
         )
         for extension in extensions
     ):
-        raise ValueError(description)
+        raise ValueError(
+            f"{description}; list literal suffixes separately, not glob or regex syntax"
+        )
     require_unique(extensions, f"{description} must be unique")
     return tuple(extensions)
 

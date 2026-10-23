@@ -139,7 +139,11 @@ dependencies.
 ## Profiles by consumer type
 
 A consumer selects capabilities explicitly. File extensions do not silently
-activate gates. Ordinary Python repositories can combine `python` and
+activate gates. An extensions list contains literal suffixes, so use
+".c", ".cpp", and ".cxx" as separate entries for several C++ spellings.
+Path include and exclude entries are POSIX globs; regex alternation such as
+".(c|cpp|cxx)" is not supported. The config validator rejects glob and regex
+syntax in extensions. Ordinary Python repositories can combine `python` and
 `markdown`; stub packages combine those with `stubs`.
 
 | Profile | Typical checks | Policy owner |
