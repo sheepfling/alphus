@@ -128,6 +128,28 @@ NATIVE_TOOLS = MappingProxyType(
                 ),
             ),
         ),
+        "eslint": NativeTool(
+            "javascript",
+            (
+                NativeStep(
+                    "JavaScript lint",
+                    ("eslint", "{files}"),
+                    ("eslint", "--fix", "{files}"),
+                    ("**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"),
+                ),
+            ),
+        ),
+        "prettier-javascript": NativeTool(
+            "javascript",
+            (
+                NativeStep(
+                    "JavaScript format",
+                    ("prettier", "--check", "{files}"),
+                    ("prettier", "--write", "{files}"),
+                    ("**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"),
+                ),
+            ),
+        ),
     }
 )
 

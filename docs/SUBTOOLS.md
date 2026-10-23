@@ -42,7 +42,10 @@ For standard commands, select tools by name in the repository's
 
 ```toml
 schema_version = 1
-tools = ["ruff", "pyright", "pytest", "rumdl", "mdrepo", "taplo", "prettier"]
+tools = [
+  "ruff", "pyright", "pytest", "rumdl", "mdrepo", "taplo", "prettier",
+  "eslint", "prettier-javascript",
+]
 ```
 
 Only selected tools run. Ruff contributes lint and format steps; rumdl,

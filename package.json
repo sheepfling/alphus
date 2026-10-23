@@ -1,0 +1,43 @@
+{
+  "name": "@alphus/javascript-quality",
+  "version": "0.1.0",
+  "description": "Reusable ESLint, Prettier, and strict JavaScript type-check policy for Alphus consumers",
+  "type": "module",
+  "engines": {
+    "node": "^20.19.0 || ^22.13.0 || >=24"
+  },
+  "files": [
+    "javascript"
+  ],
+  "exports": {
+    "./eslint": {
+      "types": "./javascript/eslint.config.d.ts",
+      "import": "./javascript/eslint.config.js"
+    },
+    "./prettier": {
+      "types": "./javascript/prettier.config.d.ts",
+      "import": "./javascript/prettier.config.js"
+    },
+    "./tsconfig": "./javascript/tsconfig.json"
+  },
+  "scripts": {
+    "test": "node --test javascript/tests/*.test.mjs",
+    "lint": "eslint javascript",
+    "format:check": "prettier --check javascript package.json",
+    "typecheck": "tsc -p javascript/tsconfig.check.json"
+  },
+  "dependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint-plugin-jsdoc": "^63.3.3",
+    "globals": "^16.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "eslint": "^10.13.0",
+    "prettier": "^3.9.9",
+    "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "eslint": "^10.0.0"
+  }
+}

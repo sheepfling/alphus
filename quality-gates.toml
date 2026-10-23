@@ -3,6 +3,7 @@ schema_version = 1
 [files]
 include = [
   "src/**/*.py", "tests/**/*.py", "README.md", "docs/**/*.md",
+  "javascript/**/*.js", "javascript/**/*.mjs", "javascript/**/*.d.ts",
   "**/*.toml", "*.toml", "**/*.json", "*.json",
 ]
 exclude = []

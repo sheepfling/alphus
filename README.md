@@ -74,6 +74,16 @@ python -m pip install \
   "alphus @ git+https://github.com/sheepfling/alphus.git@<commit-sha>"
 ```
 
+## JavaScript quality package
+
+This repository also provides an installable JavaScript policy package at
+[`javascript/`](javascript/README.md). It exports shared ESLint, Prettier, and
+strict JavaScript type-check settings with consumer-neutral fixture tests.
+Install it from an immutable Alphus Git commit and use the `eslint` and
+`prettier-javascript` tools in `quality-gates.toml`. The profile supports
+`.js`, `.jsx`, `.mjs`, and `.cjs`; consumers still select their own source and
+test directories in their TypeScript configuration.
+
 For local development, point the other repository's development environment at
 the standalone package directory:
 
@@ -158,8 +168,8 @@ Node-based checks, not just because a repository contains JavaScript.
 ## Python AST query API
 
 `alphus.support.source_scanning` provides small, policy-free queries over
-an already parsed Python `ast.Module`. The caller owns file discovery, parsing, scope,
-diagnostic wording, and the decision to reject a pattern. The query module
+an already parsed Python `ast.Module`. The caller owns file discovery, parsing,
+scope, diagnostic wording, and the decision to reject a pattern. The query module
 does not load a repository, import inspected source, or read files.
 
 | API | Contract |

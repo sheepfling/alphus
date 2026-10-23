@@ -25,7 +25,8 @@ scripts. `alphus --help` shows every option.
 Add tools one step at a time. The
 [two-tool Markdown example](../examples/markdown/quality-gates.toml) pairs
 rumdl with mdrepo using `tools = ["rumdl", "mdrepo"]`. The shortcut also
-accepts `ruff`, `pyright`, `pytest`, `taplo`, and `prettier`; selection order is
+accepts `ruff`, `pyright`, `pytest`, `taplo`, `prettier`, `eslint`, and
+`prettier-javascript`; selection order is
 execution and fix order. File-scoped lint and format steps pair a read-only
 check with an explicit fixer. Pyright and pytest run without a file scope or
 fixer. Alphus supplies a default `check` profile plus language profiles. The
@@ -85,7 +86,16 @@ activate gates. Ordinary Python repositories can combine `python` and
 | `stubs` | Build/install, API, typed examples, stubtest, smoke | Alphus and native checkers |
 | `toml` | TOML syntax and formatting | Python `tomllib` and Taplo |
 | `json` | JSON syntax and formatting | Python `json` and Prettier |
+| `javascript` | Lint and formatting across `.js`, `.jsx`, `.mjs`, and `.cjs` | Alphus JavaScript policy, ESLint, and Prettier |
 | `python-policy` | Optional repository-specific source conventions | Explicit Alphus source policy |
+
+The reusable JavaScript configs and synthetic rule fixtures live in the
+[`@alphus/javascript-quality` profile](../javascript/README.md). Install ESLint,
+Prettier, and that package in the consumer's Node development environment. The
+[JavaScript example](../examples/javascript/quality-gates.toml) selects both
+scoped commands with `tools = ["eslint", "prettier-javascript"]`. Consumers
+own the repository-specific `tsconfig` include paths; the shared TypeScript
+base enables `allowJs`, `checkJs`, `strict`, and `noEmit`.
 
 Define each profile's steps in the consumer policy, then compose them:
 
@@ -245,9 +255,9 @@ point. It selects one Alphus profile, which runs the owners in this order:
    safe `fix` command is available through an explicit Alphus fix plan.
 4. **Taplo and Prettier** check TOML and JSON formatting. Each formatter has
    a separate write command selected through Alphus's fix plan.
-5. **Python tools** own Python lint, formatting, static typing, and tests. The example uses
-   Ruff, Pyright, and pytest as configured commands. Pyright receives the same
-   interpreter selected by Alphus through `{python}`.
+5. **Python tools** own Python lint, formatting, static typing, and tests. The
+   example uses Ruff, Pyright, and pytest as configured commands. Pyright gets
+   the interpreter selected by Alphus through `{python}`.
 6. **Alphus orchestration** preserves the declared order, runs later steps
    after a failure, and combines each step's outcome into the profile exit
    status.

@@ -42,21 +42,59 @@ def test_native_tool_shortcut_generates_ordered_checks_and_language_profiles() -
         assert step.fix_argv is not None and step.files is not None
 
 
+def test_javascript_shortcuts_share_a_scoped_language_profile() -> None:
+    config = load_config_stream(
+        StringIO('schema_version = 1\ntools = ["eslint", "prettier-javascript"]\n')
+    )
+    policy = config.orchestration
+    assert policy is not None
+    check = policy.resolve_profile("check")
+    javascript = policy.resolve_profile("javascript")
+    assert check is not None and javascript is not None
+    expected = ("JavaScript lint", "JavaScript format")
+    assert check.steps == javascript.steps == expected
+    lint, format_step = policy.steps
+    assert isinstance(lint, CommandRunStep)
+    assert lint.argv == ("eslint", "{files}")
+    assert lint.fix_argv == ("eslint", "--fix", "{files}")
+    assert isinstance(format_step, CommandRunStep)
+    assert format_step.argv == ("prettier", "--check", "{files}")
+    assert format_step.fix_argv == ("prettier", "--write", "{files}")
+    assert lint.files is not None and format_step.files is not None
+    expected_scope = ("**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs")
+    assert lint.files.include == expected_scope
+    assert format_step.files.include == expected_scope
+
+
+def test_javascript_consumer_example_selects_the_shared_profile() -> None:
+    config = load_config(Path("examples/javascript/quality-gates.toml"))
+    policy = config.orchestration
+    assert policy is not None
+    check = policy.resolve_profile("check")
+    javascript = policy.resolve_profile("javascript")
+    assert check is not None and javascript is not None
+    assert check.steps == javascript.steps == ("JavaScript lint", "JavaScript format")
+
+
 @pytest.mark.parametrize(
     ("source", "message"),
     [
         ("schema_version = 1\ntools = []\n", "at least one native tool"),
         ('schema_version = 1\ntools = ["rumdl", "rumdl"]\n', "must not repeat"),
-        ('schema_version = 1\ntools = ["eslint"]\n', "unknown native tools"),
+        ('schema_version = 1\ntools = ["unknown-tool"]\n', "unknown native tools"),
         ('schema_version = 1\ntools = "rumdl"\n', "valid list"),
         (
-            'schema_version = 1\ntools = ["rumdl"]\n'
-            'orchestration_files = ["languages/python.toml"]\n',
+            (
+                'schema_version = 1\ntools = ["rumdl"]\n'
+                'orchestration_files = ["languages/python.toml"]\n'
+            ),
             "cannot be combined",
         ),
         (
-            'schema_version = 1\ntools = ["rumdl"]\n'
-            '[[orchestration.profiles]]\nname = "check"\nsteps = ["Markdown style"]\n',
+            (
+                'schema_version = 1\ntools = ["rumdl"]\n'
+                '[[orchestration.profiles]]\nname = "check"\nsteps = ["Markdown style"]\n'
+            ),
             "named profiles require explicit orchestration",
         ),
     ],
