@@ -6,8 +6,9 @@ import tomllib
 from pathlib import Path
 from typing import Annotated, Literal, TextIO
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
+from alphus.contracts.findings import Severity
 from alphus.policy.architecture import (
     ArchitectureGraphCheckPolicy,
     ArchitectureGraphPolicy,
@@ -19,6 +20,8 @@ from alphus.policy.architecture import (
 from alphus.policy.base import (
     QualityRuleName,
     StrictModel,
+    require_unique,
+    validate_single_path,
 )
 from alphus.policy.orchestration import (
     CheckPolicies,
@@ -74,8 +77,8 @@ __all__ = [
     "CallableRegistryPolicy",
     "CheckPolicies",
     "CliPolicy",
-    "CommentMarkerPolicy",
     "CommandRunStep",
+    "CommentMarkerPolicy",
     "DependencyLockPolicy",
     "FileInventoryPolicy",
     "FileSizePolicy",
@@ -130,6 +133,46 @@ class QualityGateConfig(StrictModel):
     orchestration: OrchestrationPolicy | None = None
 
 
+class _PartialOrchestration(StrictModel):
+    """Root-owned aggregate settings before language profiles are combined."""
+
+    steps: tuple[OrchestrationStep, ...] = ()
+    profiles: tuple[OrchestrationProfile, ...] = ()
+    default_profile: str = "check"
+    failure_threshold: Severity = "error"
+
+
+class _SplitPolicy(StrictModel):
+    """Validated root policy with language orchestration files."""
+
+    schema_version: Literal[1]
+    orchestration_files: tuple[str, ...]
+    files: FileInventoryPolicy
+    checks: Annotated[CheckPolicies, Field(default_factory=CheckPolicies)]
+    orchestration: _PartialOrchestration
+
+    @field_validator("orchestration_files")
+    @classmethod
+    def validate_files(cls, names: tuple[str, ...]) -> tuple[str, ...]:
+        for name in names:
+            validate_single_path(name, "orchestration file")
+        require_unique(names, "orchestration_files must not repeat a path")
+        return names
+
+
+class _LanguageOrchestration(StrictModel):
+    """Declarations owned by one language-specific profile file."""
+
+    steps: tuple[OrchestrationStep, ...] = ()
+    profiles: tuple[OrchestrationProfile, ...] = ()
+
+
+class _LanguagePolicy(StrictModel):
+    """A language file contributes steps and profiles only."""
+
+    orchestration: _LanguageOrchestration
+
+
 def _parse_config(text: str) -> QualityGateConfig:
     """Parse and validate one TOML configuration document."""
     return QualityGateConfig.model_validate(tomllib.loads(text))
@@ -142,5 +185,32 @@ def load_config_stream(stream: TextIO) -> QualityGateConfig:
 
 def load_config(path: Path) -> QualityGateConfig:
     """Read and validate a TOML quality policy at the caller-selected path."""
-    with path.open(encoding="utf-8") as stream:
-        return load_config_stream(stream)
+    document = tomllib.loads(path.read_text(encoding="utf-8"))
+    if "orchestration_files" not in document:
+        return QualityGateConfig.model_validate(document)
+    root = _SplitPolicy.model_validate(document)
+    base = path.parent.resolve(strict=True)
+    steps: list[OrchestrationStep] = []
+    profiles: list[OrchestrationProfile] = []
+    for name in root.orchestration_files:
+        fragment_path = (base / name).resolve(strict=True)
+        if not fragment_path.is_relative_to(base) or not fragment_path.is_file():
+            raise ValueError(
+                f"orchestration file must stay inside the policy directory: {name}"
+            )
+        fragment = _LanguagePolicy.model_validate(
+            tomllib.loads(fragment_path.read_text(encoding="utf-8"))
+        )
+        steps.extend(fragment.orchestration.steps)
+        profiles.extend(fragment.orchestration.profiles)
+    return QualityGateConfig(
+        schema_version=root.schema_version,
+        files=root.files,
+        checks=root.checks,
+        orchestration=OrchestrationPolicy(
+            steps=(*steps, *root.orchestration.steps),
+            profiles=(*profiles, *root.orchestration.profiles),
+            default_profile=root.orchestration.default_profile,
+            failure_threshold=root.orchestration.failure_threshold,
+        ),
+    )

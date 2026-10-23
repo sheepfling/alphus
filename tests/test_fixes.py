@@ -10,7 +10,13 @@ import pytest
 from pydantic import ValidationError
 
 from alphus.cli import main
-from alphus.config import CommandRunStep, FileInventoryPolicy
+from alphus.config import (
+    CommandRunStep,
+    FileInventoryPolicy,
+    OrchestrationPolicy,
+    OrchestrationProfile,
+)
+from alphus.execution.fixes import resolve_fix_plan
 
 
 def _repository(root: Path) -> None:
@@ -109,3 +115,22 @@ def test_fix_command_requires_a_file_scope() -> None:
             fix_argv=("tool", "--files={files}", "{files}"),
             files=FileInventoryPolicy(include=("*.py",)),
         )
+
+
+def test_fix_plan_reports_file_scope_for_read_only_command(tmp_path: Path) -> None:
+    _repository(tmp_path)
+    policy = OrchestrationPolicy(
+        steps=(
+            CommandRunStep(
+                kind="command",
+                name="Syntax",
+                argv=("tool", "check", "{files}"),
+                files=FileInventoryPolicy(include=("*.txt",)),
+            ),
+        ),
+        profiles=(OrchestrationProfile(name="check", steps=("Syntax",)),),
+    )
+    plan = resolve_fix_plan(tmp_path, tmp_path / "quality.toml", policy, "check")
+    assert [(entry.name, entry.files, entry.fixable) for entry in plan] == [
+        ("Syntax", ("sample.txt",), False)
+    ]

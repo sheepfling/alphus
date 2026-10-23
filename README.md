@@ -102,9 +102,9 @@ Consumers depend on `alphus`; they do not copy its source or import
 application packages from the repository that publishes the policy.
 See the [package architecture](docs/ARCHITECTURE.md) for the reusable
 checker, policy, and orchestration boundaries. The
-[consumer profile guide](docs/CONSUMER-PROFILES.md) describes explicit composition
-of Markdown, Python and stub-testing profiles, with a coordinated
-mdrepo, rumdl, and Python-tool example. The
+[consumer profile guide](docs/CONSUMER-PROFILES.md) describes language-specific
+policy files and explicit composition of Markdown, TOML, JSON, Python, and
+stub-testing profiles. The
 [shared stub-package CI action](docs/STUB-PACKAGE-CI.md) hosts reusable
 PEP 561 build, checker, and runtime-compatibility gates without adding an
 Alphus dependency to published stub packages. The
@@ -189,6 +189,13 @@ policy and a standalone `{files}` argument. The runner expands it to separate
 argument values for tracked and non-ignored untracked files, applying the step's
 include and exclude patterns. A scoped command passes when no files match and
 does not start the native tool.
+
+For a larger repository, list `orchestration_files` at the top of the root
+policy and put each language's steps and profile in a separate TOML file.
+The root profile composes them in the required order; see the
+[consumer example](examples/consumer/quality-gates.toml). Check commands
+remain read-only, while `fix_argv` lets a consumer declare a separate,
+file-scoped write command for a formatter or linter.
 
 ```toml
 [[orchestration.steps]]

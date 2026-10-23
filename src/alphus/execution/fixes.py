@@ -48,12 +48,18 @@ def resolve_fix_plan(
     entries: list[FixPlanEntry] = []
     for name in plan.steps:
         step: CommandRunStep | RuleRunStep = steps[name]
-        if not isinstance(step, CommandRunStep) or step.fix_argv is None:
+        if not isinstance(step, CommandRunStep):
             entries.append(FixPlanEntry(name=name, kind=step.kind))
+            continue
+        selected = (
+            candidate_files(checkout, step.files) if step.files is not None else []
+        )
+        scoped_files = tuple(path.as_posix() for path in selected)
+        if step.fix_argv is None:
+            entries.append(FixPlanEntry(name=name, kind="command", files=scoped_files))
             continue
         if step.files is None:
             raise ValueError(f"fixer {name!r} has no file scope")
-        selected = candidate_files(checkout, step.files)
         directory = step_directory(checkout, step.working_directory)
         arguments = command_arguments(
             step,
@@ -70,7 +76,7 @@ def resolve_fix_plan(
                 fix_argv=step.fix_argv,
                 expanded_argv=tuple(arguments),
                 working_directory=step.working_directory,
-                files=tuple(path.as_posix() for path in selected),
+                files=scoped_files,
             )
         )
     return tuple(entries)

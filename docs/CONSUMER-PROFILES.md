@@ -3,10 +3,13 @@
 The example policy at
 [`examples/consumer/quality-gates.toml`](../examples/consumer/quality-gates.toml)
 shows a single local profile that coordinates portable Alphus rules with
-mdrepo, rumdl, and the Python project's own lint, type, and test commands.
+mdrepo, rumdl, Taplo, Prettier, and the Python project's own lint, type, and
+test commands. The root policy includes separate files under
+`examples/consumer/languages/`; each language owns its native steps and
+profile. The root `check` profile orders those profiles.
 Copy it into a consumer repository and adjust file scopes, thresholds, and
-tool arguments there. Alphus does not add mdrepo, rumdl, Ruff, Pyright, or
-pytest to its runtime dependencies.
+tool arguments there. Alphus does not add these native tools to its runtime
+dependencies.
 
 ## Profiles by consumer type
 
@@ -19,8 +22,8 @@ activate gates. Ordinary Python repositories can combine `python` and
 | `markdown` | Document links/graph, style/format | mdrepo and rumdl |
 | `python` | Lint, formatting, project tests/tooling types | Ruff, pytest/unittest, Mypy/Pyright |
 | `stubs` | Build/install, API, typed examples, stubtest, smoke | Alphus and native checkers |
-| `toml` | TOML document syntax | Python `tomllib` or a consumer-selected validator |
-| `json` | JSON document syntax | Python `json` or a consumer-selected validator |
+| `toml` | TOML syntax and formatting | Python `tomllib` and Taplo |
+| `json` | JSON syntax and formatting | Python `json` and Prettier |
 | `python-policy` | Optional repository-specific source conventions | Explicit Alphus source policy |
 
 Define each profile's steps in the consumer policy, then compose them:
@@ -62,11 +65,12 @@ plugin import, category rewrite, or automatic type detection. Package-specific
 API expectations and runtime assertions remain in each stub repository.
 The shared checking algorithms and their unit tests live in Alphus.
 
-The consumer example defines independent `toml` and `json` profiles for
-document syntax. Each runs only when selected; a repository can add either to
-`check` when those files are part of its required gate. These document checks
-are separate from `json-structure`, which analyzes JSON parsing patterns in
-Python source.
+The consumer example defines independent `toml` and `json` profiles and
+includes both in `check`. Their syntax steps use strict document parsers and
+have no fixer: invalid content needs a human decision. Their formatting steps
+use Taplo and Prettier, with `fix_argv` for explicit application. These document
+checks are separate from `json-structure`, which analyzes JSON parsing patterns
+in Python source.
 JSON Lines and JSON with comments are distinct document formats. A consumer
 can add separate command steps for the formats it uses; their parsers, file
 patterns, and failure behavior should stay out of the Python-source
@@ -74,6 +78,47 @@ patterns, and failure behavior should stay out of the Python-source
 The same command-step mechanism lets a C++ or JavaScript consumer define its
 own native build, lint, and test profiles without changing the Python, stub,
 or Markdown selections.
+
+## Separate language files
+
+Put each language's command steps and profile in its own TOML file. The root
+policy lists them in `orchestration_files` and defines the aggregate profile:
+
+```toml
+schema_version = 1
+orchestration_files = [
+  "languages/python.toml", "languages/markdown.toml",
+  "languages/toml.toml", "languages/json.toml",
+]
+
+[files]
+include = ["src/**/*.py", "*.md", "**/*.toml", "**/*.json"]
+
+[orchestration]
+default_profile = "check"
+
+[[orchestration.profiles]]
+name = "check"
+includes = ["python", "markdown", "toml", "json"]
+```
+
+Each listed file may contain only `[[orchestration.steps]]` and
+`[[orchestration.profiles]]`. Paths are relative to the root policy's directory,
+must stay inside it after symlink resolution, and are loaded in list order.
+Names must be unique across all files. The root owns shared `[checks]`, file
+inventory, the failure threshold, and the aggregate profile. This is policy
+composition, not a new plugin or a separate language distribution. Stream-based
+policy loading accepts only self-contained policies because it has no path for
+resolving fragments.
+
+To add another language, add `languages/<name>.toml` with its check commands,
+file scopes, optional `fix_argv`, and its named profiles. Add that file to
+`orchestration_files`, then include the profile in `check` when it is ready to
+block the aggregate. A gate under evaluation may set `rollout = "provisional"`
+on its steps; it reports failures without failing the aggregate. Use an
+Alphus built-in rule only when a reusable check needs code beyond a native
+tool command. Put new language-specific implementations in
+`alphus.gates.<language>` and keep the command runner language neutral.
 
 Portable policy sections are optional when their gates are unselected. A
 command-only Markdown consumer can omit `[checks]` entirely; see the
@@ -132,12 +177,14 @@ point. It selects one Alphus profile, which runs the owners in this order:
    TOML policy.
 2. **mdrepo** checks Markdown links and the repository document graph. Its
    `mdrepo.toml` config and native rule IDs remain owned by mdrepo.
-3. **rumdl** checks Markdown formatting and style. Its config and rule IDs
-   remain owned by rumdl; `fmt --check` is read-only.
-4. **Python tools** own Python lint, static typing, and tests. The example uses
+3. **rumdl** checks Markdown style and offers `fmt` for fixable rules. Its
+   config and rule IDs remain owned by rumdl.
+4. **Taplo and Prettier** check TOML and JSON formatting. Each formatter has
+   a separate write command selected through Alphus's fix plan.
+5. **Python tools** own Python lint, formatting, static typing, and tests. The example uses
    Ruff, Pyright, and pytest as configured commands. Pyright receives the same
    interpreter selected by Alphus through `{python}`.
-5. **Alphus orchestration** preserves the declared order, runs later steps
+6. **Alphus orchestration** preserves the declared order, runs later steps
    after a failure, and combines each step's outcome into the profile exit
    status.
 
@@ -149,9 +196,10 @@ predicates. Use Alphus for reusable repository policy and as the coordinator.
 
 Install Alphus and the tools named by the copied profile in the same consumer
 development environment. For example, use the repository's lockfile or
-development-dependency group to install mdrepo, rumdl, Ruff, Pyright, and
-pytest. mdrepo must be importable by the selected Python interpreter because
-the sample invokes `python -m mdrepo`; rumdl and Pyright must be on `PATH`.
+development-dependency group to install mdrepo, rumdl, Taplo, Ruff, Pyright,
+pytest, and a pinned local Prettier package. mdrepo must be importable by the
+selected Python interpreter because the sample invokes `python -m mdrepo`;
+rumdl, Taplo, Prettier, and Pyright must be on `PATH`.
 The example `mdrepo.toml` explicitly enables missing-target and orphan checks;
 the tool defaults leave those checks disabled.
 

@@ -96,7 +96,12 @@ def _load_policy(path: Path) -> QualityGateConfig:
     """Load a policy and turn file/validation failures into CLI diagnostics."""
     try:
         return load_config(path)
-    except (OSError, tomllib.TOMLDecodeError, ValidationError) as error:
+    except (
+        OSError,
+        tomllib.TOMLDecodeError,
+        ValidationError,
+        ValueError,
+    ) as error:
         typer.echo(f"Invalid quality policy {path}: {error}", err=True)
         raise typer.Exit(2) from error
 

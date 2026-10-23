@@ -17,20 +17,9 @@ def test_consumer_example_composes_portable_rules_and_native_tools() -> None:
     assert profile is not None
     steps = {step.name: step for step in orchestration.steps}
 
-    assert [steps[name].kind for name in profile.steps] == [
-        "rule",
-        "rule",
-        "rule",
-        "rule",
-        "rule",
-        "rule",
-        "rule",
-        "command",
-        "command",
-        "command",
-        "command",
-        "command",
-    ]
+    assert len(profile.steps) == 17
+    assert [steps[name].kind for name in profile.steps[:7]] == ["rule"] * 7
+    assert all(steps[name].kind == "command" for name in profile.steps[7:])
     assert isinstance(steps["Python structure"], RuleRunStep)
     assert isinstance(steps["Markdown links and graph"], CommandRunStep)
     assert steps["Markdown links and graph"].argv == (
@@ -44,15 +33,15 @@ def test_consumer_example_composes_portable_rules_and_native_tools() -> None:
         "check",
     )
 
-    markdown = steps["Markdown format"]
+    markdown = steps["Markdown style"]
     assert isinstance(markdown, CommandRunStep)
     assert markdown.argv == (
         "rumdl",
-        "fmt",
-        "--check",
+        "check",
         "--no-cache",
         "{files}",
     )
+    assert markdown.fix_argv == ("rumdl", "fmt", "{files}")
     assert markdown.files is not None
     assert markdown.files.include == ("**/*.[mM][dD]", "*.[mM][dD]")
 
@@ -61,8 +50,15 @@ def test_consumer_example_composes_portable_rules_and_native_tools() -> None:
         "-m",
         "ruff",
         "check",
-        "src",
-        "tests",
+        "{files}",
+    )
+    assert steps["Python lint"].fix_argv == (
+        "{python}",
+        "-m",
+        "ruff",
+        "check",
+        "--fix",
+        "{files}",
     )
     assert steps["Python types"].argv == (
         "pyright",
@@ -86,10 +82,10 @@ def test_consumer_documentation_profile_has_only_native_doc_owners() -> None:
     assert orchestration is not None
     profile = orchestration.resolve_profile("docs")
     assert profile is not None
-    assert profile.steps == ("Markdown links and graph", "Markdown format")
+    assert profile.steps == ("Markdown links and graph", "Markdown style")
 
 
-def test_consumer_data_formats_have_separate_opt_in_profiles() -> None:
+def test_consumer_data_formats_have_separate_profiles_with_format_fixers() -> None:
     config = load_config(_POLICY)
     orchestration = config.orchestration
     assert orchestration is not None
@@ -97,8 +93,17 @@ def test_consumer_data_formats_have_separate_opt_in_profiles() -> None:
     json_profile = orchestration.resolve_profile("json")
     check = orchestration.resolve_profile("check")
 
-    assert toml is not None and toml.steps == ("TOML syntax",)
-    assert json_profile is not None and json_profile.steps == ("JSON syntax",)
+    assert toml is not None and toml.steps == ("TOML syntax", "TOML format")
+    assert json_profile is not None and json_profile.steps == (
+        "JSON syntax",
+        "JSON format",
+    )
     assert check is not None
-    assert "TOML syntax" not in check.steps
-    assert "JSON syntax" not in check.steps
+    assert all(name in check.steps for name in (*toml.steps, *json_profile.steps))
+    steps = {step.name: step for step in orchestration.steps}
+    assert isinstance(steps["TOML format"], CommandRunStep)
+    assert steps["TOML format"].fix_argv == ("taplo", "fmt", "{files}")
+    assert isinstance(steps["JSON format"], CommandRunStep)
+    assert steps["JSON format"].fix_argv == ("prettier", "--write", "{files}")
+    assert steps["TOML syntax"].fix_argv is None
+    assert steps["JSON syntax"].fix_argv is None

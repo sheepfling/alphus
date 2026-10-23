@@ -15,7 +15,8 @@ argv = ["{python}", "-m", "mdrepo", "--root", "{root}", "check", "--summary"]
 [[orchestration.steps]]
 kind = "command"
 name = "Markdown style"
-argv = ["rumdl", "fmt", "--check", "{files}"]
+argv = ["rumdl", "check", "{files}"]
+fix_argv = ["rumdl", "fmt", "{files}"]
 
 [orchestration.steps.files]
 include = ["*.md", "**/*.md"]

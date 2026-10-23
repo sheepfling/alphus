@@ -14,6 +14,11 @@ the configured file inventory, and combines results into one exit status.
 Native language tools retain their own checks and run as configured argument
 vectors. Python owns ordering and aggregation without importing compiler,
 Java, or Node ecosystems.
+Consumer policies can split orchestration steps and profiles into separate
+language TOML files through root-level `orchestration_files`. The loader
+combines them before validating unique names and profile references. The root
+policy owns shared file inventory and gate settings; language files only add
+steps and profiles.
 
 Alphus has two gate shapes. A portable rule inspects selected repository files
 and returns Alphus findings. A workflow gate coordinates tools and environments
@@ -153,8 +158,9 @@ Markdown link and formatting tools as ordinary command steps without adding
 repository-specific code to the package.
 
 For a coordinated consumer example that assigns Markdown graph checks to
-mdrepo, Markdown formatting to rumdl, and Python lint, typing, and tests to
-their native tools, see [consumer quality profiles](CONSUMER-PROFILES.md).
+mdrepo, Markdown lint and fixes to rumdl, TOML formatting to Taplo, JSON
+formatting to Prettier, and Python lint, typing, and tests to their native
+tools, see [consumer quality profiles](CONSUMER-PROFILES.md).
 This keeps upstream rule ownership intact while Alphus aggregates profile
 status.
 

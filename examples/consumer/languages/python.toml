@@ -1,0 +1,69 @@
+[[orchestration.steps]]
+kind = "rule"
+name = "Python structure"
+rule = "python-style"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Runtime type narrowing"
+rule = "runtime-types"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "JSON structure"
+rule = "json-structure"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Output escaping"
+rule = "output-escaping"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Path discovery"
+rule = "path-discovery"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Line length"
+rule = "line-length"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "File size"
+rule = "file-size"
+
+[[orchestration.steps]]
+kind = "command"
+name = "Python lint"
+argv = ["{python}", "-m", "ruff", "check", "{files}"]
+fix_argv = ["{python}", "-m", "ruff", "check", "--fix", "{files}"]
+files = { include = ["src/**/*.py", "tests/**/*.py"] }
+
+[[orchestration.steps]]
+kind = "command"
+name = "Python format"
+argv = ["{python}", "-m", "ruff", "format", "--check", "{files}"]
+fix_argv = ["{python}", "-m", "ruff", "format", "{files}"]
+files = { include = ["src/**/*.py", "tests/**/*.py"] }
+
+[[orchestration.steps]]
+kind = "command"
+name = "Python types"
+argv = ["pyright", "--pythonpath", "{python}", "src", "tests"]
+
+[[orchestration.steps]]
+kind = "command"
+name = "Python tests"
+argv = ["{python}", "-m", "pytest", "tests", "-q"]
+
+[[orchestration.profiles]]
+name = "python-policy"
+steps = [
+  "Python structure", "Runtime type narrowing", "JSON structure",
+  "Output escaping", "Path discovery", "Line length", "File size",
+]
+
+[[orchestration.profiles]]
+name = "python"
+steps = ["Python lint", "Python format", "Python types", "Python tests"]

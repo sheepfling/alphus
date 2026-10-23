@@ -24,9 +24,22 @@ The portable rules without fixers are `file-size`, `line-length`,
 `line-length` finding, but Alphus does not promise that result.
 
 Other consumers can add fix commands for their own native tools. A Markdown
-formatter is a likely candidate when its installed version has a documented
-write mode; package-manager lock regeneration may also be useful, but must be
-reviewed for dependency changes. Neither is declared by Alphus automatically.
+formatter, TOML formatter, and JSON formatter are configured in the
+[consumer example](../examples/consumer/quality-gates.toml):
+
+| Language | Read-only check | Explicit fixer |
+| --- | --- | --- |
+| Markdown | mdrepo graph check | None; links need review. |
+| Markdown | rumdl `check` | rumdl `fmt` for supported rules. |
+| TOML | `tomllib` syntax | None; malformed TOML needs review. |
+| TOML | Taplo `fmt --check` | Taplo `fmt`. |
+| JSON | `json` syntax | None; malformed JSON needs review. |
+| JSON | Prettier `--check` | Prettier `--write`. |
+
+The example keeps these steps in separate language files. Tools must be
+installed and pinned by the consumer. Applying a formatter may change many
+lines; inspect the diff and rerun the read-only profile. Package-manager lock
+regeneration also needs review for dependency changes.
 
 ## Review and apply
 
@@ -41,10 +54,11 @@ alphus --root . --config quality-gates.toml --run --profile check
 ```
 
 `--fix-plan` is read-only. It lists every selected step as `FIXABLE` or
-`NO FIXER`; JSON also includes the exact selected files and configured
-argument vector. `--apply-fixes` requires one or more explicit `--fix-step`
-names. Selected fixers run once in profile order, regardless of the order in
-which their names were supplied. An empty file scope skips its fixer. A
+`NO FIXER`; JSON includes selected files for scoped command steps and the
+expanded write arguments when a fixer exists. `--apply-fixes` requires one or
+more explicit `--fix-step` names. Selected fixers run once in profile order,
+regardless of the order in which their names were supplied. An empty file
+scope skips its fixer. A
 nonzero exit stops further fixes and is reported; edits already made by the
 tool remain for review. Inspect the resulting Git diff and rerun the profile.
 
