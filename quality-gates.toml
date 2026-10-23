@@ -49,6 +49,7 @@ exclude = [
   "tests/**",
   "src/alphus/gates/source/python_style.py",
   "src/alphus/gates/source/runtime_types.py",
+  "src/alphus/gates/python/compatibility.py",
 ]
 
 [checks.numeric_literals]
@@ -178,6 +179,14 @@ argv = [
 
 [[orchestration.steps]]
 kind = "command"
+name = "Python compatibility imports"
+argv = [
+  "{python}", "-m", "alphus.gates.python.compatibility",
+  "--source-root", "src",
+]
+
+[[orchestration.steps]]
+kind = "command"
 name = "Python format"
 argv = ["{python}", "-m", "ruff", "format", "--check", "src", "tests"]
 
@@ -216,7 +225,10 @@ steps = [
 
 [[orchestration.profiles]]
 name = "python"
-steps = ["Python lint", "Python format", "Python types", "Python package imports", "Package tests"]
+steps = [
+  "Python lint", "Python format", "Python types", "Python package imports",
+  "Python compatibility imports", "Package tests",
+]
 
 [[orchestration.profiles]]
 name = "toml"

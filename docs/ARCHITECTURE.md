@@ -51,9 +51,11 @@ language neutral.
   checks.
 - `alphus.gates.stubs` owns the installed stub-package workflow and fixture
   controller.
-- `alphus.gates.python` owns the installed-package import smoke workflow. It
-  maps every Python file under the source root to an import name and
-  imports each name in a fresh interpreter.
+- `alphus.gates.python` owns the installed-package import smoke workflow
+  and the [compatibility-import removal gate](COMPATIBILITY-IMPORTS.md).
+  The first maps every Python file to an import name and imports it from
+  the installed package; the second requires dated plans for forwarding
+  modules.
 - `alphus.contracts` owns finding records, severity, priority, and normalized
   diagnostic types shared by policies and execution.
 - `alphus.policy` owns validated policy models and the built-in selector

@@ -1,9 +1,9 @@
 # Self-checking Alphus
 
 The `check` profile validates the package against its own repository policy. It
-runs Alphus portable rules, the review rules, TOML syntax, an installed-package
-import smoke check, native Ruff lint and format checks, strict Pyright, and
-the package tests.
+runs Alphus portable rules, the review rules, TOML syntax, installed-package
+import smoke and compatibility-import removal checks, native Ruff lint and
+format checks, strict Pyright, and the package tests.
 The repository's GitHub Actions quality workflow runs this profile on Python
 3.11 and 3.12 for pull requests and main-branch pushes. It checks editable
 installation, builds and installs a wheel, then invokes the installed package.
@@ -66,6 +66,9 @@ each module in a fresh interpreter. It removes
 `PYTHONPATH` from each child so the CI run checks the installed wheel rather
 than importing directly from `src`. This includes `__main__.py`; command
 entry modules therefore need a main guard.
+The `Python compatibility imports` command rejects forwarding modules unless
+they have an [owned, dated removal plan](COMPATIBILITY-IMPORTS.md). Alphus runs
+it without a plan so new compatibility wrappers fail immediately.
 The target-audit isolation rule checks that the four files copied into a
 Python 3.10 target environment do not import Alphus's Python 3.11 controller
 or its Pydantic, Rich, and Typer dependencies.
@@ -75,9 +78,10 @@ The only non-empty rule exclusions are:
 - **Runtime type usage, `tests/**`:** tests deliberately exercise dynamic and
   broad runtime-type
   cases to verify the rule; this policy is for application code.
-- **Runtime type usage, `src/alphus/gates/source/python_style.py` and
-  `src/alphus/gates/source/runtime_types.py`:** these AST analyzers use `isinstance` to narrow
-  AST nodes, not application runtime values.
+- **Runtime type usage, `src/alphus/gates/source/python_style.py`,
+  `src/alphus/gates/source/runtime_types.py`, and
+  `src/alphus/gates/python/compatibility.py`:** these AST analyzers inspect
+  syntax node types, not application runtime values.
 - **JSON structure, `tests/**`:** tests include decoder calls in source
   snippets to
   verify which patterns the rule reports.

@@ -10,9 +10,9 @@ loads file scopes, thresholds, and repository conventions from TOML.
 `src/alphus/gates/` groups the checks by theme: `source` for source and
 launcher analysis, `review` for advisory rules, `repository` for architecture
 and packaging policy, `hygiene` for size and duplicate-helper rules,
-`stubs` for installed stub-package verification, and `python` for the
-package-import smoke gate. Portable themes own a `runners.py` that binds
-selectors to validated policy.
+`stubs` for installed stub-package verification, and `python` for
+package-import smoke and compatibility-import removal checks. Portable
+themes own a `runners.py` that binds selectors to validated policy.
 
 `src/alphus/contracts/` owns shared finding and diagnostic types.
 `src/alphus/policy/` owns validated settings and the built-in rule catalog.
