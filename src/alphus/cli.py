@@ -186,8 +186,7 @@ def _render_shared_utilities(report: SharedUtilitiesReport) -> None:
     )
     for location in report.direct_git_calls:
         _human_print(
-            "alphus/python/none/maintainability/direct-git-subprocess: "
-            f"{location}"
+            f"alphus/python/none/maintainability/direct-git-subprocess: {location}"
         )
     for locations in report.duplicate_groups:
         _human_print(f"{duplicate_tag}: {', '.join(locations)}")
