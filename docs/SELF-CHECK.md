@@ -50,6 +50,9 @@ TOML syntax, Python formatting, strict Pyright, Numeric review, Test review, and
 review. The separate `json` profile is available when JSON documents are
 added to this repository. The global
 `[files].exclude` is empty.
+The package-boundary step also validates console and GUI script entry-point
+reference syntax in `pyproject.toml`; it catches an invalid module segment
+before an editable installation reaches the build backend.
 
 The only non-empty rule exclusions are:
 
