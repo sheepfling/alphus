@@ -92,10 +92,12 @@ language-specific check that warrants Python code.
 
 ### Hook contract
 
-First establish an internal rule specification with a stable name, category,
-validated policy model, and callable that returns the common findings. Keep
-the current built-in registry and CLI selectors as adapters while that contract
-is exercised across existing rules.
+The internal `RuleSpec` catalog now gives every built-in selector one primary
+policy field and output shape; a matching runner table holds concrete checker
+dispatch. The next step is to migrate older rule outputs to common findings,
+then attach a category and typed checker callable to each specification. Keep
+the current CLI selectors as adapters while that contract is exercised across
+existing rules.
 
 Only after consumers need third-party checks should Alphus expose a versioned
 plugin API, potentially through an entry-point group and pytest-style hook
@@ -107,8 +109,8 @@ available as command steps without requiring a Python plugin.
 
 ## Migration sequence
 
-1. Publish the category and diagnostic vocabulary, then map current selectors
-   without changing defaults.
+1. Keep the built-in selector catalog complete while mapping current rules to
+   categories without changing defaults.
 2. Add a resolved selection plan and explicit pass, fail, not-applicable, and
    not-run outcomes while preserving existing command behavior.
 3. Migrate checkers to the shared rule specification one at a time, comparing

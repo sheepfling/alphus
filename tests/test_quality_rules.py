@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from alphus import cli, inventory
+from alphus import cli, inventory, rule_execution
 from alphus.cli import main
 from alphus.config import (
     NodeCliPolicy,
@@ -597,7 +597,7 @@ steps = ["json check"]
             )
         ]
 
-    monkeypatch.setattr(cli, "check_json_structure", warning_json_finding)
+    monkeypatch.setattr(rule_execution, "check_json_structure", warning_json_finding)
     arguments = [
         "--root",
         str(tmp_path),

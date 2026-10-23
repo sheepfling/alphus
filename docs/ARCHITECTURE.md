@@ -47,6 +47,12 @@ processes, or discover a checkout from the current directory or module path.
 Policy models are grouped by source scanning, architecture, repository
 metadata, and orchestration in separate modules. `alphus.config` re-exports
 those models as the compatibility import surface.
+`alphus.rule_catalog` records each built-in rule's required policy field and
+JSON output shape. Policy validation and profile diagnostic decoding share
+that catalog. `alphus.rule_execution` holds the built-in checker dispatch and
+validates each result against its declared shape. The package tests require
+both registries to cover every public rule selector. The CLI retains rendering
+adapters because some older rules have distinct direct-command output formats.
 The package-boundary rule also validates console and GUI script entry-point
 reference syntax in project metadata, so malformed targets fail the self-check
 before an editable or wheel installation reaches the build backend. It does not

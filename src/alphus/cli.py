@@ -12,18 +12,14 @@ from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import asdict
 from io import StringIO
 from pathlib import Path
-from typing import Annotated, TypeAlias
+from typing import Annotated, TypeAlias, cast
 
 import typer
 from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 from rich.console import Console
 
-from alphus.architecture_graph import check_architecture_graph
-from alphus.callable_registry import check_callable_registry
-from alphus.cli_policy import policy_issues as cli_policy_issues
 from alphus.config import QualityGateConfig, QualityRuleName, load_config
-from alphus.config_base import MissingPolicyError, require_policy
-from alphus.dependency_locks import check_dependency_locks
+from alphus.config_base import MissingPolicyError
 from alphus.findings import (
     Diagnostic,
     Finding,
@@ -31,24 +27,12 @@ from alphus.findings import (
     SeverityCounts,
     severity_meets_threshold,
 )
-from alphus.input_contracts import check_input_contracts
-from alphus.inventory import candidate_files, tracked_files
-from alphus.json_structure import check_json_structure
-from alphus.module_roles import check_module_roles
-from alphus.numeric_literals import check_numeric_literals
+from alphus.inventory import candidate_files
 from alphus.orchestration import RuleRunResult, run_orchestration
-from alphus.output_escaping import check_output_escaping
-from alphus.package_boundaries import check_package_boundaries
-from alphus.path_discovery import check_path_discovery
 from alphus.python_style import StyleFindings
-from alphus.python_style import findings_for as python_style_findings
-from alphus.repository_layout import check_repository_layout
-from alphus.rules import check_file_size, check_line_length
-from alphus.runtime_types import policy_issues as runtime_type_issues
-from alphus.script_policy import policy_issues as script_policy_issues
-from alphus.shared_utilities import SharedUtilitiesReport, check_shared_utilities
-from alphus.test_quality import check_test_quality
-from alphus.version_sync import check_version_sync
+from alphus.rule_catalog import RULE_SPECS
+from alphus.rule_execution import run_builtin_rule
+from alphus.shared_utilities import SharedUtilitiesReport
 
 QualityRule = QualityRuleName
 PythonStyleRuleOutput: TypeAlias = dict[str, dict[str, list[int]]]
@@ -150,50 +134,6 @@ def _load_policy(path: Path) -> QualityGateConfig:
     except (OSError, tomllib.TOMLDecodeError, ValidationError) as error:
         typer.echo(f"Invalid quality policy {path}: {error}", err=True)
         raise typer.Exit(2) from error
-
-
-def _run(
-    rule: QualityRule, root: Path, files: Sequence[Path], config: QualityGateConfig
-) -> list[Finding]:
-    """Dispatch one named rule over a validated policy."""
-    if rule == "numeric-literals":
-        policy = config.checks.numeric_literals
-        if policy is None:
-            raise typer.BadParameter(
-                "the selected configuration has no [checks.numeric_literals] policy"
-            )
-        return check_numeric_literals(root, files, policy)
-    if rule == "test-quality":
-        test_policy = config.checks.test_quality
-        if test_policy is None:
-            raise typer.BadParameter(
-                "the selected configuration has no [checks.test_quality] policy"
-            )
-        return check_test_quality(root, files, test_policy)
-    if rule == "input-contracts":
-        input_policy = config.checks.input_contracts
-        if input_policy is None:
-            raise typer.BadParameter(
-                "the selected configuration has no [checks.input_contracts] policy"
-            )
-        return check_input_contracts(root, files, input_policy)
-    if rule == "file-size":
-        return check_file_size(root, files, config)
-    if rule == "line-length":
-        return check_line_length(root, files, config)
-    if rule == "json-structure":
-        return check_json_structure(
-            root, files, require_policy(config.checks.json_structure, "json_structure")
-        )
-    if rule == "output-escaping":
-        return check_output_escaping(
-            root,
-            files,
-            require_policy(config.checks.output_escaping, "output_escaping"),
-        )
-    return check_path_discovery(
-        root, files, require_policy(config.checks.path_discovery, "path_discovery")
-    )
 
 
 def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
@@ -385,167 +325,80 @@ def _execute(
         raise typer.BadParameter(str(error), param_hint="--root") from error
     if verbose:
         _log_verbose(rule, root, len(files))
-    if rule == "dependency-locks":
-        policy = config.checks.dependency_locks
-        if policy is None:
-            raise typer.BadParameter(
-                "the selected configuration has no [checks.dependency_locks] policy"
-            )
-        findings = check_dependency_locks(root, policy)
+    try:
+        output = run_builtin_rule(rule, root, files, config)
+    except MissingPolicyError as error:
+        raise typer.BadParameter(str(error)) from error
+
+    shape = RULE_SPECS[rule].output_shape
+    if shape == "findings":
+        findings = cast(list[Finding], output)
         if json_output:
             typer.echo(
                 json.dumps([asdict(finding) for finding in findings], sort_keys=True)
             )
-        else:
+        elif rule == "dependency-locks":
             _render_dependency_locks(findings)
-        return int(_findings_fail(findings, failure_threshold, report=report))
-    if rule == "repository-layout":
-        policy = config.checks.repository_layout
-        if policy is None:
-            raise typer.BadParameter(
-                "the selected configuration has no [checks.repository_layout] policy"
-            )
-        findings = check_repository_layout(root, policy, tracked_files(root))
-        if json_output:
-            typer.echo(
-                json.dumps([asdict(finding) for finding in findings], sort_keys=True)
-            )
-        else:
+        elif rule == "repository-layout":
             _render_repository_layout(findings)
-        return int(_findings_fail(findings, failure_threshold, report=report))
-    if rule == "module-roles":
-        policy = config.checks.module_roles
-        if policy is None:
-            raise typer.BadParameter(
-                "the selected configuration has no [checks.module_roles] policy"
-            )
-        findings = check_module_roles(root, policy)
-        if json_output:
-            typer.echo(
-                json.dumps([asdict(finding) for finding in findings], sort_keys=True)
-            )
+        elif rule == "package-boundaries":
+            _render_package_boundaries(findings)
         else:
             _render(rule, findings)
         return int(_findings_fail(findings, failure_threshold, report=report))
-    if rule == "package-boundaries":
-        package_policy = config.checks.package_boundaries
-        if package_policy is None:
-            raise typer.BadParameter(
-                "the selected configuration has no [checks.package_boundaries] policy"
-            )
-        findings = check_package_boundaries(root, package_policy)
-        graph_policy = config.checks.architecture_graph
-        if graph_policy is not None and graph_policy.graph is not None:
-            findings.extend(
-                check_architecture_graph(root, graph_policy.graph, package_policy)
-            )
-        version_policy = config.checks.version_sync
-        if version_policy is not None:
-            findings.extend(check_version_sync(root, version_policy))
-        registry_policy = config.checks.callable_registry
-        if registry_policy is not None:
-            findings.extend(check_callable_registry(root, registry_policy))
-        if json_output:
-            typer.echo(
-                json.dumps([asdict(finding) for finding in findings], sort_keys=True)
-            )
-        else:
-            _render_package_boundaries(findings)
-        return int(_findings_fail(findings, failure_threshold, report=report))
-    if rule == "script-policy":
-        policy = config.checks.script_policy
-        if policy is None:
-            raise typer.BadParameter(
-                "the selected configuration has no [checks.script_policy] policy"
-            )
-        issues = script_policy_issues(root, files, policy)
+
+    if shape == "messages":
+        issues = cast(list[str], output)
         if json_output:
             typer.echo(json.dumps(issues))
-        else:
+        elif rule == "script-policy":
             _render_script_policy(issues)
-        return int(_errors_fail(len(issues), failure_threshold, report=report))
-    if rule == "cli":
-        policy = config.checks.cli
-        if policy is None:
-            raise typer.BadParameter(
-                "the selected configuration has no [checks.cli] policy"
-            )
-        issues = cli_policy_issues(root, files, policy)
-        if json_output:
-            typer.echo(json.dumps(issues))
-        else:
+        elif rule == "cli":
             _render_cli_policy(issues)
+        elif rule == "runtime-types":
+            _render_runtime_types(issues)
+        else:
+            raise ValueError(f"rule {rule!r} has no message renderer")
         return int(_errors_fail(len(issues), failure_threshold, report=report))
-    if rule == "python-style":
-        policy = config.checks.python_style
-        if policy is None:
-            raise typer.BadParameter(
-                "the selected configuration has no [checks.python_style] policy"
-            )
-        findings = python_style_findings(root, files, policy)
+
+    if shape == "python-style":
+        style_findings = cast(dict[str, StyleFindings], output)
         total = sum(
             len(lines)
-            for issues in findings.values()
+            for issues in style_findings.values()
             for _, lines in _python_style_categories(issues)
         )
         if json_output:
-            typer.echo(json.dumps(findings, sort_keys=True))
+            typer.echo(json.dumps(style_findings, sort_keys=True))
         else:
-            total = _render_python_style(findings)
+            total = _render_python_style(style_findings)
         return int(_errors_fail(total, failure_threshold, report=report))
-    if rule == "runtime-types":
-        policy = config.checks.runtime_types
-        if policy is None:
-            raise typer.BadParameter(
-                "the selected configuration has no [checks.runtime_types] policy"
-            )
-        issues = runtime_type_issues(root, files, policy)
-        if json_output:
-            typer.echo(json.dumps(issues))
-        else:
-            _render_runtime_types(issues)
-        return int(_errors_fail(len(issues), failure_threshold, report=report))
-    if rule == "shared-utilities":
-        policy = config.checks.shared_utilities
-        if policy is None:
-            raise typer.BadParameter(
-                "the selected configuration has no [checks.shared_utilities] policy"
-            )
-        shared_report = check_shared_utilities(root, files, policy)
-        if json_output:
-            typer.echo(
-                json.dumps(
-                    {
-                        "duplicate_groups": shared_report.duplicate_groups,
-                        "failed": shared_report.failed,
-                        "file_hash_implementations": shared_report.file_hash_implementations,
-                    },
-                    sort_keys=True,
-                )
-            )
-        else:
-            _render_shared_utilities(shared_report)
-        return int(
-            _errors_fail(int(shared_report.failed), failure_threshold, report=report)
-        )
-    try:
-        findings = _run(rule, root, files, config)
-    except MissingPolicyError as error:
-        raise typer.BadParameter(str(error)) from error
+
+    shared_report = cast(SharedUtilitiesReport, output)
     if json_output:
         typer.echo(
-            json.dumps([asdict(finding) for finding in findings], sort_keys=True)
+            json.dumps(
+                {
+                    "duplicate_groups": shared_report.duplicate_groups,
+                    "failed": shared_report.failed,
+                    "file_hash_implementations": shared_report.file_hash_implementations,
+                },
+                sort_keys=True,
+            )
         )
     else:
-        _render(rule, findings)
-    return int(_findings_fail(findings, failure_threshold, report=report))
+        _render_shared_utilities(shared_report)
+    return int(
+        _errors_fail(int(shared_report.failed), failure_threshold, report=report)
+    )
 
 
 def _diagnostics_from_rule_json(
     rule: QualityRule, encoded: str
 ) -> tuple[Diagnostic, ...]:
     """Validate Alphus-owned rule output before adding source provenance."""
-    if rule == "python-style":
+    output_shape = RULE_SPECS[rule].output_shape
+    if output_shape == "python-style":
         style_payload = _PYTHON_STYLE_RULE_OUTPUT.validate_json(encoded)
         diagnostics: list[Diagnostic] = []
         for path, buckets in style_payload.items():
@@ -562,7 +415,7 @@ def _diagnostics_from_rule_json(
                 )
         return tuple(diagnostics)
 
-    if rule == "shared-utilities":
+    if output_shape == "shared-utilities":
         utilities_payload = _SHARED_UTILITIES_RULE_OUTPUT.validate_json(encoded)
         diagnostics = []
         for group in utilities_payload.duplicate_groups:
@@ -594,7 +447,7 @@ def _diagnostics_from_rule_json(
             )
         return tuple(diagnostics)
 
-    if rule in {"cli", "script-policy", "runtime-types"}:
+    if output_shape == "messages":
         messages = _STRING_RULE_OUTPUT.validate_json(encoded)
         return tuple(
             Diagnostic(

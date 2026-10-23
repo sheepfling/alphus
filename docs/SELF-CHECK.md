@@ -3,6 +3,9 @@
 The `check` profile validates the package against its own repository policy. It
 runs Alphus portable rules, the review rules, TOML syntax, native Ruff lint
 and format checks, strict Pyright, and the package tests.
+The repository's GitHub Actions quality workflow runs this profile on Python
+3.11 and 3.12 for pull requests and main-branch pushes. It checks editable
+installation, builds and installs a wheel, then invokes the installed package.
 
 ## Run the installed wheel against this checkout
 

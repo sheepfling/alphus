@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping, Sequence
-from typing import Annotated, Literal, NamedTuple
+from collections.abc import Sequence
+from typing import Annotated, Literal, NamedTuple, cast
 
 from pydantic import Field, field_validator, model_validator
 
@@ -45,6 +45,7 @@ from alphus.config_sources import (
     SourceScanPolicy,
 )
 from alphus.findings import RemediationPriority, Severity
+from alphus.rule_catalog import RULE_SPECS
 
 
 class CheckPolicies(StrictModel):
@@ -73,26 +74,9 @@ class CheckPolicies(StrictModel):
 
     def require_rule(self, rule: QualityRuleName) -> None:
         """Validate only the primary policy needed by a selected rule."""
-        policies: Mapping[QualityRuleName, StrictModel | None] = {
-            "file-size": self.file_size,
-            "line-length": self.line_length,
-            "json-structure": self.json_structure,
-            "output-escaping": self.output_escaping,
-            "path-discovery": self.path_discovery,
-            "numeric-literals": self.numeric_literals,
-            "test-quality": self.test_quality,
-            "input-contracts": self.input_contracts,
-            "shared-utilities": self.shared_utilities,
-            "python-style": self.python_style,
-            "runtime-types": self.runtime_types,
-            "cli": self.cli,
-            "script-policy": self.script_policy,
-            "package-boundaries": self.package_boundaries,
-            "module-roles": self.module_roles,
-            "dependency-locks": self.dependency_locks,
-            "repository-layout": self.repository_layout,
-        }
-        require_policy(policies[rule], rule.replace("-", "_"))
+        field = RULE_SPECS[rule].policy_field
+        policy = cast(StrictModel | None, getattr(self, field))
+        require_policy(policy, field)
 
 
 class RuleRunStep(StrictModel):

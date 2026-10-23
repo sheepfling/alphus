@@ -12,6 +12,8 @@ from pydantic import ValidationError
 from alphus.cli import main
 from alphus.config import CheckPolicies, QualityRuleName, load_config
 from alphus.config_base import MissingPolicyError
+from alphus.rule_catalog import RULE_SPECS
+from alphus.rule_execution import RULE_RUNNERS
 from alphus.rules import check_file_size, check_line_length
 
 
@@ -57,11 +59,16 @@ def test_each_selected_portable_rule_requires_its_policy(rule: QualityRuleName) 
         CheckPolicies().require_rule(rule)
 
 
-@pytest.mark.parametrize(
-    "rule",
-    ["file-size", "line-length", "json-structure", "output-escaping", "path-discovery"],
-)
-def test_direct_core_rule_without_policy_is_usage_error_even_with_no_files(
+def test_rule_catalog_covers_every_public_selector_and_policy_field() -> None:
+    assert set(RULE_SPECS) == set(get_args(QualityRuleName))
+    assert set(RULE_RUNNERS) == set(RULE_SPECS)
+    assert all(
+        spec.policy_field in CheckPolicies.model_fields for spec in RULE_SPECS.values()
+    )
+
+
+@pytest.mark.parametrize("rule", get_args(QualityRuleName))
+def test_direct_rule_without_policy_is_usage_error_even_with_no_files(
     tmp_path: Path, rule: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
     path = repository(tmp_path)
