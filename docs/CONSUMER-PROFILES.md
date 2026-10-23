@@ -98,6 +98,12 @@ Alphus-owned `kind = "rule"` step; each file-scoped command declares its own
 `files` pattern beside its argv. The [subtool guide](SUBTOOLS.md) explains
 config ownership, file scope, check/fix pairing, and Markdown rule overlap.
 
+FastAPI consumers can add an opt-in profile that layers Ruff's FAST, selected
+ASYNC, annotation, and security rules over their existing Ruff settings, plus
+Alphus's current FastAPI style advisory. The
+[FastAPI quality guide](FASTAPI-QUALITY.md) documents the coverage boundary and
+provides a copyable example.
+
 The `tools` shortcut is for standard invocations. Add a project-specific
 check without repeating those tool commands:
 
