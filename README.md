@@ -184,6 +184,10 @@ Available rules are `file-size`, `line-length`, `json-structure`,
 `runtime-types`, `cli`, `script-policy`, `module-roles`, `package-boundaries`,
 `dependency-locks`, and `repository-layout`. Package boundaries also check
 the configured architecture graph, metadata versions, and callable registry.
+The architecture graph policy accepts `syntax = "flowchart"` (the default)
+or `syntax = "architecture"` for Mermaid's `architecture-beta` diagrams.
+Its edge comparison handles directed links in the selected syntax; diagrams
+using other Mermaid link forms need a matching checker extension.
 Module roles enforce configured import, call, definition, and module-level
 assignment boundaries for audited composition, operation, contract, and adapter
 modules. Assignment rules catch callable and type aliases even inside module

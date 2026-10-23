@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import tomllib
 from collections.abc import Mapping, Sequence
+from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import cast
 
@@ -12,6 +13,27 @@ from alphus.config import InstructionRouterPolicy, RepositoryLayoutPolicy
 from alphus.data_access import nested_value, validate_json_value
 from alphus.findings import Finding
 from alphus.inventory import matches_path
+
+
+class LayoutRuleId(StrEnum):
+    """Stable identifiers emitted by repository layout checks."""
+
+    ROUTER_ROOT_MISSING = "layout.router-root-missing"
+    BRIDGE_ROOT_MISSING = "layout.bridge-root-missing"
+    BRIDGE_ROOT_MARKER_MISSING = "layout.bridge-root-marker-missing"
+    ROUTER_AREA_MISSING = "layout.router-area-missing"
+    BRIDGE_AREA_MISSING = "layout.bridge-area-missing"
+    BRIDGE_SCOPE_MISSING = "layout.bridge-scope-missing"
+    BRIDGE_ROUTER_IMPORT_MISSING = "layout.bridge-router-import-missing"
+    PATH_REQUIRED = "layout.path-required"
+    PATH_FORBIDDEN = "layout.path-forbidden"
+    GLOB_FORBIDDEN = "layout.glob-forbidden"
+    JSON_ARRAY_VALUE_REQUIRED = "layout.json-array-value-required"
+    PYTHON_SYMBOL_REQUIRED = "layout.python-symbol-required"
+    TOML_TABLE_REQUIRED = "layout.toml-table-required"
+    TRACKED_SUFFIX_FORBIDDEN = "layout.tracked-suffix-forbidden"
+    TRACKED_PATH_FORBIDDEN = "layout.tracked-path-forbidden"
+    ROOT_DOCUMENT_FORBIDDEN = "layout.root-document-forbidden"
 
 
 def _safe_path(root: Path, relative: str) -> Path | None:
@@ -50,7 +72,7 @@ def _router_findings(root: Path, policy: InstructionRouterPolicy) -> list[Findin
     if instruction is None:
         findings.append(
             Finding(
-                rule_id="layout.router-root-missing",
+                rule_id=LayoutRuleId.ROUTER_ROOT_MISSING,
                 path=policy.root_instruction_path,
                 message=policy.missing_root_instruction_message,
             )
@@ -59,7 +81,7 @@ def _router_findings(root: Path, policy: InstructionRouterPolicy) -> list[Findin
     if bridge is None:
         findings.append(
             Finding(
-                rule_id="layout.bridge-root-missing",
+                rule_id=LayoutRuleId.BRIDGE_ROOT_MISSING,
                 path=policy.root_bridge_path,
                 message=policy.missing_root_bridge_message,
             )
@@ -67,7 +89,7 @@ def _router_findings(root: Path, policy: InstructionRouterPolicy) -> list[Findin
     elif policy.root_bridge_marker not in bridge.read_text(encoding="utf-8"):
         findings.append(
             Finding(
-                rule_id="layout.bridge-root-marker-missing",
+                rule_id=LayoutRuleId.BRIDGE_ROOT_MARKER_MISSING,
                 path=policy.root_bridge_path,
                 message=policy.missing_root_marker_message,
             )
@@ -77,7 +99,7 @@ def _router_findings(root: Path, policy: InstructionRouterPolicy) -> list[Findin
         if router is None:
             findings.append(
                 Finding(
-                    rule_id="layout.router-area-missing",
+                    rule_id=LayoutRuleId.ROUTER_AREA_MISSING,
                     path=route.router_path,
                     message=policy.missing_area_router_message.replace(
                         "{area}", route.area
@@ -88,7 +110,7 @@ def _router_findings(root: Path, policy: InstructionRouterPolicy) -> list[Findin
         if area_bridge is None:
             findings.append(
                 Finding(
-                    rule_id="layout.bridge-area-missing",
+                    rule_id=LayoutRuleId.BRIDGE_AREA_MISSING,
                     path=route.bridge_path,
                     message=policy.missing_area_bridge_message.replace(
                         "{area}", route.area
@@ -100,7 +122,7 @@ def _router_findings(root: Path, policy: InstructionRouterPolicy) -> list[Findin
         if route.scope_marker not in contents:
             findings.append(
                 Finding(
-                    rule_id="layout.bridge-scope-missing",
+                    rule_id=LayoutRuleId.BRIDGE_SCOPE_MISSING,
                     path=route.bridge_path,
                     message=policy.missing_scope_message.replace("{area}", route.area),
                 )
@@ -108,7 +130,7 @@ def _router_findings(root: Path, policy: InstructionRouterPolicy) -> list[Findin
         if route.import_marker not in contents:
             findings.append(
                 Finding(
-                    rule_id="layout.bridge-router-import-missing",
+                    rule_id=LayoutRuleId.BRIDGE_ROUTER_IMPORT_MISSING,
                     path=route.bridge_path,
                     message=policy.missing_import_message.replace("{area}", route.area),
                 )
@@ -117,7 +139,7 @@ def _router_findings(root: Path, policy: InstructionRouterPolicy) -> list[Findin
         if _safe_file(root, router_path) is None:
             findings.append(
                 Finding(
-                    rule_id="layout.router-area-missing",
+                    rule_id=LayoutRuleId.ROUTER_AREA_MISSING,
                     path=router_path,
                     message=policy.missing_nested_router_message.replace(
                         "{path}", router_path
@@ -140,7 +162,7 @@ def check_repository_layout(
         if not path.exists() or _safe_path(checkout, rule.path) is None:
             findings.append(
                 Finding(
-                    rule_id="layout.path-required",
+                    rule_id=LayoutRuleId.PATH_REQUIRED,
                     path=rule.path,
                     message=rule.message,
                 )
@@ -150,7 +172,7 @@ def check_repository_layout(
         if path.exists():
             findings.append(
                 Finding(
-                    rule_id="layout.path-forbidden",
+                    rule_id=LayoutRuleId.PATH_FORBIDDEN,
                     path=rule.path,
                     message=rule.message,
                 )
@@ -165,7 +187,7 @@ def check_repository_layout(
         if matches:
             findings.append(
                 Finding(
-                    rule_id="layout.glob-forbidden",
+                    rule_id=LayoutRuleId.GLOB_FORBIDDEN,
                     path=rule.pattern,
                     message=rule.message.replace("{count}", str(len(matches))),
                 )
@@ -182,7 +204,7 @@ def check_repository_layout(
         if not _contains_value(array, rule.value):
             findings.append(
                 Finding(
-                    rule_id="layout.json-array-value-required",
+                    rule_id=LayoutRuleId.JSON_ARRAY_VALUE_REQUIRED,
                     path=rule.path,
                     message=rule.message,
                 )
@@ -210,7 +232,7 @@ def check_repository_layout(
         if not present:
             findings.append(
                 Finding(
-                    rule_id="layout.python-symbol-required",
+                    rule_id=LayoutRuleId.PYTHON_SYMBOL_REQUIRED,
                     path=rule.path,
                     message=rule.message,
                 )
@@ -227,7 +249,7 @@ def check_repository_layout(
         if not _is_nonempty_mapping(table):
             findings.append(
                 Finding(
-                    rule_id="layout.toml-table-required",
+                    rule_id=LayoutRuleId.TOML_TABLE_REQUIRED,
                     path=rule.path,
                     message=rule.message,
                 )
@@ -239,7 +261,7 @@ def check_repository_layout(
             if relative.suffix.lower() in rule.suffixes:
                 findings.append(
                     Finding(
-                        rule_id="layout.tracked-suffix-forbidden",
+                        rule_id=LayoutRuleId.TRACKED_SUFFIX_FORBIDDEN,
                         path=name,
                         message=f"tracked {rule.label} file: {name}",
                     )
@@ -248,7 +270,7 @@ def check_repository_layout(
             if matches_path(name, rule.pattern):
                 findings.append(
                     Finding(
-                        rule_id="layout.tracked-path-forbidden",
+                        rule_id=LayoutRuleId.TRACKED_PATH_FORBIDDEN,
                         path=name,
                         message=rule.message.replace("{path}", name),
                     )
@@ -260,7 +282,7 @@ def check_repository_layout(
         ):
             findings.append(
                 Finding(
-                    rule_id="layout.root-document-forbidden",
+                    rule_id=LayoutRuleId.ROOT_DOCUMENT_FORBIDDEN,
                     path=name,
                     message=policy.root_document_message.replace("{path}", name),
                 )

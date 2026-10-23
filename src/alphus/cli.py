@@ -379,7 +379,10 @@ def _execute(
         if config.orchestration is not None
         else "error"
     )
-    files = candidate_files(root, config.files)
+    try:
+        files = candidate_files(root, config.files)
+    except OSError as error:
+        raise typer.BadParameter(str(error), param_hint="--root") from error
     if verbose:
         _log_verbose(rule, root, len(files))
     if rule == "dependency-locks":

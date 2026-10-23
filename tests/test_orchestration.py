@@ -19,7 +19,7 @@ from alphus.config import (
     OrchestrationProfile,
     RuleRunStep,
 )
-from alphus.findings import Diagnostic, Severity
+from alphus.findings import SEVERITY_ORDER, Diagnostic, Severity
 from alphus.orchestration import (
     RuleRunResult,
     _windows_shell_required,
@@ -49,6 +49,95 @@ def _policy() -> OrchestrationPolicy:
         ),
         default_profile="check",
     )
+
+
+def test_severity_ranks_leave_space_for_future_levels() -> None:
+    assert SEVERITY_ORDER["warning"] - SEVERITY_ORDER["info"] >= 10
+    assert SEVERITY_ORDER["error"] - SEVERITY_ORDER["warning"] >= 10
+
+
+def test_provisional_gate_reports_findings_without_blocking_profile(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "quality.toml"
+    config_path.write_text("schema_version = 1\n", encoding="utf-8")
+    policy = OrchestrationPolicy(
+        steps=(
+            RuleRunStep(
+                kind="rule",
+                name="candidate rule",
+                rule="line-length",
+                rollout="provisional",
+            ),
+        ),
+        profiles=(OrchestrationProfile(name="check", steps=("candidate rule",)),),
+        default_profile="check",
+    )
+    output = StringIO()
+    result = run_orchestration(
+        tmp_path,
+        config_path,
+        policy,
+        "check",
+        lambda _: RuleRunResult(
+            findings=(
+                Diagnostic(
+                    source="alphus",
+                    rule_id="source.line-length",
+                    path="src/example.py",
+                    message="line is long",
+                ),
+            ),
+            exit_code=1,
+        ),
+        json_output=True,
+        stdout=output,
+        stderr=StringIO(),
+    )
+
+    report = json.loads(output.getvalue())
+    assert result == report["exit_code"] == 0
+    assert (report["passed"], report["failed"]) == (0, 0)
+    assert report["provisional"] == {"passed": 0, "failed": 1}
+    assert report["steps"][0]["status"] == "failed"
+    assert report["steps"][0]["rollout"] == "provisional"
+    assert report["steps"][0]["findings"][0]["rule_id"] == "source.line-length"
+
+
+def test_provisional_native_command_reports_failure_without_blocking_profile(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "quality.toml"
+    config_path.write_text("schema_version = 1\n", encoding="utf-8")
+    policy = OrchestrationPolicy(
+        steps=(
+            CommandRunStep(
+                kind="command",
+                name="candidate tool",
+                argv=("{python}", "-c", "raise SystemExit(7)"),
+                rollout="provisional",
+            ),
+        ),
+        profiles=(OrchestrationProfile(name="check", steps=("candidate tool",)),),
+        default_profile="check",
+    )
+    output = StringIO()
+    result = run_orchestration(
+        tmp_path,
+        config_path,
+        policy,
+        "check",
+        lambda _: 0,
+        json_output=True,
+        stdout=output,
+        stderr=StringIO(),
+    )
+
+    report = json.loads(output.getvalue())
+    assert result == report["exit_code"] == 0
+    assert report["provisional"] == {"passed": 0, "failed": 1}
+    assert report["steps"][0]["exit_code"] == 7
+    assert report["steps"][0]["rollout"] == "provisional"
 
 
 def test_windows_batch_detection_uses_the_shared_platform_probe(
@@ -98,6 +187,7 @@ def test_python_orchestrator_runs_profile_without_node_on_path(
         _policy(),
         "check",
         lambda rule: called_rules.append(rule) or 0,
+        json_output=True,
         stdout=output,
         stderr=StringIO(),
     )
@@ -105,12 +195,12 @@ def test_python_orchestrator_runs_profile_without_node_on_path(
     assert result == 0
     assert (tmp_path / "native.txt").read_text(encoding="utf-8") == "ok"
     assert called_rules == ["line-length"]
-    assert output.getvalue().splitlines() == [
-        "==> native command",
-        "PASS native command",
-        "==> portable rule",
-        "PASS portable rule",
-        "Quality profile check: 2 passed, 0 failed",
+    report = json.loads(output.getvalue())
+    assert report["passed"] == 2
+    assert report["failed"] == 0
+    assert [(step["name"], step["status"]) for step in report["steps"]] == [
+        ("native command", "passed"),
+        ("portable rule", "passed"),
     ]
 
 

@@ -51,9 +51,17 @@ existing `Finding` record remains the direct-rule compatibility baseline while
 individual checkers migrate. Any broader public diagnostic contract should
 preserve stable IDs, locations, and JSON field names. The current severity
 threshold is a compatibility control for failure levels, not the final
-enforcement model. A future category configuration should distinguish
-severity from remediation priority and from enforcement (`enforced`,
+enforcement model. Severity retains `info`, `warning`, and `error`, with spaced
+internal ranks to leave room for future levels. A rule step may assign an
+independent `priority` (`low`, `normal`, `high`, or `urgent`) to its diagnostics;
+priority is reported but does not change the failure threshold. A future
+category configuration should distinguish these from enforcement (`enforced`,
 `advisory`, or `disabled`).
+
+An orchestration step may set `rollout = "provisional"` while it is being
+evaluated. Provisional steps run and retain their pass or fail status and
+diagnostics, but their failures do not fail the overall profile. Profile
+summaries count provisional outcomes separately; the default is `mainline`.
 
 The fuller execution model should report `passed`, `failed`, `not applicable`,
 and `not run` separately. A disabled, unselected, or inapplicable check must

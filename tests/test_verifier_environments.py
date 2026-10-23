@@ -44,7 +44,7 @@ def test_fixture_cli_rejects_language_version_that_disagrees_with_target(
 
 def test_preflight_failure_clears_old_passed_report(tmp_path: Path) -> None:
     report = tmp_path / "report.json"
-    report.write_text('{"passed": true}', encoding="utf-8")
+    report.write_text(json.dumps({"passed": True}), encoding="utf-8")
     with pytest.raises(SystemExit):
         verify.main(
             [

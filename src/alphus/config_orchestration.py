@@ -44,7 +44,7 @@ from alphus.config_sources import (
     SharedUtilitiesPolicy,
     SourceScanPolicy,
 )
-from alphus.findings import Severity
+from alphus.findings import RemediationPriority, Severity
 
 
 class CheckPolicies(StrictModel):
@@ -102,6 +102,8 @@ class RuleRunStep(StrictModel):
     name: str
     rule: QualityRuleName
     severity: Severity | None = None
+    priority: RemediationPriority | None = None
+    rollout: Literal["mainline", "provisional"] = "mainline"
 
     @field_validator("name")
     @classmethod
@@ -117,6 +119,7 @@ class CommandRunStep(StrictModel):
     argv: Annotated[tuple[str, ...], Field(min_length=1)]
     working_directory: str = "."
     files: FileInventoryPolicy | None = None
+    rollout: Literal["mainline", "provisional"] = "mainline"
 
     @field_validator("name")
     @classmethod

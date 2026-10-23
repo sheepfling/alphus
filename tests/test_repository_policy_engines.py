@@ -3,6 +3,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from alphus.architecture_graph import check_architecture_graph
 from alphus.callable_registry import check_callable_registry
 from alphus.config import (
@@ -51,6 +53,49 @@ def test_architecture_graph_matches_configured_package_edges(tmp_path: Path) -> 
         "Mermaid graph lacks Plugin -> Core",
         "Mermaid graph has forbidden Core -> Plugin",
     ]
+
+
+@pytest.mark.parametrize(
+    ("syntax", "diagram"),
+    [
+        ("flowchart", "flowchart LR\nPlugin-->Core\nClient-->|http|Service\n"),
+        (
+            "architecture",
+            "architecture-beta\nservice Plugin(server)[Plugin]\n"
+            "service Core(server)[Core]\nservice Client(server)[Client]\n"
+            "service Service(server)[Service]\nPlugin:R --> L:Core\n"
+            "Client:R --> L:Service\n",
+        ),
+    ],
+)
+def test_architecture_graph_uses_configured_mermaid_syntax(
+    tmp_path: Path, syntax: str, diagram: str
+) -> None:
+    policy = PackageBoundaryPolicy.model_validate(
+        {
+            "metadata_patterns": ["packages/*/pyproject.toml"],
+            "source_directory": "src",
+            "allowed_dependencies": {"framework": [], "plugin": ["framework"]},
+        }
+    )
+    graph = ArchitectureGraphPolicy.model_validate(
+        {
+            "path": "docs/architecture.md",
+            "syntax": syntax,
+            "node_names": {"framework": "Core", "plugin": "Plugin"},
+            "extra_edges": [["Client", "Service"]],
+        }
+    )
+    guide = tmp_path / graph.path
+    guide.parent.mkdir()
+    guide.write_text(f"```mermaid\n{diagram}```\n", encoding="utf-8")
+
+    assert check_architecture_graph(tmp_path, graph, policy) == []
+    wrong_header = "flowchart LR" if syntax == "architecture" else "architecture-beta"
+    guide.write_text(f"```mermaid\n{wrong_header}\n```\n", encoding="utf-8")
+    assert [
+        finding.rule_id for finding in check_architecture_graph(tmp_path, graph, policy)
+    ] == ["architecture.syntax-mismatch"]
 
 
 def test_repository_layout_checks_paths_manifests_and_python_symbols(

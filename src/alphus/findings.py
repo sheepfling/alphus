@@ -8,9 +8,10 @@ from types import MappingProxyType
 from typing import Literal, NamedTuple, TypeAlias
 
 Severity: TypeAlias = Literal["error", "warning", "info"]
+RemediationPriority: TypeAlias = Literal["low", "normal", "high", "urgent"]
 
 SEVERITY_ORDER: Mapping[Severity, int] = MappingProxyType(
-    {"info": 0, "warning": 1, "error": 2}
+    {"info": 0, "warning": 100, "error": 200}
 )
 
 
@@ -52,10 +53,18 @@ class Diagnostic:
     severity: Severity = "error"
     path: str | None = None
     line: int | None = None
+    priority: RemediationPriority | None = None
 
     def __post_init__(self) -> None:
         if self.severity not in SEVERITY_ORDER:
             raise ValueError(f"unsupported diagnostic severity: {self.severity!r}")
+        if self.priority is not None and self.priority not in {
+            "low",
+            "normal",
+            "high",
+            "urgent",
+        }:
+            raise ValueError(f"unsupported remediation priority: {self.priority!r}")
 
 
 class SourceFinding(NamedTuple):

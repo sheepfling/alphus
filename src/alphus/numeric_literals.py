@@ -170,11 +170,10 @@ class _NumericVisitor(ast.NodeVisitor):
         tokens = _expression_tokens(node)
         if self.function_names:
             tokens.update(_identifier_tokens(self.function_names[-1]))
-        match node:
-            case ast.BinOp(left=left, right=right):
-                operands = (left, right)
-            case ast.AugAssign(target=target, value=value):
-                operands = (target, value)
+        if isinstance(node, ast.BinOp):
+            operands = (node.left, node.right)
+        else:
+            operands = (node.target, node.value)
         for operand in operands:
             literal = _literal_number(operand)
             if literal is None:

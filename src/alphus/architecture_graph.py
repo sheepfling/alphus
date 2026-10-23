@@ -8,6 +8,19 @@ from pathlib import Path
 from alphus.config import ArchitectureGraphPolicy, PackageBoundaryPolicy
 from alphus.findings import Finding
 
+_EDGE_PATTERNS = {
+    "flowchart": re.compile(
+        r"^\s*(?P<origin>\w+)\s*(?:-->\s*(?:\|[^|]*\|\s*)?"
+        r"|--\s+[^\n]+?\s+-->\s*)(?P<target>\w+)\s*;?\s*$",
+        re.MULTILINE,
+    ),
+    "architecture": re.compile(
+        r"^\s*(?P<origin>\w+)(?:\{group\})?:[TBLR]\s+-->\s+"
+        r"[TBLR]:(?P<target>\w+)(?:\{group\})?\s*$",
+        re.MULTILINE,
+    ),
+}
+
 
 def check_architecture_graph(
     root: Path,
@@ -46,13 +59,23 @@ def check_architecture_graph(
             )
         ]
     diagram = parts[1].split("\n```", 1)[0]
-    observed = set(
-        re.findall(
-            r"^\s*(\w+)\s+-->\|[^|]+\|\s+(\w+)\s*$",
-            diagram,
-            re.MULTILINE,
-        )
+    header = (
+        r"architecture-beta\b"
+        if graph.syntax == "architecture"
+        else r"(?:flowchart|graph)\b"
     )
+    if re.match(header, diagram.lstrip()) is None:
+        return [
+            Finding(
+                rule_id="architecture.syntax-mismatch",
+                path=graph.path,
+                message=f"Mermaid graph must use {graph.syntax} syntax",
+            )
+        ]
+    observed = {
+        (match.group("origin"), match.group("target"))
+        for match in _EDGE_PATTERNS[graph.syntax].finditer(diagram)
+    }
     node_names = dict(graph.node_names)
     allowed = dict(package_policy.allowed_dependencies)
     missing_nodes = set(allowed) - node_names.keys()

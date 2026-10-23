@@ -10,6 +10,28 @@ from pathlib import Path, PurePosixPath
 from alphus.config import FileInventoryPolicy
 
 
+def _git_ls_files(checkout: Path, *options: str) -> bytes:
+    """Read Git's inventory or explain why it cannot be read."""
+    try:
+        result = subprocess.run(
+            ["git", "ls-files", *options, "-z"],
+            cwd=checkout,
+            capture_output=True,
+            check=True,
+        )
+    except FileNotFoundError as error:
+        raise OSError(
+            "Git is required for Alphus file inventory; install Git or use a "
+            "profile without Git-backed rules"
+        ) from error
+    except subprocess.CalledProcessError as error:
+        detail = (error.stderr or b"").decode("utf-8", errors="replace").strip()
+        raise OSError(
+            f"Git file inventory failed for {checkout}: {detail or error}"
+        ) from error
+    return result.stdout
+
+
 def matches_path(path: str, pattern: str) -> bool:
     """Match POSIX path segments with recursive ** and root-safe globs."""
     candidate = PurePosixPath(path)
@@ -45,14 +67,9 @@ def git_files(root: Path) -> list[Path]:
     checkout = root.resolve(strict=True)
     if not checkout.is_dir():
         raise ValueError(f"repository root is not a directory: {checkout}")
-    result = subprocess.run(
-        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
-        cwd=checkout,
-        capture_output=True,
-        check=True,
-    )
+    output = _git_ls_files(checkout, "--cached", "--others", "--exclude-standard")
     selected: list[Path] = []
-    for raw in result.stdout.split(b"\0"):
+    for raw in output.split(b"\0"):
         if not raw:
             continue
         name = raw.decode("utf-8")
@@ -74,14 +91,9 @@ def tracked_files(root: Path) -> list[Path]:
     checkout = root.resolve(strict=True)
     if not checkout.is_dir():
         raise ValueError(f"repository root is not a directory: {checkout}")
-    result = subprocess.run(
-        ["git", "ls-files", "--cached", "-z"],
-        cwd=checkout,
-        capture_output=True,
-        check=True,
-    )
+    output = _git_ls_files(checkout, "--cached")
     selected: list[Path] = []
-    for raw in result.stdout.split(b"\0"):
+    for raw in output.split(b"\0"):
         if not raw:
             continue
         name = raw.decode("utf-8")

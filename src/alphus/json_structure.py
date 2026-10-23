@@ -40,11 +40,9 @@ def python_json_findings(source: str) -> list[SourceFinding]:
             case ast.ImportFrom(module=module, names=names) if (
                 module in DECODER_MODULES
             ):
-                functions.update(
-                    alias.asname or alias.name
-                    for alias in names
-                    if alias.name in {"load", "loads"}
-                )
+                for alias in names:
+                    if alias.name in {"load", "loads"}:
+                        functions.add(alias.asname or alias.name)
             case _:
                 pass
     findings: set[SourceFinding] = set()

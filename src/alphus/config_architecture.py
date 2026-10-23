@@ -116,6 +116,7 @@ class ArchitectureGraphPolicy(StrictModel):
     """Mermaid graph synchronization derived from declared package edges."""
 
     path: str
+    syntax: Literal["flowchart", "architecture"] = "flowchart"
     node_names: tuple[tuple[str, str], ...]
     extra_edges: tuple[tuple[str, str], ...] = ()
 

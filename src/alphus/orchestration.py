@@ -41,6 +41,7 @@ class OrchestrationStepResult:
     stdout: str = ""
     stderr: str = ""
     severity_counts: SeverityCounts = field(default_factory=SeverityCounts)
+    rollout: Literal["mainline", "provisional"] = "mainline"
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,9 +134,10 @@ def _render_diagnostic(diagnostic: Diagnostic, output: TextIO) -> None:
     if diagnostic.line is not None:
         location = f"{location}:{diagnostic.line}" if location else str(diagnostic.line)
     suffix = f" {location}" if location else ""
+    priority = f" [priority={diagnostic.priority}]" if diagnostic.priority else ""
     print(
         f"{diagnostic.severity.upper()} {diagnostic.source} "
-        f"{diagnostic.rule_id}{suffix}: {diagnostic.message}",
+        f"{diagnostic.rule_id}{suffix}{priority}: {diagnostic.message}",
         file=output,
         flush=True,
     )
@@ -182,6 +184,8 @@ def run_orchestration(
         return 2
 
     failed = 0
+    provisional_passed = 0
+    provisional_failed = 0
     completed = 0
     results: list[OrchestrationStepResult] = []
     all_findings: list[Diagnostic] = []
@@ -212,15 +216,16 @@ def run_orchestration(
                         rule_result: int | RuleRunResult = run_rule(rule)
                     if isinstance(rule_result, RuleRunResult):
                         findings = list(rule_result.findings)
-                        if step.severity is not None:
+                        if step.severity is not None or step.priority is not None:
                             findings = [
                                 Diagnostic(
                                     source=item.source,
                                     rule_id=item.rule_id,
                                     message=item.message,
-                                    severity=step.severity,
+                                    severity=step.severity or item.severity,
                                     path=item.path,
                                     line=item.line,
+                                    priority=step.priority or item.priority,
                                 )
                                 for item in findings
                             ]
@@ -361,7 +366,10 @@ def run_orchestration(
             _write_captured(errors, step_stderr)
 
         completed += 1
+        provisional = step.rollout == "provisional"
         if exit_code == 0:
+            if provisional:
+                provisional_passed += 1
             results.append(
                 OrchestrationStepResult(
                     step.name,
@@ -379,6 +387,7 @@ def run_orchestration(
                     stdout=step_stdout,
                     stderr=step_stderr,
                     severity_counts=SeverityCounts.from_diagnostics(findings),
+                    rollout=step.rollout,
                 )
             )
             all_findings.extend(findings)
@@ -387,9 +396,13 @@ def run_orchestration(
                     _render_diagnostic(finding, output)
             if not json_output:
                 details = " (no files matched)" if skipped_empty_file_scope else ""
-                print(f"PASS {step.name}{details}", file=output, flush=True)
+                prefix = "PROVISIONAL PASS" if provisional else "PASS"
+                print(f"{prefix} {step.name}{details}", file=output, flush=True)
         else:
-            failed += 1
+            if provisional:
+                provisional_failed += 1
+            else:
+                failed += 1
             results.append(
                 OrchestrationStepResult(
                     step.name,
@@ -400,6 +413,7 @@ def run_orchestration(
                     stdout=step_stdout,
                     stderr=step_stderr,
                     severity_counts=SeverityCounts.from_diagnostics(findings),
+                    rollout=step.rollout,
                 )
             )
             all_findings.extend(findings)
@@ -407,11 +421,14 @@ def run_orchestration(
                 for finding in findings:
                     _render_diagnostic(finding, output)
             if not json_output:
-                print(f"FAIL {step.name} (exit {exit_code})", file=output, flush=True)
+                prefix = "PROVISIONAL FAIL" if provisional else "FAIL"
+                print(
+                    f"{prefix} {step.name} (exit {exit_code})", file=output, flush=True
+                )
         if json_output and step_stderr:
             print(step_stderr, end="", file=errors, flush=True)
 
-    passed = completed - failed
+    passed = completed - failed - provisional_passed - provisional_failed
     exit_code = 1 if failed else 0
     if json_output:
         result = OrchestrationResult(
@@ -424,15 +441,28 @@ def run_orchestration(
             SeverityCounts.from_diagnostics(all_findings),
         )
         payload = asdict(result)
+        for step_payload in payload["steps"]:
+            if step_payload["rollout"] == "mainline":
+                del step_payload["rollout"]
+            for finding_payload in step_payload["findings"]:
+                if finding_payload["priority"] is None:
+                    del finding_payload["priority"]
+        if provisional_passed or provisional_failed:
+            payload["provisional"] = {
+                "passed": provisional_passed,
+                "failed": provisional_failed,
+            }
         if profile.includes:
             payload["profiles"] = plan.profiles
         print(json.dumps(payload, sort_keys=True), file=output, flush=True)
     else:
-        print(
-            f"Quality profile {profile_name}: {passed} passed, {failed} failed",
-            file=output,
-            flush=True,
-        )
+        summary = f"Quality profile {profile_name}: {passed} passed, {failed} failed"
+        if provisional_passed or provisional_failed:
+            summary += (
+                f", {provisional_passed} provisional passed, "
+                f"{provisional_failed} provisional failed"
+            )
+        print(summary, file=output, flush=True)
         counts = SeverityCounts.from_diagnostics(all_findings)
         if counts.error or counts.warning or counts.info:
             print(

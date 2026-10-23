@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import json
 import subprocess
+from collections.abc import Callable, Sequence
 from io import StringIO
 from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
-from alphus import cli
+from alphus import cli, inventory
 from alphus.cli import main
 from alphus.config import (
     NodeCliPolicy,
@@ -302,6 +303,20 @@ def test_tracked_inventory_excludes_untracked_files(tmp_path: Path) -> None:
     assert tracked_files(tmp_path) == [Path("tracked.docx")]
 
 
+@pytest.mark.parametrize("reader", [inventory.git_files, inventory.tracked_files])
+def test_inventory_explains_missing_git(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    reader: Callable[[Path], Sequence[Path]],
+) -> None:
+    def missing_git(*_args: object, **_kwargs: object) -> None:
+        raise FileNotFoundError("git")
+
+    monkeypatch.setattr(inventory.subprocess, "run", missing_git)
+    with pytest.raises(OSError, match="Git is required for Alphus file inventory"):
+        reader(tmp_path)
+
+
 def test_recursive_globs_match_nested_directories_and_root_files() -> None:
     """A recursive exclusion covers root and deeply nested repository paths."""
     assert matches_path("src/service.py", "**/*.py")
@@ -478,6 +493,7 @@ kind = "rule"
 name = "line check"
 rule = "line-length"
 severity = "warning"
+priority = "high"
 
 [[orchestration.profiles]]
 name = "check"
@@ -491,12 +507,14 @@ steps = ["line check"]
     payload = json.loads(capsys.readouterr().out)
     assert payload["steps"][0]["status"] == "passed"
     assert payload["steps"][0]["findings"][0]["severity"] == "warning"
+    assert payload["steps"][0]["findings"][0]["priority"] == "high"
     assert payload["steps"][0]["findings"][0]["source"] == "alphus"
     assert payload["severity_counts"] == {"error": 0, "warning": 1, "info": 0}
 
     assert main(arguments) == 0
     text_output = capsys.readouterr().out
     assert "WARNING alphus source.line-length" in text_output
+    assert "[priority=high]" in text_output
     assert "Diagnostic triage: 0 error(s), 1 warning(s), 0 info(s)" in text_output
 
 
