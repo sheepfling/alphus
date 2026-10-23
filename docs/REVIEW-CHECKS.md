@@ -91,21 +91,33 @@ Enable the built-in catalog with one small section:
 extensions = [".py"]
 ```
 
-The catalog reviews exact arithmetic literals for `speed_of_light`, `Planck`,
-`Boltzmann`, and `Avogadro`, plus the `inch`, `foot`, `mile`, `hour`, and
-`day` unit factors. It checks each unit factor and its reciprocal. Unit
-factors require a related identifier or enclosing function name, such as
-`inches` or `meters`. Dividing by a factor also matches; the direction of a
-conversion still needs human review. Add consumer-specific entries through
-`[[checks.scipy_constants.constants]]` using the same fields as the numeric
-catalog. Disable groups with `physical_constants = false`,
-`unit_conversions = false`, or `inverse_conversions = false`.
+The built-in catalog reviews exact arithmetic literals for the SI-defined
+`speed_of_light`, `Planck`, `Boltzmann`, `Avogadro`, standard gravity,
+elementary charge/electron volt, and molar gas constants. It also covers
+common SciPy unit factors in the length, time, mass, volume, pressure, area,
+and speed families. These include `inch`, `foot`, `yard`, `mile`,
+`nautical_mile`; `minute`, `hour`, `day`, `week`, `year`, `Julian_year`;
+`gram`, `pound`, `ounce`; `liter`; `atmosphere`, `bar`; `hectare`, `acre`;
+and `mph`, `kmh`, `knot`. Each factor and its reciprocal are checked.
+
+Unit factors require a related identifier or enclosing function name, such as
+`inches` or `meters`. Multiplication and division both match. The finding
+names a SciPy symbol; review the dimensions and direction before replacing
+arithmetic. The charge and electron volt share the same numerical value, so
+their finding names both alternatives and asks for a unit check. Add
+consumer-specific entries through `[[checks.scipy_constants.constants]]` using
+the same fields as the numeric catalog. Disable groups with
+`physical_constants = false`, `unit_conversions = false`, or
+`inverse_conversions = false`.
 
 The built-in symbols and units follow the
 [SciPy constants reference](https://docs.scipy.org/doc/scipy/reference/constants.html).
 Alphus does not import SciPy, compare floating-point values approximately, or
-infer physical dimensions. The gate is provisional in Alphus's own `review`
-profile, so its findings are visible without blocking the profile.
+infer physical dimensions. This rule does not detect composed conversion
+formulas, affine temperature conversions such as Celsius to Kelvin, or
+SciPy's `lambda2nu`/`nu2lambda` function equivalents. The gate is provisional
+in Alphus's own `review` profile, so its findings are visible without
+blocking the profile.
 
 ## Test quality
 

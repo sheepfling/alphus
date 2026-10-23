@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from alphus.config import NumericLiteralSpec, ScipyConstantsPolicy
 from alphus.gates.review.scipy_constants import (
     check_scipy_constants,
@@ -81,3 +83,76 @@ def test_scipy_review_accepts_bom_prefixed_python_source(tmp_path: Path) -> None
     source.write_bytes(b"\xef\xbb\xbfenergy = frequency * 6.62607015e-34\n")
     findings = check_scipy_constants(tmp_path, [Path("physics.py")], _policy())
     assert len(findings) == 1
+
+
+@pytest.mark.parametrize(
+    ("name", "factor", "token"),
+    [
+        ("yard", 0.9144, "yards"),
+        ("nautical_mile", 1852, "nautical"),
+        ("minute", 60, "minutes"),
+        ("week", 604800, "weeks"),
+        ("year", 31536000, "years"),
+        ("Julian_year", 31557600, "julian"),
+        ("gram", 0.001, "grams"),
+        ("pound", 0.45359237, "pounds"),
+        ("ounce", 0.028349523125, "ounces"),
+        ("liter", 0.001, "liters"),
+        ("atmosphere", 101325, "atmospheres"),
+        ("bar", 100000, "bars"),
+        ("hectare", 10000, "hectares"),
+        ("acre", 4046.8564224, "acres"),
+        ("mph", 0.44704, "mph"),
+        ("kmh", 1000 / 3600, "kmh"),
+        ("knot", 1852 / 3600, "knots"),
+    ],
+)
+def test_added_unit_factors_and_reciprocals(
+    name: str, factor: float, token: str
+) -> None:
+    source = (
+        f"direct = reading_{token} * {factor!r}\n"
+        f"inverse = reading_{token} * {1 / factor!r}\n"
+    )
+    findings = scipy_literal_findings(source, _policy())
+    assert [finding.line for finding in findings] == [1, 2]
+    assert all(f"scipy.constants.{name}" in finding.message for finding in findings)
+
+
+def test_new_physical_constants_and_ambiguous_charge_are_reviewed() -> None:
+    source = (
+        "force = mass * 9.80665\n"
+        "coulombs = electrons * 1.602176634e-19\n"
+        "energy = moles * 8.31446261815324 * temperature\n"
+    )
+    findings = scipy_literal_findings(source, _policy())
+    assert [finding.line for finding in findings] == [1, 2, 3]
+    assert "scipy.constants.g" in findings[0].message
+    assert "electron_volt" in findings[1].message
+    assert "check units" in findings[1].message
+    assert "scipy.constants.gas_constant" in findings[2].message
+
+
+def test_same_numeric_factor_uses_unit_context_without_double_reporting() -> None:
+    source = (
+        "weight = reading_grams * 0.001\n"
+        "capacity = reading_liters * 0.001\n"
+        "unlabelled = reading * 0.001\n"
+    )
+    findings = scipy_literal_findings(source, _policy())
+    assert [finding.line for finding in findings] == [1, 2]
+    assert "scipy.constants.gram" in findings[0].message
+    assert "scipy.constants.liter" in findings[1].message
+
+
+def test_expanded_catalog_is_exact_and_configurable() -> None:
+    source = (
+        "seconds = elapsed_minutes * 60\n"
+        "liters = volume * 0.001\n"
+        "seconds = minutes * 0.016666666\n"
+        "force = mass * 9.80665\n"
+    )
+    policy = _policy(physical_constants=False, unit_conversions=False)
+    assert scipy_literal_findings(source, policy) == []
+    findings = scipy_literal_findings(source, _policy(inverse_conversions=False))
+    assert [finding.line for finding in findings] == [1, 2, 4]
