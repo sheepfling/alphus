@@ -53,6 +53,8 @@ added to this repository. The global
 The package-boundary step also validates console and GUI script entry-point
 reference syntax in `pyproject.toml`; it catches an invalid module segment
 before an editable installation reaches the build backend.
+The package tests load every declared script target and require a callable,
+which also catches valid-looking references to missing modules or attributes.
 
 The only non-empty rule exclusions are:
 

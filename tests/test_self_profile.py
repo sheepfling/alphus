@@ -1,5 +1,7 @@
-"""Alphus must apply its own review policy in the regular check profile."""
+"""Alphus must apply its own policy and package contracts."""
 
+import tomllib
+from importlib.metadata import EntryPoint
 from pathlib import Path
 
 from alphus.config import load_config
@@ -33,3 +35,16 @@ def test_self_check_enforces_review_and_repository_toml() -> None:
     assert [item.rule_id for item in findings] == [
         "test-quality.ephemeral-plan-dependency"
     ]
+
+
+def test_declared_script_entry_points_resolve_to_callables() -> None:
+    metadata = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    project = metadata["project"]
+    assert project["scripts"]
+    for table, group in (
+        ("scripts", "console_scripts"),
+        ("gui-scripts", "gui_scripts"),
+    ):
+        for name, reference in project.get(table, {}).items():
+            target = EntryPoint(name=name, value=reference, group=group).load()
+            assert callable(target), f"{group} entry point {name!r} is not callable"
