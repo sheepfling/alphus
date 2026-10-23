@@ -73,7 +73,8 @@ unless a consumer explicitly changes its configuration.
 
 ### Add a built-in theme today
 
-The `alphus.gates.review` package is the working example. Put the checker
+The `alphus.gates.review` and `alphus.gates.source` packages are working
+examples. Put the checker
 implementation under `alphus.gates.<theme>`, and put reusable parsing or file
 access in `alphus.support` only when more than one gate needs it. A portable
 checker receives an explicit root, selected files, and its validated policy;

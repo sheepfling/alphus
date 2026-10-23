@@ -39,6 +39,9 @@ language neutral.
   AST name resolution. These utilities do not emit findings or register rules.
 - `alphus.gates.review` owns numeric-literal, test-quality, and input-contract
   checkers. Its `runners.py` binds their selectors to validated policies.
+- `alphus.gates.source` owns portable source and launcher checks for Python,
+  JavaScript, and JSON. Its `runners.py` binds these selectors to validated
+  policies. Language-specific analysis remains inside each checker.
 - `alphus.gates.stubs` owns the installed stub-package workflow and fixture
   controller.
 - `alphus.config*`, `alphus.rule_catalog`, `alphus.rule_execution`, and
@@ -49,11 +52,11 @@ language neutral.
 - `alphus_stub_quality` contains small audit helpers copied into the Python
   3.10 target environment.
 
-Existing root imports such as `alphus.numeric_literals` and
-`alphus.source_scanning` remain compatibility modules. New code in a gate
-theme imports shared mechanics from `alphus.support` directly. The remaining
-built-in checkers still live at the package root and can move by theme without
-changing their selectors or public result shapes.
+Existing root imports such as `alphus.numeric_literals`, `alphus.python_style`,
+and `alphus.source_scanning` remain compatibility modules. New code in a gate
+theme imports shared mechanics from `alphus.support` directly. Repository and
+general hygiene checkers still live at the package root and can move by theme
+without changing their selectors or public result shapes.
 
 Node and npm are optional. A repository that configures no Node-based command
 does not need `package.json`, Node.js, or npm. Consumers may keep established
@@ -77,7 +80,8 @@ metadata, and orchestration in separate modules. `alphus.config` re-exports
 those models as the compatibility import surface.
 `alphus.rule_catalog` records each built-in rule's required policy field and
 JSON output shape. Policy validation and profile diagnostic decoding share
-that catalog. `alphus.rule_execution` holds the built-in checker dispatch, and
+that catalog. Theme packages own their runner mappings;
+`alphus.rule_execution` composes the built-in checker dispatch, and
 `alphus.rule_results` validates each result against its declared shape while
 normalizing diagnostics. The package tests require
 both registries to cover every public rule selector. The CLI retains rendering

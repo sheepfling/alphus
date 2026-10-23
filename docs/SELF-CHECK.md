@@ -68,8 +68,8 @@ The only non-empty rule exclusions are:
 - **Runtime type usage, `tests/**`:** tests deliberately exercise dynamic and
   broad runtime-type
   cases to verify the rule; this policy is for application code.
-- **Runtime type usage, `src/alphus/python_style.py` and
-  `src/alphus/runtime_types.py`:** these AST analyzers use `isinstance` to narrow
+- **Runtime type usage, `src/alphus/gates/source/python_style.py` and
+  `src/alphus/gates/source/runtime_types.py`:** these AST analyzers use `isinstance` to narrow
   AST nodes, not application runtime values.
 - **JSON structure, `tests/**`:** tests include decoder calls in source
   snippets to

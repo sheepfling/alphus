@@ -47,8 +47,8 @@ forbidden_main_imports = ["main"]
 extensions = [".py"]
 exclude = [
   "tests/**",
-  "src/alphus/python_style.py",
-  "src/alphus/runtime_types.py",
+  "src/alphus/gates/source/python_style.py",
+  "src/alphus/gates/source/runtime_types.py",
 ]
 
 [checks.numeric_literals]

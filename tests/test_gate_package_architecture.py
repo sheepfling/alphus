@@ -5,11 +5,23 @@ from __future__ import annotations
 import ast
 from importlib.resources import files
 
-from alphus import input_contracts, numeric_literals, source_scanning, test_quality
+from alphus import (
+    input_contracts,
+    json_structure,
+    numeric_literals,
+    python_style,
+    runtime_types,
+    source_scanning,
+    test_quality,
+)
 from alphus.gates.review import input_contracts as review_input_contracts
 from alphus.gates.review import numeric_literals as review_numeric_literals
 from alphus.gates.review import test_quality as review_test_quality
 from alphus.gates.review.runners import REVIEW_RULE_RUNNERS
+from alphus.gates.source import json_structure as source_json_structure
+from alphus.gates.source import python_style as source_python_style
+from alphus.gates.source import runtime_types as source_runtime_types
+from alphus.gates.source.runners import SOURCE_RULE_RUNNERS
 from alphus.rule_execution import RULE_RUNNERS
 from alphus.support import source_scanning as support_source_scanning
 
@@ -58,3 +70,24 @@ def test_review_theme_owns_its_runners_and_old_imports_remain_valid() -> None:
         is review_input_contracts.check_input_contracts
     )
     assert source_scanning.import_aliases is support_source_scanning.import_aliases
+
+
+def test_source_theme_owns_its_runners_and_old_imports_remain_valid() -> None:
+    assert set(SOURCE_RULE_RUNNERS) == {
+        "json-structure",
+        "output-escaping",
+        "path-discovery",
+        "python-style",
+        "runtime-types",
+        "cli",
+        "script-policy",
+    }
+    assert all(
+        RULE_RUNNERS[name] is runner for name, runner in SOURCE_RULE_RUNNERS.items()
+    )
+    assert (
+        json_structure.check_json_structure
+        is source_json_structure.check_json_structure
+    )
+    assert python_style.findings_for is source_python_style.findings_for
+    assert runtime_types.policy_issues is source_runtime_types.policy_issues

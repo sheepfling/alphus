@@ -24,9 +24,9 @@ from alphus.findings import (
     Finding,
     SeverityCounts,
 )
+from alphus.gates.source.python_style import StyleFindings
 from alphus.inventory import candidate_files
 from alphus.orchestration import RuleRunResult, run_orchestration
-from alphus.python_style import StyleFindings
 from alphus.rule_catalog import RULE_SPECS
 from alphus.rule_execution import run_builtin_rule
 from alphus.rule_results import RuleEvaluation
