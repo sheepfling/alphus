@@ -56,12 +56,12 @@ checker interpreter for compatibility with existing local commands.
 The verifier probes and records both full versions, executable paths, prefixes
 and installed tool versions before running. It preserves venv executable paths.
 
-| Stage | Interpreter/environment |
-| --- | --- |
-| Wheel/sdist build without isolation; install; pip check | Target |
-| API adapter; native mypy.stubtest; runtime smoke | Target |
-| Mypy/Pyright positive and expected-negative fixtures | Checker; explicit target packages and version |
-| Optional native Twine metadata check | Checker |
+| Stage                                                   | Interpreter/environment                       |
+| ------------------------------------------------------- | --------------------------------------------- |
+| Wheel/sdist build without isolation; install; pip check | Target                                        |
+| API adapter; native mypy.stubtest; runtime smoke        | Target                                        |
+| Pyright fixtures; optional Mypy/Ty                      | Checker; explicit target packages and version |
+| Optional native Twine metadata check                    | Checker                                       |
 
 Mypy receives `--python-executable TARGET --python-version X.Y`; Pyright
 receives `--pythonpath TARGET --pythonversion X.Y`. `X.Y` comes from the actual
@@ -122,14 +122,21 @@ version. The caller retains its trigger and permission policy.
 ## Generic gates and consumer adapters
 
 `alphus-typing-fixtures` (also `python -m alphus.gates.stubs.typing_fixtures`)
-checks positive and expected-negative examples through native Mypy and Pyright.
-Ty is available as an opt-in checker with `--checkers ty` after installing it
-in the checker environment. It uses concise diagnostics and accepts the same
-target interpreter and Python version selection. Add `--ty-diagnostic` when a
-negative fixture requires a Ty-specific diagnostic fragment. The default
-checker selection remains Mypy and Pyright. The isolated stub verifier accepts
-`typing_checkers = ["mypy", "pyright", "ty"]` and optional `ty_diagnostics` in
-its `verification` config to enable Ty alongside them.
+checks positive and expected-negative examples with Pyright by default.
+Mypy and Ty are opt-in fixture checkers: install `alphus[python,mypy]` or
+`alphus[python,ty]` in the checker environment, then select
+`--checkers pyright mypy` or `--checkers pyright ty`. The Ty extra pins its
+pre-1.0 checker version because its diagnostic contract can change between
+releases. Ty uses concise diagnostics and accepts the selected target
+interpreter and Python version. Add `--ty-diagnostic` to require a specific
+negative diagnostic. The isolated verifier accepts
+`typing_checkers = ["pyright", "mypy", "ty"]` in its `verification` config.
+
+The fixture runner probes every selected checker module before running cases.
+The shared `alphus.support.tool_probe` also locates native commands; the C++
+artifact scanner uses it for objdump. The installed-stub verifier still needs
+Mypy in its target environment for the separate `mypy.stubtest` stage.
+
 Positive examples require exit zero and no errors. Negative contracts require
 an exact set of marked lines, or a configured diagnostic count, plus any
 checker-specific diagnostic fragments. An unrelated failure never establishes

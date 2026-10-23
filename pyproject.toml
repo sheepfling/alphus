@@ -21,6 +21,8 @@ python = [
   "pytest>=8,<10",
   "ruff>=0.16,<1",
 ]
+mypy = ["mypy>=2.3,<3"]
+ty = ["ty==0.0.91"]
 
 [project.scripts]
 alphus = "alphus.cli:main"

@@ -262,3 +262,50 @@ def test_python_path_comparisons_require_posix_conversion() -> None:
         (1, "path string comparison; use as_posix() at the boundary"),
         (2, "path string comparison; use as_posix() at the boundary"),
     ]
+
+
+def test_path_smells_keep_distinct_semantic_categories(tmp_path: Path) -> None:
+    relative = Path("src/paths.py")
+    path = tmp_path / relative
+    path.parent.mkdir()
+    path.write_text(
+        "from pathlib import Path\n"
+        "import sys\n"
+        "sys.path.append('vendor')\n"
+        "root = Path.cwd()\n"
+        "if str(path) == expected: pass\n",
+        encoding="utf-8",
+    )
+    findings = check_path_discovery(
+        tmp_path,
+        [relative],
+        PathDiscoveryPolicy(extensions=[".py"], exclude=[], inspection_exclude=[]),
+    )
+
+    assert {item.rule_id for item in findings} == {
+        "alphus/python/none/architecture/import-path-mutation",
+        "alphus/python/none/portability/implicit-working-directory",
+        "alphus/python/none/correctness/path-string-comparison",
+    }
+
+
+def test_javascript_path_smells_keep_distinct_semantic_categories(
+    tmp_path: Path,
+) -> None:
+    relative = Path("src/paths.js")
+    path = tmp_path / relative
+    path.parent.mkdir()
+    path.write_text(
+        'const root = process.cwd();\nif (raw.includes("://")) {}\n',
+        encoding="utf-8",
+    )
+    findings = check_path_discovery(
+        tmp_path,
+        [relative],
+        PathDiscoveryPolicy(extensions=[".js"], exclude=[], inspection_exclude=[]),
+    )
+
+    assert {item.rule_id for item in findings} == {
+        "alphus/javascript/none/portability/implicit-working-directory",
+        "alphus/javascript/none/correctness/url-string-inspection",
+    }

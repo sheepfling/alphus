@@ -140,8 +140,9 @@ The C++ advisory profile has a consumer integration test that exercises both
 style and trend steps, including a nonblocking finding and insufficient history.
 
 CI also invokes the standalone JavaScript and JSON orchestration profiles.
-The separate optional-gates CI job provisions a Python 3.11 checker with Mypy
-and Pyright and a Python 3.10 target with SnakeMD and mdutils. It executes the
+The separate optional-gates CI job provisions a Python 3.11 checker with Mypy, Ty,
+and Pyright and a Python 3.10 target with SnakeMD and mdutils. It runs a
+real positive and negative Ty fixture before executing the
 native target integration test and the symlink boundary tests on Linux, then
 fails if any selected test skips. Local Windows runs may still skip symlink
 tests when the host disallows their creation. The monthly/manual Git history

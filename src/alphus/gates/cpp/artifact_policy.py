@@ -16,7 +16,6 @@ from alphus.gates.cpp.artifact_contracts import (
 )
 from alphus.support.data_access import (
     optional_json_integer,
-    optional_json_number,
     require_json_array,
     require_json_object,
     require_json_string,
@@ -99,35 +98,7 @@ def load_policy(path: Path) -> ArtifactPolicy:
         result["name"] = require_json_string(name, "policy name must be a string")
     raw_scan = policy.get("scan")
     if raw_scan is not None:
-        scan = require_json_object(raw_scan, "scan must be an object")
-        allowed_scan = {
-            "debug_dominance_min_bytes",
-            "max_review_examples",
-            "section_timeout_seconds",
-        }
-        unknown_scan = set(scan) - allowed_scan
-        if unknown_scan:
-            raise ValueError(
-                "unknown scan option(s): " + ", ".join(sorted(unknown_scan))
-            )
-        defaults = ArtifactScanOptions()
-        debug_min = optional_json_integer(
-            scan.get("debug_dominance_min_bytes", defaults.debug_dominance_min_bytes)
-        )
-        max_examples = optional_json_integer(
-            scan.get("max_review_examples", defaults.max_review_examples)
-        )
-        timeout = scan.get("section_timeout_seconds", defaults.section_timeout_seconds)
-        if debug_min is None or max_examples is None:
-            raise ValueError("scan byte and example settings must be integers")
-        timeout_number = optional_json_number(timeout)
-        if timeout_number is None:
-            raise ValueError("section_timeout_seconds must be a number")
-        result["scan"] = ArtifactScanOptions(
-            debug_dominance_min_bytes=debug_min,
-            max_review_examples=max_examples,
-            section_timeout_seconds=timeout_number,
-        )
+        result["scan"] = ArtifactScanOptions.model_validate(raw_scan)
     for field in ("include", "exclude"):
         if field in policy:
             patterns = [

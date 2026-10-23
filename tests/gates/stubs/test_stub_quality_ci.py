@@ -12,6 +12,7 @@ import pytest
 
 from alphus.gates.stubs.typing_fixtures import (
     CHECKERS,
+    DEFAULT_CHECKERS,
     OPTIONAL_CHECKERS,
     Checker,
     build_command,
@@ -20,7 +21,11 @@ from alphus.gates.stubs.typing_fixtures import (
     observed_error_lines,
     run_case,
 )
-from alphus.gates.stubs.verify import expand_path_arguments, read_config
+from alphus.gates.stubs.verify import (
+    VerificationConfig,
+    expand_path_arguments,
+    read_config,
+)
 from alphus_stub_quality.api_audit_support import (
     ast_parameters,
     class_attributes,
@@ -449,3 +454,14 @@ def test_api_audit_module_accepts_package_specific_cli_args(tmp_path: Path) -> N
         "--stub-root",
         "{source}/mdutils-stubs",
     )
+
+
+def test_pyright_is_the_default_typing_fixture_checker() -> None:
+    assert tuple(checker.name for checker in DEFAULT_CHECKERS) == ("pyright",)
+    settings = VerificationConfig(
+        stubtest_module="example",
+        stubtest_allowlist="allowlist.txt",
+        positive_fixture="positive.py",
+        negative_fixture="negative.py",
+    )
+    assert settings.typing_checkers == ("pyright",)

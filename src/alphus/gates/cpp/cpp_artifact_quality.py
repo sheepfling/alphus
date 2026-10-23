@@ -11,6 +11,7 @@ from pathlib import Path
 from alphus.gates.cpp.artifact_contracts import (
     ArtifactScanOptions,
     parse_artifact_baseline,
+    validate_artifact_report,
 )
 from alphus.gates.cpp.artifact_policy import evaluate, load_policy, manifest_digest
 from alphus.gates.cpp.artifact_scan import DEFAULT_INCLUDE_GLOBS, scan_directory
@@ -102,6 +103,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 else None
             )
             report["gate"] = evaluate(report, policy, baseline)
+        report = validate_artifact_report(report)
         totals = report["totals"]
         gate = report.get("gate")
         gate_findings = gate["findings"] if gate is not None else []

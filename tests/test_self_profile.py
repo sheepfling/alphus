@@ -85,3 +85,13 @@ def test_hosted_dependency_floor_uses_package_metadata() -> None:
     workflow = Path(".github/workflows/quality.yml").read_text(encoding="utf-8")
     floor_job = workflow.split("  minimum-dependencies:", 1)[1]
     assert "python scripts/ci.py --root . --minimum" in floor_job
+
+
+def test_stub_checker_extras_are_opt_in() -> None:
+    metadata = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    extras = metadata["project"]["optional-dependencies"]
+    assert any(requirement.startswith("pyright") for requirement in extras["python"])
+    assert not any(requirement.startswith("mypy") for requirement in extras["python"])
+    assert not any(requirement.startswith("ty==") for requirement in extras["python"])
+    assert len(extras["mypy"]) == 1 and extras["mypy"][0].startswith("mypy")
+    assert extras["ty"] == ["ty==0.0.91"]

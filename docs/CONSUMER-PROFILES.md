@@ -13,6 +13,22 @@ alphus
 alphus --fix-plan
 ```
 
+You can create the same policy without copying a file:
+
+```shell
+alphus --init-config starter
+alphus --plan
+```
+
+Choose `python`, `markdown`, `toml`, `json`, `javascript`, or `polyglot` instead
+of `starter` to generate a different bundle. Extend a recipe with repeatable
+`--add-language` and `--add-tool` options; `--init-config custom` starts with
+only the selections you supply. `--config` selects the output path under
+`--root`. Alphus validates the generated policy before writing it and refuses
+to replace a file unless `--overwrite-config` is supplied. Edit the generated
+TOML for project-specific rules and native tool overrides, then use
+`alphus --plan` to inspect the resolved checks.
+
 The starter policy contains one Markdown check and its explicit fixer. It needs
 only two lines: `schema_version = 1` and `tools = ["rumdl"]`. It needs no
 global `[files]`, `[checks]`, `[orchestration]`, or native config file.
@@ -146,18 +162,23 @@ Path include and exclude entries are POSIX globs; regex alternation such as
 syntax in extensions. Ordinary Python repositories can combine `python` and
 `markdown`; stub packages combine those with `stubs`.
 
-| Profile | Typical checks | Policy owner |
-| --- | --- | --- |
-| `markdown` | Document links/graph, style/format | mdrepo and rumdl |
-| `python` | Lint, formatting, project tests/tooling types | Ruff, pytest/unittest, Mypy/Pyright |
-| `stubs` | Build/install, API, typed examples, stubtest, smoke | Alphus and native checkers |
-| `toml` | TOML syntax and formatting | Python `tomllib` and Taplo |
-| `json` | JSON syntax and formatting | Python `json` and Prettier |
-| `javascript` | JS lint, format, tests, and types | Alphus policy, ESLint, Prettier, consumer commands |
-| `typescript` | Opt-in TS/TSX lint and format | ESLint, Prettier |
-| `html` | Opt-in Angular or standard HTML checks | angular-eslint or HTML-validate, Prettier |
-| `css` | Opt-in CSS lint and format | Stylelint, Prettier |
-| `python-policy` | Optional repository-specific source conventions | Explicit Alphus source policy |
+| Profile         | Typical checks                                      | Policy owner                              |
+| --------------- | --------------------------------------------------- | ----------------------------------------- |
+| `markdown`      | Document links/graph, style/format                  | mdrepo and rumdl                          |
+| `python`        | Lint, formatting, project tests/tooling types       | Ruff, pytest, Pyright/Mypy                |
+| `stubs`         | Build/install, API, typed examples, stubtest, smoke | Alphus and native checkers                |
+| `toml`          | TOML syntax and formatting                          | Python `tomllib` and Taplo                |
+| `json`          | JSON syntax and formatting                          | Python `json` and Prettier                |
+| `javascript`    | JS lint, format, tests, and types                   | ESLint, Prettier, app commands            |
+| `typescript`    | Opt-in TS/TSX lint and format                       | ESLint, Prettier                          |
+| `html`          | Opt-in Angular or standard HTML checks              | angular-eslint or HTML-validate, Prettier |
+| `css`           | Opt-in CSS lint and format                          | Stylelint, Prettier                       |
+| `python-policy` | Optional repository-specific source conventions     | Explicit Alphus source policy             |
+
+Path-discovery findings now use semantic categories and complaints: implicit
+roots are portability issues, import-path mutation is architecture, and raw
+path or URL string comparisons are correctness. Consumers filtering the old
+`portability/implicit-path-discovery` ID should switch to these specific tags.
 
 The reusable JavaScript configs and synthetic rule fixtures live in the
 [`@alphus/javascript-quality` profile](../javascript/README.md). Install ESLint,

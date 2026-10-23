@@ -15,6 +15,7 @@ from pathlib import Path
 
 from alphus.gates.stubs.environments import child_environment, probe_python
 from alphus.support.source_text import read_python_source
+from alphus.support.tool_probe import probe_python_module
 
 ERROR_LINE = re.compile(r"\berror(?::|\[[^\]]+\]:?)\s")
 
@@ -28,6 +29,7 @@ class Checker:
 CHECKERS = (Checker("mypy", "mypy"), Checker("pyright", "pyright"))
 OPTIONAL_CHECKERS = (Checker("ty", "ty"),)
 AVAILABLE_CHECKERS = CHECKERS + OPTIONAL_CHECKERS
+DEFAULT_CHECKERS = (CHECKERS[1],)
 ProcessRunner = Callable[..., subprocess.CompletedProcess[str]]
 
 
@@ -277,7 +279,7 @@ def run_suite(
     mypy_diagnostics: Sequence[str] = (),
     pyright_diagnostics: Sequence[str] = (),
     ty_diagnostics: Sequence[str] = (),
-    checkers: Sequence[Checker] = CHECKERS,
+    checkers: Sequence[Checker] = DEFAULT_CHECKERS,
     target_python: str | None = None,
     python_version: str | None = None,
 ) -> bool:
@@ -325,7 +327,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--checkers",
         nargs="+",
         choices=tuple(checker.name for checker in AVAILABLE_CHECKERS),
-        default=("mypy", "pyright"),
+        default=("pyright",),
     )
     parser.add_argument("--target-python")
     parser.add_argument("--python-version")
@@ -340,6 +342,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     checkers = tuple(
         checker for checker in AVAILABLE_CHECKERS if checker.name in options.checkers
     )
+    for checker in checkers:
+        probe = probe_python_module(sys.executable, checker.module)
+        if not probe.available:
+            parser.error(
+                f"{checker.name} is not installed in {sys.executable}; "
+                f"install it or remove it from --checkers"
+            )
     try:
         if options.target_python is not None:
             target = probe_python(options.target_python)

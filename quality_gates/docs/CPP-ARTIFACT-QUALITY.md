@@ -58,6 +58,10 @@ report then carries `manifest_sha256`. Its `totals.executable_paths` list can
 be compared with the graph gate's selected executable output paths. Scan the
 same build root and target scope for both lists.
 
+The JSON report is validated by `ArtifactScanDocument` before emission. Consumers
+can parse an existing report with `ArtifactScanDocument.model_validate_json(...)`
+for typed access to its totals, artifacts, and gate findings.
+
 The JSON report contains artifact paths and byte counts, debug and text section sizes, build totals, and review signals. Artifact paths are relative to the scanned root. Symbolic-link aliases are skipped so they do not double-count the same file. The `debug_dominant_executables` signal means at least 64 MiB of debug sections and at least half of an executable's bytes are debug sections. This signal is review evidence; the project's policy sets the actual budgets.
 
 Policy values are nonnegative integer bytes, except count limits. The schema 1 `limits` object accepts:

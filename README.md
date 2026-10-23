@@ -98,6 +98,13 @@ the standalone package directory:
 python -m pip install -e /path/to/alphus
 ```
 
+Generate a small, validated policy in a new consumer checkout with
+`alphus --init-config python` or choose `starter`, `markdown`, `toml`, `json`,
+`javascript`, or `polyglot`. Add a bundle with `--add-language markdown` or a
+single tool with `--add-tool mdrepo`. `--config` chooses the destination;
+existing files require `--overwrite-config` before replacement. Preview the
+result with `alphus --plan`.
+
 For a Markdown consumer, add this `quality-gates.toml` to its repository root:
 
 ```toml
@@ -121,7 +128,8 @@ python -m pip install -e "/path/to/alphus[python]"
 For a pinned Git install, use
 `"alphus[python] @ git+https://github.com/sheepfling/alphus.git@<commit-sha>"`
 in the install command above. Ruff supplies lint and format steps;
-Pyright and pytest use the repository's native settings. Add `mdrepo`, `taplo`,
+Pyright and pytest use the repository's native settings. Optional `mypy`
+and `ty` extras add those fixture checkers when selected. Add `mdrepo`, `taplo`,
 or `prettier` only when those tools are installed and needed. Add a custom
 `[[orchestration.steps]]` beside `tools` when the repository needs another
 check. For a quick multi-language start, select bundles with one `languages`

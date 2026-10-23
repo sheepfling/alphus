@@ -20,7 +20,12 @@ from pydantic import ValidationError
 from rich.console import Console
 from rich.text import Text
 
-from alphus.config import QualityGateConfig, QualityRuleName, load_config
+from alphus.config import (
+    QualityGateConfig,
+    QualityRuleName,
+    load_config,
+    load_config_stream,
+)
 from alphus.contracts.findings import (
     Finding,
     SeverityCounts,
@@ -35,6 +40,7 @@ from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
 from alphus.gates.source.python_style import StyleFindings
 from alphus.policy.base import MissingPolicyError
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
+from alphus.policy.recipes import render_recipe
 from alphus.support.inventory import candidate_files
 
 QualityRule = QualityRuleName
@@ -785,11 +791,70 @@ def _command(
         list[str] | None,
         typer.Option("--fix-step", help="Name a step to fix; repeat as needed."),
     ] = None,
+    init_config: Annotated[
+        str | None,
+        typer.Option("--init-config", help="Write a named starter config recipe."),
+    ] = None,
+    add_language: Annotated[
+        list[str] | None,
+        typer.Option("--add-language", help="Add a language bundle to the recipe."),
+    ] = None,
+    add_tool: Annotated[
+        list[str] | None,
+        typer.Option("--add-tool", help="Add one native tool to the recipe."),
+    ] = None,
+    overwrite_config: Annotated[
+        bool,
+        typer.Option(
+            "--overwrite-config", help="Replace an existing config during init."
+        ),
+    ] = False,
 ) -> None:
     """Run the default profile from this repository, or select a rule/profile."""
     if output_format.lower() not in {"rich", "plain"}:
         raise typer.BadParameter("--output must be rich or plain")
     _OUTPUT_FORMAT.set(output_format.lower())
+    if init_config is not None:
+        if any(
+            (
+                run,
+                rule is not None,
+                profile is not None,
+                json_output,
+                report,
+                verbose,
+                plan,
+                fix_plan,
+                apply_fixes,
+                bool(fix_step),
+            )
+        ):
+            raise typer.BadParameter("--init-config cannot run or plan checks")
+        try:
+            document = render_recipe(
+                init_config,
+                add_languages=tuple(add_language or ()),
+                add_tools=tuple(add_tool or ()),
+            )
+            load_config_stream(StringIO(document))
+        except ValueError as error:
+            raise typer.BadParameter(str(error), param_hint="--init-config") from error
+        checkout = root.resolve(strict=True)
+        destination = (checkout / config).resolve()
+        if not destination.is_relative_to(checkout):
+            raise typer.BadParameter("config destination must stay inside --root")
+        if destination.exists() and not overwrite_config:
+            raise typer.BadParameter(
+                f"config already exists: {destination}; use --overwrite-config"
+            )
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(document, encoding="utf-8", newline="\n")
+        _human_print(f"Wrote {destination}")
+        raise typer.Exit(0)
+    if add_language or add_tool or overwrite_config:
+        raise typer.BadParameter(
+            "--add-language, --add-tool, and --overwrite-config require --init-config"
+        )
     if plan:
         if (
             fix_plan

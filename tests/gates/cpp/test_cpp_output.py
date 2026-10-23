@@ -9,8 +9,14 @@ from pathlib import Path
 import pytest
 
 from alphus.gates.cpp import artifact_scan
-from alphus.gates.cpp.artifact_contracts import ArtifactScanOptions, SectionMetrics
+from alphus.gates.cpp.artifact_contracts import (
+    ArtifactScanDocument,
+    ArtifactScanOptions,
+    SectionMetrics,
+    validate_artifact_report,
+)
 from alphus.gates.cpp.cpp_artifact_quality import main
+from alphus.support.tool_probe import ToolProbe
 
 
 def test_artifact_scan_supports_explicit_output_formats(
@@ -31,7 +37,11 @@ def test_artifact_scan_options_control_review_signals(
 ) -> None:
     executable = tmp_path / "sample.exe"
     executable.write_bytes(b"MZ" + b"x" * 98)
-    monkeypatch.setattr(artifact_scan.shutil, "which", lambda _tool: "objdump")
+    monkeypatch.setattr(
+        artifact_scan,
+        "probe_command",
+        lambda _tool: ToolProbe("command", "objdump", True, "objdump"),
+    )
     monkeypatch.setattr(
         artifact_scan,
         "_section_metrics",
@@ -118,3 +128,35 @@ def test_artifact_policy_scan_settings_and_cli_override(
 def test_artifact_scan_rejects_nonfinite_timeout() -> None:
     with pytest.raises(ValueError, match="section_timeout_seconds"):
         ArtifactScanOptions(section_timeout_seconds=float("nan"))
+
+
+def test_artifact_report_boundary_rejects_invalid_totals(
+    tmp_path: Path,
+) -> None:
+    report = artifact_scan.scan_directory(tmp_path, measure_sections=False).to_wire()
+    report["totals"]["count"] = -1
+    with pytest.raises(ValueError, match="totals.count"):
+        validate_artifact_report(report)
+
+
+def test_saved_artifact_report_loads_with_public_pydantic_model(tmp_path: Path) -> None:
+    destination = tmp_path / "report.json"
+    assert (
+        main(
+            [
+                "scan",
+                str(tmp_path),
+                "--no-sections",
+                "--output",
+                str(destination),
+                "--format",
+                "json",
+            ]
+        )
+        == 0
+    )
+    report = ArtifactScanDocument.model_validate_json(
+        destination.read_text(encoding="utf-8")
+    )
+    assert report.schema_version == 1
+    assert report.totals.count == 0

@@ -4,18 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from math import isfinite
 from pathlib import Path
-from typing import Literal, NotRequired, TypedDict
+from typing import Annotated, Literal, NotRequired, TypedDict, cast
 
-from alphus.support.data_access import (
-    JsonValue,
-    require_json_array,
-    require_json_boolean,
-    require_json_integer,
-    require_json_object,
-    require_json_string,
-)
+from pydantic import BaseModel, ConfigDict, Field
+
+from alphus.support.data_access import JsonValue
 from alphus.support.native_artifacts import ArtifactKind
 
 SectionStatus = Literal["skipped", "unavailable", "error", "measured"]
@@ -53,24 +47,14 @@ class SectionInventory:
         )
 
 
-@dataclass(slots=True)
-class ArtifactScanOptions:
-    """Review thresholds and subprocess budget for one artifact scan."""
+class ArtifactScanOptions(BaseModel):
+    """Validated scan settings at the JSON and CLI boundary."""
 
-    debug_dominance_min_bytes: int = 64 * 1024 * 1024
-    max_review_examples: int = 8
-    section_timeout_seconds: float = 30.0
+    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
 
-    def __post_init__(self) -> None:
-        if self.debug_dominance_min_bytes < 0:
-            raise ValueError("debug_dominance_min_bytes must be nonnegative")
-        if self.max_review_examples < 0:
-            raise ValueError("max_review_examples must be nonnegative")
-        if (
-            not isfinite(self.section_timeout_seconds)
-            or self.section_timeout_seconds <= 0
-        ):
-            raise ValueError("section_timeout_seconds must be positive")
+    debug_dominance_min_bytes: Annotated[int, Field(ge=0)] = 64 * 1024 * 1024
+    max_review_examples: Annotated[int, Field(ge=0)] = 8
+    section_timeout_seconds: Annotated[float, Field(gt=0, allow_inf_nan=False)] = 30.0
 
 
 @dataclass(slots=True)
@@ -265,68 +249,128 @@ class ArtifactPolicy(TypedDict):
     scan: NotRequired[ArtifactScanOptions]
 
 
-def _artifact_row(value: JsonValue) -> ArtifactRow:
-    source = require_json_object(value, "artifact entry must be a JSON object")
-    row: ArtifactRow = {
-        "path": require_json_string(
-            source.get("path"), "artifact path must be a string"
-        ),
-        "kind": ArtifactKind(
-            require_json_string(source.get("kind"), "artifact kind must be a string")
-        ),
-        "bytes": require_json_integer(
-            source.get("bytes"), "artifact bytes must be an integer"
-        ),
-    }
-    for field in ("section_status", "section_error"):
-        value = source.get(field)
-        if value is not None:
-            row[field] = require_json_string(value, f"{field} must be a string")
-    for field in ("debug_bytes", "text_bytes"):
-        value = source.get(field)
-        if field in source:
-            row[field] = (
-                None
-                if value is None
-                else require_json_integer(value, f"{field} must be an integer")
-            )
-    return row
+class ArtifactRowDocument(BaseModel):
+    """Validate one serialized artifact row."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    path: str
+    kind: ArtifactKind
+    bytes: Annotated[int, Field(ge=0)]
+    section_status: SectionStatus | None = None
+    section_error: str | None = None
+    debug_bytes: Annotated[int, Field(ge=0)] | None = None
+    text_bytes: Annotated[int, Field(ge=0)] | None = None
+
+
+class ArtifactBaselineTotalsDocument(BaseModel):
+    model_config = ConfigDict(extra="ignore", strict=True)
+
+    executable_bytes: Annotated[int, Field(ge=0)]
+
+
+class ArtifactBaselineDocument(BaseModel):
+    """Validate an on-disk baseline before comparison."""
+
+    model_config = ConfigDict(extra="ignore", strict=True)
+
+    schema_version: Annotated[Literal[1], Field(alias="schema")]
+    include: list[str]
+    exclude: list[str]
+    include_unix_executables: bool
+    artifacts: list[ArtifactRowDocument]
+    totals: ArtifactBaselineTotalsDocument
 
 
 def parse_artifact_baseline(value: JsonValue) -> ArtifactBaseline:
-    baseline = require_json_object(value, "baseline must be a JSON object")
-    if baseline.get("schema") != 1:
-        raise ValueError("baseline must be a schema 1 artifact report")
-    include = [
-        require_json_string(item, "baseline include entries must be strings")
-        for item in require_json_array(
-            baseline.get("include"), "baseline requires include patterns"
-        )
-    ]
-    exclude = [
-        require_json_string(item, "baseline exclude entries must be strings")
-        for item in require_json_array(
-            baseline.get("exclude"), "baseline requires exclude patterns"
-        )
-    ]
-    artifacts = [
-        _artifact_row(item)
-        for item in require_json_array(
-            baseline.get("artifacts"), "baseline requires artifacts"
-        )
-    ]
-    totals = require_json_object(baseline.get("totals"), "baseline requires totals")
-    executable_bytes = require_json_integer(
-        totals.get("executable_bytes"), "baseline executable_bytes must be an integer"
+    """Read only the baseline fields needed by the policy evaluator."""
+    document = ArtifactBaselineDocument.model_validate(value)
+    return cast(
+        ArtifactBaseline, document.model_dump(mode="json", exclude={"schema_version"})
     )
-    include_unix_executables = require_json_boolean(
-        baseline.get("include_unix_executables"),
-        "baseline include_unix_executables must be a boolean",
+
+
+class KindTotalsDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    count: Annotated[int, Field(ge=0)]
+    bytes: Annotated[int, Field(ge=0)]
+
+
+class ArtifactTotalsDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    count: Annotated[int, Field(ge=0)]
+    bytes: Annotated[int, Field(ge=0)]
+    executable_count: Annotated[int, Field(ge=0)]
+    executable_paths: list[str]
+    executable_bytes: Annotated[int, Field(ge=0)]
+    static_library_count: Annotated[int, Field(ge=0)]
+    static_library_bytes: Annotated[int, Field(ge=0)]
+    measured_debug_bytes: Annotated[int, Field(ge=0)]
+    section_measured_count: Annotated[int, Field(ge=0)]
+    section_unmeasured_count: Annotated[int, Field(ge=0)]
+    by_kind: dict[ArtifactKind, KindTotalsDocument]
+
+
+class DebugSignalDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    code: str
+    count: Annotated[int, Field(ge=0)]
+    total_debug_bytes: Annotated[int, Field(ge=0)]
+    examples: list[str]
+
+
+class LimitFindingDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    code: str
+    observed: int | None
+    limit: Annotated[int, Field(ge=0)]
+    path: str | None = None
+
+
+class ArtifactComparisonDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    new_artifacts: list[str]
+    removed_artifacts: list[str]
+    total_executable_growth_bytes: int
+
+
+class ArtifactGateDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    passed: bool
+    policy: str
+    findings: list[LimitFindingDocument]
+    comparison: ArtifactComparisonDocument | None
+
+
+class ArtifactScanDocument(BaseModel):
+    """Validate every on-disk C++ artifact report before emission."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    schema_version: Annotated[Literal[1], Field(alias="schema")]
+    root: str
+    include: list[str]
+    exclude: list[str]
+    include_unix_executables: bool
+    section_tool: str | None
+    artifacts: list[ArtifactRowDocument]
+    totals: ArtifactTotalsDocument
+    review_signals: list[DebugSignalDocument]
+    run_id: str | None = None
+    manifest_sha256: str | None = None
+    gate: ArtifactGateDocument | None = None
+
+
+def validate_artifact_report(report: ArtifactScan) -> ArtifactScan:
+    """Serialize through the report schema without changing its JSON shape."""
+    document = ArtifactScanDocument.model_validate(report)
+    return cast(
+        ArtifactScan,
+        document.model_dump(mode="json", by_alias=True, exclude_unset=True),
     )
-    return {
-        "include": include,
-        "exclude": exclude,
-        "include_unix_executables": include_unix_executables,
-        "artifacts": artifacts,
-        "totals": {"executable_bytes": executable_bytes},
-    }

@@ -81,8 +81,23 @@ jobs:
         run: |
           "${{ steps.checker-python.outputs.python-path }}" -m venv "$RUNNER_TEMP/alphus-checker"
           "${{ steps.target-python.outputs.python-path }}" -m venv "$RUNNER_TEMP/alphus-target"
-          "$RUNNER_TEMP/alphus-checker/bin/python" -m pip install --disable-pip-version-check -e '.[python]' 'mypy==2.4.0'
+          "$RUNNER_TEMP/alphus-checker/bin/python" -m pip install --disable-pip-version-check -e '.[python,mypy,ty]'
           "$RUNNER_TEMP/alphus-target/bin/python" -m pip install --disable-pip-version-check 'snakemd==2.4.1' 'mdutils==1.8.1'
+      - name: Verify optional typing checker extras
+        run: |
+          "$RUNNER_TEMP/alphus-checker/bin/python" -m mypy --version
+          "$RUNNER_TEMP/alphus-checker/bin/python" -m ty --version
+      - name: Exercise optional Ty fixture checker
+        shell: bash
+        run: |
+          fixtures="$RUNNER_TEMP/alphus-ty-fixtures"
+          mkdir -p "$fixtures"
+          printf '%s\n' 'value: int = 1' > "$fixtures/positive.py"
+          printf '%s\n' 'value: int = "bad"  # expect-error' > "$fixtures/negative.py"
+          "$RUNNER_TEMP/alphus-checker/bin/python" -m alphus.gates.stubs.typing_fixtures \
+            --positive-fixture "$fixtures/positive.py" \
+            --negative-fixture "$fixtures/negative.py" \
+            --root "$fixtures" --checkers ty
       - name: Check Alphus JSON orchestration profile
         run: |
           "$RUNNER_TEMP/alphus-checker/bin/alphus" --profile json

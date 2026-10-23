@@ -56,7 +56,7 @@ class VerificationConfig(BaseModel):
     negative_expected_count: Annotated[int, Field(strict=True, ge=1)] | None = None
     typing_checkers: Annotated[
         tuple[Literal["mypy", "pyright", "ty"], ...], Field(min_length=1)
-    ] = ("mypy", "pyright")
+    ] = ("pyright",)
     mypy_diagnostics: tuple[NonEmptyString, ...] = ()
     pyright_diagnostics: tuple[NonEmptyString, ...] = ()
     ty_diagnostics: tuple[NonEmptyString, ...] = ()

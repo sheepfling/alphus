@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import fnmatch
 import re
-import shutil
 import subprocess
 from collections.abc import Sequence
 from pathlib import Path
@@ -25,6 +24,7 @@ from alphus.support.native_artifacts import (
     artifact_kind,
     is_unix_executable,
 )
+from alphus.support.tool_probe import probe_command
 
 DEFAULT_INCLUDE_GLOBS = (
     "*.exe",
@@ -100,7 +100,7 @@ def scan_directory(
     if not includes:
         raise ValueError("at least one include pattern is required")
     settings = options or ArtifactScanOptions()
-    analyzer = shutil.which(section_tool) if measure_sections else None
+    analyzer = probe_command(section_tool).resolved if measure_sections else None
     artifacts: list[ScannedArtifact] = []
     for path in root.rglob("*"):
         if path.is_symlink() or not path.is_file():
