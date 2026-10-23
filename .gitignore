@@ -229,3 +229,16 @@ temp/
 artifacts/
 node_modules/
 *.tgz
+
+# JavaScript and TypeScript tool state
+*.tsbuildinfo
+.eslintcache
+
+# C and C++ build outputs
+cmake-build-*/
+CMakeFiles/
+*.o
+*.obj
+*.pdb
+*.exe
+*.a
