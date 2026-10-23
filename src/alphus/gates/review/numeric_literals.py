@@ -16,6 +16,7 @@ from alphus.gates.review.numeric_engine import (
     scan_numeric_literals,
 )
 from alphus.support.inventory import matches_path
+from alphus.support.source_text import read_python_source
 
 _MATH_CONSTANTS = (
     NumericLiteralSpec(
@@ -67,8 +68,6 @@ def check_numeric_literals(
                 message=finding.message,
                 severity="warning",
             )
-            for finding in numeric_literal_findings(
-                path.read_text(encoding="utf-8-sig"), policy
-            )
+            for finding in numeric_literal_findings(read_python_source(path), policy)
         )
     return findings

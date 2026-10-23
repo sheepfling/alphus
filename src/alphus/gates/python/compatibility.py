@@ -12,6 +12,8 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import cast
 
+from alphus.support.source_text import read_python_source
+
 _COMPATIBILITY_MARKER = re.compile(
     r"^(?:compatibility|compat|legacy|deprecated)\s+"
     r"(?:imports?|re[- ]?exports?|forwarders?|shims?)\b",
@@ -169,7 +171,7 @@ def discover_forwarders(
     for path in sorted(root.rglob("*.py")):
         relative = path.relative_to(root)
         try:
-            source = path.read_text(encoding="utf-8")
+            source = read_python_source(path)
             tree = ast.parse(source, filename=relative.as_posix())
         except (OSError, UnicodeError, SyntaxError) as error:
             issues.append(

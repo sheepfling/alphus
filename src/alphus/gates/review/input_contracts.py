@@ -18,6 +18,7 @@ from alphus.support.source_scanning import (
     canonical_expression_name,
     import_aliases,
 )
+from alphus.support.source_text import read_python_source
 
 Family = Literal["sequence", "mapping", "set", "binary"]
 _ABSTRACT_FAMILIES: tuple[tuple[str, Family], ...] = (
@@ -768,6 +769,6 @@ def check_input_contracts(
             matches_path(name, pattern) for pattern in policy.exclude
         ):
             continue
-        source = (checkout / relative).read_text(encoding="utf-8-sig")
+        source = read_python_source(checkout / relative)
         findings.extend(input_contract_findings(source, policy, path=name))
     return findings

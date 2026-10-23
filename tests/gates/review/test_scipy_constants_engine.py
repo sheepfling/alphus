@@ -74,3 +74,10 @@ def test_repository_scan_emits_warning_findings(tmp_path: Path) -> None:
     assert findings[0].path == "physics.py"
     assert findings[0].severity == "warning"
     assert findings[0].rule_id == "alphus/python/scipy/style/inline-constant"
+
+
+def test_scipy_review_accepts_bom_prefixed_python_source(tmp_path: Path) -> None:
+    source = tmp_path / "physics.py"
+    source.write_bytes(b"\xef\xbb\xbfenergy = frequency * 6.62607015e-34\n")
+    findings = check_scipy_constants(tmp_path, [Path("physics.py")], _policy())
+    assert len(findings) == 1

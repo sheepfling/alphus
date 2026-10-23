@@ -12,6 +12,7 @@ from typing import TypedDict
 
 from alphus.config import PythonStylePolicy
 from alphus.support.inventory import matches_path
+from alphus.support.source_text import read_python_source
 
 CONCRETE = frozenset({"list", "dict", "set", "List", "Dict"})
 BARE_CONTAINERS = frozenset(
@@ -761,7 +762,7 @@ def findings_for(
         path = checkout / relative
         if not path.is_file():
             continue
-        source = path.read_text(encoding="utf-8")
+        source = read_python_source(path)
         visitor = StyleVisitor(
             policy,
             source=source,

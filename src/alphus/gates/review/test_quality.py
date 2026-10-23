@@ -14,6 +14,7 @@ from alphus.config import TestQualityPolicy as _TestQualityPolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import rule_tag
 from alphus.support.inventory import matches_path
+from alphus.support.source_text import read_python_source
 
 _PATH_READS = frozenset({"read_text", "read_bytes", "stat", "exists", "is_file"})
 _PATH_WRITES = frozenset({"write_text", "write_bytes", "touch"})
@@ -449,7 +450,5 @@ def check_test_quality(
             continue
         path = checkout / relative
         if path.is_file():
-            findings.extend(
-                python_findings(path.read_text(encoding="utf-8-sig"), name, policy)
-            )
+            findings.extend(python_findings(read_python_source(path), name, policy))
     return findings

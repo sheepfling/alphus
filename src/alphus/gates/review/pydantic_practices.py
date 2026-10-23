@@ -16,6 +16,7 @@ from alphus.support.source_scanning import (
     canonical_expression_name,
     import_aliases,
 )
+from alphus.support.source_text import read_python_source
 
 _DUMP_METHODS = frozenset({"model_dump", "model_dump_json"})
 _VALIDATION_METHODS = frozenset(
@@ -237,6 +238,6 @@ def check_pydantic_practices(
             matches_path(name, pattern) for pattern in policy.exclude
         ):
             continue
-        source = (checkout / relative).read_text(encoding="utf-8-sig")
+        source = read_python_source(checkout / relative)
         findings.extend(pydantic_practice_findings(source, policy, path=name))
     return findings
