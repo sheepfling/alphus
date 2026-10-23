@@ -103,30 +103,31 @@ def check_ignores(root: Path, languages: Sequence[str] = ()) -> list[Finding]:
     rules = [r for r in RULES if r.language == "repository" or r.language in selected]
     findings: list[Finding] = []
     for rule in rules:
-        try:
-            result = subprocess.run(
-                ["git", "check-ignore", "--quiet", "--no-index", "--", rule.sample],
-                cwd=root,
-                capture_output=True,
-                check=False,
-            )
-        except FileNotFoundError as error:
-            raise OSError("Git is required for repository quality rules") from error
-        if result.returncode == 1:
-            findings.append(
-                Finding(
-                    rule_id=rule_tag(
-                        rule.language, "git", "hygiene", "missing-ignore-rule"
-                    ),
-                    path=rule.sample,
-                    message=f"Generated {rule.language} path is not ignored by Git",
+        for sample in (rule.sample, f"nested/{rule.sample}"):
+            try:
+                result = subprocess.run(
+                    ["git", "check-ignore", "--quiet", "--no-index", "--", sample],
+                    cwd=root,
+                    capture_output=True,
+                    check=False,
                 )
-            )
-        elif result.returncode:
-            raise OSError(
-                "git check-ignore failed: "
-                + result.stderr.decode("utf-8", "replace").strip()
-            )
+            except FileNotFoundError as error:
+                raise OSError("Git is required for repository quality rules") from error
+            if result.returncode == 1:
+                findings.append(
+                    Finding(
+                        rule_id=rule_tag(
+                            rule.language, "git", "hygiene", "missing-ignore-rule"
+                        ),
+                        path=sample,
+                        message=f"Generated {rule.language} path is not ignored by Git",
+                    )
+                )
+            elif result.returncode:
+                raise OSError(
+                    "git check-ignore failed: "
+                    + result.stderr.decode("utf-8", "replace").strip()
+                )
     for path in sorted(tracked):
         for rule in rules:
             if matches_path(path, rule.pattern):

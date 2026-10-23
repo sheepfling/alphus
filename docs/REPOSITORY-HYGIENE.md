@@ -29,7 +29,7 @@ TypeScript build state, and ESLint cache. C/C++ rules cover CMake and compiler o
 JSON, TOML, and Markdown have no universal generated artifacts to require; add rules
 for tool-specific caches only when a tool is introduced.
 
-The ignore gate asks Git whether representative generated paths are effectively ignored.
+The ignore gate asks Git whether representative generated paths at the root and in a nested directory are ignored.
 It also reports generated paths already tracked, because adding .gitignore does not
 untrack them. A local global ignore can satisfy this rule, while clean CI confirms
 repository coverage. Review a tracked finding before removing it from the index;
