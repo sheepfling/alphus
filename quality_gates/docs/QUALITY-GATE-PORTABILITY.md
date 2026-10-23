@@ -1,5 +1,8 @@
 # Porting the quality gates to another C++ consumer
 
+For an overview of portable checks, advisory signals, and consumer-owned
+architecture rules, see the [C/C++ quality-gate coverage map](CPP-QUALITY-GATE-COVERAGE.md).
+
 The reusable checkers ship in the Alphus distribution under
 `alphus.gates.cpp`. Install Alphus in the consumer quality environment and
 copy calibrated copies of
@@ -14,6 +17,7 @@ paths, and limits. Keep each consumer's build, test, and package adapters outsid
 | Source ownership  | Repository root and source policy                                       | Include scope, size limits, documented growth guards                                           |
 | Artifact size     | Output directory, optional `objdump`, size policy                       | Profile-specific byte and count budgets, comparable baseline                                   |
 | Build graph       | Normalized target JSON, or CMake File API                               | Target IDs, types, compiled source counts, dependency IDs, optional compile fanout report      |
+| Include impact    | Selected source inventory, literal include edges, optional compile report | Source scope and calibrated caps for transitive dependents, dependency weight, hotspots, and measured TU fanout |
 | Test traceability | Case manifest, discovered-name JSON, JUnit or normalized execution JSON | Real selectors, source anchors, mapping IDs or internal classification                         |
 | Installed package | Install prefix, binding JSON or CMake cache, consumer result            | Required files, package path keys, unchanged binary hash and result evidence                   |
 | Worktree hygiene  | Git repository and labeled dedicated storage roots                      | Workstation count and byte budgets, known checkout locations, owner-specific archive procedure |

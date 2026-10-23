@@ -1,6 +1,6 @@
 # Common C++ quality checks
 
-`alphus.gates.cpp.cpp_common_quality` is the installed C++ common checker. It provides the `source`, `graph`, `tests`, `package`, and `verdict` checks, which emit a common JSON result with `passed`, `findings`, `metrics`, and an optional `run_id`. Install Alphus and adapt [the example policy](../examples/cpp-common-quality.example.json) in a C++ repository. Values in that file are illustrative; its test and package sections intentionally need project-specific cases and paths before they can pass. Each command exits `0` for pass, `1` for a failed gate, and `2` for invalid configuration or unreadable evidence. See the [porting contract](QUALITY-GATE-PORTABILITY.md); consumer-specific producers and mappings belong in an adapter in the consuming repository.
+`alphus.gates.cpp.cpp_common_quality` is the installed C++ common checker. It provides the `source`, `graph`, `impact`, `tests`, `package`, and `verdict` checks, which emit a common JSON result with `passed`, `findings`, `metrics`, and an optional `run_id`. Install Alphus and adapt [the example policy](../examples/cpp-common-quality.example.json) in a C++ repository. Values in that file are illustrative; its test and package sections intentionally need project-specific cases and paths before they can pass. Each command exits `0` for pass, `1` for a failed gate, and `2` for invalid configuration or unreadable evidence. See the [porting contract](QUALITY-GATE-PORTABILITY.md); consumer-specific producers and mappings belong in an adapter in the consuming repository.
 
 Use one run ID across all commands, such as the CI build ID. For a local shell session, run `RUN_ID=$(date -u +%Y%m%dT%H%M%SZ)` once before the commands below.
 
@@ -106,6 +106,56 @@ python -m alphus.gates.cpp.cpp_common_quality graph --graph-report out/quality/t
 ```
 
 `min_measured_translation_units` guards against an empty timing sample. Compare fanout within the same target scope. Raw compile duration remains a trend and investigation trigger unless the machine, toolchain, profile, and target selection are controlled.
+
+## Include dependency impact and blast radius
+
+Run the impact command to scan selected C/C++ files and build a local include
+graph. It reports direct and transitive dependents, transitive dependencies, a
+hotspot score (blast_radius * heaviness), indirectness, include
+amplification, direct-use ratio, easy-win and foundation scores, and cycle
+participants. The static graph follows literal project includes that resolve
+inside the selected source inventory. Preprocessor branches and generated headers
+can make it approximate.
+
+    python -m alphus.gates.cpp.cpp_common_quality impact . \
+      --config quality_gates/examples/cpp-common-quality.example.json \
+      --compile-report out/quality/compile.json --run-id $RUN_ID \
+      --manifest out/quality/build-manifest.json --output out/quality/impact.json
+
+The compile report uses the same records and header_fanout arrays as the graph
+gate. Its header_fanout counts translation units that actually depend on each
+project header, so it provides the measured compile blast radius; the source
+graph's blast_radius counts transitive source/header dependents. The input format
+is build-system neutral. A CMake/Ninja adapter, Make adapter, Bazel adapter, or
+other compiler dependency collector can emit it. Paths in header_fanout are
+relative to the source root (absolute paths inside it are also accepted). Run
+IDs and evidence freshness are checked when a compile report is supplied.
+
+The policy can cap max_blast_radius, max_heaviness, max_hotspot_score,
+max_indirectness, max_include_amplification, and measured
+max_translation_unit_fanout. Indirectness and include amplification surface
+umbrella headers with broad transitive reach or dependency weight. These are
+calibration points, not universal C++ limits; establish them from a reviewed
+baseline, then retain an absolute ceiling so a poor baseline cannot
+authorize unbounded growth. The report ranks the 20 largest combined hotspots
+for review. A smaller graph score is useful only when the change preserves clear
+ownership and interfaces.
+
+Indirectness is transitive dependents divided by direct dependents.
+Include amplification is transitive dependencies divided by direct includes.
+Direct-use ratio is direct dependents divided by transitive dependents.
+Easy-win score is dependency weight divided by blast radius; foundation score
+is blast radius divided by dependency weight. Ratios use a denominator of at
+least one. These are prioritization signals, not claims that a header should be
+removed or split.
+
+For each refactor batch, record a one-line hypothesis and baseline from the same
+source/build snapshot, then measure the same scope afterward. Keep the batch
+when it improves a named metric or has a documented ownership/interface reason;
+revert churn-only changes, and never duplicate code merely to lower fanout.
+Stop after two consecutive flat batches, or when the remaining work requires
+intrusive API or ownership changes. Record the final measurements and follow-on
+plan. These batch stop rules keep metric-driven refactors bounded and reviewable.
 
 ## Test selection and traceability
 

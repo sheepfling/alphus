@@ -10,6 +10,7 @@ import argparse
 import fnmatch
 import hashlib
 import json
+import math
 import os
 import re
 import subprocess
@@ -45,12 +46,18 @@ _IMPLEMENTATION_SUFFIXES = frozenset({".c", ".cc", ".cpp", ".cxx"})
 _HEADER_SUFFIXES = frozenset({".h", ".hh", ".hpp"})
 _SOURCE_SUFFIXES = _FRAGMENT_SUFFIXES | _IMPLEMENTATION_SUFFIXES | _HEADER_SUFFIXES
 _OWNER_SUFFIXES = _SOURCE_SUFFIXES - _FRAGMENT_SUFFIXES
+_IMPACT_HEADER_SUFFIXES = _HEADER_SUFFIXES | frozenset({".hxx"})
+_IMPACT_SOURCE_SUFFIXES = _SOURCE_SUFFIXES | frozenset({".hxx"})
 _INCLUDE_REGEX = re.compile(
     r'^\s*#\s*include\s*[<"]([^">]+\.(?:inc|inl|ipp|tpp|c|cc|cpp|cxx|h|hh|hpp))[>"]'
+)
+_IMPACT_INCLUDE_REGEX = re.compile(
+    r'^\s*#\s*include\s*[<"]([^">]+\.(?:inc|inl|ipp|tpp|c|cc|cpp|cxx|h|hh|hpp|hxx))[>"]'
 )
 _DEFAULT_SOURCE_INCLUDE_GLOBS = tuple(
     f"*{suffix}" for suffix in sorted(_SOURCE_SUFFIXES)
 )
+_DEFAULT_IMPACT_INCLUDE_GLOBS = (*_DEFAULT_SOURCE_INCLUDE_GLOBS, "*.hxx")
 _DEFAULT_SOURCE_EXCLUDE_GLOBS = (
     ".git/*",
     "out/*",
@@ -87,6 +94,22 @@ _SECTION_KEYS = MappingProxyType(
                 "require_executable_artifacts",
                 "min_measured_translation_units",
                 "max_header_fanout",
+            }
+        ),
+        "impact": frozenset(
+            {
+                "include",
+                "exclude",
+                "include_roots",
+                "min_files",
+                "max_evidence_age_seconds",
+                "min_measured_translation_units",
+                "max_blast_radius",
+                "max_heaviness",
+                "max_hotspot_score",
+                "max_indirectness",
+                "max_include_amplification",
+                "max_translation_unit_fanout",
             }
         ),
         "tests": frozenset(
@@ -212,6 +235,38 @@ class FanoutRow(TypedDict):
 class HeaderFanoutRow(TypedDict):
     path: str
     translation_units: int
+
+
+class ImpactPolicy(TypedDict):
+    include: list[str]
+    exclude: list[str]
+    include_roots: list[str]
+    min_files: int
+    max_evidence_age_seconds: int
+    min_measured_translation_units: int | None
+    max_blast_radius: int | None
+    max_heaviness: int | None
+    max_hotspot_score: int | None
+    max_indirectness: float | None
+    max_include_amplification: float | None
+    max_translation_unit_fanout: int | None
+
+
+class ImpactRow(TypedDict):
+    path: str
+    direct_includes: int
+    direct_dependents: int
+    transitive_dependencies: int
+    transitive_dependents: int
+    blast_radius: int
+    heaviness: int
+    hotspot_score: int
+    indirectness: float
+    include_amplification: float
+    direct_usage_ratio: float
+    easy_win_score: float
+    foundation_score: float
+    translation_units: NotRequired[int]
 
 
 def _source_policy(policy: Mapping[str, JsonValue]) -> SourcePolicy:
@@ -734,6 +789,338 @@ def check_source(
                 p.suffix.lower() in _FRAGMENT_SUFFIXES for p in files
             ),
             "largest": cast(JsonValue, [dict(item) for item in largest[:10]]),
+        },
+        run_id,
+    )
+
+
+def _impact_policy(policy: Mapping[str, JsonValue]) -> ImpactPolicy:
+    def strings(name: str, default: Sequence[str]) -> list[str]:
+        values = [
+            require_json_string(value, f"impact.{name} entries must be strings")
+            for value in require_json_array(
+                policy.get(name, list(default)), f"impact.{name} must be an array"
+            )
+        ]
+        if any(not value for value in values):
+            raise ValueError(f"impact.{name} entries must be nonempty")
+        return values
+
+    def integer(name: str, default: int | None) -> int | None:
+        value = policy.get(name, default)
+        return (
+            None
+            if value is None
+            else require_json_integer(value, f"impact.{name} must be an integer")
+        )
+
+    def number(name: str) -> float | None:
+        value = policy.get(name)
+        if value is None:
+            return None
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise TypeError(f"impact.{name} must be a number")
+        result = float(value)
+        if not math.isfinite(result) or result < 0:
+            raise ValueError(f"impact.{name} must be a finite nonnegative number")
+        return result
+
+    include = strings("include", _DEFAULT_IMPACT_INCLUDE_GLOBS)
+    exclude = strings("exclude", _DEFAULT_SOURCE_EXCLUDE_GLOBS)
+    if not include:
+        raise ValueError("impact.include must not be empty")
+    include_roots = strings("include_roots", [])
+    for value in include_roots:
+        path = Path(value)
+        if path.is_absolute() or ".." in path.parts:
+            raise ValueError("impact.include_roots must stay inside the source root")
+    min_files = integer("min_files", 1)
+    age_limit = integer("max_evidence_age_seconds", 21600)
+    assert min_files is not None and age_limit is not None
+    limits = {
+        name: integer(name, None)
+        for name in (
+            "max_blast_radius",
+            "max_heaviness",
+            "max_hotspot_score",
+            "max_translation_unit_fanout",
+            "min_measured_translation_units",
+        )
+    }
+    minimum_tus = limits["min_measured_translation_units"]
+    max_indirectness = number("max_indirectness")
+    max_include_amplification = number("max_include_amplification")
+    if min_files < 1 or age_limit < 0:
+        raise ValueError("impact file and evidence-age limits must be valid")
+    if minimum_tus is not None and minimum_tus < 1:
+        raise ValueError("impact.min_measured_translation_units must be positive")
+    if any(value is not None and value < 0 for value in limits.values()):
+        raise ValueError("impact thresholds must be nonnegative")
+    return {
+        "include": include,
+        "exclude": exclude,
+        "include_roots": include_roots,
+        "min_files": min_files,
+        "max_evidence_age_seconds": age_limit,
+        "min_measured_translation_units": limits["min_measured_translation_units"],
+        "max_blast_radius": limits["max_blast_radius"],
+        "max_heaviness": limits["max_heaviness"],
+        "max_hotspot_score": limits["max_hotspot_score"],
+        "max_indirectness": max_indirectness,
+        "max_include_amplification": max_include_amplification,
+        "max_translation_unit_fanout": limits["max_translation_unit_fanout"],
+    }
+
+
+def _include_closure(graph: Mapping[str, set[str]], start: str) -> set[str]:
+    visited: set[str] = set()
+    pending = list(graph.get(start, ()))
+    while pending:
+        current = pending.pop()
+        if current in visited:
+            continue
+        visited.add(current)
+        pending.extend(graph.get(current, ()))
+    return visited
+
+
+def check_impact(
+    root: Path,
+    policy: Mapping[str, JsonValue],
+    compile_report: Path | None,
+    run_id: str | None,
+) -> GateReport:
+    root = root.resolve()
+    if not root.is_dir():
+        raise ValueError(f"impact source root is not a directory: {root}")
+    impact_policy = _impact_policy(policy)
+    includes = impact_policy["include"]
+    excludes = impact_policy["exclude"]
+    include_roots = [root / item for item in impact_policy["include_roots"]]
+    files = {
+        path.resolve(): path.relative_to(root).as_posix()
+        for path in _files(root)
+        if path.is_file()
+        and not path.is_symlink()
+        and path.suffix.lower() in _IMPACT_SOURCE_SUFFIXES
+        and _matches(path.relative_to(root).as_posix(), includes)
+        and not _matches(path.relative_to(root).as_posix(), excludes)
+    }
+    findings: list[GateFinding] = []
+    min_files = impact_policy["min_files"]
+    if len(files) < min_files:
+        findings.append(_finding("too_few_impact_files", f"{len(files)} < {min_files}"))
+
+    forward: dict[str, set[str]] = {relative: set() for relative in files.values()}
+    reverse: dict[str, set[str]] = {relative: set() for relative in files.values()}
+    known_files = set(files)
+    edge_count = 0
+    for path, relative in files.items():
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for line in text.splitlines():
+            match = _IMPACT_INCLUDE_REGEX.match(line)
+            if match is None:
+                continue
+            token = Path(match.group(1))
+            candidates = [
+                (base / token).resolve()
+                for base in [path.parent, root, *include_roots]
+            ]
+            target = next((item for item in candidates if item in known_files), None)
+            if target is None:
+                continue
+            target_relative = files[target]
+            if target_relative not in forward[relative]:
+                forward[relative].add(target_relative)
+                reverse[target_relative].add(relative)
+                edge_count += 1
+
+    header_paths = [
+        path
+        for path in forward
+        if Path(path).suffix.lower() in _IMPACT_HEADER_SUFFIXES | _FRAGMENT_SUFFIXES
+    ]
+    dependency_closures = {
+        path: _include_closure(forward, path) for path in header_paths
+    }
+    dependent_closures = {
+        path: _include_closure(reverse, path) for path in header_paths
+    }
+    cycle_participants = sum(
+        path in closure for path, closure in dependency_closures.items()
+    )
+
+    translation_units: dict[str, int] = {}
+    age_limit = impact_policy["max_evidence_age_seconds"]
+    if compile_report is None:
+        if (
+            impact_policy["max_translation_unit_fanout"] is not None
+            or impact_policy["min_measured_translation_units"] is not None
+        ):
+            findings.append(_finding("missing_compile_report", "pass --compile-report"))
+    else:
+        compile_data = _read_json(compile_report)
+        if time.time() - compile_report.stat().st_mtime > age_limit:
+            findings.append(_finding("stale_compile_report", str(compile_report)))
+        if run_id is not None and compile_data.get("run_id") != run_id:
+            findings.append(_finding("wrong_compile_run_id", str(compile_report)))
+        records = require_json_array(
+            compile_data.get("records"),
+            "compile report needs records and header_fanout arrays",
+        )
+        header_rows = require_json_array(
+            compile_data.get("header_fanout"),
+            "compile report needs records and header_fanout arrays",
+        )
+        minimum = impact_policy["min_measured_translation_units"]
+        minimum = 1 if minimum is None else minimum
+        if len(records) < minimum:
+            findings.append(
+                _finding(
+                    "too_few_measured_translation_units",
+                    f"{len(records)} < {minimum}",
+                )
+            )
+        for item in header_rows:
+            row = require_json_object(item, "header fanout row must be an object")
+            raw_path = require_json_string(
+                row.get("path"), "header fanout row needs a path"
+            )
+            fanout = require_json_integer(
+                row.get("translation_units"),
+                "header fanout translation_units must be an integer",
+            )
+            if fanout < 0:
+                raise ValueError("header fanout translation_units must be nonnegative")
+            header_path = Path(raw_path)
+            if header_path.is_absolute():
+                try:
+                    relative = header_path.resolve().relative_to(root).as_posix()
+                except ValueError:
+                    continue
+            else:
+                if ".." in header_path.parts:
+                    raise ValueError(
+                        "compile report header paths must stay in source root"
+                    )
+                relative = header_path.as_posix()
+            if relative not in reverse or Path(relative).suffix.lower() not in (
+                _IMPACT_HEADER_SUFFIXES | _FRAGMENT_SUFFIXES
+            ):
+                continue
+            if relative in translation_units:
+                raise ValueError(f"duplicate compile report header path: {relative}")
+            translation_units[relative] = fanout
+        if (
+            impact_policy["max_translation_unit_fanout"] is not None
+            and not translation_units
+        ):
+            findings.append(
+                _finding(
+                    "missing_header_fanout_data",
+                    "compile report has no selected project headers",
+                )
+            )
+
+    rows: list[ImpactRow] = []
+    for relative in header_paths:
+        dependencies = dependency_closures[relative] - {relative}
+        dependents = dependent_closures[relative] - {relative}
+        row: ImpactRow = {
+            "path": relative,
+            "direct_includes": len(forward[relative]),
+            "direct_dependents": len(reverse[relative]),
+            "transitive_dependencies": len(dependencies),
+            "transitive_dependents": len(dependents),
+            "blast_radius": len(dependents),
+            "heaviness": len(dependencies),
+            "hotspot_score": len(dependents) * len(dependencies),
+            "indirectness": len(dependents) / max(1, len(reverse[relative])),
+            "include_amplification": len(dependencies)
+            / max(1, len(forward[relative])),
+            "direct_usage_ratio": len(reverse[relative]) / max(1, len(dependents)),
+            "easy_win_score": len(dependencies) / max(1, len(dependents)),
+            "foundation_score": len(dependents) / max(1, len(dependencies)),
+        }
+        if relative in translation_units:
+            row["translation_units"] = translation_units[relative]
+        rows.append(row)
+
+    rows.sort(
+        key=lambda item: (
+            -item["hotspot_score"],
+            -item["blast_radius"],
+            -item["heaviness"],
+            item["path"],
+        )
+    )
+    for row in rows:
+        checks: list[tuple[int | float | None, int | float, str]] = [
+            (
+                impact_policy["max_blast_radius"],
+                row["blast_radius"],
+                "include_blast_radius",
+            ),
+            (
+                impact_policy["max_heaviness"],
+                row["heaviness"],
+                "include_heaviness",
+            ),
+            (
+                impact_policy["max_hotspot_score"],
+                row["hotspot_score"],
+                "include_hotspot_score",
+            ),
+            (
+                impact_policy["max_indirectness"],
+                row["indirectness"],
+                "include_indirectness",
+            ),
+            (
+                impact_policy["max_include_amplification"],
+                row["include_amplification"],
+                "include_amplification",
+            ),
+        ]
+        translation_unit_limit = impact_policy["max_translation_unit_fanout"]
+        if translation_unit_limit is not None and "translation_units" in row:
+            checks.append(
+                (
+                    translation_unit_limit,
+                    row["translation_units"],
+                    "translation_unit_fanout",
+                )
+            )
+        for limit, value, finding_code in checks:
+            if limit is not None and value > limit:
+                findings.append(
+                    _finding(
+                        finding_code,
+                        f"{value} > {limit}",
+                        path=row["path"],
+                    )
+                )
+    return _report(
+        "impact",
+        findings,
+        {
+            "source_file_count": len(files),
+            "include_edge_count": edge_count,
+            "cycle_participant_count": cycle_participants,
+            "header_count": len(rows),
+            "highest_impact_headers": cast(
+                JsonValue, [dict(row) for row in rows[:20]]
+            ),
+            "highest_translation_unit_fanout": cast(
+                JsonValue,
+                [
+                    {"path": path, "translation_units": count}
+                    for path, count in sorted(
+                        translation_units.items(),
+                        key=lambda item: (-item[1], item[0]),
+                    )[:20]
+                ],
+            ),
         },
         run_id,
     )
@@ -2353,7 +2740,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=OutputFormat.AUTO,
     )
     build_command.add_argument("build_command", nargs=argparse.REMAINDER)
-    for name in ("source", "graph", "tests", "package", "verdict"):
+    for name in ("source", "graph", "impact", "tests", "package", "verdict"):
         child = commands.add_parser(name)
         if name != "verdict":
             child.add_argument(
@@ -2381,6 +2768,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             child.add_argument("--execution-json", type=Path)
         if name == "graph":
             child.add_argument("--graph-report", type=Path)
+            child.add_argument("--compile-report", type=Path)
+        if name == "impact":
             child.add_argument("--compile-report", type=Path)
     args = parser.parse_args(argv)
     try:
@@ -2433,6 +2822,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "graph":
             report = check_graph(
                 args.root, section, args.compile_report, args.run_id, args.graph_report
+            )
+        elif args.command == "impact":
+            report = check_impact(
+                args.root, section, args.compile_report, args.run_id
             )
         elif args.command == "tests":
             report = check_tests(
