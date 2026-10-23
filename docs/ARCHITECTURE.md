@@ -8,17 +8,18 @@ package graph, thresholds, or default check set.
 
 ## Execution model
 
-The caller supplies the repository root and policy path. The Python CLI
-validates the policy, selects the requested rule or ordered profile, gathers
-the configured file inventory, and combines results into one exit status.
+The CLI uses the current directory and `quality-gates.toml` by default. Callers
+can supply another repository root or policy path. It validates the policy,
+selects the requested rule or ordered profile, gathers the configured file
+inventory, and combines results into one exit status.
 Native language tools retain their own checks and run as configured argument
 vectors. Python owns ordering and aggregation without importing compiler,
 Java, or Node ecosystems.
 Consumer policies can split orchestration steps and profiles into separate
 language TOML files through root-level `orchestration_files`. The loader
 combines them before validating unique names and profile references. The root
-policy owns shared file inventory and gate settings; language files only add
-steps and profiles.
+policy owns optional built-in-rule file inventory and gate settings; language
+files only add steps and profiles.
 
 Alphus has two gate shapes. A portable rule inspects selected repository files
 and returns Alphus findings. A workflow gate coordinates tools and environments

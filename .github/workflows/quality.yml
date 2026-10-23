@@ -34,6 +34,4 @@ jobs:
           python -m pip install --disable-pip-version-check --no-deps \
             --force-reinstall "$RUNNER_TEMP"/alphus-wheels/alphus-*.whl
       - name: Run Alphus quality profile
-        run: |
-          python -m alphus --root . --config quality-gates.toml \
-            --run --profile check
+        run: alphus
