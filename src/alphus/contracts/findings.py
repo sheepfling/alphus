@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Literal, NamedTuple, Self, TypeAlias, get_args
+from typing import Literal, NamedTuple, Self, TypeAlias, TypeVar, get_args
 
-from alphus.contracts.rule_tags import NAMESPACE, RuleTag
+from alphus.contracts.rule_tags import NAMESPACE, Category, RuleTag, Scope
 
 Severity: TypeAlias = Literal["error", "warning", "info"]
 RemediationPriority: TypeAlias = Literal["low", "normal", "high", "urgent"]
@@ -57,14 +57,43 @@ class Diagnostic:
     path: str | None = None
     line: int | None = None
     priority: RemediationPriority | None = None
+    _rule_tag: RuleTag | None = field(default=None, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         if self.severity not in SEVERITY_ORDER:
             raise ValueError(f"unsupported diagnostic severity: {self.severity!r}")
         if self.priority is not None and self.priority not in REMEDIATION_PRIORITIES:
             raise ValueError(f"unsupported remediation priority: {self.priority!r}")
-        if self.source == NAMESPACE or RuleTag.is_alphus_id(self.rule_id):
-            RuleTag.parse(self.rule_id)
+        tag = self._rule_tag
+        if tag is not None:
+            if tag.rule_id != self.rule_id:
+                raise ValueError(
+                    "diagnostic rule tag does not match its public rule ID"
+                )
+        elif self.source == NAMESPACE or RuleTag.is_alphus_id(self.rule_id):
+            tag = RuleTag.parse(self.rule_id)
+            object.__setattr__(self, "_rule_tag", tag)
+
+    @property
+    def tag(self) -> RuleTag | None:
+        """Return the parsed Alphus identity, or ``None`` for a native tool ID."""
+        return self._rule_tag
+
+    def matches_category(self, category: Category) -> bool:
+        """Match a finding by its typed category without parsing its wire ID."""
+        return self._rule_tag is not None and self._rule_tag.category is category
+
+    def to_wire(self) -> dict[str, object]:
+        """Serialize only the established public diagnostic fields."""
+        return {
+            "source": self.source,
+            "rule_id": self.rule_id,
+            "message": self.message,
+            "severity": self.severity,
+            "path": self.path,
+            "line": self.line,
+            "priority": self.priority,
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +103,14 @@ class FindingRollup:
     key: str
     count: int
     severity_counts: SeverityCounts
+
+
+class _ComplaintKey(NamedTuple):
+    category: Category
+    complaint: str
+
+
+_RollupKey = TypeVar("_RollupKey", Scope, Category, _ComplaintKey)
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,25 +123,34 @@ class FindingRollups:
 
     @classmethod
     def from_diagnostics(cls, diagnostics: Iterable[Diagnostic]) -> Self:
-        by_scope: dict[str, list[Diagnostic]] = {}
-        by_category: dict[str, list[Diagnostic]] = {}
-        by_complaint: dict[str, list[Diagnostic]] = {}
+        by_scope: dict[Scope, list[Diagnostic]] = {}
+        by_category: dict[Category, list[Diagnostic]] = {}
+        by_complaint: dict[_ComplaintKey, list[Diagnostic]] = {}
         for diagnostic in diagnostics:
-            if not RuleTag.is_alphus_id(diagnostic.rule_id):
+            tag = diagnostic.tag
+            if tag is None:
                 continue
-            tag = RuleTag.parse(diagnostic.rule_id)
             by_scope.setdefault(tag.scope, []).append(diagnostic)
             by_category.setdefault(tag.category, []).append(diagnostic)
-            by_complaint.setdefault(f"{tag.category}/{tag.complaint}", []).append(
-                diagnostic
-            )
+            by_complaint.setdefault(
+                _ComplaintKey(tag.category, tag.complaint), []
+            ).append(diagnostic)
 
         def rows(
-            groups: Mapping[str, Sequence[Diagnostic]],
+            groups: Mapping[_RollupKey, Sequence[Diagnostic]],
         ) -> tuple[FindingRollup, ...]:
+            def wire_key(key: _RollupKey) -> str:
+                if isinstance(key, _ComplaintKey):
+                    return f"{key.category}/{key.complaint}"
+                return str(key)
+
             return tuple(
-                FindingRollup(key, len(items), SeverityCounts.from_diagnostics(items))
-                for key, items in sorted(groups.items())
+                FindingRollup(
+                    wire_key(key), len(items), SeverityCounts.from_diagnostics(items)
+                )
+                for key, items in sorted(
+                    groups.items(), key=lambda item: wire_key(item[0])
+                )
             )
 
         return cls(rows(by_scope), rows(by_category), rows(by_complaint))
@@ -126,11 +172,27 @@ class Finding:
     message: str
     line: int | None = None
     severity: Severity = "error"
+    _rule_tag: RuleTag = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         if self.severity not in SEVERITY_ORDER:
             raise ValueError(f"unsupported finding severity: {self.severity!r}")
-        RuleTag.parse(str(self.rule_id))
+        object.__setattr__(self, "_rule_tag", RuleTag.parse(str(self.rule_id)))
+
+    @property
+    def tag(self) -> RuleTag:
+        """Return the validated semantic identity for internal consumers."""
+        return self._rule_tag
+
+    def to_wire(self) -> dict[str, object]:
+        """Serialize only the established public finding fields."""
+        return {
+            "rule_id": self.rule_id,
+            "path": self.path,
+            "message": self.message,
+            "line": self.line,
+            "severity": self.severity,
+        }
 
     def as_diagnostic(self, *, source: str = "alphus") -> Diagnostic:
         """Add checker provenance while retaining the public finding fields."""
@@ -141,4 +203,5 @@ class Finding:
             severity=self.severity,
             path=self.path,
             line=self.line,
+            _rule_tag=self.tag,
         )

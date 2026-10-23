@@ -10,7 +10,6 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from contextlib import redirect_stderr, redirect_stdout
 from contextvars import ContextVar
-from dataclasses import asdict
 from io import StringIO
 from pathlib import Path
 from typing import Annotated, NamedTuple, TextIO, cast
@@ -446,7 +445,7 @@ def _execute(
         findings = cast(list[Finding], output)
         if json_output:
             typer.echo(
-                json.dumps([asdict(finding) for finding in findings], sort_keys=True)
+                json.dumps([finding.to_wire() for finding in findings], sort_keys=True)
             )
         elif rule == "dependency-locks":
             _render_dependency_locks(findings)

@@ -198,6 +198,7 @@ def run_orchestration(
                                     path=item.path,
                                     line=item.line,
                                     priority=step.priority or item.priority,
+                                    _rule_tag=item.tag,
                                 )
                                 for item in findings
                             ]
@@ -426,6 +427,13 @@ def run_orchestration(
             FindingRollups.from_diagnostics(all_findings),
         )
         payload = asdict(result)
+        # ``asdict`` includes the private parsed RuleTag cache. Replace each
+        # finding with its explicit public wire adapter to preserve the JSON
+        # schema and keep semantic identity internal.
+        for step_payload, step_result in zip(payload["steps"], result.steps):
+            step_payload["findings"] = [
+                finding.to_wire() for finding in step_result.findings
+            ]
         if not not_applicable:
             del payload["not_applicable"]
         for step_payload in payload["steps"]:
