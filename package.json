@@ -1,7 +1,7 @@
 {
   "name": "@alphus/javascript-quality",
   "version": "0.1.0",
-  "description": "Reusable ESLint, Prettier, and strict JavaScript type-check policy for Alphus consumers",
+  "description": "Reusable JavaScript, TypeScript, HTML, and CSS quality policy for Alphus consumers",
   "type": "module",
   "engines": {
     "node": "^20.19.0 || ^22.13.0 || >=24"
@@ -21,6 +21,14 @@
     "./eslint/angular": {
       "types": "./javascript/angular.config.d.ts",
       "import": "./javascript/angular.config.js"
+    },
+    "./html-validate": {
+      "types": "./javascript/html-validate.config.d.ts",
+      "import": "./javascript/html-validate.config.js"
+    },
+    "./stylelint": {
+      "types": "./javascript/stylelint.config.d.ts",
+      "import": "./javascript/stylelint.config.js"
     },
     "./prettier": {
       "types": "./javascript/prettier.config.d.ts",
@@ -45,7 +53,10 @@
     "angular-eslint": "^22.6.0",
     "eslint": "^10.13.0",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "html-validate": "^10.17.0",
     "prettier": "^3.9.9",
+    "stylelint": "^17.16.0",
+    "stylelint-config-standard": "^40.0.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.72.0"
   },
@@ -54,6 +65,9 @@
     "angular-eslint": "^22.6.0",
     "eslint": "^10.0.0",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "html-validate": "^10.17.0",
+    "stylelint": "^17.16.0",
+    "stylelint-config-standard": "^40.0.0",
     "typescript-eslint": "^8.72.0"
   },
   "peerDependenciesMeta": {
@@ -64,6 +78,15 @@
       "optional": true
     },
     "eslint-plugin-react-hooks": {
+      "optional": true
+    },
+    "html-validate": {
+      "optional": true
+    },
+    "stylelint": {
+      "optional": true
+    },
+    "stylelint-config-standard": {
       "optional": true
     },
     "typescript-eslint": {

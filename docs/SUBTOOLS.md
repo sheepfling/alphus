@@ -46,6 +46,7 @@ tools = [
   "ruff", "pyright", "pytest", "rumdl", "mdrepo", "taplo", "prettier",
   "eslint", "prettier-javascript", "eslint-typescript",
   "prettier-typescript", "eslint-angular-template",
+  "html-validate", "prettier-html", "stylelint", "prettier-css",
 ]
 ```
 
@@ -54,7 +55,7 @@ mdrepo, Taplo, and Prettier contribute one each. These use file scopes and
 explicit fixers. Pyright and pytest run without an Alphus file scope so their
 native configuration controls discovery; they have no automatic fixer. The
 list order controls execution and fix order. Alphus creates `check` plus
-`python`, `markdown`, `toml`, `json`, `javascript`, `typescript`, and `html`
+`python`, `markdown`, `toml`, `json`, `javascript`, `typescript`, `html`, and `css`
 profiles for the languages selected.
 Use `alphus --plan` to inspect resolved order, command
 arguments, file matches, rollout, and fixability without running tools. Use

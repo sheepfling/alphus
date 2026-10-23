@@ -102,6 +102,32 @@ def test_framework_shortcuts_keep_typescript_and_templates_scoped() -> None:
     assert template.files is not None and template.files.include == ("**/*.html",)
 
 
+def test_html_and_css_shortcuts_keep_plain_markup_separate_from_angular() -> None:
+    config = load_config_stream(
+        StringIO(
+            'schema_version = 1\ntools = ["html-validate", "prettier-html", '
+            '"stylelint", "prettier-css"]\n'
+        )
+    )
+    policy = config.orchestration
+    assert policy is not None
+    html = policy.resolve_profile("html")
+    css = policy.resolve_profile("css")
+    assert html is not None and html.steps == ("HTML validation", "HTML format")
+    assert css is not None and css.steps == ("CSS lint", "CSS format")
+    validation, html_format, css_lint, css_format = policy.steps
+    assert all(
+        isinstance(step, CommandRunStep)
+        for step in (validation, html_format, css_lint, css_format)
+    )
+    assert validation.files is not None
+    assert validation.files.include == ("**/*.html",)
+    assert validation.fix_argv is None
+    assert css_lint.files is not None
+    assert css_lint.files.include == ("**/*.css",)
+    assert css_lint.fix_argv == ("stylelint", "--fix", "{files}")
+
+
 @pytest.mark.parametrize(
     ("source", "message"),
     [

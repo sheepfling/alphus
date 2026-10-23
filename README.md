@@ -74,7 +74,7 @@ python -m pip install \
   "alphus @ git+https://github.com/sheepfling/alphus.git@<commit-sha>"
 ```
 
-## JavaScript quality package
+## Web quality package
 
 This repository also provides an installable JavaScript policy package at
 [`javascript/`](javascript/README.md). It exports shared ESLint, Prettier, and
@@ -84,7 +84,8 @@ Install it from an immutable Alphus Git commit and use the `eslint` and
 `.js`, `.jsx`, `.mjs`, and `.cjs`; consumers still select their own source and
 test directories in their TypeScript configuration.
 Opt-in React and Angular ESLint exports and TypeScript and Angular template
-command scopes are documented in the JavaScript package guide.
+command scopes are documented in the JavaScript package guide. It also covers
+opt-in standard HTML validation, CSS linting, and HTML/CSS formatting.
 
 For local development, point the other repository's development environment at
 the standalone package directory:

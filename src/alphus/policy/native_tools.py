@@ -161,6 +161,49 @@ NATIVE_TOOLS = MappingProxyType(
                 ),
             ),
         ),
+        "html-validate": NativeTool(
+            "html",
+            (
+                NativeStep(
+                    "HTML validation",
+                    ("html-validate", "{files}"),
+                    include=("**/*.html",),
+                ),
+            ),
+        ),
+        "prettier-html": NativeTool(
+            "html",
+            (
+                NativeStep(
+                    "HTML format",
+                    ("prettier", "--check", "{files}"),
+                    ("prettier", "--write", "{files}"),
+                    ("**/*.html",),
+                ),
+            ),
+        ),
+        "stylelint": NativeTool(
+            "css",
+            (
+                NativeStep(
+                    "CSS lint",
+                    ("stylelint", "{files}"),
+                    ("stylelint", "--fix", "{files}"),
+                    ("**/*.css",),
+                ),
+            ),
+        ),
+        "prettier-css": NativeTool(
+            "css",
+            (
+                NativeStep(
+                    "CSS format",
+                    ("prettier", "--check", "{files}"),
+                    ("prettier", "--write", "{files}"),
+                    ("**/*.css",),
+                ),
+            ),
+        ),
         "prettier-javascript": NativeTool(
             "javascript",
             (

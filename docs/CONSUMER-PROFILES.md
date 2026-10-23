@@ -27,7 +27,8 @@ Add tools one step at a time. The
 rumdl with mdrepo using `tools = ["rumdl", "mdrepo"]`. The shortcut also
 accepts `ruff`, `pyright`, `pytest`, `taplo`, `prettier`, `eslint`,
 `prettier-javascript`, `eslint-typescript`, `prettier-typescript`, and
-`eslint-angular-template`; selection order is execution and fix order.
+`eslint-angular-template`, `html-validate`, `prettier-html`, `stylelint`, and
+`prettier-css`; selection order is execution and fix order.
 File-scoped lint and format steps pair a read-only
 check with an explicit fixer. Pyright and pytest run without a file scope or
 fixer. Alphus supplies a default `check` profile plus language profiles. The
@@ -89,7 +90,8 @@ activate gates. Ordinary Python repositories can combine `python` and
 | `json` | JSON syntax and formatting | Python `json` and Prettier |
 | `javascript` | JS/JSX lint and format | Alphus JavaScript policy, ESLint, Prettier |
 | `typescript` | Opt-in TS/TSX lint and format | ESLint, Prettier |
-| `html` | Opt-in Angular template lint | ESLint, angular-eslint |
+| `html` | Opt-in Angular or standard HTML checks | angular-eslint or HTML-validate, Prettier |
+| `css` | Opt-in CSS lint and format | Stylelint, Prettier |
 | `python-policy` | Optional repository-specific source conventions | Explicit Alphus source policy |
 
 The reusable JavaScript configs and synthetic rule fixtures live in the
@@ -103,6 +105,9 @@ The package also exports opt-in React and Angular ESLint profiles. Select
 `eslint-typescript` for TS/TSX files and `eslint-angular-template` for external
 Angular HTML templates; the general `eslint` tool retains its JavaScript-only
 scope. See the JavaScript profile guide for plugin setup and composition.
+Standard HTML documents can select `html-validate` and `prettier-html`; CSS
+files can select `stylelint` and `prettier-css`. Keep the generic HTML tool
+off Angular template files.
 
 Define each profile's steps in the consumer policy, then compose them:
 
