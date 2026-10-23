@@ -35,6 +35,10 @@ processes, or discover a checkout from the current directory or module path.
 Policy models are grouped by source scanning, architecture, repository
 metadata, and orchestration in separate modules. `alphus.config` re-exports
 those models as the compatibility import surface.
+The package-boundary rule also validates console and GUI script entry-point
+reference syntax in project metadata, so malformed targets fail the self-check
+before an editable or wheel installation reaches the build backend. It does not
+import those targets or claim that they exist at runtime.
 Module-role policies can name forbidden module-level assignments separately
 from functions and classes. The assignment scanner follows module-level
 control-flow branches and stops at function, class, and lambda scopes, so a

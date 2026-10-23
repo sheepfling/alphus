@@ -36,6 +36,8 @@ class _ProjectMetadata(BaseModel):
     name: str
     dependencies: Sequence[str] = ()
     optional_dependencies: Mapping[str, Sequence[str]] = {}
+    scripts: Mapping[str, str] = {}
+    gui_scripts: Mapping[str, str] = {}
 
     @model_validator(mode="before")
     @classmethod
@@ -44,12 +46,14 @@ class _ProjectMetadata(BaseModel):
         match value:
             case Mapping():
                 metadata = cast(Mapping[str, object], value)
-                if "optional-dependencies" not in metadata:
-                    return metadata
-                return {
-                    **metadata,
-                    "optional_dependencies": metadata["optional-dependencies"],
-                }
+                normalized = dict(metadata)
+                for source, target in (
+                    ("optional-dependencies", "optional_dependencies"),
+                    ("gui-scripts", "gui_scripts"),
+                ):
+                    if source in metadata:
+                        normalized[target] = metadata[source]
+                return normalized
             case _:
                 return value
 
@@ -71,6 +75,23 @@ def _requirement_name(requirement: str) -> str:
     """Read a distribution name from the leading portion of a PEP 508 string."""
     match = re.match(r"\s*([A-Za-z0-9][A-Za-z0-9._-]*)", requirement)
     return _normalized_name(match.group(1)) if match else "<invalid>"
+
+
+def _valid_script_reference(reference: str) -> bool:
+    """Check the syntax of a console or GUI entry point without importing it."""
+    target, bracket, extras = reference.partition("[")
+    if bracket:
+        if not extras.endswith("]") or "[" in extras:
+            return False
+        names = (name.strip() for name in extras[:-1].split(","))
+        if not all(re.fullmatch(r"[\w.-]+", name) for name in names):
+            return False
+    module, separator, attribute = target.partition(":")
+    return bool(
+        separator
+        and all(part.isidentifier() for part in module.strip().split("."))
+        and all(part.isidentifier() for part in attribute.strip().split("."))
+    )
 
 
 def _inside_root(root: Path, path: Path) -> bool:
@@ -119,6 +140,22 @@ def _distributions(
                 )
             )
             continue
+        for group, scripts in (
+            ("scripts", project.scripts),
+            ("gui-scripts", project.gui_scripts),
+        ):
+            for command, reference in scripts.items():
+                if not _valid_script_reference(reference):
+                    findings.append(
+                        Finding(
+                            rule_id="package.entry-point",
+                            path=relative_config,
+                            message=(
+                                f"invalid [project.{group}] entry point "
+                                f"{command!r}: {reference!r}"
+                            ),
+                        )
+                    )
         dependencies: set[str] = set()
         raw_requirements = list(project.dependencies)
         for group in project.optional_dependencies.values():

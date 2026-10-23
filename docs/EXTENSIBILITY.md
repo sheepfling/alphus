@@ -63,6 +63,25 @@ unless a consumer explicitly changes its configuration.
 
 ## Future extension hooks
 
+### Package layout for additional languages
+
+Group built-in checks by their actual dependency and policy boundaries. A
+Python-specific checker can live in an ordinary `alphus` subpackage, while
+repository-wide and data-format checks remain separate from any one language.
+Keep the core inventory, orchestration, diagnostics, and rule IDs stable during
+such moves. The current `alphus_stub_quality` package already isolates the
+specialized stub workflow within the same distribution.
+
+Python namespace packages become useful if independently installed and
+versioned distributions need to share one import namespace. They are not needed
+to organize modules inside the current distribution. If third-party gate
+packages become necessary, discover them through an explicit, versioned entry
+point contract rather than by scanning a namespace for imports. C++ and
+JavaScript tools can continue as native command steps until Alphus owns a
+language-specific check that warrants Python code.
+
+### Hook contract
+
 First establish an internal rule specification with a stable name, category,
 validated policy model, and callable that returns the common findings. Keep
 the current built-in registry and CLI selectors as adapters while that contract

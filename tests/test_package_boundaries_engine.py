@@ -62,6 +62,39 @@ def test_allowed_dependency_and_import_pass(tmp_path: Path) -> None:
     assert check_package_boundaries(tmp_path, _policy()) == []
 
 
+@pytest.mark.parametrize(
+    ("group", "valid", "invalid"),
+    [
+        ("scripts", "workspace_core.cli:main", "workspace_core.:main"),
+        (
+            "gui-scripts",
+            "workspace_core.cli:main [display]",
+            "workspace_core.cli.:main",
+        ),
+    ],
+)
+def test_invalid_script_reference_is_reported(
+    tmp_path: Path, group: str, valid: str, invalid: str
+) -> None:
+    _distribution(tmp_path, "workspace-core", "workspace_core")
+    metadata = tmp_path / "distributions" / "workspace-core" / "pyproject.toml"
+    original = metadata.read_text(encoding="utf-8")
+    metadata.write_text(
+        original + f'[project.{group}]\nworkspace = "{valid}"\n',
+        encoding="utf-8",
+    )
+    assert check_package_boundaries(tmp_path, _policy()) == []
+
+    metadata.write_text(
+        original + f'[project.{group}]\nworkspace = "{invalid}"\n',
+        encoding="utf-8",
+    )
+    findings = check_package_boundaries(tmp_path, _policy())
+    assert [(finding.rule_id, finding.path) for finding in findings] == [
+        ("package.entry-point", "distributions/workspace-core/pyproject.toml")
+    ]
+
+
 def test_allowed_import_requires_declared_distribution_dependency(
     tmp_path: Path,
 ) -> None:
