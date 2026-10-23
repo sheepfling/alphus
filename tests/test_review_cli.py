@@ -59,10 +59,14 @@ _CASES = (
     (
         "test-quality",
         "tests/test_plan.py",
-        "from pathlib import Path\ndef test_plan():\n"
-        ' assert Path("docs/plans/today.md").exists()\n',
-        '[checks.test_quality]\nextensions = [".py"]\n'
-        'ephemeral_document_patterns = ["docs/plans/**"]\n',
+        (
+            "from pathlib import Path\ndef test_plan():\n"
+            ' assert Path("docs/plans/today.md").exists()\n'
+        ),
+        (
+            '[checks.test_quality]\nextensions = [".py"]\n'
+            'ephemeral_document_patterns = ["docs/plans/**"]\n'
+        ),
         "test-quality.ephemeral-plan-dependency",
     ),
     (
@@ -71,6 +75,20 @@ _CASES = (
         "def add(values: list[str]):\n values.append('x')\n",
         '[checks.input_contracts]\nextensions = [".py"]\n',
         "input-contracts.argument-mutation",
+    ),
+    (
+        "pydantic-practices",
+        "source.py",
+        "def output(model):\n return Model.model_validate(model.model_dump())\n",
+        '[checks.pydantic_practices]\nextensions = [".py"]\n',
+        "pydantic-practices.dump-revalidation",
+    ),
+    (
+        "fastapi-practices",
+        "source.py",
+        "from fastapi import HTTPException\nraise HTTPException(404)\n",
+        '[checks.fastapi_practices]\nextensions = [".py"]\n',
+        "fastapi-practices.literal-status",
     ),
 )
 
@@ -108,7 +126,14 @@ def test_new_review_rules_emit_structured_advisory_findings(
 
 
 @pytest.mark.parametrize(
-    "selector", ["numeric-literals", "test-quality", "input-contracts"]
+    "selector",
+    [
+        "numeric-literals",
+        "test-quality",
+        "input-contracts",
+        "pydantic-practices",
+        "fastapi-practices",
+    ],
 )
 def test_unconfigured_review_rules_report_missing_policy(
     tmp_path: Path,
@@ -168,6 +193,8 @@ def test_older_configs_leave_review_checks_opt_in(tmp_path: Path) -> None:
     assert checks.numeric_literals is None
     assert checks.test_quality is None
     assert checks.input_contracts is None
+    assert checks.pydantic_practices is None
+    assert checks.fastapi_practices is None
 
 
 @pytest.mark.parametrize(

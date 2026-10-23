@@ -76,6 +76,14 @@ ephemeral_document_patterns = ["docs/**"]
 extensions = [".py"]
 exclude = []
 
+[checks.pydantic_practices]
+extensions = [".py"]
+exclude = []
+
+[checks.fastapi_practices]
+extensions = [".py"]
+exclude = []
+
 [checks.package_boundaries]
 metadata_patterns = ["pyproject.toml"]
 source_directory = "src"
@@ -277,6 +285,19 @@ kind = "rule"
 name = "Input contract review"
 rule = "input-contracts"
 
+[[orchestration.steps]]
+kind = "rule"
+name = "Pydantic practice review"
+rule = "pydantic-practices"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "FastAPI practice review"
+rule = "fastapi-practices"
+
 [[orchestration.profiles]]
 name = "review"
-steps = ["Numeric review", "Test review", "Input contract review"]
+steps = [
+  "Numeric review", "Test review", "Input contract review",
+  "Pydantic practice review", "FastAPI practice review",
+]

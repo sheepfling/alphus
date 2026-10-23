@@ -59,6 +59,8 @@ alphus
 For the installed-wheel version of this check, including the current self-profile
 scope and exclusions, see [Self-checking Alphus](docs/SELF-CHECK.md). The
 `review` profile also selects [the review checks](docs/REVIEW-CHECKS.md) alone.
+Those include opt-in Pydantic and FastAPI source sniffers with consumer-owned
+scope and error-code vocabulary.
 See [version support](docs/VERSION-SUPPORT.md) for the checker Python range,
 dependency bounds, stub targets, and native tool ownership.
 

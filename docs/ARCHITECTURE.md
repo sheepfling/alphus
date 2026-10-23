@@ -45,8 +45,9 @@ language neutral.
 - `alphus.support` owns shared file inventory, contained-file/JSON access,
   AST name resolution, and platform probes. These utilities do not emit
   findings or register rules.
-- `alphus.gates.review` owns numeric-literal, test-quality, and input-contract
-  checkers. Its `runners.py` binds their selectors to validated policies.
+- `alphus.gates.review` owns numeric-literal, test-quality, input-contract,
+  Pydantic-practice, and FastAPI-practice checkers. Its `runners.py` binds their
+  selectors to validated policies.
 - `alphus.gates.source` owns portable source and launcher checks for Python,
   JavaScript, and JSON. Its `runners.py` binds these selectors to validated
   policies. Language-specific analysis remains inside each checker.

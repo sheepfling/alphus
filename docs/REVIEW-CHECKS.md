@@ -5,13 +5,14 @@ review of intent; they do not prove numeric correctness, test quality, or the
 absence of side effects. Existing policies remain valid without their optional
 sections. Ruff, Pyright, pytest, mdrepo, and rumdl retain their own checks.
 
-Alphus applies all three scanners to its real source/test inventory through the
+Alphus applies all five scanners to its real source/test inventory through the
 `review` profile and includes them in `check` with a warning failure threshold.
 Build/install the wheel using [the self-check guide](SELF-CHECK.md), then
 invoke the installed command from the temporary directory:
 
 ```sh
-"$work/venv/bin/alphus" --root "$repo" --config "$repo/quality-gates.toml" --run --profile review
+"$work/venv/bin/alphus" --root "$repo" \
+  --config "$repo/quality-gates.toml" --run --profile review
 ```
 
 Other consumers retain the default error threshold unless they explicitly set
@@ -63,8 +64,9 @@ Catalog values must be finite and unique within an entry; entry names must be
 unique. Set `math_constants = false` to supply a fully consumer-owned catalog.
 Conversion entries apply only to multiplication/division, including `*=` and
 `/=`. Optional tokens match identifiers or snake/camel case words in the
-arithmetic expression and nearest function name. Ordinary assignment output targets and unrelated local variables do not
-supply unit context; an augmented target is an arithmetic operand. Ordinary `*1000`, `9.81`,
+arithmetic expression and nearest function name. Ordinary assignment output
+targets and unrelated local variables do not supply unit context; an augmented
+target is an arithmetic operand. Ordinary `*1000`, `9.81`,
 ratios, scientific literals, and offset conversions have no inferred unit
 meaning. Evaluating formulas to infer units or derive factors, external constant
 authorities, and dimensional correctness remain outside this checker.
@@ -164,3 +166,63 @@ uses uncertain; writes inside those regions may be missed. Loop-element
 aliases are not tracked as caller-reachable values. It does not prove that an
 unreported parameter is immutable or free of side effects, and it makes no
 automatic source changes.
+
+## Pydantic practices
+
+Selector: `pydantic-practices`. IDs: `pydantic-practices.dump-revalidation` and
+`pydantic-practices.implicit-mutability`.
+
+```toml
+[checks.pydantic_practices]
+extensions = [".py"]
+exclude = []
+report_dump_revalidation = true
+require_explicit_frozen = false
+```
+
+The dump/revalidation check follows direct local assignments and simple aliases
+inside each function. It warns when a `model_dump` or `model_dump_json` result
+then reaches a `model_validate`, `model_validate_json`, `validate_python`, or
+`validate_json` call. A second validation can be intentional at a trust
+boundary; review the call rather than deleting it automatically. The scanner
+does not prove receiver types or control-flow reachability.
+
+The optional mutability check recognizes direct `pydantic.BaseModel` subclasses
+and their locally declared children. It asks each to declare a literal
+`frozen=True` or `frozen=False` through `ConfigDict`, a literal `model_config`
+dictionary, or a class keyword. This is a consumer convention, not a Pydantic
+requirement. Imported parent classes and computed configuration are unresolved.
+
+## FastAPI and Starlette practices
+
+Selector: `fastapi-practices`. IDs: `fastapi-practices.literal-status` and
+`fastapi-practices.literal-error-code`.
+
+```toml
+[checks.fastapi_practices]
+extensions = [".py"]
+exclude = []
+report_literal_status = true
+check_http_exception_detail_codes = true
+
+[[checks.fastapi_practices.error_code_calls]]
+call = "project.api.errors.Problem"
+position = 1
+
+[[checks.fastapi_practices.error_code_calls]]
+call = "project.api.error_contracts.ErrorResponse"
+keyword = "code"
+```
+
+The status check recognizes imported FastAPI/Starlette HTTP exceptions and
+response constructors, plus route decorators on a module-level `FastAPI()` or
+`APIRouter()` instance. It suggests a named status constant for literal
+integers. FastAPI accepts numeric status codes, so this is a style warning,
+not an error in the application. Router factories returned by helpers and
+dynamic decorators are not inferred.
+
+Error-code checks activate only for configured, dotted imported call names or,
+when enabled, literal `code` values in an HTTP exception's direct `detail`
+dictionary. The consumer owns its vocabulary and the rule does not import the
+application or assume any particular code registry. Aliased imports resolve
+to the configured name; dynamic factories and computed dictionaries do not.

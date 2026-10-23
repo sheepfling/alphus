@@ -86,7 +86,7 @@ activate gates. Ordinary Python repositories can combine `python` and
 | `stubs` | Build/install, API, typed examples, stubtest, smoke | Alphus and native checkers |
 | `toml` | TOML syntax and formatting | Python `tomllib` and Taplo |
 | `json` | JSON syntax and formatting | Python `json` and Prettier |
-| `javascript` | Lint and formatting across `.js`, `.jsx`, `.mjs`, and `.cjs` | Alphus JavaScript policy, ESLint, and Prettier |
+| `javascript` | JS family lint and formatting | Alphus JavaScript policy, ESLint, and Prettier |
 | `python-policy` | Optional repository-specific source conventions | Explicit Alphus source policy |
 
 The reusable JavaScript configs and synthetic rule fixtures live in the
@@ -202,7 +202,7 @@ policies exit 2 before any profile command runs; declared malformed sections
 remain invalid even when unselected. No permissive policy defaults are added.
 
 Alphus's self-profile retains all ten established steps by including
-`python-policy` and `python`, then adds TOML syntax and the three review
+`python-policy` and `python`, then adds TOML syntax and the five review
 rules. Its Python profile also checks formatting. Composition does not remove runtime-type
 enforcement; see the [migration record](TEST-GATE-MIGRATION.md) for results
 at each revision and the [runtime-type contract](RUNTIME-TYPES.md).

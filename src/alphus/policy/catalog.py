@@ -40,5 +40,7 @@ RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
         "numeric-literals": RuleSpec("numeric_literals", "findings"),
         "test-quality": RuleSpec("test_quality", "findings"),
         "input-contracts": RuleSpec("input_contracts", "findings"),
+        "pydantic-practices": RuleSpec("pydantic_practices", "findings"),
+        "fastapi-practices": RuleSpec("fastapi_practices", "findings"),
     }
 )

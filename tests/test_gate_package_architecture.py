@@ -67,7 +67,16 @@ def test_policy_models_do_not_import_execution_or_gate_packages() -> None:
 
 def test_gate_themes_own_their_runner_mappings() -> None:
     themes = (
-        (REVIEW_RULE_RUNNERS, {"numeric-literals", "test-quality", "input-contracts"}),
+        (
+            REVIEW_RULE_RUNNERS,
+            {
+                "numeric-literals",
+                "test-quality",
+                "input-contracts",
+                "pydantic-practices",
+                "fastapi-practices",
+            },
+        ),
         (
             SOURCE_RULE_RUNNERS,
             {

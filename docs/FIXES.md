@@ -19,8 +19,9 @@ The portable rules without fixers are `file-size`, `line-length`,
 `comment-markers`, `json-structure`, `output-escaping`, `path-discovery`,
 `shared-utilities`, `module-roles`, `python-style`, `runtime-types`, `cli`,
 `script-policy`, `package-boundaries`, `dependency-locks`,
-`repository-layout`, `numeric-literals`, `test-quality`, and
-`input-contracts`. A formatter may happen to remove an individual
+`repository-layout`, `numeric-literals`, `test-quality`, `input-contracts`,
+`pydantic-practices`, and `fastapi-practices`. A formatter may happen to remove
+an individual
 `line-length` finding, but Alphus does not promise that result.
 
 Other consumers can add fix commands for their own native tools. A Markdown

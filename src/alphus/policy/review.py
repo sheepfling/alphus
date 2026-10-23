@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Sequence
 from typing import Annotated, Literal
 
@@ -93,3 +94,48 @@ class InputContractPolicy(PythonSourceScanPolicy):
 
     report_mutation: bool = True
     suggest_read_only: bool = True
+
+
+class PydanticPracticePolicy(PythonSourceScanPolicy):
+    """Opt-in review of model mutability and dump/revalidation flows."""
+
+    require_explicit_frozen: bool = False
+    report_dump_revalidation: bool = True
+
+
+class ErrorCodeCallSpec(StrictModel):
+    """One consumer-owned error envelope constructor or factory."""
+
+    call: str
+    keyword: str = "code"
+    position: Annotated[int | None, Field(ge=0)] = None
+
+    @field_validator("call")
+    @classmethod
+    def validate_call(cls, value: str) -> str:
+        if not re.fullmatch(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+", value):
+            raise ValueError("error-code call must be a dotted imported symbol")
+        return value
+
+    @field_validator("keyword")
+    @classmethod
+    def validate_keyword(cls, value: str) -> str:
+        if not value.isidentifier():
+            raise ValueError("error-code keyword must be an identifier")
+        return value
+
+
+class FastApiPracticePolicy(PythonSourceScanPolicy):
+    """Optional FastAPI/Starlette status and configured error-code advice."""
+
+    report_literal_status: bool = True
+    error_code_calls: tuple[ErrorCodeCallSpec, ...] = ()
+    check_http_exception_detail_codes: bool = False
+
+    @model_validator(mode="after")
+    def validate_error_code_calls(self) -> FastApiPracticePolicy:
+        require_unique(
+            tuple(spec.call for spec in self.error_code_calls),
+            "error-code calls must be unique",
+        )
+        return self

@@ -29,6 +29,8 @@ QualityRuleName: TypeAlias = Literal[
     "numeric-literals",
     "test-quality",
     "input-contracts",
+    "pydantic-practices",
+    "fastapi-practices",
 ]
 
 PolicyT = TypeVar("PolicyT")

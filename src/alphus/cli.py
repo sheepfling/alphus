@@ -112,6 +112,8 @@ def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
         "numeric-literals": "Numeric literals",
         "test-quality": "Test quality",
         "input-contracts": "Input contracts",
+        "pydantic-practices": "Pydantic practices",
+        "fastapi-practices": "FastAPI practices",
     }
     if rule in review_labels:
         for finding in findings:

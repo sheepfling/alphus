@@ -12,8 +12,8 @@ An additional Python 3.11 job runs the profile with every direct runtime and
 
 ## Run the installed wheel against this checkout
 
-Use Python 3.11 through 3.14. From anywhere inside the Alphus Git checkout, build a
-wheel, install it with
+Use Python 3.11 through 3.14. From anywhere inside the Alphus Git checkout,
+build a wheel, install it with
 the project's declared development dependencies in a temporary environment,
 then run its installed `alphus` command from outside the checkout. The
 explicit `--root` and `--config` paths make it inspect this checkout's real
@@ -56,8 +56,8 @@ unchanged; that correction adds no file exclusions or threshold relaxation.
 `docs/**/*.md`, and all repository TOML and JSON files. The profile retains
 the eight original portable rules, the target-audit isolation rule, and Python
 lint/package tests, then adds
-TOML syntax, Python formatting, strict Pyright, Numeric review, Test review, and Input contract
-review. The separate `json` profile is available when JSON documents are
+TOML syntax, Python formatting, strict Pyright, and five review checks.
+The separate `json` profile is available when JSON documents are
 added to this repository. The global
 `[files].exclude` is empty.
 The package-boundary step also validates console and GUI script entry-point
@@ -107,11 +107,12 @@ test file's `Path(__file__).resolve().parents[1]` finding remains while its
 All other configured rule `exclude` lists are empty: file size, line length,
 comment markers,
 output escaping, Python structure, and structural path handling. There is no
-global file exclusion. The numeric, test-quality, and input-contract
-review scanners also have empty exclusion lists. These targeted exceptions do
+global file exclusion. The numeric, test-quality, input-contract,
+Pydantic-practice, and FastAPI-practice review scanners also have empty
+exclusion lists. These targeted exceptions do
 not relax Ruff or Pyright.
 
-The `review` profile still selects the three warning scanners on its own.
+The `review` profile selects the five warning scanners on its own.
 `check` now includes it and fails on warnings so test prose and input-contract
 regressions cannot be silently accepted. The test scan covers `tests/**` and
 flags direct reads from `docs/**`; temporary fixtures and paths created by the
@@ -125,7 +126,8 @@ Run these from the repository root in the development environment:
 ```sh
 ruff check src tests --select E4,E7,E9,F,ANN,I
 ruff format --check src tests
-python -m pyright --pythonpath "$(python -c 'import sys; print(sys.executable)')" src
+python -m pyright \
+  --pythonpath "$(python -c 'import sys; print(sys.executable)')" src
 ```
 
 These commands are the self-profile's native Python steps. The Pyright
