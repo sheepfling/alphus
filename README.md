@@ -92,6 +92,10 @@ python -m pip install \
   "alphus @ git+https://github.com/sheepfling/alphus.git@<commit-sha>"
 ```
 
+For reusable GitHub Actions, GitLab CI, and Azure Pipelines integrations, see
+[CI integrations](docs/CI-INTEGRATIONS.md). They all invoke the same Python
+CLI and leave project-specific tools and policy in the consumer repository.
+
 ## Web quality package
 
 This repository also provides an installable JavaScript policy package at
