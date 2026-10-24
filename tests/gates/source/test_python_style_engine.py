@@ -423,7 +423,7 @@ def test_scoped_after_model_validator_uses_self_return() -> None:
     assert visitor.findings["concrete_self_returns"] == [4]
 
 
-def test_scoped_after_model_validator_uses_self_return() -> None:
+def test_scoped_after_model_validator_reports_specialized_return() -> None:
     source = (
         "from pydantic import model_validator\n"
         "class Settings:\n"
