@@ -6,7 +6,7 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Annotated, Literal, TypeAlias, cast
+from typing import Annotated, Literal, Self, TypeAlias, TypedDict
 
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from pydantic import Field, ValidationInfo, field_validator, model_validator
@@ -29,6 +29,57 @@ IntentLanguage: TypeAlias = Literal[
     "typescript",
 ]
 NativeOptionValue: TypeAlias = str | int | float | bool
+IntentBindingStatus: TypeAlias = Literal[
+    "disabled", "not_selected", "unsupported", "supported"
+]
+
+
+class IntentBindingFiles(TypedDict):
+    """JSON-safe file scope shown for a resolved intent mapping."""
+
+    include: tuple[str, ...]
+    exclude: tuple[str, ...]
+
+
+class IntentBindingRow(TypedDict):
+    """Typed dry-run representation shared by the CLI and JSON output."""
+
+    rule_id: str
+    summary: str
+    language: IntentLanguage
+    enabled: bool
+    required: bool
+    mapping: IntentMapping
+    status: IntentBindingStatus
+    metric: str
+    unit: str
+    count_method: str
+    threshold: int | None
+    severity: Severity | None
+    failure_threshold: Severity
+    rollout: Literal["mainline", "provisional"]
+    profiles: tuple[str, ...]
+    backend: str
+    version_range: str
+    native_rule: str
+    evidence_format: EvidenceFormat
+    evidence_stream: EvidenceStream
+    supported_options: tuple[str, ...]
+    threshold_values: dict[int, NativeOptionValue]
+    coverage_limits: tuple[str, ...]
+    effective_configuration: dict[str, NativeOptionValue]
+    files: IntentBindingFiles
+    step: str | None
+    evidence_step: str | None
+    ownership: str
+
+
+class PlannedIntentBindingRow(IntentBindingRow, total=False):
+    """Additional command scope fields attached while rendering a plan."""
+
+    selected_files: tuple[str, ...]
+    applicable: bool
+    expanded_argv: tuple[str, ...] | None
 
 
 class FailureKind(StrEnum):
@@ -53,7 +104,13 @@ def _same_native_value(
     actual: NativeOptionValue | None, expected: NativeOptionValue
 ) -> bool:
     """Compare serialized native values without bool/int coercion."""
-    return type(actual) is type(expected) and actual == expected
+    return actual.__class__ is expected.__class__ and actual == expected
+
+
+def _normalize_threshold_key(key: object) -> object:
+    """Convert numeric string keys to integers while retaining invalid values."""
+    match = re.fullmatch(r"[+-]?[0-9]+", str(key))
+    return int(match.group()) if match is not None else key
 
 
 class IntentFileOverride(StrictModel):
@@ -155,27 +212,40 @@ class NativeCapabilityBinding(StrictModel):
 
     @field_validator("effective_configuration", mode="before")
     @classmethod
-    def normalize_configuration(cls, value: object) -> object:
+    def normalize_configuration(
+        cls,
+        value: Mapping[str, str | int | float | bool]
+        | Sequence[object]
+        | str
+        | float
+        | bool
+        | bytes
+        | None,
+    ) -> object:
         if isinstance(value, Mapping):
-            values = cast(Mapping[str, NativeOptionValue], value)
-            return tuple(values.items())
+            return tuple(value.items())
         return value
 
     @field_validator(
         "threshold_values", "severity_values", "failure_threshold_values", mode="before"
     )
     @classmethod
-    def normalize_option_values(cls, value: object, info: ValidationInfo) -> object:
+    def normalize_option_values(
+        cls,
+        value: Mapping[str | int, str | int | float | bool]
+        | Sequence[object]
+        | str
+        | float
+        | bool
+        | bytes
+        | None,
+        info: ValidationInfo,
+    ) -> object:
         if isinstance(value, Mapping):
-            values = cast(Mapping[object, NativeOptionValue], value)
+            values = value
             if info.field_name == "threshold_values":
                 return tuple(
-                    (
-                        int(key)
-                        if isinstance(key, str) and re.fullmatch(r"[+-]?[0-9]+", key)
-                        else key,
-                        option_value,
-                    )
+                    (_normalize_threshold_key(key), option_value)
                     for key, option_value in values.items()
                 )
             return tuple(values.items())
@@ -223,7 +293,7 @@ class NativeCapabilityBinding(StrictModel):
         return tuple(values)
 
     @model_validator(mode="after")
-    def validate_binding_contract(self) -> NativeCapabilityBinding:
+    def validate_binding_contract(self) -> Self:
         options = set(self.supported_options)
         configured = dict(self.effective_configuration)
         unsupported_options = set(configured) - options
@@ -337,7 +407,7 @@ class SharedQualityIntent(StrictModel):
         return tuple(values)
 
     @model_validator(mode="after")
-    def validate_semantic_mappings(self) -> SharedQualityIntent:
+    def validate_semantic_mappings(self) -> Self:
         by_language = {binding.language: binding for binding in self.bindings}
         unknown_overrides = {item.language for item in self.overrides} - set(
             by_language
@@ -526,7 +596,7 @@ def intent_bindings_for_steps(
     profile_name: str | None = None,
     selected_profiles: Sequence[str] | None = None,
     default_failure_threshold: Severity = "error",
-) -> tuple[dict[str, object], ...]:
+) -> tuple[PlannedIntentBindingRow, ...]:
     """Build a stable dry-run view that links native evidence to semantic IDs."""
     selected = set(selected_steps)
     active_profiles = set(
@@ -535,7 +605,7 @@ def intent_bindings_for_steps(
         else (() if profile_name is None else (profile_name,))
     )
     filter_profiles = profile_name is not None or selected_profiles is not None
-    rows: list[dict[str, object]] = []
+    rows: list[PlannedIntentBindingRow] = []
     for item in resolve_intent_bindings(intents, default_failure_threshold):
         binding = item.binding
         if not item.enabled:
@@ -548,39 +618,38 @@ def intent_bindings_for_steps(
             status = "supported"
         else:
             status = "not_selected"
-        rows.append(
-            {
-                "rule_id": item.intent.rule_id,
-                "summary": item.intent.summary,
-                "language": binding.language,
-                "enabled": item.enabled,
-                "required": item.intent.required,
-                "mapping": binding.mapping,
-                "status": status,
-                "metric": binding.metric,
-                "unit": binding.unit,
-                "count_method": binding.count_method,
-                "threshold": item.threshold,
-                "severity": item.severity,
-                "failure_threshold": item.failure_threshold,
-                "rollout": item.intent.rollout,
-                "profiles": item.intent.profiles,
-                "backend": binding.backend,
-                "version_range": binding.version_range,
-                "native_rule": binding.native_rule,
-                "evidence_format": binding.evidence_format,
-                "evidence_stream": binding.evidence_stream,
-                "supported_options": binding.supported_options,
-                "threshold_values": dict(binding.threshold_values),
-                "coverage_limits": binding.coverage_limits,
-                "effective_configuration": dict(binding.effective_configuration),
-                "files": {
-                    "include": item.files.include,
-                    "exclude": item.files.exclude,
-                },
-                "step": binding.step,
-                "evidence_step": binding.step,
-                "ownership": f"native backend {binding.backend}",
-            }
-        )
+        row: PlannedIntentBindingRow = {
+            "rule_id": item.intent.rule_id,
+            "summary": item.intent.summary,
+            "language": binding.language,
+            "enabled": item.enabled,
+            "required": item.intent.required,
+            "mapping": binding.mapping,
+            "status": status,
+            "metric": binding.metric,
+            "unit": binding.unit,
+            "count_method": binding.count_method,
+            "threshold": item.threshold,
+            "severity": item.severity,
+            "failure_threshold": item.failure_threshold,
+            "rollout": item.intent.rollout,
+            "profiles": item.intent.profiles,
+            "backend": binding.backend,
+            "version_range": binding.version_range,
+            "native_rule": binding.native_rule,
+            "evidence_format": binding.evidence_format,
+            "evidence_stream": binding.evidence_stream,
+            "supported_options": binding.supported_options,
+            "threshold_values": dict(binding.threshold_values),
+            "coverage_limits": binding.coverage_limits,
+            "effective_configuration": dict(binding.effective_configuration),
+            "files": {
+                "include": item.files.include,
+                "exclude": item.files.exclude,
+            },
+            "step": binding.step,
+            "evidence_step": binding.step,
+            "ownership": f"native backend {binding.backend}",
+        }
+        rows.append(row)
     return tuple(rows)

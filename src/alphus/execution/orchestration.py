@@ -48,6 +48,7 @@ from alphus.policy.intents import (
     ResolvedIntentBinding,
     resolve_intent_bindings,
 )
+from alphus.support.data_access import JsonValue, validate_json_value
 from alphus.support.inventory import candidate_files
 
 _ORCHESTRATION_CATEGORY = Category.ORCHESTRATION
@@ -69,25 +70,31 @@ _COMMAND_OUTPUT_INVALID = rule_tag(
 _UNSUPPORTED_CAPABILITY = rule_tag(
     Scope.ANY, Framework.NONE, _ORCHESTRATION_CATEGORY, "unsupported-capability"
 )
+_STATUS_DISABLED = "disabled"
+_STATUS_NOT_APPLICABLE = "not_applicable"
+_STATUS_UNSUPPORTED = "unsupported"
+_JSON_ARRAY_FORMAT = "json-array"
+_MAINLINE_ROLLOUT = "mainline"
+_PROVISIONAL_ROLLOUT = "provisional"
 
 
 class StepStatus(StrEnum):
     """Closed set of orchestration step outcomes."""
 
-    DISABLED = "disabled"
+    DISABLED = _STATUS_DISABLED
     PASSED = "passed"
     FAILED = "failed"
-    NOT_APPLICABLE = "not_applicable"
-    UNSUPPORTED = "unsupported"
+    NOT_APPLICABLE = _STATUS_NOT_APPLICABLE
+    UNSUPPORTED = _STATUS_UNSUPPORTED
 
 
 class IntentStatus(StrEnum):
     """Closed set of language-specific intent outcomes."""
 
-    DISABLED = "disabled"
-    UNSUPPORTED = "unsupported"
+    DISABLED = _STATUS_DISABLED
+    UNSUPPORTED = _STATUS_UNSUPPORTED
     NOT_SELECTED = "not_selected"
-    NOT_APPLICABLE = "not_applicable"
+    NOT_APPLICABLE = _STATUS_NOT_APPLICABLE
     PASSED = "passed"
     FAILED = "failed"
 
@@ -104,7 +111,7 @@ class OrchestrationStepResult:
     stdout: str = ""
     stderr: str = ""
     severity_counts: SeverityCounts = field(default_factory=SeverityCounts)
-    rollout: Literal["mainline", "provisional"] = "mainline"
+    rollout: Literal["mainline", "provisional"] = _MAINLINE_ROLLOUT
 
 
 @dataclass(frozen=True, slots=True)
@@ -194,19 +201,13 @@ def _timeout_output(value: bytes | str | None) -> str:
     return value or ""
 
 
-def _reject_nonstandard_json_constant(value: str) -> None:
-    """Reject JavaScript constants that Python's JSON decoder accepts."""
-    raise ValueError(f"non-standard JSON constant: {value}")
-
-
 def _matches_json_evidence_format(
-    value: object, evidence_format: EvidenceFormat
+    value: Sequence[JsonValue] | Mapping[str, JsonValue] | str | float | bool | None,
+    evidence_format: EvidenceFormat,
 ) -> bool:
     """Check decoded JSON by the selected top-level container protocol."""
-    if evidence_format == "json-array":
-        return isinstance(value, Sequence) and not isinstance(
-            value, (str, bytes, bytearray)
-        )
+    if evidence_format == _JSON_ARRAY_FORMAT:
+        return isinstance(value, Sequence) and not isinstance(value, str)
     if evidence_format == "json-object":
         return isinstance(value, Mapping)
     return True
@@ -261,7 +262,7 @@ def run_orchestration(
         for item in resolved_intents
         if item.enabled
         and active_profiles.intersection(item.intent.profiles)
-        and item.binding.mapping != "unsupported"
+        and item.binding.mapping != _STATUS_UNSUPPORTED
         and item.binding.evidence_format != "raw"
         and item.binding.step in plan.steps
     }
@@ -444,7 +445,7 @@ def run_orchestration(
                             evidence_format, evidence_stream = evidence_contract
                             expected_shape = (
                                 "JSON array"
-                                if evidence_format == "json-array"
+                                if evidence_format == _JSON_ARRAY_FORMAT
                                 else "JSON object"
                             )
                             evidence = (
@@ -453,10 +454,7 @@ def run_orchestration(
                                 else step_stderr
                             )
                             try:
-                                parsed_evidence = json.loads(
-                                    evidence,
-                                    parse_constant=_reject_nonstandard_json_constant,
-                                )
+                                parsed_evidence = validate_json_value(evidence)
                                 if not _matches_json_evidence_format(
                                     parsed_evidence, evidence_format
                                 ):
@@ -506,7 +504,7 @@ def run_orchestration(
                             ]
                             invalid_shape = (
                                 "JSON array"
-                                if invalid_format == "json-array"
+                                if invalid_format == _JSON_ARRAY_FORMAT
                                 else "JSON object"
                             )
                             invalid_message = (
@@ -565,7 +563,7 @@ def run_orchestration(
             _write_captured(errors, step_stderr)
 
         completed += 1
-        provisional = step.rollout == "provisional"
+        provisional = step.rollout == _PROVISIONAL_ROLLOUT
         if skipped_empty_file_scope:
             not_applicable += 1
             results.append(
@@ -658,12 +656,12 @@ def run_orchestration(
             status = IntentStatus.NOT_SELECTED
             failure_kind = None
             step_result = None
-        elif binding.mapping == "unsupported":
+        elif binding.mapping == _STATUS_UNSUPPORTED:
             status = IntentStatus.UNSUPPORTED
             failure_kind = FailureKind.UNSUPPORTED_CAPABILITY
             step_result = None
             unsupported_count += 1
-            blocking = intent.required and intent.rollout == "mainline"
+            blocking = intent.required and intent.rollout == _MAINLINE_ROLLOUT
             blocking_unsupported = blocking_unsupported or blocking
             message = (
                 f"{intent.rule_id} has no supported {binding.language} mapping "
@@ -775,7 +773,7 @@ def run_orchestration(
                 finding.to_wire() for finding in step_result.findings
             ]
         if not not_applicable:
-            del payload["not_applicable"]
+            del payload[_STATUS_NOT_APPLICABLE]
         if result.intent_bindings:
             payload["intent_bindings"] = [
                 asdict(item) for item in result.intent_bindings
@@ -783,17 +781,17 @@ def run_orchestration(
         else:
             del payload["intent_bindings"]
         if not result.unsupported:
-            del payload["unsupported"]
+            del payload[_STATUS_UNSUPPORTED]
         if not result.disabled:
-            del payload["disabled"]
+            del payload[_STATUS_DISABLED]
         for step_payload in payload["steps"]:
-            if step_payload["rollout"] == "mainline":
+            if step_payload["rollout"] == _MAINLINE_ROLLOUT:
                 del step_payload["rollout"]
             for finding_payload in step_payload["findings"]:
                 if finding_payload["priority"] is None:
                     del finding_payload["priority"]
         if provisional_passed or provisional_failed:
-            payload["provisional"] = {
+            payload[_PROVISIONAL_ROLLOUT] = {
                 "passed": provisional_passed,
                 "failed": provisional_failed,
             }

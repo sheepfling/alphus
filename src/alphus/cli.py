@@ -39,8 +39,12 @@ from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
 from alphus.gates.source.python_style import StyleFindings
 from alphus.policy.base import MissingPolicyError
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
-from alphus.policy.intents import intent_bindings_for_steps
+from alphus.policy.intents import (
+    PlannedIntentBindingRow,
+    intent_bindings_for_steps,
+)
 from alphus.policy.recipes import render_recipe
+from alphus.support.data_access import JsonValue
 from alphus.support.inventory import candidate_files
 
 QualityRule = QualityRuleName
@@ -684,20 +688,19 @@ def _execute_plan_profile(
         return 2
 
     by_name = {step.name: step for step in policy.steps}
-    intent_rows = [
-        dict(row)
-        for row in intent_bindings_for_steps(
+    intent_rows: list[PlannedIntentBindingRow] = list(
+        intent_bindings_for_steps(
             policy.intents,
             plan.steps,
             selected_profile,
             selected_profiles=plan.profiles,
             default_failure_threshold=policy.failure_threshold,
         )
-    ]
+    )
     entries_by_name = {entry.name: entry for entry in entries}
     for row in intent_rows:
         step_name = row["step"]
-        if isinstance(step_name, str) and step_name in entries_by_name:
+        if step_name is not None and step_name in entries_by_name:
             entry = entries_by_name[step_name]
             step = by_name[step_name]
             row["selected_files"] = entry.files
@@ -706,10 +709,13 @@ def _execute_plan_profile(
             row["expanded_argv"] = entry.check_argv
 
     if json_output:
-        details: list[object] = []
+        details: list[JsonValue] = []
         for entry in entries:
             step = by_name[entry.name]
-            detail = step.model_dump(mode="json", exclude_none=True)
+            detail = cast(
+                dict[str, JsonValue],
+                step.model_dump(mode="json", exclude_none=True),
+            )
             detail["fixable"] = entry.fixable
             if step.kind == "command":
                 detail["selected_files"] = entry.files
@@ -717,14 +723,14 @@ def _execute_plan_profile(
                 if entry.check_argv is not None:
                     detail["expanded_argv"] = entry.check_argv
             details.append(detail)
-        payload: dict[str, object] = {
+        payload: dict[str, JsonValue] = {
             "profile": selected_profile,
             "profiles": plan.profiles,
             "failure_threshold": policy.failure_threshold,
             "steps": details,
         }
         if intent_rows:
-            payload["intents"] = intent_rows
+            payload["intents"] = cast(JsonValue, intent_rows)
         typer.echo(json.dumps(payload, sort_keys=True))
         return 0
 
@@ -767,7 +773,7 @@ def _execute_plan_profile(
                 f"{json.dumps(row['effective_configuration'], sort_keys=True)}"
             )
             step_name = row["step"]
-            if isinstance(step_name, str):
+            if step_name is not None:
                 entry = entries_by_name.get(step_name)
                 if entry is not None:
                     _human_print(
