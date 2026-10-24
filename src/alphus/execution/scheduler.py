@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass
+from time import monotonic
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +27,33 @@ class WorkOutcome:
 
     value: object | None = None
     error: Exception | None = None
+    started_monotonic: float | None = None
+    finished_monotonic: float | None = None
+
+    @property
+    def duration_seconds(self) -> float:
+        """Elapsed execution time, excluding time waiting for a worker slot."""
+        if self.started_monotonic is None or self.finished_monotonic is None:
+            return 0.0
+        return max(0.0, self.finished_monotonic - self.started_monotonic)
+
+
+def _run_timed(run: Callable[[], object]) -> WorkOutcome:
+    """Capture one work unit's value, failure, and monotonic timestamps."""
+    started = monotonic()
+    try:
+        value = run()
+    except Exception as error:  # noqa: BLE001 - worker failures are results.
+        return WorkOutcome(
+            error=error,
+            started_monotonic=started,
+            finished_monotonic=monotonic(),
+        )
+    return WorkOutcome(
+        value=value,
+        started_monotonic=started,
+        finished_monotonic=monotonic(),
+    )
 
 
 def run_work_units(
@@ -53,7 +81,7 @@ def run_work_units(
         key=lambda unit: (-int(unit.previously_failed), -unit.dispatch_priority),
     )
     finished: dict[str, WorkOutcome] = {}
-    running: dict[Future[object], WorkUnit] = {}
+    running: dict[Future[WorkOutcome], WorkUnit] = {}
     held_locks: set[str] = set()
     used_slots = 0
     with ThreadPoolExecutor(max_workers=max_jobs) as executor:
@@ -66,7 +94,7 @@ def run_work_units(
                     continue
                 if not set(unit.after) <= (set(finished) | set(completed)):
                     continue
-                future = executor.submit(unit.run)
+                future = executor.submit(_run_timed, unit.run)
                 running[future] = unit
                 pending.remove(unit)
                 used_slots += slots
@@ -79,7 +107,7 @@ def run_work_units(
                 used_slots -= 1 if max_jobs == 1 else unit.slots
                 held_locks.difference_update(unit.locks)
                 try:
-                    finished[unit.key] = WorkOutcome(value=future.result())
+                    finished[unit.key] = future.result()
                 except Exception as error:  # noqa: BLE001 - worker failures are results.
                     finished[unit.key] = WorkOutcome(error=error)
     return finished

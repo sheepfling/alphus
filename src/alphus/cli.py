@@ -10,6 +10,7 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from contextlib import redirect_stderr, redirect_stdout
 from contextvars import ContextVar
+from functools import partial
 from io import StringIO
 from pathlib import Path
 from typing import Annotated, NamedTuple, NotRequired, TextIO, TypedDict, cast
@@ -37,7 +38,8 @@ from alphus.execution.fixes import resolve_fix_plan
 from alphus.execution.orchestration import RuleRunResult, run_orchestration
 from alphus.execution.parallel import run_parallel_cyclomatic
 from alphus.execution.profile_history import latest_profile_record
-from alphus.execution.results import RuleEvaluation
+from alphus.execution.results import RuleEvaluation, RuleOutput
+from alphus.execution.scheduler import WorkUnit, run_work_units
 from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
 from alphus.gates.source.cyclomatic_complexity import (
     CyclomaticReport,
@@ -482,6 +484,8 @@ def _evaluate_rule(
     verbose: bool,
     jobs: int | None = None,
     loaded_config: QualityGateConfig | None = None,
+    *,
+    already_scheduled: bool = False,
 ) -> RuleEvaluation:
     """Run a rule and retain structured output before any CLI rendering."""
     checkout = root.resolve(strict=True)
@@ -522,8 +526,23 @@ def _evaluate_rule(
             output = run_parallel_cyclomatic(
                 checkout, resolved_config, config, max_jobs
             )
-        else:
+        elif already_scheduled:
             output = run_builtin_rule(rule, checkout, files, config)
+        else:
+            outcome = run_work_units(
+                (
+                    WorkUnit(
+                        key=rule,
+                        run=partial(run_builtin_rule, rule, checkout, files, config),
+                    ),
+                ),
+                1,
+            )[rule]
+            if outcome.error is not None:
+                raise outcome.error
+            if outcome.value is None:
+                raise RuntimeError("built-in rule returned no result")
+            output = cast(RuleOutput, outcome.value)
     except MissingPolicyError as error:
         raise typer.BadParameter(str(error)) from error
     except (OSError, RuntimeError) as error:
@@ -682,7 +701,13 @@ def run_profile_rule(
     try:
         with redirect_stdout(captured_output), redirect_stderr(captured_error):
             evaluation = _evaluate_rule(
-                checkout, resolved_config, rule, verbose, 1, config
+                checkout,
+                resolved_config,
+                rule,
+                verbose,
+                1,
+                config,
+                already_scheduled=True,
             )
     except typer.BadParameter as error:
         return RuleRunResult(

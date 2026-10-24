@@ -6,7 +6,6 @@ import json
 import re
 import shutil
 import subprocess
-import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -34,6 +33,7 @@ from alphus.policy.metrics import (
 )
 from alphus.support.inventory import candidate_files
 from alphus.support.platform_utils import is_windows
+from alphus.support.python_runtime import current_python_executable
 
 _EXTENSIONS: Mapping[str, frozenset[str]] = MappingProxyType(
     {
@@ -756,7 +756,7 @@ def _run_lizard(
     CyclomaticBackendResult, tuple[CyclomaticFunctionMetric, ...], tuple[Finding, ...]
 ]:
     command = [
-        sys.executable,
+        current_python_executable(),
         "-m",
         "alphus.gates.source._lizard_worker",
         str(root),

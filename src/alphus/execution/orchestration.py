@@ -6,12 +6,11 @@ import json
 import subprocess
 import sys
 from collections.abc import Callable, Mapping
-from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from io import StringIO
 from pathlib import Path
-from typing import Literal, TextIO, TypeGuard, cast
+from typing import Literal, NoReturn, TextIO, TypeGuard, cast
 
 from alphus.config import (
     CommandRunStep,
@@ -37,13 +36,7 @@ from alphus.contracts.rule_tags import (
     Scope,
     rule_tag,
 )
-from alphus.execution.commands import (
-    command_arguments,
-    step_directory,
-    windows_shell_required,
-)
-from alphus.execution.parallel import StepExecution, run_parallel_steps
-from alphus.execution.processes import run_captured_process
+from alphus.execution.parallel import StepExecution, run_profile_steps
 from alphus.execution.profile_history import (
     capture_profile_context,
     latest_profile_record,
@@ -60,7 +53,6 @@ from alphus.policy.intents import (
     resolve_intent_bindings,
 )
 from alphus.support.data_access import JsonValue, validate_json_value
-from alphus.support.inventory import candidate_files
 
 _ORCHESTRATION_CATEGORY = Category.ORCHESTRATION
 _RULE_EXECUTION_FAILED = rule_tag(
@@ -212,6 +204,15 @@ def _timeout_output(value: bytes | str | None) -> str:
     return value or ""
 
 
+def _raise_work_error(error: Exception) -> NoReturn:
+    """Preserve timeout output while reporting other unit failures."""
+    match error:
+        case subprocess.TimeoutExpired():
+            raise error
+        case _:
+            raise OSError(str(error)) from error
+
+
 def _matches_json_evidence_format(
     value: JsonValue, evidence_format: EvidenceFormat
 ) -> bool:
@@ -285,6 +286,8 @@ def run_orchestration(
             return ExitCode.CONFIG_ERROR
     selected_steps = {step.name: step for step in policy.steps}
     parallel_results: dict[str, StepExecution] = {}
+    step_durations_seconds: dict[str, float] = {}
+    work_unit_durations_seconds: dict[str, float] = {}
 
     failed = 0
     provisional_passed = 0
@@ -320,33 +323,6 @@ def run_orchestration(
         reporter.info(f"Selected profiles: {', '.join(plan.profiles)}")
     for index, step_name in enumerate(plan.steps):
         step: RuleRunStep | CommandRunStep = selected_steps[step_name]
-        if (
-            (max_jobs > 1 and step.parallel)
-            or (isinstance(step, RuleRunStep) and step.timeout_seconds is not None)
-        ) and step_name not in parallel_results:
-            block: list[RuleRunStep | CommandRunStep] = [step]
-            if max_jobs > 1 and step.parallel:
-                for later_name in plan.steps[index + 1 :]:
-                    later = selected_steps[later_name]
-                    if not later.parallel:
-                        break
-                    block.append(later)
-            try:
-                parallel_results.update(
-                    run_parallel_steps(
-                        checkout,
-                        resolved_config,
-                        config if config is not None else load_config(resolved_config),
-                        block,
-                        max_jobs,
-                        verbose=verbose,
-                        previously_failed=previous_failures,
-                    )
-                )
-            except (OSError, ValueError) as error:
-                reporter.error(f"Cannot schedule quality work: {error}")
-                return ExitCode.CONFIG_ERROR
-        precomputed = parallel_results.pop(step_name, None)
         if not json_output:
             reporter.info(f"==> {step.name}")
         active_bindings = [
@@ -373,6 +349,41 @@ def run_orchestration(
                     f"DISABLED {step.name}: all selected intent bindings are disabled"
                 )
             continue
+        if step_name not in parallel_results:
+            block: list[RuleRunStep | CommandRunStep] = [step]
+            if max_jobs > 1 and step.parallel:
+                for later_name in plan.steps[index + 1 :]:
+                    later = selected_steps[later_name]
+                    later_bindings = [
+                        item
+                        for item in intent_bindings_by_step.get(later_name, ())
+                        if active_profiles.intersection(item.intent.profiles)
+                    ]
+                    if not later.parallel or (
+                        later_bindings
+                        and not any(item.enabled for item in later_bindings)
+                    ):
+                        break
+                    block.append(later)
+            try:
+                parallel_results.update(
+                    run_profile_steps(
+                        checkout,
+                        resolved_config,
+                        config if config is not None else load_config(resolved_config),
+                        block,
+                        max_jobs,
+                        run_rule=run_rule,
+                        verbose=verbose,
+                        previously_failed=previous_failures,
+                    )
+                )
+            except (OSError, ValueError) as error:
+                reporter.error(f"Cannot schedule quality work: {error}")
+                return ExitCode.CONFIG_ERROR
+        precomputed = parallel_results.pop(step_name)
+        step_durations_seconds[step.name] = precomputed.duration_seconds
+        work_unit_durations_seconds.update(precomputed.work_unit_durations)
         captured_stdout = StringIO()
         captured_stderr = StringIO()
         step_stdout = ""
@@ -386,20 +397,15 @@ def run_orchestration(
         exit_code = ExitCode.LAUNCH_ERROR
         try:
             match step:
-                case RuleRunStep(rule=rule):
+                case RuleRunStep():
                     rule_result: int | RuleRunResult
-                    if precomputed is None:
-                        with (
-                            redirect_stdout(captured_stdout),
-                            redirect_stderr(captured_stderr),
-                        ):
-                            rule_result = run_rule(rule)
-                    else:
-                        if precomputed.error is not None:
-                            raise OSError(str(precomputed.error))
-                        if precomputed.rule is None:
-                            raise ValueError("parallel rule returned no result")
-                        rule_result = precomputed.rule
+                    if precomputed.error is not None:
+                        _raise_work_error(precomputed.error)
+                    if precomputed.rule is None:
+                        raise ValueError("quality rule returned no result")
+                    rule_result = precomputed.rule
+                    captured_stdout.write(precomputed.stdout)
+                    captured_stderr.write(precomputed.stderr)
                     if _is_structured_rule_result(rule_result):
                         findings = list(rule_result.findings)
                         if step.severity is not None or step.priority is not None:
@@ -499,42 +505,17 @@ def run_orchestration(
                                     message=f"rule runner exited with status {exit_code}",
                                 )
                             )
-                case CommandRunStep(working_directory=working_directory):
-                    selected_files = (
-                        candidate_files(checkout, step.files)
-                        if precomputed is None and step.files is not None
-                        else []
-                    )
-                    if precomputed is not None and precomputed.error is not None:
-                        raise OSError(str(precomputed.error))
-                    if (precomputed is not None and precomputed.not_applicable) or (
-                        precomputed is None
-                        and step.files is not None
-                        and not selected_files
-                    ):
+                case CommandRunStep():
+                    attempted_command = precomputed.attempted_command
+                    if precomputed.error is not None:
+                        _raise_work_error(precomputed.error)
+                    if precomputed.not_applicable:
                         skipped_empty_file_scope = True
                         exit_code = ExitCode.SUCCESS
                     else:
-                        if precomputed is None:
-                            directory = step_directory(checkout, working_directory)
-                            arguments = command_arguments(
-                                step,
-                                checkout,
-                                resolved_config,
-                                selected_files,
-                                directory,
-                            )
-                            attempted_command = arguments[0]
-                            result = run_captured_process(
-                                arguments,
-                                directory,
-                                shell=windows_shell_required(arguments),
-                                timeout=step.timeout_seconds,
-                            )
-                        else:
-                            if precomputed.command is None:
-                                raise ValueError("parallel command returned no result")
-                            result = precomputed.command
+                        if precomputed.command is None:
+                            raise ValueError("quality command returned no result")
+                        result = precomputed.command
                         exit_code = result.returncode
                         step_stdout = result.stdout or ""
                         step_stderr = result.stderr or ""
@@ -916,6 +897,8 @@ def run_orchestration(
                 failed_steps=tuple(
                     step.name for step in results if step.status == "failed"
                 ),
+                step_durations_seconds=step_durations_seconds,
+                work_unit_durations_seconds=work_unit_durations_seconds,
             )
         except (OSError, ValueError) as error:
             reporter.error(f"Cannot write profile history: {error}")

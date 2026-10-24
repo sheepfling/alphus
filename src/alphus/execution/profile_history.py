@@ -11,8 +11,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import uuid4
+
+from pydantic import Field
 
 from alphus.config import QualityGateConfig
 from alphus.policy.base import StrictModel
@@ -69,6 +71,10 @@ class ProfileHistoryRecord(StrictModel):
     started_at_utc: str
     completed_at_utc: str
     duration_seconds: float
+    step_durations_seconds: Annotated[dict[str, float], Field(default_factory=dict)]
+    work_unit_durations_seconds: Annotated[
+        dict[str, float], Field(default_factory=dict)
+    ]
     source_root: str
     profile: str
     config_sha256: str
@@ -152,6 +158,8 @@ def write_profile_record(
     not_applicable: int,
     exit_code: int,
     failed_steps: tuple[str, ...],
+    step_durations_seconds: Mapping[str, float],
+    work_unit_durations_seconds: Mapping[str, float],
 ) -> Path:
     """Append one complete result through an atomic same-directory replacement."""
     completed = datetime.now(UTC)
@@ -160,6 +168,8 @@ def write_profile_record(
         started_at_utc=_utc_text(context.started_at_utc),
         completed_at_utc=_utc_text(completed),
         duration_seconds=max(0.0, time.monotonic() - context.started_monotonic),
+        step_durations_seconds=dict(step_durations_seconds),
+        work_unit_durations_seconds=dict(work_unit_durations_seconds),
         source_root=context.source_root,
         profile=context.profile,
         config_sha256=context.config_sha256,

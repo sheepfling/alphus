@@ -151,6 +151,8 @@ exclude = []
 extensions = [".py"]
 exclude = [
   "src/alphus/__main__.py",
+  # Private JSON worker transport is not a human-facing command-line interface.
+  "src/alphus/execution/_worker_entry.py",
   "src/alphus/gates/**",
   "scripts/**",
   "tests/**",

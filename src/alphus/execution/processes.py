@@ -33,7 +33,7 @@ def run_captured_process(
     argv: Sequence[str],
     directory: Path,
     *,
-    timeout: int | float | None = None,
+    timeout: float | None = None,
     input_text: str | None = None,
     shell: bool = False,
 ) -> subprocess.CompletedProcess[str]:

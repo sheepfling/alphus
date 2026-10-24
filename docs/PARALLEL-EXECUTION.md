@@ -1,9 +1,11 @@
 # Parallel quality execution
 
-Alphus runs profiles serially unless a consumer opts into process concurrency.
-The profile retains its declared step order for reporting and exit status. A
-bounded scheduler starts independent work in child processes and buffers each
-result until it is reported in profile order.
+Alphus sends every profile step through one measured work-unit runner. Profiles
+run serially unless a consumer opts into process concurrency. The profile
+retains its declared step order for reporting and exit status. A bounded
+scheduler starts independent work and buffers each result until it is reported
+in profile order. Direct built-in rule checks use the same runner with one
+work unit; backend-aware rules can expand into several units when enabled.
 
 ## Configure a worker budget
 
@@ -29,7 +31,9 @@ overrides it for one run or plan; `--jobs 1` gives the serial baseline. A step
 defaults to `parallel = false`. Such a step waits for all previous work and
 finishes before later work starts. Consecutive `parallel = true` steps form a
 block that shares one budget. Native command steps remain project-owned, and
-fix commands always run in their configured order.
+fix commands always run in their configured order. Serial built-in rules use
+the in-process rule callback through the runner; opted-in rules use isolated
+Python workers.
 
 Each work unit uses one slot by default. `slots` lets a consumer reserve more
 of the budget for a native tool that starts its own workers. `locks` are
@@ -78,7 +82,10 @@ output in `--json` profile results. To keep those results across runs, pass
 then appends one immutable JSON record under `PATH/profiles/YYYY/MM/` and prints
 its path to stderr. The archive includes the complete profile result, a digest,
 the source checkout, policy fingerprint, Git branch and revision when available,
-and timestamps. Ordinary runs remain read-only unless history is enabled.
+timestamps, wall time for each step, and execution time for each work unit.
+For a rule split across native backends, its step wall time covers the first
+backend start through the last backend finish; individual unit times may
+overlap. Ordinary runs remain read-only unless history is enabled.
 
 ```sh
 alphus --profile check --jobs 4 --history-dir /path/to/alphus-history

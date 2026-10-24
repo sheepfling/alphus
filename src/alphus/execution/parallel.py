@@ -1,17 +1,18 @@
-"""Expand profile work into process-backed units and reduce ordered results."""
+"""Expand profile work into measured units and reduce ordered results."""
 
 from __future__ import annotations
 
 import hashlib
 import subprocess
-import sys
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Sequence
+from contextlib import redirect_stderr, redirect_stdout
+from dataclasses import dataclass, replace
 from functools import partial
+from io import StringIO
 from pathlib import Path
 from typing import cast
 
-from alphus.config import QualityGateConfig
+from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.execution.commands import (
     command_arguments,
     step_directory,
@@ -38,17 +39,51 @@ from alphus.gates.source.cyclomatic_complexity import (
 )
 from alphus.policy.orchestration import CommandRunStep, RuleRunStep
 from alphus.support.inventory import candidate_files
+from alphus.support.python_runtime import current_python_executable
 
 
 @dataclass(frozen=True, slots=True)
 class StepExecution:
     """Raw result for the existing profile result normalizer."""
 
-    rule: RuleRunResult | None = None
+    rule: int | RuleRunResult | None = None
     command: subprocess.CompletedProcess[str] | None = None
     not_applicable: bool = False
     error: Exception | None = None
     cyclomatic_report: CyclomaticReport | None = None
+    stdout: str = ""
+    stderr: str = ""
+    attempted_command: str | None = None
+    duration_seconds: float = 0.0
+    work_unit_durations: tuple[tuple[str, float], ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class _LocalRuleRun:
+    """A serial callback's result and captured output."""
+
+    result: int | RuleRunResult | None = None
+    error: Exception | None = None
+    stdout: str = ""
+    stderr: str = ""
+
+
+def _invoke_local_rule(
+    run_rule: Callable[[QualityRuleName], int | RuleRunResult],
+    rule: QualityRuleName,
+) -> _LocalRuleRun:
+    output = StringIO()
+    errors = StringIO()
+    try:
+        with redirect_stdout(output), redirect_stderr(errors):
+            result = run_rule(rule)
+    except Exception as error:  # noqa: BLE001 - unit failures are results.
+        return _LocalRuleRun(
+            error=error, stdout=output.getvalue(), stderr=errors.getvalue()
+        )
+    return _LocalRuleRun(
+        result=result, stdout=output.getvalue(), stderr=errors.getvalue()
+    )
 
 
 def _request_payload(request: WorkerRequest) -> str:
@@ -60,9 +95,9 @@ def _invoke_worker(request: WorkerRequest, timeout: int | None) -> WorkerRespons
     root = request.root
     completed = run_captured_process(
         [
-            sys.executable,
-            "-c",
-            "from alphus.execution._worker import main; raise SystemExit(main())",
+            current_python_executable(),
+            "-m",
+            "alphus.execution._worker_entry",
         ],
         Path(root),
         input_text=_request_payload(request),
@@ -81,7 +116,7 @@ def _invoke_worker(request: WorkerRequest, timeout: int | None) -> WorkerRespons
 
 
 def _invoke_command(
-    argv: tuple[str, ...], directory: Path, timeout: int | float | None
+    argv: tuple[str, ...], directory: Path, timeout: float | None
 ) -> subprocess.CompletedProcess[str]:
     return run_captured_process(
         argv,
@@ -118,7 +153,8 @@ def _decode_backend(
     config: QualityGateConfig,
 ) -> BackendRun:
     policy = config.checks.cyclomatic_complexity
-    assert policy is not None
+    if policy is None:
+        raise ValueError("cyclomatic complexity policy is missing")
     if outcome.error is not None:
         return backend_failure(plan, policy, str(outcome.error))
     try:
@@ -146,20 +182,22 @@ def _decode_backend(
         )
 
 
-def run_parallel_steps(
+def run_profile_steps(
     root: Path,
     config_path: Path,
     config: QualityGateConfig,
     steps: Sequence[RuleRunStep | CommandRunStep],
     max_jobs: int,
     *,
+    run_rule: Callable[[QualityRuleName], int | RuleRunResult] | None = None,
     verbose: bool = False,
     previously_failed: frozenset[str] = frozenset(),
 ) -> dict[str, StepExecution]:
-    """Run one contiguous parallel profile block with a shared worker budget."""
+    """Run profile steps through one scheduler, isolating eligible work."""
     tasks: list[WorkUnit] = []
     step_keys: dict[str, tuple[str, ...]] = {}
     plans: dict[str, tuple[CyclomaticBackendPlan, ...]] = {}
+    local_rules: set[str] = set()
     skipped: set[str] = set()
     prepared_commands: dict[str, tuple[tuple[str, ...], Path]] = {}
     planning_errors: dict[str, Exception] = {}
@@ -180,6 +218,13 @@ def run_parallel_steps(
                         command_arguments(step, root, config_path, selected, directory)
                     )
                     prepared_commands[step.name] = (argv, directory)
+            elif (
+                run_rule is not None
+                and step.timeout_seconds is None
+                and (max_jobs == 1 or not step.parallel)
+            ):
+                local_rules.add(step.name)
+                step_keys[step.name] = (step.name,)
             elif step.rule == "cyclomatic-complexity":
                 policy = config.checks.cyclomatic_complexity
                 if policy is None:
@@ -217,9 +262,25 @@ def run_parallel_steps(
                 )
             )
             continue
+        if step.name in local_rules:
+            if run_rule is None:
+                raise ValueError("serial rule runner is missing")
+            tasks.append(
+                WorkUnit(
+                    key=step.name,
+                    run=partial(_invoke_local_rule, run_rule, step.rule),
+                    slots=step.slots,
+                    locks=step.locks,
+                    after=dependencies,
+                    dispatch_priority=step.dispatch_priority,
+                    previously_failed=step.name in previously_failed,
+                )
+            )
+            continue
         if step.name in plans:
             policy = config.checks.cyclomatic_complexity
-            assert policy is not None
+            if policy is None:
+                raise ValueError("cyclomatic complexity policy is missing")
             for backend in plans[step.name]:
                 request = WorkerRequest(
                     kind="cyclomatic_backend",
@@ -274,15 +335,32 @@ def run_parallel_steps(
             executed[step.name] = StepExecution(not_applicable=True)
         elif isinstance(step, CommandRunStep):
             outcome = outcomes[step.name]
+            attempted_command = prepared_commands[step.name][0][0]
+            if outcome.error is not None:
+                executed[step.name] = StepExecution(
+                    error=outcome.error, attempted_command=attempted_command
+                )
+            else:
+                executed[step.name] = StepExecution(
+                    command=cast(subprocess.CompletedProcess[str], outcome.value),
+                    attempted_command=attempted_command,
+                )
+        elif step.name in local_rules:
+            outcome = outcomes[step.name]
             if outcome.error is not None:
                 executed[step.name] = StepExecution(error=outcome.error)
             else:
+                local = cast(_LocalRuleRun, outcome.value)
                 executed[step.name] = StepExecution(
-                    command=cast(subprocess.CompletedProcess[str], outcome.value)
+                    rule=local.result,
+                    error=local.error,
+                    stdout=local.stdout,
+                    stderr=local.stderr,
                 )
         elif step.name in plans:
             policy = config.checks.cyclomatic_complexity
-            assert policy is not None
+            if policy is None:
+                raise ValueError("cyclomatic complexity policy is missing")
             threshold = (
                 config.orchestration.failure_threshold
                 if config.orchestration is not None
@@ -306,6 +384,31 @@ def run_parallel_steps(
             )
         else:
             executed[step.name] = _decode_rule(outcomes[step.name])
+        keys = step_keys[step.name]
+        times: list[tuple[float, float]] = []
+        for key in keys:
+            outcome = outcomes.get(key)
+            if outcome is None:
+                continue
+            started = outcome.started_monotonic
+            finished = outcome.finished_monotonic
+            if started is not None and finished is not None:
+                times.append((started, finished))
+        duration = (
+            max(finished for _, finished in times)
+            - min(started for started, _ in times)
+            if times
+            else 0.0
+        )
+        executed[step.name] = replace(
+            executed[step.name],
+            duration_seconds=duration,
+            work_unit_durations=tuple(
+                (key.replace("\0", " / "), outcomes[key].duration_seconds)
+                for key in keys
+                if key in outcomes
+            ),
+        )
     return executed
 
 
@@ -319,7 +422,7 @@ def run_parallel_cyclomatic(
         rule="cyclomatic-complexity",
         parallel=True,
     )
-    execution = run_parallel_steps(root, config_path, config, (step,), max_jobs)[
+    execution = run_profile_steps(root, config_path, config, (step,), max_jobs)[
         step.name
     ]
     if execution.error is not None:

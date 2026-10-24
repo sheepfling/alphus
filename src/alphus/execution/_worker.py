@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import sys
-from contextlib import redirect_stderr, redirect_stdout
-from io import StringIO
 from pathlib import Path
 
 from alphus.cli import run_profile_rule
@@ -13,7 +10,6 @@ from alphus.config import load_config
 from alphus.execution.worker_protocol import (
     BackendWorkerResponse,
     DiagnosticPayload,
-    ErrorWorkerResponse,
     FindingPayload,
     RuleWorkerResponse,
     WorkerRequest,
@@ -25,7 +21,7 @@ from alphus.gates.source.cyclomatic_complexity import (
 )
 
 
-def _dispatch(request: WorkerRequest) -> WorkerResponse:
+def dispatch_worker_request(request: WorkerRequest) -> WorkerResponse:
     root = Path(request.root).resolve(strict=True)
     config_path = Path(request.config_path).resolve(strict=True)
     config = load_config(config_path)
@@ -34,7 +30,8 @@ def _dispatch(request: WorkerRequest) -> WorkerResponse:
         raise ValueError("quality policy changed during parallel execution")
     if request.kind == "rule":
         rule = request.rule
-        assert rule is not None
+        if rule is None:
+            raise ValueError("rule worker request is missing its rule")
         result = run_profile_rule(
             root,
             config_path,
@@ -54,7 +51,8 @@ def _dispatch(request: WorkerRequest) -> WorkerResponse:
         )
     if request.kind == "cyclomatic_backend":
         language = request.language
-        assert language is not None
+        if language is None:
+            raise ValueError("backend worker request is missing its language")
         policy = config.checks.cyclomatic_complexity
         if policy is None:
             raise ValueError("cyclomatic complexity policy is missing")
@@ -79,19 +77,3 @@ def _dispatch(request: WorkerRequest) -> WorkerResponse:
             findings=tuple(FindingPayload.from_finding(item) for item in findings),
         )
     raise ValueError("unknown worker request kind")
-
-
-def main() -> int:
-    """Keep stdout reserved for one protocol value, including failures."""
-    captured_output = StringIO()
-    captured_error = StringIO()
-    try:
-        request = WorkerRequest.model_validate_json(sys.stdin.read())
-        with redirect_stdout(captured_output), redirect_stderr(captured_error):
-            response = _dispatch(request)
-        if captured_output.getvalue() or captured_error.getvalue():
-            raise ValueError("worker emitted unexpected output")
-    except Exception as error:  # noqa: BLE001 - protocol reports worker failures.
-        response = ErrorWorkerResponse(error=f"{type(error).__name__}: {error}")
-    sys.stdout.write(response.model_dump_json() + "\n")
-    return 0
