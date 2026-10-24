@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Hashable, Mapping, Sequence
+from collections.abc import Hashable, Sequence
 from collections.abc import Set as AbstractSet
 from pathlib import PurePosixPath
-from typing import Literal, TypeAlias, TypeVar, cast
+from typing import Literal, TypeAlias, TypeVar
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from alphus.contracts.model import StrictModel as _StrictModel
+
+
+class StrictModel(_StrictModel):
+    """Keep the established policy import path for the shared model."""
+
 
 QualityRuleName: TypeAlias = Literal[
     "file-size",
@@ -53,36 +58,6 @@ def require_policy(policy: PolicyT | None, name: str) -> PolicyT:
             f"the selected configuration has no [checks.{name}] policy"
         )
     return policy
-
-
-def _freeze_config(value: object) -> object:
-    """Convert mutable TOML arrays to immutable sequences before validation.
-
-    Collection kinds may intentionally change (for example, lists become
-    tuples), so an input/output type variable would promise a false identity.
-    """
-    match value:
-        case list():
-            items = cast(list[object], value)
-            return tuple(_freeze_config(item) for item in items)
-        case tuple():
-            items = cast(tuple[object, ...], value)
-            return tuple(_freeze_config(item) for item in items)
-        case Mapping():
-            items = cast(Mapping[object, object], value)
-            return {key: _freeze_config(item) for key, item in items.items()}
-        case _:
-            return value
-
-
-class StrictModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
-    @model_validator(mode="before")
-    @classmethod
-    def freeze_collections(cls, value: object) -> object:
-        """Keep validated policy collections deeply immutable."""
-        return _freeze_config(value)
 
 
 def validate_patterns(patterns: Sequence[str]) -> tuple[str, ...]:

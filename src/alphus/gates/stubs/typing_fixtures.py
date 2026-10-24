@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from alphus.gates.stubs.environments import child_environment, probe_python
+from alphus.support.python_runtime import current_python_executable
 from alphus.support.source_text import read_python_source
 from alphus.support.tool_probe import probe_python_module
 
@@ -66,7 +67,7 @@ def build_command(
     """Build an argv vector using this interpreter and no shell wrapper."""
     if target_python is not None and python_version is None:
         raise ValueError("target_python requires explicit python_version")
-    command = [sys.executable, "-m", checker.module]
+    command = [current_python_executable(), "-m", checker.module]
     if checker.name == "mypy":
         if cache_directory is None:
             raise ValueError("mypy requires a temporary cache directory")
@@ -76,7 +77,7 @@ def build_command(
         if python_version is not None:
             command.extend(("--python-version", python_version))
     elif checker.name == "pyright":
-        command.extend(("--pythonpath", target_python or sys.executable))
+        command.extend(("--pythonpath", target_python or current_python_executable()))
         if python_version is not None:
             command.extend(("--pythonversion", python_version))
     elif checker.name == "ty":
@@ -205,7 +206,7 @@ def run_case(
                 errors="replace",
                 check=False,
                 timeout=180,
-                env=child_environment(os.environ, sys.executable),
+                env=child_environment(os.environ, current_python_executable()),
             )
         except subprocess.TimeoutExpired as error:
             output = "\n".join(
@@ -343,10 +344,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         checker for checker in AVAILABLE_CHECKERS if checker.name in options.checkers
     )
     for checker in checkers:
-        probe = probe_python_module(sys.executable, checker.module)
+        probe = probe_python_module(current_python_executable(), checker.module)
         if not probe.available:
             parser.error(
-                f"{checker.name} is not installed in {sys.executable}; "
+                f"{checker.name} is not installed in {current_python_executable()}; "
                 f"install it or remove it from --checkers"
             )
     try:

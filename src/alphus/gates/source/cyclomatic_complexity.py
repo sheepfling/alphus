@@ -6,12 +6,11 @@ import json
 import re
 import shutil
 import subprocess
-import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from types import MappingProxyType
-from typing import Annotated, Literal
+from typing import Annotated, Literal, TypeAlias
 
 from packaging.version import InvalidVersion, Version
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
@@ -34,6 +33,7 @@ from alphus.policy.metrics import (
 )
 from alphus.support.inventory import candidate_files
 from alphus.support.platform_utils import is_windows
+from alphus.support.python_runtime import current_python_executable
 
 _EXTENSIONS: Mapping[str, frozenset[str]] = MappingProxyType(
     {
@@ -604,6 +604,15 @@ def _failure(
     return result, (), (finding,)
 
 
+def backend_failure(
+    plan: CyclomaticBackendPlan,
+    policy: CyclomaticComplexityPolicy,
+    message: str,
+) -> BackendRun:
+    """Turn an isolated worker failure into native backend coverage evidence."""
+    return _failure(plan, policy, message)
+
+
 def _result(
     plan: CyclomaticBackendPlan,
     policy: CyclomaticComplexityPolicy,
@@ -747,7 +756,7 @@ def _run_lizard(
     CyclomaticBackendResult, tuple[CyclomaticFunctionMetric, ...], tuple[Finding, ...]
 ]:
     command = [
-        sys.executable,
+        current_python_executable(),
         "-m",
         "alphus.gates.source._lizard_worker",
         str(root),
@@ -809,53 +818,58 @@ def _run_lizard(
     )
 
 
-def run_cyclomatic_complexity(
-    root: Path, policy: CyclomaticComplexityPolicy
+BackendRun: TypeAlias = tuple[
+    CyclomaticBackendResult,
+    Sequence[CyclomaticFunctionMetric],
+    Sequence[Finding],
+]
+
+
+def run_cyclomatic_backend(
+    root: Path,
+    policy: CyclomaticComplexityPolicy,
+    binding: CyclomaticBackendBinding,
+    plan: CyclomaticBackendPlan,
+) -> BackendRun:
+    """Run one planned native backend without changing its metric semantics."""
+    if not plan.files:
+        return (
+            CyclomaticBackendResult(
+                language=plan.language,
+                backend=plan.backend,
+                status="no_matching_files",
+                expected_version=plan.expected_version,
+                actual_version=None,
+                native_rule=plan.native_rule,
+                count_method=plan.count_method,
+                maximum=plan.maximum,
+                severity=plan.severity,
+                variant=plan.variant,
+                selected_file_count=0,
+                analyzed_file_count=0,
+                record_scope=(
+                    "all_functions" if plan.numeric_inventory else "violations_only"
+                ),
+                effective_options=_effective_options(plan),
+            ),
+            (),
+            (),
+        )
+    match binding:
+        case LizardCyclomaticBinding():
+            return _run_lizard(root, policy, binding, plan)
+        case RuffCyclomaticBinding() | EslintCyclomaticBinding():
+            return _run_native(root, policy, binding, plan)
+
+
+def combine_cyclomatic_backends(
+    policy: CyclomaticComplexityPolicy, runs: Sequence[BackendRun]
 ) -> CyclomaticReport:
-    """Run each configured backend and preserve tool failures as failures."""
-    checkout = root.resolve(strict=True)
-    plan = build_cyclomatic_plan(checkout, policy)
+    """Reduce backend outcomes in language order into the public report."""
     results: list[CyclomaticBackendResult] = []
     functions: list[CyclomaticFunctionMetric] = []
     findings: list[Finding] = []
-    for backend_plan, binding in zip(
-        plan.backends,
-        sorted(policy.backends, key=lambda item: item.language),
-        strict=True,
-    ):
-        if not backend_plan.files:
-            results.append(
-                CyclomaticBackendResult(
-                    language=backend_plan.language,
-                    backend=backend_plan.backend,
-                    status="no_matching_files",
-                    expected_version=backend_plan.expected_version,
-                    actual_version=None,
-                    native_rule=backend_plan.native_rule,
-                    count_method=backend_plan.count_method,
-                    maximum=backend_plan.maximum,
-                    severity=backend_plan.severity,
-                    variant=backend_plan.variant,
-                    selected_file_count=0,
-                    analyzed_file_count=0,
-                    record_scope=(
-                        "all_functions"
-                        if backend_plan.numeric_inventory
-                        else "violations_only"
-                    ),
-                    effective_options=_effective_options(backend_plan),
-                )
-            )
-            continue
-        match binding:
-            case LizardCyclomaticBinding():
-                result, records, backend_findings = _run_lizard(
-                    checkout, policy, binding, backend_plan
-                )
-            case RuffCyclomaticBinding() | EslintCyclomaticBinding():
-                result, records, backend_findings = _run_native(
-                    checkout, policy, binding, backend_plan
-                )
+    for result, records, backend_findings in runs:
         results.append(result)
         functions.extend(records)
         findings.extend(backend_findings)
@@ -890,6 +904,23 @@ def run_cyclomatic_complexity(
         functions=tuple(functions),
         diagnostics=tuple(finding.as_diagnostic() for finding in findings),
     )
+
+
+def run_cyclomatic_complexity(
+    root: Path, policy: CyclomaticComplexityPolicy
+) -> CyclomaticReport:
+    """Run each configured backend and preserve tool failures as failures."""
+    checkout = root.resolve(strict=True)
+    plan = build_cyclomatic_plan(checkout, policy)
+    runs = [
+        run_cyclomatic_backend(checkout, policy, binding, backend_plan)
+        for backend_plan, binding in zip(
+            plan.backends,
+            sorted(policy.backends, key=lambda item: item.language),
+            strict=True,
+        )
+    ]
+    return combine_cyclomatic_backends(policy, runs)
 
 
 def report_exit_code(

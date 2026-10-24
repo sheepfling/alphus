@@ -18,6 +18,9 @@ inventory, and combines results into one exit status.
 Native language tools retain their own checks and run as configured argument
 vectors. Python owns ordering and aggregation without importing compiler,
 Java, or Node ecosystems.
+Opt-in [parallel execution](PARALLEL-EXECUTION.md) expands selected checks into
+process-backed work units under one worker budget. The result reducer retains
+profile order and each gate's report semantics.
 Consumer policies can split orchestration steps and profiles into separate
 language TOML files through root-level `orchestration_files`. The loader
 combines them before validating unique names and profile references. The root

@@ -48,6 +48,10 @@ files), with exit code 2; this is never reported as a clean metric.
 Threshold violations return exit code 1. Operational failures, including
 missing coverage, return exit code 2 even with `--report`.
 
+Pass `--jobs N` to run independent configured backends under one worker budget.
+A profile step opts in with `parallel = true`. See
+[parallel execution](PARALLEL-EXECUTION.md) for worker and ordering controls.
+
 ## Report contract
 
 Every run records the metric, backend and actual tool version, native rule,

@@ -6,23 +6,22 @@ import json
 import subprocess
 import sys
 from collections.abc import Callable, Mapping
-from contextlib import redirect_stderr, redirect_stdout
-from dataclasses import asdict, dataclass, field
-from enum import StrEnum
+from dataclasses import asdict
 from io import StringIO
 from pathlib import Path
-from typing import Literal, TextIO
+from typing import Literal, NoReturn, TextIO, TypeGuard, cast
 
 from alphus.config import (
     CommandRunStep,
     OrchestrationPolicy,
+    QualityGateConfig,
     QualityRuleName,
     RuleRunStep,
+    load_config,
 )
 from alphus.contracts.findings import (
     Diagnostic,
     FindingRollups,
-    Severity,
     SeverityCounts,
     severity_meets_threshold,
 )
@@ -35,12 +34,22 @@ from alphus.contracts.rule_tags import (
     Scope,
     rule_tag,
 )
-from alphus.execution.commands import (
-    command_arguments,
-    step_directory,
-    windows_shell_required,
+from alphus.execution.parallel import StepExecution, run_profile_steps
+from alphus.execution.profile_history import (
+    capture_profile_context,
+    latest_profile_record,
+    write_profile_record,
 )
+from alphus.execution.profile_manifest import gate_manifest_entry
 from alphus.execution.profile_reporting import ProfileReporter
+from alphus.execution.profile_results import (
+    IntentExecutionResult,
+    IntentStatus,
+    OrchestrationResult,
+    OrchestrationStepResult,
+    StepStatus,
+)
+from alphus.execution.step_results import RuleRunResult
 from alphus.policy.intents import (
     EvidenceFormat,
     EvidenceStream,
@@ -50,7 +59,7 @@ from alphus.policy.intents import (
     resolve_intent_bindings,
 )
 from alphus.support.data_access import JsonValue, validate_json_value
-from alphus.support.inventory import candidate_files
+from alphus.support.version_control import VersionControlProvider
 
 _ORCHESTRATION_CATEGORY = Category.ORCHESTRATION
 _RULE_EXECUTION_FAILED = rule_tag(
@@ -80,109 +89,6 @@ _PROVISIONAL_ROLLOUT: Literal["mainline", "provisional"] = "provisional"
 _JSON_ARRAY_EVIDENCE_FORMAT: EvidenceFormat = "json-array"
 
 
-class StepStatus(StrEnum):
-    """Closed set of orchestration step outcomes."""
-
-    DISABLED = _STATUS_DISABLED
-    PASSED = "passed"
-    FAILED = "failed"
-    NOT_APPLICABLE = _STATUS_NOT_APPLICABLE
-    UNSUPPORTED = _STATUS_UNSUPPORTED
-
-
-class IntentStatus(StrEnum):
-    """Closed set of language-specific intent outcomes."""
-
-    DISABLED = _STATUS_DISABLED
-    UNSUPPORTED = _STATUS_UNSUPPORTED
-    NOT_SELECTED = "not_selected"
-    NOT_APPLICABLE = _STATUS_NOT_APPLICABLE
-    PASSED = "passed"
-    FAILED = "failed"
-
-
-@dataclass(frozen=True, slots=True)
-class OrchestrationStepResult:
-    """Machine-readable outcome for one configured profile step."""
-
-    name: str
-    status: StepStatus
-    exit_code: int | None
-    diagnostics: tuple[str, ...] = ()
-    findings: tuple[Diagnostic, ...] = ()
-    stdout: str = ""
-    stderr: str = ""
-    severity_counts: SeverityCounts = field(default_factory=SeverityCounts)
-    rollout: Literal["mainline", "provisional"] = _MAINLINE_ROLLOUT
-    # opaque-boundary: Native rule reports retain backend-specific JSON fields.
-    report: Mapping[str, object] | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class RuleRunResult:
-    """Structured outcome from an Alphus-owned rule invocation."""
-
-    findings: tuple[Diagnostic, ...] = ()
-    execution_failure: str | None = None
-    exit_code: int = ExitCode.SUCCESS
-    stderr: str = ""
-    stdout: str = ""
-    # opaque-boundary: Rule output carries a validated backend-specific report.
-    report: Mapping[str, object] | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class IntentExecutionResult:
-    """One language mapping's outcome with a pointer to native raw evidence."""
-
-    rule_id: str
-    language: str
-    backend: str
-    native_rule: str
-    mapping: str
-    status: IntentStatus
-    failure_kind: FailureKind | None = None
-    required: bool = True
-    severity: Severity | None = None
-    failure_threshold: Severity = "error"
-    threshold: int | None = None
-    step: str | None = None
-    evidence_step: str | None = None
-    exit_code: int | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class OrchestrationResult:
-    """Machine-readable summary for a configured quality profile."""
-
-    profile: str
-    passed: int
-    failed: int
-    exit_code: int
-    steps: tuple[OrchestrationStepResult, ...]
-    failure_threshold: Severity = "error"
-    severity_counts: SeverityCounts = field(default_factory=SeverityCounts)
-    not_applicable: int = 0
-    finding_rollups: FindingRollups = field(default_factory=FindingRollups)
-    intent_bindings: tuple[IntentExecutionResult, ...] = ()
-    unsupported: int = 0
-    disabled: int = 0
-
-
-def _render_diagnostic(diagnostic: Diagnostic, reporter: ProfileReporter) -> None:
-    """Render normalized findings with stable source and rule provenance."""
-    location = diagnostic.path or ""
-    if diagnostic.line is not None:
-        location = f"{location}:{diagnostic.line}" if location else str(diagnostic.line)
-    suffix = f" {location}" if location else ""
-    priority = f" [priority={diagnostic.priority}]" if diagnostic.priority else ""
-    owner = "" if diagnostic.source == NAMESPACE else f"{diagnostic.source} "
-    reporter.info(
-        f"{diagnostic.severity.upper()} {owner}"
-        f"{diagnostic.rule_id}{suffix}{priority}: {diagnostic.message}"
-    )
-
-
 def _legacy_diagnostic_line(diagnostic: Diagnostic) -> str:
     """Keep the existing string diagnostics field useful for older consumers."""
     location = diagnostic.path or ""
@@ -194,11 +100,11 @@ def _legacy_diagnostic_line(diagnostic: Diagnostic) -> str:
     return f"{prefix}{diagnostic.message}"
 
 
-def _write_captured(stream: TextIO, value: str) -> None:
-    """Replay command output without interpreting its contents."""
-    if value:
-        stream.write(value)
-        stream.flush()
+def _is_structured_rule_result(
+    value: int | RuleRunResult,
+) -> TypeGuard[RuleRunResult]:
+    """Narrow the public legacy integer and structured rule result union."""
+    return isinstance(value, RuleRunResult)
 
 
 def _timeout_output(value: bytes | str | None) -> str:
@@ -206,6 +112,15 @@ def _timeout_output(value: bytes | str | None) -> str:
     if isinstance(value, bytes):
         return value.decode("utf-8", errors="replace")
     return value or ""
+
+
+def _raise_work_error(error: Exception) -> NoReturn:
+    """Preserve timeout output while reporting other unit failures."""
+    match error:
+        case subprocess.TimeoutExpired():
+            raise error
+        case _:
+            raise OSError(str(error)) from error
 
 
 def _matches_json_evidence_format(
@@ -233,18 +148,70 @@ def run_orchestration(
     json_output: bool = False,
     stdout: TextIO | None = None,
     stderr: TextIO | None = None,
+    jobs: int | None = None,
+    verbose: bool = False,
+    config: QualityGateConfig | None = None,
+    history_dir: Path | None = None,
+    consumer_id: str | None = None,
+    version_control: VersionControlProvider | None = None,
 ) -> int:
     """Run every configured profile step and summarize all outcomes."""
     checkout = root.resolve(strict=True)
     resolved_config = config_path.resolve(strict=True)
     output = stdout if stdout is not None else sys.stdout
     errors = stderr if stderr is not None else sys.stderr
-    reporter = ProfileReporter(output, errors)
+    reporter = ProfileReporter(output, errors, json_output=json_output)
     profile = policy.profile(profile_name)
     plan = policy.resolve_profile(profile_name)
     if profile is None or plan is None:
         reporter.error(f"Unknown orchestration profile: {profile_name}")
         return ExitCode.CONFIG_ERROR
+
+    max_jobs = jobs if jobs is not None else policy.execution.max_jobs
+    if not 1 <= max_jobs <= 64:
+        reporter.error("--jobs must be between 1 and 64")
+        return ExitCode.CONFIG_ERROR
+    if policy.execution.prioritize_previous_failures and history_dir is None:
+        reporter.error("previous failure priority requires --history-dir")
+        return ExitCode.CONFIG_ERROR
+    if consumer_id is not None and history_dir is None:
+        reporter.error("consumer identity requires --history-dir")
+        return ExitCode.CONFIG_ERROR
+    history_context = None
+    loaded_config: QualityGateConfig | None = None
+    previous_failures: frozenset[str] = frozenset()
+    if history_dir is not None:
+        try:
+            loaded_config = (
+                config if config is not None else load_config(resolved_config)
+            )
+            history_context = capture_profile_context(
+                checkout,
+                profile_name,
+                loaded_config,
+                consumer_id=consumer_id,
+                version_control=version_control,
+            )
+            if policy.execution.prioritize_previous_failures:
+                previous = latest_profile_record(
+                    history_dir,
+                    checkout,
+                    profile_name,
+                    config_sha256=history_context.config_sha256,
+                    consumer_id=consumer_id,
+                    match_consumer_id=True,
+                )
+                if previous is not None:
+                    previous_failures = frozenset(previous.failed_steps)
+        except (OSError, ValueError) as error:
+            reporter.error(f"Cannot read profile history: {error}")
+            return ExitCode.CONFIG_ERROR
+    selected_steps = {step.name: step for step in policy.steps}
+    parallel_results: dict[str, StepExecution] = {}
+    step_durations_seconds: dict[str, float] = {}
+    work_unit_durations_seconds: dict[str, float] = {}
+    work_unit_steps: dict[str, str] = {}
+    step_attempted: dict[str, bool] = {}
 
     failed = 0
     provisional_passed = 0
@@ -276,14 +243,11 @@ def run_orchestration(
         and item.binding.evidence_format != "raw"
         and item.binding.step in plan.steps
     }
-    if profile.includes and not json_output:
-        reporter.info(f"Selected profiles: {', '.join(plan.profiles)}")
-    for step_name in plan.steps:
-        step: RuleRunStep | CommandRunStep = next(
-            item for item in policy.steps if item.name == step_name
-        )
-        if not json_output:
-            reporter.info(f"==> {step.name}")
+    if profile.includes:
+        reporter.selected_profiles(plan.profiles)
+    for index, step_name in enumerate(plan.steps):
+        step: RuleRunStep | CommandRunStep = selected_steps[step_name]
+        reporter.step_started(step.name)
         active_bindings = [
             item
             for item in intent_bindings_by_step.get(step_name, ())
@@ -303,11 +267,47 @@ def run_orchestration(
                     rollout=step.rollout,
                 )
             )
-            if not json_output:
-                reporter.info(
-                    f"DISABLED {step.name}: all selected intent bindings are disabled"
-                )
+            reporter.step_disabled(step.name)
             continue
+        if step_name not in parallel_results:
+            block: list[RuleRunStep | CommandRunStep] = [step]
+            if max_jobs > 1 and step.parallel:
+                for later_name in plan.steps[index + 1 :]:
+                    later = selected_steps[later_name]
+                    later_bindings = [
+                        item
+                        for item in intent_bindings_by_step.get(later_name, ())
+                        if active_profiles.intersection(item.intent.profiles)
+                    ]
+                    if not later.parallel or (
+                        later_bindings
+                        and not any(item.enabled for item in later_bindings)
+                    ):
+                        break
+                    block.append(later)
+            try:
+                parallel_results.update(
+                    run_profile_steps(
+                        checkout,
+                        resolved_config,
+                        config if config is not None else load_config(resolved_config),
+                        block,
+                        max_jobs,
+                        run_rule=run_rule,
+                        verbose=verbose,
+                        previously_failed=previous_failures,
+                    )
+                )
+            except (OSError, ValueError) as error:
+                reporter.error(f"Cannot schedule quality work: {error}")
+                return ExitCode.CONFIG_ERROR
+        precomputed = parallel_results.pop(step_name)
+        step_durations_seconds[step.name] = precomputed.duration_seconds
+        work_unit_durations_seconds.update(precomputed.work_unit_durations)
+        step_attempted[step.name] = bool(precomputed.work_unit_durations)
+        work_unit_steps.update(
+            {unit: step.name for unit, _ in precomputed.work_unit_durations}
+        )
         captured_stdout = StringIO()
         captured_stderr = StringIO()
         step_stdout = ""
@@ -321,13 +321,16 @@ def run_orchestration(
         exit_code = ExitCode.LAUNCH_ERROR
         try:
             match step:
-                case RuleRunStep(rule=rule):
-                    with (
-                        redirect_stdout(captured_stdout),
-                        redirect_stderr(captured_stderr),
-                    ):
-                        rule_result: int | RuleRunResult = run_rule(rule)
-                    if isinstance(rule_result, RuleRunResult):
+                case RuleRunStep():
+                    rule_result: int | RuleRunResult
+                    if precomputed.error is not None:
+                        _raise_work_error(precomputed.error)
+                    if precomputed.rule is None:
+                        raise ValueError("quality rule returned no result")
+                    rule_result = precomputed.rule
+                    captured_stdout.write(precomputed.stdout)
+                    captured_stderr.write(precomputed.stderr)
+                    if _is_structured_rule_result(rule_result):
                         findings = list(rule_result.findings)
                         if step.severity is not None or step.priority is not None:
                             findings = [
@@ -407,7 +410,7 @@ def run_orchestration(
                                 else ExitCode.SUCCESS
                             )
                     else:
-                        exit_code = rule_result
+                        exit_code = cast(int, rule_result)
                         step_stdout = captured_stdout.getvalue()
                         step_stderr = captured_stderr.getvalue()
                         if exit_code != ExitCode.SUCCESS:
@@ -426,30 +429,17 @@ def run_orchestration(
                                     message=f"rule runner exited with status {exit_code}",
                                 )
                             )
-                case CommandRunStep(working_directory=working_directory):
-                    selected_files = (
-                        candidate_files(checkout, step.files)
-                        if step.files is not None
-                        else []
-                    )
-                    if step.files is not None and not selected_files:
+                case CommandRunStep():
+                    attempted_command = precomputed.attempted_command
+                    if precomputed.error is not None:
+                        _raise_work_error(precomputed.error)
+                    if precomputed.not_applicable:
                         skipped_empty_file_scope = True
                         exit_code = ExitCode.SUCCESS
                     else:
-                        directory = step_directory(checkout, working_directory)
-                        arguments = command_arguments(
-                            step, checkout, resolved_config, selected_files, directory
-                        )
-                        attempted_command = arguments[0]
-                        result = subprocess.run(
-                            arguments,
-                            cwd=directory,
-                            check=False,
-                            shell=windows_shell_required(arguments),
-                            capture_output=True,
-                            text=True,
-                            timeout=step.timeout_seconds,
-                        )
+                        if precomputed.command is None:
+                            raise ValueError("quality command returned no result")
+                        result = precomputed.command
                         exit_code = result.returncode
                         step_stdout = result.stdout or ""
                         step_stderr = result.stderr or ""
@@ -571,10 +561,6 @@ def run_orchestration(
             )
             exit_code = ExitCode.LAUNCH_ERROR
 
-        if not json_output:
-            _write_captured(output, step_stdout)
-            _write_captured(errors, step_stderr)
-
         completed += 1
         provisional = step.rollout == _PROVISIONAL_ROLLOUT
         if skipped_empty_file_scope:
@@ -588,8 +574,6 @@ def run_orchestration(
                     rollout=step.rollout,
                 )
             )
-            if not json_output:
-                reporter.info(f"NOT APPLICABLE {step.name}: no files matched")
         elif exit_code == ExitCode.SUCCESS:
             if provisional:
                 provisional_passed += 1
@@ -608,12 +592,6 @@ def run_orchestration(
                 )
             )
             all_findings.extend(findings)
-            if not json_output and isinstance(step, RuleRunStep):
-                for finding in findings:
-                    _render_diagnostic(finding, reporter)
-            if not json_output:
-                prefix = "PROVISIONAL PASS" if provisional else "PASS"
-                reporter.info(f"{prefix} {step.name}")
         else:
             if provisional:
                 provisional_failed += 1
@@ -634,14 +612,7 @@ def run_orchestration(
                 )
             )
             all_findings.extend(findings)
-            if not json_output and isinstance(step, RuleRunStep):
-                for finding in findings:
-                    _render_diagnostic(finding, reporter)
-            if not json_output:
-                prefix = "PROVISIONAL FAIL" if provisional else "FAIL"
-                reporter.info(f"{prefix} {step.name} (exit {exit_code})")
-        if json_output and step_stderr:
-            reporter.captured_error(step_stderr)
+        reporter.step_completed(results[-1], rule=isinstance(step, RuleRunStep))
 
     intent_results: list[IntentExecutionResult] = []
     unsupported_count = 0
@@ -701,11 +672,7 @@ def run_orchestration(
             )
             completed += 1
             all_findings.append(finding)
-            if not json_output:
-                if blocking:
-                    reporter.error(f"UNSUPPORTED {message}")
-                else:
-                    reporter.info(f"UNSUPPORTED {message} (advisory)")
+            reporter.unsupported(message, blocking=blocking)
         elif binding.step not in plan.steps:
             status = IntentStatus.NOT_SELECTED
             failure_kind = None
@@ -764,21 +731,22 @@ def run_orchestration(
     exit_code = (
         ExitCode.QUALITY_FAILURE if failed or blocking_unsupported else ExitCode.SUCCESS
     )
-    if json_output:
-        result = OrchestrationResult(
-            profile_name,
-            passed,
-            failed,
-            exit_code,
-            tuple(results),
-            threshold,
-            SeverityCounts.from_diagnostics(all_findings),
-            not_applicable,
-            FindingRollups.from_diagnostics(all_findings),
-            tuple(intent_results),
-            unsupported_count,
-            disabled,
-        )
+    result = OrchestrationResult(
+        profile_name,
+        passed,
+        failed,
+        exit_code,
+        tuple(results),
+        threshold,
+        SeverityCounts.from_diagnostics(all_findings),
+        not_applicable,
+        FindingRollups.from_diagnostics(all_findings),
+        tuple(intent_results),
+        unsupported_count,
+        disabled,
+    )
+    payload = None
+    if json_output or history_context is not None:
         payload = asdict(result)
         # ``asdict`` includes the private parsed RuleTag cache. Replace each
         # finding with its explicit public wire adapter to preserve the JSON
@@ -814,26 +782,45 @@ def run_orchestration(
             }
         if profile.includes:
             payload["profiles"] = plan.profiles
-        reporter.info(json.dumps(payload, sort_keys=True))
+    if history_context is not None and payload is not None and history_dir is not None:
+        try:
+            saved = write_profile_record(
+                history_dir,
+                history_context,
+                result=payload,
+                total_steps=len(results),
+                passed=passed,
+                failed=failed,
+                provisional_passed=provisional_passed,
+                provisional_failed=provisional_failed,
+                not_applicable=not_applicable,
+                exit_code=exit_code,
+                failed_steps=tuple(
+                    step.name for step in results if step.status == "failed"
+                ),
+                step_durations_seconds=step_durations_seconds,
+                work_unit_durations_seconds=work_unit_durations_seconds,
+                gate_manifest=tuple(
+                    gate_manifest_entry(
+                        selected_steps[name],
+                        cast(QualityGateConfig, loaded_config),
+                        failure_threshold=policy.failure_threshold,
+                    )
+                    for name in plan.steps
+                ),
+                step_attempted=step_attempted,
+                work_unit_steps=work_unit_steps,
+            )
+        except (OSError, ValueError) as error:
+            reporter.error(f"Cannot write profile history: {error}")
+            return ExitCode.CONFIG_ERROR
+        reporter.history_saved(saved)
+    if json_output and payload is not None:
+        reporter.json_result(payload)
     else:
-        summary = f"Quality profile {profile_name}: {passed} passed, {failed} failed"
-        if not_applicable:
-            summary += f", {not_applicable} not applicable"
-        if unsupported_count:
-            summary += f", {unsupported_count} unsupported capability mapping(s)"
-        if disabled:
-            summary += f", {disabled} disabled"
-        if provisional_passed or provisional_failed:
-            summary += (
-                f", {provisional_passed} provisional passed, "
-                f"{provisional_failed} provisional failed"
-            )
-        reporter.info(summary)
-        counts = SeverityCounts.from_diagnostics(all_findings)
-        if counts.error or counts.warning or counts.info:
-            reporter.info(
-                "Diagnostic triage: "
-                f"{counts.error} error(s), {counts.warning} warning(s), "
-                f"{counts.info} info(s); failure threshold={threshold}"
-            )
+        reporter.summary(
+            result,
+            provisional_passed=provisional_passed,
+            provisional_failed=provisional_failed,
+        )
     return exit_code

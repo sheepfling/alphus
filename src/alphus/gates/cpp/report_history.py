@@ -17,30 +17,14 @@ from pathlib import Path
 from uuid import uuid4
 
 from alphus.support.data_access import JsonValue, require_json_string
-from alphus.support.git import run_git
+from alphus.support.git import git_value, run_git
+from alphus.support.time import utc_text
 
 _HISTORY_ENV = "ALPHUS_CPP_HISTORY_DIR"
 
 
 def _utc_now() -> datetime:
     return datetime.now(UTC)
-
-
-def _utc_text(value: datetime) -> str:
-    return (
-        value.astimezone(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
-    )
-
-
-def _git_value(root: Path, *arguments: str) -> str | None:
-    try:
-        result = run_git(root, *arguments)
-    except OSError:
-        return None
-    if result.returncode:
-        return None
-    value = os.fsdecode(result.stdout).strip()
-    return value or None
 
 
 def _git_dirty(root: Path) -> bool | None:
@@ -91,9 +75,9 @@ def capture_cpp_run(root: Path) -> CppRunContext:
     candidate = root.resolve()
     if not candidate.is_dir():
         candidate = candidate.parent
-    worktree = _git_value(candidate, "rev-parse", "--show-toplevel")
+    worktree = git_value(candidate, "rev-parse", "--show-toplevel")
     git_root = Path(worktree).resolve() if worktree is not None else candidate
-    common = _git_value(git_root, "rev-parse", "--git-common-dir")
+    common = git_value(git_root, "rev-parse", "--git-common-dir")
     common_path = str((git_root / common).resolve()) if common is not None else None
     actor, source = _initiator()
     return CppRunContext(
@@ -102,8 +86,8 @@ def capture_cpp_run(root: Path) -> CppRunContext:
         requested_root=str(candidate),
         worktree=str(git_root) if worktree is not None else None,
         git_common_dir=common_path,
-        branch=_git_value(git_root, "symbolic-ref", "--quiet", "--short", "HEAD"),
-        revision=_git_value(git_root, "rev-parse", "HEAD"),
+        branch=git_value(git_root, "symbolic-ref", "--quiet", "--short", "HEAD"),
+        revision=git_value(git_root, "rev-parse", "HEAD"),
         dirty=_git_dirty(git_root) if worktree is not None else None,
         actor=actor,
         actor_source=source,
@@ -165,8 +149,8 @@ def write_cpp_history(
         "schema": 1,
         "kind": "alphus-cpp-report-history",
         "record_id": record_id,
-        "started_at_utc": _utc_text(context.started_at_utc),
-        "completed_at_utc": _utc_text(completed),
+        "started_at_utc": utc_text(context.started_at_utc),
+        "completed_at_utc": utc_text(completed),
         "duration_seconds": duration_seconds,
         "command": command,
         "run_id": report_run_id,

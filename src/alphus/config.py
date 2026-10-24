@@ -41,6 +41,7 @@ from alphus.policy.native_tools import native_tool_policy, native_tools_for_lang
 from alphus.policy.orchestration import (
     CheckPolicies,
     CommandRunStep,
+    ExecutionPolicy,
     OrchestrationPolicy,
     OrchestrationProfile,
     OrchestrationStep,
@@ -215,6 +216,7 @@ class _PartialOrchestration(StrictModel):
     profiles: tuple[OrchestrationProfile, ...] = ()
     default_profile: str = "check"
     failure_threshold: Severity = "error"
+    execution: ExecutionPolicy = ExecutionPolicy()
     intents: tuple[SharedQualityIntent, ...] = ()
 
 
@@ -305,6 +307,7 @@ def load_config(path: Path) -> QualityGateConfig:
         profiles=(*profiles, *root.orchestration.profiles),
         default_profile=root.orchestration.default_profile,
         failure_threshold=root.orchestration.failure_threshold,
+        execution=root.orchestration.execution,
         intents=root.orchestration.intents,
     )
     selected = _selected_native_tools(root.languages, root.tools)
@@ -316,6 +319,7 @@ def load_config(path: Path) -> QualityGateConfig:
             profiles=declared.profiles,
             default_profile=declared.default_profile,
             failure_threshold=declared.failure_threshold,
+            execution=declared.execution,
             intents=declared.intents,
         )
     )
@@ -346,6 +350,7 @@ def _compose_native_orchestration(
         profiles=_merge_profiles(native.profiles, declared_profiles),
         default_profile=declared.default_profile,
         failure_threshold=declared.failure_threshold,
+        execution=declared.execution,
         intents=declared.intents,
     )
 
