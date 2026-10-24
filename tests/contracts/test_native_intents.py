@@ -33,13 +33,14 @@ from alphus.policy.intents import (
 
 
 def ruff_context(**overrides: object) -> NativeToolContext:
-    values: dict[str, object] = {
-        "backend": "ruff",
-        "executable_available": True,
-        "version": "0.16.1",
-    }
-    values.update(overrides)
-    return NativeToolContext.model_validate(values)
+    return NativeToolContext.model_validate(
+        {
+            "backend": "ruff",
+            "executable_available": True,
+            "version": "0.16.1",
+            **overrides,
+        }
+    )
 
 
 def test_catalog_maps_distinct_native_rules_without_claiming_equivalence() -> None:
@@ -341,8 +342,10 @@ def test_ruff_native_intent_fixtures_preserve_supported_evidence(
             "check",
             "--no-cache",
             "--isolated",
+            "--ignore-noqa",
             "--select",
-            "F401,F841,ARG001,N801,N802,N803,N804,N805,N806,N807,N811,N812,N813,N814,N815,N816,N817,N818,N999",
+            "F401,F841,ARG001,N801,N802,N803,N804,N805,N806,N807,N811,N812,"
+            "N813,N814,N815,N816,N817,N818,N999",
             "--config",
             'lint.dummy-variable-rgx = "^_"',
             "--config",
