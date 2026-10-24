@@ -27,6 +27,9 @@ def _intent(
     mapping: Literal["exact", "unsupported"] = "exact",
     rollout: Literal["mainline", "provisional"] = "mainline",
     required: bool = True,
+    enabled: bool = True,
+    language_enabled: bool | None = None,
+    extra_binding_language: Literal["cpp"] | None = None,
     step: str | None = "Native complexity",
     language: Literal["python", "cpp"] = "python",
     evidence_format: Literal["raw", "json-array"] = "raw",
@@ -50,6 +53,12 @@ def _intent(
         violation_exit_codes=exit_codes,
         configuration_exit_codes=config_codes,
     )
+    bindings = (binding,)
+    if extra_binding_language is not None:
+        extra_binding = NativeCapabilityBinding.model_validate(
+            {**binding.model_dump(mode="python"), "language": extra_binding_language}
+        )
+        bindings = (binding, extra_binding)
     return SharedQualityIntent(
         rule_id="alphus/any/none/maintainability/function-complexity-review",
         summary="Review functions that exceed a local complexity limit.",
@@ -57,11 +66,17 @@ def _intent(
         unit="decision_paths",
         count_method="Count each decision path starting at one.",
         threshold=10,
+        enabled=enabled,
         required=required,
         rollout=rollout,
         profiles=("check",),
         files=FileInventoryPolicy(include=("**/*.py",), exclude=()),
-        bindings=(binding,),
+        overrides=(
+            ({"language": language, "enabled": language_enabled},)
+            if language_enabled is not None
+            else ()
+        ),
+        bindings=bindings,
     )
 
 
@@ -171,6 +186,60 @@ def test_intent_profile_is_selected_through_an_included_profile(
     assert code == 0
     assert report["profile"] == "aggregate"
     assert report["intent_bindings"][0]["status"] == "passed"
+
+
+@pytest.mark.parametrize(
+    ("enabled", "language_enabled"), [(False, None), (True, False)]
+)
+def test_disabled_intent_does_not_execute_its_native_command(
+    tmp_path: Path, enabled: bool, language_enabled: bool | None
+) -> None:
+    marker = tmp_path / "native-command-ran"
+    policy = _policy(
+        tmp_path,
+        intent=_intent(enabled=enabled, language_enabled=language_enabled),
+        command=(
+            "{python}",
+            "-c",
+            f"from pathlib import Path; Path({str(marker)!r}).write_text('ran'); raise SystemExit(1)",
+        ),
+    )
+
+    code, report = _run(tmp_path, policy)
+
+    assert code == 0
+    assert not marker.exists()
+    assert report["passed"] == 0
+    assert report["failed"] == 0
+    assert report["disabled"] == 1
+    assert report["steps"][0]["status"] == "disabled"
+    assert report["steps"][0]["exit_code"] is None
+    assert report["intent_bindings"][0]["status"] == "disabled"
+
+
+def test_shared_native_command_runs_when_another_selected_binding_is_enabled(
+    tmp_path: Path,
+) -> None:
+    marker = tmp_path / "native-command-ran"
+    policy = _policy(
+        tmp_path,
+        intent=_intent(language_enabled=False, extra_binding_language="cpp"),
+        command=(
+            "{python}",
+            "-c",
+            f"from pathlib import Path; Path({str(marker)!r}).write_text('ran')",
+        ),
+    )
+
+    code, report = _run(tmp_path, policy)
+
+    assert code == 0
+    assert marker.read_text(encoding="utf-8") == "ran"
+    assert report.get("disabled", 0) == 0
+    assert report["steps"][0]["status"] == "passed"
+    bindings = {item["language"]: item for item in report["intent_bindings"]}
+    assert bindings["python"]["status"] == "disabled"
+    assert bindings["cpp"]["status"] == "passed"
 
 
 @pytest.mark.parametrize(

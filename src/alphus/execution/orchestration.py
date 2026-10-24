@@ -40,7 +40,11 @@ from alphus.execution.commands import (
     windows_shell_required,
 )
 from alphus.execution.profile_reporting import ProfileReporter
-from alphus.policy.intents import FailureKind, resolve_intent_bindings
+from alphus.policy.intents import (
+    FailureKind,
+    ResolvedIntentBinding,
+    resolve_intent_bindings,
+)
 from alphus.support.inventory import candidate_files
 
 _ORCHESTRATION_CATEGORY = Category.ORCHESTRATION
@@ -69,8 +73,8 @@ class OrchestrationStepResult:
     """Machine-readable outcome for one configured profile step."""
 
     name: str
-    status: Literal["passed", "failed", "not_applicable", "unsupported"]
-    exit_code: int
+    status: Literal["disabled", "passed", "failed", "not_applicable", "unsupported"]
+    exit_code: int | None
     diagnostics: tuple[str, ...] = ()
     findings: tuple[Diagnostic, ...] = ()
     stdout: str = ""
@@ -131,6 +135,7 @@ class OrchestrationResult:
     finding_rollups: FindingRollups = field(default_factory=FindingRollups)
     intent_bindings: tuple[IntentExecutionResult, ...] = ()
     unsupported: int = 0
+    disabled: int = 0
 
 
 def _render_diagnostic(diagnostic: Diagnostic, reporter: ProfileReporter) -> None:
@@ -204,6 +209,7 @@ def run_orchestration(
     provisional_passed = 0
     provisional_failed = 0
     not_applicable = 0
+    disabled = 0
     completed = 0
     results: list[OrchestrationStepResult] = []
     all_findings: list[Diagnostic] = []
@@ -211,9 +217,15 @@ def run_orchestration(
     operational_error_steps: set[str] = set()
     threshold = policy.failure_threshold
     active_profiles = set(plan.profiles)
+    resolved_intents = resolve_intent_bindings(policy.intents, threshold)
+    intent_bindings_by_step: dict[str, list[ResolvedIntentBinding]] = {}
+    for item in resolved_intents:
+        binding = item.binding
+        if binding.step is not None:
+            intent_bindings_by_step.setdefault(binding.step, []).append(item)
     json_evidence_by_step = {
         item.binding.step: item.binding.evidence_stream
-        for item in resolve_intent_bindings(policy.intents, threshold)
+        for item in resolved_intents
         if item.enabled
         and active_profiles.intersection(item.intent.profiles)
         and item.binding.mapping != "unsupported"
@@ -228,6 +240,30 @@ def run_orchestration(
         )
         if not json_output:
             reporter.info(f"==> {step.name}")
+        active_bindings = [
+            item
+            for item in intent_bindings_by_step.get(step_name, ())
+            if active_profiles.intersection(item.intent.profiles)
+        ]
+        if active_bindings and not any(item.enabled for item in active_bindings):
+            disabled += 1
+            completed += 1
+            results.append(
+                OrchestrationStepResult(
+                    name=step.name,
+                    status="disabled",
+                    exit_code=None,
+                    diagnostics=(
+                        "All selected intent bindings for this step are disabled.",
+                    ),
+                    rollout=step.rollout,
+                )
+            )
+            if not json_output:
+                reporter.info(
+                    f"DISABLED {step.name}: all selected intent bindings are disabled"
+                )
+            continue
         captured_stdout = StringIO()
         captured_stderr = StringIO()
         step_stdout = ""
@@ -545,7 +581,7 @@ def run_orchestration(
     unsupported_count = 0
     blocking_unsupported = False
     step_results = {result.name: result for result in results}
-    for item in resolve_intent_bindings(policy.intents, policy.failure_threshold):
+    for item in resolved_intents:
         intent = item.intent
         binding = item.binding
         if not item.enabled:
@@ -657,6 +693,7 @@ def run_orchestration(
         - provisional_failed
         - not_applicable
         - unsupported_count
+        - disabled
     )
     exit_code = (
         ExitCode.QUALITY_FAILURE if failed or blocking_unsupported else ExitCode.SUCCESS
@@ -674,6 +711,7 @@ def run_orchestration(
             FindingRollups.from_diagnostics(all_findings),
             tuple(intent_results),
             unsupported_count,
+            disabled,
         )
         payload = asdict(result)
         # ``asdict`` includes the private parsed RuleTag cache. Replace each
@@ -693,6 +731,8 @@ def run_orchestration(
             del payload["intent_bindings"]
         if not result.unsupported:
             del payload["unsupported"]
+        if not result.disabled:
+            del payload["disabled"]
         for step_payload in payload["steps"]:
             if step_payload["rollout"] == "mainline":
                 del step_payload["rollout"]
@@ -713,6 +753,8 @@ def run_orchestration(
             summary += f", {not_applicable} not applicable"
         if unsupported_count:
             summary += f", {unsupported_count} unsupported capability mapping(s)"
+        if disabled:
+            summary += f", {disabled} disabled"
         if provisional_passed or provisional_failed:
             summary += (
                 f", {provisional_passed} provisional passed, "

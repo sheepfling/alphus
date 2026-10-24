@@ -79,6 +79,11 @@ file inventory is reported as `not_applicable`, never as a pass. A required
 unsupported binding blocks only when the intent is `mainline`; provisional or
 optional unsupported mappings remain visible as advisory outcomes.
 
+When every selected intent binding for a command step is disabled, Alphus
+records the step as `disabled` without launching its native command. A step
+shared by another selected, enabled binding still runs, and the disabled
+binding remains visible in the result.
+
 Output is raw by default and is retained on the command result. A binding may
 declare `evidence_format = "json-array"` and choose `stdout` or `stderr` for
 the evidence stream. Alphus then checks for a valid top-level JSON array;
