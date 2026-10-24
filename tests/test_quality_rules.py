@@ -411,6 +411,38 @@ def test_cli_uses_an_explicit_root_and_emits_machine_readable_findings(
     assert '"path": "src/long.py"' in output
 
 
+def test_line_length_cli_renders_invalid_utf8_finding(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Human output reports invalid UTF-8 findings without parsing a line limit."""
+    _repository(tmp_path)
+    invalid_path = tmp_path / "src" / "invalid.py"
+    invalid_path.parent.mkdir(parents=True)
+    invalid_path.write_bytes(b"value = \xff\n")
+
+    assert (
+        main(
+            [
+                "--root",
+                str(tmp_path),
+                "--config",
+                "quality.toml",
+                "--rule",
+                "line-length",
+                "--output",
+                "plain",
+            ]
+        )
+        == 1
+    )
+
+    output = capsys.readouterr().out
+    assert (
+        "ERROR alphus/any/none/style/invalid-text-encoding src/invalid.py: "
+        "line-length requires UTF-8 text; file contains an invalid byte sequence"
+    ) in output
+
+
 def test_json_cli_keeps_findings_and_report_exit_behavior(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

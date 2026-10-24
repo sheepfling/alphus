@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
@@ -13,8 +14,8 @@ from alphus.gates.hygiene.rules import check_file_size, check_line_length
 
 def line_config(
     *,
-    limits: dict[str, int] | None = None,
-    path_limits: dict[str, int] | None = None,
+    limits: Mapping[str, int] | None = None,
+    path_limits: Mapping[str, int] | None = None,
     exclude: tuple[str, ...] = (),
 ) -> QualityGateConfig:
     """Build a minimal policy that selects the line-length rule only."""
@@ -37,8 +38,8 @@ def size_config(
     code_lines: int = 100,
     hard_lines: int = 200,
     raw_bytes: int | None = None,
-    extension_bytes: dict[str, int] | None = None,
-    path_bytes: dict[str, int] | None = None,
+    extension_bytes: Mapping[str, int] | None = None,
+    path_bytes: Mapping[str, int] | None = None,
     exclude: tuple[str, ...] = (),
 ) -> QualityGateConfig:
     """Build a minimal policy that selects the file-size rule only."""
@@ -249,7 +250,7 @@ def test_line_length_handles_empty_unterminated_and_crlf_files(
 def test_line_length_reports_invalid_utf8_without_reporting_a_clean_file(
     tmp_path: Path,
 ) -> None:
-    """Invalid configured text yields a stable encoding diagnostic with byte offset."""
+    """Invalid configured text yields a stable encoding diagnostic."""
     relative = write_bytes(tmp_path, "src/invalid.py", b"value = \xff\n")
 
     findings = check_line_length(tmp_path, [relative], line_config(limits={".py": 100}))

@@ -93,22 +93,28 @@ class FileSizePolicy(StrictModel):
         tuple[str, ...],
         Field(description="Suffixes that use the code-specific physical-line limit."),
     ]
-    code_limit: int = Field(
-        gt=0,
-        validation_alias=AliasChoices("code_physical_line_limit", "code_limit"),
-        description=(
-            "Legacy config key and Python attribute are code_limit; both count "
-            "physical lines for files with a configured code extension."
+    code_limit: Annotated[
+        int,
+        Field(
+            gt=0,
+            validation_alias=AliasChoices("code_physical_line_limit", "code_limit"),
+            description=(
+                "Legacy config key and Python attribute are code_limit; both count "
+                "physical lines for files with a configured code extension."
+            ),
         ),
-    )
-    hard_limit: int = Field(
-        gt=0,
-        validation_alias=AliasChoices("hard_physical_line_limit", "hard_limit"),
-        description=(
-            "Legacy config key and Python attribute are hard_limit; both count "
-            "physical lines for every included file."
+    ]
+    hard_limit: Annotated[
+        int,
+        Field(
+            gt=0,
+            validation_alias=AliasChoices("hard_physical_line_limit", "hard_limit"),
+            description=(
+                "Legacy config key and Python attribute are hard_limit; both count "
+                "physical lines for every included file."
+            ),
         ),
-    )
+    ]
     raw_byte_limit: Annotated[
         int | None,
         Field(
@@ -131,13 +137,15 @@ class FileSizePolicy(StrictModel):
             description="Raw byte limits by repository path glob.",
         ),
     ]
-    raw_byte_severity: Literal["error", "warning", "info"] = Field(
-        default="warning",
-        description=(
-            "Severity for raw-byte findings; warning keeps the new metric "
-            "advisory by default."
+    raw_byte_severity: Annotated[
+        Literal["error", "warning", "info"],
+        Field(
+            description=(
+                "Severity for raw-byte findings; warning keeps the new metric "
+                "advisory by default."
+            )
         ),
-    )
+    ] = "warning"
     initializer_name: Annotated[
         str, Field(description="Basename that selects package-initializer checks.")
     ]
@@ -152,13 +160,14 @@ class FileSizePolicy(StrictModel):
         ),
     ]
 
+    # opaque-boundary: raw config mapping before alias normalization
     @model_validator(mode="before")
     @classmethod
-    def validate_line_limit_aliases(cls, value: object) -> object:
+    def validate_line_limit_aliases(cls, value: Mapping[str, object] | None) -> object:
         """Reject conflicting values when both legacy and explicit TOML names appear."""
         if not isinstance(value, Mapping):
             return value
-        document = dict(cast(Mapping[str, object], value))
+        document = dict(value)
         for legacy_name, explicit_name in (
             ("code_limit", "code_physical_line_limit"),
             ("hard_limit", "hard_physical_line_limit"),

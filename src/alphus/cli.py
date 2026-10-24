@@ -198,27 +198,38 @@ def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
         _render_severity_totals(findings)
         return
     if rule == "line-length":
-        counts = Counter(finding.path for finding in findings)
+        line_too_long_id = rule_tag(
+            Scope.ANY, Framework.NONE, Category.STYLE, "line-too-long"
+        )
+        line_findings = [
+            finding for finding in findings if finding.rule_id == line_too_long_id
+        ]
+        for finding in findings:
+            if finding.rule_id != line_too_long_id:
+                _render_finding(finding)
+
+        counts = Counter(finding.path for finding in line_findings)
         for name, count in sorted(counts.items()):
             lines = [
                 finding.line
-                for finding in findings
+                for finding in line_findings
                 if finding.path == name and finding.line is not None
             ]
             limit = next(
                 finding.message.rsplit("limit ", maxsplit=1)[1].rstrip(")")
-                for finding in findings
+                for finding in line_findings
                 if finding.path == name
             )
             sample = ", ".join(str(line) for line in lines[:5])
             _human_print(
-                f"{rule_tag(Scope.ANY, Framework.NONE, Category.STYLE, 'line-too-long')} {name}: "
-                f"{count} lines exceed {limit} columns (example lines: {sample})"
+                f"{line_too_long_id} {name}: "
+                f"{count} lines exceed {limit} (example lines: {sample})"
             )
-        _human_print(
-            f"{rule_tag(Scope.ANY, Framework.NONE, Category.STYLE, 'line-too-long')}: "
-            f"{len(findings)} violation(s) in {len(counts)} files"
-        )
+        if line_findings or not findings:
+            _human_print(
+                f"{line_too_long_id}: {len(line_findings)} violation(s) "
+                f"in {len(counts)} files"
+            )
         _render_severity_totals(findings)
         return
     if rule == "json-structure":

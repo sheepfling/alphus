@@ -60,6 +60,7 @@ exclude = []
 opaque_boundary_paths = [
   "src/alphus/config.py",
   "src/alphus/cli.py",
+  "src/alphus/policy/sources.py",
   "tests/execution/test_shared_quality_intent_execution.py",
 ]
 opaque_boundary_marker_prefix = "# opaque-boundary: "
