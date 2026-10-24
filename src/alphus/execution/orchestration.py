@@ -10,13 +10,15 @@ from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import asdict, dataclass, field
 from io import StringIO
 from pathlib import Path
-from typing import Literal, TextIO
+from typing import TYPE_CHECKING, Literal, TextIO
 
 from alphus.config import (
     CommandRunStep,
     OrchestrationPolicy,
+    QualityGateConfig,
     QualityRuleName,
     RuleRunStep,
+    load_config,
 )
 from alphus.contracts.findings import (
     Diagnostic,
@@ -39,8 +41,12 @@ from alphus.execution.commands import (
     step_directory,
     windows_shell_required,
 )
+from alphus.execution.processes import run_captured_process
 from alphus.execution.profile_reporting import ProfileReporter
 from alphus.support.inventory import candidate_files
+
+if TYPE_CHECKING:
+    from alphus.execution.parallel import StepExecution
 
 _ORCHESTRATION_CATEGORY = Category.ORCHESTRATION
 _RULE_EXECUTION_FAILED = rule_tag(
@@ -139,6 +145,9 @@ def run_orchestration(
     json_output: bool = False,
     stdout: TextIO | None = None,
     stderr: TextIO | None = None,
+    jobs: int | None = None,
+    verbose: bool = False,
+    config: QualityGateConfig | None = None,
 ) -> int:
     """Run every configured profile step and summarize all outcomes."""
     checkout = root.resolve(strict=True)
@@ -152,6 +161,13 @@ def run_orchestration(
         reporter.error(f"Unknown orchestration profile: {profile_name}")
         return ExitCode.CONFIG_ERROR
 
+    max_jobs = jobs if jobs is not None else policy.execution.max_jobs
+    if not 1 <= max_jobs <= 64:
+        reporter.error("--jobs must be between 1 and 64")
+        return ExitCode.CONFIG_ERROR
+    selected_steps = {step.name: step for step in policy.steps}
+    parallel_results: dict[str, StepExecution] = {}
+
     failed = 0
     provisional_passed = 0
     provisional_failed = 0
@@ -162,10 +178,36 @@ def run_orchestration(
     threshold = policy.failure_threshold
     if profile.includes and not json_output:
         reporter.info(f"Selected profiles: {', '.join(plan.profiles)}")
-    for step_name in plan.steps:
-        step: RuleRunStep | CommandRunStep = next(
-            item for item in policy.steps if item.name == step_name
-        )
+    for index, step_name in enumerate(plan.steps):
+        step: RuleRunStep | CommandRunStep = selected_steps[step_name]
+        if (
+            (max_jobs > 1 and step.parallel)
+            or (isinstance(step, RuleRunStep) and step.timeout_seconds is not None)
+        ) and step_name not in parallel_results:
+            from alphus.execution.parallel import run_parallel_steps
+
+            block: list[RuleRunStep | CommandRunStep] = [step]
+            if max_jobs > 1 and step.parallel:
+                for later_name in plan.steps[index + 1 :]:
+                    later = selected_steps[later_name]
+                    if not later.parallel:
+                        break
+                    block.append(later)
+            try:
+                parallel_results.update(
+                    run_parallel_steps(
+                        checkout,
+                        resolved_config,
+                        config if config is not None else load_config(resolved_config),
+                        block,
+                        max_jobs,
+                        verbose=verbose,
+                    )
+                )
+            except (OSError, ValueError) as error:
+                reporter.error(f"Cannot schedule quality work: {error}")
+                return ExitCode.CONFIG_ERROR
+        precomputed = parallel_results.pop(step_name, None)
         if not json_output:
             reporter.info(f"==> {step.name}")
         captured_stdout = StringIO()
@@ -181,11 +223,18 @@ def run_orchestration(
         try:
             match step:
                 case RuleRunStep(rule=rule):
-                    with (
-                        redirect_stdout(captured_stdout),
-                        redirect_stderr(captured_stderr),
-                    ):
-                        rule_result: int | RuleRunResult = run_rule(rule)
+                    if precomputed is None:
+                        with (
+                            redirect_stdout(captured_stdout),
+                            redirect_stderr(captured_stderr),
+                        ):
+                            rule_result: int | RuleRunResult = run_rule(rule)
+                    else:
+                        if precomputed.error is not None:
+                            raise OSError(str(precomputed.error))
+                        if precomputed.rule is None:
+                            raise ValueError("parallel rule returned no result")
+                        rule_result = precomputed.rule
                     if isinstance(rule_result, RuleRunResult):
                         findings = list(rule_result.findings)
                         if step.severity is not None or step.priority is not None:
@@ -288,26 +337,39 @@ def run_orchestration(
                 case CommandRunStep(working_directory=working_directory):
                     selected_files = (
                         candidate_files(checkout, step.files)
-                        if step.files is not None
+                        if precomputed is None and step.files is not None
                         else []
                     )
-                    if step.files is not None and not selected_files:
+                    if precomputed is not None and precomputed.error is not None:
+                        raise OSError(str(precomputed.error))
+                    if (precomputed is not None and precomputed.not_applicable) or (
+                        precomputed is None
+                        and step.files is not None
+                        and not selected_files
+                    ):
                         skipped_empty_file_scope = True
                         exit_code = ExitCode.SUCCESS
                     else:
-                        directory = step_directory(checkout, working_directory)
-                        arguments = command_arguments(
-                            step, checkout, resolved_config, selected_files, directory
-                        )
-                        attempted_command = arguments[0]
-                        result = subprocess.run(
-                            arguments,
-                            cwd=directory,
-                            check=False,
-                            shell=windows_shell_required(arguments),
-                            capture_output=True,
-                            text=True,
-                        )
+                        if precomputed is None:
+                            directory = step_directory(checkout, working_directory)
+                            arguments = command_arguments(
+                                step,
+                                checkout,
+                                resolved_config,
+                                selected_files,
+                                directory,
+                            )
+                            attempted_command = arguments[0]
+                            result = run_captured_process(
+                                arguments,
+                                directory,
+                                shell=windows_shell_required(arguments),
+                                timeout=step.timeout_seconds,
+                            )
+                        else:
+                            if precomputed.command is None:
+                                raise ValueError("parallel command returned no result")
+                            result = precomputed.command
                         exit_code = result.returncode
                         step_stdout = result.stdout or ""
                         step_stderr = result.stderr or ""
@@ -324,7 +386,12 @@ def run_orchestration(
                                     message=f"command exited with status {exit_code}",
                                 )
                             )
-        except (OSError, ValueError, subprocess.CalledProcessError) as error:
+        except (
+            OSError,
+            ValueError,
+            subprocess.CalledProcessError,
+            subprocess.TimeoutExpired,
+        ) as error:
             detail = str(error)
             if attempted_command is not None and attempted_command not in detail:
                 detail = f"{attempted_command}: {detail}"

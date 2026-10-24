@@ -37,6 +37,8 @@ default root, and `check` is the default profile. `alphus --profile <name>`
 selects another profile. Use `--root` and `--config` when running from another
 directory or with a different filename. `--run` remains accepted in existing
 scripts. `alphus --help` shows every option.
+For explicitly reviewed independent checks, [parallel execution](PARALLEL-EXECUTION.md)
+adds a bounded `--jobs` option while preserving the declared report order.
 
 For common multi-language setups, select bundles instead of remembering each
 native tool name:

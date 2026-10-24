@@ -419,14 +419,30 @@ def _render_repository_layout(findings: Sequence[Finding]) -> None:
 
 
 def _evaluate_rule(
-    root: Path, config_path: Path, rule: QualityRule, verbose: bool
+    root: Path,
+    config_path: Path,
+    rule: QualityRule,
+    verbose: bool,
+    jobs: int | None = None,
+    loaded_config: QualityGateConfig | None = None,
 ) -> RuleEvaluation:
     """Run a rule and retain structured output before any CLI rendering."""
     checkout = root.resolve(strict=True)
     resolved_config = (
         config_path if config_path.is_absolute() else checkout / config_path
     )
-    config = _load_policy(resolved_config)
+    config = (
+        loaded_config if loaded_config is not None else _load_policy(resolved_config)
+    )
+    max_jobs = (
+        jobs
+        if jobs is not None
+        else config.orchestration.execution.max_jobs
+        if config.orchestration is not None
+        else 1
+    )
+    if not 1 <= max_jobs <= 64:
+        raise typer.BadParameter("--jobs must be between 1 and 64")
     if config.files is None and RULE_SPECS[rule].requires_files:
         raise typer.BadParameter(
             "a built-in rule requires a top-level [files] inventory in the policy"
@@ -445,7 +461,14 @@ def _evaluate_rule(
     if verbose:
         _log_verbose(rule, checkout, len(files))
     try:
-        output = run_builtin_rule(rule, checkout, files, config)
+        if rule == "cyclomatic-complexity" and max_jobs > 1:
+            from alphus.execution.parallel import run_parallel_cyclomatic
+
+            output = run_parallel_cyclomatic(
+                checkout, resolved_config, config, max_jobs
+            )
+        else:
+            output = run_builtin_rule(rule, checkout, files, config)
     except MissingPolicyError as error:
         raise typer.BadParameter(str(error)) from error
     except (OSError, RuntimeError) as error:
@@ -461,6 +484,7 @@ def _execute(
     report: bool,
     verbose: bool,
     plan_only: bool = False,
+    jobs: int | None = None,
 ) -> int:
     """Render one structured rule evaluation for the requested CLI mode."""
     if plan_only:
@@ -481,6 +505,23 @@ def _execute(
                     "[checks.cyclomatic_complexity] policy"
                 )
             payload = plan_payload(build_cyclomatic_plan(checkout, policy))
+            max_jobs = (
+                jobs
+                if jobs is not None
+                else config.orchestration.execution.max_jobs
+                if config.orchestration is not None
+                else 1
+            )
+            if max_jobs > 1:
+                payload["execution"] = {
+                    "max_jobs": max_jobs,
+                    "units": [
+                        f"cyclomatic-complexity:{backend['language']}"
+                        for backend in cast(
+                            list[dict[str, object]], payload["backends"]
+                        )
+                    ],
+                }
         except (MissingPolicyError, OSError, ValueError) as error:
             raise typer.BadParameter(str(error)) from error
         typer.echo(
@@ -488,7 +529,7 @@ def _execute(
         )
         return 0
 
-    evaluation = _evaluate_rule(root, config_path, rule, verbose)
+    evaluation = _evaluate_rule(root, config_path, rule, verbose, jobs)
     output = evaluation.output
     exit_code = int(evaluation.failed and not report)
     shape = RULE_SPECS[rule].output_shape
@@ -573,12 +614,73 @@ def _execute(
     return exit_code
 
 
+def run_profile_rule(
+    checkout: Path,
+    resolved_config: Path,
+    rule: QualityRule,
+    verbose: bool,
+    config: QualityGateConfig | None = None,
+) -> RuleRunResult:
+    """Normalize one rule for either the profile runner or an isolated worker."""
+    captured_output = StringIO()
+    captured_error = StringIO()
+    try:
+        with redirect_stdout(captured_output), redirect_stderr(captured_error):
+            evaluation = _evaluate_rule(
+                checkout, resolved_config, rule, verbose, 1, config
+            )
+    except typer.BadParameter as error:
+        return RuleRunResult(
+            execution_failure=str(error),
+            exit_code=2,
+            stderr=captured_error.getvalue(),
+        )
+    except typer.Exit as error:
+        return RuleRunResult(
+            execution_failure="Invalid quality policy.",
+            exit_code=error.exit_code,
+            stderr=captured_error.getvalue(),
+        )
+    except (ValidationError, TypeError, ValueError) as error:
+        return RuleRunResult(
+            execution_failure=f"Alphus rule output could not be normalized: {error}",
+            exit_code=2,
+            stderr=captured_error.getvalue(),
+        )
+    if captured_output.getvalue():
+        return RuleRunResult(
+            execution_failure="Alphus rule printed output instead of returning it.",
+            exit_code=2,
+            stderr=captured_error.getvalue(),
+        )
+    report = None
+    stdout = ""
+    exit_code = int(evaluation.failed)
+    if isinstance(evaluation.output, CyclomaticReport):
+        report = report_payload(evaluation.output)
+        stdout = report_summary(evaluation.output) + "\n"
+        if evaluation.output.outcome in {
+            "operational_failure",
+            "incomplete_coverage",
+            "no_matching_files",
+        }:
+            exit_code = 2
+    return RuleRunResult(
+        findings=tuple(evaluation.diagnostics),
+        exit_code=exit_code,
+        stderr=captured_error.getvalue(),
+        stdout=stdout,
+        report=report,
+    )
+
+
 def _execute_profile(
     root: Path,
     config_path: Path,
     profile_name: str | None,
     json_output: bool,
     verbose: bool,
+    jobs: int | None = None,
 ) -> int:
     """Run the configured suite through the Python orchestration layer."""
     checkout = root.resolve(strict=True)
@@ -606,56 +708,7 @@ def _execute_profile(
             return 2
 
     def run_rule(rule: QualityRule) -> RuleRunResult:
-        captured_output = StringIO()
-        captured_error = StringIO()
-        try:
-            with redirect_stdout(captured_output), redirect_stderr(captured_error):
-                evaluation = _evaluate_rule(checkout, resolved_config, rule, verbose)
-        except typer.BadParameter as error:
-            return RuleRunResult(
-                execution_failure=str(error),
-                exit_code=2,
-                stderr=captured_error.getvalue(),
-            )
-        except typer.Exit as error:
-            return RuleRunResult(
-                execution_failure="Invalid quality policy.",
-                exit_code=error.exit_code,
-                stderr=captured_error.getvalue(),
-            )
-        except (ValidationError, TypeError, ValueError) as error:
-            return RuleRunResult(
-                execution_failure=f"Alphus rule output could not be normalized: {error}",
-                exit_code=2,
-                stderr=captured_error.getvalue(),
-            )
-        if captured_output.getvalue():
-            return RuleRunResult(
-                execution_failure="Alphus rule printed output instead of returning it.",
-                exit_code=2,
-                stderr=captured_error.getvalue(),
-            )
-        report = None
-        stdout = ""
-        exit_code = int(evaluation.failed)
-        if isinstance(evaluation.output, CyclomaticReport):
-            report = report_payload(evaluation.output)
-            diagnostics = [item.to_wire() for item in evaluation.output.diagnostics]
-            report["diagnostics"] = diagnostics
-            stdout = report_summary(evaluation.output) + "\n"
-            if evaluation.output.outcome in {
-                "operational_failure",
-                "incomplete_coverage",
-                "no_matching_files",
-            }:
-                exit_code = 2
-        return RuleRunResult(
-            findings=tuple(evaluation.diagnostics),
-            exit_code=exit_code,
-            stderr=captured_error.getvalue(),
-            stdout=stdout,
-            report=report,
-        )
+        return run_profile_rule(checkout, resolved_config, rule, verbose, config)
 
     return run_orchestration(
         checkout,
@@ -664,6 +717,9 @@ def _execute_profile(
         selected_profile,
         run_rule,
         json_output=json_output,
+        jobs=jobs,
+        verbose=verbose,
+        config=config,
         stdout=(
             cast(TextIO, _HumanStream())
             if _OUTPUT_FORMAT.get() == "rich" and not json_output
@@ -747,6 +803,7 @@ def _execute_plan_profile(
     config_path: Path,
     profile_name: str | None,
     json_output: bool,
+    jobs: int | None = None,
 ) -> int:
     """Show resolved profile steps and scopes without running native tools."""
     checkout = root.resolve(strict=True)
@@ -763,6 +820,9 @@ def _execute_plan_profile(
     if plan is None:
         _human_error(f"Unknown orchestration profile: {selected_profile}")
         return 2
+    max_jobs = jobs if jobs is not None else policy.execution.max_jobs
+    if not 1 <= max_jobs <= 64:
+        raise typer.BadParameter("--jobs must be between 1 and 64")
     try:
         for step in policy.steps:
             if step.name in plan.steps and step.kind == "rule":
@@ -782,6 +842,9 @@ def _execute_plan_profile(
         for entry in entries:
             step = by_name[entry.name]
             detail = step.model_dump(mode="json", exclude_none=True)
+            if not step.parallel:
+                for field_name in ("parallel", "slots", "locks", "after"):
+                    detail.pop(field_name, None)
             detail["fixable"] = entry.fixable
             if step.kind == "command":
                 detail["selected_files"] = entry.files
@@ -789,27 +852,33 @@ def _execute_plan_profile(
                 if entry.check_argv is not None:
                     detail["expanded_argv"] = entry.check_argv
             details.append(detail)
-        typer.echo(
-            json.dumps(
-                {
-                    "profile": selected_profile,
-                    "profiles": plan.profiles,
-                    "failure_threshold": policy.failure_threshold,
-                    "steps": details,
-                },
-                sort_keys=True,
-            )
-        )
+        payload: dict[str, object] = {
+            "profile": selected_profile,
+            "profiles": plan.profiles,
+            "failure_threshold": policy.failure_threshold,
+            "steps": details,
+        }
+        if max_jobs > 1:
+            payload["execution"] = {"max_jobs": max_jobs}
+        typer.echo(json.dumps(payload, sort_keys=True))
         return 0
 
     _human_print(
         f"Execution plan for profile {selected_profile} "
         f"(failure threshold={policy.failure_threshold}):"
     )
+    if max_jobs > 1:
+        _human_print(f"Worker budget: {max_jobs}")
     if len(plan.profiles) > 1:
         _human_print(f"Profiles: {', '.join(plan.profiles)}")
     for entry in entries:
         step = by_name[entry.name]
+        if max_jobs > 1:
+            mode = "PARALLEL" if step.parallel else "SERIAL"
+            _human_print(
+                f"  {mode} {step.name}: slots={step.slots}, "
+                f"locks={list(step.locks)}, after={list(step.after)}"
+            )
         if step.kind == "rule":
             _human_print(f"{step.rollout.upper()} RULE {step.name}: {step.rule}")
             continue
@@ -853,6 +922,10 @@ def _command(
     profile: Annotated[
         str | None,
         typer.Option("--profile", help="Choose a configured orchestration profile."),
+    ] = None,
+    jobs: Annotated[
+        int | None,
+        typer.Option("--jobs", help="Maximum concurrent quality work units."),
     ] = None,
     json_output: Annotated[
         bool,
@@ -912,6 +985,8 @@ def _command(
     """Run the default profile from this repository, or select a rule/profile."""
     if output_format.lower() not in {"rich", "plain"}:
         raise typer.BadParameter("--output must be rich or plain")
+    if jobs is not None and not 1 <= jobs <= 64:
+        raise typer.BadParameter("--jobs must be between 1 and 64")
     _OUTPUT_FORMAT.set(output_format.lower())
     if init_config is not None:
         if any(
@@ -926,6 +1001,7 @@ def _command(
                 fix_plan,
                 apply_fixes,
                 bool(fix_step),
+                jobs is not None,
             )
         ):
             raise typer.BadParameter("--init-config cannot run or plan checks")
@@ -967,7 +1043,9 @@ def _command(
             raise typer.BadParameter(
                 "cyclomatic --plan cannot be combined with run, report, verbose, or fix options"
             )
-        raise typer.Exit(_execute(root, config, rule, json_output, False, False, True))
+        raise typer.Exit(
+            _execute(root, config, rule, json_output, False, False, True, jobs)
+        )
     if plan:
         if (
             fix_plan
@@ -981,8 +1059,12 @@ def _command(
             raise typer.BadParameter(
                 "--plan cannot be combined with run, rule, report, verbose, or fix options"
             )
-        raise typer.Exit(_execute_plan_profile(root, config, profile, json_output))
+        raise typer.Exit(
+            _execute_plan_profile(root, config, profile, json_output, jobs)
+        )
     if fix_plan or apply_fixes:
+        if jobs is not None:
+            raise typer.BadParameter("--jobs cannot be combined with fix operations")
         if fix_plan and apply_fixes:
             raise typer.BadParameter("choose --fix-plan or --apply-fixes")
         if run or rule is not None or report or verbose:
@@ -1001,10 +1083,14 @@ def _command(
             raise typer.BadParameter(
                 "--rule cannot be combined with --run or --profile"
             )
-        raise typer.Exit(_execute(root, config, rule, json_output, report, verbose))
+        raise typer.Exit(
+            _execute(root, config, rule, json_output, report, verbose, jobs=jobs)
+        )
     if report:
         raise typer.BadParameter("--report requires --rule")
-    raise typer.Exit(_execute_profile(root, config, profile, json_output, verbose))
+    raise typer.Exit(
+        _execute_profile(root, config, profile, json_output, verbose, jobs)
+    )
 
 
 app.callback(invoke_without_command=True)(_command)

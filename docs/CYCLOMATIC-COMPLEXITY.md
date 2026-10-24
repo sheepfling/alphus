@@ -41,6 +41,10 @@ and missing coverage. A configured language with no matching files is
 `no_matching_files` (or `incomplete_coverage` when another backend selected
 files), with exit code 2; this is never reported as a clean metric.
 
+Pass `--jobs N` to run independent configured backends under one worker budget.
+A profile step opts in with `parallel = true`. See
+[parallel execution](PARALLEL-EXECUTION.md) for worker and ordering controls.
+
 ## Report contract
 
 Every run records the metric, backend and actual tool version, native rule,

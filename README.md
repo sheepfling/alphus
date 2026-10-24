@@ -252,6 +252,10 @@ alphus --root /path/to/repository \
   --profile check
 ```
 
+Profiles run serially by default. Consumers can mark independent steps for
+[parallel execution](docs/PARALLEL-EXECUTION.md) and set a bounded worker
+budget with `--jobs N`.
+
 Use `--fix-plan --profile check` to see which selected steps declare a fixer.
 Applying one requires `--apply-fixes --fix-step "Step name"`; the ordinary
 check never edits files. See [fix plans](docs/FIXES.md) for the current
