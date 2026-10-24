@@ -102,11 +102,12 @@ summaries count provisional outcomes separately; the default is `mainline`.
 
 The current `alphus --plan` command prints resolved profile order, steps,
 file matches, rollout, and fixability before execution. A file-scoped command
-with no matching files now reports `not_applicable` instead of `passed` in
-human and JSON output. Broader execution states still need a typed contract:
-`not run` for disabled or unselected checks, and `not applicable` for built-in
-rules whose prerequisites are absent. Category and rule overrides should be
-added only with a clear resolved plan and unchanged default selection.
+with no matching files reports `not_applicable` instead of `passed` in human
+and JSON output. Shared native intents add typed disabled, unselected,
+unsupported, and failure-kind results; other built-in rules retain their
+existing prerequisite behavior. Category and rule overrides should be added
+only with a clear resolved plan and unchanged default selection. See the
+[shared intent guide](SHARED-QUALITY-INTENTS.md) for this bounded contract.
 
 ## Future extension hooks
 

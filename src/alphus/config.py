@@ -24,6 +24,12 @@ from alphus.policy.base import (
     require_unique,
     validate_single_path,
 )
+from alphus.policy.intents import (
+    IntentFileOverride,
+    IntentLanguageOverride,
+    NativeCapabilityBinding,
+    SharedQualityIntent,
+)
 from alphus.policy.native_tools import native_tool_policy, native_tools_for_languages
 from alphus.policy.orchestration import (
     CheckPolicies,
@@ -97,11 +103,14 @@ __all__ = [
     "InputContractPolicy",
     "InstructionRouterPolicy",
     "InstructionRouterRoute",
+    "IntentFileOverride",
+    "IntentLanguageOverride",
     "JsonArrayRule",
     "LineLengthPolicy",
     "LockfilePair",
     "ModuleRolePolicy",
     "ModuleRoleRule",
+    "NativeCapabilityBinding",
     "NodeCliPolicy",
     "NonEmptyTomlRule",
     "NumericLiteralPolicy",
@@ -125,6 +134,7 @@ __all__ = [
     "RuntimeTypePolicy",
     "ScipyConstantsPolicy",
     "ScriptPolicy",
+    "SharedQualityIntent",
     "SharedUtilitiesPolicy",
     "SourceScanPolicy",
     "TestQualityPolicy",
@@ -189,6 +199,7 @@ class _PartialOrchestration(StrictModel):
     profiles: tuple[OrchestrationProfile, ...] = ()
     default_profile: str = "check"
     failure_threshold: Severity = "error"
+    intents: tuple[SharedQualityIntent, ...] = ()
 
 
 class _SplitPolicy(StrictModel):
@@ -278,6 +289,7 @@ def load_config(path: Path) -> QualityGateConfig:
         profiles=(*profiles, *root.orchestration.profiles),
         default_profile=root.orchestration.default_profile,
         failure_threshold=root.orchestration.failure_threshold,
+        intents=root.orchestration.intents,
     )
     selected = _selected_native_tools(root.languages, root.tools)
     orchestration = (
@@ -288,6 +300,7 @@ def load_config(path: Path) -> QualityGateConfig:
             profiles=declared.profiles,
             default_profile=declared.default_profile,
             failure_threshold=declared.failure_threshold,
+            intents=declared.intents,
         )
     )
     return QualityGateConfig(
@@ -317,6 +330,7 @@ def _compose_native_orchestration(
         profiles=_merge_profiles(native.profiles, declared_profiles),
         default_profile=declared.default_profile,
         failure_threshold=declared.failure_threshold,
+        intents=declared.intents,
     )
 
 
@@ -351,4 +365,5 @@ def _with_native_profile(policy: OrchestrationPolicy) -> OrchestrationPolicy:
     return OrchestrationPolicy(
         steps=policy.steps,
         profiles=(*policy.profiles[:-1], native, check),
+        intents=policy.intents,
     )
