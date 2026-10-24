@@ -347,7 +347,9 @@ Selector: `pydantic-practices`. IDs: `alphus/python/pydantic/validation/dump-rev
 `alphus/python/pydantic/validation/unvalidated-copy-update`,
 `alphus/python/pydantic/correctness/validator-fallthrough`,
 `alphus/python/pydantic/style/field-positional-default`, and
-`alphus/python/pydantic/metadata/external-schema-documentation`.
+`alphus/python/pydantic/metadata/external-schema-documentation`,
+`alphus/python/pydantic/validation/custom-init`, and
+`alphus/python/pydantic/validation/public-unconstrained-any`.
 
 ```toml
 [checks.pydantic_practices]
@@ -362,6 +364,9 @@ report_validator_fallthrough = false
 report_field_positional_default = false
 report_external_model_docs = false
 external_model_names = []
+report_custom_init = false
+report_unconstrained_any = false
+public_model_paths = []
 ```
 
 To include one model exposed by another interface, set
@@ -426,6 +431,42 @@ Pydantic uses these descriptions in its
 which FastAPI includes in its
 [OpenAPI documentation](https://fastapi.tiangolo.com/tutorial/response-model/).
 They are not needed for validation or runtime correctness.
+
+`report_custom_init` adds informational review findings for custom `__init__`
+methods on locally recognized Pydantic models. Prefer field/model validators or
+`model_post_init` for model behavior. A custom initializer can be intentional,
+so this rule asks for review and does not claim it is incorrect.
+
+`report_unconstrained_any` warns about `Any` fields only in local Pydantic
+models found in explicitly selected `public_model_paths`. It recognizes
+`typing.Any` and `typing_extensions.Any`, including nested generic annotations
+and simple forward-reference strings. It skips private attributes and
+`ClassVar`s. Imported models, local type aliases, and runtime-generated schemas
+are unresolved; the path selection is the consumer's declaration that these
+models form a public data boundary. The finding is advisory and does not require
+replacing intentional compatibility fields.
+
+### Native-tool overlap and deferred candidates
+
+Pydantic's [linting guide](https://pydantic.dev/docs/validation/latest/integrations/dev-tools/linting/)
+points Flake8 users to Flake8-Pydantic. Its published `PYD001` through `PYD005`
+rules cover positional `Field` defaults, unannotated model attributes,
+unnecessary `Field(default=...)`, defaults placed inside `Annotated`, and
+annotation/name collisions. Alphus already has the opt-in `PYD001` equivalent;
+the other declaration rules stay with Flake8-Pydantic and native type/runtime
+diagnostics instead of being duplicated here. `PYD010` for
+`__pydantic_config__` likewise belongs with TypedDict/type-checker validation.
+
+There is no blanket mutable-default rule: Pydantic deep-copies unhashable model
+defaults per instance, and a consumer can still choose `default_factory` as a
+style convention. A static gate cannot prove a validator's side effects or that
+a `TypeAdapter` is on a hot path, so profile those paths and test side effects
+at runtime. Pydantic also intentionally inherits and merges model config;
+static checks do not warn on inheritance without a consumer-specific expected
+configuration. See Pydantic's guidance on
+[field defaults](https://pydantic.dev/docs/validation/latest/concepts/fields/),
+[custom model initialization](https://pydantic.dev/docs/validation/latest/concepts/models/),
+and [performance](https://pydantic.dev/docs/validation/latest/concepts/performance/).
 
 See the [runnable Pydantic consumer example](../examples/consumer/pydantic-practices/README.md)
 for a complete opt-in policy, plan command, and JSON findings run.

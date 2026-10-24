@@ -1,5 +1,7 @@
 """Example public Pydantic models for an Alphus consumer profile."""
 
+from typing import Any
+
 from pydantic import BaseModel, Field, field_validator, validator
 
 
@@ -8,6 +10,7 @@ class PublicRequest(BaseModel):
 
     name: str = Field(description="Name shown in the catalog")
     quantity: int = Field(0)
+    vendor_payload: Any = Field(description="Opaque vendor-specific metadata")
 
     @field_validator("name")
     @classmethod
