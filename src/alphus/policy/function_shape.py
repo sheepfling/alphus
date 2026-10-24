@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-import json
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, TypeAlias, cast
+from typing import Any, Final, TypeAlias, cast
 
+from pydantic import ConfigDict, TypeAdapter, ValidationError
+
+from alphus.policy.base import StrictModel
 from alphus.policy.sources import (
     FunctionShapeMetric,
     FunctionShapeOverride,
@@ -17,8 +19,26 @@ from alphus.policy.sources import (
 )
 
 JsonScalar: TypeAlias = str | int | float | bool | None
+JsonContainer: TypeAlias = Mapping[str, object] | Sequence[object]
+JsonCompatible: TypeAlias = JsonScalar | JsonContainer
 FrozenJson: TypeAlias = (
     JsonScalar | tuple["FrozenJson", ...] | Mapping[str, "FrozenJson"]
+)
+
+
+class _CompilationCommand(StrictModel):
+    """One validated entry in a clang compilation database."""
+
+    model_config = ConfigDict(extra="allow", frozen=True, strict=True)
+
+    directory: str
+    file: str
+    command: str | None = None
+    arguments: tuple[str, ...] | None = None
+
+
+_COMPILATION_COMMANDS: TypeAdapter[list[_CompilationCommand]] = TypeAdapter(
+    list[_CompilationCommand]
 )
 
 
@@ -70,15 +90,21 @@ class FunctionShapePlan:
         }
 
 
-def _freeze_json(value: object) -> FrozenJson:
+def _freeze_json(value: JsonCompatible) -> FrozenJson:
     """Recursively freeze JSON-compatible planner data for safe sharing."""
     if isinstance(value, Mapping):
         entries = cast(Mapping[object, object], value)
         return MappingProxyType(
-            {str(key): _freeze_json(item) for key, item in entries.items()}
+            {
+                str(key): _freeze_json(cast(JsonCompatible, item))
+                for key, item in entries.items()
+            }
         )
     if isinstance(value, (list, tuple)):
-        return tuple(_freeze_json(item) for item in cast(Sequence[object], value))
+        return tuple(
+            _freeze_json(cast(JsonCompatible, item))
+            for item in cast(Sequence[object], value)
+        )
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
     raise TypeError(f"plan values must be JSON-compatible, got {type(value).__name__}")
@@ -126,29 +152,19 @@ def _target_dict(target: FunctionShapeTargetPlan) -> dict[str, Any]:
     }
 
 
-def _valid_compilation_entries(value: object) -> bool:
-    """Validate compile commands structurally and tolerate mapping-like records."""
-    entries = cast(Sequence[Mapping[str, object]], value)
-    try:
-        if not entries:
-            return False
-        for entry in entries:
-            if not _has_text(entry["directory"]) or not _has_text(entry["file"]):
-                return False
-            command = entry.get("command")
-            if command is not None:
-                if _has_text(command):
-                    continue
-                return False
-            arguments = entry.get("arguments")
-            if not arguments or any(
-                not _has_text(argument)
-                for argument in cast(Iterable[object], arguments)
-            ):
-                return False
-    except (AttributeError, KeyError, TypeError):
-        return False
-    return True
+def _valid_compilation_entries(entries: Sequence[_CompilationCommand]) -> bool:
+    """Validate required compile command fields after model validation."""
+    return bool(entries) and all(
+        _has_text(entry.directory)
+        and _has_text(entry.file)
+        and (
+            _has_text(entry.command)
+            if entry.command is not None
+            else bool(entry.arguments)
+            and all(_has_text(argument) for argument in entry.arguments)
+        )
+        for entry in entries
+    )
 
 
 def _has_text(value: object) -> bool:
@@ -157,72 +173,86 @@ def _has_text(value: object) -> bool:
     return callable(strip) and bool(strip())
 
 
-_DEFINITIONS: dict[str, dict[str, tuple[str, str, str]]] = {
-    "ruff": {
-        "parameters": (
-            "PLR0913",
-            "lint.pylint.max-args",
-            "Ruff PLR0913 count: bound self/cls receivers and *args/**kwargs are excluded; defaulted and keyword-only parameters count. The positional-only metric is separate.",
+_DEFINITIONS: Final = MappingProxyType(
+    {
+        "ruff": MappingProxyType(
+            {
+                "parameters": (
+                    "PLR0913",
+                    "lint.pylint.max-args",
+                    "Ruff PLR0913 count: bound self/cls receivers and *args/**kwargs are excluded; defaulted and keyword-only parameters count. The positional-only metric is separate.",
+                ),
+                "nesting": (
+                    "PLR1702",
+                    "lint.pylint.max-nested-blocks",
+                    "Nested block count as implemented by Ruff PLR1702; preview rule and requires preview mode.",
+                ),
+                "statements": (
+                    "PLR0915",
+                    "lint.pylint.max-statements",
+                    "Statement count as implemented by Ruff PLR0915.",
+                ),
+            }
         ),
-        "nesting": (
-            "PLR1702",
-            "lint.pylint.max-nested-blocks",
-            "Nested block count as implemented by Ruff PLR1702; preview rule and requires preview mode.",
+        "pylint": MappingProxyType(
+            {
+                "parameters": (
+                    "R0913",
+                    "design.max-args",
+                    "Pylint R0913 argument count.",
+                ),
+                "nesting": (
+                    "R1702",
+                    "design.max-nested-blocks",
+                    "Pylint R1702 nested-block count.",
+                ),
+                "statements": (
+                    "R0915",
+                    "design.max-statements",
+                    "Pylint R0915 statement count.",
+                ),
+            }
         ),
-        "statements": (
-            "PLR0915",
-            "lint.pylint.max-statements",
-            "Statement count as implemented by Ruff PLR0915.",
+        "eslint": MappingProxyType(
+            {
+                "parameters": (
+                    "max-params",
+                    "max-params",
+                    "ESLint max-params counts declared parameters, including defaulted and rest parameters; a destructured parameter counts once. TypeScript this handling is controlled separately.",
+                ),
+                "nesting": (
+                    "max-depth",
+                    "max-depth",
+                    "ESLint max-depth counts nested blocks; callback nesting is a separate metric.",
+                ),
+                "statements": (
+                    "max-statements",
+                    "max-statements",
+                    "ESLint max-statements counts statements in a function body.",
+                ),
+            }
         ),
-    },
-    "pylint": {
-        "parameters": ("R0913", "design.max-args", "Pylint R0913 argument count."),
-        "nesting": (
-            "R1702",
-            "design.max-nested-blocks",
-            "Pylint R1702 nested-block count.",
+        "clang-tidy": MappingProxyType(
+            {
+                "parameters": (
+                    "readability-function-size",
+                    "ParameterThreshold",
+                    "clang-tidy readability-function-size parameter threshold; macros and template instantiation behavior follows the selected clang-tidy version.",
+                ),
+                "nesting": (
+                    "readability-function-size",
+                    "NestingThreshold",
+                    "clang-tidy readability-function-size nesting threshold; macro expansion can affect counts unless IgnoreMacros is enabled.",
+                ),
+                "statements": (
+                    "readability-function-size",
+                    "StatementThreshold",
+                    "clang-tidy readability-function-size statement threshold; CountMemberInitAsStmt is a separate native option.",
+                ),
+            }
         ),
-        "statements": (
-            "R0915",
-            "design.max-statements",
-            "Pylint R0915 statement count.",
-        ),
-    },
-    "eslint": {
-        "parameters": (
-            "max-params",
-            "max-params",
-            "ESLint max-params counts declared parameters, including defaulted and rest parameters; a destructured parameter counts once. TypeScript this handling is controlled separately.",
-        ),
-        "nesting": (
-            "max-depth",
-            "max-depth",
-            "ESLint max-depth counts nested blocks; callback nesting is a separate metric.",
-        ),
-        "statements": (
-            "max-statements",
-            "max-statements",
-            "ESLint max-statements counts statements in a function body.",
-        ),
-    },
-    "clang-tidy": {
-        "parameters": (
-            "readability-function-size",
-            "ParameterThreshold",
-            "clang-tidy readability-function-size parameter threshold; macros and template instantiation behavior follows the selected clang-tidy version.",
-        ),
-        "nesting": (
-            "readability-function-size",
-            "NestingThreshold",
-            "clang-tidy readability-function-size nesting threshold; macro expansion can affect counts unless IgnoreMacros is enabled.",
-        ),
-        "statements": (
-            "readability-function-size",
-            "StatementThreshold",
-            "clang-tidy readability-function-size statement threshold; CountMemberInitAsStmt is a separate native option.",
-        ),
-    },
-}
+    }
+)
 
 
 def _native_option(
@@ -279,8 +309,9 @@ def plan_function_shape(policy: FunctionShapePolicy, root: Path) -> FunctionShap
                         f"clang-tidy compilation database is missing or outside the checkout: {target.compilation_database}"
                     )
                 try:
-                    entries = json.loads(database.read_text(encoding="utf-8"))
-                except (OSError, UnicodeError, json.JSONDecodeError) as error:
+                    encoded = database.read_text(encoding="utf-8")
+                    entries = _COMPILATION_COMMANDS.validate_json(encoded)
+                except (OSError, UnicodeError, ValidationError) as error:
                     raise ValueError(
                         f"clang-tidy compilation database is unreadable or invalid: {target.compilation_database}"
                     ) from error

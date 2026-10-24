@@ -31,20 +31,20 @@ _FUNCTION_SHAPE_BACKENDS_BY_LANGUAGE: Final = MappingProxyType(
         _CPP_LANGUAGE: frozenset({"clang-tidy"}),
     }
 )
-_COMMENT_MARKER_EXTENSIONS_BY_LANGUAGE: Final = MappingProxyType(
-    {
-        "python": frozenset({".py", ".pyi"}),
-        "toml": frozenset({".toml"}),
-        "javascript": frozenset(
-            {".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"}
-        ),
-        "cpp": frozenset(
-            {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx"}
-        ),
-        "java": frozenset({".java"}),
-    }
+_COMMENT_MARKER_EXTENSIONS_BY_LANGUAGE: Final[Mapping[str, frozenset[str]]] = (
+    MappingProxyType(
+        {
+            "python": frozenset({".py", ".pyi"}),
+            "toml": frozenset({".toml"}),
+            "javascript": frozenset({".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"}),
+            "cpp": frozenset(
+                {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx"}
+            ),
+            "java": frozenset({".java"}),
+        }
+    )
 )
-_SUPPORTED_COMMENT_MARKER_EXTENSIONS: Final = frozenset().union(
+_SUPPORTED_COMMENT_MARKER_EXTENSIONS: Final[frozenset[str]] = frozenset().union(
     *_COMMENT_MARKER_EXTENSIONS_BY_LANGUAGE.values()
 )
 
