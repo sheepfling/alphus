@@ -9,6 +9,7 @@ from typing import Annotated, Literal, Self
 
 from pydantic import Field, field_validator, model_validator
 
+from alphus.contracts.findings import Severity
 from alphus.policy.base import (
     StrictModel,
     require_unique,
@@ -173,6 +174,21 @@ class InputContractPolicy(PythonSourceScanPolicy):
 
     report_mutation: bool = True
     suggest_read_only: bool = True
+    sequence_narrowing_paths: tuple[str, ...] = ()
+
+    @field_validator("sequence_narrowing_paths")
+    @classmethod
+    def validate_sequence_narrowing_paths(
+        cls, patterns: Sequence[str]
+    ) -> tuple[str, ...]:
+        return validate_patterns(patterns)
+
+
+class PositionalInterfacePolicy(PythonSourceScanPolicy):
+    """Opt-in advisory for directly annotated, same-type positional parameters."""
+
+    severity: Severity = "info"
+    report_same_type_primitives: bool = True
 
 
 class PydanticPracticePolicy(PythonSourceScanPolicy):

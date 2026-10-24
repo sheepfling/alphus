@@ -13,6 +13,7 @@ from alphus.gates.review.frameworks.fastapi_practices import check_fastapi_pract
 from alphus.gates.review.frameworks.pydantic_practices import check_pydantic_practices
 from alphus.gates.review.input_contracts import check_input_contracts
 from alphus.gates.review.numeric_literals import check_numeric_literals
+from alphus.gates.review.positional_interfaces import check_positional_interfaces
 from alphus.gates.review.scipy_constants import check_scipy_constants
 from alphus.gates.review.test_quality import check_test_quality
 from alphus.policy.base import require_policy
@@ -42,6 +43,15 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
             root,
             files,
             require_policy(config.checks.input_contracts, "input_contracts"),
+        ),
+        "positional-interfaces": lambda root, files, config: (
+            check_positional_interfaces(
+                root,
+                files,
+                require_policy(
+                    config.checks.positional_interfaces, "positional_interfaces"
+                ),
+            )
         ),
         "pydantic-practices": lambda root, files, config: check_pydantic_practices(
             root,

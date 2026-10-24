@@ -187,6 +187,7 @@ def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
         "scipy-constants": "SciPy constants",
         "test-quality": "Test quality",
         "input-contracts": "Input contracts",
+        "positional-interfaces": "Positional interface review",
         "pydantic-practices": "Pydantic practices",
         "fastapi-practices": "FastAPI practices",
     }

@@ -1,9 +1,10 @@
 # Python review checks
 
-These bounded source checks emit structured **warning** findings. They prompt a
-review of intent; they do not prove numeric correctness, test quality, or the
-absence of side effects. Existing policies remain valid without their optional
-sections. Ruff, Pyright, pytest, mdrepo, and rumdl retain their own checks.
+These bounded source checks emit structured **warning** and **info** findings.
+They prompt a review of intent; they do not prove numeric correctness, test
+quality, or the absence of side effects. Existing policies remain valid without
+their optional sections. Ruff, Pyright, pytest, mdrepo, and rumdl retain their
+own checks.
 
 Alphus applies all six scanners to its real source/test inventory through the
 `review` profile and includes them in `check` with a warning failure threshold.
@@ -279,7 +280,8 @@ native setup and command details.
 
 ## Input contracts
 
-Selector: `input-contracts`. IDs: `alphus/python/none/correctness/argument-mutation` and
+Selector: `input-contracts`. IDs:
+`alphus/python/none/correctness/argument-mutation` and
 `alphus/python/none/correctness/read-only-interface-violation`.
 
 ```toml
@@ -288,6 +290,7 @@ extensions = [".py"]
 exclude = []
 report_mutation = true
 suggest_read_only = true
+sequence_narrowing_paths = []
 ```
 
 For recognized annotated collection parameters, the scanner follows direct
@@ -308,6 +311,12 @@ such as `sort` do not receive an automatic `MutableSequence` replacement.
 For `bytes`, `bytearray`, and `memoryview`, the rule records visible writes to
 mutable buffers but does not suggest replacing one with another: `bytes` is
 immutable, while a `memoryview` may expose a writable underlying buffer.
+
+`sequence_narrowing_paths` opts selected files into the same advisory for an
+already abstract `Sequence` or `Iterable` interface. It defaults to empty to
+avoid broadening findings across unrelated code. Alphus scopes it to the
+positional-interface analyzer so its own quality profile checks that a
+single-pass AST input remains typed as `Iterable`.
 
 The existing `python-style.concrete_inputs` annotation convention stays at its
 configured severity, independently of these optional warnings. Its imported
@@ -423,7 +432,8 @@ This is the existing warning-only source rule. The opt-in native Ruff profile
 and deferred route/OpenAPI scope are described in the
 [FastAPI quality guide](FASTAPI-QUALITY.md).
 
-Selector: `fastapi-practices`. IDs: `alphus/python/fastapi/correctness/literal-http-status` and
+Selector: `fastapi-practices`. IDs:
+`alphus/python/fastapi/correctness/literal-http-status` and
 `alphus/python/fastapi/correctness/literal-error-code`.
 
 ```toml
@@ -454,3 +464,14 @@ when enabled, literal `code` values in an HTTP exception's direct `detail`
 dictionary. The consumer owns its vocabulary and the rule does not import the
 application or assume any particular code registry. Aliased imports resolve
 to the configured name; dynamic factories and computed dictionaries do not.
+
+## Positional interfaces
+
+Selector: `positional-interfaces`. ID:
+`alphus/python/none/correctness/confusable-positional-parameters`.
+
+This opt-in pilot reports directly annotated, consecutive positional parameters
+with the same builtin primitive type. It defaults to informational severity and
+does not infer that any call is wrong. Native parameter-count and call-order
+diagnostics remain separate. See the [positional interface guide](POSITIONAL-INTERFACES.md)
+for the Python boundaries, native capability matrix, and runnable consumer example.
