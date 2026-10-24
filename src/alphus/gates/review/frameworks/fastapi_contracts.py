@@ -260,6 +260,18 @@ def _has_nonblank_string(values: Iterable[JsonValue]) -> bool:
     return any(isinstance(item, str) and item.strip() for item in values)
 
 
+def _has_required_security(value: JsonValue) -> bool:
+    """Return whether every OpenAPI alternative requires a named scheme."""
+    if not isinstance(value, list) or not value:
+        return False
+    return all(
+        isinstance(requirement, dict)
+        and bool(requirement)
+        and all(name.strip() for name in requirement)
+        for requirement in value
+    )
+
+
 def _has_response_schema(operation: Mapping[str, JsonValue]) -> bool:
     responses: JsonValue = operation.get("responses")
     if not isinstance(responses, dict):
@@ -385,15 +397,15 @@ def _contract_findings(
             for pattern in policy.protected_route_paths
         ):
             security: JsonValue = operation.get("security")
-            if not isinstance(security, list) or not security:
+            if not _has_required_security(security):
                 findings.append(
                     Finding(
                         rule_id=tags["authorization_contract"],
                         path=source_path,
                         line=source_line,
                         message=(
-                            "configured protected route has no OpenAPI security "
-                            f"requirement: {method} {path}"
+                            "configured protected route does not require an OpenAPI "
+                            f"security scheme: {method} {path}"
                         ),
                         severity="error",
                     )

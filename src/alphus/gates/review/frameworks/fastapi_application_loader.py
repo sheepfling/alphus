@@ -56,20 +56,20 @@ def load_application(
                 f"could not load configured FastAPI application {target!r} "
                 f"({type(error).__name__})"
             ) from error
+        if policy.application_factory:
+            if not callable(value):
+                raise FastApiContractError(
+                    f"configured FastAPI application factory {target!r} is not callable"
+                )
+            try:
+                value = value()
+            except Exception as error:
+                raise FastApiContractError(
+                    f"configured FastAPI application factory {target!r} failed "
+                    f"({type(error).__name__})"
+                ) from error
     finally:
         sys.path[:] = original_path
-    if policy.application_factory:
-        if not callable(value):
-            raise FastApiContractError(
-                f"configured FastAPI application factory {target!r} is not callable"
-            )
-        try:
-            value = value()
-        except Exception as error:
-            raise FastApiContractError(
-                f"configured FastAPI application factory {target!r} failed "
-                f"({type(error).__name__})"
-            ) from error
     if not issubclass(type(value), fastapi_type):
         raise FastApiContractError(
             f"configured application {target!r} is not a FastAPI instance"

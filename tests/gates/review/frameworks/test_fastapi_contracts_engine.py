@@ -70,22 +70,38 @@ def test_zero_argument_application_factory_is_called_only_when_configured(
     tmp_path: Path,
 ) -> None:
     pytest.importorskip("fastapi")
-    module_name, policy = _module_application(
-        tmp_path,
-        """from fastapi import FastAPI
+    source_dir = tmp_path / "src"
+    source_dir.mkdir()
+    routes_module = f"factory_routes_{uuid4().hex}"
+    (source_dir / f"{routes_module}.py").write_text(
+        """from fastapi import APIRouter
 
-app = FastAPI()
+router = APIRouter()
 
-@app.get('/ready')
+@router.get('/ready')
 def ready() -> dict[str, str]:
     return {'status': 'ok'}
+""",
+        encoding="utf-8",
+    )
+    module_name, policy = _module_application(
+        tmp_path,
+        f"""from fastapi import FastAPI
 
 def create_app() -> FastAPI:
+    from {routes_module} import router
+
+    app = FastAPI()
+    app.include_router(router)
     return app
 """,
     )
     configured = policy.model_copy(
-        update={"application": f"{module_name}:create_app", "application_factory": True}
+        update={
+            "application": f"{module_name}:create_app",
+            "application_factory": True,
+            "application_python_paths": ("src",),
+        }
     )
 
     assert fastapi_contract_findings(tmp_path, configured) == []
@@ -222,7 +238,7 @@ def dependency_only(user: str = Depends(local_check)) -> dict[str, str]:
     assert [(item.message, item.severity) for item in findings] == [
         (
             (
-                "configured protected route has no OpenAPI security requirement: "
+                "configured protected route does not require an OpenAPI security scheme: "
                 "GET /dependency-only"
             ),
             "error",
@@ -261,7 +277,7 @@ schema['paths']['/explicitly-public']['get']['security'] = []
 
     assert [item.message for item in findings] == [
         (
-            "configured protected route has no OpenAPI security requirement: "
+            "configured protected route does not require an OpenAPI security scheme: "
             "GET /explicitly-public"
         )
     ]
@@ -276,6 +292,45 @@ schema['paths']['/explicitly-public']['get']['security'] = []
     inherited = inherited_path.get("get")
     assert isinstance(inherited, dict)
     assert "security" not in inherited
+
+
+@pytest.mark.parametrize(
+    "security",
+    [
+        [{}],
+        [{}, {"BearerAuth": []}],
+    ],
+)
+def test_protected_routes_reject_anonymous_openapi_security_alternatives(
+    tmp_path: Path, security: list[dict[str, list[str]]]
+) -> None:
+    pytest.importorskip("fastapi")
+    _module_name, policy = _module_application(
+        tmp_path,
+        """from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get('/protected')
+def protected() -> dict[str, str]:
+    return {'ok': 'yes'}
+
+schema = app.openapi()
+schema['paths']['/protected']['get']['security'] = SECURITY
+""".replace("SECURITY", repr(security)),
+    )
+    protected_policy = policy.model_copy(
+        update={"protected_route_paths": ("/protected",)}
+    )
+
+    findings = fastapi_contract_findings(tmp_path, protected_policy)
+
+    assert [item.message for item in findings] == [
+        (
+            "configured protected route does not require an OpenAPI security scheme: "
+            "GET /protected"
+        )
+    ]
 
 
 def test_mounted_fastapi_app_routes_use_the_mount_prefix(
