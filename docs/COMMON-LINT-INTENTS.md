@@ -110,12 +110,40 @@ parser, runtime, compiler, or plugin in their own repository.
 
 ### Dependency and layer boundaries
 
-| Language   | Existing coverage and evaluated candidate                                                                                                                                                                                                                                                                                           | Requirements and current limit                                                                                                                                                                                                          |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Python     | Alphus `package-boundaries` checks declared distribution edges, imported local package edges, and cycles. It does not express arbitrary layers inside one package. [Import Linter](https://import-linter.readthedocs.io/en/stable/contract_types/) offers forbidden, protected, layer, independence, and acyclic-sibling contracts. | Reuse Alphus for distribution boundaries. Consider Import Linter for opt-in intra-package contracts only; pin its Python package and keep its module patterns and exceptions consumer-owned. Do not report the same package edge twice. |
-| C/C++      | Alphus's include-impact evidence measures affected includes and fanout. It does not decide whether a source-to-target edge violates architecture. clang-tidy include checks concern include correctness; they are not allowed/forbidden layer contracts.                                                                            | No shared source-layer mapping is selected. A future check needs the consumer's build targets, compiler flags, and compilation database; include fanout alone is not a dependency violation.                                            |
-| JavaScript | [dependency-cruiser](https://github.com/sverweij/dependency-cruiser/blob/main/doc/rules-reference.md) supports consumer-defined `forbidden` and `allowed` module relationships, severities, and reasons.                                                                                                                            | Candidate for an opt-in module-boundary command. Pin Node, dependency-cruiser, and its config; validate path aliases, unresolved modules, and dynamic imports instead of treating incomplete resolution as a pass.                      |
-| TypeScript | dependency-cruiser can analyze TypeScript through the project's configured TypeScript/transpiler support.                                                                                                                                                                                                                           | Use a pinned TypeScript toolchain and the consumer's path/module-resolution settings. No Alphus typed TypeScript module-boundary mapping exists yet.                                                                                    |
+#### Python
+
+Alphus `package-boundaries` checks declared distribution edges, imported local
+package edges, and cycles. It does not express arbitrary layers inside one
+package. [Import Linter](https://import-linter.readthedocs.io/en/stable/contract_types/)
+offers forbidden, protected, layer, independence, and acyclic-sibling
+contracts. Reuse Alphus for distribution boundaries. Consider Import Linter
+only for opt-in intra-package contracts; pin it and keep module patterns and
+exceptions consumer-owned. Do not report the same package edge twice.
+
+#### C and C++
+
+Alphus include-impact evidence measures affected includes and fanout. It does
+not decide whether a source-to-target edge violates architecture. clang-tidy
+include checks concern include correctness, not allowed or forbidden layer
+contracts. No shared source-layer mapping is selected. A future check needs
+the consumer's build targets, compiler flags, and compilation database;
+include fanout alone is not a dependency violation.
+
+#### JavaScript
+
+[dependency-cruiser](https://github.com/sverweij/dependency-cruiser/blob/main/doc/rules-reference.md)
+supports consumer-defined `forbidden` and `allowed` module relationships,
+severities, and reasons. It is a candidate for an opt-in module-boundary
+command. Pin Node, dependency-cruiser, and its configuration. Validate path
+aliases, unresolved modules, and dynamic imports; incomplete resolution cannot
+be treated as a pass.
+
+#### TypeScript
+
+dependency-cruiser can analyze TypeScript through the project's configured
+TypeScript or transpiler support. Pin the TypeScript toolchain and the
+consumer's path and module-resolution settings. Alphus has no typed TypeScript
+module-boundary mapping yet.
 
 ### Code duplication
 
@@ -145,12 +173,32 @@ duplicated behavior.
 
 ### Unsafe constructs and security hotspots
 
-| Language   | Maintained native candidates                                                                                              | Configuration and evidence boundary                                                                                                                                            |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Python     | Ruff's selected `S` rules and [Bandit](https://bandit.readthedocs.io/en/latest/) AST plugins.                             | Pin the tool and exact rule set. Avoid duplicate Ruff/Bandit findings; Bandit reports common security patterns, not exploitability or a complete security review.              |
-| C/C++      | [clang-tidy](https://clang.llvm.org/extra/clang-tidy/checks/list.html) CERT, bug-prone, and Clang Static Analyzer checks. | Pin clang-tidy to the compiler/toolchain and use the build's compile database and flags. Check groups are specific diagnostics, not a universal unsafe-code ban.               |
-| JavaScript | [eslint-plugin-security](https://github.com/eslint-community/eslint-plugin-security).                                     | Pin ESLint and the plugin. Its maintainers describe results as security hotspots with false positives that need human triage.                                                  |
-| TypeScript | The JavaScript ESLint security plugin is a candidate only for rules that work with the consumer's TypeScript parser.      | Pin ESLint, plugin, parser, and TypeScript versions together; prove each selected rule on TypeScript fixtures before mapping it. TypeScript coverage is otherwise unsupported. |
+#### Python
+
+Ruff's selected `S` rules and [Bandit](https://bandit.readthedocs.io/en/latest/)
+AST plugins are candidates. Pin the tool and exact rule set. Avoid duplicate
+Ruff and Bandit findings; Bandit reports common security patterns, not
+exploitability or a complete security review.
+
+#### C and C++
+
+[clang-tidy](https://clang.llvm.org/extra/clang-tidy/checks/list.html) CERT,
+bug-prone, and Clang Static Analyzer checks are candidates. Pin clang-tidy to
+the compiler toolchain and use the build's compile database and flags. Check
+groups are specific diagnostics, not a universal unsafe-code ban.
+
+#### JavaScript
+
+[eslint-plugin-security](https://github.com/eslint-community/eslint-plugin-security)
+is a candidate. Pin ESLint and the plugin. Its maintainers describe results as
+security hotspots with false positives that need human triage.
+
+#### TypeScript
+
+The JavaScript ESLint security plugin is a candidate only for rules that work
+with the consumer's TypeScript parser. Pin ESLint, the plugin, parser, and
+TypeScript versions together; prove each selected rule on TypeScript fixtures
+before mapping it. Other TypeScript coverage is unsupported.
 
 There is no single cross-language definition of “unsafe construct.” Keep each
 native rule ID, language, parser/tool version, source location, severity, and
@@ -158,11 +206,24 @@ consumer exclusion. Do not infer that an unselected or unavailable rule passed.
 
 ### Test assertion conventions
 
-| Language/framework                    | Evidence and limits                                                                                                                                                                                                                     |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Python/pytest                         | `assert` is idiomatic and pytest enhances its failure output. Use pytest's framework APIs for exception assertions; a generic ban on `assert` would reject ordinary tests and would not establish oracle quality.                       |
-| C/C++ test frameworks                 | Assertion macros and failure behavior vary by the selected framework. Compiler warnings do not establish that expected values are independent or meaningful. No framework-neutral mapping is selected.                                  |
-| JavaScript/TypeScript test frameworks | Assertion APIs and matchers differ across Jest, Mocha/Chai, Node, and other frameworks. A rule about Node's `assert` API is not a rule about a test's oracle. Require explicit framework-specific coverage; otherwise mark unsupported. |
+#### Python with pytest
+
+`assert` is idiomatic and pytest enhances its failure output. Use pytest's
+framework APIs for exception assertions. A generic ban on `assert` would
+reject ordinary tests and would not establish oracle quality.
+
+#### C and C++ test frameworks
+
+Assertion macros and failure behavior vary by framework. Compiler warnings do
+not establish that expected values are independent or meaningful. No
+framework-neutral mapping is selected.
+
+#### JavaScript and TypeScript test frameworks
+
+Assertion APIs and matchers differ across Jest, Mocha/Chai, Node, and other
+frameworks. A rule about Node's `assert` API is not a rule about a test's
+oracle. Require explicit framework-specific coverage; otherwise mark it
+unsupported.
 
 Keep issue [#15](https://github.com/sheepfling/alphus/issues/15) separate:
 assertion style is not proof of test-oracle independence. No universal
