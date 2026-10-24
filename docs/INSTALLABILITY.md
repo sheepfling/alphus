@@ -9,8 +9,8 @@ commands, and the `py.typed` marker. After PR #37 merged, the exact main commit
 passed its push-triggered self-quality and hygiene workflows, including Python
 3.11–3.15, minimum-dependency, and optional-gate checks.
 
-The selected adoption channel is a direct GitHub source install pinned to the
-full commit SHA:
+The verified pre-registry trial route is a direct GitHub source install pinned
+to the full commit SHA:
 
 ```shell
 python -m pip install "alphus @ git+https://github.com/sheepfling/alphus.git@20221e76720e170b7a37895b8fa2e1c56a658396"
@@ -18,8 +18,9 @@ python -m pip install "alphus @ git+https://github.com/sheepfling/alphus.git@202
 
 The package metadata remains at `0.0.1`; the full source SHA in the consumer's
 requirement distinguishes this exact revision from other source builds with
-that same metadata version. This is a pinned-source distribution path, not a
-numbered PyPI release; no release tag or package-index publication was created.
+that same metadata version. This records a pinned-source install for a
+pre-registry trial. It does not approve a public package-index channel. No
+release tag or package-index publication was created.
 
 Using Python 3.12.14 and `build` 1.6.1, both a wheel and source distribution
 were built from that exact commit with isolated setuptools 84.2.1. The wheel
@@ -33,8 +34,8 @@ The GitHub source install resolved to the recorded full SHA in a clean Python
 archive each passed `pip check`; `alphus --help`, `alphus-history --help`,
 package import, installed `py.typed`, and both primary console entry points
 were verified from their isolated environments. This establishes installation
-from the selected GitHub source channel and local artifact installability. It
-does not establish a PyPI package-index install.
+from the recorded GitHub source revision and local artifact installability. It
+does not establish a PyPI package-index install or approve publication.
 
 ## Historical install proofs
 
