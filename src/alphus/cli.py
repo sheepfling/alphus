@@ -61,6 +61,9 @@ _CLI_CONTRACT_TAG = rule_tag(
 _SCRIPT_POLICY_TAG = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.SECURITY, "script-policy-violation"
 )
+_LINE_TOO_LONG_TAG = rule_tag(
+    Scope.ANY, Framework.NONE, Category.STYLE, "line-too-long"
+)
 
 
 def _render_finding(finding: Finding) -> None:
@@ -198,14 +201,11 @@ def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
         _render_severity_totals(findings)
         return
     if rule == "line-length":
-        line_too_long_id = rule_tag(
-            Scope.ANY, Framework.NONE, Category.STYLE, "line-too-long"
-        )
         line_findings = [
-            finding for finding in findings if finding.rule_id == line_too_long_id
+            finding for finding in findings if finding.line_length is not None
         ]
         for finding in findings:
-            if finding.rule_id != line_too_long_id:
+            if finding.line_length is None:
                 _render_finding(finding)
 
         counts = Counter(finding.path for finding in line_findings)
@@ -216,18 +216,20 @@ def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
                 if finding.path == name and finding.line is not None
             ]
             limit = next(
-                finding.message.rsplit("limit ", maxsplit=1)[1].rstrip(")")
+                finding.line_length.limit_codepoints
                 for finding in line_findings
-                if finding.path == name
+                if finding.path == name and finding.line_length is not None
             )
             sample = ", ".join(str(line) for line in lines[:5])
             _human_print(
-                f"{line_too_long_id} {name}: "
-                f"{count} lines exceed {limit} (example lines: {sample})"
+                f"{_LINE_TOO_LONG_TAG} {name}: "
+                f"{count} lines exceed {limit} Unicode code points "
+                f"(example lines: {sample})"
             )
         if line_findings or not findings:
             _human_print(
-                f"{line_too_long_id}: {len(line_findings)} violation(s) "
+                f"{_LINE_TOO_LONG_TAG}: "
+                f"{len(line_findings)} violation(s) "
                 f"in {len(counts)} files"
             )
         _render_severity_totals(findings)
@@ -356,11 +358,16 @@ def _python_style_categories(
         _StyleCategory("raw_reporting_prints", issues["raw_reporting_prints"]),
         _StyleCategory("magic_exit_codes", issues["magic_exit_codes"]),
         _StyleCategory("repeated_literals", issues["repeated_literals"]),
-        _StyleCategory(
-            "heterogeneous_tuple_returns", issues["heterogeneous_tuple_returns"]
-        ),
+        _StyleCategory("unnamed_tuple_returns", issues["unnamed_tuple_returns"]),
         _StyleCategory(
             "undifferentiated_patterns", issues["undifferentiated_patterns"]
+        ),
+        _StyleCategory(
+            "concrete_classmethod_returns", issues["concrete_classmethod_returns"]
+        ),
+        _StyleCategory(
+            "concrete_model_validator_returns",
+            issues["concrete_model_validator_returns"],
         ),
         _StyleCategory("concrete_self_returns", issues["concrete_self_returns"]),
         _StyleCategory("direct_text_reads", issues["direct_text_reads"]),

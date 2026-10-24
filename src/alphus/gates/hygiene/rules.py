@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import ast
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 from alphus.config import QualityGateConfig
-from alphus.contracts.findings import Finding
+from alphus.contracts.findings import Finding, LineLengthMeasurement
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.policy.base import require_policy
+from alphus.policy.sources import PathLimit
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 
@@ -47,6 +49,9 @@ def check_line_length(
                                 ),
                                 path=relative.as_posix(),
                                 line=number,
+                                line_length=LineLengthMeasurement(
+                                    codepoints=len(line), limit_codepoints=limit
+                                ),
                                 message=(
                                     f"physical line has {len(line)} Unicode code points "
                                     f"(limit {limit} Unicode code points)"
@@ -74,7 +79,26 @@ def check_line_length(
     return findings
 
 
-def _file_metrics(path: Path) -> tuple[int, int]:
+@dataclass(frozen=True, slots=True)
+class FileMetrics:
+    """Physical line count and byte count measured from one file."""
+
+    physical_lines: int
+    raw_bytes: int
+
+
+@dataclass(frozen=True, order=True, slots=True)
+class OverrideSpecificity:
+    """Comparable precedence for one matching path-limit pattern."""
+
+    exact_path_rank: int
+    literal_segments_rank: int
+    literal_characters_rank: int
+    wildcard_characters: int
+    pattern: str
+
+
+def _file_metrics(path: Path) -> FileMetrics:
     """Measure physical lines and raw bytes in chunks without decoding the file."""
     physical_separators = 0
     raw_bytes = 0
@@ -92,43 +116,44 @@ def _file_metrics(path: Path) -> tuple[int, int]:
     physical_lines = physical_separators + int(
         raw_bytes > 0 and last_byte not in (ord("\r"), ord("\n"))
     )
-    return physical_lines, raw_bytes
+    return FileMetrics(physical_lines, raw_bytes)
 
 
-def _path_override(path: str, overrides: Sequence[tuple[str, int]]) -> int | None:
+def _override_specificity(pattern: str) -> OverrideSpecificity:
+    """Return a named, sortable key matching the documented precedence order."""
+    segments = pattern.split("/")
+    literal_segments = sum(
+        not any(character in segment for character in "*?[") for segment in segments
+    )
+    literal_characters = sum(character not in "*?[]" for character in pattern)
+    wildcard_characters = sum(character in "*?[]" for character in pattern)
+    return OverrideSpecificity(
+        int(wildcard_characters != 0),
+        -literal_segments,
+        -literal_characters,
+        wildcard_characters,
+        pattern,
+    )
+
+
+def _path_override(path: str, overrides: Sequence[PathLimit]) -> int | None:
     """Select a matching path override by documented specificity, independent of table order."""
     matching = [
-        (pattern, value) for pattern, value in overrides if matches_path(path, pattern)
+        override for override in overrides if matches_path(path, override.pattern)
     ]
     if not matching:
         return None
-
-    def precedence(item: tuple[str, int]) -> tuple[int, int, int, int, str]:
-        pattern = item[0]
-        segments = pattern.split("/")
-        literal_segments = sum(
-            not any(character in segment for character in "*?[") for segment in segments
-        )
-        literal_characters = sum(character not in "*?[]" for character in pattern)
-        wildcard_characters = sum(character in "*?[]" for character in pattern)
-        exact_path = int(wildcard_characters == 0)
-        return (
-            -exact_path,
-            -literal_segments,
-            -literal_characters,
-            wildcard_characters,
-            pattern,
-        )
-
-    return min(matching, key=precedence)[1]
+    return min(
+        matching, key=lambda override: _override_specificity(override.pattern)
+    ).limit
 
 
 def _initializer_findings(
-    source: str, name: str, limit: int, physical_lines: int
+    source: str, name: str, line_limit: int, physical_line_count: int
 ) -> list[Finding]:
     """Keep configured package initializer files small and explicit."""
     findings: list[Finding] = []
-    if physical_lines > limit:
+    if physical_line_count > line_limit:
         findings.append(
             Finding(
                 rule_id=rule_tag(
@@ -139,8 +164,8 @@ def _initializer_findings(
                 ),
                 path=name,
                 message=(
-                    f"{Path(name).name} has {physical_lines} physical lines "
-                    f"(limit {limit} physical lines)"
+                    f"{Path(name).name} has {physical_line_count} physical lines "
+                    f"(limit {line_limit} physical lines)"
                 ),
             )
         )
@@ -193,7 +218,9 @@ def check_file_size(
         ):
             continue
         path = checkout / relative
-        count, raw_byte_count = _file_metrics(path)
+        metrics = _file_metrics(path)
+        count = metrics.physical_lines
+        raw_byte_count = metrics.raw_bytes
         if path.name == policy.initializer_name:
             source = read_python_source(path)
             findings.extend(
@@ -239,8 +266,13 @@ def check_file_size(
             relative.as_posix(), policy.path_raw_byte_limits
         )
         if raw_byte_limit is None:
-            raw_byte_limit = dict(policy.raw_byte_limits).get(
-                path.suffix.lower(), policy.raw_byte_limit
+            raw_byte_limit = next(
+                (
+                    item.limit
+                    for item in policy.raw_byte_limits
+                    if item.extension == path.suffix.lower()
+                ),
+                policy.raw_byte_limit,
             )
         if raw_byte_limit is not None and raw_byte_count > raw_byte_limit:
             findings.append(

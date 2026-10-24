@@ -77,7 +77,9 @@ semantic_result_paths = [
   "src/alphus/gates/review/positional_interfaces.py",
   "src/alphus/gates/repository/**",
   "src/alphus/gates/hygiene/comment_markers.py",
+  "src/alphus/gates/hygiene/rules.py",
   "src/alphus/gates/vcs/worktree_hygiene.py",
+  "src/alphus/policy/sources.py",
 ]
 pattern_kind_paths = [
   "src/alphus/gates/cpp/artifact_scan.py",

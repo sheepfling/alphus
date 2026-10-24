@@ -9,6 +9,7 @@ import pytest
 from pydantic import ValidationError
 
 from alphus.config import FileSizePolicy, LineLengthPolicy, QualityGateConfig
+from alphus.contracts.findings import LineLengthMeasurement
 from alphus.gates.hygiene.rules import check_file_size, check_line_length
 
 
@@ -169,11 +170,21 @@ def test_hard_physical_line_limit_applies_to_non_code_files(tmp_path: Path) -> N
 
 def test_public_policy_json_schema_documents_metric_units() -> None:
     """The Pydantic schema makes legacy names and new measurement units explicit."""
-    file_size = FileSizePolicy.model_json_schema()["properties"]
-    line_length = LineLengthPolicy.model_json_schema()["properties"]
+    file_schema = FileSizePolicy.model_json_schema()
+    line_schema = LineLengthPolicy.model_json_schema()
+    file_size = file_schema["properties"]
+    line_length = line_schema["properties"]
     assert "physical lines" in file_size["code_physical_line_limit"]["description"]
     assert "raw bytes" in file_size["raw_byte_limit"]["description"]
     assert "Unicode code points" in line_length["codepoint_limits"]["description"]
+    assert (
+        line_schema["$defs"]["PathLimit"]["prefixItems"][0]["description"]
+        == "Repository-relative POSIX path glob."
+    )
+    assert (
+        line_schema["$defs"]["PathLimit"]["prefixItems"][1]["description"]
+        == "Maximum value for matching paths."
+    )
 
 
 def test_line_length_rejects_empty_or_conflicting_extension_tables() -> None:
@@ -230,6 +241,8 @@ def test_line_length_counts_codepoints_and_keeps_tabs_spaces_and_combining_marks
     assert all("Unicode code points" in finding.message for finding in findings)
     bom_finding = next(finding for finding in findings if finding.path == "src/bom.py")
     assert "3 Unicode code points" in bom_finding.message
+    assert bom_finding.line_length == LineLengthMeasurement(3, 2)
+    assert "line_length" not in bom_finding.to_wire()
 
 
 @pytest.mark.parametrize(

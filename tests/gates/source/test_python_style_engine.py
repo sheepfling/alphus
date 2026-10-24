@@ -374,7 +374,7 @@ def test_literal_rule_dimensions_require_canonical_enums() -> None:
     assert visitor.findings["literal_rule_dimensions"] == []
 
 
-def test_scoped_semantic_results_require_named_heterogeneous_records() -> None:
+def test_scoped_semantic_results_require_named_fixed_position_records() -> None:
     source = (
         "def load() -> tuple[dict[str, int], list[str]]: pass\n"
         "def count() -> tuple[int, int]: pass\n"
@@ -382,7 +382,7 @@ def test_scoped_semantic_results_require_named_heterogeneous_records() -> None:
     )
     visitor = StyleVisitor(POLICY, semantic_results=True)
     visitor.visit(ast.parse(source))
-    assert visitor.findings["heterogeneous_tuple_returns"] == [1]
+    assert visitor.findings["unnamed_tuple_returns"] == [1, 2]
 
 
 def test_scoped_pattern_declarations_name_globs_and_regexes() -> None:
@@ -423,26 +423,42 @@ def test_scoped_after_model_validator_uses_self_return() -> None:
     assert visitor.findings["concrete_self_returns"] == [4]
 
 
-def test_scoped_semantic_results_check_nested_heterogeneous_tuples() -> None:
+def test_scoped_after_model_validator_uses_self_return() -> None:
+    source = (
+        "from pydantic import model_validator\n"
+        "class Settings:\n"
+        "    @model_validator(mode='after')\n"
+        "    def validate(self) -> Settings: return self\n"
+        "    @model_validator(mode='before')\n"
+        "    @classmethod\n"
+        "    def normalize(cls, value) -> object: return value\n"
+    )
+    visitor = StyleVisitor(POLICY, self_returns=True)
+    visitor.visit(ast.parse(source))
+    assert visitor.findings["concrete_model_validator_returns"] == [4]
+
+
+def test_scoped_semantic_results_check_nested_fixed_position_tuples() -> None:
     visitor = StyleVisitor(POLICY, semantic_results=True)
     visitor.visit(ast.parse("def comments() -> list[tuple[int, str]]: return []"))
-    assert visitor.findings["heterogeneous_tuple_returns"] == [1]
+    assert visitor.findings["unnamed_tuple_returns"] == [1]
 
 
 def test_scoped_semantic_results_preserve_named_and_wire_contracts() -> None:
     source = (
         "from typing import NamedTuple, TypedDict\n"
+        "class Point(NamedTuple):\n    x: int\n    y: int\n"
         "class Pair(NamedTuple):\n    count: int\n    name: str\n"
         "class WireRow(TypedDict):\n    count: int\n    name: str\n"
         "def pair() -> Pair: ...\n"
         "def wire() -> WireRow: ...\n"
-        "def coordinates() -> tuple[int, int]: ...\n"
+        "def coordinates() -> Point: ...\n"
         "def tags() -> tuple[str, ...]: ...\n"
         "def json_row() -> dict[str, int | str]: ...\n"
     )
     visitor = StyleVisitor(POLICY, semantic_results=True)
     visitor.visit(ast.parse(source))
-    assert visitor.findings["heterogeneous_tuple_returns"] == []
+    assert visitor.findings["unnamed_tuple_returns"] == []
     assert visitor.findings["opaque_mappings"] == []
 
 
@@ -458,13 +474,11 @@ def test_semantic_result_paths_are_opt_in_and_respect_exclusions(
     )
 
     disabled = findings_for(tmp_path, [relative], POLICY)
-    assert (
-        disabled.get(relative.as_posix(), {}).get("heterogeneous_tuple_returns") is None
-    )
+    assert disabled.get(relative.as_posix(), {}).get("unnamed_tuple_returns") is None
 
     enabled = POLICY.model_copy(update={"semantic_result_paths": ["src/**"]})
     selected = findings_for(tmp_path, [relative], enabled)
-    assert selected[relative.as_posix()]["heterogeneous_tuple_returns"] == [1]
+    assert selected[relative.as_posix()]["unnamed_tuple_returns"] == [1]
 
     excluded = enabled.model_copy(update={"exclude": ["src/**"]})
     assert findings_for(tmp_path, [relative], excluded) == {}

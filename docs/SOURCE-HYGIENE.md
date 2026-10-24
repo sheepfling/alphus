@@ -7,13 +7,13 @@ exceptions.
 
 ## Measurements
 
-| Policy | Measurement | Boundary behavior |
-| --- | --- | --- |
-| `line-length` | Unicode code points per physical line | Excludes terminator; equal passes. |
-| `code_physical_line_limit` | Physical lines for code suffixes | Blank and comment lines count. |
-| `hard_physical_line_limit` | Physical lines in each selected file | Blank and comment lines count. |
-| `raw_byte_limit` | Raw bytes, including BOM and newlines | Equal passes; over limit reports measured bytes. |
-| `initializer_limit` | Physical lines in the package initializer | Blank and comment lines count. |
+| Policy                     | Measurement                               | Boundary behavior                                |
+| -------------------------- | ----------------------------------------- | ------------------------------------------------ |
+| `line-length`              | Unicode code points per physical line     | Excludes terminator; equal passes.               |
+| `code_physical_line_limit` | Physical lines for code suffixes          | Blank and comment lines count.                   |
+| `hard_physical_line_limit` | Physical lines in each selected file      | Blank and comment lines count.                   |
+| `raw_byte_limit`           | Raw bytes, including BOM and newlines     | Equal passes; over limit reports measured bytes. |
+| `initializer_limit`        | Physical lines in the package initializer | Blank and comment lines count.                   |
 
 Physical lines use LF, CRLF, or CR separators. An empty file has zero physical
 lines. A line ending terminates one line and does not create a synthetic extra
@@ -60,25 +60,14 @@ tie, the lexicographically first pattern wins. This makes the result
 independent of TOML table order. Exclusions are applied before limit selection.
 
 ```toml
+# Relevant overrides only; required baseline fields are omitted.
 [checks.file_size]
-code_extensions = [".py"]
-code_physical_line_limit = 3000
-hard_physical_line_limit = 5000
-initializer_name = "__init__.py"
-initializer_limit = 100
 raw_byte_limit = 500000
 raw_byte_severity = "warning"
-
-[checks.file_size.raw_byte_limits]
-".md" = 750000
 
 [checks.file_size.path_raw_byte_limits]
 "schemas/**" = 100000
 "schemas/public.json" = 200000
-
-[checks.line_length.codepoint_limits]
-".py" = 100
-".md" = 120
 
 [checks.line_length.path_codepoint_limits]
 "docs/api/**" = 140

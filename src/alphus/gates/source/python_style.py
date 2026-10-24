@@ -229,26 +229,21 @@ def has_undifferentiated_pattern_name(name: str, value: ast.expr) -> bool:
     return False
 
 
-def has_heterogeneous_tuple_result(annotation: ast.expr) -> bool:
-    """Require a named record when a tuple return carries distinct meanings."""
+def has_unnamed_tuple_result(annotation: ast.expr) -> bool:
+    """Require a named record for fixed-position tuple results."""
     if isinstance(annotation, ast.BinOp) and isinstance(annotation.op, ast.BitOr):
-        return has_heterogeneous_tuple_result(
-            annotation.left
-        ) or has_heterogeneous_tuple_result(annotation.right)
+        return has_unnamed_tuple_result(annotation.left) or has_unnamed_tuple_result(
+            annotation.right
+        )
     if isinstance(annotation, ast.Subscript) and type_name(annotation.value) == "tuple":
         if not isinstance(annotation.slice, ast.Tuple):
             return False
         items = annotation.slice.elts
-        return (
-            len(items) >= 2
-            and not any(
-                isinstance(item, ast.Constant) and item.value is Ellipsis
-                for item in items
-            )
-            and len({ast.dump(item) for item in items}) > 1
+        return len(items) >= 2 and not any(
+            isinstance(item, ast.Constant) and item.value is Ellipsis for item in items
         )
     if isinstance(annotation, ast.Subscript):
-        return has_heterogeneous_tuple_result(annotation.slice)
+        return has_unnamed_tuple_result(annotation.slice)
     return False
 
 
@@ -283,8 +278,10 @@ class StyleFindings(TypedDict):
     raw_reporting_prints: list[int]
     magic_exit_codes: list[int]
     repeated_literals: list[int]
-    heterogeneous_tuple_returns: list[int]
+    unnamed_tuple_returns: list[int]
     undifferentiated_patterns: list[int]
+    concrete_classmethod_returns: list[int]
+    concrete_model_validator_returns: list[int]
     concrete_self_returns: list[int]
     direct_text_reads: list[int]
     duplicate_literal_catalogs: list[int]
@@ -400,8 +397,10 @@ class StyleVisitor(ast.NodeVisitor):
             "raw_reporting_prints": [],
             "magic_exit_codes": [],
             "repeated_literals": [],
-            "heterogeneous_tuple_returns": [],
+            "unnamed_tuple_returns": [],
             "undifferentiated_patterns": [],
+            "concrete_classmethod_returns": [],
+            "concrete_model_validator_returns": [],
             "concrete_self_returns": [],
             "direct_text_reads": [],
             "duplicate_literal_catalogs": [],
@@ -642,9 +641,9 @@ class StyleVisitor(ast.NodeVisitor):
         if (
             self.semantic_results
             and node.returns is not None
-            and has_heterogeneous_tuple_result(node.returns)
+            and has_unnamed_tuple_result(node.returns)
         ):
-            self.findings["heterogeneous_tuple_returns"].append(node.lineno)
+            self.findings["unnamed_tuple_returns"].append(node.lineno)
         if node.returns is not None and has_quoted_type(node.returns):
             self.findings["quoted_types"].append(node.lineno)
         if node.returns is not None:
@@ -772,11 +771,20 @@ class StyleVisitor(ast.NodeVisitor):
                     )
                     for decorator in statement.decorator_list
                 )
-                if (
-                    ("classmethod" in classmethod_decorators or after_model_validator)
-                    and statement.returns is not None
+                returns_current_model = (
+                    statement.returns is not None
                     and type_name(statement.returns) == node.name
-                ):
+                )
+                is_classmethod = "classmethod" in classmethod_decorators
+                if is_classmethod and returns_current_model:
+                    self.findings["concrete_classmethod_returns"].append(
+                        statement.lineno
+                    )
+                if after_model_validator and returns_current_model:
+                    self.findings["concrete_model_validator_returns"].append(
+                        statement.lineno
+                    )
+                if (is_classmethod or after_model_validator) and returns_current_model:
                     self.findings["concrete_self_returns"].append(statement.lineno)
         self.pydantic_model_stack.append(is_pydantic_model)
         self.frozen_model_stack.append(frozen_model)

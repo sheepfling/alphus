@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping, Sequence
 from pathlib import PurePosixPath
-from typing import Annotated, Literal, Self, cast
+from typing import Annotated, Literal, NamedTuple, Self, cast
 
 from pydantic import AliasChoices, Field, field_validator, model_validator
 
@@ -14,6 +14,20 @@ from alphus.policy.base import (
     validate_extensions,
     validate_patterns,
 )
+
+
+class ExtensionLimit(NamedTuple):
+    """One configured limit selected by a file extension."""
+
+    extension: Annotated[str, Field(description="File suffix, including its dot.")]
+    limit: Annotated[int, Field(gt=0, description="Maximum value for this suffix.")]
+
+
+class PathLimit(NamedTuple):
+    """One configured limit selected by a repository-relative path pattern."""
+
+    pattern: Annotated[str, Field(description="Repository-relative POSIX path glob.")]
+    limit: Annotated[int, Field(gt=0, description="Maximum value for matching paths.")]
 
 
 class FileInventoryPolicy(StrictModel):
@@ -127,11 +141,11 @@ class FileSizePolicy(StrictModel):
         ),
     ] = None
     raw_byte_limits: Annotated[
-        tuple[tuple[str, int], ...],
+        tuple[ExtensionLimit, ...],
         Field(default_factory=tuple, description="Raw byte limits by extension."),
     ]
     path_raw_byte_limits: Annotated[
-        tuple[tuple[str, int], ...],
+        tuple[PathLimit, ...],
         Field(
             default_factory=tuple,
             description="Raw byte limits by repository path glob.",
@@ -202,52 +216,51 @@ class FileSizePolicy(StrictModel):
     @classmethod
     def normalize_raw_byte_limits(cls, limits: object) -> object:
         """Accept TOML extension tables and keep the validated form immutable."""
-        match limits:
-            case Mapping():
-                values = cast(Mapping[str, int], limits)
-                return tuple(values.items())
-            case _:
-                return limits
+        if isinstance(limits, Mapping):
+            values = cast(Mapping[str, int], limits)
+            return tuple(
+                ExtensionLimit(extension, limit) for extension, limit in values.items()
+            )
+        return limits
 
     @field_validator("raw_byte_limits")
     @classmethod
     def validate_raw_byte_limits(
-        cls, limits: Sequence[tuple[str, int]]
-    ) -> tuple[tuple[str, int], ...]:
-        extensions = validate_extensions(
-            tuple(extension for extension, _ in limits),
+        cls, limits: Sequence[ExtensionLimit]
+    ) -> tuple[ExtensionLimit, ...]:
+        validate_extensions(
+            tuple(item.extension for item in limits),
             "raw-byte keys must be lowercase file extensions with positive limits",
         )
-        if any(limit <= 0 for _, limit in limits):
+        if any(item.limit <= 0 for item in limits):
             raise ValueError(
                 "raw-byte keys must be lowercase file extensions with positive limits"
             )
-        return tuple(zip(extensions, (limit for _, limit in limits), strict=True))
+        return tuple(limits)
 
     @field_validator("path_raw_byte_limits", mode="before")
     @classmethod
     def normalize_path_raw_byte_limits(cls, limits: object) -> object:
         """Accept TOML path tables and retain their declared precedence order."""
-        match limits:
-            case Mapping():
-                values = cast(Mapping[str, int], limits)
-                return tuple(values.items())
-            case _:
-                return limits
+        if isinstance(limits, Mapping):
+            values = cast(Mapping[str, int], limits)
+            return tuple(PathLimit(pattern, limit) for pattern, limit in values.items())
+        return limits
 
     @field_validator("path_raw_byte_limits")
     @classmethod
     def validate_path_raw_byte_limits(
-        cls, limits: Sequence[tuple[str, int]]
-    ) -> tuple[tuple[str, int], ...]:
-        patterns = validate_patterns(tuple(pattern for pattern, _ in limits))
+        cls, limits: Sequence[PathLimit]
+    ) -> tuple[PathLimit, ...]:
+        patterns = tuple(item.pattern for item in limits)
+        validate_patterns(patterns)
         if len(patterns) != len(set(patterns)) or any(
-            limit <= 0 for _, limit in limits
+            item.limit <= 0 for item in limits
         ):
             raise ValueError(
                 "path raw-byte limits need unique paths and positive values"
             )
-        return tuple(zip(patterns, (limit for _, limit in limits), strict=True))
+        return tuple(limits)
 
     @field_validator("exclude")
     @classmethod
@@ -259,21 +272,21 @@ class LineLengthPolicy(StrictModel):
     """Maximum Unicode code points per physical line."""
 
     limits: Annotated[
-        tuple[tuple[str, int], ...],
+        tuple[ExtensionLimit, ...],
         Field(
             default_factory=tuple,
             description="Legacy extension limits; values count Unicode code points.",
         ),
     ]
     codepoint_limits: Annotated[
-        tuple[tuple[str, int], ...],
+        tuple[ExtensionLimit, ...],
         Field(
             default_factory=tuple,
             description="Maximum Unicode code points per physical line by extension.",
         ),
     ]
     path_codepoint_limits: Annotated[
-        tuple[tuple[str, int], ...],
+        tuple[PathLimit, ...],
         Field(
             default_factory=tuple,
             description="Maximum Unicode code points per physical line by path glob.",
@@ -291,58 +304,57 @@ class LineLengthPolicy(StrictModel):
     @classmethod
     def normalize_limits(cls, limits: object) -> object:
         """Represent TOML extension tables as immutable limit pairs."""
-        match limits:
-            case Mapping():
-                values = cast(Mapping[str, int], limits)
-                return tuple(values.items())
-            case _:
-                return limits
+        if isinstance(limits, Mapping):
+            values = cast(Mapping[str, int], limits)
+            return tuple(
+                ExtensionLimit(extension, limit) for extension, limit in values.items()
+            )
+        return limits
 
     @field_validator("limits", "codepoint_limits")
     @classmethod
     def validate_limits(
-        cls, limits: Sequence[tuple[str, int]]
-    ) -> tuple[tuple[str, int], ...]:
-        extensions = validate_extensions(
-            tuple(extension for extension, _ in limits),
+        cls, limits: Sequence[ExtensionLimit]
+    ) -> tuple[ExtensionLimit, ...]:
+        validate_extensions(
+            tuple(item.extension for item in limits),
             "line-length keys must be lowercase extensions with positive limits",
         )
-        if any(limit <= 0 for _, limit in limits):
+        if any(item.limit <= 0 for item in limits):
             raise ValueError(
                 "line-length keys must be lowercase extensions with positive limits"
             )
-        return tuple(zip(extensions, (limit for _, limit in limits), strict=True))
+        return tuple(limits)
 
     @field_validator("path_codepoint_limits", mode="before")
     @classmethod
     def normalize_path_codepoint_limits(cls, limits: object) -> object:
         """Accept a TOML path table and keep the validated form immutable."""
-        match limits:
-            case Mapping():
-                values = cast(Mapping[str, int], limits)
-                return tuple(values.items())
-            case _:
-                return limits
+        if isinstance(limits, Mapping):
+            values = cast(Mapping[str, int], limits)
+            return tuple(PathLimit(pattern, limit) for pattern, limit in values.items())
+        return limits
 
     @field_validator("path_codepoint_limits")
     @classmethod
     def validate_path_codepoint_limits(
-        cls, limits: Sequence[tuple[str, int]]
-    ) -> tuple[tuple[str, int], ...]:
-        patterns = validate_patterns(tuple(pattern for pattern, _ in limits))
+        cls, limits: Sequence[PathLimit]
+    ) -> tuple[PathLimit, ...]:
+        patterns = tuple(item.pattern for item in limits)
+        validate_patterns(patterns)
         if len(patterns) != len(set(patterns)) or any(
-            limit <= 0 for _, limit in limits
+            item.limit <= 0 for item in limits
         ):
             raise ValueError(
                 "path codepoint limits need unique paths and positive values"
             )
-        return tuple(zip(patterns, (limit for _, limit in limits), strict=True))
+        return tuple(limits)
 
     @model_validator(mode="after")
-    def validate_limit_names(self) -> LineLengthPolicy:
+    def validate_limit_names(self) -> Self:
         """Reject conflicting values for the legacy and explicit extension maps."""
-        legacy = dict(self.limits)
-        explicit = dict(self.codepoint_limits)
+        legacy = {item.extension: item.limit for item in self.limits}
+        explicit = {item.extension: item.limit for item in self.codepoint_limits}
         if not legacy and not explicit and not self.path_codepoint_limits:
             raise ValueError("configure an extension or path code-point limit")
         if any(
@@ -359,7 +371,14 @@ class LineLengthPolicy(StrictModel):
 
     def limit_for(self, extension: str) -> int | None:
         """Return the configured code-point limit for one extension."""
-        return dict(self.limits + self.codepoint_limits).get(extension)
+        return next(
+            (
+                item.limit
+                for item in self.limits + self.codepoint_limits
+                if item.extension == extension
+            ),
+            None,
+        )
 
 
 class SourceScanPolicy(StrictModel):
