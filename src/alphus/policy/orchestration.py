@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Sequence
-from typing import Annotated, Literal, NamedTuple, cast
+from typing import Annotated, Literal, NamedTuple, Self, cast
 
 from pydantic import Field, field_validator, model_validator
 
@@ -138,7 +138,7 @@ class CommandRunStep(StrictModel):
         return validate_single_path(path, "command working directory")
 
     @model_validator(mode="after")
-    def validate_file_arguments(self) -> CommandRunStep:
+    def validate_file_arguments(self) -> Self:
         placeholders = sum(argument == "{files}" for argument in self.argv)
         embedded = any(
             "{files}" in argument and argument != "{files}" for argument in self.argv
@@ -199,7 +199,7 @@ class OrchestrationProfile(StrictModel):
         return tuple(includes)
 
     @model_validator(mode="after")
-    def require_selection(self) -> OrchestrationProfile:
+    def require_selection(self) -> Self:
         if not self.steps and not self.includes:
             raise ValueError("a profile must select steps or include another profile")
         return self
@@ -225,7 +225,7 @@ class OrchestrationPolicy(StrictModel):
     failure_threshold: Severity = "error"
 
     @model_validator(mode="after")
-    def validate_plan(self) -> OrchestrationPolicy:
+    def validate_plan(self) -> Self:
         names = [step.name for step in self.steps]
         require_unique(names, "orchestration step names must be unique")
         profile_names = [profile.name for profile in self.profiles]

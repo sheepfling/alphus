@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Sequence
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, field_validator, model_validator
 
@@ -63,7 +63,7 @@ class NumericLiteralPolicy(PythonSourceScanPolicy):
     constants: tuple[NumericLiteralSpec, ...] = ()
 
     @model_validator(mode="after")
-    def validate_constant_names(self) -> NumericLiteralPolicy:
+    def validate_constant_names(self) -> Self:
         require_unique(
             tuple(spec.name for spec in self.constants),
             "numeric catalog names must be unique",
@@ -80,7 +80,7 @@ class ScipyConstantsPolicy(PythonSourceScanPolicy):
     constants: tuple[NumericLiteralSpec, ...] = ()
 
     @model_validator(mode="after")
-    def validate_constant_names(self) -> ScipyConstantsPolicy:
+    def validate_constant_names(self) -> Self:
         require_unique(
             tuple(spec.name for spec in self.constants),
             "SciPy catalog names must be unique",
@@ -160,7 +160,7 @@ class TestQualityPolicy(PythonSourceScanPolicy):
         return tuple(values)
 
     @model_validator(mode="after")
-    def require_oracle_modules_when_enabled(self) -> TestQualityPolicy:
+    def require_oracle_modules_when_enabled(self) -> Self:
         if self.oracle_independence and not self.oracle_production_modules:
             raise ValueError(
                 "oracle_production_modules is required when oracle_independence is enabled"
@@ -227,7 +227,7 @@ class FastApiPracticePolicy(PythonSourceScanPolicy):
     check_http_exception_detail_codes: bool = False
 
     @model_validator(mode="after")
-    def validate_error_code_calls(self) -> FastApiPracticePolicy:
+    def validate_error_code_calls(self) -> Self:
         require_unique(
             tuple(spec.call for spec in self.error_code_calls),
             "error-code calls must be unique",

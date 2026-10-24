@@ -408,7 +408,19 @@ def test_scoped_classmethod_factory_uses_self_return() -> None:
     )
     visitor = StyleVisitor(POLICY, self_returns=True)
     visitor.visit(ast.parse(source))
-    assert visitor.findings["concrete_classmethod_returns"] == [3]
+    assert visitor.findings["concrete_self_returns"] == [3]
+
+
+def test_scoped_after_model_validator_uses_self_return() -> None:
+    source = (
+        "from pydantic import BaseModel, model_validator\n"
+        "class Report(BaseModel):\n"
+        "    @model_validator(mode='after')\n"
+        "    def validate(self) -> Report: return self\n"
+    )
+    visitor = StyleVisitor(POLICY, self_returns=True)
+    visitor.visit(ast.parse(source))
+    assert visitor.findings["concrete_self_returns"] == [4]
 
 
 def test_scoped_semantic_results_check_nested_heterogeneous_tuples() -> None:

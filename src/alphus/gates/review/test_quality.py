@@ -387,7 +387,11 @@ class _TestScanner:
             if isinstance(value, (ast.Name, ast.Attribute))
             else None
         )
-        oracle = self.oracle_value(value, scope) if value is not None else None
+        oracle = (
+            self.oracle_value(value, scope)
+            if value is not None and isinstance(target, ast.Name)
+            else None
+        )
         for name in _targets(target):
             scope.forget(name)
             if text is not None:

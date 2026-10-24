@@ -38,7 +38,7 @@ def scan(source: str, policy: Policy = POLICY) -> list[tuple[str, int | None]]:
     ]
 
 
-ORACLE_POLICY = POLICY.model_copy(
+_ORACLE_POLICY = POLICY.model_copy(
     update={
         "oracle_independence": True,
         "oracle_production_modules": ("sample",),
@@ -46,7 +46,7 @@ ORACLE_POLICY = POLICY.model_copy(
 )
 
 
-def oracle_scan(source: str, policy: Policy = ORACLE_POLICY) -> list[Finding]:
+def oracle_scan(source: str, policy: Policy = _ORACLE_POLICY) -> list[Finding]:
     return python_findings(source, "tests/test_oracle.py", policy)
 
 
@@ -405,6 +405,17 @@ def test_shared_oracle_reports_each_assertion_with_direct_import_aliases() -> No
     assert oracle_scan(source) == findings
 
 
+def test_shared_oracle_does_not_propagate_through_destructuring() -> None:
+    source = (
+        "from sample.math import bounds\n"
+        "def test_bounds():\n"
+        " lower, upper = bounds(4)\n"
+        " assert lower == upper\n"
+    )
+
+    assert oracle_scan(source) == []
+
+
 @pytest.mark.parametrize(
     "body",
     [
@@ -461,7 +472,7 @@ def test_oracle_detector_skips_rebinding_shadowing_dynamic_and_branch_bindings()
 
 
 def test_helper_allowlist_and_reasoned_exclusion_are_scoped() -> None:
-    allowlisted = ORACLE_POLICY.model_copy(
+    allowlisted = _ORACLE_POLICY.model_copy(
         update={"oracle_helper_allowlist": ("sample.math.reference",)}
     )
     source = (
@@ -476,7 +487,7 @@ def test_helper_allowlist_and_reasoned_exclusion_are_scoped() -> None:
         test_function="test_delegation",
         reason="This test documents the public wrapper delegation contract.",
     )
-    excluded = ORACLE_POLICY.model_copy(update={"oracle_exclusions": (exclusion,)})
+    excluded = _ORACLE_POLICY.model_copy(update={"oracle_exclusions": (exclusion,)})
     source = (
         "from sample.math import calculate\n"
         "def test_delegation():\n"
