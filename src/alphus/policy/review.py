@@ -7,6 +7,8 @@ import re
 from collections.abc import Sequence
 from typing import Annotated, Literal, Self
 
+from packaging.specifiers import InvalidSpecifier, SpecifierSet
+from packaging.version import InvalidVersion, Version
 from pydantic import Field, field_validator, model_validator
 
 from alphus.contracts.findings import Severity
@@ -248,4 +250,72 @@ class FastApiPracticePolicy(PythonSourceScanPolicy):
             tuple(spec.call for spec in self.error_code_calls),
             "error-code calls must be unique",
         )
+        return self
+
+
+class SqlAlchemyPracticePolicy(PythonSourceScanPolicy):
+    """Opt-in, conservative SQLAlchemy 2.x source review."""
+
+    target_sqlalchemy: str | None = None
+    report_legacy_query: bool = True
+    report_legacy_declarative_base: bool = True
+    report_backref: bool = True
+    report_literal_execute: bool = True
+    report_module_session: bool = False
+    report_repository_commit: bool = False
+    repository_paths: tuple[str, ...] = ()
+
+    @field_validator("target_sqlalchemy")
+    @classmethod
+    def validate_target_sqlalchemy(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        message = (
+            "target_sqlalchemy must be a bounded SQLAlchemy 2.x range, "
+            "for example '>=2.0,<3.0'"
+        )
+        try:
+            specifiers = tuple(SpecifierSet(value))
+        except InvalidSpecifier as error:
+            raise ValueError(message) from error
+        lower = [item for item in specifiers if item.operator == ">="]
+        upper = [item for item in specifiers if item.operator == "<"]
+        if len(specifiers) != 2 or len(lower) != 1 or len(upper) != 1:
+            raise ValueError(message)
+        try:
+            minimum = Version(lower[0].version)
+            maximum = Version(upper[0].version)
+        except InvalidVersion as error:
+            raise ValueError(message) from error
+        if (
+            minimum < Version("2.0")
+            or minimum >= Version("3.0")
+            or maximum <= minimum
+            or maximum > Version("3.0")
+            or minimum.is_prerelease
+            or minimum.is_devrelease
+            or maximum.is_prerelease
+            or maximum.is_devrelease
+        ):
+            raise ValueError(message)
+        return value.strip()
+
+    @field_validator("repository_paths")
+    @classmethod
+    def validate_repository_paths(cls, paths: Sequence[str]) -> tuple[str, ...]:
+        normalized = validate_patterns(paths)
+        require_unique(normalized, "repository paths must be unique")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_required_settings(self) -> Self:
+        if self.target_sqlalchemy is None:
+            raise ValueError(
+                "target_sqlalchemy is required; set a bounded SQLAlchemy 2.x range "
+                "such as '>=2.0,<3.0'"
+            )
+        if self.report_repository_commit and not self.repository_paths:
+            raise ValueError(
+                "repository_paths must be configured when repository commit review is enabled"
+            )
         return self

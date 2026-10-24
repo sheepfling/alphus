@@ -479,3 +479,91 @@ with the same builtin primitive type. It defaults to informational severity and
 does not infer that any call is wrong. Native parameter-count and call-order
 diagnostics remain separate. See the [positional interface guide](POSITIONAL-INTERFACES.md)
 for the Python boundaries, native capability matrix, and runnable consumer example.
+
+## SQLAlchemy 2.x practices
+
+Selector: `sqlalchemy-practices`. IDs:
+`alphus/python/sqlalchemy/style/legacy-query`,
+`alphus/python/sqlalchemy/style/legacy-declarative-base`,
+`alphus/python/sqlalchemy/style/legacy-backref`,
+`alphus/python/sqlalchemy/correctness/literal-execute`,
+`alphus/python/sqlalchemy/architecture/module-session`, and
+`alphus/python/sqlalchemy/architecture/repository-commit`.
+
+```toml
+[checks.sqlalchemy_practices]
+target_sqlalchemy = ">=2.0,<3.0"
+extensions = [".py"]
+exclude = ["tests/fixtures/**"]
+report_legacy_query = true
+report_legacy_declarative_base = true
+report_backref = true
+report_literal_execute = true
+report_module_session = false
+report_repository_commit = false
+repository_paths = []
+```
+
+An explicit bounded SQLAlchemy 2.x target is required; Alphus does not infer
+the consumer's runtime or dependency version. The supported range starts at
+2.0 or later and ends before 3.0. The separate M1b `module-session` advisory is
+disabled by default and can be enabled after reviewing its source scope.
+
+The first three rules are modernization advice. `Session.query()` and a
+direct `Query(...)` constructor are still supported in SQLAlchemy 2.x; a bare
+`Query` import or type annotation is not reported. The
+declarative-base rule reports a local `declarative_base()` assignment only
+when a locally declared model inherits from that base. The backref rule looks
+for a resolved SQLAlchemy `relationship(backref=...)` call. Use typed
+`Mapped[...]` relationships with `back_populates` when that is the consumer's
+selected convention.
+
+The `literal-execute` rule is a warning for a direct string literal passed to a
+resolved `Connection.execute()` or `Session.execute()` call when its trimmed
+text starts with a recognized SQL command. Use
+`text("SELECT ... WHERE id = :id")` with bound values, or use
+`Connection.exec_driver_sql()` when driver-level SQL is deliberate. The
+[SQLAlchemy 2.0 migration guide](https://docs.sqlalchemy.org/en/20/changelog/migration_20.html)
+describes this execute contract. The
+[Connection API guide](https://docs.sqlalchemy.org/en/20/core/connections.html)
+covers `exec_driver_sql()`. This rule does not inspect constructed SQL, variable
+contents, f-strings, dynamic SQL, leading SQL comments, identifiers, or query
+safety. Ruff S608 remains the owner for its separate generic check of
+dynamically assembled SQL strings.
+
+The session rules resolve imported `Session` and `AsyncSession` types, simple
+local sessionmaker factories, typed session parameters, and connections
+created by a locally recognized engine. `module-session` reports a mutable
+session instance created at module scope; it allows module-level `Engine`,
+`sessionmaker`, and `async_sessionmaker` factories. It does not claim that
+every other call to `commit()` is a transaction-boundary defect. To review
+commits only in consumer-selected data-access code, enable the rule and scope
+it explicitly:
+
+```toml
+report_repository_commit = true
+repository_paths = ["src/repositories/**", "src/data_access.py"]
+```
+
+That advisory reports resolved session and connection `commit()` calls in
+those paths so a consumer can compare them with its declared transaction
+ownership. A commit may be valid when the repository owns the transaction.
+Unknown receivers, untyped local aliases, dynamic imports, computed factories,
+and intermodule flows are not inferred. No consumer module is imported, and
+the scanner itself does not import SQLAlchemy or connect to a database.
+
+The scanner is advisory and bounded. It does not prove transaction safety,
+SQL injection freedom, migration safety, or absence of N+1 queries. Use the
+consumer's native Ruff, Pyright, pytest, and Alembic checks alongside it.
+For a database-backed consumer, run `alembic upgrade head` and `alembic check`
+against a disposable database configured with that consumer's dialect; review
+generated revisions manually, including renames, constraints, and backfills.
+In pytest, count statements with SQLAlchemy engine events and assert how
+counts scale with result size; exercise intended relationship loaders,
+`Result.unique()` where joined collection loading requires it, rollback
+boundaries, and async session ownership. Those runtime checks need the
+consumer's database fixtures and do not belong in Alphus's portable scanner.
+
+See the [synthetic SQLAlchemy consumer example](../examples/consumer/sqlalchemy-practices/README.md)
+for an opt-in provisional profile, representative findings, and runnable
+plan/report commands.

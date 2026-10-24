@@ -74,6 +74,7 @@ from alphus.policy.review import (
     PositionalInterfacePolicy,
     PydanticPracticePolicy,
     ScipyConstantsPolicy,
+    SqlAlchemyPracticePolicy,
     TestQualityExclusion,
     TestQualityPolicy,
 )
@@ -161,6 +162,7 @@ __all__ = [
     "SharedQualityIntent",
     "SharedUtilitiesPolicy",
     "SourceScanPolicy",
+    "SqlAlchemyPracticePolicy",
     "TestQualityExclusion",
     "TestQualityPolicy",
     "TrackedPathRule",

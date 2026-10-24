@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -105,6 +106,17 @@ _CASES = (
         '[checks.fastapi_practices]\nextensions = [".py"]\n',
         "alphus/python/fastapi/correctness/literal-http-status",
     ),
+    (
+        "sqlalchemy-practices",
+        "source.py",
+        (
+            "from sqlalchemy.orm import Session as DbSession\n"
+            "def list_users(session: DbSession):\n"
+            "    return session.query(User).all()\n"
+        ),
+        '[checks.sqlalchemy_practices]\nextensions = [".py"]\ntarget_sqlalchemy = ">=2.0,<3.0"\n',
+        "alphus/python/sqlalchemy/style/legacy-query",
+    ),
 )
 
 
@@ -164,6 +176,7 @@ def test_scipy_direct_rule_uses_its_own_label(
         "input-contracts",
         "pydantic-practices",
         "fastapi-practices",
+        "sqlalchemy-practices",
     ],
 )
 def test_unconfigured_review_rules_report_missing_policy(
@@ -175,6 +188,40 @@ def test_unconfigured_review_rules_report_missing_policy(
 
     assert main([*arguments, "--rule", selector]) == 2
     assert "has no" in capsys.readouterr().err
+
+
+def test_sqlalchemy_invalid_selected_policy_fails_with_validation_error(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    arguments = repository(
+        tmp_path,
+        "source.py",
+        "value = 1\n",
+        '[checks.sqlalchemy_practices]\nextensions = [".py"]\n'
+        'target_sqlalchemy = ">=2.0,<3.0"\n'
+        "report_repository_commit = true\n",
+    )
+
+    assert main([*arguments, "--rule", "sqlalchemy-practices"]) == 2
+    assert "repository_paths" in capsys.readouterr().err
+
+
+def test_sqlalchemy_policy_requires_explicit_target_in_cli(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    arguments = repository(
+        tmp_path,
+        "source.py",
+        "value = 1\n",
+        '[checks.sqlalchemy_practices]\nextensions = [".py"]\n',
+    )
+
+    assert main([*arguments, "--rule", "sqlalchemy-practices"]) == 2
+    error = capsys.readouterr().err
+    assert "target_sqlalchemy" in error
+    assert ">=2.0,<3.0" in error
 
 
 @pytest.mark.parametrize(
@@ -227,6 +274,75 @@ def test_older_configs_leave_review_checks_opt_in(tmp_path: Path) -> None:
     assert checks.positional_interfaces is None
     assert checks.pydantic_practices is None
     assert checks.fastapi_practices is None
+    assert checks.sqlalchemy_practices is None
+
+
+def test_sqlalchemy_literal_execute_is_warning_with_source_location(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    arguments = repository(
+        tmp_path,
+        "repository.py",
+        (
+            "from sqlalchemy.engine import Connection\n"
+            "def load(connection: Connection):\n"
+            '    return connection.execute("SELECT * FROM users")\n'
+        ),
+        '[checks.sqlalchemy_practices]\nextensions = [".py"]\ntarget_sqlalchemy = ">=2.0,<3.0"\n',
+    )
+
+    assert main([*arguments, "--rule", "sqlalchemy-practices", "--json"]) == 0
+    finding = json.loads(capsys.readouterr().out)[0]
+    assert finding["rule_id"] == "alphus/python/sqlalchemy/correctness/literal-execute"
+    assert finding["severity"] == "warning"
+    assert finding["path"] == "repository.py"
+    assert finding["line"] == 3
+
+
+def test_sqlalchemy_consumer_example_plans_and_reports_provisionally(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    example = Path("examples/consumer/sqlalchemy-practices")
+    consumer = tmp_path / "consumer"
+    shutil.copytree(example, consumer)
+    subprocess.run(
+        ["git", "init", "--quiet", str(consumer)], check=True, capture_output=True
+    )
+    arguments = ["--root", str(consumer), "--config", "quality-gates.toml"]
+
+    assert main([*arguments, "--plan", "--json"]) == 0
+    plan = json.loads(capsys.readouterr().out)
+    step = plan["steps"][0]
+    assert step["rule"] == "sqlalchemy-practices"
+    assert step["rollout"] == "provisional"
+    assert step["selected_files"] == [
+        "src/legacy_models.py",
+        "src/legacy_repository.py",
+        "src/legacy_session.py",
+        "src/modern_models.py",
+    ]
+
+    assert main([*arguments, "--plan"]) == 0
+    assert (
+        "PROVISIONAL RULE SQLAlchemy practices: sqlalchemy-practices (4 file(s))"
+        in (capsys.readouterr().out)
+    )
+
+    assert main([*arguments, "--run", "--json"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["failed"] == 0
+    assert report["provisional"] == {"passed": 1, "failed": 0}
+    findings = report["steps"][0]["findings"]
+    assert {finding["rule_id"] for finding in findings} == {
+        "alphus/python/sqlalchemy/style/legacy-query",
+        "alphus/python/sqlalchemy/style/legacy-declarative-base",
+        "alphus/python/sqlalchemy/style/legacy-backref",
+        "alphus/python/sqlalchemy/correctness/literal-execute",
+        "alphus/python/sqlalchemy/architecture/module-session",
+    }
+    assert all(finding["source"] == "alphus" for finding in findings)
 
 
 def test_confusable_positional_consumer_preserves_native_output_and_json_shapes(

@@ -43,6 +43,7 @@ from alphus.policy.review import (
     PositionalInterfacePolicy,
     PydanticPracticePolicy,
     ScipyConstantsPolicy,
+    SqlAlchemyPracticePolicy,
     TestQualityPolicy,
 )
 from alphus.policy.sources import (
@@ -77,6 +78,7 @@ class CheckPolicies(StrictModel):
     positional_interfaces: PositionalInterfacePolicy | None = None
     pydantic_practices: PydanticPracticePolicy | None = None
     fastapi_practices: FastApiPracticePolicy | None = None
+    sqlalchemy_practices: SqlAlchemyPracticePolicy | None = None
     shared_utilities: SharedUtilitiesPolicy | None = None
     python_style: PythonStylePolicy | None = None
     runtime_types: RuntimeTypePolicy | None = None
