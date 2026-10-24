@@ -21,7 +21,7 @@ from alphus.contracts.findings import (
     deduplicate_semantic_diagnostics,
 )
 from alphus.contracts.rule_tags import Category, Scope
-from alphus.policy.intents import (
+from alphus.policy.native_intents import (
     NATIVE_RULE_BINDINGS,
     CommonIntent,
     NativeIntentContextError,

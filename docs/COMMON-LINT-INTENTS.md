@@ -4,7 +4,7 @@ Alphus groups selected native rules under three comparable intents: naming,
 unused symbols, and unreachable code. A shared intent identifies the kind of
 concern; it does not promise equal analysis or findings across tools. The
 validated, warning-level mappings live in
-[`policy/intents.py`](../src/alphus/policy/intents.py).
+[`policy/native_intents.py`](../src/alphus/policy/native_intents.py).
 
 These mappings are opt-in metadata. They do not install tools, change a
 consumer's native configuration, add rules to a command, or parse arbitrary

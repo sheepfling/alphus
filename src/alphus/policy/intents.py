@@ -1,699 +1,637 @@
-"""Validated, opt-in mappings from shared lint intent to native rules."""
+"""Validated cross-language quality intent and native capability contracts."""
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Annotated, Literal
+from typing import Annotated, Literal, NotRequired, TypeAlias, TypedDict, cast
 
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
-from packaging.version import InvalidVersion, Version
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, JsonValue, ValidationInfo, field_validator, model_validator
 
-from alphus.contracts.findings import Diagnostic, Severity
-from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
-from alphus.policy.base import StrictModel, require_unique, validate_one_line_message
+from alphus.contracts.findings import Severity
+from alphus.contracts.rule_tags import RuleTag, Scope
+from alphus.policy.base import StrictModel, require_unique, validate_patterns
+from alphus.policy.sources import FileInventoryPolicy
+
+IntentMapping: TypeAlias = Literal["exact", "comparable", "unsupported"]
+IntentLanguage: TypeAlias = Literal[
+    "c",
+    "cpp",
+    "css",
+    "html",
+    "java",
+    "javascript",
+    "markdown",
+    "python",
+    "typescript",
+]
+NativeOptionValue: TypeAlias = str | int | float | bool
+RawConfiguration: TypeAlias = JsonValue | tuple[tuple[str, NativeOptionValue], ...]
+RawOptionValues: TypeAlias = JsonValue | tuple[tuple[str | int, NativeOptionValue], ...]
+EvidenceFormat: TypeAlias = Literal["raw", "json-array", "json-object"]
+EvidenceStream: TypeAlias = Literal["stdout", "stderr"]
 
 
-class CommonIntent(StrEnum):
-    """A cross-language concern with deliberately native-specific coverage."""
+class IntentBindingRow(TypedDict):
+    """Structured dry-run information for one resolved native binding."""
 
-    NAMING = "naming"
-    UNUSED = "unused"
-    UNREACHABLE = "unreachable"
-
-
-class VersionPolicy(StrEnum):
-    """How a binding constrains its native tool's version."""
-
-    VERIFIED_RANGE = "verified-range"
-    CONSUMER_PINNED = "consumer-pinned"
-    TOOLCHAIN_MATCHED = "toolchain-matched"
-
-
-class NativeRuleBinding(StrictModel):
-    """One native rule family mapped to one stable Alphus semantic intent."""
-
-    key: str
-    intent: CommonIntent
-    languages: Annotated[tuple[Scope, ...], Field(min_length=1)]
+    rule_id: str
+    summary: str
+    language: IntentLanguage
+    enabled: bool
+    required: bool
+    mapping: IntentMapping
+    status: Literal["disabled", "not_selected", "unsupported", "supported"]
+    metric: str
+    unit: str
+    count_method: str
+    threshold: int | None
+    severity: Severity | None
+    failure_threshold: Severity
+    rollout: Literal["mainline", "provisional"]
+    profiles: tuple[str, ...]
     backend: str
-    native_rule_ids: tuple[str, ...] = ()
-    version_policy: VersionPolicy
-    version_range: str | None = None
-    scope: str
+    version_range: str
+    native_rule: str
+    evidence_format: EvidenceFormat
+    evidence_stream: EvidenceStream
+    supported_options: tuple[str, ...]
+    threshold_values: dict[int, NativeOptionValue]
+    coverage_limits: tuple[str, ...]
+    effective_configuration: dict[str, NativeOptionValue]
+    files: dict[str, tuple[str, ...]]
+    step: str | None
+    evidence_step: str | None
+    ownership: str
+    selected_files: NotRequired[tuple[str, ...]]
+    applicable: NotRequired[bool]
+    expanded_argv: NotRequired[tuple[str, ...] | None]
+
+
+class FailureKind(StrEnum):
+    """Closed classification for why a selected intent did not pass."""
+
+    VIOLATION = "violation"
+    CONFIGURATION_ERROR = "configuration_error"
+    OPERATIONAL_ERROR = "operational_error"
+    UNSUPPORTED_CAPABILITY = "unsupported_capability"
+    NO_MATCHING_FILES = "no_matching_files"
+
+
+_IDENTIFIER = re.compile(r"[a-z][a-z0-9_.-]*\Z")
+_OPTION_NAME = re.compile(r"[A-Za-z][A-Za-z0-9_.-]*\Z")
+_PROFILE_NAME = re.compile(r"[a-z][a-z0-9_-]*\Z")
+_INTEGER = re.compile(r"[+-]?[0-9]+\Z")
+
+
+def _same_native_value(
+    actual: NativeOptionValue | None, expected: NativeOptionValue
+) -> bool:
+    """Compare serialized native values without bool/int coercion."""
+    if isinstance(actual, bool):
+        return isinstance(expected, bool) and actual == expected
+    if isinstance(expected, bool):
+        return False
+    if isinstance(actual, int):
+        return isinstance(expected, int) and actual == expected
+    if isinstance(actual, float):
+        return isinstance(expected, float) and actual == expected
+    return isinstance(actual, str) and isinstance(expected, str) and actual == expected
+
+
+def _normalize_threshold_key(key: str | int) -> str | int:
+    """Convert integer-looking threshold keys to integers without coercing others."""
+    return int(key) if isinstance(key, str) and _INTEGER.fullmatch(key) else key
+
+
+class IntentFileOverride(StrictModel):
+    """Replace shared includes for one language and add exclusions."""
+
+    include: tuple[str, ...] | None = None
+    exclude: tuple[str, ...] = ()
+
+    @field_validator("include")
+    @classmethod
+    def validate_include(cls, patterns: Sequence[str] | None) -> tuple[str, ...] | None:
+        return None if patterns is None else validate_patterns(patterns)
+
+    @field_validator("exclude")
+    @classmethod
+    def validate_exclude(cls, patterns: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(patterns)
+
+
+class IntentLanguageOverride(StrictModel):
+    """Explicit per-language values layered over one shared intent."""
+
+    language: IntentLanguage
+    enabled: bool | None = None
+    threshold: Annotated[int, Field(gt=0)] | None = None
+    severity: Severity | None = None
+    failure_threshold: Severity | None = None
+    files: IntentFileOverride | None = None
+
+
+class NativeCapabilityBinding(StrictModel):
+    """One native rule's declared relationship to an Alphus semantic intent."""
+
+    language: IntentLanguage
+    backend: str
+    version_range: str
+    native_rule: str
+    metric: str
+    unit: str
+    count_method: str
+    mapping: IntentMapping
+    step: str | None = None
+    evidence_format: EvidenceFormat = "raw"
+    evidence_stream: EvidenceStream = "stdout"
     supported_options: tuple[str, ...] = ()
-    required_settings: tuple[str, ...] = ()
-    exclusions: tuple[str, ...] = ()
-    required_plugins: tuple[str, ...] = ()
-    requires_compiler_context: bool = False
-    requires_compile_database: bool = False
-    severity: Severity = "warning"
-    limitations: Annotated[tuple[str, ...], Field(min_length=1)]
-    status: Literal["partial", "unsupported"] = "partial"
+    coverage_limits: tuple[str, ...] = ()
+    threshold_option: str | None = None
+    threshold_values: tuple[tuple[int, NativeOptionValue], ...] = ()
+    severity_option: str | None = None
+    severity_values: tuple[tuple[Severity, NativeOptionValue], ...] = ()
+    failure_threshold_option: str | None = None
+    failure_threshold_values: tuple[tuple[Severity, NativeOptionValue], ...] = ()
+    effective_configuration: tuple[tuple[str, NativeOptionValue], ...] = ()
+    violation_exit_codes: tuple[int, ...] = ()
+    configuration_exit_codes: tuple[int, ...] = ()
 
-    @field_validator("key", "backend", "scope")
+    @field_validator("backend", "native_rule", "metric", "unit", "count_method", "step")
     @classmethod
-    def validate_label(cls, value: str) -> str:
-        return validate_one_line_message(value)
+    def validate_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if not value.strip() or "\n" in value or "\r" in value or "\x00" in value:
+            raise ValueError("native capability fields must be non-empty single lines")
+        return value
 
-    @field_validator(
-        "native_rule_ids",
-        "supported_options",
-        "required_settings",
-        "exclusions",
-        "required_plugins",
-    )
+    @field_validator("backend", "metric", "unit")
     @classmethod
-    def validate_unique_names(cls, values: Sequence[str]) -> tuple[str, ...]:
-        if any(not value or "\n" in value or "\r" in value for value in values):
-            raise ValueError("native binding entries must be non-empty single lines")
-        require_unique(values, "native binding entries must be unique")
+    def validate_identifier(cls, value: str) -> str:
+        if not _IDENTIFIER.fullmatch(value):
+            raise ValueError("backend, metric, and unit must be lowercase identifiers")
+        return value
+
+    @field_validator("version_range")
+    @classmethod
+    def validate_version_range(cls, value: str) -> str:
+        try:
+            parsed = SpecifierSet(value)
+        except InvalidSpecifier as error:
+            raise ValueError(f"invalid PEP 440 version range: {value!r}") from error
+        if not value or not str(parsed):
+            raise ValueError("version_range must constrain supported backend versions")
+        return value
+
+    @field_validator("supported_options")
+    @classmethod
+    def validate_supported_options(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not _OPTION_NAME.fullmatch(value) for value in values):
+            raise ValueError("supported option names must be simple native keys")
+        require_unique(values, "supported option names must be unique")
         return tuple(values)
 
-    @field_validator("limitations")
+    @field_validator("coverage_limits")
     @classmethod
-    def validate_limitations(cls, values: Sequence[str]) -> tuple[str, ...]:
-        checked = tuple(validate_one_line_message(value) for value in values)
-        require_unique(checked, "native binding limitations must be unique")
-        return checked
+    def validate_coverage_limits(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.strip() or "\n" in value or "\r" in value for value in values):
+            raise ValueError("coverage limits must be non-empty single lines")
+        require_unique(values, "coverage limits must be unique")
+        return tuple(values)
+
+    @field_validator("effective_configuration", mode="before")
+    @classmethod
+    def normalize_configuration(cls, value: RawConfiguration) -> object:
+        if isinstance(value, dict):
+            values = cast(Mapping[str, NativeOptionValue], value)
+            return tuple(values.items())
+        return value
+
+    @field_validator(
+        "threshold_values", "severity_values", "failure_threshold_values", mode="before"
+    )
+    @classmethod
+    def normalize_option_values(
+        cls, value: RawOptionValues, info: ValidationInfo
+    ) -> object:
+        if isinstance(value, dict):
+            values = cast(Mapping[str | int, NativeOptionValue], value)
+            if info.field_name == "threshold_values":
+                return tuple(
+                    (
+                        _normalize_threshold_key(key),
+                        option_value,
+                    )
+                    for key, option_value in values.items()
+                )
+            return tuple(values.items())
+        return value
+
+    @field_validator("threshold_values")
+    @classmethod
+    def validate_threshold_values(
+        cls, values: Sequence[tuple[int, NativeOptionValue]]
+    ) -> tuple[tuple[int, NativeOptionValue], ...]:
+        thresholds = tuple(threshold for threshold, _ in values)
+        if any(threshold <= 0 for threshold in thresholds):
+            raise ValueError("native threshold mappings must use positive thresholds")
+        if any(isinstance(native_value, bool) for _, native_value in values):
+            raise ValueError("native threshold mappings cannot use boolean values")
+        require_unique(thresholds, "native threshold mappings must be unique")
+        return tuple(values)
+
+    @field_validator("severity_values", "failure_threshold_values")
+    @classmethod
+    def validate_severity_values(
+        cls, values: Sequence[tuple[Severity, NativeOptionValue]]
+    ) -> tuple[tuple[Severity, NativeOptionValue], ...]:
+        names = tuple(name for name, _ in values)
+        require_unique(names, "severity mappings must not repeat a severity")
+        return tuple(values)
+
+    @field_validator("effective_configuration")
+    @classmethod
+    def validate_configuration(
+        cls, values: Sequence[tuple[str, NativeOptionValue]]
+    ) -> tuple[tuple[str, NativeOptionValue], ...]:
+        names = tuple(name for name, _ in values)
+        if any(not _OPTION_NAME.fullmatch(name) for name in names):
+            raise ValueError("effective configuration keys must be native option names")
+        require_unique(names, "effective configuration keys must be unique")
+        return tuple(values)
+
+    @field_validator("violation_exit_codes", "configuration_exit_codes")
+    @classmethod
+    def validate_exit_codes(cls, values: Sequence[int]) -> tuple[int, ...]:
+        if any(value <= 0 for value in values):
+            raise ValueError("classified native exit codes must be positive integers")
+        require_unique(values, "classified native exit codes must be unique")
+        return tuple(values)
 
     @model_validator(mode="after")
-    def validate_binding(self) -> NativeRuleBinding:
-        if any(
-            language in {Scope.ANY, Scope.REPOSITORY} for language in self.languages
-        ):
-            raise ValueError("native intent bindings require concrete language scopes")
-        require_unique(self.languages, "native binding languages must be unique")
-        if self.version_policy is VersionPolicy.VERIFIED_RANGE:
-            if self.version_range is None:
-                raise ValueError("verified native bindings require a version range")
-            try:
-                SpecifierSet(self.version_range)
-            except InvalidSpecifier as error:
-                raise ValueError("native version range is invalid") from error
-        elif self.version_range is not None:
+    def validate_binding_contract(self) -> NativeCapabilityBinding:
+        options = set(self.supported_options)
+        configured = dict(self.effective_configuration)
+        unsupported_options = set(configured) - options
+        if unsupported_options:
             raise ValueError(
-                "only verified native bindings may declare a version range"
+                "effective configuration uses undeclared native options: "
+                f"{', '.join(sorted(unsupported_options))}"
             )
-        if self.status == "unsupported" and self.native_rule_ids:
-            raise ValueError("unsupported bindings cannot claim native rule IDs")
-        if self.status == "partial" and not self.native_rule_ids:
-            raise ValueError("supported bindings require native rule IDs")
-        if (
-            self.requires_compiler_context or self.requires_compile_database
-        ) and not self.languages:
-            raise ValueError("compiler bindings require a language scope")
-        if (
-            not self.backend.replace("-", "")
-            .replace("@", "")
-            .replace("/", "")
-            .replace("_", "")
-            .replace(".", "")
-            .isalnum()
+        mapped_options = (
+            self.threshold_option,
+            self.severity_option,
+            self.failure_threshold_option,
+        )
+        if any(
+            option is not None and option not in options for option in mapped_options
         ):
-            raise ValueError("native backend must be a tool name")
+            raise ValueError("shared option mappings must appear in supported_options")
+        if self.threshold_option is None and self.threshold_values:
+            raise ValueError("threshold values require a mapped native option")
+        for option, values in (
+            (self.severity_option, self.severity_values),
+            (self.failure_threshold_option, self.failure_threshold_values),
+        ):
+            if option is None and values:
+                raise ValueError("severity values require a mapped native option")
+            if option is not None and not values:
+                raise ValueError(
+                    "mapped severity options require native severity values"
+                )
+        if set(dict(self.severity_values)) - {"error", "warning", "info"}:
+            raise ValueError("native severity values use an unsupported severity")
+        if self.mapping == "unsupported":
+            if self.step is not None:
+                raise ValueError(
+                    "unsupported capabilities cannot select a command step"
+                )
+        elif self.step is None:
+            raise ValueError("supported capability mappings require a command step")
+        if set(self.violation_exit_codes) & set(self.configuration_exit_codes):
+            raise ValueError("violation and configuration exit codes must not overlap")
         return self
 
-    def rule_tag(self, language: Scope) -> RuleTag:
-        """Build a stable in-memory identity without changing the native rule ID."""
-        if language not in self.languages:
-            raise ValueError(f"{language!s} is outside binding {self.key!r}")
-        category, complaint = {
-            CommonIntent.NAMING: (Category.STYLE, "naming-convention"),
-            CommonIntent.UNUSED: (Category.MAINTAINABILITY, "unused-symbol"),
-            CommonIntent.UNREACHABLE: (Category.CORRECTNESS, "unreachable-code"),
-        }[self.intent]
-        return RuleTag(language, Framework.NONE, category, complaint)
+
+class SharedQualityIntent(StrictModel):
+    """One stable policy identity with explicit native mappings by language."""
+
+    rule_id: str
+    summary: str
+    metric: str
+    unit: str
+    count_method: str
+    enabled: bool = True
+    required: bool = True
+    threshold: Annotated[int, Field(gt=0)] | None = None
+    severity: Severity | None = None
+    failure_threshold: Severity | None = None
+    rollout: Literal["mainline", "provisional"] = "provisional"
+    profiles: tuple[str, ...] = ("check",)
+    files: FileInventoryPolicy
+    overrides: tuple[IntentLanguageOverride, ...] = ()
+    bindings: Annotated[tuple[NativeCapabilityBinding, ...], Field(min_length=1)]
+
+    @field_validator("rule_id")
+    @classmethod
+    def validate_rule_id(cls, value: str) -> str:
+        tag = RuleTag.parse(value)
+        if tag.scope is not Scope.ANY:
+            raise ValueError("cross-language intent rule IDs must use the any scope")
+        return value
+
+    @field_validator("summary", "count_method")
+    @classmethod
+    def validate_description(cls, value: str) -> str:
+        if not value.strip() or "\n" in value or "\r" in value:
+            raise ValueError("intent descriptions must be non-empty single lines")
+        return value
+
+    @field_validator("metric", "unit")
+    @classmethod
+    def validate_measurement_identifier(cls, value: str) -> str:
+        if not _IDENTIFIER.fullmatch(value):
+            raise ValueError("intent metric and unit must be lowercase identifiers")
+        return value
+
+    @field_validator("overrides")
+    @classmethod
+    def validate_overrides(
+        cls, values: Sequence[IntentLanguageOverride]
+    ) -> tuple[IntentLanguageOverride, ...]:
+        languages = tuple(value.language for value in values)
+        require_unique(languages, "intent language overrides must be unique")
+        return tuple(values)
+
+    @field_validator("bindings")
+    @classmethod
+    def validate_binding_languages(
+        cls, values: Sequence[NativeCapabilityBinding]
+    ) -> tuple[NativeCapabilityBinding, ...]:
+        languages = tuple(value.language for value in values)
+        require_unique(
+            languages, "an intent may have only one active binding per language"
+        )
+        return tuple(values)
+
+    @field_validator("profiles")
+    @classmethod
+    def validate_profiles(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if not values or any(not _PROFILE_NAME.fullmatch(value) for value in values):
+            raise ValueError("intent profiles must be named with lowercase identifiers")
+        require_unique(values, "intent profiles must be unique")
+        return tuple(values)
+
+    @model_validator(mode="after")
+    def validate_semantic_mappings(self) -> SharedQualityIntent:
+        by_language = {binding.language: binding for binding in self.bindings}
+        unknown_overrides = {item.language for item in self.overrides} - set(
+            by_language
+        )
+        if unknown_overrides:
+            raise ValueError(
+                "intent overrides reference languages without a capability binding: "
+                f"{', '.join(sorted(unknown_overrides))}"
+            )
+
+        for binding in self.bindings:
+            if binding.mapping == "exact" and (
+                binding.metric != self.metric
+                or binding.unit != self.unit
+                or binding.count_method != self.count_method
+            ):
+                raise ValueError(
+                    f"exact mapping for {binding.language} must match the shared metric, "
+                    "unit, and count method"
+                )
+
+        for binding in self.bindings:
+            threshold = self.threshold_for(binding.language)
+            if not self.is_enabled_for(binding.language):
+                continue
+            if binding.mapping == "unsupported":
+                continue
+            configuration = dict(binding.effective_configuration)
+            if threshold is not None:
+                override = self.override_for(binding.language)
+                has_local_threshold = (
+                    override is not None and override.threshold is not None
+                )
+                if (
+                    self.threshold is not None
+                    and not has_local_threshold
+                    and binding.mapping != "exact"
+                ):
+                    raise ValueError(
+                        "a shared numeric threshold requires exact mappings; use explicit "
+                        "per-language thresholds for comparable mappings"
+                    )
+                if binding.threshold_option is None:
+                    raise ValueError(
+                        f"threshold for {binding.language} has no native threshold option"
+                    )
+                native_threshold = dict(binding.threshold_values).get(
+                    threshold, threshold
+                )
+                configured_threshold = configuration.get(binding.threshold_option)
+                if not _same_native_value(configured_threshold, native_threshold):
+                    raise ValueError(
+                        f"effective native option {binding.threshold_option!r} for "
+                        f"{binding.language} conflicts with configured threshold {threshold}"
+                    )
+            severity = self.severity_for(binding.language)
+            if severity is not None:
+                if binding.severity_option is None:
+                    raise ValueError(
+                        f"severity for {binding.language} has no native option mapping"
+                    )
+                severity_value = dict(binding.severity_values).get(severity)
+                if severity_value is None or not _same_native_value(
+                    configuration.get(binding.severity_option), severity_value
+                ):
+                    raise ValueError(
+                        f"effective native severity for {binding.language} conflicts with "
+                        f"configured severity {severity}"
+                    )
+            failure_threshold = self.failure_threshold_for(binding.language)
+            if failure_threshold is not None:
+                if binding.failure_threshold_option is None:
+                    raise ValueError(
+                        f"failure threshold for {binding.language} has no native option mapping"
+                    )
+                failure_value = dict(binding.failure_threshold_values).get(
+                    failure_threshold
+                )
+                if failure_value is None or not _same_native_value(
+                    configuration.get(binding.failure_threshold_option),
+                    failure_value,
+                ):
+                    raise ValueError(
+                        f"effective native failure threshold for {binding.language} "
+                        f"conflicts with configured threshold {failure_threshold}"
+                    )
+        return self
+
+    def override_for(self, language: IntentLanguage) -> IntentLanguageOverride | None:
+        """Return the explicit per-language override, if any."""
+        return next(
+            (item for item in self.overrides if item.language == language), None
+        )
+
+    def is_enabled_for(self, language: IntentLanguage) -> bool:
+        """Resolve enablement using shared policy followed by a language override."""
+        override = self.override_for(language)
+        return (
+            self.enabled
+            if override is None or override.enabled is None
+            else override.enabled
+        )
+
+    def threshold_for(self, language: IntentLanguage) -> int | None:
+        """Resolve the explicit language threshold before the shared default."""
+        override = self.override_for(language)
+        return (
+            self.threshold
+            if override is None or override.threshold is None
+            else override.threshold
+        )
+
+    def severity_for(self, language: IntentLanguage) -> Severity | None:
+        """Resolve effective severity using the documented precedence."""
+        override = self.override_for(language)
+        return (
+            self.severity
+            if override is None or override.severity is None
+            else override.severity
+        )
+
+    def failure_threshold_for(self, language: IntentLanguage) -> Severity | None:
+        """Resolve effective failure threshold using the documented precedence."""
+        override = self.override_for(language)
+        return (
+            self.failure_threshold
+            if override is None or override.failure_threshold is None
+            else override.failure_threshold
+        )
+
+    def files_for(self, language: IntentLanguage) -> FileInventoryPolicy:
+        """Apply language includes over shared includes and append exclusions."""
+        override = self.override_for(language)
+        files = None if override is None else override.files
+        include = (
+            self.files.include
+            if files is None or files.include is None
+            else files.include
+        )
+        exclude = tuple(
+            dict.fromkeys((*self.files.exclude, *(files.exclude if files else ())))
+        )
+        return FileInventoryPolicy(include=include, exclude=exclude)
 
 
 @dataclass(frozen=True, slots=True)
-class NativeRuleResolution:
-    """Effective selection and visible ownership for one mapped native rule."""
+class ResolvedIntentBinding:
+    """Effective per-language contract used by plans and execution reports."""
 
-    effective_enabled: bool | None
-    source: Literal[
-        "consumer", "consumer-default", "shared-policy", "aligned", "conflict"
+    intent: SharedQualityIntent
+    binding: NativeCapabilityBinding
+    enabled: bool
+    threshold: int | None
+    severity: Severity | None
+    failure_threshold: Severity
+    files: FileInventoryPolicy
+
+
+def resolve_intent_bindings(
+    intents: Sequence[SharedQualityIntent],
+    default_failure_threshold: Severity = "error",
+) -> tuple[ResolvedIntentBinding, ...]:
+    """Expand shared intent defaults into deterministic language contracts."""
+    resolved = [
+        ResolvedIntentBinding(
+            intent=intent,
+            binding=binding,
+            enabled=intent.is_enabled_for(binding.language),
+            threshold=intent.threshold_for(binding.language),
+            severity=intent.severity_for(binding.language),
+            failure_threshold=intent.failure_threshold_for(binding.language)
+            or default_failure_threshold,
+            files=intent.files_for(binding.language),
+        )
+        for intent in intents
+        for binding in intent.bindings
     ]
-    conflict: bool
-    message: str
-
-
-def resolve_native_rule_selection(
-    binding: NativeRuleBinding,
-    *,
-    consumer_enabled: bool | None,
-    shared_enabled: bool | None,
-    shared_policy_opt_in: bool = False,
-) -> NativeRuleResolution:
-    """Keep consumer settings authoritative and report opted-in conflicts."""
-    if binding.status != "partial":
-        raise ValueError("unsupported native rules cannot be selected")
-    if not shared_policy_opt_in or shared_enabled is None:
-        if consumer_enabled is None:
-            return NativeRuleResolution(
-                None,
-                "consumer-default",
-                False,
-                "The consumer's native-tool default remains authoritative.",
-            )
-        return NativeRuleResolution(
-            consumer_enabled,
-            "consumer",
-            False,
-            "The consumer's native-tool setting remains authoritative.",
-        )
-    if consumer_enabled is None:
-        return NativeRuleResolution(
-            shared_enabled,
-            "shared-policy",
-            False,
-            "The consumer opted into the shared native-rule selection.",
-        )
-    if consumer_enabled == shared_enabled:
-        return NativeRuleResolution(
-            consumer_enabled,
-            "aligned",
-            False,
-            "Consumer and shared native-rule selections agree.",
-        )
-    return NativeRuleResolution(
-        consumer_enabled,
-        "conflict",
-        True,
-        "Consumer and opted-in shared settings conflict; the consumer setting wins.",
+    return tuple(
+        sorted(resolved, key=lambda item: (item.intent.rule_id, item.binding.language))
     )
 
 
-class NativeToolContext(StrictModel):
-    """Observed command context required before a native result can be mapped."""
-
-    backend: str
-    executable_available: bool
-    version: str | None = None
-    compiler_version: str | None = None
-    compiler_arguments: tuple[str, ...] = ()
-    effective_settings: tuple[str, ...] = ()
-    plugin_versions: tuple[tuple[str, str], ...] = ()
-    compile_database_available: bool = False
-    syntax_errors: tuple[str, ...] = ()
-
-    @field_validator("backend")
-    @classmethod
-    def validate_backend(cls, value: str) -> str:
-        return validate_one_line_message(value)
-
-    @field_validator("version", "compiler_version")
-    @classmethod
-    def validate_version(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        try:
-            Version(value)
-        except InvalidVersion as error:
-            raise ValueError(
-                "native tool versions must be parseable versions"
-            ) from error
-        return value
-
-    @field_validator("syntax_errors")
-    @classmethod
-    def validate_syntax_errors(cls, values: Sequence[str]) -> tuple[str, ...]:
-        checked = tuple(validate_one_line_message(value) for value in values)
-        return checked
-
-    @field_validator("compiler_arguments")
-    @classmethod
-    def validate_compiler_arguments(cls, values: Sequence[str]) -> tuple[str, ...]:
-        if any(not value or "\n" in value or "\r" in value for value in values):
-            raise ValueError("compiler arguments must be non-empty single lines")
-        return tuple(values)
-
-    @field_validator("effective_settings")
-    @classmethod
-    def validate_effective_settings(cls, values: Sequence[str]) -> tuple[str, ...]:
-        checked = tuple(validate_one_line_message(value) for value in values)
-        require_unique(checked, "effective native settings must be unique")
-        return checked
-
-    @field_validator("plugin_versions")
-    @classmethod
-    def validate_plugin_versions(
-        cls, values: Sequence[tuple[str, str]]
-    ) -> tuple[tuple[str, str], ...]:
-        checked: list[tuple[str, str]] = []
-        for name, version in values:
-            checked.append((validate_one_line_message(name), Version(version).public))
-        require_unique(
-            tuple(name for name, _ in checked),
-            "native plugin versions must use unique plugin names",
-        )
-        return tuple(checked)
-
-
-class NativeIntentContextError(RuntimeError):
-    """The native report lacks enough trustworthy execution context to map."""
-
-
-def validate_native_context(
-    binding: NativeRuleBinding, context: NativeToolContext
-) -> None:
-    """Reject missing tools, versions, compiler context, and syntax failures."""
-    if context.backend != binding.backend:
-        raise NativeIntentContextError("native result backend does not match binding")
-    if not context.executable_available:
-        raise NativeIntentContextError(
-            f"native tool {binding.backend!r} is unavailable"
-        )
-    if context.version is None:
-        raise NativeIntentContextError(
-            f"native tool {binding.backend!r} has no version"
-        )
-    if binding.version_policy is VersionPolicy.VERIFIED_RANGE:
-        assert binding.version_range is not None
-        if Version(context.version) not in SpecifierSet(binding.version_range):
-            raise NativeIntentContextError(
-                f"native tool version {context.version} is outside "
-                f"{binding.version_range}"
-            )
-    if binding.version_policy is VersionPolicy.TOOLCHAIN_MATCHED:
-        if context.compiler_version is None:
-            raise NativeIntentContextError("compiler version is unavailable")
-        if (
-            Version(context.version).release[0]
-            != Version(context.compiler_version).release[0]
-        ):
-            raise NativeIntentContextError(
-                "native tool and compiler versions do not match"
-            )
-    if binding.requires_compile_database and not context.compile_database_available:
-        raise NativeIntentContextError(
-            "compiler diagnostics require a compile database"
-        )
-    if binding.requires_compiler_context and not context.compiler_arguments:
-        raise NativeIntentContextError(
-            "compiler diagnostics require the effective compiler arguments"
-        )
-    missing_settings = set(binding.required_settings) - set(context.effective_settings)
-    if missing_settings:
-        raise NativeIntentContextError(
-            "required native settings are not effective: "
-            + ", ".join(sorted(missing_settings))
-        )
-    plugin_versions = dict(context.plugin_versions)
-    missing_plugins = set(binding.required_plugins) - plugin_versions.keys()
-    if missing_plugins:
-        raise NativeIntentContextError(
-            "required native plugin versions are unavailable: "
-            + ", ".join(sorted(missing_plugins))
-        )
-    if context.syntax_errors:
-        raise NativeIntentContextError("native analysis reported syntax errors")
-
-
-def bind_native_diagnostic(
-    diagnostic: Diagnostic,
-    binding: NativeRuleBinding,
-    language: Scope,
-    context: NativeToolContext,
-    *,
-    severity: Severity | None = None,
-) -> Diagnostic:
-    """Attach a typed tag while preserving the diagnostic's native wire fields."""
-    validate_native_context(binding, context)
-    if binding.status != "partial" or diagnostic.rule_id not in binding.native_rule_ids:
-        raise ValueError("native rule is not supported by this binding")
-    if diagnostic.source != binding.backend:
-        raise ValueError("native diagnostic source does not match its binding")
-    tag = binding.rule_tag(language)
-    if diagnostic.tag is not None and diagnostic.tag != tag:
-        raise ValueError("native diagnostic already has a different semantic identity")
-    return Diagnostic(
-        source=diagnostic.source,
-        rule_id=diagnostic.rule_id,
-        message=diagnostic.message,
-        severity=severity if severity is not None else binding.severity,
-        path=diagnostic.path,
-        line=diagnostic.line,
-        priority=diagnostic.priority,
-        _rule_tag=tag,
+def intent_bindings_for_steps(
+    intents: Sequence[SharedQualityIntent],
+    selected_steps: Sequence[str],
+    profile_name: str | None = None,
+    selected_profiles: Sequence[str] | None = None,
+    default_failure_threshold: Severity = "error",
+) -> tuple[IntentBindingRow, ...]:
+    """Build a stable dry-run view that links native evidence to semantic IDs."""
+    selected = set(selected_steps)
+    active_profiles = set(
+        selected_profiles
+        if selected_profiles is not None
+        else (() if profile_name is None else (profile_name,))
     )
-
-
-def _binding(
-    key: str,
-    intent: CommonIntent,
-    language: Scope | tuple[Scope, ...],
-    backend: str,
-    native_rule_ids: tuple[str, ...],
-    version_policy: VersionPolicy,
-    scope: str,
-    *,
-    version_range: str | None = None,
-    supported_options: tuple[str, ...] = (),
-    required_settings: tuple[str, ...] = (),
-    exclusions: tuple[str, ...] = (),
-    required_plugins: tuple[str, ...] = (),
-    requires_compiler_context: bool = False,
-    requires_compile_database: bool = False,
-    limitations: tuple[str, ...],
-    status: Literal["partial", "unsupported"] = "partial",
-) -> NativeRuleBinding:
-    languages = (language,) if isinstance(language, Scope) else language
-    return NativeRuleBinding(
-        key=key,
-        intent=intent,
-        languages=languages,
-        backend=backend,
-        native_rule_ids=native_rule_ids,
-        version_policy=version_policy,
-        version_range=version_range,
-        scope=scope,
-        supported_options=supported_options,
-        required_settings=required_settings,
-        exclusions=exclusions,
-        required_plugins=required_plugins,
-        requires_compiler_context=requires_compiler_context,
-        requires_compile_database=requires_compile_database,
-        limitations=limitations,
-        status=status,
-    )
-
-
-NATIVE_RULE_BINDINGS = (
-    _binding(
-        "python.naming.ruff",
-        CommonIntent.NAMING,
-        Scope.PYTHON,
-        "ruff",
-        (
-            "N801",
-            "N802",
-            "N803",
-            "N804",
-            "N805",
-            "N806",
-            "N807",
-            "N811",
-            "N812",
-            "N813",
-            "N814",
-            "N815",
-            "N816",
-            "N817",
-            "N818",
-            "N999",
-        ),
-        VersionPolicy.VERIFIED_RANGE,
-        "Module, class, function, method, argument, variable, and import-alias names.",
-        version_range=">=0.16,<1",
-        supported_options=(
-            "lint.select",
-            "lint.ignore",
-            "lint.per-file-ignores",
-            "lint.pep8-naming.ignore-names",
-            "lint.pep8-naming.extend-ignore-names",
-        ),
-        exclusions=("Native rule-specific exemptions remain consumer-owned.",),
-        limitations=(
-            "Naming rules are opt-in in Ruff and check distinct symbol kinds.",
-        ),
-    ),
-    _binding(
-        "python.naming.pylint",
-        CommonIntent.NAMING,
-        Scope.PYTHON,
-        "pylint",
-        ("C0103",),
-        VersionPolicy.CONSUMER_PINNED,
-        "Configured module, class, function, method, argument, attribute, and variable names.",
-        supported_options=("module-rgx", "class-rgx", "function-rgx", "argument-rgx"),
-        exclusions=("Project exemptions and generated files remain Pylint-owned.",),
-        limitations=("One message ID covers multiple configured name categories.",),
-    ),
-    _binding(
-        "javascript.naming.camelcase",
-        CommonIntent.NAMING,
-        Scope.JAVASCRIPT,
-        "eslint",
-        ("camelcase",),
-        VersionPolicy.CONSUMER_PINNED,
-        "Definitions and assignments using camelcase conventions.",
-        supported_options=(
-            "properties",
-            "ignoreDestructuring",
-            "ignoreImports",
-            "allow",
-        ),
-        exclusions=(
-            "Leading/trailing underscores and uppercase constants are ignored.",
-        ),
-        limitations=("Does not inspect function calls; use project-specific options.",),
-    ),
-    _binding(
-        "javascript.naming.id-match",
-        CommonIntent.NAMING,
-        Scope.JAVASCRIPT,
-        "eslint",
-        ("id-match",),
-        VersionPolicy.CONSUMER_PINNED,
-        "Identifiers in assignments and function definitions.",
-        supported_options=("pattern", "ignoreDestructuring", "properties"),
-        exclusions=("The regex and ignored names are consumer-owned.",),
-        limitations=(
-            "A shared identifier regex would erase language-specific intent.",
-        ),
-    ),
-    _binding(
-        "cpp.naming.clang-tidy",
-        CommonIntent.NAMING,
-        (Scope.C, Scope.CPP),
-        "clang-tidy",
-        ("readability-identifier-naming",),
-        VersionPolicy.TOOLCHAIN_MATCHED,
-        "Only identifier kinds configured by the consumer's .clang-tidy file.",
-        supported_options=(
-            "Checks",
-            "readability-identifier-naming.DefaultCase",
-            "readability-identifier-naming.ClassCase",
-            "readability-identifier-naming.FunctionCase",
-            "readability-identifier-naming.VariableCase",
-        ),
-        exclusions=("Unconfigured identifier kinds are not checked.",),
-        requires_compile_database=True,
-        requires_compiler_context=True,
-        limitations=(
-            "The check is effectively disabled until naming options are set.",
-        ),
-    ),
-    _binding(
-        "python.unused.ruff",
-        CommonIntent.UNUSED,
-        Scope.PYTHON,
-        "ruff",
-        ("F401", "F841", "ARG001", "ARG002", "ARG003", "ARG004", "ARG005"),
-        VersionPolicy.VERIFIED_RANGE,
-        "Imports, function-local assignments, and function arguments.",
-        version_range=">=0.16,<1",
-        supported_options=(
-            "lint.select",
-            "lint.ignore",
-            "lint.dummy-variable-rgx",
-            "lint.per-file-ignores",
-        ),
-        exclusions=(
-            "Explicit re-exports and underscore argument conventions are configurable.",
-        ),
-        limitations=(
-            "Each rule has a narrower scope; this is not whole-program dead-code analysis.",
-        ),
-    ),
-    _binding(
-        "python.unused.pylint",
-        CommonIntent.UNUSED,
-        Scope.PYTHON,
-        "pylint",
-        ("W0611", "W0612", "W0613", "W0614", "W0238"),
-        VersionPolicy.CONSUMER_PINNED,
-        "Imports, local variables, arguments, wildcard imports, and private members.",
-        supported_options=(
-            "ignored-argument-names",
-            "dummy-variables-rgx",
-            "ignored-modules",
-        ),
-        exclusions=(
-            "Configured exports, callback arguments, and generated code remain project-owned.",
-        ),
-        limitations=("Message IDs have different scopes and inference from Ruff.",),
-    ),
-    _binding(
-        "javascript.unused.eslint",
-        CommonIntent.UNUSED,
-        Scope.JAVASCRIPT,
-        "eslint",
-        ("no-unused-vars",),
-        VersionPolicy.CONSUMER_PINNED,
-        "Variables, functions, and parameters analyzed by the configured parser.",
-        supported_options=(
-            "vars",
-            "args",
-            "caughtErrors",
-            "ignoreRestSiblings",
-            "varsIgnorePattern",
-            "argsIgnorePattern",
-            "caughtErrorsIgnorePattern",
-            "destructuredArrayIgnorePattern",
-        ),
-        exclusions=("Ignore patterns and exported globals are consumer-owned.",),
-        limitations=("Module and script modes affect exported/global handling.",),
-    ),
-    _binding(
-        "typescript.unused.eslint",
-        CommonIntent.UNUSED,
-        Scope.TYPESCRIPT,
-        "eslint",
-        ("@typescript-eslint/no-unused-vars",),
-        VersionPolicy.CONSUMER_PINNED,
-        "TypeScript symbols parsed by typescript-eslint.",
-        supported_options=(
-            "vars",
-            "args",
-            "caughtErrors",
-            "ignoreRestSiblings",
-            "varsIgnorePattern",
-            "argsIgnorePattern",
-            "caughtErrorsIgnorePattern",
-            "destructuredArrayIgnorePattern",
-        ),
-        exclusions=(
-            "Type-only symbols and underscore conventions need project settings.",
-        ),
-        required_plugins=(
-            "@typescript-eslint/parser",
-            "@typescript-eslint/eslint-plugin",
-        ),
-        limitations=("Use this rule in place of core no-unused-vars for TypeScript.",),
-    ),
-    _binding(
-        "c-cpp.unused.compiler",
-        CommonIntent.UNUSED,
-        (Scope.C, Scope.CPP),
-        "clang",
-        ("-Wunused-variable", "-Wunused-function", "-Wunused-parameter"),
-        VersionPolicy.TOOLCHAIN_MATCHED,
-        "Variables, functions, and parameters diagnosed by the active compiler flags.",
-        supported_options=(
-            "-Wall",
-            "-Wextra",
-            "-Wunused-variable",
-            "-Wunused-function",
-            "-Wunused-parameter",
-        ),
-        exclusions=(
-            "Compiler-specific diagnostic suppression flags remain authoritative.",
-        ),
-        requires_compiler_context=True,
-        limitations=(
-            "A warning is not available unless the selected compiler enables it.",
-        ),
-    ),
-    _binding(
-        "cpp.unused.clang-tidy-local",
-        CommonIntent.UNUSED,
-        Scope.CPP,
-        "clang-tidy",
-        ("bugprone-unused-local-non-trivial-variable",),
-        VersionPolicy.TOOLCHAIN_MATCHED,
-        "Unused local non-trivial C++ variables.",
-        requires_compiler_context=True,
-        requires_compile_database=True,
-        limitations=("This narrow check is not general unused-symbol analysis.",),
-    ),
-    _binding(
-        "python.unreachable.ruff",
-        CommonIntent.UNREACHABLE,
-        Scope.PYTHON,
-        "ruff",
-        (),
-        VersionPolicy.VERIFIED_RANGE,
-        "Python unreachable statements.",
-        version_range=">=0.16,<1",
-        limitations=("Ruff has no equivalent unreachable-code rule in this mapping.",),
-        status="unsupported",
-    ),
-    _binding(
-        "python.unreachable.pylint",
-        CommonIntent.UNREACHABLE,
-        Scope.PYTHON,
-        "pylint",
-        ("W0101",),
-        VersionPolicy.CONSUMER_PINNED,
-        "Statements Pylint proves unreachable in its analyzed control flow.",
-        limitations=(
-            "Reachability is limited by Pylint's analysis and configuration.",
-        ),
-    ),
-    _binding(
-        "javascript.unreachable.eslint",
-        CommonIntent.UNREACHABLE,
-        (Scope.JAVASCRIPT, Scope.TYPESCRIPT),
-        "eslint",
-        ("no-unreachable",),
-        VersionPolicy.CONSUMER_PINNED,
-        "Statements after unconditional return, throw, continue, or break.",
-        limitations=(
-            "TypeScript can own this check when allowUnreachableCode is false.",
-        ),
-    ),
-    _binding(
-        "typescript.unreachable.compiler",
-        CommonIntent.UNREACHABLE,
-        Scope.TYPESCRIPT,
-        "tsc",
-        ("7027",),
-        VersionPolicy.CONSUMER_PINNED,
-        "Statements TypeScript proves unreachable from JavaScript syntax.",
-        supported_options=("allowUnreachableCode",),
-        required_settings=("allowUnreachableCode=false",),
-        exclusions=("Choose this or ESLint no-unreachable for a file, not both.",),
-        requires_compiler_context=True,
-        limitations=(
-            "The option must be false; editor suggestions with the default are not a gate.",
-        ),
-    ),
-    _binding(
-        "c-cpp.unreachable.clang",
-        CommonIntent.UNREACHABLE,
-        (Scope.C, Scope.CPP),
-        "clang",
-        ("-Wunreachable-code", "-Wunreachable-code-aggressive"),
-        VersionPolicy.TOOLCHAIN_MATCHED,
-        "Compiler-detected unreachable statements under active warning flags.",
-        supported_options=("-Wunreachable-code", "-Wunreachable-code-aggressive"),
-        exclusions=(
-            "Compiler warning suppressions and target-specific flags remain authoritative.",
-        ),
-        requires_compiler_context=True,
-        limitations=(
-            "Do not infer diagnostics for warning flags that were not enabled.",
-        ),
-    ),
-)
-
-
-def binding_for_native_rule(
-    backend: str, native_rule_id: str, language: Scope
-) -> NativeRuleBinding | None:
-    """Resolve a supported native rule without guessing unknown rule IDs."""
-    matches = tuple(
-        binding
-        for binding in NATIVE_RULE_BINDINGS
-        if binding.status == "partial"
-        and binding.backend == backend
-        and native_rule_id in binding.native_rule_ids
-        and language in binding.languages
-    )
-    if len(matches) > 1:
-        raise RuntimeError("native intent catalog contains an ambiguous rule mapping")
-    return matches[0] if matches else None
+    filter_profiles = profile_name is not None or selected_profiles is not None
+    rows: list[IntentBindingRow] = []
+    for item in resolve_intent_bindings(intents, default_failure_threshold):
+        binding = item.binding
+        if not item.enabled:
+            status = "disabled"
+        elif filter_profiles and not active_profiles.intersection(item.intent.profiles):
+            status = "not_selected"
+        elif binding.mapping == "unsupported":
+            status = "unsupported"
+        elif binding.step in selected:
+            status = "supported"
+        else:
+            status = "not_selected"
+        rows.append(
+            {
+                "rule_id": item.intent.rule_id,
+                "summary": item.intent.summary,
+                "language": binding.language,
+                "enabled": item.enabled,
+                "required": item.intent.required,
+                "mapping": binding.mapping,
+                "status": status,
+                "metric": binding.metric,
+                "unit": binding.unit,
+                "count_method": binding.count_method,
+                "threshold": item.threshold,
+                "severity": item.severity,
+                "failure_threshold": item.failure_threshold,
+                "rollout": item.intent.rollout,
+                "profiles": item.intent.profiles,
+                "backend": binding.backend,
+                "version_range": binding.version_range,
+                "native_rule": binding.native_rule,
+                "evidence_format": binding.evidence_format,
+                "evidence_stream": binding.evidence_stream,
+                "supported_options": binding.supported_options,
+                "threshold_values": dict(binding.threshold_values),
+                "coverage_limits": binding.coverage_limits,
+                "effective_configuration": dict(binding.effective_configuration),
+                "files": {
+                    "include": item.files.include,
+                    "exclude": item.files.exclude,
+                },
+                "step": binding.step,
+                "evidence_step": binding.step,
+                "ownership": f"native backend {binding.backend}",
+            }
+        )
+    return tuple(rows)
