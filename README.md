@@ -5,9 +5,31 @@ the river Heracles put to work on the Augean stables.
 The package keeps rule implementations independent of a project's layout and
 loads file scopes, thresholds, and repository conventions from TOML.
 
+## Source layout
+
+`src/alphus/gates/` groups the checks by theme: `source` for source and
+launcher analysis, `review` for advisory rules, `repository` for architecture
+and packaging policy, `hygiene` for size and duplicate-helper rules,
+`stubs` for installed stub-package verification, and `python` for
+package-import smoke and compatibility-import removal checks. Portable
+themes own a `runners.py` that binds selectors to validated policy.
+
+`src/alphus/contracts/` owns shared finding and diagnostic types.
+`src/alphus/policy/` owns validated settings and the built-in rule catalog.
+`src/alphus/execution/` owns rule dispatch, results, and profiles.
+`src/alphus/support/` contains shared file inventory, data access, AST queries,
+and platform probes. The root has only `config.py` and `cli.py` as public
+boundaries, plus package metadata and the module entry point.
+
+`src/alphus_stub_quality/` contains the small Python 3.10 audit helpers copied
+into isolated target environments. It ships in the same Alphus wheel because
+the Python 3.10 target cannot import the Python 3.11+ checker. See the
+[documentation map](docs/README.md) for the guides and the
+[architecture guide](docs/ARCHITECTURE.md) for the dependency map.
+
 ## Install
 
-Use Python 3.11 or newer:
+Use Python 3.11 through 3.15:
 
 ```sh
 python -m pip install .
@@ -15,27 +37,33 @@ python -m pip install .
 
 Run that command from this directory. The package depends on Pydantic 2,
 `packaging`, Typer, and Rich, and installs the `alphus` command.
+The same install also provides `alphus-stub-quality` and
+`alphus-typing-fixtures`; there is no separate stubs package to install.
 
 ## Develop Alphus
 
-Install the package and its Python-only development tools in your active
+Install the package and its Python quality tools in your active
 environment:
 
 ```sh
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[python]"
 ```
 
 Run the self-check profile from the repository root. It applies Alphus's
-portable rules to this source tree, then runs Ruff and the package tests:
+portable and review rules to this source tree, validates TOML, then runs Ruff
+lint/format, strict Pyright, and the package tests:
 
 ```sh
-alphus --root . --config quality-gates.toml --run --profile check
+alphus
 ```
 
 For the installed-wheel version of this check, including the current self-profile
-scope and exclusions, see [Self-checking Alphus](docs/SELF-CHECK.md). The separate
-`review` profile runs [optional advisory checks](docs/REVIEW-CHECKS.md) for numeric
-literals, test contracts, and collection inputs.
+scope and exclusions, see [Self-checking Alphus](docs/SELF-CHECK.md). The
+`review` profile also selects [the review checks](docs/REVIEW-CHECKS.md) alone.
+Those include opt-in Pydantic and FastAPI source sniffers with consumer-owned
+scope and error-code vocabulary.
+See [version support](docs/VERSION-SUPPORT.md) for the checker Python range,
+dependency bounds, stub targets, and native tool ownership.
 
 ## Use from another repository
 
@@ -49,6 +77,20 @@ python -m pip install \
   "alphus @ git+https://github.com/sheepfling/alphus.git@<commit-sha>"
 ```
 
+## Web quality package
+
+This repository also provides an installable JavaScript policy package at
+[`javascript/`](javascript/README.md). It exports shared ESLint, Prettier, and
+strict JavaScript type-check settings with consumer-neutral fixture tests.
+Install it from an immutable Alphus Git commit and use the `eslint` and
+`prettier-javascript` tools in `quality-gates.toml`. The profile supports
+`.js`, `.jsx`, `.mjs`, and `.cjs`; consumers still select their own source and
+test directories in their TypeScript configuration. Alphus resolves ESLint and
+Prettier through `npm exec --no`, using installed local packages.
+Opt-in React and Angular ESLint exports, TypeScript and Angular template
+commands, standard HTML validation, CSS linting, and HTML/CSS formatting are
+documented in the JavaScript package guide.
+
 For local development, point the other repository's development environment at
 the standalone package directory:
 
@@ -56,8 +98,58 @@ the standalone package directory:
 python -m pip install -e /path/to/alphus
 ```
 
-Keep that repository's file patterns and thresholds in its own
-`quality-gates.toml`, then pass both paths explicitly:
+Generate a small, validated policy in a new consumer checkout with
+`alphus --init-config python` or choose `starter`, `markdown`, `toml`, `json`,
+`javascript`, or `polyglot`. Add a bundle with `--add-language markdown` or a
+single tool with `--add-tool mdrepo`. `--config` chooses the destination;
+existing files require `--overwrite-config` before replacement. Preview the
+result with `alphus --plan`.
+
+For a Markdown consumer, add this `quality-gates.toml` to its repository root:
+
+```toml
+schema_version = 1
+tools = ["rumdl"]
+```
+
+Install rumdl in that repository's development environment, then run `alphus`
+from the root. `alphus --profile markdown` selects the generated language
+profile. `alphus --plan` previews the resolved steps and file matches;
+`alphus --fix-plan` shows available fixers. The selected native
+tool keeps its own configuration. A Python repository can start with
+[`examples/python/quality-gates.toml`](examples/python/quality-gates.toml):
+`tools = ["ruff", "pyright", "pytest"]`. Install the Python bundle in the
+consumer's development environment from a local checkout:
+
+```sh
+python -m pip install -e "/path/to/alphus[python]"
+```
+
+For a pinned Git install, use
+`"alphus[python] @ git+https://github.com/sheepfling/alphus.git@<commit-sha>"`
+in the install command above. Ruff supplies lint and format steps;
+Pyright and pytest use the repository's native settings. Optional `mypy`
+and `ty` extras add those fixture checkers when selected. Add `mdrepo`, `taplo`,
+or `prettier` only when those tools are installed and needed. Add a custom
+`[[orchestration.steps]]` beside `tools` when the repository needs another
+check. For a quick multi-language start, select bundles with one `languages`
+line:
+
+```toml
+schema_version = 1
+languages = ["python", "markdown", "toml", "json", "javascript"]
+```
+
+This expands to generated language profiles plus a coordinated `check`.
+Plain TypeScript, HTML, and CSS have bundles too. Add `tools = [...]` for
+individual opt-in checks alongside the bundles; for example, Angular template
+lint can accompany the TypeScript bundle without selecting standard HTML
+validation. Custom profiles and `orchestration_files` compose with those
+bundles. C++ build and artifact commands remain project-specific. The
+[consumer guide](docs/CONSUMER-PROFILES.md) covers profile composition and
+tool-command customization.
+
+From another directory, pass the repository and policy paths explicitly:
 
 ```sh
 alphus --root /path/to/other-repository \
@@ -79,9 +171,11 @@ Consumers depend on `alphus`; they do not copy its source or import
 application packages from the repository that publishes the policy.
 See the [package architecture](docs/ARCHITECTURE.md) for the reusable
 checker, policy, and orchestration boundaries. The
-[consumer profile guide](docs/CONSUMER-PROFILES.md) describes explicit composition
-of Markdown, Python and stub-testing profiles, with a coordinated
-mdrepo, rumdl, and Python-tool example. The
+[consumer profile guide](docs/CONSUMER-PROFILES.md) describes language-specific
+policy files and explicit composition of Markdown, TOML, JSON, Python, and
+stub-testing profiles. Start with its one-file example and add native tools as
+needed. The [subtool guide](docs/SUBTOOLS.md) explains how Alphus coordinates
+rumdl, mdrepo, Taplo, and Prettier. The
 [shared stub-package CI action](docs/STUB-PACKAGE-CI.md) hosts reusable
 PEP 561 build, checker, and runtime-compatibility gates without adding an
 Alphus dependency to published stub packages. The
@@ -105,26 +199,26 @@ Node-based checks, not just because a repository contains JavaScript.
 
 ## Python AST query API
 
-`alphus.source_scanning` provides small, policy-free queries over an already
-parsed Python `ast.Module`. The caller owns file discovery, parsing, scope,
-diagnostic wording, and the decision to reject a pattern. The query module
+`alphus.support.source_scanning` provides small, policy-free queries over
+an already parsed Python `ast.Module`. The caller owns file discovery, parsing,
+scope, diagnostic wording, and the decision to reject a pattern. The query module
 does not load a repository, import inspected source, or read files.
 
-| API | Contract |
-| --- | --- |
-| `ImportAliases` | Frozen record with read-only module and symbol mappings |
-| `import_aliases` | Collect import spellings, including nested imports |
-| `canonical_expression_name` | Resolve a dotted expression using those mappings |
-| `qualified_call_lines` | Find calls to one canonical function or class |
-| `qualified_reference_lines` | Find matching Name/Attribute occurrences; sorted unique lines |
-| `registry_decorated_function_lines` | Find top-level sync/async callbacks for a registry factory |
+| API                                 | Contract                                                      |
+| ----------------------------------- | ------------------------------------------------------------- |
+| `ImportAliases`                     | Frozen record with read-only module and symbol mappings       |
+| `import_aliases`                    | Collect import spellings, including nested imports            |
+| `canonical_expression_name`         | Resolve a dotted expression using those mappings              |
+| `qualified_call_lines`              | Find calls to one canonical function or class                 |
+| `qualified_reference_lines`         | Find matching Name/Attribute occurrences; sorted unique lines |
+| `registry_decorated_function_lines` | Find top-level sync/async callbacks for a registry factory    |
 
 For example, a stored class-method reference is visible even without a call:
 
 ```python
 import ast
 
-from alphus.source_scanning import qualified_reference_lines
+from alphus.support.source_scanning import qualified_reference_lines
 
 tree = ast.parse("from datetime import datetime as Clock\nparse = Clock.fromisoformat\n")
 assert qualified_reference_lines(tree, "datetime.datetime.fromisoformat") == [2]
@@ -149,13 +243,19 @@ alphus --root /path/to/repository \
   --rule file-size
 ```
 
-Run an ordered profile defined by `[orchestration]` in the same policy:
+Run the policy's default profile from the repository root with `alphus`. To
+select another profile from elsewhere:
 
 ```sh
 alphus --root /path/to/repository \
   --config /path/to/quality-gates.toml \
-  --run --profile check
+  --profile check
 ```
+
+Use `--fix-plan --profile check` to see which selected steps declare a fixer.
+Applying one requires `--apply-fixes --fix-step "Step name"`; the ordinary
+check never edits files. See [fix plans](docs/FIXES.md) for the current
+fixability inventory and the file-scoped command contract.
 
 Profiles can mix portable rules with native tools configured as argument
 arrays. A policy that has no Node-based command steps does not require npm or
@@ -165,6 +265,13 @@ argument values for tracked and non-ignored untracked files, applying the step's
 include and exclude patterns. A scoped command passes when no files match and
 does not start the native tool.
 
+For a larger repository, list `orchestration_files` at the top of the root
+policy and put each language's steps and profile in a separate TOML file.
+The root profile composes them in the required order; see the
+[consumer example](examples/consumer/quality-gates.toml). Check commands
+remain read-only, while `fix_argv` lets a consumer declare a separate,
+file-scoped write command for a formatter or linter.
+
 ```toml
 [[orchestration.steps]]
 kind = "command"
@@ -173,11 +280,20 @@ argv = ["ruff", "format", "--check", "{files}"]
 files = { include = ["**/*.py"], exclude = ["**/vendor/**"] }
 ```
 
-Add `--verbose` to write diagnostics to stderr. Human reports use Rich;
-`--json` emits one plain JSON value on stdout.
+Add `--verbose` to write diagnostics to stderr. Human reports use Rich by
+default; pass `--output plain` for unstyled text. `--json` emits one plain JSON
+value on stdout and is independent of the human output style.
 
 The generic Markdown checks include configured line-length and hard file-size
 limits. Python files support those checks plus the AST-based policy rules.
+The `comment-markers` rule can reject configurable temporary-work words in
+Python, TOML, JavaScript, TypeScript, C/C++, and Java comments. It ignores
+strings and reports file and line; add its `[checks.comment_markers]` policy
+and a rule step to a profile to enable it. Alphus selects this rule in its own
+`check` profile.
+Python comments use Python's tokenizer. The JavaScript and C/C++ scanner is
+lexical; it does not fully parse regex literals or template interpolation, so
+native language lint remains useful alongside this gate.
 Markdown link checkers and formatters can be configured as command steps with
 their native arguments and file patterns; reusable support stays in this
 package, while each repository supplies its own tool selection and scope.
@@ -185,8 +301,13 @@ package, while each repository supplies its own tool selection and scope.
 Available rules are `file-size`, `line-length`, `json-structure`,
 `output-escaping`, `path-discovery`, `shared-utilities`, `python-style`,
 `runtime-types`, `cli`, `script-policy`, `module-roles`, `package-boundaries`,
-`dependency-locks`, and `repository-layout`. Package boundaries also check
-the configured architecture graph, metadata versions, and callable registry.
+`dependency-locks`, `repository-layout`, `git-ignores`, `git-history`, and
+`cyclomatic-complexity`. Package boundaries also check the configured
+architecture graph, metadata versions, and callable registry.
+The architecture graph policy accepts `syntax = "flowchart"` (the default)
+or `syntax = "architecture"` for Mermaid's `architecture-beta` diagrams.
+Its edge comparison handles directed links in the selected syntax; diagrams
+using other Mermaid link forms need a matching checker extension.
 Module roles enforce configured import, call, definition, and module-level
 assignment boundaries for audited composition, operation, contract, and adapter
 modules. Assignment rules catch callable and type aliases even inside module
@@ -196,9 +317,12 @@ Repository layout checks configured paths, tracked files, and instruction
 routers. `--report` prints findings with a successful exit status; `--json`
 emits machine-readable findings.
 
-The root must be a Git working tree. Checks receive files selected by the
+The root must be a Git working tree. Source checks receive files selected by
 `[files]` include and exclude patterns. The inventory includes tracked and
 non-ignored untracked files, and skips symlinks and paths that escape the root.
+Git-backed rules read ignore policy, the index, or reachable history directly;
+they need `[checks.git]` but no `[files]` inventory. See the
+[repository hygiene guide](docs/REPOSITORY-HYGIENE.md) for scope and cadence.
 
 ## Minimal policy
 

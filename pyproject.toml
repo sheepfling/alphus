@@ -4,9 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "alphus"
-version = "0.1.0"
+version = "0.0.1"
 description = "Portable, policy-driven source quality gates for Git repositories"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.16"
 readme = "README.md"
 dependencies = [
   "packaging>=23,<27",
@@ -16,16 +16,23 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = [
+python = [
+  "pyright>=1.1.414,<2",
   "pytest>=8,<10",
   "ruff>=0.16,<1",
 ]
+mypy = ["mypy>=2.3,<3"]
+ty = ["ty==0.0.91"]
 cyclomatic-lizard = ["lizard==1.24.2"]
 
 [project.scripts]
 alphus = "alphus.cli:main"
-alphus-typing-fixtures = "alphus_stub_quality.typing_fixtures:main"
-alphus-stub-quality = "alphus_stub_quality.verify:main"
+alphus-typing-fixtures = "alphus.gates.stubs.typing_fixtures:main"
+alphus-stub-quality = "alphus.gates.stubs.verify:main"
+alphus-cpp-quality = "alphus.gates.cpp.cpp_common_quality:main"
+alphus-cpp-advisory-quality = "alphus.gates.cpp.cpp_advisory_quality:main"
+alphus-cpp-artifact-quality = "alphus.gates.cpp.cpp_artifact_quality:main"
+alphus-worktree-hygiene = "alphus.gates.vcs.worktree_hygiene:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -40,10 +47,8 @@ pythonpath = ["src"]
 known-first-party = ["alphus", "alphus_stub_quality"]
 
 [tool.pyright]
-include = ["src"]
+include = ["src", "scripts"]
 extraPaths = ["src"]
-venvPath = "."
-venv = ".venv"
 pythonVersion = "3.11"
 typeCheckingMode = "strict"
 

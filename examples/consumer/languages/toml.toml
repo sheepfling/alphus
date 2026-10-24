@@ -1,0 +1,20 @@
+[[orchestration.steps]]
+kind = "command"
+name = "TOML syntax"
+argv = [
+  "{python}", "-c",
+  "import sys, tomllib; from pathlib import Path; [tomllib.loads(Path(p).read_text(encoding='utf-8')) for p in sys.argv[1:]]",
+  "{files}",
+]
+files = { include = ["**/*.toml", "*.toml"] }
+
+[[orchestration.steps]]
+kind = "command"
+name = "TOML format"
+argv = ["taplo", "fmt", "--check", "{files}"]
+fix_argv = ["taplo", "fmt", "{files}"]
+files = { include = ["**/*.toml", "*.toml"] }
+
+[[orchestration.profiles]]
+name = "toml"
+steps = ["TOML syntax", "TOML format"]

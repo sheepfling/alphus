@@ -77,4 +77,4 @@ runs:
         if [[ "$WITH_TWINE" == "true" ]]; then
           args+=(--with-twine)
         fi
-        "$ALPHUS_CHECKER_PYTHON" -m alphus_stub_quality.verify "${args[@]}"
+        "$ALPHUS_CHECKER_PYTHON" -m alphus.gates.stubs.verify "${args[@]}"

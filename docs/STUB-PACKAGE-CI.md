@@ -1,10 +1,10 @@
 # Shared CI checks for stub packages
 
 Alphus hosts the reusable PEP 561 stub-package verification action at
-[`ci/stub-quality`](../ci/stub-quality). The reusable gates and inspection
-helpers
-live in `src/alphus_stub_quality` and ship in the Alphus wheel. The action
-invokes that same implementation from its pinned checkout.
+[`ci/stub-quality`](../ci/stub-quality). The verifier and fixture runner live
+in `src/alphus/gates/stubs`; Python 3.10-compatible audit helpers live in
+`src/alphus_stub_quality`. Both ship in the one Alphus wheel. The action
+invokes the same verifier from its pinned checkout.
 Alphus is a verification tool; consumer distributions retain only their stubs
 and runtime requirements.
 
@@ -49,19 +49,19 @@ Example caller step (replace the revision with the reviewed Alphus commit SHA):
 
 ## Separate checker and target environments
 
-Alphus installs on Python >=3.11. A stub package may target Python >=3.10.
+Alphus installs on Python >=3.11,<3.16. A stub package may target Python >=3.10.
 `--target-python` names the actual target executable; the default is the
 checker interpreter for compatibility with existing local commands.
 `ALPHUS_TARGET_PYTHON` supplies the same selection to a composed profile.
 The verifier probes and records both full versions, executable paths, prefixes
 and installed tool versions before running. It preserves venv executable paths.
 
-| Stage | Interpreter/environment |
-| --- | --- |
-| Wheel/sdist build without isolation; install; pip check | Target |
-| API adapter; native mypy.stubtest; runtime smoke | Target |
-| Mypy/Pyright positive and expected-negative fixtures | Checker; explicit target packages and version |
-| Optional native Twine metadata check | Checker |
+| Stage                                                   | Interpreter/environment                       |
+| ------------------------------------------------------- | --------------------------------------------- |
+| Wheel/sdist build without isolation; install; pip check | Target                                        |
+| API adapter; native mypy.stubtest; runtime smoke        | Target                                        |
+| Pyright fixtures; optional Mypy/Ty                      | Checker; explicit target packages and version |
+| Optional native Twine metadata check                    | Checker                                       |
 
 Mypy receives `--python-executable TARGET --python-version X.Y`; Pyright
 receives `--pythonpath TARGET --pythonversion X.Y`. `X.Y` comes from the actual
@@ -69,21 +69,23 @@ target probe. The standalone fixture CLI also probes the target and rejects a
 conflicting explicit version. These flags override consumer language defaults.
 The checker's own version alone is not compatibility evidence.
 
-For a reusable POSIX local run, start in the consumer repository. Replace
-`/path/to/alphus.whl` with the reviewed wheel and choose each target interpreter:
+For a reusable POSIX local run, start in the consumer repository. Set
+`ALPHUS_WHEEL` to the reviewed wheel and choose each target interpreter:
 
-```sh
+```shell
+ALPHUS_WHEEL="$(find dist -maxdepth 1 -name 'alphus-*.whl' -print -quit)"
+test -n "$ALPHUS_WHEEL" || { echo 'Build an Alphus wheel in dist/ first' >&2; exit 1; }
 repo="$(pwd)"
 work="$(mktemp -d)"
 python3.12 -m venv "$work/checker"
 python3.10 -m venv "$work/target"
-"$work/checker/bin/python" -m pip install /path/to/alphus.whl \
+"$work/checker/bin/python" -m pip install "$ALPHUS_WHEEL" \
   'mypy>=2.3' 'pyright>=1.1.414' 'twine>=7.0'
 "$work/target/bin/python" -m pip install -r "$repo/requirements-target.txt" \
   -r "$repo/requirements-compat.txt"
 (
   cd "$work"
-  "$work/checker/bin/python" -m alphus_stub_quality.verify \
+  "$work/checker/bin/python" -m alphus.gates.stubs.verify \
     --root "$repo" --config stub-quality.json --with-twine \
     --target-python "$work/target/bin/python" --report "$work/result.json"
 )
@@ -119,8 +121,22 @@ version. The caller retains its trigger and permission policy.
 
 ## Generic gates and consumer adapters
 
-`alphus-typing-fixtures` (also `python -m alphus_stub_quality.typing_fixtures`)
-checks positive and expected-negative examples through native Mypy and Pyright.
+`alphus-typing-fixtures` (also `python -m alphus.gates.stubs.typing_fixtures`)
+checks positive and expected-negative examples with Pyright by default.
+Mypy and Ty are opt-in fixture checkers: install `alphus[python,mypy]` or
+`alphus[python,ty]` in the checker environment, then select
+`--checkers pyright mypy` or `--checkers pyright ty`. The Ty extra pins its
+pre-1.0 checker version because its diagnostic contract can change between
+releases. Ty uses concise diagnostics and accepts the selected target
+interpreter and Python version. Add `--ty-diagnostic` to require a specific
+negative diagnostic. The isolated verifier accepts
+`typing_checkers = ["pyright", "mypy", "ty"]` in its `verification` config.
+
+The fixture runner probes every selected checker module before running cases.
+The shared `alphus.support.tool_probe` also locates native commands; the C++
+artifact scanner uses it for objdump. The installed-stub verifier still needs
+Mypy in its target environment for the separate `mypy.stubtest` stage.
+
 Positive examples require exit zero and no errors. Negative contracts require
 an exact set of marked lines, or a configured diagnostic count, plus any
 checker-specific diagnostic fragments. An unrelated failure never establishes
@@ -149,14 +165,18 @@ semantics.
 Source shape checks preserve AST default expressions and decorator distinctions.
 
 Only the five shared audit helper files need Python 3.10 compatibility.
-The controller stays installed in the Python >=3.11 checker environment.
+The controller stays installed in the Python >=3.11,<3.16 checker environment.
 Alphus's own regression suite uses these same shared engines with neutral
 positive and intentionally broken examples.
 
 The execution gates use the installed `alphus-typing-fixtures` and
 `alphus-stub-quality` entrypoints. They can be selected as command steps in an
-Alphus profile; they are not source-only `--rule` scanners. The GitHub Action
-installs the same pinned Alphus code as a verification tool.
+Alphus profile. They are workflow gates that coordinate native tools and
+environments, so they use the same command-step interface as other tools
+instead of the source-only `--rule` scanner interface. The GitHub Action
+installs the same pinned Alphus code as a verification tool. The former
+stub helper forwarders have been removed; import controller APIs from
+`alphus.gates.stubs` and target audit helpers from `alphus_stub_quality`.
 
 The [migration record](TEST-GATE-MIGRATION.md) maps consumer ownership and
 records revision-specific acceptance evidence.

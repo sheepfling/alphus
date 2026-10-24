@@ -155,11 +155,12 @@ def validate_stub_tree(
             and node.name in forbidden_names
         ):
             fail(f"{module_name} stub defines a dynamic fallback {node.name!r}")
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            if node.name.startswith("_") and not (
-                node.name.startswith("__") and node.name.endswith("__")
-            ):
-                fail(f"{module_name} stub exposes private declaration {node.name!r}")
+        if (
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+            and node.name.startswith("_")
+            and not (node.name.startswith("__") and node.name.endswith("__"))
+        ):
+            fail(f"{module_name} stub exposes private declaration {node.name!r}")
         if isinstance(node, ast.ImportFrom) and any(
             alias.name == "*" for alias in node.names
         ):
@@ -239,10 +240,12 @@ def validate_stub_tree(
             for member_name, member in vars(runtime_class).items()
             if visible_class_member(member_name, member)
         }
-        if set(runtime_member_values) != set(stub_members):
+        assigned = assigned_public_instance_attributes(source_path, name)
+        runtime_members = set(runtime_member_values) | assigned
+        if runtime_members != set(stub_members):
             fail(
                 f"class members differ for {module_name}.{name}: "
-                f"stub {sorted(stub_members)}; runtime {sorted(runtime_member_values)}"
+                f"stub {sorted(stub_members)}; runtime {sorted(runtime_members)}"
             )
 
         for member_name, runtime_member in runtime_member_values.items():
@@ -287,7 +290,6 @@ def validate_stub_tree(
                 ):
                     fail(f"runtime callable {label} is not declared as a stub method")
 
-        assigned = assigned_public_instance_attributes(source_path, name)
         declared_attributes = {
             member_name
             for member_name, member in stub_members.items()

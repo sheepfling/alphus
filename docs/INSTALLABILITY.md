@@ -2,11 +2,28 @@
 
 ## Candidate package
 
-The candidate is `sheepfling/alphus`, under review in draft PR #1 on
+The candidate is `sheepfling/alphus`, under review in PR #1 on
 `codex/alphus-quality-closure`; the closure changes are recorded in the
-review-candidate snapshot below. The package declares version `0.1.0`, Python
-`>=3.11`, the `alphus` console command, and `py.typed`. The earlier 3.11 and
-3.12 proofs document source revisions tested before this closure work.
+review-candidate snapshot below. The current package version and Python range
+are declared in `pyproject.toml`; the `0.1.0` artifacts below are historical
+proofs from earlier source revisions. The package provides the `alphus`
+console command and `py.typed`.
+
+## Current editable-install proof (2026-10-22)
+
+At commit `45f26bf92cc3d01127c05a1995d75219720df736`, a disposable Python
+3.12.14 environment on Windows installed the checkout with `uv pip install -e .`
+and resolved its runtime dependencies. The installed `alphus --help` command
+exited successfully. Installed metadata exposed the expected `alphus.cli:main`,
+`alphus_stub_quality.verify:main`, and
+`alphus_stub_quality.typing_fixtures:main` entry points. This validates the
+current editable packaging path; it does not establish a public-index install
+or a hosted CI result. The self-profile's package-boundary step now rejects
+malformed console and GUI entry-point references such as `alphus.:main` before
+a build backend is invoked.
+The entry-point paths above record that historical proof. The current source
+points those same console commands at `alphus.gates.stubs`; the historical
+module paths have since been removed.
 
 ## Python 3.11 wheel and runtime proof
 

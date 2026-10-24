@@ -1,0 +1,33 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py", "tests/**/*.py"]
+exclude = []
+
+[checks.fastapi_practices]
+extensions = [".py"]
+exclude = []
+report_literal_status = true
+
+[orchestration]
+default_profile = "fastapi"
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "command"
+name = "FastAPI Ruff checks"
+argv = [
+  "{python}", "-m", "ruff", "check", "--config", "ruff.fastapi.toml",
+  "--force-exclude", "{files}",
+]
+files = { include = ["src/**/*.py", "tests/**/*.py"] }
+
+[[orchestration.steps]]
+kind = "rule"
+name = "FastAPI style advisory"
+rule = "fastapi-practices"
+severity = "warning"
+
+[[orchestration.profiles]]
+name = "fastapi"
+steps = ["FastAPI Ruff checks", "FastAPI style advisory"]

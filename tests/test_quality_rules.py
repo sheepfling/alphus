@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import json
 import subprocess
+from collections.abc import Callable, Sequence
 from io import StringIO
 from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
-from alphus import cli
 from alphus.cli import main
 from alphus.config import (
     NodeCliPolicy,
@@ -20,9 +20,16 @@ from alphus.config import (
     load_config,
     load_config_stream,
 )
-from alphus.findings import Finding
-from alphus.inventory import candidate_files, matches_path, tracked_files
-from alphus.rules import check_file_size, check_line_length
+from alphus.contracts.findings import Diagnostic, Finding
+from alphus.execution.results import (
+    RuleEvaluation,
+    diagnostics_from_json,
+    diagnostics_from_output,
+)
+from alphus.gates.hygiene.rules import check_file_size, check_line_length
+from alphus.gates.source import runners as source_runners
+from alphus.support import git, inventory
+from alphus.support.inventory import candidate_files, matches_path, tracked_files
 
 POLICY = """schema_version = 1
 
@@ -157,6 +164,7 @@ def test_loaded_policy_collections_are_immutable(tmp_path: Path) -> None:
 
     config = load_config(tmp_path / "quality.toml")
 
+    assert config.files is not None
     assert isinstance(config.files.include, tuple)
     assert config.checks.file_size is not None
     assert config.checks.line_length is not None
@@ -282,6 +290,7 @@ def test_inventory_applies_policy_to_tracked_and_new_files(tmp_path: Path) -> No
     _write(tmp_path, "generated/output.py", "ignored = True\n")
     config = load_config(tmp_path / "quality.toml")
 
+    assert config.files is not None
     assert [path.as_posix() for path in candidate_files(tmp_path, config.files)] == [
         "src/new.py",
     ]
@@ -300,6 +309,20 @@ def test_tracked_inventory_excludes_untracked_files(tmp_path: Path) -> None:
     )
 
     assert tracked_files(tmp_path) == [Path("tracked.docx")]
+
+
+@pytest.mark.parametrize("reader", [inventory.git_files, inventory.tracked_files])
+def test_inventory_explains_missing_git(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    reader: Callable[[Path], Sequence[Path]],
+) -> None:
+    def missing_git(*_args: object, **_kwargs: object) -> None:
+        raise FileNotFoundError("git")
+
+    monkeypatch.setattr(git.subprocess, "run", missing_git)
+    with pytest.raises(OSError, match="Git is required for Alphus file inventory"):
+        reader(tmp_path)
 
 
 def test_recursive_globs_match_nested_directories_and_root_files() -> None:
@@ -323,22 +346,43 @@ def test_source_rules_report_stable_locations_and_messages(tmp_path: Path) -> No
     )
     config = load_config(tmp_path / "quality.toml")
 
+    assert config.files is not None
     files = candidate_files(tmp_path, config.files)
     line_findings = check_line_length(tmp_path, files, config)
     assert [(item.rule_id, item.path, item.line) for item in line_findings] == [
-        ("source.line-length", "docs/README.md", 1),
-        ("source.line-length", "src/long.py", 1),
-        ("source.line-length", "src/pkg/__init__.py", 1),
-        ("source.line-length", "vendor/lib.py", 1),
+        ("alphus/any/none/style/line-too-long", "docs/README.md", 1),
+        ("alphus/any/none/style/line-too-long", "src/long.py", 1),
+        ("alphus/any/none/style/line-too-long", "src/pkg/__init__.py", 1),
+        ("alphus/any/none/style/line-too-long", "vendor/lib.py", 1),
     ]
 
     size_findings = check_file_size(tmp_path, files, config)
     assert [(item.rule_id, item.path, item.line) for item in size_findings] == [
-        ("source.code-file-size", "src/oversized.py", None),
-        ("source.initializer-size", "src/pkg/__init__.py", None),
-        ("source.initializer-wildcard-import", "src/pkg/__init__.py", 1),
-        ("source.initializer-definition", "src/pkg/__init__.py", 3),
-        ("source.code-file-size", "src/pkg/__init__.py", None),
+        (
+            "alphus/any/none/maintainability/code-file-too-large",
+            "src/oversized.py",
+            None,
+        ),
+        (
+            "alphus/python/none/maintainability/initializer-too-large",
+            "src/pkg/__init__.py",
+            None,
+        ),
+        (
+            "alphus/python/none/style/initializer-wildcard-import",
+            "src/pkg/__init__.py",
+            1,
+        ),
+        (
+            "alphus/python/none/architecture/initializer-contains-definition",
+            "src/pkg/__init__.py",
+            3,
+        ),
+        (
+            "alphus/any/none/maintainability/code-file-too-large",
+            "src/pkg/__init__.py",
+            None,
+        ),
     ]
 
 
@@ -363,7 +407,7 @@ def test_cli_uses_an_explicit_root_and_emits_machine_readable_findings(
         == 1
     )
     output = capsys.readouterr().out
-    assert '"rule_id": "source.line-length"' in output
+    assert '"rule_id": "alphus/any/none/style/line-too-long"' in output
     assert '"path": "src/long.py"' in output
 
 
@@ -384,6 +428,7 @@ def test_json_cli_keeps_findings_and_report_exit_behavior(
 
     assert main(arguments) == 1
     assert capsys.readouterr().out == (
+        "ERROR alphus/python/none/validation/unvalidated-json-decode "
         "src/decode.py:2: raw JSON decode; validate into a named model\n"
         "JSON structure: 1 violation(s)\n"
     )
@@ -478,6 +523,7 @@ kind = "rule"
 name = "line check"
 rule = "line-length"
 severity = "warning"
+priority = "high"
 
 [[orchestration.profiles]]
 name = "check"
@@ -491,31 +537,50 @@ steps = ["line check"]
     payload = json.loads(capsys.readouterr().out)
     assert payload["steps"][0]["status"] == "passed"
     assert payload["steps"][0]["findings"][0]["severity"] == "warning"
+    assert payload["steps"][0]["findings"][0]["priority"] == "high"
     assert payload["steps"][0]["findings"][0]["source"] == "alphus"
     assert payload["severity_counts"] == {"error": 0, "warning": 1, "info": 0}
 
     assert main(arguments) == 0
     text_output = capsys.readouterr().out
-    assert "WARNING alphus source.line-length" in text_output
+    assert "WARNING alphus/any/none/style/line-too-long" in text_output
+    assert "[priority=high]" in text_output
     assert "Diagnostic triage: 0 error(s), 1 warning(s), 0 info(s)" in text_output
 
 
 def test_rule_profile_json_adapters_validate_each_owned_shape() -> None:
-    style_findings = cli._diagnostics_from_rule_json(
+    style_findings = diagnostics_from_json(
         "python-style",
         json.dumps({"src/example.py": {"bare_containers": [7]}}),
     )
-    assert style_findings == (
-        cli.Diagnostic(
+    assert style_findings == [
+        Diagnostic(
             source="alphus",
-            rule_id="python-style.bare_containers",
+            rule_id="alphus/python/none/style/bare-containers",
             path="src/example.py",
             line=7,
             message="bare containers",
         ),
-    )
+    ]
 
-    shared_findings = cli._diagnostics_from_rule_json(
+    advisory_findings = diagnostics_from_json(
+        "python-style",
+        json.dumps(
+            {
+                "src/example.py": {
+                    "bare_containers": [],
+                    "heterogeneous_tuple_returns": [8],
+                    "opaque_mappings": [12],
+                }
+            }
+        ),
+    )
+    assert [(item.rule_id, item.severity) for item in advisory_findings] == [
+        ("alphus/python/none/style/heterogeneous-tuple-returns", "warning"),
+        ("alphus/python/none/style/opaque-mappings", "warning"),
+    ]
+
+    shared_findings = diagnostics_from_json(
         "shared-utilities",
         json.dumps(
             {
@@ -526,23 +591,43 @@ def test_rule_profile_json_adapters_validate_each_owned_shape() -> None:
         ),
     )
     assert [finding.rule_id for finding in shared_findings] == [
-        "shared-utilities.duplicate-helper",
-        "shared-utilities.file-hash-implementation",
+        "alphus/python/none/maintainability/duplicate-helper",
+        "alphus/python/none/maintainability/duplicate-file-hash-implementation",
     ]
 
-    legacy_messages = cli._diagnostics_from_rule_json(
+    legacy_messages = diagnostics_from_json(
         "runtime-types", '["src/example.py:4: annotate the union"]'
     )
-    assert legacy_messages[0].rule_id == "alphus.runtime-types"
+    assert (
+        legacy_messages[0].rule_id
+        == "alphus/python/none/typing/runtime-type-contract-violation"
+    )
     assert legacy_messages[0].message == "src/example.py:4: annotate the union"
 
-    finding_records = cli._diagnostics_from_rule_json(
+    finding_records = diagnostics_from_json(
         "line-length",
-        '[{"rule_id":"source.line-length","path":"src/example.py",'
+        '[{"rule_id":"alphus/any/none/style/line-too-long","path":"src/example.py",'
         '"line":4,"message":"line is long","severity":"warning"}]',
     )
     assert finding_records[0].severity == "warning"
     assert finding_records[0].source == "alphus"
+
+
+def test_rule_evaluation_validates_structured_output_before_rendering() -> None:
+    finding = Finding(
+        rule_id="alphus/any/none/style/line-too-long",
+        path="src/example.py",
+        line=4,
+        message="line is long",
+        severity="warning",
+    )
+    evaluation = RuleEvaluation.from_output("line-length", [finding], "warning")
+    assert evaluation.output == [finding]
+    assert evaluation.diagnostics == [finding.as_diagnostic()]
+    assert evaluation.failed
+
+    with pytest.raises(ValidationError):
+        diagnostics_from_output("line-length", ["not a Finding"])
 
 
 def test_direct_rule_uses_threshold_and_report_mode_overrides_it(
@@ -571,7 +656,7 @@ steps = ["json check"]
     def warning_json_finding(*_args: object) -> list[Finding]:
         return [
             Finding(
-                "json.raw-decode",
+                "alphus/python/none/validation/unvalidated-json-decode",
                 "src/decode.py",
                 "validate raw JSON",
                 line=3,
@@ -579,7 +664,7 @@ steps = ["json check"]
             )
         ]
 
-    monkeypatch.setattr(cli, "check_json_structure", warning_json_finding)
+    monkeypatch.setattr(source_runners, "check_json_structure", warning_json_finding)
     arguments = [
         "--root",
         str(tmp_path),
@@ -595,11 +680,17 @@ steps = ["json check"]
 
     assert main(arguments) == 1
     output = capsys.readouterr().out
-    assert "WARNING alphus json.raw-decode src/decode.py:3: validate raw JSON" in output
+    assert (
+        "WARNING alphus/python/none/validation/unvalidated-json-decode "
+        "src/decode.py:3: validate raw JSON" in output
+    )
     assert "Severity totals: 0 error(s), 1 warning(s), 0 info(s)" in output
 
     assert main([*arguments, "--report"]) == 0
-    assert "WARNING alphus json.raw-decode src/decode.py:3" in capsys.readouterr().out
+    assert (
+        "WARNING alphus/python/none/validation/unvalidated-json-decode src/decode.py:3"
+        in capsys.readouterr().out
+    )
 
 
 def test_invalid_cli_policy_reports_validation_error_without_traceback(
@@ -607,7 +698,7 @@ def test_invalid_cli_policy_reports_validation_error_without_traceback(
 ) -> None:
     """Invalid policy input becomes a concise command error on stderr."""
     _repository(tmp_path)
-    (tmp_path / "quality.toml").write_text("schema_version = 1\n", encoding="utf-8")
+    (tmp_path / "quality.toml").write_text("schema_version = 2\n", encoding="utf-8")
     arguments = [
         "--root",
         str(tmp_path),
@@ -685,6 +776,7 @@ def test_output_escaping_cli_renders_configured_scanner_findings(
         == 1
     )
     assert capsys.readouterr().out == (
+        "ERROR alphus/python/none/security/manual-output-escaping "
         "src/render.py:1: manual output escape replacement; "
         "use a library or tested shared utility\n"
         "Output escaping: 1 finding(s)\n"
@@ -740,6 +832,7 @@ def test_runtime_type_cli_uses_configured_exclusions_and_report_mode(
 
     assert main(arguments) == 1
     assert capsys.readouterr().out == (
+        "alphus/python/none/typing/runtime-type-contract-violation: "
         "src/runtime.py:2: runtime type check requires an explicit union annotation\n"
         "Runtime type checks: 1 violation(s)\n"
     )
@@ -767,5 +860,5 @@ def test_cli_policy_cli_uses_configured_contract_and_manifest(
     ]
 
     assert main(arguments) == 1
-    assert len(json.loads(capsys.readouterr().out)) == 5
+    assert len(json.loads(capsys.readouterr().out)) == 7
     assert main([*arguments, "--report"]) == 0

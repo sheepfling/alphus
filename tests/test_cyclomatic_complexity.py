@@ -11,15 +11,15 @@ from typing import cast
 import pytest
 from pydantic import ValidationError
 
-import alphus.cyclomatic_complexity as complexity
-from alphus import _lizard_worker as lizard_worker
 from alphus import cli
 from alphus.cli import main
-from alphus.config_metrics import (
+from alphus.contracts.findings import Diagnostic
+from alphus.gates.source import _lizard_worker as lizard_worker
+from alphus.gates.source import cyclomatic_complexity as complexity
+from alphus.policy.metrics import (
     CyclomaticComplexityPolicy,
     RuffCyclomaticBinding,
 )
-from alphus.findings import Diagnostic
 
 FIXTURES = Path(__file__).parent / "fixtures" / "cyclomatic"
 
@@ -77,7 +77,9 @@ def _read_fixture(name: str) -> str:
     return (FIXTURES / name).read_text(encoding="utf-8")
 
 
-def test_policy_has_explicit_advisory_thresholds_and_rejects_unsupported_options() -> None:
+def test_policy_has_explicit_advisory_thresholds_and_rejects_unsupported_options() -> (
+    None
+):
     policy = _policy(_ruff())
     assert policy.severity == "warning"
     assert policy.maximum == 3
@@ -119,7 +121,9 @@ def test_plan_is_sorted_native_and_scopes_out_generated_and_vendor_files(
     assert python.command is not None
     assert "C901" in python.command
     assert "lint.mccabe.max-complexity=3" in python.command
-    assert all("ignored" not in path for backend in plan.backends for path in backend.files)
+    assert all(
+        "ignored" not in path for backend in plan.backends for path in backend.files
+    )
     assert "complete per-function inventory" in python.unsupported_capabilities
 
 
@@ -145,9 +149,7 @@ def test_ruff_gate_fixture_is_violation_only_and_fails_closed_on_unknown_output(
             "0.16.1",
         )
     with pytest.raises(ValueError, match="could not parse"):
-        complexity._parse_ruff(
-            '[{"code":"invalid-syntax"}]', root, plan, "0.16.1"
-        )
+        complexity._parse_ruff('[{"code":"invalid-syntax"}]', root, plan, "0.16.1")
 
 
 def test_eslint_fixture_preserves_variant_and_never_invents_numeric_values(
@@ -205,9 +207,7 @@ def test_eslint_keeps_methods_and_same_line_closures_distinct(
             ],
         }
     ]
-    records, _ = complexity._parse_eslint(
-        json.dumps(payload), root, plan, "10.13.0"
-    )
+    records, _ = complexity._parse_eslint(json.dumps(payload), root, plan, "10.13.0")
 
     assert [record.column for record in records] == [10, 35, 3]
     assert records[0].function_identity != records[1].function_identity
@@ -298,9 +298,7 @@ def test_lizard_worker_uses_the_pinned_api_and_filters_global_records(
     assert payload["files"] == [
         {
             "path": "sample.cpp",
-            "functions": [
-                {"name": "Engine::run(int)", "line": 4, "value": 5}
-            ],
+            "functions": [{"name": "Engine::run(int)", "line": 4, "value": 5}],
         }
     ]
 
@@ -356,7 +354,9 @@ def test_native_failures_are_operational_not_clean(
     assert backend.failure is not None and message in backend.failure
 
 
-def test_excluded_only_scope_is_reported_as_empty_not_as_a_score(tmp_path: Path) -> None:
+def test_excluded_only_scope_is_reported_as_empty_not_as_a_score(
+    tmp_path: Path,
+) -> None:
     root = _repository(tmp_path, "generated/output.py")
     policy = _policy(_ruff())
 
@@ -375,9 +375,7 @@ def test_windows_batch_launchers_use_the_platform_command_shell(
         complexity.shutil, "which", lambda _: "C:/consumer/node_modules/.bin/eslint.cmd"
     )
     assert complexity._native_shell_required("eslint") is True
-    monkeypatch.setattr(
-        complexity.shutil, "which", lambda _: "C:/tools/ruff.exe"
-    )
+    monkeypatch.setattr(complexity.shutil, "which", lambda _: "C:/tools/ruff.exe")
     assert complexity._native_shell_required("ruff") is False
     monkeypatch.setattr(complexity, "is_windows", lambda: False)
     assert complexity._native_shell_required("eslint.cmd") is False
@@ -405,18 +403,21 @@ version = "0.16.1"
         encoding="utf-8",
     )
 
-    assert main(
-        [
-            "--root",
-            str(root),
-            "--config",
-            str(config),
-            "--rule",
-            "cyclomatic-complexity",
-            "--plan",
-            "--json",
-        ]
-    ) == 0
+    assert (
+        main(
+            [
+                "--root",
+                str(root),
+                "--config",
+                str(config),
+                "--rule",
+                "cyclomatic-complexity",
+                "--plan",
+                "--json",
+            ]
+        )
+        == 0
+    )
     plan = json.loads(capsys.readouterr().out)
     assert plan["backends"][0]["backend"] == "ruff"
     assert "C901" in plan["backends"][0]["command"]
@@ -425,7 +426,9 @@ version = "0.16.1"
 def test_installed_package_example_loads_all_three_opt_in_backends() -> None:
     from alphus.config import load_config
 
-    config_path = Path(__file__).parents[1] / "examples" / "cyclomatic" / "quality-gates.toml"
+    config_path = (
+        Path(__file__).parents[1] / "examples" / "cyclomatic" / "quality-gates.toml"
+    )
     config = load_config(config_path)
 
     assert config.checks.cyclomatic_complexity is not None
@@ -494,7 +497,7 @@ steps = ["Cyclomatic", "Existing command"]
         functions=(),
         diagnostics=(),
     )
-    monkeypatch.setattr(cli, "run_cyclomatic_complexity", lambda *_: clean_report)
+    monkeypatch.setattr(cli, "run_builtin_rule", lambda *_: clean_report)
 
     assert main(["--root", str(root), "--config", str(config), "--run", "--json"]) == 0
     payload = json.loads(capsys.readouterr().out)
@@ -507,7 +510,7 @@ steps = ["Cyclomatic", "Existing command"]
 def test_report_exit_code_keeps_advisories_and_operational_errors_distinct() -> None:
     diagnostic = Diagnostic(
         source="alphus",
-        rule_id="cyclomatic-complexity.threshold",
+        rule_id="alphus/any/none/maintainability/cyclomatic-complexity-threshold",
         message="above limit",
         severity="warning",
     )
