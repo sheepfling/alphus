@@ -17,12 +17,17 @@ from alphus.contracts.findings import (
 )
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
+from alphus.gates.source.cyclomatic_complexity import CyclomaticReport
 from alphus.gates.source.python_style import StyleFindings
 from alphus.policy.base import QualityRuleName
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
 
 RuleOutput: TypeAlias = (
-    list[Finding] | list[str] | dict[str, StyleFindings] | SharedUtilitiesReport
+    list[Finding]
+    | list[str]
+    | dict[str, StyleFindings]
+    | SharedUtilitiesReport
+    | CyclomaticReport
 )
 PythonStyleOutput: TypeAlias = dict[str, dict[str, list[int]]]
 
@@ -36,14 +41,24 @@ class _SharedUtilitiesWire(BaseModel):
     direct_git_calls: tuple[str, ...] = ()
 
 
+class _CyclomaticWire(BaseModel):
+    """Validate the direct-rule report and diagnostic envelope together."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    diagnostics: tuple[Diagnostic, ...]
+    report: CyclomaticReport
+    summary: str
+
+
 _FINDINGS: TypeAdapter[list[Finding]] = TypeAdapter(list[Finding])
 _MESSAGES: TypeAdapter[list[str]] = TypeAdapter(list[str])
 _PYTHON_STYLE: TypeAdapter[PythonStyleOutput] = TypeAdapter(PythonStyleOutput)
 _SHARED_UTILITIES: TypeAdapter[_SharedUtilitiesWire] = TypeAdapter(_SharedUtilitiesWire)
 _SHARED_REPORT: TypeAdapter[SharedUtilitiesReport] = TypeAdapter(SharedUtilitiesReport)
-_ADVISORY_STYLE_CATEGORIES = frozenset(
-    {"opaque_mappings", "heterogeneous_tuple_returns"}
-)
+_CYCLOMATIC_WIRE: TypeAdapter[_CyclomaticWire] = TypeAdapter(_CyclomaticWire)
+_ADVISORY_STYLE_CATEGORIES = frozenset({"opaque_mappings", "unnamed_tuple_returns"})
+_STYLE_COMPATIBILITY_ONLY_CATEGORIES = frozenset({"concrete_self_returns"})
 
 _MESSAGE_RULE_IDS: Mapping[QualityRuleName, str] = MappingProxyType(
     {
@@ -95,6 +110,7 @@ def _style_diagnostics(
         for path, buckets in payload.items()
         for category, lines in buckets.items()
         for line in lines
+        if category not in _STYLE_COMPATIBILITY_ONLY_CATEGORIES
     ]
 
 
@@ -175,6 +191,10 @@ def diagnostics_from_output(
     if shape is RuleOutputShape.PYTHON_STYLE:
         payload = _PYTHON_STYLE.validate_python(output)
         return _style_diagnostics(payload)
+    if shape is RuleOutputShape.CYCLOMATIC_REPORT:
+        return list(output.diagnostics) if isinstance(output, CyclomaticReport) else []
+    if shape is not RuleOutputShape.SHARED_UTILITIES:
+        raise ValueError(f"rule {rule!r} has no output normalizer")
     report = _SHARED_REPORT.validate_python(output)
     return _shared_diagnostics(
         report.duplicate_groups,
@@ -193,6 +213,13 @@ def diagnostics_from_json(rule: QualityRuleName, encoded: str) -> list[Diagnosti
         return _message_diagnostics(rule, _MESSAGES.validate_json(encoded))
     if shape is RuleOutputShape.PYTHON_STYLE:
         return _style_diagnostics(_PYTHON_STYLE.validate_json(encoded))
+    if shape is RuleOutputShape.CYCLOMATIC_REPORT:
+        payload = _CYCLOMATIC_WIRE.validate_json(encoded)
+        if payload.report.diagnostics != payload.diagnostics:
+            raise ValueError("cyclomatic complexity report diagnostics do not match")
+        return list(payload.diagnostics)
+    if shape is not RuleOutputShape.SHARED_UTILITIES:
+        raise ValueError(f"rule {rule!r} has no JSON output normalizer")
     report = _SHARED_UTILITIES.validate_json(encoded)
     return _shared_diagnostics(
         report.duplicate_groups,

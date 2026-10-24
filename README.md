@@ -202,6 +202,9 @@ PEP 561 build, checker, and runtime-compatibility gates without adding an
 Alphus dependency to published stub packages. The
 [extension and diagnostics proposal](docs/EXTENSIBILITY.md) records a staged
 design for categories, shared findings, and future third-party rules. The
+[cyclomatic complexity guide](docs/CYCLOMATIC-COMPLEXITY.md) documents the
+opt-in native Python, C/C++, and JavaScript metric gates and their distinct
+counting limits. The
 [installability report](docs/INSTALLABILITY.md) records the current wheel,
 Python-version, and distribution evidence.
 
@@ -270,6 +273,10 @@ alphus --root /path/to/repository \
   --profile check
 ```
 
+Profiles run serially by default. Consumers can mark independent steps for
+[parallel execution](docs/PARALLEL-EXECUTION.md) and set a bounded worker
+budget with `--jobs N`.
+
 Use `--fix-plan --profile check` to see which selected steps declare a fixer.
 Applying one requires `--apply-fixes --fix-step "Step name"`; the ordinary
 check never edits files. See [fix plans](docs/FIXES.md) for the current
@@ -302,8 +309,11 @@ Add `--verbose` to write diagnostics to stderr. Human reports use Rich by
 default; pass `--output plain` for unstyled text. `--json` emits one plain JSON
 value on stdout and is independent of the human output style.
 
-The generic Markdown checks include configured line-length and hard file-size
-limits. Python files support those checks plus the AST-based policy rules.
+The generic checks include configured Unicode-code-point line lengths,
+physical-line limits, and optional advisory raw-byte limits. Their units,
+newline behavior, backward-compatible names, path precedence, and native-tool
+ownership are described in the [source hygiene guide](docs/SOURCE-HYGIENE.md).
+Python files support those checks plus the AST-based policy rules.
 The `comment-markers` rule can reject configurable temporary-work words in
 Python, TOML, JavaScript, TypeScript, C/C++, and Java comments. It ignores
 strings and reports file and line; add its `[checks.comment_markers]` policy
@@ -319,8 +329,9 @@ package, while each repository supplies its own tool selection and scope.
 Available rules are `file-size`, `line-length`, `json-structure`,
 `output-escaping`, `path-discovery`, `shared-utilities`, `python-style`,
 `runtime-types`, `cli`, `script-policy`, `module-roles`, `package-boundaries`,
-`dependency-locks`, `repository-layout`, `git-ignores`, and `git-history`. Package boundaries also check
-the configured architecture graph, metadata versions, and callable registry.
+`dependency-locks`, `repository-layout`, `git-ignores`, `git-history`, and
+`cyclomatic-complexity`. Package boundaries also check the configured
+architecture graph, metadata versions, and callable registry.
 The architecture graph policy accepts `syntax = "flowchart"` (the default)
 or `syntax = "architecture"` for Mermaid's `architecture-beta` diagrams.
 Its edge comparison handles directed links in the selected syntax; diagrams

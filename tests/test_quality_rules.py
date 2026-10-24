@@ -7,11 +7,12 @@ import subprocess
 from collections.abc import Callable, Sequence
 from io import StringIO
 from pathlib import Path
+from typing import cast
 
 import pytest
 from pydantic import ValidationError
 
-from alphus.cli import main
+from alphus.cli import _render_python_style, main
 from alphus.config import (
     NodeCliPolicy,
     PythonStylePolicy,
@@ -28,6 +29,7 @@ from alphus.execution.results import (
 )
 from alphus.gates.hygiene.rules import check_file_size, check_line_length
 from alphus.gates.source import runners as source_runners
+from alphus.gates.source.python_style import StyleFindings
 from alphus.support import git, inventory
 from alphus.support.inventory import candidate_files, matches_path, tracked_files
 
@@ -411,6 +413,65 @@ def test_cli_uses_an_explicit_root_and_emits_machine_readable_findings(
     assert '"path": "src/long.py"' in output
 
 
+def test_line_length_cli_renders_invalid_utf8_finding(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Human output reports invalid UTF-8 findings without parsing a line limit."""
+    _repository(tmp_path)
+    invalid_path = tmp_path / "src" / "invalid.py"
+    invalid_path.parent.mkdir(parents=True)
+    invalid_path.write_bytes(b"value = \xff\n")
+
+    assert (
+        main(
+            [
+                "--root",
+                str(tmp_path),
+                "--config",
+                "quality.toml",
+                "--rule",
+                "line-length",
+                "--output",
+                "plain",
+            ]
+        )
+        == 1
+    )
+
+    output = capsys.readouterr().out
+    assert (
+        "ERROR alphus/any/none/style/invalid-text-encoding src/invalid.py: "
+        "line-length requires UTF-8 text; file contains an invalid byte sequence"
+    ) in output
+
+
+def test_line_length_cli_uses_structured_measurements_for_summary(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The human summary uses typed measurements, independent of finding prose."""
+    _repository(tmp_path)
+    _write(tmp_path, "src/long.py", "x" * 21 + "\n")
+
+    assert (
+        main(
+            [
+                "--root",
+                str(tmp_path),
+                "--config",
+                "quality.toml",
+                "--rule",
+                "line-length",
+                "--output",
+                "plain",
+            ]
+        )
+        == 1
+    )
+
+    output = capsys.readouterr().out
+    assert "lines exceed 18 Unicode code points (example lines: 1)" in output
+
+
 def test_json_cli_keeps_findings_and_report_exit_behavior(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -569,14 +630,14 @@ def test_rule_profile_json_adapters_validate_each_owned_shape() -> None:
             {
                 "src/example.py": {
                     "bare_containers": [],
-                    "heterogeneous_tuple_returns": [8],
+                    "unnamed_tuple_returns": [8],
                     "opaque_mappings": [12],
                 }
             }
         ),
     )
     assert [(item.rule_id, item.severity) for item in advisory_findings] == [
-        ("alphus/python/none/style/heterogeneous-tuple-returns", "warning"),
+        ("alphus/python/none/style/unnamed-tuple-returns", "warning"),
         ("alphus/python/none/style/opaque-mappings", "warning"),
     ]
 
@@ -611,6 +672,45 @@ def test_rule_profile_json_adapters_validate_each_owned_shape() -> None:
     )
     assert finding_records[0].severity == "warning"
     assert finding_records[0].source == "alphus"
+
+
+def test_python_style_diagnostics_ignore_the_aggregate_self_return_alias() -> None:
+    encoded = json.dumps(
+        {
+            "src/example.py": {
+                "concrete_classmethod_returns": [3],
+                "concrete_model_validator_returns": [6],
+                "concrete_self_returns": [3, 6],
+            }
+        }
+    )
+
+    findings = diagnostics_from_json("python-style", encoded)
+
+    assert [(item.rule_id, item.line) for item in findings] == [
+        ("alphus/python/none/style/concrete-classmethod-returns", 3),
+        ("alphus/python/none/style/concrete-model-validator-returns", 6),
+    ]
+
+
+def test_python_style_summary_renders_only_specialized_self_return_categories(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    issues = cast(
+        StyleFindings,
+        {category: [] for category in StyleFindings.__annotations__},
+    )
+    issues["concrete_classmethod_returns"] = [3]
+    issues["concrete_model_validator_returns"] = [6]
+    issues["concrete_self_returns"] = [3, 6]
+
+    total = _render_python_style({"src/example.py": issues})
+
+    output = capsys.readouterr().out
+    assert total == 2
+    assert output.count("/concrete-classmethod-returns ") == 1
+    assert output.count("/concrete-model-validator-returns ") == 1
+    assert "concrete-self-returns" not in output
 
 
 def test_rule_evaluation_validates_structured_output_before_rendering() -> None:

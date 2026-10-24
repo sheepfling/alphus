@@ -1,0 +1,5 @@
+[lint]
+extend-select = ["PLR0917"]
+
+[lint.pylint]
+max-positional-args = 5

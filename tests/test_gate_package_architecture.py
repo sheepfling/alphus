@@ -75,6 +75,7 @@ def test_gate_themes_own_their_runner_mappings() -> None:
                 "scipy-constants",
                 "test-quality",
                 "input-contracts",
+                "positional-interfaces",
                 "pydantic-practices",
                 "fastapi-practices",
             },
@@ -89,6 +90,7 @@ def test_gate_themes_own_their_runner_mappings() -> None:
                 "runtime-types",
                 "cli",
                 "script-policy",
+                "cyclomatic-complexity",
             },
         ),
         (

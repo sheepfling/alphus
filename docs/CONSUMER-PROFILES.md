@@ -37,6 +37,8 @@ default root, and `check` is the default profile. `alphus --profile <name>`
 selects another profile. Use `--root` and `--config` when running from another
 directory or with a different filename. `--run` remains accepted in existing
 scripts. `alphus --help` shows every option.
+For explicitly reviewed independent checks, [parallel execution](PARALLEL-EXECUTION.md)
+adds a bounded `--jobs` option while preserving the declared report order.
 
 For common multi-language setups, select bundles instead of remembering each
 native tool name:
@@ -119,6 +121,10 @@ ASYNC, annotation, and security rules over their existing Ruff settings, plus
 Alphus's current FastAPI style advisory. The
 [FastAPI quality guide](FASTAPI-QUALITY.md) documents the coverage boundary and
 provides a copyable example.
+
+The [common lint intent map](COMMON-LINT-INTENTS.md) compares native naming,
+unused-symbol, and unreachable-code rules across Python, C/C++, JavaScript, and
+TypeScript. It keeps rule selection and configuration with each consumer tool.
 
 The `tools` shortcut is for standard invocations. Add a project-specific
 check without repeating those tool commands:

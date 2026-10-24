@@ -11,6 +11,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from alphus.support.python_runtime import current_python_executable
+
 
 @dataclass(frozen=True, slots=True)
 class ModuleInventory:
@@ -94,7 +96,7 @@ def import_failures(
     for module in modules:
         try:
             result = subprocess.run(
-                [sys.executable, "-c", command, module],
+                [current_python_executable(), "-c", command, module],
                 capture_output=True,
                 text=True,
                 cwd=source_root.parent,

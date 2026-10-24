@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -29,3 +30,14 @@ def git_output(root: Path, *arguments: str, input_data: bytes | None = None) -> 
         detail = result.stderr.decode("utf-8", errors="replace").strip()
         raise OSError(f"git {' '.join(arguments)} failed: {detail}")
     return result.stdout
+
+
+def git_value(root: Path, *arguments: str) -> str | None:
+    """Return one optional Git text value, including when Git is unavailable."""
+    try:
+        result = run_git(root, *arguments)
+    except OSError:
+        return None
+    if result.returncode:
+        return None
+    return os.fsdecode(result.stdout).strip() or None

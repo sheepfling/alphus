@@ -29,6 +29,7 @@ from alphus.policy.intents import (
     SharedQualityIntent,
     resolve_intent_bindings,
 )
+from alphus.policy.metrics import CyclomaticComplexityPolicy
 from alphus.policy.repository import (
     DependencyLockPolicy,
     GitRepositoryPolicy,
@@ -39,6 +40,7 @@ from alphus.policy.review import (
     FastApiPracticePolicy,
     InputContractPolicy,
     NumericLiteralPolicy,
+    PositionalInterfacePolicy,
     PydanticPracticePolicy,
     ScipyConstantsPolicy,
     TestQualityPolicy,
@@ -72,6 +74,7 @@ class CheckPolicies(StrictModel):
     scipy_constants: ScipyConstantsPolicy | None = None
     test_quality: TestQualityPolicy | None = None
     input_contracts: InputContractPolicy | None = None
+    positional_interfaces: PositionalInterfacePolicy | None = None
     pydantic_practices: PydanticPracticePolicy | None = None
     fastapi_practices: FastApiPracticePolicy | None = None
     shared_utilities: SharedUtilitiesPolicy | None = None
@@ -88,6 +91,7 @@ class CheckPolicies(StrictModel):
     dependency_locks: DependencyLockPolicy | None = None
     git: GitRepositoryPolicy | None = None
     function_shape: FunctionShapePolicy | None = None
+    cyclomatic_complexity: CyclomaticComplexityPolicy | None = None
 
     def require_rule(self, rule: QualityRuleName) -> None:
         """Validate only the primary policy needed by a selected rule."""
@@ -105,11 +109,27 @@ class RuleRunStep(StrictModel):
     severity: Severity | None = None
     priority: RemediationPriority | None = None
     rollout: Literal["mainline", "provisional"] = "mainline"
+    parallel: bool = False
+    dispatch_priority: Annotated[int, Field(ge=-100, le=100)] = 0
+    slots: Annotated[int, Field(ge=1)] = 1
+    locks: tuple[str, ...] = ()
+    after: tuple[str, ...] = ()
+    timeout_seconds: Annotated[int | None, Field(ge=1, le=3600)] = None
 
     @field_validator("name")
     @classmethod
     def validate_name(cls, name: str) -> str:
+        if "\x00" in name:
+            raise ValueError("orchestration step names cannot contain NUL")
         return validate_one_line_message(name)
+
+    @field_validator("locks", "after")
+    @classmethod
+    def validate_execution_names(cls, names: Sequence[str]) -> tuple[str, ...]:
+        for name in names:
+            validate_one_line_message(name)
+        require_unique(names, "execution names must be unique")
+        return tuple(names)
 
 
 class CommandRunStep(StrictModel):
@@ -117,6 +137,7 @@ class CommandRunStep(StrictModel):
 
     kind: Literal["command"]
     name: str
+    gate_id: str | None = None
     argv: Annotated[tuple[str, ...], Field(min_length=1)]
     fix_argv: Annotated[tuple[str, ...] | None, Field(min_length=1)] = None
     working_directory: str = "."
@@ -125,11 +146,33 @@ class CommandRunStep(StrictModel):
         None
     )
     rollout: Literal["mainline", "provisional"] = "mainline"
+    parallel: bool = False
+    dispatch_priority: Annotated[int, Field(ge=-100, le=100)] = 0
+    slots: Annotated[int, Field(ge=1)] = 1
+    locks: tuple[str, ...] = ()
+    after: tuple[str, ...] = ()
 
     @field_validator("name")
     @classmethod
     def validate_name(cls, name: str) -> str:
+        if "\x00" in name:
+            raise ValueError("orchestration step names cannot contain NUL")
         return validate_one_line_message(name)
+
+    @field_validator("gate_id")
+    @classmethod
+    def validate_gate_id(cls, gate_id: str | None) -> str | None:
+        if gate_id is not None and re.fullmatch(r"[a-z][a-z0-9._/-]*", gate_id) is None:
+            raise ValueError("gate_id must be a lowercase portable identifier")
+        return gate_id
+
+    @field_validator("locks", "after")
+    @classmethod
+    def validate_execution_names(cls, names: Sequence[str]) -> tuple[str, ...]:
+        for name in names:
+            validate_one_line_message(name)
+        require_unique(names, "execution names must be unique")
+        return tuple(names)
 
     @field_validator("argv", "fix_argv")
     @classmethod
@@ -226,6 +269,13 @@ class ProfilePlan(NamedTuple):
 OrchestrationStep = Annotated[RuleRunStep | CommandRunStep, Field(discriminator="kind")]
 
 
+class ExecutionPolicy(StrictModel):
+    """Bounded process concurrency for an opted-in profile."""
+
+    max_jobs: Annotated[int, Field(ge=1, le=64)] = 1
+    prioritize_previous_failures: bool = False
+
+
 class OrchestrationPolicy(StrictModel):
     """Ordered portable-rule and native-tool steps for one quality run."""
 
@@ -233,6 +283,7 @@ class OrchestrationPolicy(StrictModel):
     profiles: Annotated[tuple[OrchestrationProfile, ...], Field(min_length=1)]
     default_profile: str = "check"
     failure_threshold: Severity = "error"
+    execution: ExecutionPolicy = ExecutionPolicy()
     intents: tuple[SharedQualityIntent, ...] = ()
 
     @model_validator(mode="after")
@@ -265,21 +316,36 @@ class OrchestrationPolicy(StrictModel):
                 "profiles reference unknown orchestration profiles: "
                 f"{', '.join(sorted(unknown_profiles))}"
             )
+        selected_profiles: dict[str, tuple[str, ...]] = {}
         for profile in self.profiles:
-            self.resolve_profile(profile.name)
+            plan = self.resolve_profile(profile.name)
+            assert plan is not None
+            selected_profiles[profile.name] = plan.steps
+            selected = set(plan.steps)
+            position = {name: index for index, name in enumerate(plan.steps)}
+            for step in self.steps:
+                if step.name not in selected:
+                    continue
+                for dependency in step.after:
+                    if dependency not in selected:
+                        raise ValueError(
+                            f"step {step.name!r} requires unselected step {dependency!r} "
+                            f"in profile {profile.name!r}"
+                        )
+                    if position[dependency] >= position[step.name]:
+                        raise ValueError(
+                            f"step {step.name!r} must follow {dependency!r} "
+                            f"in profile {profile.name!r}"
+                        )
         intent_ids = tuple(intent.rule_id for intent in self.intents)
         require_unique(intent_ids, "shared quality intent rule IDs must be unique")
-        steps_by_name = {step.name: step for step in self.steps}
+        steps_by_name: dict[str, RuleRunStep | CommandRunStep] = {
+            step.name: step for step in self.steps
+        }
         resolved_intents = resolve_intent_bindings(self.intents)
         seen_native_rules: set[tuple[str, str, str]] = set()
         declared_native_options: dict[tuple[str, str], NativeOptionValue] = {}
         declared_evidence_formats: dict[str, tuple[str, str]] = {}
-        selected_profiles: dict[str, tuple[str, ...]] = {}
-        for profile in self.profiles:
-            resolved = self.resolve_profile(profile.name)
-            if resolved is None:
-                raise ValueError(f"unknown orchestration profile: {profile.name}")
-            selected_profiles[profile.name] = resolved.steps
         unknown_intent_profiles = {
             name
             for intent in self.intents
@@ -296,8 +362,8 @@ class OrchestrationPolicy(StrictModel):
             if not item.enabled or binding.mapping == "unsupported":
                 continue
             assert binding.step is not None
-            step = steps_by_name.get(binding.step)
-            if step is None or step.kind != "command":
+            step: RuleRunStep | CommandRunStep | None = steps_by_name.get(binding.step)
+            if step is None or not isinstance(step, CommandRunStep):
                 raise ValueError(
                     f"native capability {item.intent.rule_id} for {binding.language} "
                     f"references unknown command step {binding.step!r}"

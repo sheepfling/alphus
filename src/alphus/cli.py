@@ -10,9 +10,10 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from contextlib import redirect_stderr, redirect_stdout
 from contextvars import ContextVar
+from functools import partial
 from io import StringIO
 from pathlib import Path
-from typing import Annotated, NamedTuple, TextIO, cast
+from typing import Annotated, NamedTuple, NotRequired, TextIO, TypedDict, cast
 
 import typer
 from pydantic import ValidationError
@@ -29,27 +30,59 @@ from alphus.contracts.findings import (
     Finding,
     SeverityCounts,
 )
+from alphus.contracts.process import ExitCode
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.execution.dispatch import run_builtin_rule
 from alphus.execution.fixes import apply_fixes as apply_configured_fixes
 from alphus.execution.fixes import resolve_fix_plan
 from alphus.execution.orchestration import RuleRunResult, run_orchestration
-from alphus.execution.results import RuleEvaluation
+from alphus.execution.parallel import run_parallel_cyclomatic
+from alphus.execution.profile_analysis import (
+    rollup_profile_history,
+    summarize_profile_entry,
+)
+from alphus.execution.profile_history import (
+    ProfileHistoryRecord,
+    ProfileHistoryRecordV1,
+    ProfileHistoryRecordV3,
+    ProfileHistoryRecordV4,
+    iter_profile_records,
+    latest_profile_record,
+)
+from alphus.execution.results import RuleEvaluation, RuleOutput
+from alphus.execution.scheduler import WorkUnit, run_work_units
 from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
+from alphus.gates.source.cyclomatic_complexity import (
+    CyclomaticReport,
+    build_cyclomatic_plan,
+    plan_payload,
+    report_payload,
+    report_summary,
+)
 from alphus.gates.source.python_style import StyleFindings
 from alphus.policy.base import MissingPolicyError
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
 from alphus.policy.function_shape import plan_function_shape
-from alphus.policy.intents import (
-    PlannedIntentBindingRow,
-    intent_bindings_for_steps,
-)
+from alphus.policy.intents import intent_bindings_for_steps
 from alphus.policy.recipes import render_recipe
 from alphus.support.data_access import JsonValue
 from alphus.support.inventory import candidate_files
 
 QualityRule = QualityRuleName
-_OUTPUT_FORMAT: ContextVar[str] = ContextVar("alphus_output_format", default="rich")
+
+
+class _ProfilePlanPayload(TypedDict):
+    """Stable JSON shape for a resolved profile plan."""
+
+    profile: str
+    profiles: tuple[str, ...]
+    failure_threshold: str
+    steps: list[JsonValue]
+    execution: NotRequired[dict[str, int]]
+    intents: NotRequired[list[JsonValue]]
+
+
+_OUTPUT_FORMAT: ContextVar[str] = ContextVar("alphus_output_format", default="auto")
 _DIRECT_GIT_SUBPROCESS_TAG = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.MAINTAINABILITY, "direct-git-subprocess"
 )
@@ -61,6 +94,9 @@ _CLI_CONTRACT_TAG = rule_tag(
 )
 _SCRIPT_POLICY_TAG = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.SECURITY, "script-policy-violation"
+)
+_LINE_TOO_LONG_TAG = rule_tag(
+    Scope.ANY, Framework.NONE, Category.STYLE, "line-too-long"
 )
 
 
@@ -84,6 +120,24 @@ def _render_severity_totals(findings: Sequence[Finding]) -> None:
         )
 
 
+def _render_cyclomatic_report(report: CyclomaticReport) -> None:
+    """Render native backend coverage and threshold diagnostics."""
+    _human_print(report_summary(report))
+    findings = [
+        Finding(
+            rule_id=item.rule_id,
+            path=item.path or "<backend>",
+            line=item.line,
+            severity=item.severity,
+            message=item.message,
+        )
+        for item in report.diagnostics
+    ]
+    for finding in findings:
+        _render_finding(finding)
+    _render_severity_totals(findings)
+
+
 app = typer.Typer(
     name="alphus",
     help="Run portable, policy-driven repository quality checks.",
@@ -92,19 +146,41 @@ app = typer.Typer(
 )
 
 
+def _select_output_format(
+    output_format: str,
+    *,
+    json_requested: bool,
+    stdout_is_terminal: bool,
+) -> tuple[str, bool]:
+    """Resolve auto and JSON aliases into one renderer and payload mode."""
+    selected = output_format.lower()
+    if selected not in {"auto", "plain", "rich", "json"}:
+        raise ValueError("--output must be auto, plain, rich, or json")
+    if json_requested and selected in {"plain", "rich"}:
+        raise ValueError("--json cannot be combined with --output plain or rich")
+    if json_requested or selected == "json":
+        return "plain", True
+    if selected == "auto":
+        return ("rich" if stdout_is_terminal else "plain"), False
+    return selected, False
+
+
 def _human_print(message: str) -> None:
     """Render one human-facing line in the selected terminal style."""
-    if _OUTPUT_FORMAT.get() == "plain":
+    selected_format = _OUTPUT_FORMAT.get()
+    if selected_format == "plain" or (
+        selected_format == "auto" and not sys.stdout.isatty()
+    ):
         print(message)
         return
     console = Console(
         markup=False,
         highlight=False,
         soft_wrap=True,
-        color_system="auto" if _OUTPUT_FORMAT.get() == "rich" else None,
+        color_system="auto" if selected_format == "rich" else None,
     )
     text = Text(message)
-    if _OUTPUT_FORMAT.get() == "rich":
+    if selected_format == "rich":
         first_word = message.partition(" ")[0].rstrip(":")
         style = {
             "ERROR": "bold red",
@@ -188,6 +264,7 @@ def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
         "scipy-constants": "SciPy constants",
         "test-quality": "Test quality",
         "input-contracts": "Input contracts",
+        "positional-interfaces": "Positional interface review",
         "pydantic-practices": "Pydantic practices",
         "fastapi-practices": "FastAPI practices",
     }
@@ -198,27 +275,37 @@ def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
         _render_severity_totals(findings)
         return
     if rule == "line-length":
-        counts = Counter(finding.path for finding in findings)
+        line_findings = [
+            finding for finding in findings if finding.line_length is not None
+        ]
+        for finding in findings:
+            if finding.line_length is None:
+                _render_finding(finding)
+
+        counts = Counter(finding.path for finding in line_findings)
         for name, count in sorted(counts.items()):
             lines = [
                 finding.line
-                for finding in findings
+                for finding in line_findings
                 if finding.path == name and finding.line is not None
             ]
             limit = next(
-                finding.message.rsplit("limit ", maxsplit=1)[1].rstrip(")")
-                for finding in findings
-                if finding.path == name
+                finding.line_length.limit_codepoints
+                for finding in line_findings
+                if finding.path == name and finding.line_length is not None
             )
             sample = ", ".join(str(line) for line in lines[:5])
             _human_print(
-                f"{rule_tag(Scope.ANY, Framework.NONE, Category.STYLE, 'line-too-long')} {name}: "
-                f"{count} lines exceed {limit} columns (example lines: {sample})"
+                f"{_LINE_TOO_LONG_TAG} {name}: "
+                f"{count} lines exceed {limit} Unicode code points "
+                f"(example lines: {sample})"
             )
-        _human_print(
-            f"{rule_tag(Scope.ANY, Framework.NONE, Category.STYLE, 'line-too-long')}: "
-            f"{len(findings)} violation(s) in {len(counts)} files"
-        )
+        if line_findings or not findings:
+            _human_print(
+                f"{_LINE_TOO_LONG_TAG}: "
+                f"{len(line_findings)} violation(s) "
+                f"in {len(counts)} files"
+            )
         _render_severity_totals(findings)
         return
     if rule == "json-structure":
@@ -326,7 +413,7 @@ class _StyleCategory(NamedTuple):
 def _python_style_categories(
     issues: StyleFindings,
 ) -> tuple[_StyleCategory, ...]:
-    """Keep the style categories statically typed while rendering summaries."""
+    """Render specialized categories; the aggregate self-return key is an alias."""
     return (
         _StyleCategory("bare_containers", issues["bare_containers"]),
         _StyleCategory("bare_tuples", issues["bare_tuples"]),
@@ -345,13 +432,17 @@ def _python_style_categories(
         _StyleCategory("raw_reporting_prints", issues["raw_reporting_prints"]),
         _StyleCategory("magic_exit_codes", issues["magic_exit_codes"]),
         _StyleCategory("repeated_literals", issues["repeated_literals"]),
-        _StyleCategory(
-            "heterogeneous_tuple_returns", issues["heterogeneous_tuple_returns"]
-        ),
+        _StyleCategory("unnamed_tuple_returns", issues["unnamed_tuple_returns"]),
         _StyleCategory(
             "undifferentiated_patterns", issues["undifferentiated_patterns"]
         ),
-        _StyleCategory("concrete_self_returns", issues["concrete_self_returns"]),
+        _StyleCategory(
+            "concrete_classmethod_returns", issues["concrete_classmethod_returns"]
+        ),
+        _StyleCategory(
+            "concrete_model_validator_returns",
+            issues["concrete_model_validator_returns"],
+        ),
         _StyleCategory("direct_text_reads", issues["direct_text_reads"]),
         _StyleCategory(
             "duplicate_literal_catalogs", issues["duplicate_literal_catalogs"]
@@ -398,14 +489,32 @@ def _render_repository_layout(findings: Sequence[Finding]) -> None:
 
 
 def _evaluate_rule(
-    root: Path, config_path: Path, rule: QualityRule, verbose: bool
+    root: Path,
+    config_path: Path,
+    rule: QualityRule,
+    verbose: bool,
+    jobs: int | None = None,
+    loaded_config: QualityGateConfig | None = None,
+    *,
+    already_scheduled: bool = False,
 ) -> RuleEvaluation:
     """Run a rule and retain structured output before any CLI rendering."""
     checkout = root.resolve(strict=True)
     resolved_config = (
         config_path if config_path.is_absolute() else checkout / config_path
     )
-    config = _load_policy(resolved_config)
+    config = (
+        loaded_config if loaded_config is not None else _load_policy(resolved_config)
+    )
+    max_jobs = (
+        jobs
+        if jobs is not None
+        else config.orchestration.execution.max_jobs
+        if config.orchestration is not None
+        else 1
+    )
+    if not 1 <= max_jobs <= 64:
+        raise typer.BadParameter("--jobs must be between 1 and 64")
     if config.files is None and RULE_SPECS[rule].requires_files:
         raise typer.BadParameter(
             "a built-in rule requires a top-level [files] inventory in the policy"
@@ -424,7 +533,27 @@ def _evaluate_rule(
     if verbose:
         _log_verbose(rule, checkout, len(files))
     try:
-        output = run_builtin_rule(rule, checkout, files, config)
+        if rule == "cyclomatic-complexity" and max_jobs > 1:
+            output = run_parallel_cyclomatic(
+                checkout, resolved_config, config, max_jobs
+            )
+        elif already_scheduled:
+            output = run_builtin_rule(rule, checkout, files, config)
+        else:
+            outcome = run_work_units(
+                (
+                    WorkUnit(
+                        key=rule,
+                        run=partial(run_builtin_rule, rule, checkout, files, config),
+                    ),
+                ),
+                1,
+            )[rule]
+            if outcome.error is not None:
+                raise outcome.error
+            if outcome.value is None:
+                raise RuntimeError("built-in rule returned no result")
+            output = cast(RuleOutput, outcome.value)
     except MissingPolicyError as error:
         raise typer.BadParameter(str(error)) from error
     except (OSError, RuntimeError) as error:
@@ -439,12 +568,81 @@ def _execute(
     json_output: bool,
     report: bool,
     verbose: bool,
+    plan_only: bool = False,
+    jobs: int | None = None,
 ) -> int:
     """Render one structured rule evaluation for the requested CLI mode."""
-    evaluation = _evaluate_rule(root, config_path, rule, verbose)
+    if plan_only:
+        if rule != "cyclomatic-complexity":
+            raise typer.BadParameter(
+                "--plan with --rule requires cyclomatic-complexity"
+            )
+        checkout = root.resolve(strict=True)
+        resolved_config = (
+            config_path if config_path.is_absolute() else checkout / config_path
+        )
+        config = _load_policy(resolved_config)
+        try:
+            policy = config.checks.cyclomatic_complexity
+            if policy is None:
+                raise MissingPolicyError(
+                    "the selected configuration has no "
+                    "[checks.cyclomatic_complexity] policy"
+                )
+            payload = plan_payload(build_cyclomatic_plan(checkout, policy))
+            max_jobs = (
+                jobs
+                if jobs is not None
+                else config.orchestration.execution.max_jobs
+                if config.orchestration is not None
+                else 1
+            )
+            if max_jobs > 1:
+                payload["execution"] = {
+                    "max_jobs": max_jobs,
+                    "units": [
+                        f"cyclomatic-complexity:{backend['language']}"
+                        for backend in cast(
+                            list[dict[str, object]], payload["backends"]
+                        )
+                    ],
+                }
+        except (MissingPolicyError, OSError, ValueError) as error:
+            raise typer.BadParameter(str(error)) from error
+        typer.echo(
+            json.dumps(payload, indent=None if json_output else 2, sort_keys=True)
+        )
+        return 0
+
+    evaluation = _evaluate_rule(root, config_path, rule, verbose, jobs)
     output = evaluation.output
     exit_code = int(evaluation.failed and not report)
     shape = RULE_SPECS[rule].output_shape
+    if shape is RuleOutputShape.CYCLOMATIC_REPORT:
+        complexity_report = cast(CyclomaticReport, output)
+        if json_output:
+            report_data = report_payload(complexity_report)
+            diagnostics = [item.to_wire() for item in complexity_report.diagnostics]
+            typer.echo(
+                json.dumps(
+                    {
+                        "report": report_data,
+                        "diagnostics": diagnostics,
+                        "summary": report_summary(complexity_report),
+                    },
+                    sort_keys=True,
+                )
+            )
+        else:
+            _render_cyclomatic_report(complexity_report)
+        if complexity_report.outcome in {
+            "operational_failure",
+            "incomplete_coverage",
+            "no_matching_files",
+        }:
+            return 2
+        return exit_code
+
     if shape is RuleOutputShape.FINDINGS:
         findings = cast(list[Finding], output)
         if json_output:
@@ -501,12 +699,84 @@ def _execute(
     return exit_code
 
 
+def run_profile_rule(
+    checkout: Path,
+    resolved_config: Path,
+    rule: QualityRule,
+    verbose: bool,
+    config: QualityGateConfig | None = None,
+) -> RuleRunResult:
+    """Normalize one rule for either the profile runner or an isolated worker."""
+    captured_output = StringIO()
+    captured_error = StringIO()
+    try:
+        with redirect_stdout(captured_output), redirect_stderr(captured_error):
+            evaluation = _evaluate_rule(
+                checkout,
+                resolved_config,
+                rule,
+                verbose,
+                1,
+                config,
+                already_scheduled=True,
+            )
+    except typer.BadParameter as error:
+        return RuleRunResult(
+            execution_failure=str(error),
+            exit_code=ExitCode.CONFIG_ERROR,
+            stderr=captured_error.getvalue(),
+        )
+    except typer.Exit as error:
+        return RuleRunResult(
+            execution_failure="Invalid quality policy.",
+            exit_code=error.exit_code,
+            stderr=captured_error.getvalue(),
+        )
+    except (ValidationError, TypeError, ValueError) as error:
+        return RuleRunResult(
+            execution_failure=f"Alphus rule output could not be normalized: {error}",
+            exit_code=ExitCode.OPERATIONAL_FAILURE,
+            stderr=captured_error.getvalue(),
+        )
+    if captured_output.getvalue():
+        return RuleRunResult(
+            execution_failure="Alphus rule printed output instead of returning it.",
+            exit_code=ExitCode.OPERATIONAL_FAILURE,
+            stderr=captured_error.getvalue(),
+        )
+    report = None
+    stdout = ""
+    exit_code = ExitCode.QUALITY_FAILURE if evaluation.failed else ExitCode.SUCCESS
+    match evaluation.output:
+        case CyclomaticReport() as cyclomatic_report:
+            report = report_payload(cyclomatic_report)
+            stdout = report_summary(cyclomatic_report) + "\n"
+            if cyclomatic_report.outcome in {
+                "operational_failure",
+                "incomplete_coverage",
+                "no_matching_files",
+            }:
+                exit_code = ExitCode.OPERATIONAL_FAILURE
+        case _:
+            pass
+    return RuleRunResult(
+        findings=tuple(evaluation.diagnostics),
+        exit_code=exit_code,
+        stderr=captured_error.getvalue(),
+        stdout=stdout,
+        report=report,
+    )
+
+
 def _execute_profile(
     root: Path,
     config_path: Path,
     profile_name: str | None,
     json_output: bool,
     verbose: bool,
+    jobs: int | None = None,
+    history_dir: Path | None = None,
+    consumer_id: str | None = None,
 ) -> int:
     """Run the configured suite through the Python orchestration layer."""
     checkout = root.resolve(strict=True)
@@ -517,7 +787,7 @@ def _execute_profile(
     policy = config.orchestration
     if policy is None:
         _human_error("The selected policy has no [orchestration] section.")
-        return 2
+        return ExitCode.CONFIG_ERROR
     selected_profile = profile_name or policy.default_profile
     plan = policy.resolve_profile(selected_profile)
     if plan is not None:
@@ -531,43 +801,10 @@ def _execute_profile(
                     config.checks.require_rule(step.rule)
         except MissingPolicyError as error:
             _human_error(str(error))
-            return 2
+            return ExitCode.CONFIG_ERROR
 
     def run_rule(rule: QualityRule) -> RuleRunResult:
-        captured_output = StringIO()
-        captured_error = StringIO()
-        try:
-            with redirect_stdout(captured_output), redirect_stderr(captured_error):
-                evaluation = _evaluate_rule(checkout, resolved_config, rule, verbose)
-        except typer.BadParameter as error:
-            return RuleRunResult(
-                execution_failure=str(error),
-                exit_code=2,
-                stderr=captured_error.getvalue(),
-            )
-        except typer.Exit as error:
-            return RuleRunResult(
-                execution_failure="Invalid quality policy.",
-                exit_code=error.exit_code,
-                stderr=captured_error.getvalue(),
-            )
-        except (ValidationError, TypeError, ValueError) as error:
-            return RuleRunResult(
-                execution_failure=f"Alphus rule output could not be normalized: {error}",
-                exit_code=2,
-                stderr=captured_error.getvalue(),
-            )
-        if captured_output.getvalue():
-            return RuleRunResult(
-                execution_failure="Alphus rule printed output instead of returning it.",
-                exit_code=2,
-                stderr=captured_error.getvalue(),
-            )
-        return RuleRunResult(
-            findings=tuple(evaluation.diagnostics),
-            exit_code=int(evaluation.failed),
-            stderr=captured_error.getvalue(),
-        )
+        return run_profile_rule(checkout, resolved_config, rule, verbose, config)
 
     return run_orchestration(
         checkout,
@@ -576,6 +813,11 @@ def _execute_profile(
         selected_profile,
         run_rule,
         json_output=json_output,
+        jobs=jobs,
+        verbose=verbose,
+        config=config,
+        history_dir=history_dir,
+        consumer_id=consumer_id,
         stdout=(
             cast(TextIO, _HumanStream())
             if _OUTPUT_FORMAT.get() == "rich" and not json_output
@@ -587,6 +829,131 @@ def _execute_profile(
             else sys.stderr
         ),
     )
+
+
+def _execute_history(
+    root: Path,
+    config_path: Path,
+    profile_name: str | None,
+    history_dir: Path,
+    json_output: bool,
+    consumer_id: str | None = None,
+) -> int:
+    """Show the latest saved result and its failed steps without rerunning gates."""
+    checkout = root.resolve(strict=True)
+    resolved_config = (
+        config_path if config_path.is_absolute() else checkout / config_path
+    )
+    config = _load_policy(resolved_config)
+    policy = config.orchestration
+    if policy is None:
+        _human_error("The selected policy has no [orchestration] section.")
+        return 2
+    selected_profile = profile_name or policy.default_profile
+    if policy.resolve_profile(selected_profile) is None:
+        _human_error(f"Unknown orchestration profile: {selected_profile}")
+        return 2
+    try:
+        record = latest_profile_record(
+            history_dir, checkout, selected_profile, consumer_id=consumer_id
+        )
+    except (OSError, ValueError) as error:
+        _human_error(f"Cannot read profile history: {error}")
+        return 2
+    record: (
+        ProfileHistoryRecordV1
+        | ProfileHistoryRecord
+        | ProfileHistoryRecordV3
+        | ProfileHistoryRecordV4
+        | None
+    )
+    if record is None:
+        _human_error(
+            f"No saved result for profile {selected_profile!r} in {history_dir}"
+        )
+        return 2
+    if json_output:
+        typer.echo(record.model_dump_json())
+    else:
+        _human_print(
+            f"Latest {selected_profile} result: {record.total_steps} steps, "
+            f"{record.passed} passed, {record.failed} failed, "
+            f"{record.provisional_passed} provisional passed, "
+            f"{record.provisional_failed} provisional failed, "
+            f"{record.not_applicable} not applicable "
+            f"({record.completed_at_utc})"
+        )
+        vcs = (
+            record.vcs
+            if isinstance(record, (ProfileHistoryRecordV3, ProfileHistoryRecordV4))
+            else "git"
+        )
+        _human_print(
+            f"Revision ({vcs or 'unavailable'}): {record.revision or 'unavailable'}"
+        )
+        if record.failed_steps:
+            for name in record.failed_steps:
+                _human_print(f"FAILED {name}")
+        else:
+            _human_print("No failed steps.")
+    return 0
+
+
+def _execute_history_report(
+    history_dir: Path,
+    report: str,
+    profile: str | None,
+    consumer_id: str | None,
+    json_output: bool,
+) -> int:
+    """Index or roll up validated archive records without rerunning checks."""
+    entries = iter_profile_records(
+        history_dir, profile=profile, consumer_id=consumer_id
+    )
+    if report == "runs":
+        try:
+            rows = tuple(summarize_profile_entry(entry) for entry in entries)
+        except (OSError, ValueError) as error:
+            _human_error(f"Cannot read profile history: {error}")
+            return ExitCode.CONFIG_ERROR
+        if json_output:
+            typer.echo(json.dumps([row.model_dump() for row in rows], sort_keys=True))
+        else:
+            for row in rows:
+                _human_print(
+                    f"{row.completed_at_utc} {row.consumer_id or row.source_root} "
+                    f"{row.profile}: {row.passed} passed, {row.failed} failed "
+                    f"in {row.duration_seconds:.3f}s ({row.path})"
+                )
+        return ExitCode.SUCCESS
+    try:
+        rollup = rollup_profile_history(entries)
+    except (OSError, ValueError) as error:
+        _human_error(f"Cannot read profile history: {error}")
+        return ExitCode.CONFIG_ERROR
+    if json_output:
+        typer.echo(rollup.model_dump_json())
+    else:
+        _human_print(
+            f"Profile archive: {rollup.run_count} runs, "
+            f"{rollup.failed_run_count} failed runs, {len(rollup.groups)} groups"
+        )
+        for group in rollup.groups:
+            _human_print(
+                f"{group.consumer_id or group.source_roots[0]} {group.profile} "
+                f"[{group.config_sha256[:12]}]: {group.run_count} runs, "
+                f"{group.failed_run_count} failed, "
+                f"p95 {group.run_timing.p95_seconds:.3f}s"
+            )
+            slowest = sorted(
+                group.step_timings.items(),
+                key=lambda item: (-item[1].p95_seconds, item[0]),
+            )[:5]
+            for name, timing in slowest:
+                _human_print(
+                    f"  {name}: p95 {timing.p95_seconds:.3f}s over {timing.count} runs"
+                )
+    return ExitCode.SUCCESS
 
 
 def _execute_fix_profile(
@@ -659,6 +1026,7 @@ def _execute_plan_profile(
     config_path: Path,
     profile_name: str | None,
     json_output: bool,
+    jobs: int | None = None,
 ) -> int:
     """Show resolved profile steps and scopes without running native tools."""
     checkout = root.resolve(strict=True)
@@ -675,6 +1043,9 @@ def _execute_plan_profile(
     if plan is None:
         _human_error(f"Unknown orchestration profile: {selected_profile}")
         return 2
+    max_jobs = jobs if jobs is not None else policy.execution.max_jobs
+    if not 1 <= max_jobs <= 64:
+        raise typer.BadParameter("--jobs must be between 1 and 64")
     try:
         for step in policy.steps:
             if step.name in plan.steps and step.kind == "rule":
@@ -689,7 +1060,7 @@ def _execute_plan_profile(
         return 2
 
     by_name = {step.name: step for step in policy.steps}
-    intent_rows: list[PlannedIntentBindingRow] = list(
+    intent_rows = list(
         intent_bindings_for_steps(
             policy.intents,
             plan.steps,
@@ -699,15 +1070,21 @@ def _execute_plan_profile(
         )
     )
     entries_by_name = {entry.name: entry for entry in entries}
-    for row in intent_rows:
-        step_name = row["step"]
+    for index, row in enumerate(intent_rows):
+        step_name = row.step
         if step_name is not None and step_name in entries_by_name:
             entry = entries_by_name[step_name]
             step = by_name[step_name]
-            row["selected_files"] = entry.files
-            if step.kind == "command":
-                row["applicable"] = step.files is None or bool(entry.files)
-            row["expanded_argv"] = entry.check_argv
+            applicable = (
+                step.files is None or bool(entry.files)
+                if step.kind == "command"
+                else None
+            )
+            intent_rows[index] = row.with_execution_plan(
+                selected_files=entry.files,
+                applicable=applicable,
+                expanded_argv=entry.check_argv,
+            )
 
     if json_output:
         details: list[JsonValue] = []
@@ -717,6 +1094,15 @@ def _execute_plan_profile(
                 dict[str, JsonValue],
                 step.model_dump(mode="json", exclude_none=True),
             )
+            if not step.parallel:
+                for field_name in (
+                    "parallel",
+                    "dispatch_priority",
+                    "slots",
+                    "locks",
+                    "after",
+                ):
+                    detail.pop(field_name, None)
             detail["fixable"] = entry.fixable
             if step.kind == "command":
                 detail["selected_files"] = entry.files
@@ -724,14 +1110,18 @@ def _execute_plan_profile(
                 if entry.check_argv is not None:
                     detail["expanded_argv"] = entry.check_argv
             details.append(detail)
-        payload: dict[str, JsonValue] = {
+        payload: _ProfilePlanPayload = {
             "profile": selected_profile,
             "profiles": plan.profiles,
             "failure_threshold": policy.failure_threshold,
             "steps": details,
         }
+        if max_jobs > 1:
+            payload["execution"] = {"max_jobs": max_jobs}
         if intent_rows:
-            payload["intents"] = cast(JsonValue, intent_rows)
+            payload["intents"] = [
+                row.model_dump(mode="json", exclude_none=True) for row in intent_rows
+            ]
         typer.echo(json.dumps(payload, sort_keys=True))
         return 0
 
@@ -739,10 +1129,18 @@ def _execute_plan_profile(
         f"Execution plan for profile {selected_profile} "
         f"(failure threshold={policy.failure_threshold}):"
     )
+    if max_jobs > 1:
+        _human_print(f"Worker budget: {max_jobs}")
     if len(plan.profiles) > 1:
         _human_print(f"Profiles: {', '.join(plan.profiles)}")
     for entry in entries:
         step = by_name[entry.name]
+        if max_jobs > 1:
+            mode = "PARALLEL" if step.parallel else "SERIAL"
+            _human_print(
+                f"  {mode} {step.name}: slots={step.slots}, "
+                f"locks={list(step.locks)}, after={list(step.after)}"
+            )
         if step.kind == "rule":
             _human_print(f"{step.rollout.upper()} RULE {step.name}: {step.rule}")
             continue
@@ -758,30 +1156,30 @@ def _execute_plan_profile(
     if intent_rows:
         _human_print("Shared quality intents:")
         for row in intent_rows:
-            status = str(row["status"]).replace("_", " ").upper()
-            if row.get("applicable") is False:
+            status = row.status.replace("_", " ").upper()
+            if row.applicable is False:
                 status = "NOT APPLICABLE"
-            metric = f"{row['metric']} ({row['unit']})"
+            metric = f"{row.metric} ({row.unit})"
             _human_print(
-                f"{status} {row['rule_id']} [{row['language']}]: "
-                f"{row['backend']} {row['native_rule']}; {row['mapping']} mapping; "
-                f"{metric}; severity={row['severity']}, failure threshold="
-                f"{row['failure_threshold']}, rollout={row['rollout']}"
+                f"{status} {row.rule_id} [{row.language}]: "
+                f"{row.backend} {row.native_rule}; {row.mapping} mapping; "
+                f"{metric}; severity={row.severity}, failure threshold="
+                f"{row.failure_threshold}, rollout={row.rollout}"
             )
             _human_print(
-                f"  scope={json.dumps(row['files'], sort_keys=True)}; "
+                f"  scope={json.dumps(row.files.model_dump(mode='json'), sort_keys=True)}; "
                 "effective config="
-                f"{json.dumps(row['effective_configuration'], sort_keys=True)}"
+                f"{json.dumps(row.effective_configuration, sort_keys=True)}"
             )
-            step_name = row["step"]
+            step_name = row.step
             if step_name is not None:
                 entry = entries_by_name.get(step_name)
                 if entry is not None:
                     _human_print(
-                        f"  owner={row['ownership']}; evidence step={step_name}; "
+                        f"  owner={row.ownership}; evidence step={step_name}; "
                         f"{len(entry.files)} file(s) selected"
                     )
-            elif row["status"] == "unsupported":
+            elif row.status == "unsupported":
                 _human_print("  no native command is configured for this capability")
     return 0
 
@@ -822,6 +1220,37 @@ def _command(
             help="Print the native function-shape mapping without running a checker.",
         ),
     ] = False,
+    jobs: Annotated[
+        int | None,
+        typer.Option("--jobs", help="Maximum concurrent quality work units."),
+    ] = None,
+    history_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--history-dir",
+            envvar="ALPHUS_PROFILE_HISTORY_DIR",
+            help="Append immutable profile JSON records here.",
+        ),
+    ] = None,
+    show_history: Annotated[
+        bool,
+        typer.Option("--show-history", help="Show the latest saved profile result."),
+    ] = False,
+    history_report: Annotated[
+        str | None,
+        typer.Option(
+            "--history-report",
+            help="Read saved runs or timing rollups: runs, rollup.",
+        ),
+    ] = None,
+    consumer_id: Annotated[
+        str | None,
+        typer.Option(
+            "--consumer-id",
+            envvar="ALPHUS_CONSUMER_ID",
+            help="Stable consumer identity for saved runs or archive filtering.",
+        ),
+    ] = None,
     json_output: Annotated[
         bool,
         typer.Option("--json", help="Emit one plain JSON value on stdout."),
@@ -830,10 +1259,10 @@ def _command(
         str,
         typer.Option(
             "--output",
-            help="Human-readable output style: rich (default) or plain.",
+            help="Output format: auto, plain, rich, or json.",
             case_sensitive=False,
         ),
-    ] = "rich",
+    ] = "auto",
     report: Annotated[
         bool,
         typer.Option("--report", help="Report findings without failing."),
@@ -878,6 +1307,25 @@ def _command(
     ] = False,
 ) -> None:
     """Run the default profile from this repository, or select a rule/profile."""
+    try:
+        selected_format, json_output = _select_output_format(
+            output_format,
+            json_requested=json_output,
+            stdout_is_terminal=sys.stdout.isatty(),
+        )
+    except ValueError as error:
+        raise typer.BadParameter(str(error), param_hint="--output") from error
+    if jobs is not None and not 1 <= jobs <= 64:
+        raise typer.BadParameter("--jobs must be between 1 and 64")
+    if (
+        consumer_id is not None
+        and history_dir is not None
+        and (not consumer_id or consumer_id != consumer_id.strip())
+    ):
+        raise typer.BadParameter("--consumer-id must be nonempty and trimmed")
+    if history_report is not None and history_report not in {"runs", "rollup"}:
+        raise typer.BadParameter("--history-report must be runs or rollup")
+    _OUTPUT_FORMAT.set(selected_format)
     if plan_function_shape_only:
         if any(
             (
@@ -892,6 +1340,14 @@ def _command(
                 apply_fixes,
                 bool(fix_step),
                 init_config is not None,
+                add_language is not None,
+                add_tool is not None,
+                overwrite_config,
+                jobs is not None,
+                history_dir is not None,
+                show_history,
+                history_report is not None,
+                consumer_id is not None,
             )
         ):
             raise typer.BadParameter(
@@ -914,22 +1370,22 @@ def _command(
             typer.echo(f"Function-shape plan failed: {error}", err=True)
             raise typer.Exit(2) from error
         raise typer.Exit(0)
-    if output_format.lower() not in {"rich", "plain"}:
-        raise typer.BadParameter("--output must be rich or plain")
-    _OUTPUT_FORMAT.set(output_format.lower())
     if init_config is not None:
         if any(
             (
                 run,
                 rule is not None,
                 profile is not None,
-                json_output,
                 report,
                 verbose,
                 plan,
                 fix_plan,
                 apply_fixes,
                 bool(fix_step),
+                jobs is not None,
+                history_dir is not None,
+                show_history,
+                history_report is not None,
             )
         ):
             raise typer.BadParameter("--init-config cannot run or plan checks")
@@ -952,11 +1408,76 @@ def _command(
             )
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(document, encoding="utf-8", newline="\n")
-        _human_print(f"Wrote {destination}")
-        raise typer.Exit(0)
+        if json_output:
+            typer.echo(json.dumps({"path": str(destination)}, sort_keys=True))
+        else:
+            _human_print(f"Wrote {destination}")
+        raise typer.Exit(ExitCode.SUCCESS)
     if add_language or add_tool or overwrite_config:
         raise typer.BadParameter(
             "--add-language, --add-tool, and --overwrite-config require --init-config"
+        )
+    if history_report is not None:
+        if history_dir is None:
+            raise typer.BadParameter("--history-report requires --history-dir")
+        if any(
+            (
+                show_history,
+                run,
+                rule is not None,
+                report,
+                verbose,
+                plan,
+                fix_plan,
+                apply_fixes,
+                bool(fix_step),
+                jobs is not None,
+            )
+        ):
+            raise typer.BadParameter("--history-report cannot run or plan checks")
+        raise typer.Exit(
+            _execute_history_report(
+                history_dir, history_report, profile, consumer_id, json_output
+            )
+        )
+    if show_history:
+        if history_dir is None:
+            raise typer.BadParameter("--show-history requires --history-dir")
+        if any(
+            (
+                run,
+                rule is not None,
+                report,
+                verbose,
+                plan,
+                fix_plan,
+                apply_fixes,
+                bool(fix_step),
+                jobs is not None,
+            )
+        ):
+            raise typer.BadParameter("--show-history cannot run or plan checks")
+        raise typer.Exit(
+            _execute_history(
+                root, config, profile, history_dir, json_output, consumer_id
+            )
+        )
+    if plan and rule == "cyclomatic-complexity":
+        if (
+            fix_plan
+            or apply_fixes
+            or run
+            or profile is not None
+            or report
+            or verbose
+            or fix_step
+            or history_dir is not None
+        ):
+            raise typer.BadParameter(
+                "cyclomatic --plan cannot be combined with run, report, verbose, or fix options"
+            )
+        raise typer.Exit(
+            _execute(root, config, rule, json_output, False, False, True, jobs)
         )
     if plan:
         if (
@@ -967,12 +1488,19 @@ def _command(
             or report
             or verbose
             or fix_step
+            or history_dir is not None
         ):
             raise typer.BadParameter(
                 "--plan cannot be combined with run, rule, report, verbose, or fix options"
             )
-        raise typer.Exit(_execute_plan_profile(root, config, profile, json_output))
+        raise typer.Exit(
+            _execute_plan_profile(root, config, profile, json_output, jobs)
+        )
     if fix_plan or apply_fixes:
+        if jobs is not None or history_dir is not None:
+            raise typer.BadParameter(
+                "--jobs and --history-dir cannot be combined with fix operations"
+            )
         if fix_plan and apply_fixes:
             raise typer.BadParameter("choose --fix-plan or --apply-fixes")
         if run or rule is not None or report or verbose:
@@ -987,14 +1515,27 @@ def _command(
     if fix_step:
         raise typer.BadParameter("--fix-step requires --apply-fixes")
     if rule is not None:
-        if run or profile is not None:
+        if run or profile is not None or history_dir is not None:
             raise typer.BadParameter(
-                "--rule cannot be combined with --run or --profile"
+                "--rule cannot be combined with --run, --profile, or --history-dir"
             )
-        raise typer.Exit(_execute(root, config, rule, json_output, report, verbose))
+        raise typer.Exit(
+            _execute(root, config, rule, json_output, report, verbose, jobs=jobs)
+        )
     if report:
         raise typer.BadParameter("--report requires --rule")
-    raise typer.Exit(_execute_profile(root, config, profile, json_output, verbose))
+    raise typer.Exit(
+        _execute_profile(
+            root,
+            config,
+            profile,
+            json_output,
+            verbose,
+            jobs,
+            history_dir,
+            consumer_id if history_dir is not None else None,
+        )
+    )
 
 
 app.callback(invoke_without_command=True)(_command)
@@ -1002,19 +1543,19 @@ app.callback(invoke_without_command=True)(_command)
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the Typer command and return its process exit status."""
-    _OUTPUT_FORMAT.set("rich")
+    _OUTPUT_FORMAT.set("auto")
     try:
         app(args=list(argv) if argv is not None else None)
     except SystemExit as error:
         if error.code is None:
-            return 0
+            return ExitCode.SUCCESS
         try:
             return int(error.code)
         except (TypeError, ValueError):
-            return 1
+            return ExitCode.QUALITY_FAILURE
     finally:
-        _OUTPUT_FORMAT.set("rich")
-    return 0
+        _OUTPUT_FORMAT.set("auto")
+    return ExitCode.SUCCESS
 
 
 def main_for_rule(rule: str) -> int:

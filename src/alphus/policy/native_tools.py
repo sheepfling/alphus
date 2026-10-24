@@ -76,6 +76,18 @@ NATIVE_TOOLS = MappingProxyType(
             "python",
             (NativeStep("Python tests", ("{python}", "-m", "pytest")),),
         ),
+        # Explicit selection only; call-order diagnostics stay in Pylint's
+        # native configuration and this tool is not part of the Python bundle.
+        "pylint": NativeTool(
+            "python",
+            (
+                NativeStep(
+                    "Python Pylint diagnostics",
+                    ("pylint", "{files}"),
+                    include=("**/*.py",),
+                ),
+            ),
+        ),
         "rumdl": NativeTool(
             "markdown",
             (

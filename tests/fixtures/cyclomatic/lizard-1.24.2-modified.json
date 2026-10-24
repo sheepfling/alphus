@@ -1,0 +1,13 @@
+{
+  "version": "1.24.2",
+  "analyzed_file_count": 1,
+  "files": [
+    {
+      "path": "sample.cpp",
+      "functions": [
+        {"name": "switchCases", "line": 1, "value": 4},
+        {"name": "nestedSwitch", "line": 12, "value": 6}
+      ]
+    }
+  ]
+}

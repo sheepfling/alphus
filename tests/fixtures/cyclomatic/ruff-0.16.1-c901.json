@@ -1,0 +1,13 @@
+[
+  {
+    "cell": null,
+    "code": "C901",
+    "end_location": {"row": 1, "column": 22},
+    "filename": "sample.py",
+    "fix": null,
+    "location": {"row": 1, "column": 5},
+    "message": "`over_limit` is too complex (4 > 3)",
+    "noqa_row": 1,
+    "url": "https://docs.astral.sh/ruff/rules/complex-structure/"
+  }
+]

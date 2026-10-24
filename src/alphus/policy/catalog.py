@@ -15,6 +15,7 @@ class RuleOutputShape(StrEnum):
     MESSAGES = "messages"
     PYTHON_STYLE = "python-style"
     SHARED_UTILITIES = "shared-utilities"
+    CYCLOMATIC_REPORT = "cyclomatic-report"
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,7 +55,15 @@ RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
         "scipy-constants": RuleSpec("scipy_constants", RuleOutputShape.FINDINGS),
         "test-quality": RuleSpec("test_quality", RuleOutputShape.FINDINGS),
         "input-contracts": RuleSpec("input_contracts", RuleOutputShape.FINDINGS),
+        "positional-interfaces": RuleSpec(
+            "positional_interfaces", RuleOutputShape.FINDINGS
+        ),
         "pydantic-practices": RuleSpec("pydantic_practices", RuleOutputShape.FINDINGS),
         "fastapi-practices": RuleSpec("fastapi_practices", RuleOutputShape.FINDINGS),
+        "cyclomatic-complexity": RuleSpec(
+            "cyclomatic_complexity",
+            RuleOutputShape.CYCLOMATIC_REPORT,
+            requires_files=False,
+        ),
     }
 )

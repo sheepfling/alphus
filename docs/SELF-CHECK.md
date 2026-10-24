@@ -19,6 +19,9 @@ labels every stage and prints its command, exit code, duration, and captured
 output. Use `python scripts/ci.py --root . --output json` for one compact JSON
 event per stage; a failed stage includes the final 8,192 characters of stdout and stderr
 with truncation flags.
+Pass `--history-dir PATH --consumer-id ID` to this runner to archive its final
+self-profile result. The runner passes those options only to the self-profile
+command, so the package tests run without a global history setting.
 
 ## Run the installed wheel against this checkout
 

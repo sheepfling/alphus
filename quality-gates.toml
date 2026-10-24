@@ -57,7 +57,20 @@ minimum_ast_nodes = 15
 [checks.python_style]
 extensions = [".py"]
 exclude = []
-opaque_boundary_paths = ["src/alphus/config.py"]
+opaque_boundary_paths = [
+  "src/alphus/config.py",
+  "src/alphus/cli.py",
+  "src/alphus/execution/orchestration.py",
+  "src/alphus/execution/history_index.py",
+  "src/alphus/execution/profile_history.py",
+  "src/alphus/execution/profile_results.py",
+  "src/alphus/execution/step_results.py",
+  "src/alphus/execution/worker_protocol.py",
+  "src/alphus/gates/source/cyclomatic_complexity.py",
+  "src/alphus/policy/sources.py",
+  "tests/execution/test_shared_quality_intent_execution.py",
+  "tests/execution/test_history_index.py",
+]
 opaque_boundary_marker_prefix = "# opaque-boundary: "
 opaque_boundary_min_reason_chars = 12
 forbidden_main_imports = ["main"]
@@ -69,9 +82,12 @@ repeated_literal_paths = [
   "src/alphus/contracts/findings.py",
 ]
 semantic_result_paths = [
+  "src/alphus/gates/review/positional_interfaces.py",
   "src/alphus/gates/repository/**",
   "src/alphus/gates/hygiene/comment_markers.py",
+  "src/alphus/gates/hygiene/rules.py",
   "src/alphus/gates/vcs/worktree_hygiene.py",
+  "src/alphus/policy/sources.py",
 ]
 pattern_kind_paths = [
   "src/alphus/gates/cpp/artifact_scan.py",
@@ -111,6 +127,7 @@ ephemeral_document_patterns = ["docs/**"]
 [checks.input_contracts]
 extensions = [".py"]
 exclude = []
+sequence_narrowing_paths = ["src/alphus/gates/review/positional_interfaces.py"]
 
 [checks.pydantic_practices]
 extensions = [".py"]
@@ -122,8 +139,10 @@ report_unvalidated_construct = false
 report_unvalidated_copy_update = false
 report_validator_fallthrough = false
 report_field_positional_default = false
-report_external_model_docs = false
-external_model_names = []
+report_external_model_docs = true
+external_model_names = [
+  "ExtensionLimit", "FileSizePolicy", "LineLengthPolicy", "PathLimit",
+]
 
 [checks.fastapi_practices]
 extensions = [".py"]
@@ -135,6 +154,8 @@ exclude = []
 extensions = [".py"]
 exclude = [
   "src/alphus/__main__.py",
+  # Private JSON worker transport is not a human-facing command-line interface.
+  "src/alphus/execution/_worker_entry.py",
   "src/alphus/gates/**",
   "scripts/**",
   "tests/**",
@@ -277,6 +298,8 @@ rule = "git-history"
 [[orchestration.steps]]
 kind = "command"
 name = "Python lint"
+parallel = true
+locks = ["ruff-cache"]
 argv = [
   "{python}", "-m", "ruff", "check", "--force-exclude", "--select", "E4,E7,E9,F,ANN,I", "{files}",
 ]
@@ -322,6 +345,8 @@ argv = [
 [[orchestration.steps]]
 kind = "command"
 name = "Python format"
+parallel = true
+locks = ["ruff-cache"]
 argv = ["{python}", "-m", "ruff", "format", "--check", "--force-exclude", "{files}"]
 fix_argv = ["{python}", "-m", "ruff", "format", "--force-exclude", "{files}"]
 files = { include = ["src/**/*.py", "src/**/*.pyi", "tests/**/*.py", "scripts/**/*.py"] }
@@ -329,11 +354,13 @@ files = { include = ["src/**/*.py", "src/**/*.pyi", "tests/**/*.py", "scripts/**
 [[orchestration.steps]]
 kind = "command"
 name = "Python types"
+parallel = true
 argv = ["{python}", "-m", "pyright", "--pythonpath", "{python}", "src", "scripts"]
 
 [[orchestration.steps]]
 kind = "command"
 name = "TOML syntax"
+parallel = true
 argv = [
   "{python}", "-c",
   "import sys, tomllib; from pathlib import Path; [tomllib.loads(Path(p).read_text(encoding='utf-8')) for p in sys.argv[1:]]",
