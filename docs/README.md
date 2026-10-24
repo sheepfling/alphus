@@ -14,6 +14,7 @@ path that matches the repository being checked.
 | Review advisory test, input, and framework checks         | [Review checks](REVIEW-CHECKS.md)           |
 | Review positional argument interfaces                      | [Positional interfaces](POSITIONAL-INTERFACES.md) |
 | Add FastAPI-specific static checks                        | [FastAPI quality](FASTAPI-QUALITY.md)        |
+| Map common lint intents to native rules                   | [Common lint intents](COMMON-LINT-INTENTS.md) |
 | Verify Alphus with its own policy                         | [Self-check](SELF-CHECK.md)                 |
 
 ## How the pieces fit
