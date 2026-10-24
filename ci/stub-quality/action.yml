@@ -1,0 +1,80 @@
+name: Stub package verification
+description: Verify an installed stub wheel under an explicit target runtime.
+inputs:
+  python-version:
+    description: Python 3.11 or later for Alphus and native static checkers.
+    required: false
+    default: "3.12"
+  target-python-version:
+    description: Target Python 3.10 or later; defaults to the checker version.
+    required: false
+    default: ""
+  requirements-file:
+    description: Runtime compatibility requirements in the caller repository.
+    required: true
+  target-requirements-file:
+    description: Optional target build/backend and native stubtest requirements.
+    required: false
+    default: ""
+  config-file:
+    description: Stub-specific verification settings JSON file.
+    required: false
+    default: stub-quality.json
+  with-twine:
+    description: Also validate wheel and sdist metadata with native Twine.
+    required: false
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      id: checker
+      with:
+        python-version: ${{ inputs.python-version }}
+    - uses: actions/setup-python@v5
+      id: target
+      with:
+        python-version: ${{ inputs.target-python-version || inputs.python-version }}
+    - name: Create distinct checker and target environments
+      shell: bash
+      env:
+        CHECKER_BASE: ${{ steps.checker.outputs.python-path }}
+        TARGET_BASE: ${{ steps.target.outputs.python-path }}
+      run: |
+        verification_root=$(mktemp -d "$RUNNER_TEMP/alphus-stub-quality.XXXXXX")
+        "$CHECKER_BASE" -m venv "$verification_root/checker"
+        "$TARGET_BASE" -m venv "$verification_root/target"
+        echo "ALPHUS_CHECKER_PYTHON=$verification_root/checker/bin/python" >> "$GITHUB_ENV"
+        echo "ALPHUS_TARGET_PYTHON=$verification_root/target/bin/python" >> "$GITHUB_ENV"
+    - name: Install checker and target prerequisites
+      shell: bash
+      env:
+        REQUIREMENTS_FILE: ${{ inputs.requirements-file }}
+        TARGET_REQUIREMENTS: ${{ inputs.target-requirements-file }}
+        WITH_TWINE: ${{ inputs.with-twine }}
+        ALPHUS_ROOT: ${{ github.action_path }}/../..
+      run: |
+        "$ALPHUS_CHECKER_PYTHON" -m pip install --disable-pip-version-check "$ALPHUS_ROOT" \
+          "mypy>=2.3" "pyright>=1.1.414"
+        if [[ "$WITH_TWINE" == "true" ]]; then
+          "$ALPHUS_CHECKER_PYTHON" -m pip install --disable-pip-version-check "twine>=7.0"
+        fi
+        args=(-r "$REQUIREMENTS_FILE")
+        if [[ -n "$TARGET_REQUIREMENTS" ]]; then
+          args+=(-r "$TARGET_REQUIREMENTS")
+        else
+          args+=("build>=1.2" "mypy>=2.3" "setuptools>=80" "setuptools-scm>=9.2" wheel typing_extensions)
+        fi
+        "$ALPHUS_TARGET_PYTHON" -m pip install --disable-pip-version-check "${args[@]}"
+    - name: Build and verify installed stub package
+      shell: bash
+      env:
+        CONFIG_FILE: ${{ inputs.config-file }}
+        WITH_TWINE: ${{ inputs.with-twine }}
+      run: |
+        args=(--root "$GITHUB_WORKSPACE" --config "$CONFIG_FILE" \
+          --target-python "$ALPHUS_TARGET_PYTHON" --report "$RUNNER_TEMP/alphus-target-report.json")
+        if [[ "$WITH_TWINE" == "true" ]]; then
+          args+=(--with-twine)
+        fi
+        "$ALPHUS_CHECKER_PYTHON" -m alphus.gates.stubs.verify "${args[@]}"

@@ -1,0 +1,16 @@
+extend = "pyproject.toml"
+required-version = ">=0.16.0"
+
+[lint]
+extend-select = [
+  "FAST001", "FAST002", "FAST003",
+  "ASYNC210", "ASYNC230", "ASYNC240", "ASYNC251",
+  "B008", "ANN001", "ANN201",
+  "S113", "S501", "S608",
+]
+
+[lint.flake8-bugbear]
+extend-immutable-calls = [
+  "fastapi.Body", "fastapi.Cookie", "fastapi.Depends", "fastapi.File",
+  "fastapi.Header", "fastapi.Path", "fastapi.Query", "fastapi.Security",
+]

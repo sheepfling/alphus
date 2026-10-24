@@ -1,0 +1,66 @@
+schema_version = 1
+orchestration_files = [
+  "languages/python.toml",
+  "languages/markdown.toml",
+  "languages/toml.toml",
+  "languages/json.toml",
+]
+
+[files]
+include = [
+  "src/**/*.py", "tests/**/*.py", "README.md", "*.md", "docs/**/*.md",
+  "**/*.toml", "*.toml", "**/*.json", "*.json",
+]
+exclude = []
+
+[checks.file_size]
+code_extensions = [".py"]
+code_limit = 3000
+hard_limit = 5000
+initializer_name = "__init__.py"
+initializer_limit = 100
+exclude = []
+
+[checks.line_length]
+exclude = []
+
+[checks.line_length.limits]
+".py" = 100
+".md" = 120
+
+[checks.json_structure]
+# Extensions are literal suffixes; list each one separately. Excludes are globs.
+extensions = [".py"]
+exclude = ["tests/**"]
+
+[checks.output_escaping]
+extensions = [".py"]
+exclude = []
+
+[checks.path_discovery]
+extensions = [".py"]
+exclude = []
+inspection_exclude = ["tests/**"]
+
+[checks.python_style]
+extensions = [".py"]
+exclude = []
+opaque_boundary_paths = []
+opaque_boundary_marker_prefix = "# opaque-boundary: "
+opaque_boundary_min_reason_chars = 12
+forbidden_main_imports = ["main"]
+
+[checks.runtime_types]
+extensions = [".py"]
+exclude = ["tests/**"]
+
+[orchestration]
+default_profile = "check"
+
+[[orchestration.profiles]]
+name = "check"
+includes = ["python-policy", "markdown", "toml", "json", "python"]
+
+[[orchestration.profiles]]
+name = "docs"
+includes = ["markdown"]

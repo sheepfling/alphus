@@ -1,0 +1,142 @@
+schema_version = 1
+
+[orchestration]
+default_profile = "check"
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "command"
+name = "Python cyclomatic complexity"
+argv = ["{python}", "-m", "ruff", "check", "--force-exclude", "--output-format=json", "{files}"]
+rollout = "provisional"
+
+[orchestration.steps.files]
+include = ["python/**/*.py"]
+exclude = ["**/generated/**"]
+
+[[orchestration.steps]]
+kind = "command"
+name = "C++ function branches"
+argv = ["clang-tidy", "-p", "build", "{files}"]
+rollout = "provisional"
+
+[orchestration.steps.files]
+include = ["cpp/**/*.cpp"]
+exclude = ["**/generated/**"]
+
+[[orchestration.steps]]
+kind = "command"
+name = "JavaScript cyclomatic complexity"
+argv = ["npm", "exec", "--no", "--", "eslint", "--format=json", "{files}"]
+rollout = "provisional"
+
+[orchestration.steps.files]
+include = ["javascript/**/*.js"]
+exclude = ["**/generated/**"]
+
+[[orchestration.profiles]]
+name = "python"
+steps = ["Python cyclomatic complexity"]
+
+[[orchestration.profiles]]
+name = "cpp"
+steps = ["C++ function branches"]
+
+[[orchestration.profiles]]
+name = "javascript"
+steps = ["JavaScript cyclomatic complexity"]
+
+[[orchestration.profiles]]
+name = "check"
+includes = ["python", "cpp", "javascript"]
+
+[[orchestration.intents]]
+rule_id = "alphus/any/none/maintainability/function-complexity-review"
+summary = "Review functions whose native complexity measures exceed local limits."
+metric = "cyclomatic_complexity"
+unit = "decision_paths"
+count_method = "Ruff C901 uses McCabe's cyclomatic complexity and starts each function at one."
+threshold = 10
+rollout = "provisional"
+profiles = ["check"]
+required = true
+
+[orchestration.intents.files]
+include = ["**/*"]
+exclude = ["**/generated/**"]
+
+[[orchestration.intents.overrides]]
+language = "python"
+threshold = 12
+
+[orchestration.intents.overrides.files]
+include = ["python/**/*.py"]
+
+[[orchestration.intents.overrides]]
+language = "cpp"
+threshold = 6
+
+[orchestration.intents.overrides.files]
+include = ["cpp/**/*.cpp"]
+
+[[orchestration.intents.overrides]]
+language = "javascript"
+threshold = 10
+
+[orchestration.intents.overrides.files]
+include = ["javascript/**/*.js"]
+
+[[orchestration.intents.bindings]]
+language = "python"
+backend = "ruff"
+version_range = ">=0.16,<1"
+native_rule = "C901"
+metric = "cyclomatic_complexity"
+unit = "decision_paths"
+count_method = "Ruff C901 uses McCabe's cyclomatic complexity and starts each function at one."
+mapping = "exact"
+step = "Python cyclomatic complexity"
+evidence_format = "json-array"
+evidence_stream = "stdout"
+supported_options = ["max-complexity"]
+threshold_option = "max-complexity"
+violation_exit_codes = [1]
+configuration_exit_codes = [2]
+
+[orchestration.intents.bindings.effective_configuration]
+max-complexity = 12
+
+[[orchestration.intents.bindings]]
+language = "cpp"
+backend = "clang-tidy"
+version_range = ">=18,<23"
+native_rule = "readability-function-size.BranchThreshold"
+metric = "control_statement_count"
+unit = "branches"
+count_method = "Count control statements that introduce branches; this is not a McCabe path count."
+mapping = "comparable"
+step = "C++ function branches"
+supported_options = ["BranchThreshold"]
+threshold_option = "BranchThreshold"
+threshold_values = { 6 = "6" }
+effective_configuration = { BranchThreshold = "6" }
+coverage_limits = ["Logical operators and switch cases do not have the same contribution as a cyclomatic path count."]
+
+[[orchestration.intents.bindings]]
+language = "javascript"
+backend = "eslint"
+version_range = ">=9,<10"
+native_rule = "complexity"
+metric = "cyclomatic_complexity"
+unit = "decision_paths"
+count_method = "ESLint classic variant counts syntax-specific decisions; the modified variant treats a switch as one decision."
+mapping = "comparable"
+step = "JavaScript cyclomatic complexity"
+evidence_format = "json-array"
+evidence_stream = "stdout"
+supported_options = ["max", "variant", "severity"]
+threshold_option = "max"
+effective_configuration = { max = 10, variant = "classic", severity = "error" }
+violation_exit_codes = [1]
+configuration_exit_codes = [2]
+coverage_limits = ["ESLint syntax and rule-version behavior is kept in the native config."]

@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "alphus"
+version = "0.0.1"
+description = "Portable, policy-driven source quality gates for Git repositories"
+requires-python = ">=3.11,<3.16"
+readme = "README.md"
+dependencies = [
+  "packaging>=23,<27",
+  "pydantic>=2.7,<3",
+  "rich>=15.0.0,<16",
+  "typer>=0.27.3,<0.28",
+]
+
+[project.optional-dependencies]
+python = [
+  "pyright>=1.1.414,<2",
+  "pytest>=8,<10",
+  "ruff>=0.16,<1",
+]
+mypy = ["mypy>=2.3,<3"]
+ty = ["ty==0.0.91"]
+
+[project.scripts]
+alphus = "alphus.cli:main"
+alphus-typing-fixtures = "alphus.gates.stubs.typing_fixtures:main"
+alphus-stub-quality = "alphus.gates.stubs.verify:main"
+alphus-cpp-quality = "alphus.gates.cpp.cpp_common_quality:main"
+alphus-cpp-advisory-quality = "alphus.gates.cpp.cpp_advisory_quality:main"
+alphus-cpp-artifact-quality = "alphus.gates.cpp.cpp_artifact_quality:main"
+alphus-worktree-hygiene = "alphus.gates.vcs.worktree_hygiene:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["alphus", "alphus_stub_quality"]
+
+[tool.pyright]
+include = ["src", "scripts"]
+extraPaths = ["src"]
+pythonVersion = "3.11"
+typeCheckingMode = "strict"
+
+[tool.setuptools.package-data]
+alphus = ["py.typed"]
+alphus_stub_quality = ["py.typed"]

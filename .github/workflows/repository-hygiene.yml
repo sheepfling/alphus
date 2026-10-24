@@ -1,0 +1,41 @@
+name: Repository hygiene
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: "23 4 1 * *"
+
+permissions:
+  contents: read
+
+jobs:
+  ignore-policy:
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Install Alphus
+        run: python -m pip install --disable-pip-version-check -e .
+      - name: Check language-specific ignores and tracked artifacts
+        run: alphus --profile git
+
+  history-audit:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Install Alphus
+        run: python -m pip install --disable-pip-version-check -e .
+      - name: Audit all reachable Git history
+        run: alphus --profile repository-history
