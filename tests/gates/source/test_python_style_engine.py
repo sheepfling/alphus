@@ -444,6 +444,27 @@ def test_scoped_semantic_results_check_nested_fixed_position_tuples() -> None:
     assert visitor.findings["unnamed_tuple_returns"] == [1]
 
 
+def test_scoped_semantic_results_check_raw_tuple_return_values() -> None:
+    source = (
+        "def pair(): return 1, 'one'\n"
+        "def empty(): return ()\n"
+        "def singleton(): return ('one',)\n"
+        "def nested():\n"
+        "    def coordinates() -> tuple[int, int]: return 1, 2\n"
+        "    return {'point': (1, 2)}\n"
+    )
+    visitor = StyleVisitor(POLICY, semantic_results=True)
+    visitor.visit(ast.parse(source))
+    assert visitor.findings["unnamed_tuple_returns"] == [1, 5]
+
+
+def test_typed_and_raw_tuple_result_is_reported_once() -> None:
+    source = "def pair() -> tuple[int, str]: return 1, 'one'"
+    visitor = StyleVisitor(POLICY, semantic_results=True)
+    visitor.visit(ast.parse(source))
+    assert visitor.findings["unnamed_tuple_returns"] == [1]
+
+
 def test_scoped_semantic_results_preserve_named_and_wire_contracts() -> None:
     source = (
         "from typing import NamedTuple, TypedDict\n"
@@ -469,7 +490,8 @@ def test_semantic_result_paths_are_opt_in_and_respect_exclusions(
     target = tmp_path / relative
     target.parent.mkdir(parents=True)
     target.write_text(
-        "def load() -> tuple[dict[str, int], list[str]]: return {}, []\n",
+        "def load() -> tuple[dict[str, int], list[str]]: return {}, []\n"
+        "def pair(): return 1, 2\n",
         encoding="utf-8",
     )
 
@@ -478,7 +500,7 @@ def test_semantic_result_paths_are_opt_in_and_respect_exclusions(
 
     enabled = POLICY.model_copy(update={"semantic_result_paths": ["src/**"]})
     selected = findings_for(tmp_path, [relative], enabled)
-    assert selected[relative.as_posix()]["unnamed_tuple_returns"] == [1]
+    assert selected[relative.as_posix()]["unnamed_tuple_returns"] == [1, 2]
 
     excluded = enabled.model_copy(update={"exclude": ["src/**"]})
     assert findings_for(tmp_path, [relative], excluded) == {}

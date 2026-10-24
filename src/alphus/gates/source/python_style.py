@@ -247,6 +247,11 @@ def has_unnamed_tuple_result(annotation: ast.expr) -> bool:
     return False
 
 
+def is_unnamed_tuple_value(value: ast.expr | None) -> bool:
+    """Recognize a returned fixed-position tuple literal without evaluating it."""
+    return isinstance(value, ast.Tuple) and len(value.elts) >= 2
+
+
 def literal_string_values(items: Sequence[ast.expr]) -> frozenset[str] | None:
     """Read a string-only literal collection without evaluating expressions."""
     values: list[str] = []
@@ -422,6 +427,7 @@ class StyleVisitor(ast.NodeVisitor):
         self.boundary_min_reason_chars = policy.opaque_boundary_min_reason_chars
         self.forbidden_main_imports = set(policy.forbidden_main_imports)
         self.function_depth = 0
+        self.tuple_result_functions: list[tuple[int, bool]] = []
         self.type_checking_depth = 0
         self.type_checking_names = {"TYPE_CHECKING"}
         self.typing_names = {"typing"}
@@ -638,12 +644,12 @@ class StyleVisitor(ast.NodeVisitor):
             ):
                 self.findings["bare_containers"].append(arg.lineno)
             self.check_opaque(arg.annotation, declaration_line)
-        if (
+        has_tuple_result = (
             self.semantic_results
             and node.returns is not None
             and has_unnamed_tuple_result(node.returns)
-        ):
-            self.findings["unnamed_tuple_returns"].append(node.lineno)
+        )
+        self.tuple_result_functions.append((node.lineno, has_tuple_result))
         if node.returns is not None and has_quoted_type(node.returns):
             self.findings["quoted_types"].append(node.lineno)
         if node.returns is not None:
@@ -659,9 +665,24 @@ class StyleVisitor(ast.NodeVisitor):
         self.function_depth += 1
         for statement in node.body:
             self.visit(statement)
+        tuple_result_line, has_tuple_result = self.tuple_result_functions.pop()
+        if has_tuple_result:
+            self.findings["unnamed_tuple_returns"].append(tuple_result_line)
+            self.findings["unnamed_tuple_returns"].sort()
         self.function_depth -= 1
 
     visit_AsyncFunctionDef = visit_FunctionDef
+
+    def visit_Return(self, node: ast.Return) -> None:
+        """Flag tuple values returned by functions with semantic result checks."""
+        if (
+            self.semantic_results
+            and self.tuple_result_functions
+            and is_unnamed_tuple_value(node.value)
+        ):
+            function_line, _ = self.tuple_result_functions[-1]
+            self.tuple_result_functions[-1] = (function_line, True)
+        self.generic_visit(node)
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
         """Check variable annotations as well as function signatures."""

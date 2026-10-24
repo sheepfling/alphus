@@ -131,8 +131,10 @@ report_unvalidated_construct = false
 report_unvalidated_copy_update = false
 report_validator_fallthrough = false
 report_field_positional_default = false
-report_external_model_docs = false
-external_model_names = []
+report_external_model_docs = true
+external_model_names = [
+  "ExtensionLimit", "FileSizePolicy", "LineLengthPolicy", "PathLimit",
+]
 
 [checks.fastapi_practices]
 extensions = [".py"]
