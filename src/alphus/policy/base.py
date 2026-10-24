@@ -36,6 +36,7 @@ QualityRuleName: TypeAlias = Literal[
     "positional-interfaces",
     "pydantic-practices",
     "fastapi-practices",
+    "cyclomatic-complexity",
 ]
 
 PolicyT = TypeVar("PolicyT")

@@ -1,0 +1,38 @@
+schema_version = 1
+
+[files]
+include = [
+  "**/*.py", "**/*.c", "**/*.cc", "**/*.cpp", "**/*.h",
+  "**/*.hpp", "**/*.js", "**/*.mjs", "**/*.cjs",
+]
+exclude = ["generated/**", "vendor/**"]
+
+[checks.cyclomatic_complexity]
+metric = "cyclomatic"
+maximum = 10
+severity = "warning"
+timeout_seconds = 60
+
+[checks.cyclomatic_complexity.files]
+include = [
+  "**/*.py", "**/*.c", "**/*.cc", "**/*.cpp", "**/*.h",
+  "**/*.hpp", "**/*.js", "**/*.mjs", "**/*.cjs",
+]
+exclude = ["generated/**", "vendor/**"]
+
+[[checks.cyclomatic_complexity.backends]]
+language = "python"
+backend = "ruff"
+version = "0.16.1"
+
+[[checks.cyclomatic_complexity.backends]]
+language = "cpp"
+backend = "lizard"
+version = "1.24.2"
+variant = "standard"
+
+[[checks.cyclomatic_complexity.backends]]
+language = "javascript"
+backend = "eslint"
+version = "10.13.0"
+variant = "modified"

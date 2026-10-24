@@ -175,6 +175,12 @@ configured repository root. Consumers can configure
 Markdown link and formatting tools as ordinary command steps without adding
 repository-specific code to the package.
 
+Native cyclomatic checks are an opt-in extension to the same profile runner.
+The plan is resolved before execution; Python Ruff and JavaScript ESLint keep
+their native threshold-gate semantics, while C/C++ Lizard returns numeric
+function records through its pinned Python API. Backend, version, variant,
+effective options, and file coverage remain in the structured report.
+
 For a coordinated consumer example that assigns Markdown graph checks to
 mdrepo, Markdown lint and fixes to rumdl, TOML formatting to Taplo, JSON
 formatting to Prettier, and Python lint, typing, and tests to their native

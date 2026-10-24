@@ -29,6 +29,7 @@ from alphus.policy.intents import (
     SharedQualityIntent,
     resolve_intent_bindings,
 )
+from alphus.policy.metrics import CyclomaticComplexityPolicy
 from alphus.policy.repository import (
     DependencyLockPolicy,
     GitRepositoryPolicy,
@@ -88,6 +89,7 @@ class CheckPolicies(StrictModel):
     callable_registry: CallableRegistryPolicy | None = None
     dependency_locks: DependencyLockPolicy | None = None
     git: GitRepositoryPolicy | None = None
+    cyclomatic_complexity: CyclomaticComplexityPolicy | None = None
 
     def require_rule(self, rule: QualityRuleName) -> None:
         """Validate only the primary policy needed by a selected rule."""

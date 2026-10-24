@@ -30,6 +30,13 @@ from alphus.policy.intents import (
     NativeCapabilityBinding,
     SharedQualityIntent,
 )
+from alphus.policy.metrics import (
+    CyclomaticBackendBinding,
+    CyclomaticComplexityPolicy,
+    EslintCyclomaticBinding,
+    LizardCyclomaticBinding,
+    RuffCyclomaticBinding,
+)
 from alphus.policy.native_tools import native_tool_policy, native_tools_for_languages
 from alphus.policy.orchestration import (
     CheckPolicies,
@@ -95,8 +102,11 @@ __all__ = [
     "CliPolicy",
     "CommandRunStep",
     "CommentMarkerPolicy",
+    "CyclomaticBackendBinding",
+    "CyclomaticComplexityPolicy",
     "DependencyLockPolicy",
     "ErrorCodeCallSpec",
+    "EslintCyclomaticBinding",
     "FastApiPracticePolicy",
     "FileInventoryPolicy",
     "FileSizePolicy",
@@ -109,6 +119,7 @@ __all__ = [
     "IntentLanguageOverride",
     "JsonArrayRule",
     "LineLengthPolicy",
+    "LizardCyclomaticBinding",
     "LockfilePair",
     "ModuleRolePolicy",
     "ModuleRoleRule",
@@ -133,6 +144,7 @@ __all__ = [
     "QualityGateConfig",
     "QualityRuleName",
     "RepositoryLayoutPolicy",
+    "RuffCyclomaticBinding",
     "RuleRunStep",
     "RuntimeTypePolicy",
     "ScipyConstantsPolicy",

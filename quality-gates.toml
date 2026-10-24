@@ -60,6 +60,8 @@ exclude = []
 opaque_boundary_paths = [
   "src/alphus/config.py",
   "src/alphus/cli.py",
+  "src/alphus/execution/orchestration.py",
+  "src/alphus/gates/source/cyclomatic_complexity.py",
   "src/alphus/policy/sources.py",
   "tests/execution/test_shared_quality_intent_execution.py",
 ]

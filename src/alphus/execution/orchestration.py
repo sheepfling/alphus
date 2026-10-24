@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
@@ -114,6 +114,8 @@ class OrchestrationStepResult:
     stderr: str = ""
     severity_counts: SeverityCounts = field(default_factory=SeverityCounts)
     rollout: Literal["mainline", "provisional"] = _MAINLINE_ROLLOUT
+    # opaque-boundary: Native rule reports retain backend-specific JSON fields.
+    report: Mapping[str, object] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,6 +126,9 @@ class RuleRunResult:
     execution_failure: str | None = None
     exit_code: int = ExitCode.SUCCESS
     stderr: str = ""
+    stdout: str = ""
+    # opaque-boundary: Rule output carries a validated backend-specific report.
+    report: Mapping[str, object] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -307,6 +312,8 @@ def run_orchestration(
         captured_stderr = StringIO()
         step_stdout = ""
         step_stderr = ""
+        # opaque-boundary: Preserve the selected rule's backend report for output.
+        step_report: Mapping[str, object] | None = None
         findings: list[Diagnostic] = []
         skipped_empty_file_scope = False
         legacy_diagnostics: tuple[str, ...] = ()
@@ -344,7 +351,8 @@ def run_orchestration(
                             _legacy_diagnostic_line(finding) for finding in findings
                         )
                         step_stderr = rule_result.stderr or captured_stderr.getvalue()
-                        step_stdout = captured_stdout.getvalue()
+                        step_stdout = rule_result.stdout or captured_stdout.getvalue()
+                        step_report = rule_result.report
                         if rule_result.execution_failure is not None:
                             message = rule_result.execution_failure
                             findings.append(
@@ -596,6 +604,7 @@ def run_orchestration(
                     stderr=step_stderr,
                     severity_counts=SeverityCounts.from_diagnostics(findings),
                     rollout=step.rollout,
+                    report=step_report,
                 )
             )
             all_findings.extend(findings)
@@ -621,6 +630,7 @@ def run_orchestration(
                     stderr=step_stderr,
                     severity_counts=SeverityCounts.from_diagnostics(findings),
                     rollout=step.rollout,
+                    report=step_report,
                 )
             )
             all_findings.extend(findings)
@@ -777,6 +787,8 @@ def run_orchestration(
             step_payload["findings"] = [
                 finding.to_wire() for finding in step_result.findings
             ]
+            if step_result.report is None:
+                step_payload.pop("report")
         if not not_applicable:
             del payload[_STATUS_NOT_APPLICABLE]
         if result.intent_bindings:
