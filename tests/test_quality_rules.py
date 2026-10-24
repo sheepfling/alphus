@@ -7,11 +7,12 @@ import subprocess
 from collections.abc import Callable, Sequence
 from io import StringIO
 from pathlib import Path
+from typing import cast
 
 import pytest
 from pydantic import ValidationError
 
-from alphus.cli import main
+from alphus.cli import _render_python_style, main
 from alphus.config import (
     NodeCliPolicy,
     PythonStylePolicy,
@@ -28,6 +29,7 @@ from alphus.execution.results import (
 )
 from alphus.gates.hygiene.rules import check_file_size, check_line_length
 from alphus.gates.source import runners as source_runners
+from alphus.gates.source.python_style import StyleFindings
 from alphus.support import git, inventory
 from alphus.support.inventory import candidate_files, matches_path, tracked_files
 
@@ -670,6 +672,45 @@ def test_rule_profile_json_adapters_validate_each_owned_shape() -> None:
     )
     assert finding_records[0].severity == "warning"
     assert finding_records[0].source == "alphus"
+
+
+def test_python_style_diagnostics_ignore_the_aggregate_self_return_alias() -> None:
+    encoded = json.dumps(
+        {
+            "src/example.py": {
+                "concrete_classmethod_returns": [3],
+                "concrete_model_validator_returns": [6],
+                "concrete_self_returns": [3, 6],
+            }
+        }
+    )
+
+    findings = diagnostics_from_json("python-style", encoded)
+
+    assert [(item.rule_id, item.line) for item in findings] == [
+        ("alphus/python/none/style/concrete-classmethod-returns", 3),
+        ("alphus/python/none/style/concrete-model-validator-returns", 6),
+    ]
+
+
+def test_python_style_summary_renders_only_specialized_self_return_categories(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    issues = cast(
+        StyleFindings,
+        {category: [] for category in StyleFindings.__annotations__},
+    )
+    issues["concrete_classmethod_returns"] = [3]
+    issues["concrete_model_validator_returns"] = [6]
+    issues["concrete_self_returns"] = [3, 6]
+
+    total = _render_python_style({"src/example.py": issues})
+
+    output = capsys.readouterr().out
+    assert total == 2
+    assert output.count("/concrete-classmethod-returns ") == 1
+    assert output.count("/concrete-model-validator-returns ") == 1
+    assert "concrete-self-returns" not in output
 
 
 def test_rule_evaluation_validates_structured_output_before_rendering() -> None:

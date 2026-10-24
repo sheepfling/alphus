@@ -337,7 +337,7 @@ class _StyleCategory(NamedTuple):
 def _python_style_categories(
     issues: StyleFindings,
 ) -> tuple[_StyleCategory, ...]:
-    """Keep the style categories statically typed while rendering summaries."""
+    """Render specialized categories; the aggregate self-return key is an alias."""
     return (
         _StyleCategory("bare_containers", issues["bare_containers"]),
         _StyleCategory("bare_tuples", issues["bare_tuples"]),
@@ -367,7 +367,6 @@ def _python_style_categories(
             "concrete_model_validator_returns",
             issues["concrete_model_validator_returns"],
         ),
-        _StyleCategory("concrete_self_returns", issues["concrete_self_returns"]),
         _StyleCategory("direct_text_reads", issues["direct_text_reads"]),
         _StyleCategory(
             "duplicate_literal_catalogs", issues["duplicate_literal_catalogs"]
