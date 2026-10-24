@@ -27,6 +27,9 @@ class PackageBoundaryPolicy(StrictModel):
     forbidden_import_roots: Annotated[tuple[str, ...], Field(default_factory=tuple)]
     vendor_path_components: Annotated[tuple[str, ...], Field(default_factory=tuple)]
     file_loader_calls: Annotated[tuple[str, ...], Field(default_factory=tuple)]
+    approved_dynamic_loading_paths: Annotated[
+        tuple[str, ...], Field(default_factory=tuple)
+    ]
     reject_sys_path_mutations: bool = True
     reject_dynamic_imports: bool = True
     require_import_packages: bool = True
@@ -44,9 +47,14 @@ class PackageBoundaryPolicy(StrictModel):
             case _:
                 return value
 
-    @field_validator("metadata_patterns", "loose_module_directories")
+    @field_validator(
+        "metadata_patterns",
+        "loose_module_directories",
+        "approved_dynamic_loading_paths",
+    )
     @classmethod
     def validate_path_patterns(cls, patterns: Sequence[str]) -> tuple[str, ...]:
+        require_unique(patterns, "package-boundary path patterns must be unique")
         return validate_patterns(patterns)
 
     @field_validator("source_directory")

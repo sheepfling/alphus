@@ -67,6 +67,7 @@ from alphus.policy.repository import (
 )
 from alphus.policy.review import (
     ErrorCodeCallSpec,
+    FastApiFindingOverride,
     FastApiPracticePolicy,
     InputContractPolicy,
     NumericLiteralPolicy,
@@ -113,6 +114,7 @@ __all__ = [
     "DependencyLockPolicy",
     "ErrorCodeCallSpec",
     "EslintCyclomaticBinding",
+    "FastApiFindingOverride",
     "FastApiPracticePolicy",
     "FileInventoryPolicy",
     "FileSizePolicy",

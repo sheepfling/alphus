@@ -263,6 +263,50 @@ def test_import_and_system_path_aliases_cannot_bypass_checks(tmp_path: Path) -> 
     ]
 
 
+def test_approved_dynamic_loading_boundary_is_limited_to_configured_paths(
+    tmp_path: Path,
+) -> None:
+    _distribution(
+        tmp_path,
+        "workspace-core",
+        "workspace_core",
+        "import importlib\n"
+        "import sys\n"
+        "importlib.import_module(module_name)\n"
+        "sys.path.insert(0, 'consumer_src')\n",
+    )
+    package = tmp_path / "distributions" / "workspace-core" / "src" / "workspace_core"
+    (package / "secondary.py").write_text(
+        "import importlib\n"
+        "import sys\n"
+        "importlib.import_module(module_name)\n"
+        "sys.path.insert(0, 'another_src')\n",
+        encoding="utf-8",
+    )
+    policy = _policy().model_copy(
+        update={
+            "approved_dynamic_loading_paths": (
+                "distributions/workspace-core/src/workspace_core/module.py",
+            )
+        }
+    )
+
+    findings = check_package_boundaries(tmp_path, policy)
+
+    assert [(finding.path, finding.line, finding.message) for finding in findings] == [
+        (
+            "distributions/workspace-core/src/workspace_core/secondary.py",
+            3,
+            "opaque dynamic import",
+        ),
+        (
+            "distributions/workspace-core/src/workspace_core/secondary.py",
+            4,
+            "installed package edits sys.path",
+        ),
+    ]
+
+
 def test_metadata_cycles_are_reported(tmp_path: Path) -> None:
     _distribution(
         tmp_path,

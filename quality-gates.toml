@@ -42,7 +42,9 @@ exclude = []
 
 [checks.path_discovery]
 extensions = [".py"]
-exclude = []
+# This isolated adapter is the approved consumer-app import boundary; all other
+# package modules remain subject to path-discovery checks.
+exclude = ["src/alphus/gates/review/frameworks/fastapi_application_loader.py"]
 inspection_exclude = ["tests/**"]
 
 [checks.shared_utilities]
@@ -198,6 +200,9 @@ loose_module_directories = []
 forbidden_import_roots = ["src", "tests"]
 vendor_path_components = ["vendor"]
 file_loader_calls = ["spec_from_file_location", "SourceFileLoader", "run_path"]
+# This isolated adapter intentionally imports a configured consumer module and
+# restores sys.path immediately after import.
+approved_dynamic_loading_paths = ["src/alphus/gates/review/frameworks/fastapi_application_loader.py"]
 reject_sys_path_mutations = true
 reject_dynamic_imports = true
 require_import_packages = true

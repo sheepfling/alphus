@@ -99,6 +99,10 @@ jobs:
         run: |
           "$RUNNER_TEMP/alphus-checker/bin/python" -m mypy --version
           "$RUNNER_TEMP/alphus-checker/bin/python" -m ty --version
+      - name: Install the optional FastAPI contract test extra
+        run: >-
+          "$RUNNER_TEMP/alphus-checker/bin/python" -m pip install
+          --disable-pip-version-check -e '.[fastapi-test]'
       - name: Exercise optional Ty fixture checker
         shell: bash
         run: |
@@ -125,6 +129,8 @@ jobs:
             tests/gates/source/test_script_policy_engine.py::test_cmd_router_rejects_a_symlinked_module_outside_the_root \
             tests/gates/cpp/test_cpp_quality.py::test_cpp_advisory_profile_runs_both_provisional_gates \
             tests/gates/review/test_scipy_constants_engine.py \
+            tests/gates/review/frameworks/test_fastapi_contracts_engine.py \
+            examples/consumer/fastapi/tests \
             tests/test_review_cli.py::test_scipy_direct_rule_uses_its_own_label 2>&1); then
             printf '%s\n' "$output"
             exit 1

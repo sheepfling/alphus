@@ -5,11 +5,13 @@ from __future__ import annotations
 import ast
 from collections.abc import Iterable
 from collections.abc import Set as AbstractSet
+from dataclasses import replace
 from pathlib import Path
 
 from alphus.config import FastApiPracticePolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.gates.review.frameworks.fastapi_contracts import fastapi_contract_findings
 from alphus.support.inventory import matches_path
 from alphus.support.source_scanning import (
     ImportAliases,
@@ -214,4 +216,29 @@ def check_fastapi_practices(
             continue
         source = read_python_source(checkout / relative)
         findings.extend(fastapi_practice_findings(source, policy, path=name))
-    return findings
+    if policy.application is not None:
+        findings.extend(fastapi_contract_findings(checkout, policy))
+    overrides = {item.rule_id.value: item for item in policy.finding_overrides}
+    adjusted: list[Finding] = []
+    for finding in findings:
+        override = overrides.get(finding.rule_id)
+        if override is None:
+            adjusted.append(finding)
+            continue
+        if any(
+            matches_path(finding.path, pattern) for pattern in override.exclude_paths
+        ):
+            continue
+        adjusted.append(
+            replace(finding, severity=override.severity or finding.severity)
+        )
+    return sorted(
+        adjusted,
+        key=lambda item: (
+            item.path,
+            item.line or 0,
+            item.rule_id,
+            item.message,
+            item.severity,
+        ),
+    )

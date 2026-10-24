@@ -60,8 +60,12 @@ are visible through `--fix-plan` and run only through `--apply-fixes` with
 named steps; see [fix plans](FIXES.md).
 
 The [runtime-type contract](RUNTIME-TYPES.md) describes typed AST dispatch and
-explicit reflection-value annotations. The existing exclusions below remain
-unchanged; that correction adds no file exclusions or threshold relaxation.
+explicit reflection-value annotations. Its existing exclusions remain
+unchanged. The FastAPI application loader has one exact path-discovery
+exclusion and one matching package-boundary allowance because it temporarily
+adds explicitly configured consumer import paths while importing the selected
+application, then restores `sys.path`. Other package files retain both checks,
+and file-backed module loading remains rejected.
 
 ## Self-profile scope and exclusions
 
