@@ -178,11 +178,11 @@ def test_public_policy_json_schema_documents_metric_units() -> None:
     assert "raw bytes" in file_size["raw_byte_limit"]["description"]
     assert "Unicode code points" in line_length["codepoint_limits"]["description"]
     assert (
-        line_schema["$defs"]["PathLimit"]["prefixItems"][0]["description"]
+        line_schema["$defs"]["PathLimit"]["properties"]["pattern"]["description"]
         == "Repository-relative POSIX path glob."
     )
     assert (
-        line_schema["$defs"]["PathLimit"]["prefixItems"][1]["description"]
+        line_schema["$defs"]["PathLimit"]["properties"]["limit"]["description"]
         == "Maximum value for matching paths."
     )
 

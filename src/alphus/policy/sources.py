@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping, Sequence
 from pathlib import PurePosixPath
-from typing import Annotated, Literal, NamedTuple, Self, cast
+from typing import Annotated, Literal, Self, cast
 
 from pydantic import AliasChoices, Field, field_validator, model_validator
 
@@ -16,14 +16,14 @@ from alphus.policy.base import (
 )
 
 
-class ExtensionLimit(NamedTuple):
+class ExtensionLimit(StrictModel):
     """One configured limit selected by a file extension."""
 
     extension: Annotated[str, Field(description="File suffix, including its dot.")]
     limit: Annotated[int, Field(gt=0, description="Maximum value for this suffix.")]
 
 
-class PathLimit(NamedTuple):
+class PathLimit(StrictModel):
     """One configured limit selected by a repository-relative path pattern."""
 
     pattern: Annotated[str, Field(description="Repository-relative POSIX path glob.")]
@@ -216,10 +216,11 @@ class FileSizePolicy(StrictModel):
     @classmethod
     def normalize_raw_byte_limits(cls, limits: object) -> object:
         """Accept TOML extension tables and keep the validated form immutable."""
-        if isinstance(limits, Mapping):
+        if hasattr(limits, "items"):
             values = cast(Mapping[str, int], limits)
             return tuple(
-                ExtensionLimit(extension, limit) for extension, limit in values.items()
+                ExtensionLimit(extension=extension, limit=limit)
+                for extension, limit in values.items()
             )
         return limits
 
@@ -232,19 +233,18 @@ class FileSizePolicy(StrictModel):
             tuple(item.extension for item in limits),
             "raw-byte keys must be lowercase file extensions with positive limits",
         )
-        if any(item.limit <= 0 for item in limits):
-            raise ValueError(
-                "raw-byte keys must be lowercase file extensions with positive limits"
-            )
         return tuple(limits)
 
     @field_validator("path_raw_byte_limits", mode="before")
     @classmethod
     def normalize_path_raw_byte_limits(cls, limits: object) -> object:
         """Accept TOML path tables and retain their declared precedence order."""
-        if isinstance(limits, Mapping):
+        if hasattr(limits, "items"):
             values = cast(Mapping[str, int], limits)
-            return tuple(PathLimit(pattern, limit) for pattern, limit in values.items())
+            return tuple(
+                PathLimit(pattern=pattern, limit=limit)
+                for pattern, limit in values.items()
+            )
         return limits
 
     @field_validator("path_raw_byte_limits")
@@ -254,9 +254,7 @@ class FileSizePolicy(StrictModel):
     ) -> tuple[PathLimit, ...]:
         patterns = tuple(item.pattern for item in limits)
         validate_patterns(patterns)
-        if len(patterns) != len(set(patterns)) or any(
-            item.limit <= 0 for item in limits
-        ):
+        if len(patterns) != len(set(patterns)):
             raise ValueError(
                 "path raw-byte limits need unique paths and positive values"
             )
@@ -304,10 +302,11 @@ class LineLengthPolicy(StrictModel):
     @classmethod
     def normalize_limits(cls, limits: object) -> object:
         """Represent TOML extension tables as immutable limit pairs."""
-        if isinstance(limits, Mapping):
+        if hasattr(limits, "items"):
             values = cast(Mapping[str, int], limits)
             return tuple(
-                ExtensionLimit(extension, limit) for extension, limit in values.items()
+                ExtensionLimit(extension=extension, limit=limit)
+                for extension, limit in values.items()
             )
         return limits
 
@@ -320,19 +319,18 @@ class LineLengthPolicy(StrictModel):
             tuple(item.extension for item in limits),
             "line-length keys must be lowercase extensions with positive limits",
         )
-        if any(item.limit <= 0 for item in limits):
-            raise ValueError(
-                "line-length keys must be lowercase extensions with positive limits"
-            )
         return tuple(limits)
 
     @field_validator("path_codepoint_limits", mode="before")
     @classmethod
     def normalize_path_codepoint_limits(cls, limits: object) -> object:
         """Accept a TOML path table and keep the validated form immutable."""
-        if isinstance(limits, Mapping):
+        if hasattr(limits, "items"):
             values = cast(Mapping[str, int], limits)
-            return tuple(PathLimit(pattern, limit) for pattern, limit in values.items())
+            return tuple(
+                PathLimit(pattern=pattern, limit=limit)
+                for pattern, limit in values.items()
+            )
         return limits
 
     @field_validator("path_codepoint_limits")
@@ -342,9 +340,7 @@ class LineLengthPolicy(StrictModel):
     ) -> tuple[PathLimit, ...]:
         patterns = tuple(item.pattern for item in limits)
         validate_patterns(patterns)
-        if len(patterns) != len(set(patterns)) or any(
-            item.limit <= 0 for item in limits
-        ):
+        if len(patterns) != len(set(patterns)):
             raise ValueError(
                 "path codepoint limits need unique paths and positive values"
             )
