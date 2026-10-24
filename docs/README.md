@@ -13,6 +13,7 @@ path that matches the repository being checked.
 | Check Git ignores or historical repository artifacts      | [Repository hygiene](REPOSITORY-HYGIENE.md) |
 | Review advisory test, input, and framework checks         | [Review checks](REVIEW-CHECKS.md)           |
 | Add FastAPI-specific static checks                        | [FastAPI quality](FASTAPI-QUALITY.md)        |
+| Map common lint intents to native rules                   | [Common lint intents](COMMON-LINT-INTENTS.md) |
 | Verify Alphus with its own policy                         | [Self-check](SELF-CHECK.md)                 |
 
 ## How the pieces fit

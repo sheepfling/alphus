@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import Literal, NamedTuple, Self, TypeAlias, TypedDict, TypeVar, get_args
 
@@ -89,7 +89,9 @@ class Diagnostic:
             raise ValueError(f"unsupported remediation priority: {self.priority!r}")
         tag = self._rule_tag
         if tag is not None:
-            if tag.rule_id != self.rule_id:
+            if tag.rule_id != self.rule_id and (
+                self.source == NAMESPACE or RuleTag.is_alphus_id(self.rule_id)
+            ):
                 raise ValueError(
                     "diagnostic rule tag does not match its public rule ID"
                 )
@@ -99,7 +101,7 @@ class Diagnostic:
 
     @property
     def tag(self) -> RuleTag | None:
-        """Return the parsed Alphus identity, or ``None`` for a native tool ID."""
+        """Return an internal semantic identity when one is available."""
         return self._rule_tag
 
     def matches_category(self, category: Category) -> bool:
@@ -136,9 +138,69 @@ class _ComplaintKey(NamedTuple):
 _RollupKey = TypeVar("_RollupKey", Scope, Category, _ComplaintKey)
 
 
+def deduplicate_semantic_diagnostics(
+    diagnostics: Iterable[Diagnostic],
+) -> tuple[Diagnostic, ...]:
+    """Prefer native evidence when it exactly overlaps an Alphus semantic finding.
+
+    The key includes the typed rule, source location, and message. Separate
+    native rules keep their own IDs, and findings with different evidence remain
+    distinct. The public diagnostic wire shape is unchanged.
+    """
+    items = tuple(diagnostics)
+    semantic_keys = {
+        (item.tag.rule_id, item.path, item.line, item.message)
+        for item in items
+        if item.tag is not None and item.source != NAMESPACE
+    }
+    severity_for_key: dict[tuple[str, str | None, int | None, str], Severity] = {}
+    for item in items:
+        if item.tag is None:
+            continue
+        key = (item.tag.rule_id, item.path, item.line, item.message)
+        current = severity_for_key.get(key)
+        if current is None or SEVERITY_ORDER[item.severity] > SEVERITY_ORDER[current]:
+            severity_for_key[key] = item.severity
+
+    output: list[Diagnostic] = []
+    seen: set[tuple[object, ...]] = set()
+    for item in items:
+        if item.tag is None:
+            output.append(item)
+            continue
+        semantic_key = (item.tag.rule_id, item.path, item.line, item.message)
+        if semantic_key in semantic_keys:
+            if item.source == NAMESPACE:
+                continue
+            identity = (
+                *semantic_key,
+                item.source,
+                item.rule_id,
+            )
+            if identity in seen:
+                continue
+            seen.add(identity)
+            severity = severity_for_key[semantic_key]
+            output.append(
+                item if item.severity == severity else replace(item, severity=severity)
+            )
+            continue
+        identity = (
+            *semantic_key,
+            item.source,
+            item.rule_id,
+            item.severity,
+            item.priority,
+        )
+        if identity not in seen:
+            seen.add(identity)
+            output.append(item)
+    return tuple(output)
+
+
 @dataclass(frozen=True, slots=True)
 class FindingRollups:
-    """Cross-language indexes over normalized Alphus diagnostics."""
+    """Cross-language indexes over Alphus and mapped native diagnostics."""
 
     scopes: tuple[FindingRollup, ...] = ()
     categories: tuple[FindingRollup, ...] = ()
@@ -149,7 +211,7 @@ class FindingRollups:
         by_scope: dict[Scope, list[Diagnostic]] = {}
         by_category: dict[Category, list[Diagnostic]] = {}
         by_complaint: dict[_ComplaintKey, list[Diagnostic]] = {}
-        for diagnostic in diagnostics:
+        for diagnostic in deduplicate_semantic_diagnostics(diagnostics):
             tag = diagnostic.tag
             if tag is None:
                 continue
