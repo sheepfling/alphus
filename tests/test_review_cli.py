@@ -71,6 +71,20 @@ _CASES = (
         "alphus/python/none/testing/ephemeral-plan-dependency",
     ),
     (
+        "test-quality",
+        "tests/test_oracle.py",
+        (
+            "from sample.math import compute\n"
+            "def test_compute():\n assert compute(4) == compute(4)\n"
+        ),
+        (
+            '[checks.test_quality]\nextensions = [".py"]\n'
+            "oracle_independence = true\n"
+            'oracle_production_modules = ["sample"]\n'
+        ),
+        "alphus/python/none/testing/shared-oracle",
+    ),
+    (
         "input-contracts",
         "source.py",
         "def add(values: list[str]):\n values.append('x')\n",
@@ -270,6 +284,30 @@ def test_confusable_positional_consumer_preserves_native_output_and_json_shapes(
     }
     assert native["status"] == "passed"
     assert native["stdout"] == "pylint: W1114 native diagnostic\n"
+
+
+def test_oracle_policy_loads_production_scope_and_reasoned_exclusion(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "quality.toml"
+    config_path.write_text(
+        _BASE
+        + '[checks.test_quality]\nextensions = [".py"]\n'
+        + "oracle_independence = true\n"
+        + 'oracle_production_modules = ["sample"]\n'
+        + "[[checks.test_quality.oracle_exclusions]]\n"
+        + 'path = "tests/test_contracts.py"\n'
+        + 'test_function = "TestApi.test_delegates"\n'
+        + 'reason = "This test documents the public wrapper delegation contract."\n',
+        encoding="utf-8",
+    )
+
+    policy = load_config(config_path).checks.test_quality
+
+    assert policy is not None
+    assert policy.oracle_independence is True
+    assert policy.oracle_production_modules == ("sample",)
+    assert policy.oracle_exclusions[0].test_function == "TestApi.test_delegates"
 
 
 @pytest.mark.parametrize(

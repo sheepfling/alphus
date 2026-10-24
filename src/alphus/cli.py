@@ -12,7 +12,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from contextvars import ContextVar
 from io import StringIO
 from pathlib import Path
-from typing import Annotated, NamedTuple, TextIO, cast
+from typing import Annotated, NamedTuple, NotRequired, TextIO, TypedDict, cast
 
 import typer
 from pydantic import ValidationError
@@ -27,6 +27,7 @@ from alphus.config import (
 )
 from alphus.contracts.findings import (
     Finding,
+    Severity,
     SeverityCounts,
 )
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
@@ -39,6 +40,7 @@ from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
 from alphus.gates.source.python_style import StyleFindings
 from alphus.policy.base import MissingPolicyError
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
+from alphus.policy.intents import IntentBindingPlan, intent_bindings_for_steps
 from alphus.policy.recipes import render_recipe
 from alphus.support.inventory import candidate_files
 
@@ -56,6 +58,16 @@ _CLI_CONTRACT_TAG = rule_tag(
 _SCRIPT_POLICY_TAG = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.SECURITY, "script-policy-violation"
 )
+
+
+class ExecutionPlanPayload(TypedDict):
+    """Typed JSON representation of the selected execution plan."""
+
+    profile: str
+    profiles: tuple[str, ...]
+    failure_threshold: Severity
+    steps: list[object]
+    intents: NotRequired[list[IntentBindingPlan]]
 
 
 def _render_finding(finding: Finding) -> None:
@@ -346,9 +358,7 @@ def _python_style_categories(
         _StyleCategory(
             "undifferentiated_patterns", issues["undifferentiated_patterns"]
         ),
-        _StyleCategory(
-            "concrete_classmethod_returns", issues["concrete_classmethod_returns"]
-        ),
+        _StyleCategory("concrete_self_returns", issues["concrete_self_returns"]),
         _StyleCategory("direct_text_reads", issues["direct_text_reads"]),
         _StyleCategory(
             "duplicate_literal_catalogs", issues["duplicate_literal_catalogs"]
@@ -686,6 +696,26 @@ def _execute_plan_profile(
         return 2
 
     by_name = {step.name: step for step in policy.steps}
+    intent_rows = list(
+        intent_bindings_for_steps(
+            policy.intents,
+            plan.steps,
+            selected_profile,
+            selected_profiles=plan.profiles,
+            default_failure_threshold=policy.failure_threshold,
+        )
+    )
+    entries_by_name = {entry.name: entry for entry in entries}
+    for row in intent_rows:
+        step_name = row["step"]
+        if step_name is not None and step_name in entries_by_name:
+            entry = entries_by_name[step_name]
+            step = by_name[step_name]
+            row["selected_files"] = entry.files
+            if step.kind == "command":
+                row["applicable"] = step.files is None or bool(entry.files)
+            row["expanded_argv"] = entry.check_argv
+
     if json_output:
         details: list[object] = []
         for entry in entries:
@@ -698,17 +728,15 @@ def _execute_plan_profile(
                 if entry.check_argv is not None:
                     detail["expanded_argv"] = entry.check_argv
             details.append(detail)
-        typer.echo(
-            json.dumps(
-                {
-                    "profile": selected_profile,
-                    "profiles": plan.profiles,
-                    "failure_threshold": policy.failure_threshold,
-                    "steps": details,
-                },
-                sort_keys=True,
-            )
-        )
+        payload: ExecutionPlanPayload = {
+            "profile": selected_profile,
+            "profiles": plan.profiles,
+            "failure_threshold": policy.failure_threshold,
+            "steps": details,
+        }
+        if intent_rows:
+            payload["intents"] = intent_rows
+        typer.echo(json.dumps(payload, sort_keys=True))
         return 0
 
     _human_print(
@@ -731,6 +759,34 @@ def _execute_plan_profile(
         fixer = ", fixer available" if entry.fixable else ""
         _human_print(f"{label} COMMAND {step.name}: {scope}{fixer}")
         _human_print(f"  check={json.dumps(step.argv)}")
+    if intent_rows:
+        _human_print("Shared quality intents:")
+        for row in intent_rows:
+            status = str(row["status"]).replace("_", " ").upper()
+            if row.get("applicable") is False:
+                status = "NOT APPLICABLE"
+            metric = f"{row['metric']} ({row['unit']})"
+            _human_print(
+                f"{status} {row['rule_id']} [{row['language']}]: "
+                f"{row['backend']} {row['native_rule']}; {row['mapping']} mapping; "
+                f"{metric}; severity={row['severity']}, failure threshold="
+                f"{row['failure_threshold']}, rollout={row['rollout']}"
+            )
+            _human_print(
+                f"  scope={json.dumps(row['files'], sort_keys=True)}; "
+                "effective config="
+                f"{json.dumps(row['effective_configuration'], sort_keys=True)}"
+            )
+            step_name = row["step"]
+            if step_name is not None:
+                entry = entries_by_name.get(step_name)
+                if entry is not None:
+                    _human_print(
+                        f"  owner={row['ownership']}; evidence step={step_name}; "
+                        f"{len(entry.files)} file(s) selected"
+                    )
+            elif row["status"] == "unsupported":
+                _human_print("  no native command is configured for this capability")
     return 0
 
 

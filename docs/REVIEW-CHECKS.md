@@ -122,9 +122,9 @@ blocking the profile.
 
 ## Test quality
 
-Selector: `test-quality`. IDs:
-`alphus/python/none/testing/large-prose-assertion` and
-`alphus/python/none/testing/ephemeral-plan-dependency`.
+Selector: `test-quality`. IDs: `alphus/python/none/testing/large-prose-assertion`,
+`alphus/python/none/testing/ephemeral-plan-dependency`, and
+`alphus/python/none/testing/shared-oracle`.
 
 ```toml
 [checks.test_quality]
@@ -164,6 +164,119 @@ This makes a direct read of repository documentation an enforced finding in
 the self `check` profile; a test-created fixture or temporary path remains
 allowed. Consumers select their own document folders. This is not a global
 file exclusion.
+
+### Shared-oracle advisory
+
+The shared-oracle check is independently opt-in and disabled by default. It
+inspects only files selected by `test_paths` and only calls resolved from
+`oracle_production_modules`. This is a conservative source check: it parses
+consumer code without importing or executing it. It is not a detector of test
+authorship or a proof of correctness.
+
+```toml
+[checks.test_quality]
+extensions = [".py"]
+test_paths = ["tests/**"]
+oracle_independence = true
+oracle_production_modules = ["my_package"]
+oracle_helper_allowlist = ["my_package.test_helpers.reference_value"]
+
+[[checks.test_quality.oracle_exclusions]]
+path = "tests/test_compatibility.py"
+test_function = "test_public_delegates_to_core"
+reason = "This test documents the public wrapper delegation contract."
+```
+
+The scanner reports a direct production call used on both sides of a simple
+equality assertion, including calls reached through import aliases, callable
+aliases, and local result assignments. Its diagnostic includes the assertion
+operand spans and the source spans of the shared calls. It says that this
+comparison does not supply independent evidence for that calculation; it does
+not claim that the test is useless.
+
+`oracle_production_modules` contains dotted Python module prefixes. The helper
+allowlist contains exact dotted callable names. Exclusions match one test
+function in one exact configured test file and require a one-line reason of at
+least 20 characters. A missing production-module scope is a configuration error when
+the check is enabled.
+
+Unknown wrappers, dynamic imports, branch-dependent bindings, and unresolved
+receivers are skipped. Fixture builders outside the configured production
+modules, comparison helpers such as `pytest.approx`, distinct reference
+implementations, literal vectors, and ordinary public behavior assertions do
+not match. Add a focused, reasoned exclusion for a deliberate delegation or
+consistency contract. This scanner does not compare copied arithmetic or
+algorithm similarity, inspect exact mock-call sequences, or infer the behavior
+inside a wrapper.
+
+For example, comparing `circle_area(3)` with another `circle_area(3)` uses the
+same implementation to produce both values. A literal or independently
+calculated reference such as `circle_area(3) == 28.274333882308138` supplies a
+separate expected value. For mathematical code, prefer hand-worked or authoritative
+reference vectors with units, tolerances, and provenance; the scanner cannot
+judge whether the vector itself is correct.
+
+### Optional mutation pilot
+
+Use a small, selected function and its focused tests for a first mutation
+review. `mutmut` requires `fork` support; its current documentation says
+Windows users need WSL. Run it from a clean disposable checkout or worktree,
+pin the version used for the review, and do not apply generated mutants to the
+source tree.
+
+```toml
+[tool.mutmut]
+source_paths = ["src/my_package/geometry.py"]
+pytest_add_cli_args_test_selection = ["tests/test_geometry.py"]
+```
+
+```shell
+mutmut run "my_package.geometry.area*"
+mutmut browse
+```
+
+Keep the pilot to one function, set a short wall-clock budget such as two
+minutes, and record any interrupted work as `not-run`. If using mutmut's
+per-mutant timeout settings, check the installed version's documentation
+first; those settings are version-sensitive. Review outcomes separately:
+
+- `killed`: a focused test failed while the mutant was active.
+- `survived`: the tests passed; inspect whether the mutant is equivalent or
+  exposes a missing assertion.
+- `timeout`: the mutant did not finish within the configured time.
+- `error`: the runner or mutated program errored; this is not a test kill.
+- `not-run`: the mutant was not evaluated, including work left after the
+  budget or on an unsupported platform.
+
+A surviving mutant may be equivalent, and a high kill rate does not prove
+independent validation. Unsupported platforms and incomplete runs are not
+success results.
+
+### Property and metamorphic tests
+
+Hypothesis is an optional native test dependency, not a second Alphus
+generator. Choose strategies from the input domain and write properties only
+for invariants justified by the API or mathematics:
+
+```python
+from hypothesis import given, strategies as st
+
+
+@given(st.integers(), st.integers())
+def test_addition_is_commutative(left: int, right: int) -> None:
+    assert add(left, right) == add(right, left)
+```
+
+This property alone would accept an implementation that always returns zero.
+Add hand-worked or authoritative vectors, such as `add(1, 2) == 3`, when they
+are supported by an independent source. A round trip or inverse pair can share
+the same defect. Record vector provenance, units, and tolerances where
+relevant. Use metamorphic relations only when the expected relationship
+between transformed inputs and outputs has an independent justification.
+
+See the [Hypothesis quickstart](https://hypothesis.readthedocs.io/en/latest/quickstart.html)
+and [mutmut documentation](https://mutmut.readthedocs.io/en/latest/) for their
+native setup and command details.
 
 ## Input contracts
 
