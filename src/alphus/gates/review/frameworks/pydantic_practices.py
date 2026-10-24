@@ -865,10 +865,76 @@ def _external_model_doc_lines(
     return findings
 
 
+def _annotation_contains_any(annotation: ast.expr, aliases: ImportAliases) -> bool:
+    match annotation:
+        case ast.Constant(value=str() as source):
+            try:
+                annotation = ast.parse(source, mode="eval").body
+            except SyntaxError:
+                return False
+        case _:
+            pass
+    for node in ast.walk(annotation):
+        match node:
+            case ast.Name() | ast.Attribute() if canonical_expression_name(
+                node, aliases
+            ) in {"typing.Any", "typing_extensions.Any"}:
+                return True
+            case _:
+                pass
+    return False
+
+
+def _public_any_lines(
+    module: ast.Module, aliases: ImportAliases, models: AbstractSet[str]
+) -> list[int]:
+    lines: set[int] = set()
+    for node in module.body:
+        match node:
+            case ast.ClassDef(name=name, body=body) if name in models:
+                pass
+            case _:
+                continue
+        for statement in body:
+            match statement:
+                case ast.AnnAssign(
+                    target=ast.Name(id=field_name), annotation=annotation
+                ) if not field_name.startswith("_"):
+                    pass
+                case _:
+                    continue
+            class_variable = False
+            for candidate in ast.walk(annotation):
+                match candidate:
+                    case ast.Name() | ast.Attribute() if canonical_expression_name(
+                        candidate, aliases
+                    ) in {"typing.ClassVar", "typing_extensions.ClassVar"}:
+                        class_variable = True
+                        break
+                    case _:
+                        pass
+            if class_variable:
+                continue
+            if _annotation_contains_any(annotation, aliases):
+                lines.add(statement.lineno)
+    return sorted(lines)
+
+
+def _custom_init_lines(module: ast.Module, models: AbstractSet[str]) -> list[int]:
+    return sorted(
+        statement.lineno
+        for node in module.body
+        if isinstance(node, ast.ClassDef) and node.name in models
+        for statement in node.body
+        if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and statement.name == "__init__"
+    )
+
+
 def pydantic_practice_findings(
     source: str, policy: PydanticPracticePolicy, *, path: str = "<source>"
 ) -> list[Finding]:
-    """Report possible redundant validation and opt-in mutability intent."""
+    """Report selected Pydantic validation and declaration practices."""
     module = ast.parse(source, filename=path)
     aliases = import_aliases(module)
     models = _model_names(module, aliases)
@@ -944,6 +1010,16 @@ def pydantic_practice_findings(
             _field_positional_lines(module, aliases, models),
             "use Field(default=...) to make the field default explicit",
         ),
+        (
+            policy.report_custom_init,
+            Category.VALIDATION,
+            "custom-init",
+            _custom_init_lines(module, models),
+            (
+                "review this custom Pydantic initializer; use a validator or "
+                "model_post_init when possible"
+            ),
+        ),
     )
     for enabled, category, name, lines, message in optional_rules:
         if enabled:
@@ -953,12 +1029,33 @@ def pydantic_practice_findings(
                     path=path,
                     line=line,
                     severity="info"
-                    if name == "field-positional-default"
+                    if name in {"field-positional-default", "custom-init"}
                     else "warning",
                     message=message,
                 )
                 for line in lines
             )
+    if policy.report_unconstrained_any and any(
+        matches_path(path, pattern) for pattern in policy.public_model_paths
+    ):
+        findings.extend(
+            Finding(
+                rule_id=rule_tag(
+                    Scope.PYTHON,
+                    Framework.PYDANTIC,
+                    Category.VALIDATION,
+                    "public-unconstrained-any",
+                ),
+                path=path,
+                line=line,
+                severity="warning",
+                message=(
+                    "replace or explicitly review Any in this designated public "
+                    "Pydantic field"
+                ),
+            )
+            for line in _public_any_lines(module, aliases, models)
+        )
     if policy.report_external_model_docs:
         findings.extend(
             Finding(

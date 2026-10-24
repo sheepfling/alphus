@@ -204,7 +204,10 @@ class PydanticPracticePolicy(PythonSourceScanPolicy):
     report_validator_fallthrough: bool = False
     report_field_positional_default: bool = False
     report_external_model_docs: bool = False
+    report_custom_init: bool = False
+    report_unconstrained_any: bool = False
     external_model_names: tuple[str, ...] = ()
+    public_model_paths: tuple[str, ...] = ()
 
     @field_validator("external_model_names")
     @classmethod
@@ -213,6 +216,21 @@ class PydanticPracticePolicy(PythonSourceScanPolicy):
             raise ValueError("external model names must be Python identifiers")
         require_unique(values, "external model names must be unique")
         return tuple(values)
+
+    @field_validator("public_model_paths")
+    @classmethod
+    def validate_public_model_paths(cls, paths: Sequence[str]) -> tuple[str, ...]:
+        normalized = validate_patterns(paths)
+        require_unique(normalized, "public model paths must be unique")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_public_any_scope(self) -> Self:
+        if self.report_unconstrained_any and not self.public_model_paths:
+            raise ValueError(
+                "public_model_paths must be configured when unconstrained Any review is enabled"
+            )
+        return self
 
 
 class ErrorCodeCallSpec(StrictModel):
