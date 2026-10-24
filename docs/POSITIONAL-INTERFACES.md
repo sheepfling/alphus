@@ -8,12 +8,30 @@ below. It does not rewrite signatures or normalize native diagnostics.
 
 ## Capability matrix
 
-| Intent | Python | C/C++ | JavaScript / TypeScript |
-| --- | --- | --- | --- |
-| Total parameter count | Ruff PLR0913 or Pylint R0913 | No universal clang-tidy parameter-count check is selected here | ESLint `max-params` |
-| Positional parameter count | Ruff PLR0917 or Pylint R0917 | Use a backend-specific native rule if configured | `max-params` counts declared parameters; it does not detect same-type swaps |
-| Easily swappable definition | Alphus advisory for directly annotated builtin primitives; native Ruff/Pylint count rules do not identify same-type pairs | clang-tidy `bugprone-easily-swappable-parameters` | No Alphus check in this release; ESLint core `max-params` is count-only |
-| Suspicious call order | Pylint W1114 compares argument names with parameter names | clang-tidy `readability-suspicious-call-argument` compares names; `bugprone-swapped-arguments` focuses on suspicious conversions | No Alphus check in this release; no custom ESLint rule is enabled |
+### Python
+
+- Total count: Ruff PLR0913 or Pylint R0913.
+- Positional count: Ruff PLR0917 or Pylint R0917.
+- Easily swappable definition: Alphus advisory for directly annotated builtin
+  primitives. Native count rules do not identify same-type pairs.
+- Suspicious call order: Pylint W1114 compares argument and parameter names.
+
+### C and C++
+
+- No universal clang-tidy parameter-count check is selected here.
+- Use a backend-specific native positional-count rule if configured.
+- Easily swappable definition: clang-tidy
+  `bugprone-easily-swappable-parameters`.
+- Suspicious call order: clang-tidy `readability-suspicious-call-argument`
+  compares names; `bugprone-swapped-arguments` focuses on suspicious
+  conversions.
+
+### JavaScript and TypeScript
+
+- ESLint `max-params` counts declared parameters; it does not detect same-type
+  swaps.
+- No Alphus definition or call-order check is enabled in this release.
+- No custom ESLint rule is enabled here.
 
 These mappings express related intent, not equal measurements. Ruff PLR0917
 was added in Ruff 0.16.0; Pylint R0917 is available from Pylint 3.3.0. Keep
@@ -178,9 +196,15 @@ consumer environment. Alphus does not install tools or change CI configuration.
 
 - [Ruff PLR0913: total argument count](https://docs.astral.sh/ruff/rules/too-many-arguments/)
 - [Ruff PLR0917: positional argument count](https://docs.astral.sh/ruff/rules/too-many-positional-arguments/)
-- [Pylint R0917: positional argument count](https://pylint.readthedocs.io/en/v3.3.9/user_guide/messages/refactor/too-many-positional-arguments.html)
-- [Pylint W1114: arguments out of order](https://pylint.readthedocs.io/en/stable/user_guide/messages/warning/arguments-out-of-order.html)
-- [clang-tidy easily swappable parameters](https://clang.llvm.org/extra/clang-tidy/checks/bugprone/easily-swappable-parameters.html)
-- [clang-tidy suspicious call argument](https://clang.llvm.org/extra/clang-tidy/checks/readability/suspicious-call-argument.html)
-- [clang-tidy swapped arguments](https://clang.llvm.org/extra/clang-tidy/checks/bugprone/swapped-arguments.html)
+- [Pylint R0917: positional argument count][pylint-r0917]
+- [Pylint W1114: arguments out of order][pylint-w1114]
+- [clang-tidy easily swappable parameters][clang-tidy-swappable]
+- [clang-tidy suspicious call argument][clang-tidy-call]
+- [clang-tidy swapped arguments][clang-tidy-swapped]
 - [ESLint `max-params`](https://eslint.org/docs/latest/rules/max-params)
+
+[pylint-r0917]: https://pylint.readthedocs.io/en/v3.3.9/user_guide/messages/refactor/too-many-positional-arguments.html
+[pylint-w1114]: https://pylint.readthedocs.io/en/stable/user_guide/messages/warning/arguments-out-of-order.html
+[clang-tidy-swappable]: https://clang.llvm.org/extra/clang-tidy/checks/bugprone/easily-swappable-parameters.html
+[clang-tidy-call]: https://clang.llvm.org/extra/clang-tidy/checks/readability/suspicious-call-argument.html
+[clang-tidy-swapped]: https://clang.llvm.org/extra/clang-tidy/checks/bugprone/swapped-arguments.html

@@ -69,6 +69,7 @@ repeated_literal_paths = [
   "src/alphus/contracts/findings.py",
 ]
 semantic_result_paths = [
+  "src/alphus/gates/review/positional_interfaces.py",
   "src/alphus/gates/repository/**",
   "src/alphus/gates/hygiene/comment_markers.py",
   "src/alphus/gates/vcs/worktree_hygiene.py",
@@ -111,6 +112,7 @@ ephemeral_document_patterns = ["docs/**"]
 [checks.input_contracts]
 extensions = [".py"]
 exclude = []
+sequence_narrowing_paths = ["src/alphus/gates/review/positional_interfaces.py"]
 
 [checks.pydantic_practices]
 extensions = [".py"]

@@ -112,6 +112,14 @@ class InputContractPolicy(PythonSourceScanPolicy):
 
     report_mutation: bool = True
     suggest_read_only: bool = True
+    sequence_narrowing_paths: tuple[str, ...] = ()
+
+    @field_validator("sequence_narrowing_paths")
+    @classmethod
+    def validate_sequence_narrowing_paths(
+        cls, patterns: Sequence[str]
+    ) -> tuple[str, ...]:
+        return validate_patterns(patterns)
 
 
 class PositionalInterfacePolicy(PythonSourceScanPolicy):

@@ -177,6 +177,7 @@ extensions = [".py"]
 exclude = []
 report_mutation = true
 suggest_read_only = true
+sequence_narrowing_paths = []
 ```
 
 For recognized annotated collection parameters, the scanner follows direct
@@ -197,6 +198,12 @@ such as `sort` do not receive an automatic `MutableSequence` replacement.
 For `bytes`, `bytearray`, and `memoryview`, the rule records visible writes to
 mutable buffers but does not suggest replacing one with another: `bytes` is
 immutable, while a `memoryview` may expose a writable underlying buffer.
+
+`sequence_narrowing_paths` opts selected files into the same advisory for an
+already abstract `Sequence` or `Iterable` interface. It defaults to empty to
+avoid broadening findings across unrelated code. Alphus scopes it to the
+positional-interface analyzer so its own quality profile checks that a
+single-pass AST input remains typed as `Iterable`.
 
 The existing `python-style.concrete_inputs` annotation convention stays at its
 configured severity, independently of these optional warnings. Its imported

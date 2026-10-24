@@ -232,5 +232,17 @@ def test_symmetric_and_compatibility_paths_can_be_excluded_with_reasons_in_polic
     assert findings[0].path == "coordinates.py"
 
 
-def test_non_python_inventory_is_ignored() -> None:
-    assert check_positional_interfaces(Path.cwd(), [Path("source.cpp")], _POLICY) == []
+def test_duplicate_inventory_paths_produce_one_finding(tmp_path: Path) -> None:
+    relative = Path("coordinates.py")
+    (tmp_path / relative).write_text(
+        "def point(x: float, y: float):\n return x, y\n", encoding="utf-8"
+    )
+
+    findings = check_positional_interfaces(tmp_path, [relative, relative], _POLICY)
+
+    assert len(findings) == 1
+    assert findings[0].path == relative.as_posix()
+
+
+def test_non_python_inventory_is_ignored(tmp_path: Path) -> None:
+    assert check_positional_interfaces(tmp_path, [Path("source.cpp")], _POLICY) == []

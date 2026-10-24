@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import ast
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable
 from pathlib import Path
+from typing import NamedTuple
 
 from alphus.config import PositionalInterfacePolicy
 from alphus.contracts.findings import Finding
@@ -21,6 +22,23 @@ _RULE_ID = rule_tag(
 )
 
 
+class _ParameterGroup(NamedTuple):
+    primitive: str
+    parameters: tuple[ast.arg, ...]
+
+
+class _FunctionScope(NamedTuple):
+    function: ast.FunctionDef | ast.AsyncFunctionDef
+    shadowed: frozenset[str]
+    is_method: bool
+
+
+class _FunctionFindingGroup(NamedTuple):
+    function: ast.FunctionDef | ast.AsyncFunctionDef
+    primitive: str
+    parameters: tuple[ast.arg, ...]
+
+
 class _ScopeBindings(ast.NodeVisitor):
     """Collect names bound in one module or class namespace."""
 
@@ -28,8 +46,11 @@ class _ScopeBindings(ast.NodeVisitor):
         self.names: set[str] = set()
 
     def visit_Name(self, node: ast.Name) -> None:
-        if isinstance(node.ctx, (ast.Store, ast.Del)):
-            self.names.add(node.id)
+        match node.ctx:
+            case ast.Store() | ast.Del():
+                self.names.add(node.id)
+            case _:
+                pass
 
     def visit_Import(self, node: ast.Import) -> None:
         self.names.update(
@@ -77,7 +98,7 @@ class _ScopeBindings(ast.NodeVisitor):
         self.generic_visit(node)
 
 
-def _bound_names(statements: Sequence[ast.stmt]) -> frozenset[str]:
+def _bound_names(statements: Iterable[ast.stmt]) -> frozenset[str]:
     visitor = _ScopeBindings()
     for statement in statements:
         visitor.visit(statement)
@@ -100,12 +121,12 @@ def _parameter_groups(
     shadowed: frozenset[str],
     *,
     is_method: bool,
-) -> list[tuple[str, tuple[ast.arg, ...]]]:
+) -> list[_ParameterGroup]:
     parameters = [*function.args.posonlyargs, *function.args.args]
     if is_method and parameters and parameters[0].arg in {"cls", "self"}:
         parameters = parameters[1:]
 
-    groups: list[tuple[str, tuple[ast.arg, ...]]] = []
+    groups: list[_ParameterGroup] = []
     current_type: str | None = None
     current: list[ast.arg] = []
     for parameter in parameters:
@@ -114,47 +135,50 @@ def _parameter_groups(
             current.append(parameter)
             continue
         if current_type is not None and len(current) >= 2:
-            groups.append((current_type, tuple(current)))
+            groups.append(_ParameterGroup(current_type, tuple(current)))
         current_type = primitive
         current = [parameter] if primitive is not None else []
     if current_type is not None and len(current) >= 2:
-        groups.append((current_type, tuple(current)))
+        groups.append(_ParameterGroup(current_type, tuple(current)))
     return groups
 
 
 def _function_finding_groups(
     module: ast.Module,
-) -> list[tuple[ast.FunctionDef | ast.AsyncFunctionDef, str, tuple[ast.arg, ...]]]:
+) -> list[_FunctionFindingGroup]:
     """Return top-level functions and simple class methods with safe namespaces."""
     module_names = _bound_names(module.body)
-    functions: list[
-        tuple[ast.FunctionDef | ast.AsyncFunctionDef, frozenset[str], bool]
-    ] = []
+    functions: list[_FunctionScope] = []
     for statement in module.body:
         match statement:
             case ast.FunctionDef() | ast.AsyncFunctionDef():
-                functions.append((statement, module_names, False))
+                functions.append(_FunctionScope(statement, module_names, False))
             case ast.ClassDef() if not statement.bases:
                 class_names = module_names | _bound_names(statement.body)
-                functions.extend(
-                    (member, class_names, True)
-                    for member in statement.body
-                    if isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef))
-                )
+                for member in statement.body:
+                    match member:
+                        case ast.FunctionDef() | ast.AsyncFunctionDef():
+                            functions.append(_FunctionScope(member, class_names, True))
+                        case _:
+                            pass
             case _:
                 pass
 
-    groups: list[
-        tuple[ast.FunctionDef | ast.AsyncFunctionDef, str, tuple[ast.arg, ...]]
-    ] = []
-    for function, shadowed, is_method in functions:
+    groups: list[_FunctionFindingGroup] = []
+    for scope in functions:
         # Decorators can replace or constrain a callable's runtime interface.
-        if function.decorator_list:
+        if scope.function.decorator_list:
             continue
-        for primitive, parameters in _parameter_groups(
-            function, shadowed, is_method=is_method
+        for parameter_group in _parameter_groups(
+            scope.function, scope.shadowed, is_method=scope.is_method
         ):
-            groups.append((function, primitive, parameters))
+            groups.append(
+                _FunctionFindingGroup(
+                    scope.function,
+                    parameter_group.primitive,
+                    parameter_group.parameters,
+                )
+            )
     return groups
 
 
@@ -172,16 +196,17 @@ def positional_interface_findings(
         Finding(
             rule_id=_RULE_ID,
             path=path,
-            line=parameters[0].lineno,
+            line=group.parameters[0].lineno,
             severity=policy.severity,
             message=(
-                f"parameters {', '.join(parameter.arg for parameter in parameters)} "
-                f"are consecutive positional {primitive} values; their annotations "
+                f"{group.function.name}: parameters "
+                f"{', '.join(parameter.arg for parameter in group.parameters)} "
+                f"are consecutive positional {group.primitive} values; their annotations "
                 "do not distinguish argument order. Advisory only: no incorrect call "
                 "is inferred; review a keyword-only API or a meaningful domain type."
             ),
         )
-        for _, primitive, parameters in _function_finding_groups(module)
+        for group in _function_finding_groups(module)
     ]
     return sorted(findings, key=lambda finding: (finding.line or 0, finding.message))
 
@@ -192,7 +217,7 @@ def check_positional_interfaces(
     """Analyze only configured, inventoried Python source files."""
     checkout = root.resolve(strict=True)
     findings: list[Finding] = []
-    for relative in sorted(paths):
+    for relative in sorted(set(paths)):
         name = relative.as_posix()
         if relative.suffix not in policy.extensions or any(
             matches_path(name, pattern) for pattern in policy.exclude
