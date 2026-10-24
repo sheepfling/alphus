@@ -24,7 +24,11 @@ from alphus.policy.base import (
     validate_single_path,
 )
 from alphus.policy.catalog import RULE_SPECS
-from alphus.policy.intents import SharedQualityIntent, resolve_intent_bindings
+from alphus.policy.intents import (
+    NativeOptionValue,
+    SharedQualityIntent,
+    resolve_intent_bindings,
+)
 from alphus.policy.repository import (
     DependencyLockPolicy,
     GitRepositoryPolicy,
@@ -268,7 +272,7 @@ class OrchestrationPolicy(StrictModel):
         steps_by_name = {step.name: step for step in self.steps}
         resolved_intents = resolve_intent_bindings(self.intents)
         seen_native_rules: set[tuple[str, str, str]] = set()
-        declared_native_options: dict[tuple[str, str], object] = {}
+        declared_native_options: dict[tuple[str, str], NativeOptionValue] = {}
         declared_evidence_formats: dict[str, tuple[str, str]] = {}
         selected_profiles: dict[str, tuple[str, ...]] = {}
         for profile in self.profiles:
@@ -293,7 +297,7 @@ class OrchestrationPolicy(StrictModel):
                 continue
             assert binding.step is not None
             step = steps_by_name.get(binding.step)
-            if step is None or not isinstance(step, CommandRunStep):
+            if step is None or step.kind != "command":
                 raise ValueError(
                     f"native capability {item.intent.rule_id} for {binding.language} "
                     f"references unknown command step {binding.step!r}"

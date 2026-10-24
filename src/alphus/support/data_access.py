@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from math import isfinite
 from pathlib import Path
 from types import NoneType
 from typing import Any, TypeAlias, cast
@@ -73,9 +74,26 @@ def nested_value(value: object, key: str) -> object:
     return current
 
 
+def _validate_finite_json_numbers(value: JsonValue) -> None:
+    """Reject non-standard numeric constants accepted by permissive JSON parsers."""
+    match value:
+        case float() if not isfinite(value):
+            raise ValueError("JSON numbers must be finite")
+        case None | bool() | int() | float() | str():
+            return
+        case Sequence() as items:
+            for item in items:
+                _validate_finite_json_numbers(item)
+        case Mapping() as items:
+            for item in items.values():
+                _validate_finite_json_numbers(item)
+
+
 def validate_json_value(source: str | bytes) -> JsonValue:
-    """Decode JSON and expose its recursive structure through read-only types."""
-    return cast(JsonValue, _JSON_VALUE_ADAPTER.validate_json(source))
+    """Decode standard JSON and expose its structure through read-only types."""
+    value = cast(JsonValue, _JSON_VALUE_ADAPTER.validate_json(source))
+    _validate_finite_json_numbers(value)
+    return value
 
 
 def nested_json_value(payload: JsonValue, dotted: str) -> JsonValue:
