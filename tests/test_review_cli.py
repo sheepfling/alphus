@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -209,8 +210,66 @@ def test_older_configs_leave_review_checks_opt_in(tmp_path: Path) -> None:
     assert checks.numeric_literals is None
     assert checks.test_quality is None
     assert checks.input_contracts is None
+    assert checks.positional_interfaces is None
     assert checks.pydantic_practices is None
     assert checks.fastapi_practices is None
+
+
+def test_confusable_positional_consumer_preserves_native_output_and_json_shapes(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    example = Path("examples/consumer/confusable-positional").resolve()
+    config_text = (example / "quality-gates.toml").read_text(encoding="utf-8")
+    native_argv = json.dumps(
+        [
+            sys.executable,
+            "-c",
+            "print('pylint: W1114 native diagnostic')",
+            "{files}",
+        ]
+    )
+    config_text = config_text.replace(
+        'argv = ["pylint", "{files}"]', f"argv = {native_argv}"
+    )
+    config_path = tmp_path / "quality-gates.toml"
+    config_path.write_text(config_text, encoding="utf-8")
+
+    assert (
+        main(
+            [
+                "--root",
+                str(example),
+                "--config",
+                str(config_path),
+                "--run",
+                "--profile",
+                "argument-review-with-pylint",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    payload = json.loads(capsys.readouterr().out)
+    steps = {step["name"]: step for step in payload["steps"]}
+    positional = steps["Positional interface review"]["findings"]
+    native = steps["Pylint native call-order review"]
+
+    assert len(positional) == 1
+    assert (
+        positional[0]["rule_id"]
+        == "alphus/python/none/correctness/confusable-positional-parameters"
+    )
+    assert positional[0]["severity"] == "info"
+    assert set(positional[0]) == {
+        "source",
+        "rule_id",
+        "message",
+        "severity",
+        "path",
+        "line",
+    }
+    assert native["status"] == "passed"
+    assert native["stdout"] == "pylint: W1114 native diagnostic\n"
 
 
 @pytest.mark.parametrize(

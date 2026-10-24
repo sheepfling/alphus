@@ -9,6 +9,7 @@ from typing import Annotated, Literal
 
 from pydantic import Field, field_validator, model_validator
 
+from alphus.contracts.findings import Severity
 from alphus.policy.base import (
     StrictModel,
     require_unique,
@@ -111,6 +112,13 @@ class InputContractPolicy(PythonSourceScanPolicy):
 
     report_mutation: bool = True
     suggest_read_only: bool = True
+
+
+class PositionalInterfacePolicy(PythonSourceScanPolicy):
+    """Opt-in advisory for directly annotated, same-type positional parameters."""
+
+    severity: Severity = "info"
+    report_same_type_primitives: bool = True
 
 
 class PydanticPracticePolicy(PythonSourceScanPolicy):

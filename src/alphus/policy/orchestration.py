@@ -34,6 +34,7 @@ from alphus.policy.review import (
     FastApiPracticePolicy,
     InputContractPolicy,
     NumericLiteralPolicy,
+    PositionalInterfacePolicy,
     PydanticPracticePolicy,
     ScipyConstantsPolicy,
     TestQualityPolicy,
@@ -66,6 +67,7 @@ class CheckPolicies(StrictModel):
     scipy_constants: ScipyConstantsPolicy | None = None
     test_quality: TestQualityPolicy | None = None
     input_contracts: InputContractPolicy | None = None
+    positional_interfaces: PositionalInterfacePolicy | None = None
     pydantic_practices: PydanticPracticePolicy | None = None
     fastapi_practices: FastApiPracticePolicy | None = None
     shared_utilities: SharedUtilitiesPolicy | None = None
