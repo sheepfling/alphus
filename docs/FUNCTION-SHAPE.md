@@ -89,12 +89,15 @@ overrides.
 
 ## Capability matrix
 
-| Language | Backend | Parameters | Nesting | Statements | Availability notes |
-| --- | --- | --- | --- | --- | --- |
-| Python | Ruff | `PLR0913` (since 0.0.238) | `PLR1702` (preview since 0.1.15) | `PLR0915` (since 0.0.240) | `PLR1702` requires Ruff preview mode. Ruff exempts methods marked with `@typing.override` from the argument rule. |
-| Python | Pylint | `R0913` (1.9+) | `R1702` (1.9+) | `R0915` (1.9+) | Native message thresholds are controlled by Pylint's `design` options. |
-| JavaScript | ESLint | `max-params` (0.0.9+) | `max-depth` (0.0.9+) | `max-statements` (0.0.9+) | `max-depth` measures block depth; callback nesting is a different quantity. `max-params` counts destructured parameters as one and has TypeScript-only `this` handling. |
-| C++ | clang-tidy | `readability-function-size` `ParameterThreshold` | `readability-function-size` `NestingThreshold` | `readability-function-size` `StatementThreshold` | Requires a usable compilation database. The checker excludes instantiated declarations and lambdas; macro handling and constructor member-initializer counting remain native options. |
+- Python / Ruff: parameters `PLR0913`; nesting `PLR1702`; statements `PLR0915`.
+  `PLR1702` needs preview mode; `PLR0913` exempts methods marked `@typing.override`.
+- Python / Pylint: parameters `R0913`; nesting `R1702`; statements `R0915`.
+  Native message thresholds use Pylint's `design` options.
+- JavaScript / ESLint: parameters `max-params`; nesting `max-depth`; statements
+  `max-statements`. `max-depth` counts blocks, not callback nesting.
+- C++ / clang-tidy: `readability-function-size` uses its parameter, nesting, and
+  statement thresholds. It requires a compilation database; macro behavior is
+  controlled by native options.
 
 Rule availability and preview status are taken from the tools' rule catalogs.
 The validator enforces the documented introduction floor for Ruff's three

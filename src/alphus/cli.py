@@ -895,7 +895,8 @@ def _command(
             )
         ):
             raise typer.BadParameter(
-                "--plan-function-shape cannot be combined with run, rule, report, or other plan/fix options"
+                "--plan-function-shape cannot be combined with run, rule, report, "
+                "or other plan/fix options"
             )
         config_path = config if config.is_absolute() else root / config
         policy = _load_policy(config_path).checks.function_shape

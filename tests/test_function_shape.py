@@ -80,7 +80,7 @@ def test_native_mapping_names_rule_and_definition(
     rule: str,
     option: str,
 ) -> None:
-    extra: dict[str, object] = {}
+    extra: dict[str, str] = {}
     if language == "cpp":
         build = tmp_path / "build"
         build.mkdir()

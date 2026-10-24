@@ -139,7 +139,7 @@ class FunctionShapeTarget(StrictModel):
         return tuple(overrides)
 
     @model_validator(mode="after")
-    def validate_binding(self) -> FunctionShapeTarget:
+    def validate_binding(self) -> Self:
         if self.backend not in _FUNCTION_SHAPE_BACKENDS_BY_LANGUAGE[self.language]:
             raise ValueError(f"{self.backend} does not support {self.language}")
         if self.backend == "eslint" and (
@@ -179,7 +179,8 @@ class FunctionShapeTarget(StrictModel):
         ]
         if unsupported:
             raise ValueError(
-                f"{self.backend} {self.minimum_version} predates configured metrics: {', '.join(unsupported)}"
+                f"{self.backend} {self.minimum_version} predates configured "
+                f"metrics: {', '.join(unsupported)}"
             )
         if self.language == _CPP_LANGUAGE:
             if self.compilation_database is None:
