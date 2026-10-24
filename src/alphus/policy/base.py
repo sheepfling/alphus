@@ -33,6 +33,7 @@ QualityRuleName: TypeAlias = Literal[
     "scipy-constants",
     "test-quality",
     "input-contracts",
+    "positional-interfaces",
     "pydantic-practices",
     "fastapi-practices",
 ]

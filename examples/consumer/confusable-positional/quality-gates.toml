@@ -1,0 +1,39 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py"]
+exclude = []
+
+[checks.positional_interfaces]
+extensions = [".py"]
+exclude = ["src/compatibility.py", "src/symmetric_operations.py"]
+severity = "info"
+report_same_type_primitives = true
+
+[orchestration]
+default_profile = "argument-review"
+failure_threshold = "warning"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Positional interface review"
+rule = "positional-interfaces"
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "command"
+name = "Pylint native call-order review"
+argv = ["pylint", "{files}"]
+rollout = "provisional"
+
+[orchestration.steps.files]
+include = ["src/**/*.py"]
+exclude = []
+
+[[orchestration.profiles]]
+name = "argument-review"
+steps = ["Positional interface review"]
+
+[[orchestration.profiles]]
+name = "argument-review-with-pylint"
+steps = ["Positional interface review", "Pylint native call-order review"]

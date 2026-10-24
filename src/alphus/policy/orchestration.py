@@ -39,6 +39,7 @@ from alphus.policy.review import (
     FastApiPracticePolicy,
     InputContractPolicy,
     NumericLiteralPolicy,
+    PositionalInterfacePolicy,
     PydanticPracticePolicy,
     ScipyConstantsPolicy,
     TestQualityPolicy,
@@ -71,6 +72,7 @@ class CheckPolicies(StrictModel):
     scipy_constants: ScipyConstantsPolicy | None = None
     test_quality: TestQualityPolicy | None = None
     input_contracts: InputContractPolicy | None = None
+    positional_interfaces: PositionalInterfacePolicy | None = None
     pydantic_practices: PydanticPracticePolicy | None = None
     fastapi_practices: FastApiPracticePolicy | None = None
     shared_utilities: SharedUtilitiesPolicy | None = None
@@ -267,7 +269,7 @@ class OrchestrationPolicy(StrictModel):
             self.resolve_profile(profile.name)
         intent_ids = tuple(intent.rule_id for intent in self.intents)
         require_unique(intent_ids, "shared quality intent rule IDs must be unique")
-        steps_by_name: dict[str, RuleRunStep | CommandRunStep] = {
+        steps_by_name: dict[str, OrchestrationStep] = {
             step.name: step for step in self.steps
         }
         resolved_intents = resolve_intent_bindings(self.intents)

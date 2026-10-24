@@ -163,6 +163,7 @@ _ITERATION_CALLS = frozenset(
 class CollectionAnnotation:
     """A recognized, explicitly imported collection annotation."""
 
+    interface: str
     family: Family
     concrete: bool
     mutable: bool
@@ -252,15 +253,19 @@ def _collection_annotation(
         case _:
             pass
     name = canonical_expression_name(value, aliases)
-    if name is not None and name.startswith("builtins."):
+    if name is None:
+        return None
+    if name.startswith("builtins."):
         name = name.removeprefix("builtins.")
-    specification = _COLLECTIONS.get(name or "")
+    specification = _COLLECTIONS.get(name)
     if specification is None:
         return None
     family, concrete, mutable = specification
     if arguments == "T" and family == "mapping":
         arguments = "K, V"
-    return CollectionAnnotation(family, concrete, mutable, arguments)
+    return CollectionAnnotation(
+        name.rsplit(".", maxsplit=1)[-1], family, concrete, mutable, arguments
+    )
 
 
 class _UseVisitor(ast.NodeVisitor):
@@ -646,6 +651,9 @@ def _function_findings(
         *function.args.kwonlyargs,
     ]
     uses: dict[str, ArgumentUse] = {}
+    sequence_narrowing_path = any(
+        matches_path(path, pattern) for pattern in policy.sequence_narrowing_paths
+    )
     for argument in arguments:
         if argument.annotation is not None:
             annotation = _collection_annotation(argument.annotation, aliases)
@@ -704,7 +712,15 @@ def _function_findings(
                 )
         if (
             policy.suggest_read_only
-            and usage.annotation.concrete
+            and (
+                usage.annotation.concrete
+                or (
+                    sequence_narrowing_path
+                    and usage.annotation.family == "sequence"
+                    and usage.annotation.interface
+                    in {"Collection", "Iterable", "MutableSequence", "Sequence"}
+                )
+            )
             and usage.annotation.family != "binary"
             and usage.reads
             and not usage.mutations
@@ -723,6 +739,8 @@ def _function_findings(
                     interface = "AbstractSet"
                 case _:
                     continue
+            if interface == usage.annotation.interface:
+                continue
             findings.append(
                 Finding(
                     rule_id=rule_tag(
@@ -736,7 +754,9 @@ def _function_findings(
                     severity="warning",
                     message=(
                         f"parameter {name}: observed uses fit "
-                        f"{interface}[{usage.annotation.arguments}]; review the contract "
+                        f"{interface}[{usage.annotation.arguments}] rather than the "
+                        f"declared {usage.annotation.interface}"
+                        f"[{usage.annotation.arguments}]; review the contract "
                         "(helper calls, custom aliases and runtime immutability are not proved)"
                     ),
                 )

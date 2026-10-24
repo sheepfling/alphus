@@ -382,6 +382,27 @@ def test_python_shortcut_orders_lint_format_types_and_tests() -> None:
     assert tests.files is None and tests.fix_argv is None
 
 
+def test_pylint_recipe_is_explicit_and_not_part_of_the_python_bundle() -> None:
+    optional = load_config_stream(
+        StringIO('schema_version = 1\ntools = ["pylint"]\n')
+    ).orchestration
+    python = load_config_stream(
+        StringIO('schema_version = 1\nlanguages = ["python"]\n')
+    ).orchestration
+
+    assert optional is not None and python is not None
+    optional_check = optional.resolve_profile("check")
+    python_check = python.resolve_profile("check")
+    assert optional_check is not None
+    assert optional_check.steps == ("Python Pylint diagnostics",)
+    pylint = optional.steps[0]
+    assert isinstance(pylint, CommandRunStep)
+    assert pylint.argv == ("pylint", "{files}")
+    assert pylint.files is not None and pylint.files.include == ("**/*.py",)
+    assert python_check is not None
+    assert "Python Pylint diagnostics" not in python_check.steps
+
+
 def test_language_bundles_compose_with_split_project_profiles(tmp_path: Path) -> None:
     (tmp_path / "languages").mkdir()
     (tmp_path / "languages/cpp.toml").write_text(
