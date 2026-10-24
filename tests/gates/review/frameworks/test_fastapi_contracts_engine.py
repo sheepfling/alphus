@@ -7,7 +7,7 @@ import importlib
 import os
 import re
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from types import ModuleType
 from uuid import uuid4
@@ -302,7 +302,7 @@ schema['paths']['/explicitly-public']['get']['security'] = []
     ],
 )
 def test_protected_routes_reject_anonymous_openapi_security_alternatives(
-    tmp_path: Path, security: list[dict[str, list[str]]]
+    tmp_path: Path, security: Sequence[Mapping[str, Sequence[str]]]
 ) -> None:
     pytest.importorskip("fastapi")
     _module_name, policy = _module_application(

@@ -264,12 +264,16 @@ def _has_required_security(value: JsonValue) -> bool:
     """Return whether every OpenAPI alternative requires a named scheme."""
     if not isinstance(value, list) or not value:
         return False
-    return all(
-        isinstance(requirement, dict)
-        and bool(requirement)
-        and all(name.strip() for name in requirement)
-        for requirement in value
-    )
+    for raw_requirement in value:
+        requirement: JsonValue = raw_requirement
+        if not isinstance(requirement, dict):
+            return False
+        security_requirement: dict[str, JsonValue] = requirement
+        if not security_requirement or any(
+            not name.strip() for name in security_requirement
+        ):
+            return False
+    return True
 
 
 def _has_response_schema(operation: Mapping[str, JsonValue]) -> bool:
