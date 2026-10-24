@@ -39,10 +39,7 @@ from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
 from alphus.gates.source.python_style import StyleFindings
 from alphus.policy.base import MissingPolicyError
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
-from alphus.policy.intents import (
-    PlannedIntentBindingRow,
-    intent_bindings_for_steps,
-)
+from alphus.policy.intents import intent_bindings_for_steps
 from alphus.policy.recipes import render_recipe
 from alphus.support.data_access import JsonValue
 from alphus.support.inventory import candidate_files
@@ -60,6 +57,9 @@ _CLI_CONTRACT_TAG = rule_tag(
 )
 _SCRIPT_POLICY_TAG = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.SECURITY, "script-policy-violation"
+)
+_LINE_TOO_LONG_TAG = rule_tag(
+    Scope.ANY, Framework.NONE, Category.STYLE, "line-too-long"
 )
 
 
@@ -198,27 +198,37 @@ def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
         _render_severity_totals(findings)
         return
     if rule == "line-length":
-        counts = Counter(finding.path for finding in findings)
+        line_findings = [
+            finding for finding in findings if finding.line_length is not None
+        ]
+        for finding in findings:
+            if finding.line_length is None:
+                _render_finding(finding)
+
+        counts = Counter(finding.path for finding in line_findings)
         for name, count in sorted(counts.items()):
             lines = [
                 finding.line
-                for finding in findings
+                for finding in line_findings
                 if finding.path == name and finding.line is not None
             ]
             limit = next(
-                finding.message.rsplit("limit ", maxsplit=1)[1].rstrip(")")
-                for finding in findings
-                if finding.path == name
+                finding.line_length.limit_codepoints
+                for finding in line_findings
+                if finding.path == name and finding.line_length is not None
             )
             sample = ", ".join(str(line) for line in lines[:5])
             _human_print(
-                f"{rule_tag(Scope.ANY, Framework.NONE, Category.STYLE, 'line-too-long')} {name}: "
-                f"{count} lines exceed {limit} columns (example lines: {sample})"
+                f"{_LINE_TOO_LONG_TAG} {name}: "
+                f"{count} lines exceed {limit} Unicode code points "
+                f"(example lines: {sample})"
             )
-        _human_print(
-            f"{rule_tag(Scope.ANY, Framework.NONE, Category.STYLE, 'line-too-long')}: "
-            f"{len(findings)} violation(s) in {len(counts)} files"
-        )
+        if line_findings or not findings:
+            _human_print(
+                f"{_LINE_TOO_LONG_TAG}: "
+                f"{len(line_findings)} violation(s) "
+                f"in {len(counts)} files"
+            )
         _render_severity_totals(findings)
         return
     if rule == "json-structure":
@@ -345,11 +355,16 @@ def _python_style_categories(
         _StyleCategory("raw_reporting_prints", issues["raw_reporting_prints"]),
         _StyleCategory("magic_exit_codes", issues["magic_exit_codes"]),
         _StyleCategory("repeated_literals", issues["repeated_literals"]),
-        _StyleCategory(
-            "heterogeneous_tuple_returns", issues["heterogeneous_tuple_returns"]
-        ),
+        _StyleCategory("unnamed_tuple_returns", issues["unnamed_tuple_returns"]),
         _StyleCategory(
             "undifferentiated_patterns", issues["undifferentiated_patterns"]
+        ),
+        _StyleCategory(
+            "concrete_classmethod_returns", issues["concrete_classmethod_returns"]
+        ),
+        _StyleCategory(
+            "concrete_model_validator_returns",
+            issues["concrete_model_validator_returns"],
         ),
         _StyleCategory("concrete_self_returns", issues["concrete_self_returns"]),
         _StyleCategory("direct_text_reads", issues["direct_text_reads"]),
@@ -689,7 +704,7 @@ def _execute_plan_profile(
         return 2
 
     by_name = {step.name: step for step in policy.steps}
-    intent_rows: list[PlannedIntentBindingRow] = list(
+    intent_rows = list(
         intent_bindings_for_steps(
             policy.intents,
             plan.steps,
@@ -699,15 +714,21 @@ def _execute_plan_profile(
         )
     )
     entries_by_name = {entry.name: entry for entry in entries}
-    for row in intent_rows:
-        step_name = row["step"]
+    for index, row in enumerate(intent_rows):
+        step_name = row.step
         if step_name is not None and step_name in entries_by_name:
             entry = entries_by_name[step_name]
             step = by_name[step_name]
-            row["selected_files"] = entry.files
-            if step.kind == "command":
-                row["applicable"] = step.files is None or bool(entry.files)
-            row["expanded_argv"] = entry.check_argv
+            applicable = (
+                step.files is None or bool(entry.files)
+                if step.kind == "command"
+                else None
+            )
+            intent_rows[index] = row.with_execution_plan(
+                selected_files=entry.files,
+                applicable=applicable,
+                expanded_argv=entry.check_argv,
+            )
 
     if json_output:
         details: list[JsonValue] = []
@@ -731,7 +752,9 @@ def _execute_plan_profile(
             "steps": details,
         }
         if intent_rows:
-            payload["intents"] = cast(JsonValue, intent_rows)
+            payload["intents"] = [
+                row.model_dump(mode="json", exclude_none=True) for row in intent_rows
+            ]
         typer.echo(json.dumps(payload, sort_keys=True))
         return 0
 
@@ -758,30 +781,30 @@ def _execute_plan_profile(
     if intent_rows:
         _human_print("Shared quality intents:")
         for row in intent_rows:
-            status = str(row["status"]).replace("_", " ").upper()
-            if row.get("applicable") is False:
+            status = row.status.replace("_", " ").upper()
+            if row.applicable is False:
                 status = "NOT APPLICABLE"
-            metric = f"{row['metric']} ({row['unit']})"
+            metric = f"{row.metric} ({row.unit})"
             _human_print(
-                f"{status} {row['rule_id']} [{row['language']}]: "
-                f"{row['backend']} {row['native_rule']}; {row['mapping']} mapping; "
-                f"{metric}; severity={row['severity']}, failure threshold="
-                f"{row['failure_threshold']}, rollout={row['rollout']}"
+                f"{status} {row.rule_id} [{row.language}]: "
+                f"{row.backend} {row.native_rule}; {row.mapping} mapping; "
+                f"{metric}; severity={row.severity}, failure threshold="
+                f"{row.failure_threshold}, rollout={row.rollout}"
             )
             _human_print(
-                f"  scope={json.dumps(row['files'], sort_keys=True)}; "
+                f"  scope={json.dumps(row.files.model_dump(mode='json'), sort_keys=True)}; "
                 "effective config="
-                f"{json.dumps(row['effective_configuration'], sort_keys=True)}"
+                f"{json.dumps(row.effective_configuration, sort_keys=True)}"
             )
-            step_name = row["step"]
+            step_name = row.step
             if step_name is not None:
                 entry = entries_by_name.get(step_name)
                 if entry is not None:
                     _human_print(
-                        f"  owner={row['ownership']}; evidence step={step_name}; "
+                        f"  owner={row.ownership}; evidence step={step_name}; "
                         f"{len(entry.files)} file(s) selected"
                     )
-            elif row["status"] == "unsupported":
+            elif row.status == "unsupported":
                 _human_print("  no native command is configured for this capability")
     return 0
 
