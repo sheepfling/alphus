@@ -81,14 +81,22 @@ output in `--json` profile results. To keep those results across runs, pass
 `--history-dir PATH` or set `ALPHUS_PROFILE_HISTORY_DIR`. Each completed run
 then appends one immutable JSON record under `PATH/profiles/YYYY/MM/` and prints
 its path to stderr. The archive includes the complete profile result, a digest,
-the source checkout, policy fingerprint, Git branch and revision when available,
-timestamps, wall time for each step, and execution time for each work unit.
+the source checkout, policy fingerprint, timestamps, wall time for each step,
+and execution time for each work unit. It also records the VCS kind, branch or
+path, and revision when available.
 Set `--consumer-id ID` (or `ALPHUS_CONSUMER_ID`) when saving runs from CI or
 multiple worktrees. Use a stable, user-chosen identity such as
 `sheepfling/alphus`; the absolute checkout path is still recorded for
-provenance. New records use schema version 2 with a digest covering the timing
+provenance. New records use schema version 3 with a digest covering the timing
 and provenance envelope as well as the embedded result. Existing version 1
-records remain readable and group by their recorded checkout path.
+and 2 records remain readable and group by their recorded checkout path when
+they have no consumer identity. Version 2 records carry a consumer identity
+but do not identify which VCS supplied their Git-oriented branch and revision.
+Profile history probes Git and then local Subversion metadata. A missing VCS
+or unavailable command leaves those provenance fields null; it does not stop
+the run or prevent the archive from being written. Python consumers can pass
+a `VersionControlProvider` to `run_orchestration` for another system. VCS
+specific gates still require their own backend when selected.
 For a rule split across native backends, its step wall time covers the first
 backend start through the last backend finish; individual unit times may
 overlap. Ordinary runs remain read-only unless history is enabled.

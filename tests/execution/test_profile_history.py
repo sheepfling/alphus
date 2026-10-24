@@ -5,18 +5,37 @@ from __future__ import annotations
 import json
 import time
 from datetime import UTC, datetime
+from io import StringIO
 from pathlib import Path
 
 import pytest
 
 from alphus.cli import main
+from alphus.config import (
+    OrchestrationPolicy,
+    OrchestrationProfile,
+    QualityGateConfig,
+    RuleRunStep,
+)
 from alphus.execution import profile_history as history
+from alphus.execution.orchestration import run_orchestration
 from alphus.execution.profile_analysis import (
     _timing_summary,
     rollup_profile_history,
     summarize_profile_entry,
 )
 from alphus.support.data_access import JsonValue
+from alphus.support.version_control import VersionControlIdentity
+
+
+class SampleVersionControl:
+    def identify(self, root: Path) -> VersionControlIdentity | None:
+        return VersionControlIdentity("sapling", "main", "abc123")
+
+
+class MissingVersionControl:
+    def identify(self, root: Path) -> VersionControlIdentity | None:
+        return None
 
 
 def _record(
@@ -97,11 +116,69 @@ def test_writer_emits_readable_version_two_record(tmp_path: Path) -> None:
     )
 
     record = history.read_profile_record(saved)
-    assert isinstance(record, history.ProfileHistoryRecord)
-    assert record.schema_version == 2
+    assert isinstance(record, history.ProfileHistoryRecordV3)
+    assert record.schema_version == 3
     assert record.consumer_id == "consumer/a"
+    assert record.vcs is None
     assert record.step_durations_seconds == {"lint": 1.0}
     assert record.work_unit_durations_seconds == {"lint:worker": 0.5}
+
+    changed = json.loads(saved.read_text(encoding="utf-8"))
+    changed["vcs"] = "git"
+    saved.write_text(json.dumps(changed), encoding="utf-8")
+    with pytest.raises(ValueError, match="envelope digest mismatch"):
+        history.read_profile_record(saved)
+
+
+def test_history_context_accepts_other_vcs_and_missing_provenance(
+    tmp_path: Path,
+) -> None:
+    config = QualityGateConfig(schema_version=1)
+    context = history.capture_profile_context(
+        tmp_path, "check", config, version_control=SampleVersionControl()
+    )
+    assert (context.vcs, context.branch, context.revision) == (
+        "sapling",
+        "main",
+        "abc123",
+    )
+    missing = history.capture_profile_context(
+        tmp_path, "check", config, version_control=MissingVersionControl()
+    )
+    assert (missing.vcs, missing.branch, missing.revision) == (None, None, None)
+
+
+def test_orchestration_saves_consumer_provided_vcs(tmp_path: Path) -> None:
+    policy = OrchestrationPolicy(
+        steps=(RuleRunStep(kind="rule", name="portable", rule="line-length"),),
+        profiles=(OrchestrationProfile(name="check", steps=("portable",)),),
+    )
+    config = QualityGateConfig(schema_version=1, orchestration=policy)
+    config_path = tmp_path / "quality-gates.toml"
+    config_path.write_text("schema_version = 1\n", encoding="utf-8")
+    history_dir = tmp_path / "history"
+    assert (
+        run_orchestration(
+            tmp_path,
+            config_path,
+            policy,
+            "check",
+            lambda _: 0,
+            config=config,
+            history_dir=history_dir,
+            version_control=SampleVersionControl(),
+            stdout=StringIO(),
+            stderr=StringIO(),
+        )
+        == 0
+    )
+    record = next(history.iter_profile_records(history_dir)).record
+    assert isinstance(record, history.ProfileHistoryRecordV3)
+    assert (record.vcs, record.branch, record.revision) == (
+        "sapling",
+        "main",
+        "abc123",
+    )
 
 
 def test_archive_reads_both_versions_and_rejects_changed_evidence(

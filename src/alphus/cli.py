@@ -42,6 +42,9 @@ from alphus.execution.profile_analysis import (
     summarize_profile_entry,
 )
 from alphus.execution.profile_history import (
+    ProfileHistoryRecord,
+    ProfileHistoryRecordV1,
+    ProfileHistoryRecordV3,
     iter_profile_records,
     latest_profile_record,
 )
@@ -856,6 +859,9 @@ def _execute_history(
     except (OSError, ValueError) as error:
         _human_error(f"Cannot read profile history: {error}")
         return 2
+    record: (
+        ProfileHistoryRecordV1 | ProfileHistoryRecord | ProfileHistoryRecordV3 | None
+    )
     if record is None:
         _human_error(
             f"No saved result for profile {selected_profile!r} in {history_dir}"
@@ -872,7 +878,10 @@ def _execute_history(
             f"{record.not_applicable} not applicable "
             f"({record.completed_at_utc})"
         )
-        _human_print(f"Revision: {record.revision or 'unavailable'}")
+        vcs = record.vcs if isinstance(record, ProfileHistoryRecordV3) else "git"
+        _human_print(
+            f"Revision ({vcs or 'unavailable'}): {record.revision or 'unavailable'}"
+        )
         if record.failed_steps:
             for name in record.failed_steps:
                 _human_print(f"FAILED {name}")

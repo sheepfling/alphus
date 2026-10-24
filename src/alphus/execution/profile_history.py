@@ -19,8 +19,11 @@ from pydantic import Field
 from alphus.config import QualityGateConfig
 from alphus.policy.base import StrictModel
 from alphus.support.data_access import nested_value, validate_json_value
-from alphus.support.git import git_value
 from alphus.support.time import utc_text
+from alphus.support.version_control import (
+    VersionControlProvider,
+    capture_version_control,
+)
 
 NonnegativeSeconds: TypeAlias = Annotated[float, Field(ge=0, allow_inf_nan=False)]
 
@@ -49,6 +52,7 @@ class ProfileHistoryContext:
     branch: str | None
     revision: str | None
     consumer_id: str | None = None
+    vcs: str | None = None
 
 
 class _ProfileHistoryFields(StrictModel):
@@ -90,18 +94,27 @@ class ProfileHistoryRecordV1(_ProfileHistoryFields):
 
 
 class ProfileHistoryRecord(_ProfileHistoryFields):
-    """Current history record with a stable cross-checkout consumer identity."""
+    """Version 2 history record with a stable cross-checkout consumer identity."""
 
     schema_version: Literal[2] = 2
     consumer_id: str | None = None
     envelope_sha256: str = ""
 
 
-HistoryRecord = ProfileHistoryRecordV1 | ProfileHistoryRecord
+class ProfileHistoryRecordV3(_ProfileHistoryFields):
+    """Current record with an identified or explicitly unavailable VCS."""
+
+    schema_version: Literal[3] = 3
+    consumer_id: str | None = None
+    envelope_sha256: str = ""
+    vcs: str | None = None
 
 
-def _envelope_digest(record: ProfileHistoryRecord) -> str:
-    """Protect v2 timing and provenance as well as the embedded result."""
+HistoryRecord = ProfileHistoryRecordV1 | ProfileHistoryRecord | ProfileHistoryRecordV3
+
+
+def _envelope_digest(record: ProfileHistoryRecord | ProfileHistoryRecordV3) -> str:
+    """Protect timing and provenance as well as the embedded result."""
     payload = record.model_dump(mode="json", exclude={"envelope_sha256"})
     encoded = json.dumps(
         payload,
@@ -127,6 +140,7 @@ def capture_profile_context(
     config: QualityGateConfig,
     *,
     consumer_id: str | None = None,
+    version_control: VersionControlProvider | None = None,
 ) -> ProfileHistoryContext:
     """Pin the profile and source identity used for comparable prior failures."""
     if consumer_id is not None and (
@@ -135,15 +149,17 @@ def capture_profile_context(
         raise ValueError("consumer_id must be nonempty and trimmed")
     checkout = root.resolve(strict=True)
     fingerprint = hashlib.sha256(config.model_dump_json().encode()).hexdigest()
+    identity = capture_version_control(checkout, provider=version_control)
     return ProfileHistoryContext(
         started_at_utc=datetime.now(UTC),
         started_monotonic=time.monotonic(),
         source_root=str(checkout),
         profile=profile,
         config_sha256=fingerprint,
-        branch=git_value(checkout, "symbolic-ref", "--quiet", "--short", "HEAD"),
-        revision=git_value(checkout, "rev-parse", "HEAD"),
+        branch=identity.branch if identity is not None else None,
+        revision=identity.revision if identity is not None else None,
         consumer_id=consumer_id,
+        vcs=identity.kind if identity is not None else None,
     )
 
 
@@ -155,11 +171,15 @@ def read_profile_record(path: Path) -> HistoryRecord:
         encoded = path.read_bytes()
         header = validate_json_value(encoded)
         version = nested_value(header, "schema_version")
-        record: ProfileHistoryRecordV1 | ProfileHistoryRecord
+        record: HistoryRecord
         if version == 1:
             record = ProfileHistoryRecordV1.model_validate_json(encoded)
         elif version == 2:
             record = ProfileHistoryRecord.model_validate_json(encoded)
+            if _envelope_digest(record) != record.envelope_sha256:
+                raise ValueError(f"profile history envelope digest mismatch: {path}")
+        elif version == 3:
+            record = ProfileHistoryRecordV3.model_validate_json(encoded)
             if _envelope_digest(record) != record.envelope_sha256:
                 raise ValueError(f"profile history envelope digest mismatch: {path}")
         else:
@@ -196,11 +216,13 @@ def iter_profile_records(
             or not path.is_file()
         ):
             continue
-        record: ProfileHistoryRecordV1 | ProfileHistoryRecord = read_profile_record(
-            path
-        )
+        record: (
+            ProfileHistoryRecordV1 | ProfileHistoryRecord | ProfileHistoryRecordV3
+        ) = read_profile_record(path)
         record_consumer = (
-            record.consumer_id if isinstance(record, ProfileHistoryRecord) else None
+            record.consumer_id
+            if isinstance(record, (ProfileHistoryRecord, ProfileHistoryRecordV3))
+            else None
         )
         if (
             (root is None or record.source_root == root)
@@ -255,7 +277,7 @@ def write_profile_record(
 ) -> Path:
     """Append one complete result through an atomic same-directory replacement."""
     completed = datetime.now(UTC)
-    record = ProfileHistoryRecord(
+    record = ProfileHistoryRecordV3(
         record_id=str(uuid4()),
         started_at_utc=utc_text(context.started_at_utc),
         completed_at_utc=utc_text(completed),
@@ -268,6 +290,7 @@ def write_profile_record(
         branch=context.branch,
         revision=context.revision,
         consumer_id=context.consumer_id,
+        vcs=context.vcs,
         total_steps=total_steps,
         passed=passed,
         failed=failed,

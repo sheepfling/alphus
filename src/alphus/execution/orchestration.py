@@ -58,6 +58,7 @@ from alphus.policy.intents import (
     resolve_intent_bindings,
 )
 from alphus.support.data_access import JsonValue, validate_json_value
+from alphus.support.version_control import VersionControlProvider
 
 _ORCHESTRATION_CATEGORY = Category.ORCHESTRATION
 _RULE_EXECUTION_FAILED = rule_tag(
@@ -151,6 +152,7 @@ def run_orchestration(
     config: QualityGateConfig | None = None,
     history_dir: Path | None = None,
     consumer_id: str | None = None,
+    version_control: VersionControlProvider | None = None,
 ) -> int:
     """Run every configured profile step and summarize all outcomes."""
     checkout = root.resolve(strict=True)
@@ -182,7 +184,11 @@ def run_orchestration(
                 config if config is not None else load_config(resolved_config)
             )
             history_context = capture_profile_context(
-                checkout, profile_name, loaded_config, consumer_id=consumer_id
+                checkout,
+                profile_name,
+                loaded_config,
+                consumer_id=consumer_id,
+                version_control=version_control,
             )
             if policy.execution.prioritize_previous_failures:
                 previous = latest_profile_record(
