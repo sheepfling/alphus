@@ -610,7 +610,14 @@ def _external_models(
     models: AbstractSet[str],
     configured: AbstractSet[str],
 ) -> set[str]:
-    external = set(models).intersection(configured)
+    declared_classes = {
+        node.name for node in module.body if isinstance(node, ast.ClassDef)
+    }
+    # Explicit configuration can select models that inherit an imported custom
+    # Pydantic base which this single-file scan cannot resolve.
+    external = set(models).intersection(configured) | declared_classes.intersection(
+        configured
+    )
     owners = _fastapi_owners(module, aliases)
     for node in module.body:
         match node:

@@ -46,6 +46,14 @@ class FindingWire(_WireModel):
     severity: Severity
 
 
+@dataclass(frozen=True, slots=True)
+class LineLengthMeasurement:
+    """Measured width and selected limit for one line-length diagnostic."""
+
+    codepoints: int
+    limit_codepoints: int
+
+
 SEVERITY_ORDER: Mapping[Severity, int] = MappingProxyType(
     {"info": 0, "warning": 100, "error": 200}
 )
@@ -267,6 +275,9 @@ class Finding:
     message: str
     line: int | None = None
     severity: Severity = "error"
+    line_length: LineLengthMeasurement | None = field(
+        default=None, repr=False, compare=False
+    )
     _rule_tag: RuleTag = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
