@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
@@ -80,7 +80,7 @@ class NativeRuleBinding(StrictModel):
         return checked
 
     @model_validator(mode="after")
-    def validate_binding(self) -> NativeRuleBinding:
+    def validate_binding(self) -> Self:
         if any(
             language in {Scope.ANY, Scope.REPOSITORY} for language in self.languages
         ):

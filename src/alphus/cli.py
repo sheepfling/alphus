@@ -39,7 +39,10 @@ from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
 from alphus.gates.source.python_style import StyleFindings
 from alphus.policy.base import MissingPolicyError
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
-from alphus.policy.intents import IntentBindingRow, intent_bindings_for_steps
+from alphus.policy.intents import (
+    PlannedIntentBindingRow,
+    intent_bindings_for_steps,
+)
 from alphus.policy.recipes import render_recipe
 from alphus.support.data_access import JsonValue
 from alphus.support.inventory import candidate_files
@@ -347,9 +350,7 @@ def _python_style_categories(
         _StyleCategory(
             "undifferentiated_patterns", issues["undifferentiated_patterns"]
         ),
-        _StyleCategory(
-            "concrete_classmethod_returns", issues["concrete_classmethod_returns"]
-        ),
+        _StyleCategory("concrete_self_returns", issues["concrete_self_returns"]),
         _StyleCategory("direct_text_reads", issues["direct_text_reads"]),
         _StyleCategory(
             "duplicate_literal_catalogs", issues["duplicate_literal_catalogs"]
@@ -687,7 +688,7 @@ def _execute_plan_profile(
         return 2
 
     by_name = {step.name: step for step in policy.steps}
-    intent_rows: list[IntentBindingRow] = list(
+    intent_rows: list[PlannedIntentBindingRow] = list(
         intent_bindings_for_steps(
             policy.intents,
             plan.steps,
@@ -711,7 +712,10 @@ def _execute_plan_profile(
         details: list[JsonValue] = []
         for entry in entries:
             step = by_name[entry.name]
-            detail = step.model_dump(mode="json", exclude_none=True)
+            detail = cast(
+                dict[str, JsonValue],
+                step.model_dump(mode="json", exclude_none=True),
+            )
             detail["fixable"] = entry.fixable
             if step.kind == "command":
                 detail["selected_files"] = entry.files
@@ -719,15 +723,14 @@ def _execute_plan_profile(
                 if entry.check_argv is not None:
                     detail["expanded_argv"] = entry.check_argv
             details.append(detail)
-        # opaque-boundary: heterogeneous report fields stay dynamic until JSON encoding
-        payload: dict[str, object] = {
+        payload: dict[str, JsonValue] = {
             "profile": selected_profile,
             "profiles": plan.profiles,
             "failure_threshold": policy.failure_threshold,
             "steps": details,
         }
         if intent_rows:
-            payload["intents"] = intent_rows
+            payload["intents"] = cast(JsonValue, intent_rows)
         typer.echo(json.dumps(payload, sort_keys=True))
         return 0
 

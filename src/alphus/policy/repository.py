@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Sequence
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, field_validator, model_validator
 
@@ -229,7 +229,7 @@ class InstructionRouterPolicy(StrictModel):
         return validate_template(message, {"path"})
 
     @model_validator(mode="after")
-    def validate_routes(self) -> InstructionRouterPolicy:
+    def validate_routes(self) -> Self:
         areas = [route.area for route in self.routes]
         bridges = [route.bridge_path for route in self.routes]
         uniqueness_message = "instruction router areas and bridges must be unique"

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import subprocess
+from collections.abc import Mapping
 from io import StringIO
 from pathlib import Path
-from typing import Any, Literal
+from typing import Literal
 
 import pytest
 
@@ -20,6 +20,11 @@ from alphus.config import (
     SharedQualityIntent,
 )
 from alphus.execution.orchestration import run_orchestration
+from alphus.support.data_access import (
+    JsonValue,
+    require_json_object,
+    validate_json_value,
+)
 
 
 def _intent(
@@ -55,23 +60,7 @@ def _intent(
     )
     bindings = (binding,)
     if extra_binding_language is not None:
-        extra_binding = NativeCapabilityBinding(
-            language=extra_binding_language,
-            backend=binding.backend,
-            version_range=binding.version_range,
-            native_rule=binding.native_rule,
-            metric=binding.metric,
-            unit=binding.unit,
-            count_method=binding.count_method,
-            mapping=binding.mapping,
-            step=binding.step,
-            evidence_format=binding.evidence_format,
-            supported_options=binding.supported_options,
-            threshold_option=binding.threshold_option,
-            effective_configuration=binding.effective_configuration,
-            violation_exit_codes=binding.violation_exit_codes,
-            configuration_exit_codes=binding.configuration_exit_codes,
-        )
+        extra_binding = binding.model_copy(update={"language": extra_binding_language})
         bindings = (binding, extra_binding)
     return SharedQualityIntent(
         rule_id="alphus/any/none/maintainability/function-complexity-review",
@@ -111,9 +100,11 @@ def _policy(
     argv = command or (
         "{python}",
         "-c",
-        f"import sys; print('native stdout'); "
-        f"print('native stderr', file=sys.stderr); "
-        f"raise SystemExit({exit_code})",
+        (
+            "import sys; print('native stdout'); "
+            "print('native stderr', file=sys.stderr); "
+            f"raise SystemExit({exit_code})"
+        ),
     )
     command_step = CommandRunStep(
         kind="command",
@@ -135,10 +126,9 @@ def _policy(
     )
 
 
-# opaque-boundary: decoded CLI report stays dynamic while assertions select fields
 def _run(
     tmp_path: Path, policy: OrchestrationPolicy, profile_name: str = "check"
-) -> tuple[int, dict[str, Any]]:
+) -> tuple[int, Mapping[str, JsonValue]]:
     output = StringIO()
     errors = StringIO()
     code = run_orchestration(
@@ -151,7 +141,9 @@ def _run(
         stdout=output,
         stderr=errors,
     )
-    return code, json.loads(output.getvalue())
+    return code, require_json_object(
+        validate_json_value(output.getvalue()), "expected a JSON object report"
+    )
 
 
 @pytest.mark.parametrize(
@@ -218,9 +210,10 @@ def test_disabled_intent_does_not_execute_its_native_command(
         command=(
             "{python}",
             "-c",
-            "from pathlib import Path; "
-            f"Path({str(marker)!r}).write_text('ran'); "
-            "raise SystemExit(1)",
+            (
+                f"from pathlib import Path; Path({str(marker)!r}).write_text('ran'); "
+                "raise SystemExit(1)"
+            ),
         ),
     )
 
@@ -395,7 +388,9 @@ def test_unsupported_capabilities_are_explicit_and_only_required_mainline_blocks
         stdout=output,
         stderr=StringIO(),
     )
-    report = json.loads(output.getvalue())
+    report = require_json_object(
+        validate_json_value(output.getvalue()), "expected a JSON object report"
+    )
 
     assert code == expected_code
     assert report["unsupported"] == 1

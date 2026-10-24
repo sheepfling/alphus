@@ -3,18 +3,15 @@
 from __future__ import annotations
 
 import json
-import math
 import subprocess
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from io import StringIO
 from pathlib import Path
-from typing import Final, Literal, Self, TextIO
-
-from pydantic import ConfigDict, JsonValue, RootModel, ValidationError, model_validator
+from typing import Literal, TextIO
 
 from alphus.config import (
     CommandRunStep,
@@ -51,14 +48,8 @@ from alphus.policy.intents import (
     ResolvedIntentBinding,
     resolve_intent_bindings,
 )
+from alphus.support.data_access import JsonValue, validate_json_value
 from alphus.support.inventory import candidate_files
-
-_DISABLED: Final = "disabled"
-_NOT_APPLICABLE: Final = "not_applicable"
-_UNSUPPORTED: Final = "unsupported"
-_MAINLINE: Final = "mainline"
-_PROVISIONAL: Final = "provisional"
-_JSON_ARRAY: Final = "json-array"
 
 _ORCHESTRATION_CATEGORY = Category.ORCHESTRATION
 _RULE_EXECUTION_FAILED = rule_tag(
@@ -79,63 +70,33 @@ _COMMAND_OUTPUT_INVALID = rule_tag(
 _UNSUPPORTED_CAPABILITY = rule_tag(
     Scope.ANY, Framework.NONE, _ORCHESTRATION_CATEGORY, "unsupported-capability"
 )
+_STATUS_DISABLED = "disabled"
+_STATUS_NOT_APPLICABLE = "not_applicable"
+_STATUS_UNSUPPORTED = "unsupported"
+_JSON_ARRAY_FORMAT = "json-array"
+_MAINLINE_ROLLOUT = "mainline"
+_PROVISIONAL_ROLLOUT = "provisional"
 
 
 class StepStatus(StrEnum):
     """Closed set of orchestration step outcomes."""
 
-    DISABLED = _DISABLED
+    DISABLED = _STATUS_DISABLED
     PASSED = "passed"
     FAILED = "failed"
-    NOT_APPLICABLE = _NOT_APPLICABLE
-    UNSUPPORTED = _UNSUPPORTED
+    NOT_APPLICABLE = _STATUS_NOT_APPLICABLE
+    UNSUPPORTED = _STATUS_UNSUPPORTED
 
 
 class IntentStatus(StrEnum):
     """Closed set of language-specific intent outcomes."""
 
-    DISABLED = _DISABLED
-    UNSUPPORTED = _UNSUPPORTED
+    DISABLED = _STATUS_DISABLED
+    UNSUPPORTED = _STATUS_UNSUPPORTED
     NOT_SELECTED = "not_selected"
-    NOT_APPLICABLE = _NOT_APPLICABLE
+    NOT_APPLICABLE = _STATUS_NOT_APPLICABLE
     PASSED = "passed"
     FAILED = "failed"
-
-
-def _validate_finite_json_value(value: JsonValue) -> None:
-    """Reject non-finite numbers recursively in decoded JSON evidence."""
-    if isinstance(value, float) and not math.isfinite(value):
-        raise ValueError("JSON evidence numbers must be finite")
-    if isinstance(value, list):
-        for item in value:
-            _validate_finite_json_value(item)
-    elif isinstance(value, dict):
-        for item in value.values():
-            _validate_finite_json_value(item)
-
-
-class _JsonArrayEvidence(RootModel[list[JsonValue]]):
-    """Validated JSON-array evidence accepted from a native tool."""
-
-    model_config = ConfigDict(frozen=True)
-
-    @model_validator(mode="after")
-    def validate_finite_numbers(self) -> Self:
-        for item in self.root:
-            _validate_finite_json_value(item)
-        return self
-
-
-class _JsonObjectEvidence(RootModel[dict[str, JsonValue]]):
-    """Validated JSON-object evidence accepted from a native tool."""
-
-    model_config = ConfigDict(frozen=True)
-
-    @model_validator(mode="after")
-    def validate_finite_numbers(self) -> Self:
-        for item in self.root.values():
-            _validate_finite_json_value(item)
-        return self
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,7 +111,7 @@ class OrchestrationStepResult:
     stdout: str = ""
     stderr: str = ""
     severity_counts: SeverityCounts = field(default_factory=SeverityCounts)
-    rollout: Literal["mainline", "provisional"] = _MAINLINE
+    rollout: Literal["mainline", "provisional"] = _MAINLINE_ROLLOUT
 
 
 @dataclass(frozen=True, slots=True)
@@ -240,6 +201,18 @@ def _timeout_output(value: bytes | str | None) -> str:
     return value or ""
 
 
+def _matches_json_evidence_format(
+    value: Sequence[JsonValue] | Mapping[str, JsonValue] | str | float | bool | None,
+    evidence_format: EvidenceFormat,
+) -> bool:
+    """Check decoded JSON by the selected top-level container protocol."""
+    if evidence_format == _JSON_ARRAY_FORMAT:
+        return isinstance(value, Sequence) and not isinstance(value, str)
+    if evidence_format == "json-object":
+        return isinstance(value, Mapping)
+    return True
+
+
 def run_orchestration(
     root: Path,
     config_path: Path,
@@ -289,7 +262,7 @@ def run_orchestration(
         for item in resolved_intents
         if item.enabled
         and active_profiles.intersection(item.intent.profiles)
-        and item.binding.mapping != _UNSUPPORTED
+        and item.binding.mapping != _STATUS_UNSUPPORTED
         and item.binding.evidence_format != "raw"
         and item.binding.step in plan.steps
     }
@@ -472,7 +445,7 @@ def run_orchestration(
                             evidence_format, evidence_stream = evidence_contract
                             expected_shape = (
                                 "JSON array"
-                                if evidence_format == _JSON_ARRAY
+                                if evidence_format == _JSON_ARRAY_FORMAT
                                 else "JSON object"
                             )
                             evidence = (
@@ -481,11 +454,19 @@ def run_orchestration(
                                 else step_stderr
                             )
                             try:
-                                if evidence_format == _JSON_ARRAY:
-                                    _JsonArrayEvidence.model_validate_json(evidence)
-                                else:
-                                    _JsonObjectEvidence.model_validate_json(evidence)
-                            except (ValidationError, RecursionError):
+                                parsed_evidence = validate_json_value(evidence)
+                                if not _matches_json_evidence_format(
+                                    parsed_evidence, evidence_format
+                                ):
+                                    raise TypeError(
+                                        f"expected a top-level {expected_shape}"
+                                    )
+                            except (
+                                json.JSONDecodeError,
+                                ValueError,
+                                TypeError,
+                                RecursionError,
+                            ):
                                 output_invalid_steps.add(step.name)
                                 operational_error_steps.add(step.name)
                                 message = (
@@ -523,7 +504,7 @@ def run_orchestration(
                             ]
                             invalid_shape = (
                                 "JSON array"
-                                if invalid_format == _JSON_ARRAY
+                                if invalid_format == _JSON_ARRAY_FORMAT
                                 else "JSON object"
                             )
                             invalid_message = (
@@ -582,7 +563,7 @@ def run_orchestration(
             _write_captured(errors, step_stderr)
 
         completed += 1
-        provisional = step.rollout == _PROVISIONAL
+        provisional = step.rollout == _PROVISIONAL_ROLLOUT
         if skipped_empty_file_scope:
             not_applicable += 1
             results.append(
@@ -675,12 +656,12 @@ def run_orchestration(
             status = IntentStatus.NOT_SELECTED
             failure_kind = None
             step_result = None
-        elif binding.mapping == _UNSUPPORTED:
+        elif binding.mapping == _STATUS_UNSUPPORTED:
             status = IntentStatus.UNSUPPORTED
             failure_kind = FailureKind.UNSUPPORTED_CAPABILITY
             step_result = None
             unsupported_count += 1
-            blocking = intent.required and intent.rollout == _MAINLINE
+            blocking = intent.required and intent.rollout == _MAINLINE_ROLLOUT
             blocking_unsupported = blocking_unsupported or blocking
             message = (
                 f"{intent.rule_id} has no supported {binding.language} mapping "
@@ -792,7 +773,7 @@ def run_orchestration(
                 finding.to_wire() for finding in step_result.findings
             ]
         if not not_applicable:
-            del payload[_NOT_APPLICABLE]
+            del payload[_STATUS_NOT_APPLICABLE]
         if result.intent_bindings:
             payload["intent_bindings"] = [
                 asdict(item) for item in result.intent_bindings
@@ -800,17 +781,17 @@ def run_orchestration(
         else:
             del payload["intent_bindings"]
         if not result.unsupported:
-            del payload[_UNSUPPORTED]
+            del payload[_STATUS_UNSUPPORTED]
         if not result.disabled:
-            del payload[_DISABLED]
+            del payload[_STATUS_DISABLED]
         for step_payload in payload["steps"]:
-            if step_payload["rollout"] == _MAINLINE:
+            if step_payload["rollout"] == _MAINLINE_ROLLOUT:
                 del step_payload["rollout"]
             for finding_payload in step_payload["findings"]:
                 if finding_payload["priority"] is None:
                     del finding_payload["priority"]
         if provisional_passed or provisional_failed:
-            payload[_PROVISIONAL] = {
+            payload[_PROVISIONAL_ROLLOUT] = {
                 "passed": provisional_passed,
                 "failed": provisional_failed,
             }
