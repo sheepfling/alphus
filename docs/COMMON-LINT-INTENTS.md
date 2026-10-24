@@ -97,29 +97,94 @@ and provide observed tool context before these mappings participate in a run.
 Until then, this catalog is an explicit capability inventory and safe mapping
 boundary; it does not claim that a native command ran or its output was parsed.
 
-## Deferred integrations
+## Evaluated follow-up integrations
 
-Dependency and layer boundaries, semantic clone detection, unsafe-construct
-rules, and assertion conventions remain separate evaluations. Adopt a future
-backend only after checking that it is maintained, names the languages and
-frameworks it supports, exposes its version and configuration, and does not
-duplicate an existing Alphus or native check. Keep consumer-owned relationships
-and exclusions explicit.
+These candidates do not add a shared gate or install a tool. Consumers still
+own their native configuration, versions, scope, and exclusions. A generic
+Alphus command step can invoke a native checker, but the current runner treats
+its output as opaque text; typed findings require a separate parser and
+version-pinned fixtures. These are capability evaluations, not Alphus-supported
+version ranges, integrated gates, or validated adapters. This document does not
+pin or install third-party tools; consumers must pin each tool and its required
+parser, runtime, compiler, or plugin in their own repository.
 
-- **Dependency boundaries:** require consumer-declared allowed or forbidden
-  relationships and report the imports that violate them. Reconcile findings
-  with Alphus's architecture/import checks and C++ include-impact evidence;
-  include fanout alone is not a dependency violation.
-- **Duplication:** select the clone kind (text, token, or semantic), minimum
-  size, exclusions, and backend provenance before reporting findings. Exclude
-  generated code, fixtures, and intentional mirrored interfaces where the
-  consumer requests it. Existing repeated-window C++ findings remain review
-  heuristics, not proof of duplicated behavior; do not substitute an arbitrary
-  repository-wide percentage.
-- **Unsafe constructs and assertion conventions:** inventory maintained
-  language- or framework-specific checks, document their scope and native
-  configuration, and keep test-oracle independence as its own review concern.
-  Do not impose a universal rule across unrelated frameworks.
+### Dependency and layer boundaries
+
+| Language   | Existing coverage and evaluated candidate                                                                                                                                                                                                                                                                                           | Requirements and current limit                                                                                                                                                                                                          |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Python     | Alphus `package-boundaries` checks declared distribution edges, imported local package edges, and cycles. It does not express arbitrary layers inside one package. [Import Linter](https://import-linter.readthedocs.io/en/stable/contract_types/) offers forbidden, protected, layer, independence, and acyclic-sibling contracts. | Reuse Alphus for distribution boundaries. Consider Import Linter for opt-in intra-package contracts only; pin its Python package and keep its module patterns and exceptions consumer-owned. Do not report the same package edge twice. |
+| C/C++      | Alphus's include-impact evidence measures affected includes and fanout. It does not decide whether a source-to-target edge violates architecture. clang-tidy include checks concern include correctness; they are not allowed/forbidden layer contracts.                                                                            | No shared source-layer mapping is selected. A future check needs the consumer's build targets, compiler flags, and compilation database; include fanout alone is not a dependency violation.                                            |
+| JavaScript | [dependency-cruiser](https://github.com/sverweij/dependency-cruiser/blob/main/doc/rules-reference.md) supports consumer-defined `forbidden` and `allowed` module relationships, severities, and reasons.                                                                                                                            | Candidate for an opt-in module-boundary command. Pin Node, dependency-cruiser, and its config; validate path aliases, unresolved modules, and dynamic imports instead of treating incomplete resolution as a pass.                      |
+| TypeScript | dependency-cruiser can analyze TypeScript through the project's configured TypeScript/transpiler support.                                                                                                                                                                                                                           | Use a pinned TypeScript toolchain and the consumer's path/module-resolution settings. No Alphus typed TypeScript module-boundary mapping exists yet.                                                                                    |
+
+### Code duplication
+
+Two maintained candidates cover the requested source languages:
+
+- [PMD CPD](https://pmd.github.io/pmd/pmd_userdocs_cpd.html) supports Python,
+  C/C++, JavaScript, and TypeScript. Its minimum-token option gives a concrete
+  token clone threshold, and it can emit XML, CSV, or other native reports.
+  Pin the PMD release and use its documented Java runtime. Comment suppression
+  is language-specific; generated code, fixtures, tests, and intentionally
+  mirrored interfaces still need consumer-owned directory or file exclusions.
+- [jscpd](https://jscpd.dev/concepts/how-detection-works) is also token-based
+  and provides configurable minimum tokens/lines and JSON/SARIF reporters. Its
+  configuration distinguishes exact, renamed, near-miss, AST, and semantic
+  clone kinds. Pin the package/runtime and explicitly select the desired kinds;
+  do not enable semantic or model-backed detection as an accidental default.
+
+PMD CPD is the bounded first candidate for a token-clone prototype; compare it
+with jscpd against the same positive, negative, generated-code, and suppression
+fixtures before choosing an Alphus adapter. Neither is selected as a shared
+Alphus gate yet. Token counts and clone kinds differ by backend and language,
+so record the native backend, version, language, minimum token/line threshold,
+exclusions, locations, and analyzed-file coverage. Do not compare raw scores
+across tools or impose a repository-wide duplication percentage. Existing
+repeated-window C++ results remain advisory review evidence, not proof of
+duplicated behavior.
+
+### Unsafe constructs and security hotspots
+
+| Language   | Maintained native candidates                                                                                              | Configuration and evidence boundary                                                                                                                                            |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Python     | Ruff's selected `S` rules and [Bandit](https://bandit.readthedocs.io/en/latest/) AST plugins.                             | Pin the tool and exact rule set. Avoid duplicate Ruff/Bandit findings; Bandit reports common security patterns, not exploitability or a complete security review.              |
+| C/C++      | [clang-tidy](https://clang.llvm.org/extra/clang-tidy/checks/list.html) CERT, bug-prone, and Clang Static Analyzer checks. | Pin clang-tidy to the compiler/toolchain and use the build's compile database and flags. Check groups are specific diagnostics, not a universal unsafe-code ban.               |
+| JavaScript | [eslint-plugin-security](https://github.com/eslint-community/eslint-plugin-security).                                     | Pin ESLint and the plugin. Its maintainers describe results as security hotspots with false positives that need human triage.                                                  |
+| TypeScript | The JavaScript ESLint security plugin is a candidate only for rules that work with the consumer's TypeScript parser.      | Pin ESLint, plugin, parser, and TypeScript versions together; prove each selected rule on TypeScript fixtures before mapping it. TypeScript coverage is otherwise unsupported. |
+
+There is no single cross-language definition of “unsafe construct.” Keep each
+native rule ID, language, parser/tool version, source location, severity, and
+consumer exclusion. Do not infer that an unselected or unavailable rule passed.
+
+### Test assertion conventions
+
+| Language/framework                    | Evidence and limits                                                                                                                                                                                                                     |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Python/pytest                         | `assert` is idiomatic and pytest enhances its failure output. Use pytest's framework APIs for exception assertions; a generic ban on `assert` would reject ordinary tests and would not establish oracle quality.                       |
+| C/C++ test frameworks                 | Assertion macros and failure behavior vary by the selected framework. Compiler warnings do not establish that expected values are independent or meaningful. No framework-neutral mapping is selected.                                  |
+| JavaScript/TypeScript test frameworks | Assertion APIs and matchers differ across Jest, Mocha/Chai, Node, and other frameworks. A rule about Node's `assert` API is not a rule about a test's oracle. Require explicit framework-specific coverage; otherwise mark unsupported. |
+
+Keep issue [#15](https://github.com/sheepfling/alphus/issues/15) separate:
+assertion style is not proof of test-oracle independence. No universal
+assertion-convention rule is selected.
+
+### Adoption criteria
+
+Before turning any candidate into an Alphus mapping or gate:
+
+1. Pin the native tool and required parser, compiler, runtime, or plugin; verify
+   the version and configuration actually used.
+2. Scope each language independently. Make generated-code, test, fixture, and
+   intentional-mirror exclusions explicit, with a reason where supported.
+3. Preserve native rule IDs, messages, locations, and severity. Add a typed
+   Alphus category only when evidence has the same meaning; never merge
+   unrelated checks because their names sound similar.
+4. Add positive, negative, ambiguity, exclusion, malformed-output, missing-tool,
+   and incomplete-resolution fixtures. Operational errors cannot become a
+   clean pass.
+5. Keep the integration opt-in. Do not install tools for consumers, add CI
+   triggers, or enable a repo-wide architecture, clone threshold, security ban,
+   or assertion rule by default.
 
 ## Native references
 
@@ -131,3 +196,11 @@ and exclusions explicit.
 - [TypeScript `allowUnreachableCode`](https://www.typescriptlang.org/tsconfig/allowUnreachableCode.html)
 - [clang-tidy identifier naming](https://clang.llvm.org/extra/clang-tidy/checks/readability/identifier-naming.html)
 - [Clang diagnostic flags](https://clang.llvm.org/docs/DiagnosticsReference.html)
+- [Import Linter contracts](https://import-linter.readthedocs.io/en/stable/contract_types/)
+- [dependency-cruiser rules](https://github.com/sverweij/dependency-cruiser/blob/main/doc/rules-reference.md)
+- [PMD copy/paste detector](https://pmd.github.io/pmd/pmd_userdocs_cpd.html)
+- [jscpd detection model](https://jscpd.dev/concepts/how-detection-works)
+- [Bandit documentation](https://bandit.readthedocs.io/en/latest/)
+- [clang-tidy checks](https://clang.llvm.org/extra/clang-tidy/checks/list.html)
+- [ESLint security plugin](https://github.com/eslint-community/eslint-plugin-security)
+- [pytest assertion documentation](https://docs.pytest.org/en/stable/how-to/assert.html)
