@@ -6,8 +6,7 @@ import json
 import subprocess
 import sys
 from collections.abc import Callable, Mapping
-from dataclasses import asdict, dataclass, field
-from enum import StrEnum
+from dataclasses import asdict
 from io import StringIO
 from pathlib import Path
 from typing import Literal, NoReturn, TextIO, TypeGuard, cast
@@ -23,7 +22,6 @@ from alphus.config import (
 from alphus.contracts.findings import (
     Diagnostic,
     FindingRollups,
-    Severity,
     SeverityCounts,
     severity_meets_threshold,
 )
@@ -43,6 +41,13 @@ from alphus.execution.profile_history import (
     write_profile_record,
 )
 from alphus.execution.profile_reporting import ProfileReporter
+from alphus.execution.profile_results import (
+    IntentExecutionResult,
+    IntentStatus,
+    OrchestrationResult,
+    OrchestrationStepResult,
+    StepStatus,
+)
 from alphus.execution.step_results import RuleRunResult
 from alphus.policy.intents import (
     EvidenceFormat,
@@ -82,96 +87,6 @@ _PROVISIONAL_ROLLOUT: Literal["mainline", "provisional"] = "provisional"
 _JSON_ARRAY_EVIDENCE_FORMAT: EvidenceFormat = "json-array"
 
 
-class StepStatus(StrEnum):
-    """Closed set of orchestration step outcomes."""
-
-    DISABLED = _STATUS_DISABLED
-    PASSED = "passed"
-    FAILED = "failed"
-    NOT_APPLICABLE = _STATUS_NOT_APPLICABLE
-    UNSUPPORTED = _STATUS_UNSUPPORTED
-
-
-class IntentStatus(StrEnum):
-    """Closed set of language-specific intent outcomes."""
-
-    DISABLED = _STATUS_DISABLED
-    UNSUPPORTED = _STATUS_UNSUPPORTED
-    NOT_SELECTED = "not_selected"
-    NOT_APPLICABLE = _STATUS_NOT_APPLICABLE
-    PASSED = "passed"
-    FAILED = "failed"
-
-
-@dataclass(frozen=True, slots=True)
-class OrchestrationStepResult:
-    """Machine-readable outcome for one configured profile step."""
-
-    name: str
-    status: StepStatus
-    exit_code: int | None
-    diagnostics: tuple[str, ...] = ()
-    findings: tuple[Diagnostic, ...] = ()
-    stdout: str = ""
-    stderr: str = ""
-    severity_counts: SeverityCounts = field(default_factory=SeverityCounts)
-    rollout: Literal["mainline", "provisional"] = _MAINLINE_ROLLOUT
-    # opaque-boundary: Native rule reports retain backend-specific JSON fields.
-    report: Mapping[str, object] | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class IntentExecutionResult:
-    """One language mapping's outcome with a pointer to native raw evidence."""
-
-    rule_id: str
-    language: str
-    backend: str
-    native_rule: str
-    mapping: str
-    status: IntentStatus
-    failure_kind: FailureKind | None = None
-    required: bool = True
-    severity: Severity | None = None
-    failure_threshold: Severity = "error"
-    threshold: int | None = None
-    step: str | None = None
-    evidence_step: str | None = None
-    exit_code: int | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class OrchestrationResult:
-    """Machine-readable summary for a configured quality profile."""
-
-    profile: str
-    passed: int
-    failed: int
-    exit_code: int
-    steps: tuple[OrchestrationStepResult, ...]
-    failure_threshold: Severity = "error"
-    severity_counts: SeverityCounts = field(default_factory=SeverityCounts)
-    not_applicable: int = 0
-    finding_rollups: FindingRollups = field(default_factory=FindingRollups)
-    intent_bindings: tuple[IntentExecutionResult, ...] = ()
-    unsupported: int = 0
-    disabled: int = 0
-
-
-def _render_diagnostic(diagnostic: Diagnostic, reporter: ProfileReporter) -> None:
-    """Render normalized findings with stable source and rule provenance."""
-    location = diagnostic.path or ""
-    if diagnostic.line is not None:
-        location = f"{location}:{diagnostic.line}" if location else str(diagnostic.line)
-    suffix = f" {location}" if location else ""
-    priority = f" [priority={diagnostic.priority}]" if diagnostic.priority else ""
-    owner = "" if diagnostic.source == NAMESPACE else f"{diagnostic.source} "
-    reporter.info(
-        f"{diagnostic.severity.upper()} {owner}"
-        f"{diagnostic.rule_id}{suffix}{priority}: {diagnostic.message}"
-    )
-
-
 def _legacy_diagnostic_line(diagnostic: Diagnostic) -> str:
     """Keep the existing string diagnostics field useful for older consumers."""
     location = diagnostic.path or ""
@@ -181,13 +96,6 @@ def _legacy_diagnostic_line(diagnostic: Diagnostic) -> str:
     if location:
         return f"{prefix}{location}: {diagnostic.message}"
     return f"{prefix}{diagnostic.message}"
-
-
-def _write_captured(stream: TextIO, value: str) -> None:
-    """Replay command output without interpreting its contents."""
-    if value:
-        stream.write(value)
-        stream.flush()
 
 
 def _is_structured_rule_result(
@@ -248,7 +156,7 @@ def run_orchestration(
     resolved_config = config_path.resolve(strict=True)
     output = stdout if stdout is not None else sys.stdout
     errors = stderr if stderr is not None else sys.stderr
-    reporter = ProfileReporter(output, errors)
+    reporter = ProfileReporter(output, errors, json_output=json_output)
     profile = policy.profile(profile_name)
     plan = policy.resolve_profile(profile_name)
     if profile is None or plan is None:
@@ -319,12 +227,11 @@ def run_orchestration(
         and item.binding.evidence_format != "raw"
         and item.binding.step in plan.steps
     }
-    if profile.includes and not json_output:
-        reporter.info(f"Selected profiles: {', '.join(plan.profiles)}")
+    if profile.includes:
+        reporter.selected_profiles(plan.profiles)
     for index, step_name in enumerate(plan.steps):
         step: RuleRunStep | CommandRunStep = selected_steps[step_name]
-        if not json_output:
-            reporter.info(f"==> {step.name}")
+        reporter.step_started(step.name)
         active_bindings = [
             item
             for item in intent_bindings_by_step.get(step_name, ())
@@ -344,10 +251,7 @@ def run_orchestration(
                     rollout=step.rollout,
                 )
             )
-            if not json_output:
-                reporter.info(
-                    f"DISABLED {step.name}: all selected intent bindings are disabled"
-                )
+            reporter.step_disabled(step.name)
             continue
         if step_name not in parallel_results:
             block: list[RuleRunStep | CommandRunStep] = [step]
@@ -637,10 +541,6 @@ def run_orchestration(
             )
             exit_code = ExitCode.LAUNCH_ERROR
 
-        if not json_output:
-            _write_captured(output, step_stdout)
-            _write_captured(errors, step_stderr)
-
         completed += 1
         provisional = step.rollout == _PROVISIONAL_ROLLOUT
         if skipped_empty_file_scope:
@@ -654,8 +554,6 @@ def run_orchestration(
                     rollout=step.rollout,
                 )
             )
-            if not json_output:
-                reporter.info(f"NOT APPLICABLE {step.name}: no files matched")
         elif exit_code == ExitCode.SUCCESS:
             if provisional:
                 provisional_passed += 1
@@ -674,12 +572,6 @@ def run_orchestration(
                 )
             )
             all_findings.extend(findings)
-            if not json_output and isinstance(step, RuleRunStep):
-                for finding in findings:
-                    _render_diagnostic(finding, reporter)
-            if not json_output:
-                prefix = "PROVISIONAL PASS" if provisional else "PASS"
-                reporter.info(f"{prefix} {step.name}")
         else:
             if provisional:
                 provisional_failed += 1
@@ -700,14 +592,7 @@ def run_orchestration(
                 )
             )
             all_findings.extend(findings)
-            if not json_output and isinstance(step, RuleRunStep):
-                for finding in findings:
-                    _render_diagnostic(finding, reporter)
-            if not json_output:
-                prefix = "PROVISIONAL FAIL" if provisional else "FAIL"
-                reporter.info(f"{prefix} {step.name} (exit {exit_code})")
-        if json_output and step_stderr:
-            reporter.captured_error(step_stderr)
+        reporter.step_completed(results[-1], rule=isinstance(step, RuleRunStep))
 
     intent_results: list[IntentExecutionResult] = []
     unsupported_count = 0
@@ -767,11 +652,7 @@ def run_orchestration(
             )
             completed += 1
             all_findings.append(finding)
-            if not json_output:
-                if blocking:
-                    reporter.error(f"UNSUPPORTED {message}")
-                else:
-                    reporter.info(f"UNSUPPORTED {message} (advisory)")
+            reporter.unsupported(message, blocking=blocking)
         elif binding.step not in plan.steps:
             status = IntentStatus.NOT_SELECTED
             failure_kind = None
@@ -830,22 +711,22 @@ def run_orchestration(
     exit_code = (
         ExitCode.QUALITY_FAILURE if failed or blocking_unsupported else ExitCode.SUCCESS
     )
+    result = OrchestrationResult(
+        profile_name,
+        passed,
+        failed,
+        exit_code,
+        tuple(results),
+        threshold,
+        SeverityCounts.from_diagnostics(all_findings),
+        not_applicable,
+        FindingRollups.from_diagnostics(all_findings),
+        tuple(intent_results),
+        unsupported_count,
+        disabled,
+    )
     payload = None
     if json_output or history_context is not None:
-        result = OrchestrationResult(
-            profile_name,
-            passed,
-            failed,
-            exit_code,
-            tuple(results),
-            threshold,
-            SeverityCounts.from_diagnostics(all_findings),
-            not_applicable,
-            FindingRollups.from_diagnostics(all_findings),
-            tuple(intent_results),
-            unsupported_count,
-            disabled,
-        )
         payload = asdict(result)
         # ``asdict`` includes the private parsed RuleTag cache. Replace each
         # finding with its explicit public wire adapter to preserve the JSON
@@ -903,28 +784,13 @@ def run_orchestration(
         except (OSError, ValueError) as error:
             reporter.error(f"Cannot write profile history: {error}")
             return ExitCode.CONFIG_ERROR
-        errors.write(f"history={saved}\n")
+        reporter.history_saved(saved)
     if json_output and payload is not None:
-        reporter.info(json.dumps(payload, sort_keys=True))
+        reporter.json_result(payload)
     else:
-        summary = f"Quality profile {profile_name}: {passed} passed, {failed} failed"
-        if not_applicable:
-            summary += f", {not_applicable} not applicable"
-        if unsupported_count:
-            summary += f", {unsupported_count} unsupported capability mapping(s)"
-        if disabled:
-            summary += f", {disabled} disabled"
-        if provisional_passed or provisional_failed:
-            summary += (
-                f", {provisional_passed} provisional passed, "
-                f"{provisional_failed} provisional failed"
-            )
-        reporter.info(summary)
-        counts = SeverityCounts.from_diagnostics(all_findings)
-        if counts.error or counts.warning or counts.info:
-            reporter.info(
-                "Diagnostic triage: "
-                f"{counts.error} error(s), {counts.warning} warning(s), "
-                f"{counts.info} info(s); failure threshold={threshold}"
-            )
+        reporter.summary(
+            result,
+            provisional_passed=provisional_passed,
+            provisional_failed=provisional_failed,
+        )
     return exit_code

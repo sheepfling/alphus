@@ -62,6 +62,7 @@ opaque_boundary_paths = [
   "src/alphus/cli.py",
   "src/alphus/execution/orchestration.py",
   "src/alphus/execution/profile_history.py",
+  "src/alphus/execution/profile_results.py",
   "src/alphus/execution/step_results.py",
   "src/alphus/execution/worker_protocol.py",
   "src/alphus/gates/source/cyclomatic_complexity.py",

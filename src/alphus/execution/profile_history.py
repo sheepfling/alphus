@@ -18,23 +18,8 @@ from pydantic import Field
 
 from alphus.config import QualityGateConfig
 from alphus.policy.base import StrictModel
-from alphus.support.git import run_git
-
-
-def _utc_text(value: datetime) -> str:
-    return (
-        value.astimezone(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
-    )
-
-
-def _git_value(root: Path, *arguments: str) -> str | None:
-    try:
-        result = run_git(root, *arguments)
-    except OSError:
-        return None
-    if result.returncode:
-        return None
-    return os.fsdecode(result.stdout).strip() or None
+from alphus.support.git import git_value
+from alphus.support.time import utc_text
 
 
 # opaque-boundary: Digest the complete heterogeneous profile wire report.
@@ -105,8 +90,8 @@ def capture_profile_context(
         source_root=str(checkout),
         profile=profile,
         config_sha256=fingerprint,
-        branch=_git_value(checkout, "symbolic-ref", "--quiet", "--short", "HEAD"),
-        revision=_git_value(checkout, "rev-parse", "HEAD"),
+        branch=git_value(checkout, "symbolic-ref", "--quiet", "--short", "HEAD"),
+        revision=git_value(checkout, "rev-parse", "HEAD"),
     )
 
 
@@ -165,8 +150,8 @@ def write_profile_record(
     completed = datetime.now(UTC)
     record = ProfileHistoryRecord(
         record_id=str(uuid4()),
-        started_at_utc=_utc_text(context.started_at_utc),
-        completed_at_utc=_utc_text(completed),
+        started_at_utc=utc_text(context.started_at_utc),
+        completed_at_utc=utc_text(completed),
         duration_seconds=max(0.0, time.monotonic() - context.started_monotonic),
         step_durations_seconds=dict(step_durations_seconds),
         work_unit_durations_seconds=dict(work_unit_durations_seconds),
