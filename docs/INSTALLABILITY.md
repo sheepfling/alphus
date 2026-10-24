@@ -1,32 +1,40 @@
 # Alphus installability and distribution status
 
-## Current main verification (2026-10-24)
+## Current source-install verification (2026-10-24)
 
-Main is at commit `b04be80a33082d1f77386cc835e6fbb776eb8311` (tree
-`19f176553960e61b8bb139acdc177338928d1da2`), with the integration delivered by
-[PR #28](https://github.com/sheepfling/alphus/pull/28). The tested PR head
-`1ff62107716172d4ccdb2d97942b76de287513e0` has the same tree as this main
-commit. `pyproject.toml` declares version `0.0.1`, Python `>=3.11,<3.16`, and
-the `alphus`, `alphus-history`, typing-fixture, stub-quality, C++ quality, and
-worktree-hygiene commands. The package includes `py.typed`.
+Main is at commit `20221e76720e170b7a37895b8fa2e1c56a658396`, which includes
+the FastAPI contract integration and the common-lint evaluation. `pyproject.toml`
+declares package version `0.0.1`, Python `>=3.11,<3.16`, eight console
+commands, and the `py.typed` marker. After PR #37 merged, the exact main commit
+passed its push-triggered self-quality and hygiene workflows, including Python
+3.11–3.15, minimum-dependency, and optional-gate checks.
 
-On the exact PR tree, `.venv/bin/python scripts/ci.py --root . --wheel`
-completed with 1,010 passed and 1 skipped; 26 profile checks passed, 1
-provisional SciPy review step remained, and there were no failures. The Node
-checks passed: `npm test` reported 27 passing tests, with lint, JavaScript
-format, Markdown format, TypeScript typecheck, and the JavaScript profile also
-passing. Hosted checks on that exact tree passed the Python 3.11–3.15,
-minimum-dependency, optional-gate, JavaScript, and repository-hygiene jobs.
+The selected adoption channel is a direct GitHub source install pinned to the
+full commit SHA:
 
-A wheel built from this tree had SHA-256
-`ea3c99922d91fd54dc90fde68d9c39262fc4b76261ba10cc4634f1c6c5aaf5f8`. It was
-installed into a fresh isolated environment outside the checkout; `pip check`,
-`alphus --help`, and `alphus-history --help` passed, and the import resolved
-from that environment's `site-packages` with `py.typed` present. An external
-Git consumer fixture passed `--plan --json` and its valid Ruff cyclomatic
-profile; the deliberately high-complexity fixture exited 1 with the expected
-diagnostic. This verifies a local wheel and consumer workflow from this source
-tree; it does not verify installation from a public package index or Git URL.
+```shell
+python -m pip install "alphus @ git+https://github.com/sheepfling/alphus.git@20221e76720e170b7a37895b8fa2e1c56a658396"
+```
+
+The package metadata remains at `0.0.1`; the full source SHA in the consumer's
+requirement distinguishes this exact revision from other source builds with
+that same metadata version. This is a pinned-source distribution path, not a
+numbered PyPI release; no release tag or package-index publication was created.
+
+Using Python 3.12.14 and `build` 1.6.1, both a wheel and source distribution
+were built from that exact commit with isolated setuptools 84.2.1. The wheel
+SHA-256 is
+`5eef38ac951832ee8ddd522ec4affa167923a05b01f92c2ad5cf6623fc4f3c95`; the
+source archive SHA-256 is
+`24951e227024319ef2b71562e8cc35f5eb71d387bde8a68d0eda813428c83685`.
+
+The GitHub source install resolved to the recorded full SHA in a clean Python
+3.12.14 environment. That install, the locally built wheel, and the source
+archive each passed `pip check`; `alphus --help`, `alphus-history --help`,
+package import, installed `py.typed`, and both primary console entry points
+were verified from their isolated environments. This establishes installation
+from the selected GitHub source channel and local artifact installability. It
+does not establish a PyPI package-index install.
 
 ## Historical install proofs
 
@@ -127,20 +135,22 @@ negative profile exited 1 with `MDR004`, `MDR101`, and Markdown-format findings,
 while the remaining checks ran (10/12 steps passed) on both versions. The
 fresh positive fixture is `/tmp/alphus-consumer-positive-ac972`.
 
-## Distribution status
+## Downstream adoption
 
-The current-main and earlier proofs establish local builds and installations
-only for their recorded source revisions, with dependencies resolved from the
-approved official PyPI route where noted. They do not establish a clean install
-from a public Alphus package index or from a public Git URL. A historical
-registry check found no PyPI project or GitHub release at that time. PR #1 was
-merged and is not a release. The local tag
-`quality-gate/module-role-assignments` is a development tag. No publish or
-release action was taken in this closeout.
+The historical review snapshot recorded an Alphus pin in `mdutils-stubs` at
+`73e4cdb`. Its current `main` branch no longer declares Alphus in
+`pyproject.toml` or its verification workflow. The current `snakemd-stubs`
+`pyproject.toml` and CI workflow also do not declare Alphus. No consumer
+repository was changed, and no current downstream pin requiring migration was
+identified in those repositories.
 
-Issue [#29](https://github.com/sheepfling/alphus/issues/29) tracks selecting a
-distribution channel, preparing verified release artifacts, and planning
-downstream adoption. Publication and consumer-pin changes remain outside this
-repository-closeout work and require separate authorization. Keep consumer
-pins on immutable commits until a supported distribution path is selected and
-verified.
+For a consumer that chooses to adopt this source revision, pin the full commit
+SHA in its dependency file. Validate that consumer's Python version and
+platform, run `pip check`, verify its Alphus console commands and package
+resources, and run the consumer-owned quality profile. A future consumer-pin
+change still needs that repository owner's explicit authorization.
+
+PyPI publication and a numbered release remain unselected. They require a
+separate approval after the proposed workflow, version, and exact artifacts
+are reviewed. No public release or downstream repository change was made as
+part of this plan.
