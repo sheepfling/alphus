@@ -123,6 +123,48 @@ def test_forward_string_annotations_resolve_known_sqlalchemy_types() -> None:
     ]
 
 
+def test_annotations_resolve_outer_types_and_explicit_optional_wrappers() -> None:
+    source = (
+        "from typing import Annotated, Optional\n"
+        "from sqlalchemy.orm import Session\n"
+        "def optional(session: Optional[Session]):\n"
+        '    session.execute("SELECT 1")\n'
+        "def annotated(session: Annotated[Session, 'database']):\n"
+        '    session.execute("SELECT 2")\n'
+        "def unrelated(repository: Repository[Session]):\n"
+        '    repository.execute("SELECT 3")\n'
+    )
+
+    findings = sqlalchemy_practice_findings(source, _policy())
+
+    assert [(finding.rule_id, finding.line) for finding in findings] == [
+        ("alphus/python/sqlalchemy/correctness/literal-execute", 4),
+        ("alphus/python/sqlalchemy/correctness/literal-execute", 6),
+    ]
+
+
+def test_nested_functions_preserve_closure_bindings_without_restoring_shadowed_globals() -> (
+    None
+):
+    source = (
+        "import sqlite3\n"
+        "from sqlalchemy.orm import Session\n"
+        "session = Session()\n"
+        "def outer(session: sqlite3.Connection):\n"
+        "    def inner():\n"
+        '        session.execute("SELECT 1")\n'
+        "def typed_outer(session: Session):\n"
+        "    def inner():\n"
+        '        session.execute("SELECT 2")\n'
+    )
+
+    findings = sqlalchemy_practice_findings(source, _policy())
+
+    assert [(finding.rule_id, finding.line) for finding in findings] == [
+        ("alphus/python/sqlalchemy/correctness/literal-execute", 9)
+    ]
+
+
 def test_literal_execute_recognizes_typed_connections_sessions_and_engine_scopes() -> (
     None
 ):

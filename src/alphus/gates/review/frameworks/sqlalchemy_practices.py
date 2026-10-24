@@ -232,15 +232,51 @@ def _annotation_kind(
                 return None
         case _:
             pass
+    match annotation:
+        case ast.BinOp(op=ast.BitOr(), left=left, right=right):
+            return _nullable_union_kind((left, right), aliases)
+        case ast.Subscript(value=wrapper, slice=argument):
+            wrapper_name = canonical_expression_name(wrapper, aliases)
+            if wrapper_name == "typing.Annotated":
+                match argument:
+                    case ast.Tuple(elts=[first, *_]):
+                        return _annotation_kind(first, aliases)
+                    case _:
+                        return _annotation_kind(argument, aliases)
+            if wrapper_name == "typing.Optional":
+                return _annotation_kind(argument, aliases)
+            if wrapper_name == "typing.Union":
+                match argument:
+                    case ast.Tuple(elts=members):
+                        return _nullable_union_kind(members, aliases)
+                    case _:
+                        return _annotation_kind(argument, aliases)
+            return None
+        case _:
+            return _canonical_kind(canonical_expression_name(annotation, aliases))
+
+
+def _is_none_annotation(annotation: ast.expr, aliases: ImportAliases) -> bool:
+    match annotation:
+        case ast.Constant(value=None) | ast.Name(id="None"):
+            return True
+        case _:
+            return canonical_expression_name(annotation, aliases) in {
+                "builtins.NoneType",
+                "types.NoneType",
+            }
+
+
+def _nullable_union_kind(
+    members: Sequence[ast.expr], aliases: ImportAliases
+) -> NameKind | None:
     kinds: set[NameKind] = set()
-    for node in ast.walk(annotation):
-        match node:
-            case ast.expr() as expression:
-                kind = _canonical_kind(canonical_expression_name(expression, aliases))
-                if kind in {"session", "session-registry", "engine", "connection"}:
-                    kinds.add(kind)
-            case _:
-                pass
+    for member in members:
+        kind = _annotation_kind(member, aliases)
+        if kind is not None:
+            kinds.add(kind)
+        elif not _is_none_annotation(member, aliases):
+            return None
     return next(iter(kinds)) if len(kinds) == 1 else None
 
 
@@ -332,6 +368,37 @@ class _LocalNames(ast.NodeVisitor):
 
     def visit_Lambda(self, node: ast.Lambda) -> None:
         return
+
+
+def _function_scope_names(
+    function: ast.FunctionDef | ast.AsyncFunctionDef,
+    inherited: Mapping[str, NameKind],
+    aliases: ImportAliases,
+) -> dict[str, NameKind]:
+    local_names = _LocalNames()
+    for statement in function.body:
+        local_names.visit(statement)
+    arguments = [
+        *function.args.posonlyargs,
+        *function.args.args,
+        *function.args.kwonlyargs,
+    ]
+    if function.args.vararg is not None:
+        arguments.append(function.args.vararg)
+    if function.args.kwarg is not None:
+        arguments.append(function.args.kwarg)
+    local_names.names.update(argument.arg for argument in arguments)
+
+    function_names: dict[str, NameKind] = {
+        name: kind for name, kind in inherited.items() if name not in local_names.names
+    }
+    for argument in arguments:
+        kind = _annotation_kind(argument.annotation, aliases)
+        if kind is None:
+            function_names.pop(argument.arg, None)
+        else:
+            function_names[argument.arg] = kind
+    return function_names
 
 
 def _merge_names(
@@ -709,6 +776,59 @@ def _calls_in_scope(
     return current
 
 
+def _analyze_nested_function_scopes(
+    statements: Sequence[ast.stmt],
+    inherited: Mapping[str, NameKind],
+    aliases: ImportAliases,
+    policy: SqlAlchemyPracticePolicy,
+    path: str,
+    findings: MutableMapping[RuleName, MutableSet[int]],
+) -> None:
+    class _FunctionScopes(ast.NodeVisitor):
+        def __init__(self, names: Mapping[str, NameKind]) -> None:
+            self.names = names
+
+        def _visit_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+            function_names = _function_scope_names(node, self.names, aliases)
+            final_names = _calls_in_scope(
+                node.body,
+                function_names,
+                aliases,
+                policy,
+                path,
+                findings,
+                module_scope=False,
+            )
+            _analyze_nested_function_scopes(
+                node.body,
+                final_names,
+                aliases,
+                policy,
+                path,
+                findings,
+            )
+
+        def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+            self._visit_function(node)
+
+        def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+            self._visit_function(node)
+
+        def visit_ClassDef(self, node: ast.ClassDef) -> None:
+            _analyze_nested_function_scopes(
+                node.body,
+                self.names,
+                aliases,
+                policy,
+                path,
+                findings,
+            )
+
+    visitor = _FunctionScopes(inherited)
+    for statement in statements:
+        visitor.visit(statement)
+
+
 def _declarative_base_lines(module: ast.Module, aliases: ImportAliases) -> list[int]:
     bases: dict[str, set[int]] = {}
     lines: set[int] = set()
@@ -822,47 +942,14 @@ def sqlalchemy_practice_findings(
         findings,
         module_scope=True,
     )
-    for node in ast.walk(module):
-        match node:
-            case ast.FunctionDef() | ast.AsyncFunctionDef():
-                local_names = _LocalNames()
-                for statement in node.body:
-                    local_names.visit(statement)
-                function_names: dict[str, NameKind] = {
-                    name: kind
-                    for name, kind in module_names.items()
-                    if name not in local_names.names
-                }
-                arguments = [
-                    *node.args.posonlyargs,
-                    *node.args.args,
-                    *node.args.kwonlyargs,
-                ]
-                for argument in arguments:
-                    kind = _annotation_kind(argument.annotation, aliases)
-                    if kind is not None:
-                        function_names[argument.arg] = kind
-                    else:
-                        function_names.pop(argument.arg, None)
-                if node.args.vararg is not None:
-                    kind = _annotation_kind(node.args.vararg.annotation, aliases)
-                    if kind is not None:
-                        function_names[node.args.vararg.arg] = kind
-                if node.args.kwarg is not None:
-                    kind = _annotation_kind(node.args.kwarg.annotation, aliases)
-                    if kind is not None:
-                        function_names[node.args.kwarg.arg] = kind
-                _calls_in_scope(
-                    node.body,
-                    function_names,
-                    aliases,
-                    policy,
-                    path,
-                    findings,
-                    module_scope=False,
-                )
-            case _:
-                pass
+    _analyze_nested_function_scopes(
+        module.body,
+        module_names,
+        aliases,
+        policy,
+        path,
+        findings,
+    )
 
     return sorted(
         (
