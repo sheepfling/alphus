@@ -6,7 +6,7 @@ import json
 import shutil
 import subprocess
 import sys
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import asdict, dataclass, field
 from io import StringIO
@@ -41,6 +41,7 @@ class OrchestrationStepResult:
     stdout: str = ""
     stderr: str = ""
     severity_counts: SeverityCounts = field(default_factory=SeverityCounts)
+    report: Mapping[str, object] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +52,8 @@ class RuleRunResult:
     execution_failure: str | None = None
     exit_code: int = 0
     stderr: str = ""
+    stdout: str = ""
+    report: Mapping[str, object] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -185,6 +188,7 @@ def run_orchestration(
         findings: list[Diagnostic] = []
         skipped_empty_file_scope = False
         legacy_diagnostics: tuple[str, ...] = ()
+        step_report: Mapping[str, object] | None = None
         try:
             match step:
                 case RuleRunStep(rule=rule):
@@ -211,7 +215,8 @@ def run_orchestration(
                             _legacy_diagnostic_line(finding) for finding in findings
                         )
                         step_stderr = rule_result.stderr or captured_stderr.getvalue()
-                        step_stdout = captured_stdout.getvalue()
+                        step_stdout = rule_result.stdout or captured_stdout.getvalue()
+                        step_report = rule_result.report
                         if rule_result.execution_failure is not None:
                             message = rule_result.execution_failure
                             findings.append(
@@ -358,6 +363,7 @@ def run_orchestration(
                     stdout=step_stdout,
                     stderr=step_stderr,
                     severity_counts=SeverityCounts.from_diagnostics(findings),
+                    report=step_report,
                 )
             )
             all_findings.extend(findings)
@@ -379,6 +385,7 @@ def run_orchestration(
                     stdout=step_stdout,
                     stderr=step_stderr,
                     severity_counts=SeverityCounts.from_diagnostics(findings),
+                    report=step_report,
                 )
             )
             all_findings.extend(findings)
@@ -403,6 +410,9 @@ def run_orchestration(
             SeverityCounts.from_diagnostics(all_findings),
         )
         payload = asdict(result)
+        for step_payload in payload["steps"]:
+            if step_payload["report"] is None:
+                step_payload.pop("report")
         if profile.includes:
             payload["profiles"] = plan.profiles
         print(json.dumps(payload, sort_keys=True), file=output, flush=True)

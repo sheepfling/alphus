@@ -28,6 +28,7 @@ QualityRuleName: TypeAlias = Literal[
     "numeric-literals",
     "test-quality",
     "input-contracts",
+    "cyclomatic-complexity",
 ]
 
 PolicyT = TypeVar("PolicyT")

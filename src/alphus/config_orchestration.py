@@ -22,6 +22,7 @@ from alphus.config_base import (
     validate_one_line_message,
     validate_single_path,
 )
+from alphus.config_metrics import CyclomaticComplexityPolicy
 from alphus.config_repository import (
     DependencyLockPolicy,
     RepositoryLayoutPolicy,
@@ -70,6 +71,7 @@ class CheckPolicies(StrictModel):
     version_sync: VersionSyncPolicy | None = None
     callable_registry: CallableRegistryPolicy | None = None
     dependency_locks: DependencyLockPolicy | None = None
+    cyclomatic_complexity: CyclomaticComplexityPolicy | None = None
 
     def require_rule(self, rule: QualityRuleName) -> None:
         """Validate only the primary policy needed by a selected rule."""
@@ -91,6 +93,7 @@ class CheckPolicies(StrictModel):
             "module-roles": self.module_roles,
             "dependency-locks": self.dependency_locks,
             "repository-layout": self.repository_layout,
+            "cyclomatic-complexity": self.cyclomatic_complexity,
         }
         require_policy(policies[rule], rule.replace("-", "_"))
 

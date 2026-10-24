@@ -12,7 +12,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import asdict
 from io import StringIO
 from pathlib import Path
-from typing import Annotated, TypeAlias
+from typing import Annotated, TypeAlias, cast
 
 import typer
 from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
@@ -23,6 +23,15 @@ from alphus.callable_registry import check_callable_registry
 from alphus.cli_policy import policy_issues as cli_policy_issues
 from alphus.config import QualityGateConfig, QualityRuleName, load_config
 from alphus.config_base import MissingPolicyError, require_policy
+from alphus.cyclomatic_complexity import (
+    CyclomaticReport,
+    build_cyclomatic_plan,
+    plan_payload,
+    report_exit_code,
+    report_payload,
+    report_summary,
+    run_cyclomatic_complexity,
+)
 from alphus.dependency_locks import check_dependency_locks
 from alphus.findings import (
     Diagnostic,
@@ -65,6 +74,7 @@ class _SharedUtilitiesRuleOutput(BaseModel):
 
 
 _FINDING_RULE_OUTPUT: TypeAdapter[list[Finding]] = TypeAdapter(list[Finding])
+_DIAGNOSTIC_RULE_OUTPUT: TypeAdapter[list[Diagnostic]] = TypeAdapter(list[Diagnostic])
 _STRING_RULE_OUTPUT: TypeAdapter[list[str]] = TypeAdapter(list[str])
 _PYTHON_STYLE_RULE_OUTPUT: TypeAdapter[PythonStyleRuleOutput] = TypeAdapter(
     PythonStyleRuleOutput
@@ -72,6 +82,58 @@ _PYTHON_STYLE_RULE_OUTPUT: TypeAdapter[PythonStyleRuleOutput] = TypeAdapter(
 _SHARED_UTILITIES_RULE_OUTPUT: TypeAdapter[_SharedUtilitiesRuleOutput] = TypeAdapter(
     _SharedUtilitiesRuleOutput
 )
+
+
+def _cyclomatic_rule_output(
+    encoded: str,
+) -> tuple[tuple[Diagnostic, ...], dict[str, object], str]:
+    """Decode the structured complexity report consumed by orchestration."""
+    try:
+        payload = json.loads(encoded)
+    except json.JSONDecodeError as error:
+        raise ValueError("cyclomatic complexity output is malformed JSON") from error
+    if not isinstance(payload, dict):
+        raise TypeError("cyclomatic complexity output has an unexpected shape")
+    decoded = cast(dict[str, object], payload)
+    if set(decoded) != {
+        "diagnostics",
+        "report",
+        "summary",
+    }:
+        raise ValueError("cyclomatic complexity output has an unexpected shape")
+    report_value = decoded.get("report")
+    if not isinstance(report_value, dict):
+        raise TypeError("cyclomatic complexity report has an unexpected shape")
+    report = cast(dict[str, object], report_value)
+    if set(report) != {
+        "backends",
+        "diagnostics",
+        "functions",
+        "metric",
+        "outcome",
+    }:
+        raise ValueError("cyclomatic complexity report has an unexpected shape")
+    if report.get("metric") != "cyclomatic" or not isinstance(
+        report.get("backends"), list
+    ) or not isinstance(report.get("functions"), list) or not isinstance(
+        report.get("diagnostics"), list
+    ):
+        raise ValueError("cyclomatic complexity report has invalid metric data")
+    if report["diagnostics"] != decoded["diagnostics"]:
+        raise ValueError("cyclomatic complexity diagnostic lists do not match")
+    if report.get("outcome") not in {
+        "clean",
+        "violations",
+        "incomplete_coverage",
+        "no_matching_files",
+        "operational_failure",
+    }:
+        raise ValueError("cyclomatic complexity report has an unknown outcome")
+    diagnostics = _DIAGNOSTIC_RULE_OUTPUT.validate_python(decoded["diagnostics"])
+    summary = decoded.get("summary")
+    if not isinstance(summary, str):
+        raise TypeError("cyclomatic complexity report has no human summary")
+    return tuple(diagnostics), report, summary
 
 
 def _findings_fail(
@@ -362,6 +424,24 @@ def _render_repository_layout(findings: Sequence[Finding]) -> None:
     _render_severity_totals(findings)
 
 
+def _render_cyclomatic_report(report: CyclomaticReport) -> None:
+    """Render native backend coverage and threshold diagnostics."""
+    _human_print(report_summary(report))
+    findings = [
+        Finding(
+            rule_id=item.rule_id,
+            path=item.path or "<backend>",
+            line=item.line,
+            severity=item.severity,
+            message=item.message,
+        )
+        for item in report.diagnostics
+    ]
+    for finding in findings:
+        _render_finding(finding)
+    _render_severity_totals(findings)
+
+
 def _execute(
     root: Path,
     config_path: Path,
@@ -369,6 +449,7 @@ def _execute(
     json_output: bool,
     report: bool,
     verbose: bool,
+    plan_only: bool = False,
 ) -> int:
     """Run one configured gate against the caller-provided checkout root."""
     root = root.resolve(strict=True)
@@ -382,6 +463,38 @@ def _execute(
     files = candidate_files(root, config.files)
     if verbose:
         _log_verbose(rule, root, len(files))
+    if rule == "cyclomatic-complexity":
+        policy = config.checks.cyclomatic_complexity
+        if policy is None:
+            raise typer.BadParameter(
+                "the selected configuration has no "
+                "[checks.cyclomatic_complexity] policy"
+            )
+        if plan_only:
+            payload = plan_payload(build_cyclomatic_plan(root, policy))
+            typer.echo(
+                json.dumps(payload, indent=None if json_output else 2, sort_keys=True)
+            )
+            return 0
+        complexity_report = run_cyclomatic_complexity(root, policy)
+        if json_output:
+            typer.echo(
+                json.dumps(
+                    {
+                        "report": report_payload(complexity_report),
+                        "diagnostics": [
+                            asdict(item) for item in complexity_report.diagnostics
+                        ],
+                        "summary": report_summary(complexity_report),
+                    },
+                    sort_keys=True,
+                )
+            )
+        else:
+            _render_cyclomatic_report(complexity_report)
+        return report_exit_code(
+            complexity_report, failure_threshold, report_only=report
+        )
     if rule == "dependency-locks":
         policy = config.checks.dependency_locks
         if policy is None:
@@ -542,6 +655,8 @@ def _diagnostics_from_rule_json(
     rule: QualityRule, encoded: str
 ) -> tuple[Diagnostic, ...]:
     """Validate Alphus-owned rule output before adding source provenance."""
+    if rule == "cyclomatic-complexity":
+        return _cyclomatic_rule_output(encoded)[0]
     if rule == "python-style":
         style_payload = _PYTHON_STYLE_RULE_OUTPUT.validate_json(encoded)
         diagnostics: list[Diagnostic] = []
@@ -654,8 +769,18 @@ def _execute_profile(
                 exit_code=error.exit_code,
                 stderr=captured_error.getvalue(),
             )
+        report: dict[str, object] | None = None
+        report_stdout = ""
         try:
-            findings = _diagnostics_from_rule_json(rule, captured_output.getvalue())
+            if rule == "cyclomatic-complexity":
+                findings, report, summary = _cyclomatic_rule_output(
+                    captured_output.getvalue()
+                )
+                report_stdout = f"{summary}\n"
+            else:
+                findings = _diagnostics_from_rule_json(
+                    rule, captured_output.getvalue()
+                )
         except (ValidationError, TypeError, ValueError) as error:
             return RuleRunResult(
                 execution_failure=f"Alphus rule output could not be decoded: {error}",
@@ -666,18 +791,25 @@ def _execute_profile(
             return RuleRunResult(
                 execution_failure=f"Alphus rule returned exit code {exit_code}.",
                 exit_code=exit_code,
+                findings=findings,
                 stderr=captured_error.getvalue(),
+                stdout=report_stdout,
+                report=report,
             )
         if exit_code == 1 and not findings:
             return RuleRunResult(
                 execution_failure="Alphus rule failed without structured findings.",
                 exit_code=2,
                 stderr=captured_error.getvalue(),
+                stdout=report_stdout,
+                report=report,
             )
         return RuleRunResult(
             findings=findings,
             exit_code=exit_code,
             stderr=captured_error.getvalue(),
+            stdout=report_stdout,
+            report=report,
         )
 
     return run_orchestration(
@@ -727,6 +859,10 @@ def _command(
         bool,
         typer.Option("--report", help="Report findings without failing."),
     ] = False,
+    plan: Annotated[
+        bool,
+        typer.Option("--plan", help="Show the resolved cyclomatic backend plan."),
+    ] = False,
     verbose: Annotated[
         bool,
         typer.Option("--verbose", help="Write rule diagnostics to stderr."),
@@ -734,14 +870,22 @@ def _command(
 ) -> None:
     """Run one rule or a configured profile against an explicit repository root."""
     if run:
-        if rule is not None or report:
-            raise typer.BadParameter("--run cannot be combined with --rule or --report")
+        if rule is not None or report or plan:
+            raise typer.BadParameter(
+                "--run cannot be combined with --rule, --report, or --plan"
+            )
         raise typer.Exit(_execute_profile(root, config, profile, json_output, verbose))
     if profile is not None:
         raise typer.BadParameter("--profile requires --run")
     if rule is None:
         raise typer.BadParameter("choose either --rule or --run")
-    raise typer.Exit(_execute(root, config, rule, json_output, report, verbose))
+    if plan and (rule != "cyclomatic-complexity" or report):
+        raise typer.BadParameter(
+            "--plan requires --rule cyclomatic-complexity and cannot use --report"
+        )
+    raise typer.Exit(
+        _execute(root, config, rule, json_output, report, verbose, plan)
+    )
 
 
 app.callback(invoke_without_command=True)(_command)

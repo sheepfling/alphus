@@ -87,6 +87,9 @@ PEP 561 build, checker, and runtime-compatibility gates without adding an
 Alphus dependency to published stub packages. The
 [extension and diagnostics proposal](docs/EXTENSIBILITY.md) records a staged
 design for categories, shared findings, and future third-party rules. The
+[cyclomatic complexity guide](docs/CYCLOMATIC-COMPLEXITY.md) documents the
+opt-in native Python, C/C++, and JavaScript metric gates and their distinct
+counting limits. The
 [installability report](docs/INSTALLABILITY.md) records the current wheel,
 Python-version, and distribution evidence.
 
