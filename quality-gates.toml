@@ -1,11 +1,11 @@
-# Root policy for checks and profile composition; optional orchestration_files can split language steps.
+# Alphus self-check policy; consumer starter policies live under examples/.
 schema_version = 1
 [files]
 include = [
   "src/**/*.py", "tests/**/*.py", "scripts/**/*.py",
   "README.md", "docs/**/*.md",
   "javascript/**/*.js", "javascript/**/*.mjs", "javascript/**/*.d.ts",
-  "**/*.toml", "*.toml", "**/*.json", "*.json",
+  "**/*.toml", "**/*.json",
 ]
 exclude = []
 
@@ -26,7 +26,7 @@ markers = ["TODO", "FIXME", "HACK", "XXX", "XXXX"]
 exclude = []
 
 [checks.line_length]
-exclude = []
+exclude = ["docs/cpp/**"]
 
 [checks.line_length.limits]
 ".py" = 100
@@ -339,7 +339,7 @@ argv = [
   "import sys, tomllib; from pathlib import Path; [tomllib.loads(Path(p).read_text(encoding='utf-8')) for p in sys.argv[1:]]",
   "{files}",
 ]
-files = { include = ["**/*.toml", "*.toml"] }
+files = { include = ["**/*.toml"] }
 
 [[orchestration.steps]]
 kind = "command"
@@ -349,7 +349,7 @@ argv = [
   "import json, sys; from pathlib import Path; [json.loads(Path(p).read_text(encoding='utf-8')) for p in sys.argv[1:]]",
   "{files}",
 ]
-files = { include = ["**/*.json", "*.json"] }
+files = { include = ["**/*.json"] }
 
 [[orchestration.profiles]]
 name = "python-policy"

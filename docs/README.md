@@ -23,7 +23,12 @@ explains how to add a rule or language theme. [Version support](VERSION-SUPPORT.
 lists the supported Python and dependency ranges. [Installability](INSTALLABILITY.md)
 records wheel and editable-install checks.
 
-C++ policy examples and the report contracts live in
-[quality_gates](../quality_gates/README.md); their implementations ship in
-`alphus.gates.cpp`. Tests for those engines live in `tests/` and run in the
-same Alphus suite as the Python and repository gates.
+The root [`quality-gates.toml`](../quality-gates.toml) configures Alphus's
+own self-check. Files named `quality-gates.toml` under `examples/` are
+consumer starting points; tests load some of them as fixtures. They are
+not part of the root self-check configuration.
+
+The C++ checker implementations ship in `src/alphus/gates/cpp/`. Their
+detailed evidence contracts live in [the C++ guide index](cpp/README.md),
+and sample JSON policy inputs live under
+[`examples/cpp/policies/`](../examples/cpp/policies/).

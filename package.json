@@ -41,8 +41,8 @@
     "lint": "eslint javascript",
     "format:check": "prettier --check javascript package.json",
     "typecheck": "tsc -p javascript/tsconfig.check.json",
-    "format:markdown:check": "prettier --check \"quality_gates/**/*.md\"",
-    "format:markdown": "prettier --write \"quality_gates/**/*.md\""
+    "format:markdown:check": "prettier --check \"docs/cpp/**/*.md\"",
+    "format:markdown": "prettier --write \"docs/cpp/**/*.md\""
   },
   "dependencies": {
     "@eslint/js": "^10.0.1",
