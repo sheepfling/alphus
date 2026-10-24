@@ -23,6 +23,7 @@ from rich.text import Text
 from alphus.config import (
     QualityGateConfig,
     QualityRuleName,
+    SourceScanPolicy,
     load_config,
     load_config_stream,
 )
@@ -66,7 +67,7 @@ from alphus.policy.function_shape import plan_function_shape
 from alphus.policy.intents import intent_bindings_for_steps
 from alphus.policy.recipes import render_recipe
 from alphus.support.data_access import JsonValue
-from alphus.support.inventory import candidate_files
+from alphus.support.inventory import candidate_files, matches_path
 
 QualityRule = QualityRuleName
 
@@ -83,6 +84,24 @@ class _ProfilePlanPayload(TypedDict):
 
 
 _OUTPUT_FORMAT: ContextVar[str] = ContextVar("alphus_output_format", default="auto")
+_SOURCE_SCAN_RULES: frozenset[QualityRuleName] = frozenset(
+    {
+        "json-structure",
+        "output-escaping",
+        "path-discovery",
+        "shared-utilities",
+        "python-style",
+        "runtime-types",
+        "numeric-literals",
+        "scipy-constants",
+        "test-quality",
+        "input-contracts",
+        "positional-interfaces",
+        "pydantic-practices",
+        "fastapi-practices",
+        "sqlalchemy-practices",
+    }
+)
 _DIRECT_GIT_SUBPROCESS_TAG = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.MAINTAINABILITY, "direct-git-subprocess"
 )
@@ -267,6 +286,7 @@ def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
         "positional-interfaces": "Positional interface review",
         "pydantic-practices": "Pydantic practices",
         "fastapi-practices": "FastAPI practices",
+        "sqlalchemy-practices": "SQLAlchemy practices",
     }
     if rule in review_labels:
         for finding in findings:
@@ -1104,7 +1124,11 @@ def _execute_plan_profile(
                 ):
                     detail.pop(field_name, None)
             detail["fixable"] = entry.fixable
-            if step.kind == "command":
+            if step.kind == "rule":
+                selected = _selected_rule_files(checkout, config, step.rule)
+                if selected is not None:
+                    detail["selected_files"] = selected
+            else:
                 detail["selected_files"] = entry.files
                 detail["applicable"] = step.files is None or bool(entry.files)
                 if entry.check_argv is not None:
@@ -1142,7 +1166,15 @@ def _execute_plan_profile(
                 f"locks={list(step.locks)}, after={list(step.after)}"
             )
         if step.kind == "rule":
-            _human_print(f"{step.rollout.upper()} RULE {step.name}: {step.rule}")
+            selected = _selected_rule_files(checkout, config, step.rule)
+            scope = (
+                f"{len(selected)} file(s)"
+                if selected is not None
+                else "repository scope"
+            )
+            _human_print(
+                f"{step.rollout.upper()} RULE {step.name}: {step.rule} ({scope})"
+            )
             continue
         scope = "unscoped" if step.files is None else f"{len(entry.files)} file(s)"
         label = (
@@ -1182,6 +1214,28 @@ def _execute_plan_profile(
             elif row.status == "unsupported":
                 _human_print("  no native command is configured for this capability")
     return 0
+
+
+def _selected_rule_files(
+    checkout: Path, config: QualityGateConfig, rule: QualityRuleName
+) -> list[str] | None:
+    """Resolve the file scope for source-scanning rules in a profile plan."""
+    if config.files is None or rule not in _SOURCE_SCAN_RULES:
+        return None
+    policy = cast(
+        SourceScanPolicy | None,
+        getattr(config.checks, RULE_SPECS[rule].policy_field),
+    )
+    if policy is None:
+        return None
+    return [
+        relative.as_posix()
+        for relative in candidate_files(checkout, config.files)
+        if relative.suffix in policy.extensions
+        and not any(
+            matches_path(relative.as_posix(), pattern) for pattern in policy.exclude
+        )
+    ]
 
 
 def _command(

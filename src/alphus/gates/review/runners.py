@@ -11,6 +11,9 @@ from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.execution.results import RuleOutput
 from alphus.gates.review.frameworks.fastapi_practices import check_fastapi_practices
 from alphus.gates.review.frameworks.pydantic_practices import check_pydantic_practices
+from alphus.gates.review.frameworks.sqlalchemy_practices import (
+    check_sqlalchemy_practices,
+)
 from alphus.gates.review.input_contracts import check_input_contracts
 from alphus.gates.review.numeric_literals import check_numeric_literals
 from alphus.gates.review.positional_interfaces import check_positional_interfaces
@@ -62,6 +65,11 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
             root,
             files,
             require_policy(config.checks.fastapi_practices, "fastapi_practices"),
+        ),
+        "sqlalchemy-practices": lambda root, files, config: check_sqlalchemy_practices(
+            root,
+            files,
+            require_policy(config.checks.sqlalchemy_practices, "sqlalchemy_practices"),
         ),
     }
 )

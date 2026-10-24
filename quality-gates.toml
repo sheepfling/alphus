@@ -148,6 +148,18 @@ external_model_names = [
 extensions = [".py"]
 exclude = []
 
+[checks.sqlalchemy_practices]
+target_sqlalchemy = ">=2.0,<3.0"
+extensions = [".py"]
+exclude = []
+report_legacy_query = true
+report_legacy_declarative_base = true
+report_backref = true
+report_literal_execute = true
+report_module_session = false
+report_repository_commit = false
+repository_paths = []
+
 [checks.cli]
 
 [checks.cli.python]
@@ -449,9 +461,15 @@ kind = "rule"
 name = "FastAPI practice review"
 rule = "fastapi-practices"
 
+[[orchestration.steps]]
+kind = "rule"
+name = "SQLAlchemy practices review"
+rule = "sqlalchemy-practices"
+rollout = "provisional"
+
 [[orchestration.profiles]]
 name = "review"
 steps = [
   "Numeric review", "SciPy constants review", "Test review", "Input contract review",
-  "Pydantic practice review", "FastAPI practice review",
+  "Pydantic practice review", "FastAPI practice review", "SQLAlchemy practices review",
 ]

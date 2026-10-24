@@ -78,6 +78,7 @@ def test_gate_themes_own_their_runner_mappings() -> None:
                 "positional-interfaces",
                 "pydantic-practices",
                 "fastapi-practices",
+                "sqlalchemy-practices",
             },
         ),
         (
