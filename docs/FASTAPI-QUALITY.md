@@ -38,13 +38,15 @@ adds an explicit `fastapi` profile. Its Ruff configuration extends the
 consumer's `pyproject.toml` and uses `extend-select`, preserving the base
 selection and exclusions. The profile checks these stable rules:
 
-| Rules | Coverage |
-| --- | --- |
-| `FAST001`, `FAST002`, `FAST003` | Redundant response model, dependency `Annotated`, missing path parameter |
-| `ASYNC210`, `ASYNC230`, `ASYNC240`, `ASYNC251` | Blocking HTTP, file, path, and sleep operations in async functions |
-| `B008` | Function calls in defaults, with FastAPI parameter constructors configured as immutable calls |
-| `ANN001`, `ANN201` | Missing parameter and return annotations |
-| `S113`, `S501`, `S608` | Missing HTTP timeouts, disabled certificate checks, and SQL built from strings |
+- `FAST001`, `FAST002`, `FAST003`: redundant response model, dependency
+  `Annotated`, and missing path parameter.
+- `ASYNC210`, `ASYNC230`, `ASYNC240`, `ASYNC251`: blocking HTTP, file, path,
+  and sleep operations in async functions.
+- `B008`: function calls in defaults; FastAPI parameter constructors are
+  configured as immutable calls.
+- `ANN001`, `ANN201`: missing parameter and return annotations.
+- `S113`, `S501`, `S608`: missing HTTP timeouts, disabled certificate checks,
+  and SQL built from strings.
 
 The sample targets Python 3.12 and requires Ruff 0.16 or newer. FastAPI and
 Pydantic stay in the consuming application's dependency set; the static
@@ -104,15 +106,15 @@ characters, including `/`, and `?` matches one character.
 
 The deterministic rule IDs are:
 
-| Rule ID suffix | Finding |
-| --- | --- |
-| `correctness/duplicate-route` | Duplicate registered method and path |
-| `metadata/missing-operation-id` | OpenAPI operation without an ID |
-| `metadata/duplicate-operation-id` | ID repeated across operations |
-| `validation/missing-response-contract` | Configured operation has no typed 2xx response schema |
-| `metadata/missing-route-metadata` | Configured summary, description, or tags are absent from OpenAPI |
-| `security/missing-openapi-security` | A configured protected path lacks an OpenAPI security requirement |
-| `validation/openapi-breaking-change` | The configured compatibility tool found a breaking difference |
+| Rule ID suffix                         | Finding                                                           |
+| -------------------------------------- | ----------------------------------------------------------------- |
+| `correctness/duplicate-route`          | Duplicate registered method and path                              |
+| `metadata/missing-operation-id`        | OpenAPI operation without an ID                                   |
+| `metadata/duplicate-operation-id`      | ID repeated across operations                                     |
+| `validation/missing-response-contract` | Configured operation has no typed 2xx response schema             |
+| `metadata/missing-route-metadata`      | Configured summary, description, or tags are absent from OpenAPI  |
+| `security/missing-openapi-security`    | A configured protected path lacks an OpenAPI security requirement |
+| `validation/openapi-breaking-change`   | The configured compatibility tool found a breaking difference     |
 
 The duplicate route and operation ID checks run whenever `application` is
 configured. Response schema, metadata, and protected-route checks are opt-in
@@ -192,3 +194,35 @@ compatibility; it is not generated or approved automatically.
 The route implementation and fixtures are optional: core Alphus installs
 without FastAPI, Starlette, or HTTPX. The existing reusable Ruff profile stays
 read-only and does not change global Ruff configuration or add hosted CI jobs.
+
+## Selection boundaries
+
+The checks described above are the selected rules in the current FastAPI
+profile. The proposed FAPI identifiers below are not additional Alphus rules;
+there is no implicit finding when their conditions are not checked:
+
+- **FAPI106, blocking I/O in async endpoints:** the consumer Ruff example
+  enables selected native `ASYNC` checks. They recognize known calls and do
+  not prove that wrappers or project-specific helpers are nonblocking.
+- **FAPI107, database-session lifetime and sharing:** there is no static
+  session-safety rule. The sample verifies one `yield` dependency cleanup
+  path; consumers need database-specific concurrency and transaction tests.
+- **FAPI109, documented error-response consistency:** Alphus has no universal
+  error-response policy. Consumers can require response contracts and compare
+  an approved OpenAPI baseline, but must define which error responses apply to
+  each operation.
+- **FAPI110, import-time external resources:** importing a configured
+  application executes consumer code. Alphus documents that boundary but does
+  not guess which top-level calls open external resources.
+- **FAPI111, HTTP and business-logic layer boundaries:** the generic
+  `package-boundaries` check can enforce a consumer-declared package graph.
+  Alphus does not impose a FastAPI-specific service/repository architecture.
+- **FAPI112, production CORS and debug settings:** these settings depend on the
+  deployment environment. Alphus does not infer a production policy from an
+  app object without an explicit consumer policy.
+
+These proposals are not part of the selected profile and do not claim coverage.
+The current deliverable remains opt-in, deterministic for its configured
+checks, optional-dependency safe, and covered by fixtures for implemented
+rules. A future request to adopt one of these checks needs its consumer policy,
+evidence boundary, and positive/negative fixtures defined first.
