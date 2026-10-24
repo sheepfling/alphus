@@ -34,7 +34,7 @@ class WorkerRequest(StrictModel):
     expected_plan: CyclomaticBackendPlan | None = None
 
     @model_validator(mode="after")
-    def validate_variant(self) -> WorkerRequest:
+    def validate_variant(self) -> Self:
         if self.kind == "rule":
             if self.rule is None or self.language is not None or self.expected_plan:
                 raise ValueError("rule worker request has invalid fields")

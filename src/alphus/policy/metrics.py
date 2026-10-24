@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from typing import Annotated, Literal
 
 from packaging.version import InvalidVersion, Version
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, field_validator
 
 from alphus.contracts.findings import Severity
 from alphus.policy.base import StrictModel, require_unique
@@ -99,9 +99,3 @@ class CyclomaticComplexityPolicy(StrictModel):
             "cyclomatic backends must select each language at most once",
         )
         return tuple(backends)
-
-    @model_validator(mode="after")
-    def validate_language_backend_pairs(self) -> CyclomaticComplexityPolicy:
-        # The discriminated models deliberately encode the supported pairs:
-        # Python/Ruff, C or C++/Lizard, and JavaScript/ESLint.
-        return self

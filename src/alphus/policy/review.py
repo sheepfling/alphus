@@ -5,15 +5,17 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Sequence
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, field_validator, model_validator
 
+from alphus.contracts.findings import Severity
 from alphus.policy.base import (
     StrictModel,
     require_unique,
     validate_one_line_message,
     validate_patterns,
+    validate_single_path,
 )
 from alphus.policy.sources import PythonSourceScanPolicy
 
@@ -62,7 +64,7 @@ class NumericLiteralPolicy(PythonSourceScanPolicy):
     constants: tuple[NumericLiteralSpec, ...] = ()
 
     @model_validator(mode="after")
-    def validate_constant_names(self) -> NumericLiteralPolicy:
+    def validate_constant_names(self) -> Self:
         require_unique(
             tuple(spec.name for spec in self.constants),
             "numeric catalog names must be unique",
@@ -79,7 +81,7 @@ class ScipyConstantsPolicy(PythonSourceScanPolicy):
     constants: tuple[NumericLiteralSpec, ...] = ()
 
     @model_validator(mode="after")
-    def validate_constant_names(self) -> ScipyConstantsPolicy:
+    def validate_constant_names(self) -> Self:
         require_unique(
             tuple(spec.name for spec in self.constants),
             "SciPy catalog names must be unique",
@@ -87,8 +89,36 @@ class ScipyConstantsPolicy(PythonSourceScanPolicy):
         return self
 
 
+class TestQualityExclusion(StrictModel):
+    """One documented test excluded from shared-oracle review."""
+
+    path: str
+    test_function: str
+    reason: str
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, value: str) -> str:
+        return validate_single_path(value, "oracle exclusion paths")
+
+    @field_validator("test_function")
+    @classmethod
+    def validate_test_function(cls, value: str) -> str:
+        if any(not part.isidentifier() for part in value.split(".")):
+            raise ValueError("test_function must be a dotted Python identifier")
+        return value
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, value: str) -> str:
+        reason = validate_one_line_message(value)
+        if len(reason) < 20:
+            raise ValueError("oracle exclusion reasons must be at least 20 characters")
+        return reason
+
+
 class TestQualityPolicy(PythonSourceScanPolicy):
-    """Advisory checks for exact prose assertions and declared transient documents."""
+    """Advisory checks for brittle test contracts and declared transient inputs."""
 
     test_paths: tuple[str, ...] = (
         "tests/**",
@@ -99,11 +129,44 @@ class TestQualityPolicy(PythonSourceScanPolicy):
     large_prose_min_chars: Annotated[int, Field(gt=0)] = 300
     large_prose_min_words: Annotated[int, Field(gt=0)] = 50
     ephemeral_document_patterns: tuple[str, ...] = ()
+    oracle_independence: bool = False
+    oracle_production_modules: tuple[str, ...] = ()
+    oracle_helper_allowlist: tuple[str, ...] = ()
+    oracle_exclusions: tuple[TestQualityExclusion, ...] = ()
 
     @field_validator("test_paths", "ephemeral_document_patterns")
     @classmethod
     def validate_scope(cls, values: Sequence[str]) -> tuple[str, ...]:
         return validate_patterns(values)
+
+    @field_validator("oracle_exclusions")
+    @classmethod
+    def validate_oracle_exclusions(
+        cls, values: Sequence[TestQualityExclusion]
+    ) -> tuple[TestQualityExclusion, ...]:
+        exclusions = tuple(values)
+        keys = tuple((item.path, item.test_function) for item in exclusions)
+        require_unique(keys, "oracle test exclusions must be unique")
+        return exclusions
+
+    @field_validator("oracle_production_modules", "oracle_helper_allowlist")
+    @classmethod
+    def validate_oracle_names(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not value or any(not part.isidentifier() for part in value.split("."))
+            for value in values
+        ):
+            raise ValueError("oracle names must be dotted Python identifiers")
+        require_unique(values, "oracle names must be unique")
+        return tuple(values)
+
+    @model_validator(mode="after")
+    def require_oracle_modules_when_enabled(self) -> Self:
+        if self.oracle_independence and not self.oracle_production_modules:
+            raise ValueError(
+                "oracle_production_modules is required when oracle_independence is enabled"
+            )
+        return self
 
 
 class InputContractPolicy(PythonSourceScanPolicy):
@@ -111,6 +174,21 @@ class InputContractPolicy(PythonSourceScanPolicy):
 
     report_mutation: bool = True
     suggest_read_only: bool = True
+    sequence_narrowing_paths: tuple[str, ...] = ()
+
+    @field_validator("sequence_narrowing_paths")
+    @classmethod
+    def validate_sequence_narrowing_paths(
+        cls, patterns: Sequence[str]
+    ) -> tuple[str, ...]:
+        return validate_patterns(patterns)
+
+
+class PositionalInterfacePolicy(PythonSourceScanPolicy):
+    """Opt-in advisory for directly annotated, same-type positional parameters."""
+
+    severity: Severity = "info"
+    report_same_type_primitives: bool = True
 
 
 class PydanticPracticePolicy(PythonSourceScanPolicy):
@@ -165,7 +243,7 @@ class FastApiPracticePolicy(PythonSourceScanPolicy):
     check_http_exception_detail_codes: bool = False
 
     @model_validator(mode="after")
-    def validate_error_code_calls(self) -> FastApiPracticePolicy:
+    def validate_error_code_calls(self) -> Self:
         require_unique(
             tuple(spec.call for spec in self.error_code_calls),
             "error-code calls must be unique",

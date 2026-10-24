@@ -81,7 +81,7 @@ def _invoke_worker(request: WorkerRequest, timeout: int | None) -> WorkerRespons
 
 
 def _invoke_command(
-    argv: tuple[str, ...], directory: Path, timeout: int | None
+    argv: tuple[str, ...], directory: Path, timeout: int | float | None
 ) -> subprocess.CompletedProcess[str]:
     return run_captured_process(
         argv,

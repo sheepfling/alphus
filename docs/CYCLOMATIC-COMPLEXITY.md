@@ -71,11 +71,16 @@ records are collapsed deterministically.
 These backends share an inclusive maximum (`value > maximum` fails), not a
 promise that they count every construct identically:
 
-| Language | Backend | Gate or count method | Variant and limits |
-| --- | --- | --- | --- |
-| Python | Ruff C901 | Native McCabe threshold gate | Uses `lint.mccabe.max-complexity`; numeric values for passing functions are unavailable. Ruff parser errors fail the run. |
-| C/C++ | Lizard Python API | Numeric `cyclomatic_complexity` function records | `standard` uses default Lizard counting; `modified` selects Lizard's `mccabe` extension, which treats consecutive switch cases differently. It does not expand preprocessor macros or use compiler/template semantics. |
-| JavaScript | ESLint `complexity` | Native threshold gate | `classic` and `modified` are explicit rule options. The adapter runs with config lookup disabled, so project plugins and other ESLint rules are outside this check. |
+- Python uses Ruff C901 as a native McCabe threshold gate. It sets
+  `lint.mccabe.max-complexity`; numeric values for passing functions are
+  unavailable. Ruff parser errors fail the run.
+- C/C++ uses Lizard's Python API for numeric `cyclomatic_complexity` function
+  records. `standard` uses default counting; `modified` selects the `mccabe`
+  extension, which treats consecutive switch cases differently. It does not
+  expand preprocessor macros or use compiler/template semantics.
+- JavaScript uses ESLint's native `complexity` threshold gate. `classic` and
+  `modified` are explicit rule options. The adapter disables config lookup,
+  so project plugins and other ESLint rules are outside this check.
 
 Ruff C901 is derived from McCabe complexity. ESLint's classic and modified
 variants have different switch, optional-chain, and default-initializer
