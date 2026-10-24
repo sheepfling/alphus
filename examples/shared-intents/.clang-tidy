@@ -1,0 +1,4 @@
+Checks: '-*,readability-function-size'
+CheckOptions:
+  - key: readability-function-size.BranchThreshold
+    value: '6'
