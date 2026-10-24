@@ -16,6 +16,8 @@ class WorkUnit:
     slots: int = 1
     locks: tuple[str, ...] = ()
     after: tuple[str, ...] = ()
+    dispatch_priority: int = 0
+    previously_failed: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,7 +34,7 @@ def run_work_units(
     *,
     completed: frozenset[str] = frozenset(),
 ) -> dict[str, WorkOutcome]:
-    """Schedule ready units in declared order and retain every outcome."""
+    """Schedule ready units by failure history and priority; retain every outcome."""
     if max_jobs < 1:
         raise ValueError("max_jobs must be positive")
     keys = [unit.key for unit in units]
@@ -45,7 +47,11 @@ def run_work_units(
         if set(unit.after) - available:
             raise ValueError(f"work unit {unit.key!r} has unknown prerequisites")
 
-    pending = list(units)
+    # Sort only dispatch candidates; results are reduced in declared profile order.
+    pending = sorted(
+        units,
+        key=lambda unit: (-int(unit.previously_failed), -unit.dispatch_priority),
+    )
     finished: dict[str, WorkOutcome] = {}
     running: dict[Future[object], WorkUnit] = {}
     held_locks: set[str] = set()

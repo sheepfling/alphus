@@ -101,6 +101,7 @@ class RuleRunStep(StrictModel):
     priority: RemediationPriority | None = None
     rollout: Literal["mainline", "provisional"] = "mainline"
     parallel: bool = False
+    dispatch_priority: Annotated[int, Field(ge=-100, le=100)] = 0
     slots: Annotated[int, Field(ge=1)] = 1
     locks: tuple[str, ...] = ()
     after: tuple[str, ...] = ()
@@ -133,6 +134,7 @@ class CommandRunStep(StrictModel):
     files: FileInventoryPolicy | None = None
     rollout: Literal["mainline", "provisional"] = "mainline"
     parallel: bool = False
+    dispatch_priority: Annotated[int, Field(ge=-100, le=100)] = 0
     slots: Annotated[int, Field(ge=1)] = 1
     locks: tuple[str, ...] = ()
     after: tuple[str, ...] = ()
@@ -252,6 +254,7 @@ class ExecutionPolicy(StrictModel):
     """Bounded process concurrency for an opted-in profile."""
 
     max_jobs: Annotated[int, Field(ge=1, le=64)] = 1
+    prioritize_previous_failures: bool = False
 
 
 class OrchestrationPolicy(StrictModel):

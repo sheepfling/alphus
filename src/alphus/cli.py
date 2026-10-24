@@ -35,6 +35,7 @@ from alphus.execution.fixes import apply_fixes as apply_configured_fixes
 from alphus.execution.fixes import resolve_fix_plan
 from alphus.execution.orchestration import RuleRunResult, run_orchestration
 from alphus.execution.parallel import run_parallel_cyclomatic
+from alphus.execution.profile_history import latest_profile_record
 from alphus.execution.results import RuleEvaluation
 from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
 from alphus.gates.source.cyclomatic_complexity import (
@@ -693,6 +694,7 @@ def _execute_profile(
     json_output: bool,
     verbose: bool,
     jobs: int | None = None,
+    history_dir: Path | None = None,
 ) -> int:
     """Run the configured suite through the Python orchestration layer."""
     checkout = root.resolve(strict=True)
@@ -732,6 +734,7 @@ def _execute_profile(
         jobs=jobs,
         verbose=verbose,
         config=config,
+        history_dir=history_dir,
         stdout=(
             cast(TextIO, _HumanStream())
             if _OUTPUT_FORMAT.get() == "rich" and not json_output
@@ -743,6 +746,57 @@ def _execute_profile(
             else sys.stderr
         ),
     )
+
+
+def _execute_history(
+    root: Path,
+    config_path: Path,
+    profile_name: str | None,
+    history_dir: Path,
+    json_output: bool,
+) -> int:
+    """Show the latest saved result and its failed steps without rerunning gates."""
+    checkout = root.resolve(strict=True)
+    resolved_config = (
+        config_path if config_path.is_absolute() else checkout / config_path
+    )
+    config = _load_policy(resolved_config)
+    policy = config.orchestration
+    if policy is None:
+        _human_error("The selected policy has no [orchestration] section.")
+        return 2
+    selected_profile = profile_name or policy.default_profile
+    if policy.resolve_profile(selected_profile) is None:
+        _human_error(f"Unknown orchestration profile: {selected_profile}")
+        return 2
+    try:
+        record = latest_profile_record(history_dir, checkout, selected_profile)
+    except (OSError, ValueError) as error:
+        _human_error(f"Cannot read profile history: {error}")
+        return 2
+    if record is None:
+        _human_error(
+            f"No saved result for profile {selected_profile!r} in {history_dir}"
+        )
+        return 2
+    if json_output:
+        typer.echo(record.model_dump_json())
+    else:
+        _human_print(
+            f"Latest {selected_profile} result: {record.total_steps} steps, "
+            f"{record.passed} passed, {record.failed} failed, "
+            f"{record.provisional_passed} provisional passed, "
+            f"{record.provisional_failed} provisional failed, "
+            f"{record.not_applicable} not applicable "
+            f"({record.completed_at_utc})"
+        )
+        _human_print(f"Revision: {record.revision or 'unavailable'}")
+        if record.failed_steps:
+            for name in record.failed_steps:
+                _human_print(f"FAILED {name}")
+        else:
+            _human_print("No failed steps.")
+    return 0
 
 
 def _execute_fix_profile(
@@ -855,7 +909,13 @@ def _execute_plan_profile(
             step = by_name[entry.name]
             detail = step.model_dump(mode="json", exclude_none=True)
             if not step.parallel:
-                for field_name in ("parallel", "slots", "locks", "after"):
+                for field_name in (
+                    "parallel",
+                    "dispatch_priority",
+                    "slots",
+                    "locks",
+                    "after",
+                ):
                     detail.pop(field_name, None)
             detail["fixable"] = entry.fixable
             if step.kind == "command":
@@ -939,6 +999,18 @@ def _command(
         int | None,
         typer.Option("--jobs", help="Maximum concurrent quality work units."),
     ] = None,
+    history_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--history-dir",
+            envvar="ALPHUS_PROFILE_HISTORY_DIR",
+            help="Append immutable profile JSON records here.",
+        ),
+    ] = None,
+    show_history: Annotated[
+        bool,
+        typer.Option("--show-history", help="Show the latest saved profile result."),
+    ] = False,
     json_output: Annotated[
         bool,
         typer.Option("--json", help="Emit one plain JSON value on stdout."),
@@ -1014,6 +1086,8 @@ def _command(
                 apply_fixes,
                 bool(fix_step),
                 jobs is not None,
+                history_dir is not None,
+                show_history,
             )
         ):
             raise typer.BadParameter("--init-config cannot run or plan checks")
@@ -1042,6 +1116,26 @@ def _command(
         raise typer.BadParameter(
             "--add-language, --add-tool, and --overwrite-config require --init-config"
         )
+    if show_history:
+        if history_dir is None:
+            raise typer.BadParameter("--show-history requires --history-dir")
+        if any(
+            (
+                run,
+                rule is not None,
+                report,
+                verbose,
+                plan,
+                fix_plan,
+                apply_fixes,
+                bool(fix_step),
+                jobs is not None,
+            )
+        ):
+            raise typer.BadParameter("--show-history cannot run or plan checks")
+        raise typer.Exit(
+            _execute_history(root, config, profile, history_dir, json_output)
+        )
     if plan and rule == "cyclomatic-complexity":
         if (
             fix_plan
@@ -1051,6 +1145,7 @@ def _command(
             or report
             or verbose
             or fix_step
+            or history_dir is not None
         ):
             raise typer.BadParameter(
                 "cyclomatic --plan cannot be combined with run, report, verbose, or fix options"
@@ -1067,6 +1162,7 @@ def _command(
             or report
             or verbose
             or fix_step
+            or history_dir is not None
         ):
             raise typer.BadParameter(
                 "--plan cannot be combined with run, rule, report, verbose, or fix options"
@@ -1075,8 +1171,10 @@ def _command(
             _execute_plan_profile(root, config, profile, json_output, jobs)
         )
     if fix_plan or apply_fixes:
-        if jobs is not None:
-            raise typer.BadParameter("--jobs cannot be combined with fix operations")
+        if jobs is not None or history_dir is not None:
+            raise typer.BadParameter(
+                "--jobs and --history-dir cannot be combined with fix operations"
+            )
         if fix_plan and apply_fixes:
             raise typer.BadParameter("choose --fix-plan or --apply-fixes")
         if run or rule is not None or report or verbose:
@@ -1091,9 +1189,9 @@ def _command(
     if fix_step:
         raise typer.BadParameter("--fix-step requires --apply-fixes")
     if rule is not None:
-        if run or profile is not None:
+        if run or profile is not None or history_dir is not None:
             raise typer.BadParameter(
-                "--rule cannot be combined with --run or --profile"
+                "--rule cannot be combined with --run, --profile, or --history-dir"
             )
         raise typer.Exit(
             _execute(root, config, rule, json_output, report, verbose, jobs=jobs)
@@ -1101,7 +1199,7 @@ def _command(
     if report:
         raise typer.BadParameter("--report requires --rule")
     raise typer.Exit(
-        _execute_profile(root, config, profile, json_output, verbose, jobs)
+        _execute_profile(root, config, profile, json_output, verbose, jobs, history_dir)
     )
 
 

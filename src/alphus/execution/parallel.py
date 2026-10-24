@@ -154,6 +154,7 @@ def run_parallel_steps(
     max_jobs: int,
     *,
     verbose: bool = False,
+    previously_failed: frozenset[str] = frozenset(),
 ) -> dict[str, StepExecution]:
     """Run one contiguous parallel profile block with a shared worker budget."""
     tasks: list[WorkUnit] = []
@@ -211,6 +212,8 @@ def run_parallel_steps(
                     slots=step.slots,
                     locks=step.locks,
                     after=dependencies,
+                    dispatch_priority=step.dispatch_priority,
+                    previously_failed=step.name in previously_failed,
                 )
             )
             continue
@@ -237,6 +240,8 @@ def run_parallel_steps(
                         slots=step.slots,
                         locks=step.locks,
                         after=dependencies,
+                        dispatch_priority=step.dispatch_priority,
+                        previously_failed=step.name in previously_failed,
                     )
                 )
             continue
@@ -255,6 +260,8 @@ def run_parallel_steps(
                 slots=step.slots,
                 locks=step.locks,
                 after=dependencies,
+                dispatch_priority=step.dispatch_priority,
+                previously_failed=step.name in previously_failed,
             )
         )
 

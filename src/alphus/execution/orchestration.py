@@ -43,6 +43,11 @@ from alphus.execution.commands import (
 )
 from alphus.execution.parallel import StepExecution, run_parallel_steps
 from alphus.execution.processes import run_captured_process
+from alphus.execution.profile_history import (
+    capture_profile_context,
+    latest_profile_record,
+    write_profile_record,
+)
 from alphus.execution.profile_reporting import ProfileReporter
 from alphus.execution.step_results import RuleRunResult
 from alphus.support.inventory import candidate_files
@@ -142,6 +147,7 @@ def run_orchestration(
     jobs: int | None = None,
     verbose: bool = False,
     config: QualityGateConfig | None = None,
+    history_dir: Path | None = None,
 ) -> int:
     """Run every configured profile step and summarize all outcomes."""
     checkout = root.resolve(strict=True)
@@ -159,6 +165,31 @@ def run_orchestration(
     if not 1 <= max_jobs <= 64:
         reporter.error("--jobs must be between 1 and 64")
         return ExitCode.CONFIG_ERROR
+    if policy.execution.prioritize_previous_failures and history_dir is None:
+        reporter.error("previous failure priority requires --history-dir")
+        return ExitCode.CONFIG_ERROR
+    history_context = None
+    previous_failures: frozenset[str] = frozenset()
+    if history_dir is not None:
+        try:
+            loaded_config = (
+                config if config is not None else load_config(resolved_config)
+            )
+            history_context = capture_profile_context(
+                checkout, profile_name, loaded_config
+            )
+            if policy.execution.prioritize_previous_failures:
+                previous = latest_profile_record(
+                    history_dir,
+                    checkout,
+                    profile_name,
+                    config_sha256=history_context.config_sha256,
+                )
+                if previous is not None:
+                    previous_failures = frozenset(previous.failed_steps)
+        except (OSError, ValueError) as error:
+            reporter.error(f"Cannot read profile history: {error}")
+            return ExitCode.CONFIG_ERROR
     selected_steps = {step.name: step for step in policy.steps}
     parallel_results: dict[str, StepExecution] = {}
 
@@ -194,6 +225,7 @@ def run_orchestration(
                         block,
                         max_jobs,
                         verbose=verbose,
+                        previously_failed=previous_failures,
                     )
                 )
             except (OSError, ValueError) as error:
@@ -481,7 +513,8 @@ def run_orchestration(
         completed - failed - provisional_passed - provisional_failed - not_applicable
     )
     exit_code = ExitCode.QUALITY_FAILURE if failed else ExitCode.SUCCESS
-    if json_output:
+    payload = None
+    if json_output or history_context is not None:
         result = OrchestrationResult(
             profile_name,
             passed,
@@ -518,6 +551,28 @@ def run_orchestration(
             }
         if profile.includes:
             payload["profiles"] = plan.profiles
+    if history_context is not None and payload is not None and history_dir is not None:
+        try:
+            saved = write_profile_record(
+                history_dir,
+                history_context,
+                result=payload,
+                total_steps=len(results),
+                passed=passed,
+                failed=failed,
+                provisional_passed=provisional_passed,
+                provisional_failed=provisional_failed,
+                not_applicable=not_applicable,
+                exit_code=exit_code,
+                failed_steps=tuple(
+                    step.name for step in results if step.status == "failed"
+                ),
+            )
+        except (OSError, ValueError) as error:
+            reporter.error(f"Cannot write profile history: {error}")
+            return ExitCode.CONFIG_ERROR
+        errors.write(f"history={saved}\n")
+    if json_output and payload is not None:
         reporter.info(json.dumps(payload, sort_keys=True))
     else:
         summary = f"Quality profile {profile_name}: {passed} passed, {failed} failed"
