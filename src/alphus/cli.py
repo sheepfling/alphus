@@ -37,7 +37,14 @@ from alphus.execution.fixes import apply_fixes as apply_configured_fixes
 from alphus.execution.fixes import resolve_fix_plan
 from alphus.execution.orchestration import RuleRunResult, run_orchestration
 from alphus.execution.parallel import run_parallel_cyclomatic
-from alphus.execution.profile_history import latest_profile_record
+from alphus.execution.profile_analysis import (
+    rollup_profile_history,
+    summarize_profile_entry,
+)
+from alphus.execution.profile_history import (
+    iter_profile_records,
+    latest_profile_record,
+)
 from alphus.execution.results import RuleEvaluation, RuleOutput
 from alphus.execution.scheduler import WorkUnit, run_work_units
 from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
@@ -765,6 +772,7 @@ def _execute_profile(
     verbose: bool,
     jobs: int | None = None,
     history_dir: Path | None = None,
+    consumer_id: str | None = None,
 ) -> int:
     """Run the configured suite through the Python orchestration layer."""
     checkout = root.resolve(strict=True)
@@ -805,6 +813,7 @@ def _execute_profile(
         verbose=verbose,
         config=config,
         history_dir=history_dir,
+        consumer_id=consumer_id,
         stdout=(
             cast(TextIO, _HumanStream())
             if _OUTPUT_FORMAT.get() == "rich" and not json_output
@@ -824,6 +833,7 @@ def _execute_history(
     profile_name: str | None,
     history_dir: Path,
     json_output: bool,
+    consumer_id: str | None = None,
 ) -> int:
     """Show the latest saved result and its failed steps without rerunning gates."""
     checkout = root.resolve(strict=True)
@@ -840,7 +850,9 @@ def _execute_history(
         _human_error(f"Unknown orchestration profile: {selected_profile}")
         return 2
     try:
-        record = latest_profile_record(history_dir, checkout, selected_profile)
+        record = latest_profile_record(
+            history_dir, checkout, selected_profile, consumer_id=consumer_id
+        )
     except (OSError, ValueError) as error:
         _human_error(f"Cannot read profile history: {error}")
         return 2
@@ -867,6 +879,63 @@ def _execute_history(
         else:
             _human_print("No failed steps.")
     return 0
+
+
+def _execute_history_report(
+    history_dir: Path,
+    report: str,
+    profile: str | None,
+    consumer_id: str | None,
+    json_output: bool,
+) -> int:
+    """Index or roll up validated archive records without rerunning checks."""
+    entries = iter_profile_records(
+        history_dir, profile=profile, consumer_id=consumer_id
+    )
+    if report == "runs":
+        try:
+            rows = tuple(summarize_profile_entry(entry) for entry in entries)
+        except (OSError, ValueError) as error:
+            _human_error(f"Cannot read profile history: {error}")
+            return ExitCode.CONFIG_ERROR
+        if json_output:
+            typer.echo(json.dumps([row.model_dump() for row in rows], sort_keys=True))
+        else:
+            for row in rows:
+                _human_print(
+                    f"{row.completed_at_utc} {row.consumer_id or row.source_root} "
+                    f"{row.profile}: {row.passed} passed, {row.failed} failed "
+                    f"in {row.duration_seconds:.3f}s ({row.path})"
+                )
+        return ExitCode.SUCCESS
+    try:
+        rollup = rollup_profile_history(entries)
+    except (OSError, ValueError) as error:
+        _human_error(f"Cannot read profile history: {error}")
+        return ExitCode.CONFIG_ERROR
+    if json_output:
+        typer.echo(rollup.model_dump_json())
+    else:
+        _human_print(
+            f"Profile archive: {rollup.run_count} runs, "
+            f"{rollup.failed_run_count} failed runs, {len(rollup.groups)} groups"
+        )
+        for group in rollup.groups:
+            _human_print(
+                f"{group.consumer_id or group.source_roots[0]} {group.profile} "
+                f"[{group.config_sha256[:12]}]: {group.run_count} runs, "
+                f"{group.failed_run_count} failed, "
+                f"p95 {group.run_timing.p95_seconds:.3f}s"
+            )
+            slowest = sorted(
+                group.step_timings.items(),
+                key=lambda item: (-item[1].p95_seconds, item[0]),
+            )[:5]
+            for name, timing in slowest:
+                _human_print(
+                    f"  {name}: p95 {timing.p95_seconds:.3f}s over {timing.count} runs"
+                )
+    return ExitCode.SUCCESS
 
 
 def _execute_fix_profile(
@@ -1142,6 +1211,21 @@ def _command(
         bool,
         typer.Option("--show-history", help="Show the latest saved profile result."),
     ] = False,
+    history_report: Annotated[
+        str | None,
+        typer.Option(
+            "--history-report",
+            help="Read saved runs or timing rollups: runs, rollup.",
+        ),
+    ] = None,
+    consumer_id: Annotated[
+        str | None,
+        typer.Option(
+            "--consumer-id",
+            envvar="ALPHUS_CONSUMER_ID",
+            help="Stable consumer identity for saved runs or archive filtering.",
+        ),
+    ] = None,
     json_output: Annotated[
         bool,
         typer.Option("--json", help="Emit one plain JSON value on stdout."),
@@ -1208,6 +1292,14 @@ def _command(
         raise typer.BadParameter(str(error), param_hint="--output") from error
     if jobs is not None and not 1 <= jobs <= 64:
         raise typer.BadParameter("--jobs must be between 1 and 64")
+    if (
+        consumer_id is not None
+        and history_dir is not None
+        and (not consumer_id or consumer_id != consumer_id.strip())
+    ):
+        raise typer.BadParameter("--consumer-id must be nonempty and trimmed")
+    if history_report is not None and history_report not in {"runs", "rollup"}:
+        raise typer.BadParameter("--history-report must be runs or rollup")
     _OUTPUT_FORMAT.set(selected_format)
     if init_config is not None:
         if any(
@@ -1224,6 +1316,7 @@ def _command(
                 jobs is not None,
                 history_dir is not None,
                 show_history,
+                history_report is not None,
             )
         ):
             raise typer.BadParameter("--init-config cannot run or plan checks")
@@ -1255,6 +1348,29 @@ def _command(
         raise typer.BadParameter(
             "--add-language, --add-tool, and --overwrite-config require --init-config"
         )
+    if history_report is not None:
+        if history_dir is None:
+            raise typer.BadParameter("--history-report requires --history-dir")
+        if any(
+            (
+                show_history,
+                run,
+                rule is not None,
+                report,
+                verbose,
+                plan,
+                fix_plan,
+                apply_fixes,
+                bool(fix_step),
+                jobs is not None,
+            )
+        ):
+            raise typer.BadParameter("--history-report cannot run or plan checks")
+        raise typer.Exit(
+            _execute_history_report(
+                history_dir, history_report, profile, consumer_id, json_output
+            )
+        )
     if show_history:
         if history_dir is None:
             raise typer.BadParameter("--show-history requires --history-dir")
@@ -1273,7 +1389,9 @@ def _command(
         ):
             raise typer.BadParameter("--show-history cannot run or plan checks")
         raise typer.Exit(
-            _execute_history(root, config, profile, history_dir, json_output)
+            _execute_history(
+                root, config, profile, history_dir, json_output, consumer_id
+            )
         )
     if plan and rule == "cyclomatic-complexity":
         if (
@@ -1338,7 +1456,16 @@ def _command(
     if report:
         raise typer.BadParameter("--report requires --rule")
     raise typer.Exit(
-        _execute_profile(root, config, profile, json_output, verbose, jobs, history_dir)
+        _execute_profile(
+            root,
+            config,
+            profile,
+            json_output,
+            verbose,
+            jobs,
+            history_dir,
+            consumer_id if history_dir is not None else None,
+        )
     )
 
 

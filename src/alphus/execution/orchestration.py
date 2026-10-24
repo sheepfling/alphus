@@ -150,6 +150,7 @@ def run_orchestration(
     verbose: bool = False,
     config: QualityGateConfig | None = None,
     history_dir: Path | None = None,
+    consumer_id: str | None = None,
 ) -> int:
     """Run every configured profile step and summarize all outcomes."""
     checkout = root.resolve(strict=True)
@@ -170,6 +171,9 @@ def run_orchestration(
     if policy.execution.prioritize_previous_failures and history_dir is None:
         reporter.error("previous failure priority requires --history-dir")
         return ExitCode.CONFIG_ERROR
+    if consumer_id is not None and history_dir is None:
+        reporter.error("consumer identity requires --history-dir")
+        return ExitCode.CONFIG_ERROR
     history_context = None
     previous_failures: frozenset[str] = frozenset()
     if history_dir is not None:
@@ -178,7 +182,7 @@ def run_orchestration(
                 config if config is not None else load_config(resolved_config)
             )
             history_context = capture_profile_context(
-                checkout, profile_name, loaded_config
+                checkout, profile_name, loaded_config, consumer_id=consumer_id
             )
             if policy.execution.prioritize_previous_failures:
                 previous = latest_profile_record(
@@ -186,6 +190,8 @@ def run_orchestration(
                     checkout,
                     profile_name,
                     config_sha256=history_context.config_sha256,
+                    consumer_id=consumer_id,
+                    match_consumer_id=True,
                 )
                 if previous is not None:
                     previous_failures = frozenset(previous.failed_steps)

@@ -83,20 +83,47 @@ then appends one immutable JSON record under `PATH/profiles/YYYY/MM/` and prints
 its path to stderr. The archive includes the complete profile result, a digest,
 the source checkout, policy fingerprint, Git branch and revision when available,
 timestamps, wall time for each step, and execution time for each work unit.
+Set `--consumer-id ID` (or `ALPHUS_CONSUMER_ID`) when saving runs from CI or
+multiple worktrees. Use a stable, user-chosen identity such as
+`sheepfling/alphus`; the absolute checkout path is still recorded for
+provenance. New records use schema version 2 with a digest covering the timing
+and provenance envelope as well as the embedded result. Existing version 1
+records remain readable and group by their recorded checkout path.
 For a rule split across native backends, its step wall time covers the first
 backend start through the last backend finish; individual unit times may
 overlap. Ordinary runs remain read-only unless history is enabled.
 
 ```sh
-alphus --profile check --jobs 4 --history-dir /path/to/alphus-history
+alphus --profile check --jobs 4 --history-dir /path/to/alphus-history --consumer-id sheepfling/alphus
 alphus --profile check --show-history --history-dir /path/to/alphus-history
 alphus --profile check --show-history --history-dir /path/to/alphus-history --json
+alphus --history-report runs --history-dir /path/to/alphus-history --json
+alphus --history-report rollup --history-dir /path/to/alphus-history --json
 ```
 
 `--show-history` prints the latest total and outcome counts plus failed step
 names without rerunning gates. Add `--json` to read the complete saved record.
-To start steps that
-failed in the previous comparable run first, configure:
+`--history-report runs` returns compact, newest-first rows with paths to the
+complete records. `--history-report rollup` returns run failure counts and
+timing statistics for runs, steps, and work units. Both reports accept
+`--profile NAME` and `--consumer-id ID` filters, and emit a single JSON value
+with `--json`. Rollups keep different consumer identities, profiles, and
+policy fingerprints separate. They include sample counts because steps and
+work units may change between runs. The p95 is the nearest-rank sample;
+individual unit durations can overlap and must not be summed as wall time.
+
+Python consumers can call `read_profile_record(path)` to validate one record,
+`iter_profile_records(history_dir, ...)` to stream the archive, and
+`rollup_profile_history(entries)` to calculate the same report. The reader
+rejects unknown schema versions, malformed records, and result digest
+mismatches rather than silently dropping them. These reports cover profile
+archives; standalone C++ report history uses its own archive and trend API.
+To analyze records produced by separate CI jobs or consumers, collect their
+`profiles/YYYY/MM/*.json` files under one history directory before running
+the CLI report. Python callers can also combine iterators from separate
+archives and pass them to `rollup_profile_history`.
+
+To start steps that failed in the previous comparable run first, configure:
 
 ```toml
 [orchestration.execution]
@@ -105,12 +132,13 @@ prioritize_previous_failures = true
 ```
 
 That setting requires a history directory. A prior result is comparable when
-the resolved checkout, profile, and validated policy fingerprint match. All
-previously failed steps rank ahead of other eligible steps; configured
-`dispatch_priority` then breaks ties. Reporting remains in profile order.
+the resolved checkout, consumer identity, profile, and validated policy
+fingerprint match. Previously failed steps rank ahead of other eligible
+steps; configured `dispatch_priority` then breaks ties. Reporting remains in
+profile order.
 
 The worker protocol and saved records use versioned JSON. JSON matches the
 existing profile output and the repository's C++ report archives, and each
 archive is written atomically by the coordinator. No database is needed for
 one writer per profile run. CI must retain the directory as an artifact if
-later jobs should use its history.
+later jobs should use its history or analyze runs over time.
