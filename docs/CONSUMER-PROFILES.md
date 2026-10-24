@@ -434,3 +434,7 @@ reads its own config or uses its defaults. See [Composing subtools](SUBTOOLS.md)
 for the rumdl/mdrepo boundary, Taplo and Prettier config locations, and the
 read-only check and explicit fixer contracts. Command arrays can also call a
 repository wrapper when its file scope and exit status remain clear.
+For opt-in native function-shape mappings across Python, JavaScript, and C++,
+see [native function-shape policy](FUNCTION-SHAPE.md). Its dry-run mapper
+preserves backend rule IDs and count definitions without replacing consumer
+lint configuration.

@@ -43,6 +43,7 @@ from alphus.policy.sources import (
     CommentMarkerPolicy,
     FileInventoryPolicy,
     FileSizePolicy,
+    FunctionShapePolicy,
     LineLengthPolicy,
     PathDiscoveryPolicy,
     PythonStylePolicy,
@@ -81,6 +82,7 @@ class CheckPolicies(StrictModel):
     callable_registry: CallableRegistryPolicy | None = None
     dependency_locks: DependencyLockPolicy | None = None
     git: GitRepositoryPolicy | None = None
+    function_shape: FunctionShapePolicy | None = None
 
     def require_rule(self, rule: QualityRuleName) -> None:
         """Validate only the primary policy needed by a selected rule."""
