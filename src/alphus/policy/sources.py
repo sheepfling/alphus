@@ -9,7 +9,14 @@ from types import MappingProxyType
 from typing import Annotated, Final, Literal, Self, cast
 
 from packaging.version import InvalidVersion, Version
-from pydantic import AliasChoices, Field, field_validator, model_validator
+from pydantic import (
+    AliasChoices,
+    Field,
+    TypeAdapter,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from alphus.contracts.findings import Severity
 from alphus.policy.base import (
@@ -22,6 +29,9 @@ from alphus.policy.base import (
 FunctionShapeMetricName = Literal["parameters", "nesting", "statements"]
 FunctionShapeLanguage = Literal["python", "javascript", "cpp"]
 FunctionShapeBackend = Literal["ruff", "pylint", "eslint", "clang-tidy"]
+CliPresentationEnforcement = Literal["off", "advisory", "enforce"]
+# opaque-boundary: Policy validator accepts heterogeneous config fields before parsing.
+_MAPPING_INPUT: TypeAdapter[Mapping[str, object]] = TypeAdapter(Mapping[str, object])
 
 _CPP_LANGUAGE: Final = "cpp"
 _FUNCTION_SHAPE_BACKENDS_BY_LANGUAGE: Final = MappingProxyType(
@@ -700,22 +710,63 @@ class RuntimeTypePolicy(PythonSourceScanPolicy):
 
 
 class PythonCliPolicy(PythonSourceScanPolicy):
-    """Source scope and required command conventions for Python CLIs."""
+    """Source scope and selected command conventions for Python CLIs."""
 
     typer_package: str
     typer_calls: Annotated[tuple[str, ...], Field(min_length=1)]
-    rich_package: str
-    rich_calls: Annotated[tuple[str, ...], Field(min_length=1)]
+    rich_package: str | None = None
+    rich_calls: Annotated[tuple[str, ...], Field(default_factory=tuple)]
     json_option: str
     json_serializers: Annotated[tuple[str, ...], Field(min_length=1)]
     verbose_option: str
-    output_option: str = "--output"
+    renderer_enforcement: CliPresentationEnforcement | None = None
+    output_style_enforcement: CliPresentationEnforcement | None = None
+    style_option: str = "--output-style"
+    output_option: str | None = None
     rich_output: str = "rich"
     plain_output: str = "plain"
 
-    @field_validator("typer_package", "rich_package")
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_legacy_presentation_policy(cls, value: object) -> object:
+        """Keep explicit legacy selections while dropping implicit mandates."""
+        try:
+            mapping = _MAPPING_INPUT.validate_python(value)
+        except ValidationError:
+            return value
+        data = dict(mapping)
+        if data.get("renderer_enforcement") is None:
+            explicitly_selected = (
+                "rich_package" in data
+                and data.get("rich_package") is not None
+                and "rich_calls" in data
+                and bool(data.get("rich_calls"))
+            )
+            data["renderer_enforcement"] = "enforce" if explicitly_selected else "off"
+        if data.get("output_style_enforcement") is None:
+            legacy_selector = any(
+                name in data
+                for name in ("output_option", "rich_output", "plain_output")
+            )
+            data["output_style_enforcement"] = "enforce" if legacy_selector else "off"
+        if "style_option" not in data and any(
+            name in data for name in ("output_option", "rich_output", "plain_output")
+        ):
+            data["style_option"] = data.get("output_option", "--output")
+        return data
+
+    @field_validator("typer_package")
     @classmethod
     def validate_import_packages(cls, name: str) -> str:
+        if any(not segment.isidentifier() for segment in name.split(".")):
+            raise ValueError("CLI package names must be dotted Python identifiers")
+        return name
+
+    @field_validator("rich_package")
+    @classmethod
+    def validate_rich_package(cls, name: str | None) -> str | None:
+        if name is None:
+            return None
         if any(not segment.isidentifier() for segment in name.split(".")):
             raise ValueError("CLI package names must be dotted Python identifiers")
         return name
@@ -727,9 +778,11 @@ class PythonCliPolicy(PythonSourceScanPolicy):
             raise ValueError("CLI call names must be Python identifiers")
         return tuple(names)
 
-    @field_validator("json_option", "verbose_option", "output_option")
+    @field_validator("json_option", "verbose_option", "style_option", "output_option")
     @classmethod
-    def validate_cli_options(cls, option: str) -> str:
+    def validate_cli_options(cls, option: str | None) -> str | None:
+        if option is None:
+            return None
         if not option.startswith("--") or any(
             character.isspace() for character in option
         ):
@@ -744,9 +797,19 @@ class PythonCliPolicy(PythonSourceScanPolicy):
         return style
 
     @model_validator(mode="after")
-    def validate_distinct_output_styles(self) -> Self:
+    def validate_presentation_policy(self) -> Self:
         if self.rich_output.casefold() == self.plain_output.casefold():
             raise ValueError("Rich and plain CLI output styles must differ")
+        if self.renderer_enforcement != "off" and (
+            self.rich_package is None or not self.rich_calls
+        ):
+            raise ValueError(
+                "renderer enforcement requires rich_package and rich_calls"
+            )
+        if self.output_option is not None and self.output_option != self.style_option:
+            raise ValueError(
+                "legacy output_option conflicts with the selected style_option"
+            )
         return self
 
 

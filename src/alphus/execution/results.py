@@ -17,6 +17,7 @@ from alphus.contracts.findings import (
 )
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
+from alphus.gates.source.cli_policy import CliPolicyReport
 from alphus.gates.source.cyclomatic_complexity import CyclomaticReport
 from alphus.gates.source.python_style import StyleFindings
 from alphus.policy.base import QualityRuleName
@@ -25,6 +26,7 @@ from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
 RuleOutput: TypeAlias = (
     list[Finding]
     | list[str]
+    | CliPolicyReport
     | dict[str, StyleFindings]
     | SharedUtilitiesReport
     | CyclomaticReport
@@ -59,6 +61,9 @@ _SHARED_REPORT: TypeAdapter[SharedUtilitiesReport] = TypeAdapter(SharedUtilities
 _CYCLOMATIC_WIRE: TypeAdapter[_CyclomaticWire] = TypeAdapter(_CyclomaticWire)
 _ADVISORY_STYLE_CATEGORIES = frozenset({"opaque_mappings", "unnamed_tuple_returns"})
 _STYLE_COMPATIBILITY_ONLY_CATEGORIES = frozenset({"concrete_self_returns"})
+_CLI_PRESENTATION_RULE_ID = rule_tag(
+    Scope.PYTHON, Framework.NONE, Category.STYLE, "cli-presentation-policy"
+)
 
 _MESSAGE_RULE_IDS: Mapping[QualityRuleName, str] = MappingProxyType(
     {
@@ -87,9 +92,53 @@ def _message_diagnostics(
         raise ValueError(
             f"no diagnostic tag registered for message rule {rule!r}"
         ) from error
+    output: list[Diagnostic] = []
+    for message in messages:
+        inconclusive = "[presentation:inconclusive] "
+        if rule == "cli" and message.startswith(inconclusive):
+            output.append(
+                Diagnostic(
+                    source="alphus",
+                    rule_id=_CLI_PRESENTATION_RULE_ID,
+                    message=message,
+                    severity="info",
+                )
+            )
+            continue
+        marker = "[presentation:"
+        if rule == "cli" and message.startswith(marker):
+            closing = message.find("] ", len(marker))
+            severity_text = message[len(marker) : closing] if closing >= 0 else ""
+            if severity_text in {"warning", "error"} and closing >= 0:
+                severity: Severity = (
+                    "warning" if severity_text == "warning" else "error"
+                )
+                output.append(
+                    Diagnostic(
+                        source="alphus",
+                        rule_id=_CLI_PRESENTATION_RULE_ID,
+                        message=message,
+                        severity=severity,
+                    )
+                )
+                continue
+        output.append(Diagnostic(source="alphus", rule_id=rule_id, message=message))
+    return output
+
+
+def _cli_policy_diagnostics(report: CliPolicyReport) -> list[Diagnostic]:
     return [
-        Diagnostic(source="alphus", rule_id=rule_id, message=message)
-        for message in messages
+        Diagnostic(
+            source="alphus",
+            rule_id=(
+                _CLI_PRESENTATION_RULE_ID
+                if finding.classification == "presentation"
+                else _MESSAGE_RULE_IDS["cli"]
+            ),
+            message=finding.to_legacy_message(),
+            severity=finding.severity,
+        )
+        for finding in report.findings
     ]
 
 
@@ -187,6 +236,8 @@ def diagnostics_from_output(
     if shape is RuleOutputShape.FINDINGS:
         return [item.as_diagnostic() for item in _FINDINGS.validate_python(output)]
     if shape is RuleOutputShape.MESSAGES:
+        if rule == "cli" and isinstance(output, CliPolicyReport):
+            return _cli_policy_diagnostics(output)
         return _message_diagnostics(rule, _MESSAGES.validate_python(output))
     if shape is RuleOutputShape.PYTHON_STYLE:
         payload = _PYTHON_STYLE.validate_python(output)
@@ -243,12 +294,29 @@ class RuleEvaluation:
         cls, rule: QualityRuleName, output: RuleOutput, threshold: Severity
     ) -> Self:
         diagnostics = diagnostics_from_output(rule, output)
+        nonfatal_cli_messages: set[str] = set()
+        if rule == "cli" and isinstance(output, CliPolicyReport):
+            nonfatal_cli_messages = {
+                finding.to_legacy_message()
+                for finding in output.findings
+                if finding.evidence == "unresolved"
+            }
+        elif rule == "cli" and isinstance(output, list):
+            for message in output:
+                match message:
+                    case str() as legacy_message if legacy_message.startswith(
+                        "[presentation:inconclusive] "
+                    ):
+                        nonfatal_cli_messages.add(legacy_message)
+                    case _:
+                        pass
         return cls(
             rule=rule,
             output=output,
             diagnostics=diagnostics,
             failed=any(
                 severity_meets_threshold(diagnostic.severity, threshold)
+                and diagnostic.message not in nonfatal_cli_messages
                 for diagnostic in diagnostics
             ),
         )

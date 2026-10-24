@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 import typer
 from rich.console import Console
@@ -25,7 +25,8 @@ from alphus.execution.history_index import (
 app = typer.Typer(help="Analyze verified Alphus archives across consumers.")
 JsonOption = Annotated[bool, typer.Option("--json", help="Emit one JSON value.")]
 OutputOption = Annotated[
-    str, typer.Option("--output", help="Output: auto, plain, rich, or json.")
+    Literal["auto", "plain", "rich", "json"],
+    typer.Option("--output", help="Output: auto, plain, rich, or json."),
 ]
 VerboseOption = Annotated[
     bool, typer.Option("--verbose", help="Write progress to stderr.")
