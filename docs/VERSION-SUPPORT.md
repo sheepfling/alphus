@@ -12,7 +12,7 @@ evidence establishes the combinations Alphus has actually exercised.
 installed-wheel profile on 3.11, 3.12, 3.13, 3.14, and 3.15.
 
 **Runtime packages:** `packaging>=23,<27`, `pydantic>=2.7,<3`,
-`rich>=15,<16`, and `typer>=0.27.3,<0.28`. CI runs the full profile with
+`rich>=15,<16`, `SQLAlchemy>=2.0.52,<2.2`, and `typer>=0.27.3,<0.28`. CI runs the full profile with
 resolved versions on each checker Python and with all direct lower bounds
 together on 3.11.
 

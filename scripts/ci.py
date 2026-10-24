@@ -97,7 +97,13 @@ def run(root: Path, *arguments: str, stage: str, output: OutputMode) -> None:
 
 
 def python_profile(
-    root: Path, *, minimum: bool, wheel: bool, output: OutputMode
+    root: Path,
+    *,
+    minimum: bool,
+    wheel: bool,
+    output: OutputMode,
+    history_dir: Path | None = None,
+    consumer_id: str | None = None,
 ) -> None:
     if minimum:
         run(
@@ -172,11 +178,17 @@ def python_profile(
                 stage="Install built wheel",
                 output=output,
             )
+    history_arguments: tuple[str, ...] = ()
+    if history_dir is not None:
+        history_arguments = ("--history-dir", str(history_dir))
+        if consumer_id is not None:
+            history_arguments += ("--consumer-id", consumer_id)
     run(
         root,
         sys.executable,
         "-m",
         "alphus",
+        *history_arguments,
         stage="Run Alphus self profile",
         output=output,
     )
@@ -192,6 +204,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--wheel", action="store_true", help="replace editable install with built wheel"
     )
     parser.add_argument(
+        "--history-dir", type=Path, help="save only the self profile's history"
+    )
+    parser.add_argument(
+        "--consumer-id", help="stable identity for the saved self profile"
+    )
+    parser.add_argument(
         "--output",
         choices=("plain", "json"),
         default="plain",
@@ -199,6 +217,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     arguments = parser.parse_args(argv)
     try:
+        if arguments.consumer_id is not None and arguments.history_dir is None:
+            raise ValueError("--consumer-id requires --history-dir")
         root = arguments.root.resolve(strict=True)
         if not (root / "pyproject.toml").is_file():
             raise ValueError(f"not an Alphus checkout root: {root}")
@@ -207,6 +227,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             minimum=arguments.minimum,
             wheel=arguments.wheel,
             output=arguments.output,
+            history_dir=arguments.history_dir,
+            consumer_id=arguments.consumer_id,
         )
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         _record(arguments.output, "error", message=str(error))

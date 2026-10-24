@@ -1,0 +1,15 @@
+{
+  "version": "1.24.2",
+  "analyzed_file_count": 1,
+  "files": [
+    {
+      "path": "sample.cpp",
+      "functions": [
+        {"name": "Engine::belowLimit", "line": 1, "value": 2},
+        {"name": "Engine::atLimit", "line": 8, "value": 3},
+        {"name": "Engine::overLimit", "line": 16, "value": 4},
+        {"name": "Engine::overLimit", "line": 16, "value": 4}
+      ]
+    }
+  ]
+}

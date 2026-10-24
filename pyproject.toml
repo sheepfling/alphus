@@ -12,6 +12,7 @@ dependencies = [
   "packaging>=23,<27",
   "pydantic>=2.7,<3",
   "rich>=15.0.0,<16",
+  "SQLAlchemy>=2.0.52,<2.2",
   "typer>=0.27.3,<0.28",
 ]
 
@@ -23,9 +24,11 @@ python = [
 ]
 mypy = ["mypy>=2.3,<3"]
 ty = ["ty==0.0.91"]
+cyclomatic-lizard = ["lizard==1.24.2"]
 
 [project.scripts]
 alphus = "alphus.cli:main"
+alphus-history = "alphus.execution.history_cli:main"
 alphus-typing-fixtures = "alphus.gates.stubs.typing_fixtures:main"
 alphus-stub-quality = "alphus.gates.stubs.verify:main"
 alphus-cpp-quality = "alphus.gates.cpp.cpp_common_quality:main"

@@ -18,6 +18,9 @@ inventory, and combines results into one exit status.
 Native language tools retain their own checks and run as configured argument
 vectors. Python owns ordering and aggregation without importing compiler,
 Java, or Node ecosystems.
+Opt-in [parallel execution](PARALLEL-EXECUTION.md) expands selected checks into
+process-backed work units under one worker budget. The result reducer retains
+profile order and each gate's report semantics.
 Consumer policies can split orchestration steps and profiles into separate
 language TOML files through root-level `orchestration_files`. The loader
 combines them before validating unique names and profile references. The root
@@ -174,6 +177,12 @@ arrays for native tools, and keep their working directories within the
 configured repository root. Consumers can configure
 Markdown link and formatting tools as ordinary command steps without adding
 repository-specific code to the package.
+
+Native cyclomatic checks are an opt-in extension to the same profile runner.
+The plan is resolved before execution; Python Ruff and JavaScript ESLint keep
+their native threshold-gate semantics, while C/C++ Lizard returns numeric
+function records through its pinned Python API. Backend, version, variant,
+effective options, and file coverage remain in the structured report.
 
 For a coordinated consumer example that assigns Markdown graph checks to
 mdrepo, Markdown lint and fixes to rumdl, TOML formatting to Taplo, JSON

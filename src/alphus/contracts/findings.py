@@ -7,8 +7,7 @@ from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import Literal, NamedTuple, Self, TypeAlias, TypeVar, get_args
 
-from pydantic import BaseModel, ConfigDict
-
+from alphus.contracts.model import StrictModel
 from alphus.contracts.rule_tags import NAMESPACE, Category, RuleTag, Scope
 
 Severity: TypeAlias = Literal["error", "warning", "info"]
@@ -18,10 +17,8 @@ WirePayload: TypeAlias = dict[str, WireValue]
 REMEDIATION_PRIORITIES: frozenset[str] = frozenset(get_args(RemediationPriority))
 
 
-class _WireModel(BaseModel):
+class _WireModel(StrictModel):
     """Strict schema used only when data crosses the public wire boundary."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
 
 class DiagnosticWire(_WireModel):

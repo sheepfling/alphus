@@ -13,6 +13,7 @@ def test_ci_dependency_floors_follow_package_metadata() -> None:
         "packaging==23",
         "pydantic==2.7",
         "rich==15.0.0",
+        "SQLAlchemy==2.0.52",
         "typer==0.27.3",
         "pyright==1.1.414",
         "pytest==8",

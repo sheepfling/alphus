@@ -7,7 +7,7 @@ The candidate is `sheepfling/alphus`, under review in PR #1 on
 review-candidate snapshot below. The current package version and Python range
 are declared in `pyproject.toml`; the `0.1.0` artifacts below are historical
 proofs from earlier source revisions. The package provides the `alphus`
-console command and `py.typed`.
+console commands (`alphus` and `alphus-history`) and `py.typed`.
 
 ## Current editable-install proof (2026-10-22)
 

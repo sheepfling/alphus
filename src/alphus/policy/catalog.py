@@ -15,6 +15,7 @@ class RuleOutputShape(StrEnum):
     MESSAGES = "messages"
     PYTHON_STYLE = "python-style"
     SHARED_UTILITIES = "shared-utilities"
+    CYCLOMATIC_REPORT = "cyclomatic-report"
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,5 +60,10 @@ RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
         ),
         "pydantic-practices": RuleSpec("pydantic_practices", RuleOutputShape.FINDINGS),
         "fastapi-practices": RuleSpec("fastapi_practices", RuleOutputShape.FINDINGS),
+        "cyclomatic-complexity": RuleSpec(
+            "cyclomatic_complexity",
+            RuleOutputShape.CYCLOMATIC_REPORT,
+            requires_files=False,
+        ),
     }
 )

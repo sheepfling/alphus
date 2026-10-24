@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import shutil
-import sys
 from collections.abc import Sequence
 from pathlib import Path, PurePosixPath
 
 from alphus.config import CommandRunStep
 from alphus.support.platform_utils import is_windows
+from alphus.support.python_runtime import current_python_executable
 
 
 def step_directory(root: Path, working_directory: str) -> Path:
@@ -34,7 +34,7 @@ def command_arguments(
 ) -> list[str]:
     """Expand only the documented runner placeholders in an argv vector."""
     replacements = {
-        "{python}": sys.executable,
+        "{python}": current_python_executable(),
         "{root}": str(root),
         "{config}": str(config_path),
     }
