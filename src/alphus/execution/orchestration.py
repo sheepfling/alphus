@@ -3,18 +3,15 @@
 from __future__ import annotations
 
 import json
-import math
 import subprocess
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from io import StringIO
 from pathlib import Path
-from typing import Literal, Self, TextIO, TypeAlias, cast
-
-from pydantic import RootModel, model_validator
+from typing import Literal, TextIO
 
 from alphus.config import (
     CommandRunStep,
@@ -51,7 +48,7 @@ from alphus.policy.intents import (
     ResolvedIntentBinding,
     resolve_intent_bindings,
 )
-from alphus.support.data_access import JsonValue
+from alphus.support.data_access import JsonValue, validate_json_value
 from alphus.support.inventory import candidate_files
 
 _ORCHESTRATION_CATEGORY = Category.ORCHESTRATION
@@ -73,24 +70,20 @@ _COMMAND_OUTPUT_INVALID = rule_tag(
 _UNSUPPORTED_CAPABILITY = rule_tag(
     Scope.ANY, Framework.NONE, _ORCHESTRATION_CATEGORY, "unsupported-capability"
 )
-
 _STATUS_DISABLED = "disabled"
-_STATUS_FAILED = "failed"
 _STATUS_NOT_APPLICABLE = "not_applicable"
-_STATUS_PASSED = "passed"
 _STATUS_UNSUPPORTED = "unsupported"
+_JSON_ARRAY_FORMAT = "json-array"
 _MAINLINE_ROLLOUT = "mainline"
-_JSON_ARRAY_EVIDENCE = "json-array"
-_JSON_OBJECT_EVIDENCE = "json-object"
-Rollout: TypeAlias = Literal["mainline", "provisional"]
+_PROVISIONAL_ROLLOUT = "provisional"
 
 
 class StepStatus(StrEnum):
     """Closed set of orchestration step outcomes."""
 
     DISABLED = _STATUS_DISABLED
-    PASSED = _STATUS_PASSED
-    FAILED = _STATUS_FAILED
+    PASSED = "passed"
+    FAILED = "failed"
     NOT_APPLICABLE = _STATUS_NOT_APPLICABLE
     UNSUPPORTED = _STATUS_UNSUPPORTED
 
@@ -102,8 +95,8 @@ class IntentStatus(StrEnum):
     UNSUPPORTED = _STATUS_UNSUPPORTED
     NOT_SELECTED = "not_selected"
     NOT_APPLICABLE = _STATUS_NOT_APPLICABLE
-    PASSED = _STATUS_PASSED
-    FAILED = _STATUS_FAILED
+    PASSED = "passed"
+    FAILED = "failed"
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,7 +111,7 @@ class OrchestrationStepResult:
     stdout: str = ""
     stderr: str = ""
     severity_counts: SeverityCounts = field(default_factory=SeverityCounts)
-    rollout: Rollout = _MAINLINE_ROLLOUT
+    rollout: Literal["mainline", "provisional"] = _MAINLINE_ROLLOUT
 
 
 @dataclass(frozen=True, slots=True)
@@ -208,45 +201,15 @@ def _timeout_output(value: bytes | str | None) -> str:
     return value or ""
 
 
-def _json_numbers_are_finite(value: JsonValue) -> bool:
-    """Reject non-finite numbers anywhere in decoded JSON evidence."""
-    match value:
-        case float() as number:
-            return math.isfinite(number)
-        case list() as values:
-            return all(_json_numbers_are_finite(item) for item in values)
-        case dict() as values:
-            return all(_json_numbers_are_finite(item) for item in values.values())
-        case _:
-            return True
-
-
-class JsonEvidenceDocument(RootModel[object]):
-    """Validated JSON evidence document with only standard finite numbers."""
-
-    @model_validator(mode="after")
-    def require_finite_numbers(self) -> Self:
-        if not _json_numbers_are_finite(cast(JsonValue, self.root)):
-            raise ValueError("JSON evidence must not contain non-finite numbers")
-        return self
-
-
 def _matches_json_evidence_format(
-    value: JsonValue, evidence_format: EvidenceFormat
+    value: Sequence[JsonValue] | Mapping[str, JsonValue] | str | float | bool | None,
+    evidence_format: EvidenceFormat,
 ) -> bool:
     """Check decoded JSON by the selected top-level container protocol."""
-    if evidence_format == _JSON_ARRAY_EVIDENCE:
-        match value:
-            case list():
-                return True
-            case _:
-                return False
-    if evidence_format == _JSON_OBJECT_EVIDENCE:
-        match value:
-            case dict():
-                return True
-            case _:
-                return False
+    if evidence_format == _JSON_ARRAY_FORMAT:
+        return isinstance(value, Sequence) and not isinstance(value, str)
+    if evidence_format == "json-object":
+        return isinstance(value, Mapping)
     return True
 
 
@@ -482,7 +445,7 @@ def run_orchestration(
                             evidence_format, evidence_stream = evidence_contract
                             expected_shape = (
                                 "JSON array"
-                                if evidence_format == _JSON_ARRAY_EVIDENCE
+                                if evidence_format == _JSON_ARRAY_FORMAT
                                 else "JSON object"
                             )
                             evidence = (
@@ -491,19 +454,19 @@ def run_orchestration(
                                 else step_stderr
                             )
                             try:
-                                parsed_evidence = cast(
-                                    JsonValue,
-                                    JsonEvidenceDocument.model_validate_json(
-                                        evidence
-                                    ).root,
-                                )
+                                parsed_evidence = validate_json_value(evidence)
                                 if not _matches_json_evidence_format(
                                     parsed_evidence, evidence_format
                                 ):
                                     raise TypeError(
                                         f"expected a top-level {expected_shape}"
                                     )
-                            except (ValueError, TypeError, RecursionError):
+                            except (
+                                json.JSONDecodeError,
+                                ValueError,
+                                TypeError,
+                                RecursionError,
+                            ):
                                 output_invalid_steps.add(step.name)
                                 operational_error_steps.add(step.name)
                                 message = (
@@ -541,7 +504,7 @@ def run_orchestration(
                             ]
                             invalid_shape = (
                                 "JSON array"
-                                if invalid_format == _JSON_ARRAY_EVIDENCE
+                                if invalid_format == _JSON_ARRAY_FORMAT
                                 else "JSON object"
                             )
                             invalid_message = (
@@ -600,7 +563,7 @@ def run_orchestration(
             _write_captured(errors, step_stderr)
 
         completed += 1
-        provisional = step.rollout == "provisional"
+        provisional = step.rollout == _PROVISIONAL_ROLLOUT
         if skipped_empty_file_scope:
             not_applicable += 1
             results.append(
@@ -828,7 +791,7 @@ def run_orchestration(
                 if finding_payload["priority"] is None:
                     del finding_payload["priority"]
         if provisional_passed or provisional_failed:
-            payload["provisional"] = {
+            payload[_PROVISIONAL_ROLLOUT] = {
                 "passed": provisional_passed,
                 "failed": provisional_failed,
             }

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import subprocess
+from collections.abc import Mapping
 from io import StringIO
 from pathlib import Path
-from typing import Literal, NotRequired, TypedDict
+from typing import Literal
 
 import pytest
 
@@ -20,33 +20,11 @@ from alphus.config import (
     SharedQualityIntent,
 )
 from alphus.execution.orchestration import run_orchestration
-
-
-class _StepReport(TypedDict):
-    status: str
-    exit_code: int | None
-    stdout: str
-    stderr: str
-    findings: list[object]
-
-
-class _IntentBindingReport(TypedDict):
-    rule_id: str
-    language: str
-    backend: str
-    native_rule: str
-    status: str
-    failure_kind: str | None
-
-
-class _ExecutionReport(TypedDict):
-    profile: str
-    passed: int
-    failed: int
-    disabled: NotRequired[int]
-    unsupported: NotRequired[int]
-    steps: list[_StepReport]
-    intent_bindings: NotRequired[list[_IntentBindingReport]]
+from alphus.support.data_access import (
+    JsonValue,
+    require_json_object,
+    validate_json_value,
+)
 
 
 def _intent(
@@ -123,8 +101,7 @@ def _policy(
         "{python}",
         "-c",
         (
-            "import sys; "
-            "print('native stdout'); "
+            "import sys; print('native stdout'); "
             "print('native stderr', file=sys.stderr); "
             f"raise SystemExit({exit_code})"
         ),
@@ -151,7 +128,7 @@ def _policy(
 
 def _run(
     tmp_path: Path, policy: OrchestrationPolicy, profile_name: str = "check"
-) -> tuple[int, _ExecutionReport]:
+) -> tuple[int, Mapping[str, JsonValue]]:
     output = StringIO()
     errors = StringIO()
     code = run_orchestration(
@@ -164,7 +141,9 @@ def _run(
         stdout=output,
         stderr=errors,
     )
-    return code, json.loads(output.getvalue())
+    return code, require_json_object(
+        validate_json_value(output.getvalue()), "expected a JSON object report"
+    )
 
 
 @pytest.mark.parametrize(
@@ -232,8 +211,7 @@ def test_disabled_intent_does_not_execute_its_native_command(
             "{python}",
             "-c",
             (
-                "from pathlib import Path; "
-                f"Path({str(marker)!r}).write_text('ran'); "
+                f"from pathlib import Path; Path({str(marker)!r}).write_text('ran'); "
                 "raise SystemExit(1)"
             ),
         ),
@@ -410,7 +388,9 @@ def test_unsupported_capabilities_are_explicit_and_only_required_mainline_blocks
         stdout=output,
         stderr=StringIO(),
     )
-    report = json.loads(output.getvalue())
+    report = require_json_object(
+        validate_json_value(output.getvalue()), "expected a JSON object report"
+    )
 
     assert code == expected_code
     assert report["unsupported"] == 1

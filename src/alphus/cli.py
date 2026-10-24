@@ -12,7 +12,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from contextvars import ContextVar
 from io import StringIO
 from pathlib import Path
-from typing import Annotated, NamedTuple, NotRequired, TextIO, TypedDict, cast
+from typing import Annotated, NamedTuple, TextIO, cast
 
 import typer
 from pydantic import ValidationError
@@ -27,7 +27,6 @@ from alphus.config import (
 )
 from alphus.contracts.findings import (
     Finding,
-    Severity,
     SeverityCounts,
 )
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
@@ -40,8 +39,12 @@ from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
 from alphus.gates.source.python_style import StyleFindings
 from alphus.policy.base import MissingPolicyError
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
-from alphus.policy.intents import IntentBindingPlan, intent_bindings_for_steps
+from alphus.policy.intents import (
+    PlannedIntentBindingRow,
+    intent_bindings_for_steps,
+)
 from alphus.policy.recipes import render_recipe
+from alphus.support.data_access import JsonValue
 from alphus.support.inventory import candidate_files
 
 QualityRule = QualityRuleName
@@ -58,16 +61,6 @@ _CLI_CONTRACT_TAG = rule_tag(
 _SCRIPT_POLICY_TAG = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.SECURITY, "script-policy-violation"
 )
-
-
-class ExecutionPlanPayload(TypedDict):
-    """Typed JSON representation of the selected execution plan."""
-
-    profile: str
-    profiles: tuple[str, ...]
-    failure_threshold: Severity
-    steps: list[object]
-    intents: NotRequired[list[IntentBindingPlan]]
 
 
 def _render_finding(finding: Finding) -> None:
@@ -696,7 +689,7 @@ def _execute_plan_profile(
         return 2
 
     by_name = {step.name: step for step in policy.steps}
-    intent_rows = list(
+    intent_rows: list[PlannedIntentBindingRow] = list(
         intent_bindings_for_steps(
             policy.intents,
             plan.steps,
@@ -717,10 +710,13 @@ def _execute_plan_profile(
             row["expanded_argv"] = entry.check_argv
 
     if json_output:
-        details: list[object] = []
+        details: list[JsonValue] = []
         for entry in entries:
             step = by_name[entry.name]
-            detail = step.model_dump(mode="json", exclude_none=True)
+            detail = cast(
+                dict[str, JsonValue],
+                step.model_dump(mode="json", exclude_none=True),
+            )
             detail["fixable"] = entry.fixable
             if step.kind == "command":
                 detail["selected_files"] = entry.files
@@ -728,14 +724,14 @@ def _execute_plan_profile(
                 if entry.check_argv is not None:
                     detail["expanded_argv"] = entry.check_argv
             details.append(detail)
-        payload: ExecutionPlanPayload = {
+        payload: dict[str, JsonValue] = {
             "profile": selected_profile,
             "profiles": plan.profiles,
             "failure_threshold": policy.failure_threshold,
             "steps": details,
         }
         if intent_rows:
-            payload["intents"] = intent_rows
+            payload["intents"] = cast(JsonValue, intent_rows)
         typer.echo(json.dumps(payload, sort_keys=True))
         return 0
 

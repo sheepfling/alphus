@@ -6,8 +6,9 @@ import json
 import re
 import shutil
 import subprocess
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Literal, NotRequired, TypedDict
+from typing import Literal, TypedDict
 
 import pytest
 from packaging.specifiers import SpecifierSet
@@ -24,58 +25,94 @@ from alphus.config import (
     SharedQualityIntent,
     load_config,
 )
-from alphus.contracts.findings import Severity
-from alphus.policy.intents import NativeOptionValue, intent_bindings_for_steps
+from alphus.policy.intents import (
+    IntentFileOverride,
+    IntentLanguage,
+    IntentLanguageOverride,
+    IntentMapping,
+    NativeOptionValue,
+    intent_bindings_for_steps,
+)
 
 _EXAMPLE = Path("examples/shared-intents/quality-gates.toml")
 
 
-class _IntentFileInput(TypedDict, total=False):
-    include: list[str]
-    exclude: list[str]
-
-
-class _IntentOverrideInput(TypedDict, total=False):
-    language: Literal["python"]
-    enabled: NotRequired[bool | None]
-    threshold: NotRequired[int | None]
-    severity: NotRequired[Severity | None]
-    failure_threshold: NotRequired[Severity | None]
-    files: NotRequired[_IntentFileInput | None]
-
-
-class _NativeBindingInput(TypedDict, total=False):
-    language: Literal["python", "cpp"]
+class _BindingInput(TypedDict):
+    language: IntentLanguage
     backend: str
     version_range: str
     native_rule: str
     metric: str
     unit: str
     count_method: str
-    mapping: Literal["exact", "comparable", "unsupported"]
+    mapping: IntentMapping
     step: str | None
     supported_options: tuple[str, ...]
     threshold_option: str
-    threshold_values: dict[str, str] | tuple[tuple[int, NativeOptionValue], ...]
+    threshold_values: (
+        Mapping[str | int, NativeOptionValue] | Sequence[tuple[int, NativeOptionValue]]
+    )
     effective_configuration: (
-        dict[str, NativeOptionValue] | tuple[tuple[str, NativeOptionValue], ...]
+        Mapping[str, NativeOptionValue] | Sequence[tuple[str, NativeOptionValue]]
     )
     violation_exit_codes: tuple[int, ...]
     configuration_exit_codes: tuple[int, ...]
 
 
-class _IntentInput(TypedDict, total=False):
+class _IntentFilesInput(TypedDict):
+    include: tuple[str, ...]
+    exclude: tuple[str, ...]
+
+
+class _IntentInput(TypedDict):
     rule_id: str
     summary: str
     metric: str
     unit: str
     count_method: str
     threshold: int | None
-    rollout: Literal["provisional"]
-    profiles: list[str]
-    files: _IntentFileInput
-    overrides: list[_IntentOverrideInput] | tuple[_IntentOverrideInput, ...]
-    bindings: list[NativeCapabilityBinding] | tuple[NativeCapabilityBinding, ...]
+    rollout: Literal["mainline", "provisional"]
+    profiles: tuple[str, ...]
+    files: _IntentFilesInput
+    overrides: tuple[IntentLanguageOverride, ...]
+    bindings: tuple[NativeCapabilityBinding | _BindingInput, ...]
+
+
+def _binding_values(
+    *,
+    mapping: IntentMapping = "exact",
+    metric: str = "cyclomatic_complexity",
+    unit: str = "decision_paths",
+    count_method: str = "McCabe decision count starting at one",
+    threshold: int = 10,
+    step: str | None = "Complexity",
+    version_range: str = ">=0.16,<1",
+    threshold_values: Mapping[str | int, NativeOptionValue]
+    | Sequence[tuple[int, NativeOptionValue]] = (),
+    effective_configuration: Mapping[str, NativeOptionValue]
+    | Sequence[tuple[str, NativeOptionValue]]
+    | None = None,
+) -> _BindingInput:
+    configuration = effective_configuration
+    if configuration is None:
+        configuration = (("max-complexity", threshold),)
+    return {
+        "language": "python",
+        "backend": "ruff",
+        "version_range": version_range,
+        "native_rule": "C901",
+        "metric": metric,
+        "unit": unit,
+        "count_method": count_method,
+        "mapping": mapping,
+        "step": step,
+        "supported_options": ("max-complexity",),
+        "threshold_option": "max-complexity",
+        "threshold_values": threshold_values,
+        "effective_configuration": configuration,
+        "violation_exit_codes": (1,),
+        "configuration_exit_codes": (2,),
+    }
 
 
 def _binding(
@@ -88,8 +125,8 @@ def _binding(
     step: str | None = "Complexity",
 ) -> NativeCapabilityBinding:
     return NativeCapabilityBinding.model_validate(
-        _binding_input(
-            mapping=mapping,
+        _binding_values(
+            mapping=mapping,  # type: ignore[arg-type]
             metric=metric,
             unit=unit,
             count_method=count_method,
@@ -99,50 +136,19 @@ def _binding(
     )
 
 
-def _binding_input(
-    *,
-    mapping: Literal["exact", "comparable", "unsupported"] = "exact",
-    metric: str = "cyclomatic_complexity",
-    unit: str = "decision_paths",
-    count_method: str = "McCabe decision count starting at one",
-    threshold: int = 10,
-    step: str | None = "Complexity",
-) -> _NativeBindingInput:
-    return {
-        "language": "python",
-        "backend": "ruff",
-        "version_range": ">=0.16,<1",
-        "native_rule": "C901",
-        "metric": metric,
-        "unit": unit,
-        "count_method": count_method,
-        "mapping": mapping,
-        "step": step,
-        "supported_options": ("max-complexity",),
-        "threshold_option": "max-complexity",
-        "effective_configuration": (("max-complexity", threshold),),
-        "violation_exit_codes": (1,),
-        "configuration_exit_codes": (2,),
-    }
-
-
-def _intent(
-    binding: NativeCapabilityBinding | None = None,
+def _intent_values(
+    binding: NativeCapabilityBinding | _BindingInput | None = None,
     *,
     threshold: int | None = 10,
-    overrides: tuple[_IntentOverrideInput, ...] = (),
-) -> SharedQualityIntent:
-    return SharedQualityIntent.model_validate(
-        _intent_input(binding=binding, threshold=threshold, overrides=overrides)
-    )
-
-
-def _intent_input(
-    binding: NativeCapabilityBinding | None = None,
-    *,
-    threshold: int | None = 10,
-    overrides: tuple[_IntentOverrideInput, ...] = (),
+    overrides: tuple[IntentLanguageOverride, ...] = (),
+    profiles: tuple[str, ...] = ("check",),
+    bindings: tuple[NativeCapabilityBinding | _BindingInput, ...] | None = None,
 ) -> _IntentInput:
+    selected_bindings = (
+        bindings
+        if bindings is not None
+        else (binding or _binding_values(threshold=threshold or 10),)
+    )
     return {
         "rule_id": "alphus/any/none/maintainability/function-complexity-review",
         "summary": "Review functions that exceed a complexity limit.",
@@ -151,11 +157,22 @@ def _intent_input(
         "count_method": "McCabe decision count starting at one",
         "threshold": threshold,
         "rollout": "provisional",
-        "profiles": ["check"],
-        "files": {"include": ["**/*.py"], "exclude": ["**/generated/**"]},
-        "overrides": list(overrides),
-        "bindings": [binding or _binding(threshold=threshold or 10)],
+        "profiles": profiles,
+        "files": {"include": ("**/*.py",), "exclude": ("**/generated/**",)},
+        "overrides": overrides,
+        "bindings": selected_bindings,
     }
+
+
+def _intent(
+    binding: NativeCapabilityBinding | None = None,
+    *,
+    threshold: int | None = 10,
+    overrides: tuple[IntentLanguageOverride, ...] = (),
+) -> SharedQualityIntent:
+    return SharedQualityIntent.model_validate(
+        _intent_values(binding, threshold=threshold, overrides=overrides)
+    )
 
 
 def _policy(intent: SharedQualityIntent) -> OrchestrationPolicy:
@@ -315,7 +332,7 @@ def test_comparable_mapping_can_use_an_explicit_local_threshold() -> None:
     intent = _intent(
         binding,
         threshold=10,
-        overrides=({"language": "python", "threshold": 8},),
+        overrides=(IntentLanguageOverride(language="python", threshold=8),),
     )
     assert intent.threshold_for("python") == 8
 
@@ -327,26 +344,31 @@ def test_effective_native_threshold_conflicts_are_rejected() -> None:
 
 
 def test_native_threshold_values_translate_to_tool_specific_types() -> None:
-    binding_input = _binding_input()
-    binding_input["threshold_values"] = {"10": "10"}
-    binding_input["effective_configuration"] = {"max-complexity": "10"}
-    binding = NativeCapabilityBinding.model_validate(binding_input)
+    binding = NativeCapabilityBinding.model_validate(
+        _binding_values(
+            threshold_values={"10": "10"},
+            effective_configuration={"max-complexity": "10"},
+        )
+    )
     assert binding.threshold_values == ((10, "10"),)
     intent = _intent(binding)
     assert intent.threshold_for("python") == 10
 
-    boolean_input = _binding_input(threshold=1)
-    boolean_input["effective_configuration"] = (("max-complexity", True),)
-    boolean_threshold = NativeCapabilityBinding.model_validate(boolean_input)
+    boolean_threshold = NativeCapabilityBinding.model_validate(
+        _binding_values(
+            threshold=1,
+            effective_configuration=(("max-complexity", True),),
+        )
+    )
     with pytest.raises(ValidationError, match="conflicts with configured threshold"):
         _intent(boolean_threshold, threshold=1)
 
 
 def test_invalid_version_ranges_and_undeclared_native_options_fail_validation() -> None:
-    invalid_range = _binding_input()
-    invalid_range["version_range"] = "not-a-version-range"
     with pytest.raises(ValidationError, match="version range"):
-        NativeCapabilityBinding.model_validate(invalid_range)
+        NativeCapabilityBinding.model_validate(
+            _binding_values(version_range="not-a-version-range")
+        )
 
     with pytest.raises(ValidationError, match="undeclared native options"):
         NativeCapabilityBinding(
@@ -377,11 +399,14 @@ def test_unsupported_capability_is_explicit_in_a_plan() -> None:
         count_method="No native rule is selected for this measurement.",
         mapping="unsupported",
     )
-    intent_input = _intent_input(supported, threshold=None)
-    intent_input["threshold"] = None
-    intent_input["bindings"] = [supported, unsupported]
-    intent_input["overrides"] = []
-    intent = SharedQualityIntent.model_validate(intent_input)
+    intent = SharedQualityIntent.model_validate(
+        _intent_values(
+            supported,
+            threshold=None,
+            bindings=(supported, unsupported),
+            overrides=(),
+        )
+    )
     rows = intent_bindings_for_steps((intent,), ("Complexity",), "check")
     cpp = next(row for row in rows if row["language"] == "cpp")
     assert cpp["mapping"] == "unsupported"
@@ -413,7 +438,14 @@ def test_intent_command_steps_cannot_enable_native_fixers() -> None:
     intent = _intent()
     base = _policy(intent).steps[0]
     assert isinstance(base, CommandRunStep)
-    fixer = base.model_copy(update={"fix_argv": ("ruff", "check", "--fix", "{files}")})
+    fixer = CommandRunStep(
+        kind="command",
+        name=base.name,
+        argv=base.argv,
+        files=base.files,
+        rollout=base.rollout,
+        fix_argv=("ruff", "check", "--fix", "{files}"),
+    )
     with pytest.raises(ValidationError, match="cannot use an automatic fixer"):
         OrchestrationPolicy(
             steps=(fixer,),
@@ -428,17 +460,17 @@ def test_language_override_precedence_is_explicit_and_deterministic() -> None:
         binding,
         threshold=10,
         overrides=(
-            {
-                "language": "python",
-                "enabled": False,
-                "threshold": 8,
-                "severity": "warning",
-                "failure_threshold": "info",
-                "files": {
-                    "include": ["src/api/**/*.py"],
-                    "exclude": ["src/api/gen/**"],
-                },
-            },
+            IntentLanguageOverride(
+                language="python",
+                enabled=False,
+                threshold=8,
+                severity="warning",
+                failure_threshold="info",
+                files=IntentFileOverride(
+                    include=("src/api/**/*.py",),
+                    exclude=("src/api/gen/**",),
+                ),
+            ),
         ),
     )
     assert intent.is_enabled_for("python") is False
@@ -453,13 +485,9 @@ def test_language_override_precedence_is_explicit_and_deterministic() -> None:
 def test_duplicate_intent_bindings_and_unknown_profiles_are_rejected() -> None:
     binding = _binding()
     with pytest.raises(ValidationError, match="one active binding per language"):
-        duplicate_bindings = _intent_input()
-        duplicate_bindings["bindings"] = (binding, binding)
-        SharedQualityIntent.model_validate(duplicate_bindings)
+        SharedQualityIntent.model_validate(_intent_values(bindings=(binding, binding)))
 
-    invalid_intent = _intent_input()
-    invalid_intent["profiles"] = ["missing"]
-    invalid = SharedQualityIntent.model_validate(invalid_intent)
+    invalid = SharedQualityIntent.model_validate(_intent_values(profiles=("missing",)))
     with pytest.raises(ValidationError, match="unknown profiles"):
         OrchestrationPolicy(
             steps=_policy(_intent()).steps,
