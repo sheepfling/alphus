@@ -82,7 +82,10 @@ not infer those roles from source.
 For clang-tidy, `ignore_macros` and
 `count_member_initializers_as_statements` pin native count behavior. Defaults
 follow clang-tidy (`false` and `true`). These fields are rejected for other
-languages.
+languages. The planner sets unselected `readability-function-size`
+`ParameterThreshold`, `NestingThreshold`, and `StatementThreshold` options to
+`-1` so clang-tidy keeps omitted metrics disabled, including in metric-replacing
+overrides.
 
 ## Capability matrix
 
@@ -142,6 +145,9 @@ mapping in that config or in a reviewed per-run overlay. Keep the rule IDs in
 the native command output so the origin remains visible. Alphus does not parse
 native diagnostics into duplicate Alphus findings. If consumers run multiple
 backends over the same files, each backend may emit its own equivalent finding.
+ESLint severity values map `error` to `error` and `warning` to `warn`; `info` is
+rejected for ESLint targets and overrides because ESLint has no informational
+severity.
 
 Positional parameter count is not this feature's total-parameter metric, and
 neither metric says whether argument types are confusable. See the separate

@@ -149,6 +149,45 @@ def test_path_override_replaces_metrics_and_severity(tmp_path: Path) -> None:
     assert override["metrics"][0]["severity"] == "info"
 
 
+def test_eslint_severity_is_translated_and_override_is_applied(
+    tmp_path: Path,
+) -> None:
+    configured = target(
+        "javascript",
+        "eslint",
+        ("parameters", 4),
+        severity="error",
+        overrides=[
+            {
+                "include": ["src/api/**"],
+                "severity": "warning",
+            }
+        ],
+    )
+    plan = plan_function_shape(
+        FunctionShapePolicy(targets=(configured,)), tmp_path
+    ).to_dict()
+    target_options = plan["targets"][0]["metrics"][0]["native_options"]
+    override_options = plan["targets"][0]["overrides"][0]["metrics"][0][
+        "native_options"
+    ]
+
+    assert target_options["value"] == ["error", 4]
+    assert override_options["value"] == ["warn", 4]
+
+
+def test_eslint_rejects_info_severity() -> None:
+    with pytest.raises(ValidationError, match="ESLint does not support info"):
+        target("javascript", "eslint", ("parameters", 4), severity="info")
+    with pytest.raises(ValidationError, match="ESLint does not support info"):
+        target(
+            "javascript",
+            "eslint",
+            ("parameters", 4),
+            overrides=[{"include": ["src/api/**"], "severity": "info"}],
+        )
+
+
 def test_native_plan_is_immutable_until_json_serialization(tmp_path: Path) -> None:
     plan = plan_function_shape(
         FunctionShapePolicy(targets=(target("python", "ruff", ("parameters", 4)),)),
@@ -238,12 +277,58 @@ def test_clang_tidy_exposes_macro_and_member_initializer_controls(
     ).to_dict()
     options = plan["targets"][0]["metrics"][0]["native_options"]["CheckOptions"]
     assert options == [
+        {"key": "readability-function-size.ParameterThreshold", "value": "-1"},
+        {"key": "readability-function-size.NestingThreshold", "value": "-1"},
         {"key": "readability-function-size.StatementThreshold", "value": "20"},
         {"key": "readability-function-size.IgnoreMacros", "value": "true"},
         {
             "key": "readability-function-size.CountMemberInitAsStmt",
             "value": "false",
         },
+    ]
+
+
+def test_clang_tidy_disables_unselected_thresholds_in_metric_replacement(
+    tmp_path: Path,
+) -> None:
+    build = tmp_path / "build"
+    build.mkdir()
+    (build / "compile_commands.json").write_text(
+        json.dumps(
+            [
+                {
+                    "directory": str(tmp_path),
+                    "file": "sample.cpp",
+                    "command": "clang++ sample.cpp",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    configured = target(
+        "cpp",
+        "clang-tidy",
+        ("parameters", 5),
+        ("statements", 30),
+        compilation_database="build/compile_commands.json",
+        overrides=[
+            {
+                "include": ["src/api/**"],
+                "metrics": [{"name": "nesting", "maximum": 3}],
+            }
+        ],
+    )
+    plan = plan_function_shape(
+        FunctionShapePolicy(targets=(configured,)), tmp_path
+    ).to_dict()
+    options = plan["targets"][0]["overrides"][0]["metrics"][0]["native_options"][
+        "CheckOptions"
+    ]
+
+    assert options[:3] == [
+        {"key": "readability-function-size.ParameterThreshold", "value": "-1"},
+        {"key": "readability-function-size.NestingThreshold", "value": "3"},
+        {"key": "readability-function-size.StatementThreshold", "value": "-1"},
     ]
 
 

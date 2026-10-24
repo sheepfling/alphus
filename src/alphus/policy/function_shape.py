@@ -10,6 +10,7 @@ from typing import Any, Final, TypeAlias, cast
 
 from pydantic import ConfigDict, TypeAdapter, ValidationError
 
+from alphus.contracts.findings import Severity
 from alphus.policy.base import StrictModel
 from alphus.policy.sources import (
     FunctionShapeMetric,
@@ -256,16 +257,32 @@ _DEFINITIONS: Final = MappingProxyType(
 
 
 def _native_option(
-    target: FunctionShapeTarget, metric: FunctionShapeMetric
+    target: FunctionShapeTarget,
+    metric: FunctionShapeMetric,
+    severity: Severity,
+    configured_metrics: Sequence[FunctionShapeMetric],
 ) -> dict[str, object]:
     native_rule, option, _ = _DEFINITIONS[target.backend][metric.name]
     if target.backend == "eslint":
-        return {"rule": native_rule, "value": [target.severity, metric.maximum]}
+        eslint_severity = {"warning": "warn", "error": "error"}[severity]
+        return {"rule": native_rule, "value": [eslint_severity, metric.maximum]}
     if target.backend == "clang-tidy":
+        thresholds = {
+            "parameters": "ParameterThreshold",
+            "nesting": "NestingThreshold",
+            "statements": "StatementThreshold",
+        }
+        configured = {item.name: item.maximum for item in configured_metrics}
         return {
             "Checks": f"{native_rule}",
             "CheckOptions": [
-                {"key": f"{native_rule}.{option}", "value": str(metric.maximum)},
+                {
+                    "key": f"{native_rule}.{thresholds[name]}",
+                    "value": str(configured.get(name, -1)),
+                }
+                for name in thresholds
+            ]
+            + [
                 {
                     "key": f"{native_rule}.IgnoreMacros",
                     "value": str(target.ignore_macros or False).lower(),
@@ -351,7 +368,7 @@ def plan_function_shape(policy: FunctionShapePolicy, root: Path) -> FunctionShap
 def _metric_plans(
     target: FunctionShapeTarget,
     metrics: tuple[FunctionShapeMetric, ...],
-    severity: str,
+    severity: Severity,
 ) -> tuple[FunctionShapeMetricPlan, ...]:
     result: list[FunctionShapeMetricPlan] = []
     for metric in metrics:
@@ -362,7 +379,9 @@ def _metric_plans(
                 native_rule=native_rule,
                 definition=definition,
                 maximum=metric.maximum,
-                native_options=_freeze_json(_native_option(target, metric)),
+                native_options=_freeze_json(
+                    _native_option(target, metric, severity, metrics)
+                ),
                 severity=severity,
                 severity_mapping=(
                     "native rule severity is retained; use the native command's advisory exit behavior"

@@ -44,8 +44,10 @@ _COMMENT_MARKER_EXTENSIONS_BY_LANGUAGE: Final[Mapping[str, frozenset[str]]] = (
         }
     )
 )
-_SUPPORTED_COMMENT_MARKER_EXTENSIONS: Final[frozenset[str]] = frozenset().union(
-    *_COMMENT_MARKER_EXTENSIONS_BY_LANGUAGE.values()
+_SUPPORTED_COMMENT_MARKER_EXTENSIONS: Final[frozenset[str]] = frozenset(
+    extension
+    for extensions in _COMMENT_MARKER_EXTENSIONS_BY_LANGUAGE.values()
+    for extension in extensions
 )
 
 
@@ -140,6 +142,13 @@ class FunctionShapeTarget(StrictModel):
     def validate_binding(self) -> FunctionShapeTarget:
         if self.backend not in _FUNCTION_SHAPE_BACKENDS_BY_LANGUAGE[self.language]:
             raise ValueError(f"{self.backend} does not support {self.language}")
+        if self.backend == "eslint" and (
+            self.severity == "info"
+            or any(override.severity == "info" for override in self.overrides)
+        ):
+            raise ValueError(
+                "ESLint does not support info severity; use warning or error"
+            )
         minimums = {
             "ruff": {
                 "parameters": "0.0.238",
