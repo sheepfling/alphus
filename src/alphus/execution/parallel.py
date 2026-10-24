@@ -51,6 +51,11 @@ class StepExecution:
     cyclomatic_report: CyclomaticReport | None = None
 
 
+def _request_payload(request: WorkerRequest) -> str:
+    """Serialize the trusted plan before sending it to another process."""
+    return request.model_dump_json()
+
+
 def _invoke_worker(request: WorkerRequest, timeout: int | None) -> WorkerResponse:
     root = request.root
     completed = run_captured_process(
@@ -60,7 +65,7 @@ def _invoke_worker(request: WorkerRequest, timeout: int | None) -> WorkerRespons
             "from alphus.execution._worker import main; raise SystemExit(main())",
         ],
         Path(root),
-        input_text=request.model_dump_json(),
+        input_text=_request_payload(request),
         timeout=timeout,
     )
     if completed.returncode != 0:
