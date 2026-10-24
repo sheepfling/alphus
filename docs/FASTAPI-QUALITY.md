@@ -38,13 +38,15 @@ adds an explicit `fastapi` profile. Its Ruff configuration extends the
 consumer's `pyproject.toml` and uses `extend-select`, preserving the base
 selection and exclusions. The profile checks these stable rules:
 
-| Rules                                          | Coverage                                                                                      |
-| ---------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `FAST001`, `FAST002`, `FAST003`                | Redundant response model, dependency `Annotated`, missing path parameter                      |
-| `ASYNC210`, `ASYNC230`, `ASYNC240`, `ASYNC251` | Blocking HTTP, file, path, and sleep operations in async functions                            |
-| `B008`                                         | Function calls in defaults, with FastAPI parameter constructors configured as immutable calls |
-| `ANN001`, `ANN201`                             | Missing parameter and return annotations                                                      |
-| `S113`, `S501`, `S608`                         | Missing HTTP timeouts, disabled certificate checks, and SQL built from strings                |
+- `FAST001`, `FAST002`, `FAST003`: redundant response model, dependency
+  `Annotated`, and missing path parameter.
+- `ASYNC210`, `ASYNC230`, `ASYNC240`, `ASYNC251`: blocking HTTP, file, path,
+  and sleep operations in async functions.
+- `B008`: function calls in defaults; FastAPI parameter constructors are
+  configured as immutable calls.
+- `ANN001`, `ANN201`: missing parameter and return annotations.
+- `S113`, `S501`, `S608`: missing HTTP timeouts, disabled certificate checks,
+  and SQL built from strings.
 
 The sample targets Python 3.12 and requires Ruff 0.16 or newer. FastAPI and
 Pydantic stay in the consuming application's dependency set; the static
