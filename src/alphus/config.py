@@ -202,7 +202,7 @@ class _PartialOrchestration(StrictModel):
     profiles: tuple[OrchestrationProfile, ...] = ()
     default_profile: str = "check"
     failure_threshold: Severity = "error"
-    execution: ExecutionPolicy = Field(default_factory=ExecutionPolicy)
+    execution: ExecutionPolicy = ExecutionPolicy()
 
 
 class _SplitPolicy(StrictModel):

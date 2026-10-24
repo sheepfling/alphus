@@ -10,7 +10,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import asdict, dataclass, field
 from io import StringIO
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, TextIO
+from typing import Literal, TextIO, TypeGuard, cast
 
 from alphus.config import (
     CommandRunStep,
@@ -41,12 +41,11 @@ from alphus.execution.commands import (
     step_directory,
     windows_shell_required,
 )
+from alphus.execution.parallel import StepExecution, run_parallel_steps
 from alphus.execution.processes import run_captured_process
 from alphus.execution.profile_reporting import ProfileReporter
+from alphus.execution.step_results import RuleRunResult
 from alphus.support.inventory import candidate_files
-
-if TYPE_CHECKING:
-    from alphus.execution.parallel import StepExecution
 
 _ORCHESTRATION_CATEGORY = Category.ORCHESTRATION
 _RULE_EXECUTION_FAILED = rule_tag(
@@ -73,18 +72,6 @@ class OrchestrationStepResult:
     stderr: str = ""
     severity_counts: SeverityCounts = field(default_factory=SeverityCounts)
     rollout: Literal["mainline", "provisional"] = "mainline"
-    report: Mapping[str, object] | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class RuleRunResult:
-    """Structured outcome from an Alphus-owned rule invocation."""
-
-    findings: tuple[Diagnostic, ...] = ()
-    execution_failure: str | None = None
-    exit_code: int = ExitCode.SUCCESS
-    stderr: str = ""
-    stdout: str = ""
     report: Mapping[str, object] | None = None
 
 
@@ -133,6 +120,13 @@ def _write_captured(stream: TextIO, value: str) -> None:
     if value:
         stream.write(value)
         stream.flush()
+
+
+def _is_structured_rule_result(
+    value: int | RuleRunResult,
+) -> TypeGuard[RuleRunResult]:
+    """Narrow the public legacy integer and structured rule result union."""
+    return isinstance(value, RuleRunResult)
 
 
 def run_orchestration(
@@ -184,8 +178,6 @@ def run_orchestration(
             (max_jobs > 1 and step.parallel)
             or (isinstance(step, RuleRunStep) and step.timeout_seconds is not None)
         ) and step_name not in parallel_results:
-            from alphus.execution.parallel import run_parallel_steps
-
             block: list[RuleRunStep | CommandRunStep] = [step]
             if max_jobs > 1 and step.parallel:
                 for later_name in plan.steps[index + 1 :]:
@@ -223,19 +215,20 @@ def run_orchestration(
         try:
             match step:
                 case RuleRunStep(rule=rule):
+                    rule_result: int | RuleRunResult
                     if precomputed is None:
                         with (
                             redirect_stdout(captured_stdout),
                             redirect_stderr(captured_stderr),
                         ):
-                            rule_result: int | RuleRunResult = run_rule(rule)
+                            rule_result = run_rule(rule)
                     else:
                         if precomputed.error is not None:
                             raise OSError(str(precomputed.error))
                         if precomputed.rule is None:
                             raise ValueError("parallel rule returned no result")
                         rule_result = precomputed.rule
-                    if isinstance(rule_result, RuleRunResult):
+                    if _is_structured_rule_result(rule_result):
                         findings = list(rule_result.findings)
                         if step.severity is not None or step.priority is not None:
                             findings = [
@@ -315,7 +308,7 @@ def run_orchestration(
                                 else ExitCode.SUCCESS
                             )
                     else:
-                        exit_code = rule_result
+                        exit_code = cast(int, rule_result)
                         step_stdout = captured_stdout.getvalue()
                         step_stderr = captured_stderr.getvalue()
                         if exit_code != ExitCode.SUCCESS:

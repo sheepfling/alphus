@@ -8,9 +8,11 @@ import subprocess
 from collections.abc import Sequence
 from pathlib import Path
 
+from alphus.support.platform_utils import is_windows
+
 
 def _stop_process(process: subprocess.Popen[str]) -> None:
-    if os.name == "nt":
+    if is_windows():
         try:
             subprocess.run(
                 ["taskkill", "/PID", str(process.pid), "/T", "/F"],
@@ -44,7 +46,7 @@ def run_captured_process(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
-        start_new_session=os.name != "nt",
+        start_new_session=not is_windows(),
     ) as process:
         try:
             stdout, stderr = process.communicate(input=input_text, timeout=timeout)

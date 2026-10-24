@@ -261,7 +261,7 @@ class OrchestrationPolicy(StrictModel):
     profiles: Annotated[tuple[OrchestrationProfile, ...], Field(min_length=1)]
     default_profile: str = "check"
     failure_threshold: Severity = "error"
-    execution: ExecutionPolicy = Field(default_factory=ExecutionPolicy)
+    execution: ExecutionPolicy = ExecutionPolicy()
 
     @model_validator(mode="after")
     def validate_plan(self) -> OrchestrationPolicy:

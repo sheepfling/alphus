@@ -3,32 +3,31 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import subprocess
 import sys
 from collections.abc import Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 from typing import cast
 
-from pydantic import TypeAdapter
-
 from alphus.config import QualityGateConfig
-from alphus.contracts.findings import Diagnostic, Finding
 from alphus.execution.commands import (
     command_arguments,
     step_directory,
     windows_shell_required,
 )
-from alphus.execution.orchestration import RuleRunResult
 from alphus.execution.processes import run_captured_process
 from alphus.execution.scheduler import WorkOutcome, WorkUnit, run_work_units
+from alphus.execution.step_results import RuleRunResult
+from alphus.execution.worker_protocol import (
+    WORKER_RESPONSE,
+    WorkerRequest,
+    WorkerResponse,
+)
 from alphus.gates.source.cyclomatic_complexity import (
     BackendRun,
     CyclomaticBackendPlan,
-    CyclomaticBackendResult,
-    CyclomaticFunctionMetric,
     CyclomaticReport,
     backend_failure,
     build_cyclomatic_plan,
@@ -39,11 +38,6 @@ from alphus.gates.source.cyclomatic_complexity import (
 )
 from alphus.policy.orchestration import CommandRunStep, RuleRunStep
 from alphus.support.inventory import candidate_files
-
-_DIAGNOSTICS = TypeAdapter(tuple[Diagnostic, ...])
-_BACKEND_RESULT = TypeAdapter(CyclomaticBackendResult)
-_FUNCTIONS = TypeAdapter(tuple[CyclomaticFunctionMetric, ...])
-_FINDINGS = TypeAdapter(tuple[Finding, ...])
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,28 +51,25 @@ class StepExecution:
     cyclomatic_report: CyclomaticReport | None = None
 
 
-def _invoke_worker(
-    request: dict[str, object], timeout: int | None
-) -> dict[str, object]:
-    root = str(request["root"])
+def _invoke_worker(request: WorkerRequest, timeout: int | None) -> WorkerResponse:
+    root = request.root
     completed = run_captured_process(
-        [sys.executable, "-m", "alphus.execution._worker"],
+        [
+            sys.executable,
+            "-c",
+            "from alphus.execution._worker import main; raise SystemExit(main())",
+        ],
         Path(root),
-        input_text=json.dumps(request, sort_keys=True),
+        input_text=request.model_dump_json(),
         timeout=timeout,
     )
     if completed.returncode != 0:
         raise RuntimeError(
             f"Alphus worker exited {completed.returncode}: {completed.stderr.strip()}"
         )
-    decoded: object = json.loads(completed.stdout)
-    if not isinstance(decoded, dict):
-        raise TypeError("Alphus worker returned a non-object response")
-    response = cast(dict[str, object], decoded)
-    if "error" in response:
-        raise RuntimeError(str(response["error"]))
-    if response.get("version") != 1:
-        raise ValueError("unsupported worker response version")
+    response = WORKER_RESPONSE.validate_json(completed.stdout)
+    if response.kind == "error":
+        raise RuntimeError(response.error)
     if completed.stderr:
         raise RuntimeError(f"Alphus worker emitted stderr: {completed.stderr.strip()}")
     return response
@@ -98,34 +89,21 @@ def _invoke_command(
 def _decode_rule(outcome: WorkOutcome) -> StepExecution:
     if outcome.error is not None:
         return StepExecution(error=outcome.error)
-    response = cast(dict[str, object], outcome.value)
-    if response.get("kind") != "rule":
+    response = cast(WorkerResponse, outcome.value)
+    if response.kind != "rule":
         return StepExecution(error=ValueError("unexpected rule worker response"))
     try:
-        failure = response["execution_failure"]
-        exit_code = response["exit_code"]
-        stdout = response["stdout"]
-        stderr = response["stderr"]
-        report = response["report"]
-        if failure is not None and not isinstance(failure, str):
-            raise TypeError("worker failure must be text")
-        if type(exit_code) is not int:
-            raise TypeError("worker exit code must be an integer")
-        if not isinstance(stdout, str) or not isinstance(stderr, str):
-            raise TypeError("worker output must be text")
-        if report is not None and not isinstance(report, dict):
-            raise TypeError("worker report must be an object")
         return StepExecution(
             rule=RuleRunResult(
-                findings=_DIAGNOSTICS.validate_python(response["findings"]),
-                execution_failure=failure,
-                exit_code=exit_code,
-                stdout=stdout,
-                stderr=stderr,
-                report=cast(dict[str, object] | None, report),
+                findings=tuple(item.to_diagnostic() for item in response.findings),
+                execution_failure=response.execution_failure,
+                exit_code=response.exit_code,
+                stdout=response.stdout,
+                stderr=response.stderr,
+                report=response.report,
             )
         )
-    except (KeyError, TypeError, ValueError) as error:
+    except (TypeError, ValueError) as error:
         return StepExecution(error=error)
 
 
@@ -139,10 +117,10 @@ def _decode_backend(
     if outcome.error is not None:
         return backend_failure(plan, policy, str(outcome.error))
     try:
-        response = cast(dict[str, object], outcome.value)
-        if response.get("kind") != "cyclomatic_backend":
+        response = cast(WorkerResponse, outcome.value)
+        if response.kind != "cyclomatic_backend":
             raise ValueError("unexpected cyclomatic backend response")
-        result = _BACKEND_RESULT.validate_python(response["result"])
+        result = response.result
         if (
             result.language != plan.language
             or result.backend != plan.backend
@@ -154,8 +132,8 @@ def _decode_backend(
             raise ValueError("cyclomatic backend provenance changed")
         return (
             result,
-            _FUNCTIONS.validate_python(response["records"]),
-            _FINDINGS.validate_python(response["findings"]),
+            response.records,
+            tuple(item.to_finding() for item in response.findings),
         )
     except (KeyError, TypeError, ValueError) as error:
         return backend_failure(
@@ -215,7 +193,7 @@ def run_parallel_steps(
         if step.name in planning_errors:
             continue
         dependencies = tuple(
-            key for name in step.after for key in step_keys.get(name, ())
+            key for name in step.after if name in step_keys for key in step_keys[name]
         )
         if isinstance(step, CommandRunStep):
             if step.name in skipped:
@@ -235,15 +213,14 @@ def run_parallel_steps(
             policy = config.checks.cyclomatic_complexity
             assert policy is not None
             for backend in plans[step.name]:
-                request: dict[str, object] = {
-                    "version": 1,
-                    "kind": "cyclomatic_backend",
-                    "root": str(root),
-                    "config_path": str(config_path),
-                    "config_fingerprint": config_fingerprint,
-                    "language": backend.language,
-                    "expected_plan": asdict(backend),
-                }
+                request = WorkerRequest(
+                    kind="cyclomatic_backend",
+                    root=str(root),
+                    config_path=str(config_path),
+                    config_fingerprint=config_fingerprint,
+                    language=backend.language,
+                    expected_plan=backend,
+                )
                 tasks.append(
                     WorkUnit(
                         key=f"{step.name}\0{backend.language}",
@@ -258,15 +235,14 @@ def run_parallel_steps(
                     )
                 )
             continue
-        request = {
-            "version": 1,
-            "kind": "rule",
-            "root": str(root),
-            "config_path": str(config_path),
-            "config_fingerprint": config_fingerprint,
-            "rule": step.rule,
-            "verbose": verbose,
-        }
+        request = WorkerRequest(
+            kind="rule",
+            root=str(root),
+            config_path=str(config_path),
+            config_fingerprint=config_fingerprint,
+            rule=step.rule,
+            verbose=verbose,
+        )
         tasks.append(
             WorkUnit(
                 key=step.name,

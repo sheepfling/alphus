@@ -12,7 +12,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from contextvars import ContextVar
 from io import StringIO
 from pathlib import Path
-from typing import Annotated, NamedTuple, TextIO, cast
+from typing import Annotated, NamedTuple, NotRequired, TextIO, TypedDict, cast
 
 import typer
 from pydantic import ValidationError
@@ -34,6 +34,7 @@ from alphus.execution.dispatch import run_builtin_rule
 from alphus.execution.fixes import apply_fixes as apply_configured_fixes
 from alphus.execution.fixes import resolve_fix_plan
 from alphus.execution.orchestration import RuleRunResult, run_orchestration
+from alphus.execution.parallel import run_parallel_cyclomatic
 from alphus.execution.results import RuleEvaluation
 from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
 from alphus.gates.source.cyclomatic_complexity import (
@@ -50,6 +51,18 @@ from alphus.policy.recipes import render_recipe
 from alphus.support.inventory import candidate_files
 
 QualityRule = QualityRuleName
+
+
+class _ProfilePlanPayload(TypedDict):
+    """Stable JSON shape for a resolved profile plan."""
+
+    profile: str
+    profiles: tuple[str, ...]
+    failure_threshold: str
+    steps: list[object]
+    execution: NotRequired[dict[str, int]]
+
+
 _OUTPUT_FORMAT: ContextVar[str] = ContextVar("alphus_output_format", default="rich")
 _DIRECT_GIT_SUBPROCESS_TAG = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.MAINTAINABILITY, "direct-git-subprocess"
@@ -462,8 +475,6 @@ def _evaluate_rule(
         _log_verbose(rule, checkout, len(files))
     try:
         if rule == "cyclomatic-complexity" and max_jobs > 1:
-            from alphus.execution.parallel import run_parallel_cyclomatic
-
             output = run_parallel_cyclomatic(
                 checkout, resolved_config, config, max_jobs
             )
@@ -656,10 +667,11 @@ def run_profile_rule(
     report = None
     stdout = ""
     exit_code = int(evaluation.failed)
-    if isinstance(evaluation.output, CyclomaticReport):
-        report = report_payload(evaluation.output)
-        stdout = report_summary(evaluation.output) + "\n"
-        if evaluation.output.outcome in {
+    if rule == "cyclomatic-complexity":
+        cyclomatic_report = cast(CyclomaticReport, evaluation.output)
+        report = report_payload(cyclomatic_report)
+        stdout = report_summary(cyclomatic_report) + "\n"
+        if cyclomatic_report.outcome in {
             "operational_failure",
             "incomplete_coverage",
             "no_matching_files",
@@ -852,7 +864,7 @@ def _execute_plan_profile(
                 if entry.check_argv is not None:
                     detail["expanded_argv"] = entry.check_argv
             details.append(detail)
-        payload: dict[str, object] = {
+        payload: _ProfilePlanPayload = {
             "profile": selected_profile,
             "profiles": plan.profiles,
             "failure_threshold": policy.failure_threshold,

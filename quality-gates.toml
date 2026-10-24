@@ -57,7 +57,11 @@ minimum_ast_nodes = 15
 [checks.python_style]
 extensions = [".py"]
 exclude = []
-opaque_boundary_paths = ["src/alphus/config.py"]
+opaque_boundary_paths = [
+  "src/alphus/config.py",
+  "src/alphus/execution/step_results.py",
+  "src/alphus/execution/worker_protocol.py",
+]
 opaque_boundary_marker_prefix = "# opaque-boundary: "
 opaque_boundary_min_reason_chars = 12
 forbidden_main_imports = ["main"]
