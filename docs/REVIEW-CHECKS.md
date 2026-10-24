@@ -473,11 +473,11 @@ for a complete opt-in policy, plan command, and JSON findings run.
 
 ## FastAPI and Starlette practices
 
-This is the existing warning-only source rule. The opt-in native Ruff profile
-and deferred route/OpenAPI scope are described in the
-[FastAPI quality guide](FASTAPI-QUALITY.md).
+This opt-in rule supports source advice and, when explicitly configured, route
+and generated OpenAPI review. The native Ruff profile and execution limits are
+described in the [FastAPI quality guide](FASTAPI-QUALITY.md).
 
-Selector: `fastapi-practices`. IDs:
+Selector: `fastapi-practices`. Source-only IDs:
 `alphus/python/fastapi/correctness/literal-http-status` and
 `alphus/python/fastapi/correctness/literal-error-code`.
 
@@ -509,6 +509,19 @@ when enabled, literal `code` values in an HTTP exception's direct `detail`
 dictionary. The consumer owns its vocabulary and the rule does not import the
 application or assume any particular code registry. Aliased imports resolve
 to the configured name; dynamic factories and computed dictionaries do not.
+
+To also inspect registered routes and OpenAPI, set an explicit application
+target. For example, `application = "my_api.main:app"` with
+`application_python_paths = ["src"]` imports the consumer module and calls
+`app.openapi()`; it does not start lifespan or send requests. Configure
+`exclude_route_paths`, `required_route_metadata`,
+`require_response_contract`, and `protected_route_paths` to set consumer scope.
+Duplicate method/path registrations and missing or duplicate operation IDs are
+checked whenever the application is configured. FastAPI remains optional for
+Alphus installs, and the application import path must be usable without
+production infrastructure. See the guide for diagnostic IDs, baseline setup,
+and the limits of documented OpenAPI security versus actual request
+authorization.
 
 ## Positional interfaces
 
