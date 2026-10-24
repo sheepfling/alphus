@@ -11,4 +11,5 @@ class ExitCode(IntEnum):
     SUCCESS = 0
     QUALITY_FAILURE = 1
     CONFIG_ERROR = 2
+    OPERATIONAL_FAILURE = 2
     LAUNCH_ERROR = 127

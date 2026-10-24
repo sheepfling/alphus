@@ -16,8 +16,15 @@ from alphus import cli
 from alphus.cli import main
 from alphus.config import load_config
 from alphus.contracts.findings import Diagnostic
-from alphus.gates.source import _lizard_worker as lizard_worker
+from alphus.contracts.process import ExitCode
+from alphus.gates.source import (
+    _lizard_analysis as lizard_analysis,
+)
+from alphus.gates.source import (
+    _lizard_worker as lizard_worker,
+)
 from alphus.gates.source import cyclomatic_complexity as complexity
+from alphus.gates.source._lizard_contracts import LizardWorkerResponse
 from alphus.policy.metrics import (
     CyclomaticComplexityPolicy,
     RuffCyclomaticBinding,
@@ -290,20 +297,43 @@ def test_lizard_worker_uses_the_pinned_api_and_filters_global_records(
 
     fake_lizard.get_extensions = get_extensions
     fake_lizard.analyze_files = analyze_files
-    monkeypatch.setattr(lizard_worker.importlib, "import_module", lambda _: fake_lizard)
-    monkeypatch.setattr(lizard_worker.importlib.metadata, "version", lambda _: "1.24.2")
+    monkeypatch.setattr(
+        lizard_analysis.importlib, "import_module", lambda _: fake_lizard
+    )
+    monkeypatch.setattr(
+        lizard_analysis.importlib.metadata, "version", lambda _: "1.24.2"
+    )
 
-    payload = lizard_worker._analyze(root, variant, ["sample.cpp"])
+    payload = lizard_analysis.analyze_lizard_files(root, variant, ("sample.cpp",))
 
     assert observed["extensions"] == expected_extensions
     assert observed["used_extensions"] == expected_extensions
-    assert payload["analyzed_file_count"] == 1
-    assert payload["files"] == [
+    assert payload.analyzed_file_count == 1
+    assert [item.model_dump(mode="json") for item in payload.files] == [
         {
             "path": "sample.cpp",
             "functions": [{"name": "Engine::run(int)", "line": 4, "value": 5}],
         }
     ]
+
+
+def test_lizard_worker_main_emits_validated_json_and_semantic_status(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = _repository(tmp_path, "sample.cpp")
+    response = LizardWorkerResponse(
+        version="1.24.2",
+        analyzed_file_count=1,
+        files=(),
+    )
+    monkeypatch.setattr(lizard_worker, "analyze_lizard_files", lambda *_: response)
+
+    status = lizard_worker.main([str(root), "standard", "sample.cpp"])
+
+    assert status is ExitCode.SUCCESS
+    assert LizardWorkerResponse.model_validate_json(capsys.readouterr().out) == response
 
 
 @pytest.mark.parametrize(
@@ -367,7 +397,7 @@ def test_excluded_only_scope_is_reported_as_empty_not_as_a_score(
 
     assert report.outcome == "no_matching_files"
     assert report.backends[0].status == "no_matching_files"
-    assert complexity.report_exit_code(report, "error") == 2
+    assert complexity.report_exit_code(report, "error") is ExitCode.OPERATIONAL_FAILURE
 
 
 def test_windows_batch_launchers_use_the_platform_command_shell(
@@ -424,6 +454,44 @@ version = "0.16.1"
     plan = json.loads(capsys.readouterr().out)
     assert plan["backends"][0]["backend"] == "ruff"
     assert "C901" in plan["backends"][0]["command"]
+
+    eslint_policy = root / "eslint-quality.toml"
+    (root / "sample.js").write_text("function run() { return 1; }\n", encoding="utf-8")
+    eslint_policy.write_text(
+        """schema_version = 1
+[files]
+include = ["**/*.js"]
+exclude = []
+[checks.cyclomatic_complexity]
+metric = "cyclomatic"
+maximum = 3
+files = { include = ["**/*.js"], exclude = [] }
+[[checks.cyclomatic_complexity.backends]]
+language = "javascript"
+backend = "eslint"
+variant = "classic"
+version = "10.13.0"
+""",
+        encoding="utf-8",
+    )
+    assert (
+        main(
+            [
+                "--root",
+                str(root),
+                "--config",
+                str(eslint_policy),
+                "--rule",
+                "cyclomatic-complexity",
+                "--plan",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    eslint_command = json.loads(capsys.readouterr().out)["backends"][0]["command"]
+    assert "--no-config-lookup" in eslint_command
+    assert "--no-inline-config" in eslint_command
 
 
 def test_installed_package_example_loads_all_three_opt_in_backends(

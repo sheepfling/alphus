@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from alphus.cli import main
+from alphus.cli import _select_output_format, main
 
 
 def test_plan_shows_native_and_custom_steps_without_running_them(
@@ -45,6 +45,9 @@ def test_plan_shows_native_and_custom_steps_without_running_them(
     assert smoke["fixable"] is False
     assert not (tmp_path / "ran").exists()
 
+    assert main([*arguments, "--output", "json"]) == 0
+    assert json.loads(capsys.readouterr().out)["profile"] == "check"
+
     assert main([*arguments, "--output", "plain"]) == 0
     human = capsys.readouterr().out
     assert "MAINLINE COMMAND Markdown style: 1 file(s), fixer available" in human
@@ -55,6 +58,29 @@ def test_plan_shows_native_and_custom_steps_without_running_them(
 
 def test_output_option_rejects_unknown_human_format() -> None:
     assert main(["--output", "compact"]) == 2
+
+
+def test_output_mode_resolves_terminal_text_styles_and_json_alias() -> None:
+    assert _select_output_format(
+        "auto", json_requested=False, stdout_is_terminal=True
+    ) == ("rich", False)
+    assert _select_output_format(
+        "auto", json_requested=False, stdout_is_terminal=False
+    ) == ("plain", False)
+    assert _select_output_format(
+        "plain", json_requested=False, stdout_is_terminal=True
+    ) == ("plain", False)
+    assert _select_output_format(
+        "rich", json_requested=False, stdout_is_terminal=False
+    ) == ("rich", False)
+    assert _select_output_format(
+        "json", json_requested=False, stdout_is_terminal=True
+    ) == ("plain", True)
+    assert _select_output_format(
+        "auto", json_requested=True, stdout_is_terminal=True
+    ) == ("plain", True)
+    with pytest.raises(ValueError, match="cannot be combined"):
+        _select_output_format("rich", json_requested=True, stdout_is_terminal=True)
 
 
 def test_plan_rejects_missing_selected_rule_policy(
