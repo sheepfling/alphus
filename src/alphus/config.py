@@ -59,6 +59,7 @@ from alphus.policy.review import (
     NumericLiteralSpec,
     PydanticPracticePolicy,
     ScipyConstantsPolicy,
+    TestQualityExclusion,
     TestQualityPolicy,
 )
 from alphus.policy.sources import (
@@ -127,6 +128,7 @@ __all__ = [
     "ScriptPolicy",
     "SharedUtilitiesPolicy",
     "SourceScanPolicy",
+    "TestQualityExclusion",
     "TestQualityPolicy",
     "TrackedPathRule",
     "TrackedSuffixRule",

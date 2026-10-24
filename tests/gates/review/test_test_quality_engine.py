@@ -1,10 +1,18 @@
 """Keep advisory test checks focused on concrete brittle dependencies."""
 
+from collections.abc import Iterable
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
-from alphus.config import TestQualityPolicy as Policy
+from alphus.config import (
+    TestQualityExclusion as OracleExclusion,
+)
+from alphus.config import (
+    TestQualityPolicy as Policy,
+)
+from alphus.contracts.findings import Finding
 from alphus.gates.review.test_quality import check_test_quality, python_findings
 
 POLICY = Policy(
@@ -28,6 +36,18 @@ def scan(source: str, policy: Policy = POLICY) -> list[tuple[str, int | None]]:
         (item.rule_id, item.line)
         for item in python_findings(source, "tests/test_report.py", policy)
     ]
+
+
+ORACLE_POLICY = POLICY.model_copy(
+    update={
+        "oracle_independence": True,
+        "oracle_production_modules": ("sample",),
+    }
+)
+
+
+def oracle_scan(source: str, policy: Policy = ORACLE_POLICY) -> list[Finding]:
+    return python_findings(source, "tests/test_oracle.py", policy)
 
 
 def test_large_exact_narrative_and_local_aliases_warn_at_the_assertion() -> None:
@@ -345,3 +365,162 @@ def test_multiple_same_line_findings_are_deterministic() -> None:
     second = python_findings(source, "tests/test_plan.py", POLICY)
     assert first == second
     assert [item.message for item in first] == sorted(item.message for item in first)
+
+
+def test_shared_oracle_follows_import_aliases_and_simple_result_assignments() -> None:
+    source = (
+        "import sample.math as math_module\n"
+        "def test_distance():\n"
+        " calculate = math_module.distance\n"
+        " actual = calculate((0, 0), (3, 4))\n"
+        " expected = calculate((0, 0), (3, 4))\n"
+        " assert actual == expected\n"
+    )
+    findings = oracle_scan(source)
+
+    assert [(item.rule_id, item.line, item.severity) for item in findings] == [
+        ("alphus/python/none/testing/shared-oracle", 6, "warning")
+    ]
+    assert "actual operand 6:9-6:15" in findings[0].message
+    assert "expected operand 6:19-6:27" in findings[0].message
+    assert "sample.math.distance" in findings[0].message
+    assert "calls at 4:11-4:36 and 5:13-5:38" in findings[0].message
+    assert "does not supply independent evidence" in findings[0].message
+
+
+def test_shared_oracle_reports_each_assertion_with_direct_import_aliases() -> None:
+    source = (
+        "from sample.math import distance as compute\n"
+        "def test_distance():\n"
+        " assert compute((0, 0), (3, 4)) == compute((0, 0), (3, 4))\n"
+        " assert compute((1, 1), (4, 5)) == compute((1, 1), (4, 5))\n"
+    )
+    findings = oracle_scan(source)
+
+    assert [item.rule_id for item in findings] == [
+        "alphus/python/none/testing/shared-oracle",
+        "alphus/python/none/testing/shared-oracle",
+    ]
+    assert [item.line for item in findings] == [3, 4]
+    assert oracle_scan(source) == findings
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "assert calculate(4) == 16",
+        "assert calculate(4) == reference.calculate(4)",
+        "assert calculate(4) == pytest.approx(16)",
+        "assert build_fixture(4) == build_fixture(4)",
+        "assert public_api(4) == implementation(4)",
+        "assert wrap(calculate(4)) == calculate(4)",
+    ],
+)
+def test_independent_values_helpers_and_unknown_wrappers_are_not_reported(
+    body: str,
+) -> None:
+    source = (
+        "import pytest\n"
+        "from sample.math import calculate\n"
+        "from sample.reference import calculate as reference\n"
+        "from tests.fixtures import build_fixture\n"
+        "from sample.api import public_api\n"
+        "from sample.internal import implementation\n"
+        "def test_value():\n " + body + "\n"
+    )
+
+    assert oracle_scan(source) == []
+
+
+def test_oracle_detector_skips_rebinding_shadowing_dynamic_and_branch_bindings() -> (
+    None
+):
+    source = (
+        "from sample.math import calculate\n"
+        "def test_rebound():\n"
+        " calculate = local_function\n"
+        " assert calculate(4) == calculate(4)\n"
+        "def test_shadowed(calculate):\n"
+        " assert calculate(4) == calculate(4)\n"
+        "def test_branch():\n"
+        " if condition:\n  selected = calculate\n"
+        " else:\n  selected = local_function\n"
+        " assert selected(4) == selected(4)\n"
+        "def test_rebound_callable():\n"
+        " selected = calculate\n"
+        " selected = local_function\n"
+        " assert selected(4) == selected(4)\n"
+        "def test_unresolved_receiver(self):\n"
+        " assert self.calculate(4) == self.calculate(4)\n"
+        "def test_dynamic():\n"
+        " calculate = __import__('sample.math').calculate\n"
+        " assert calculate(4) == calculate(4)\n"
+    )
+
+    assert oracle_scan(source) == []
+
+
+def test_helper_allowlist_and_reasoned_exclusion_are_scoped() -> None:
+    allowlisted = ORACLE_POLICY.model_copy(
+        update={"oracle_helper_allowlist": ("sample.math.reference",)}
+    )
+    source = (
+        "from sample.math import reference\n"
+        "def test_reference():\n"
+        " assert reference(4) == reference(4)\n"
+    )
+    assert oracle_scan(source, allowlisted) == []
+
+    exclusion = OracleExclusion(
+        path="tests/test_oracle.py",
+        test_function="test_delegation",
+        reason="This test documents the public wrapper delegation contract.",
+    )
+    excluded = ORACLE_POLICY.model_copy(update={"oracle_exclusions": (exclusion,)})
+    source = (
+        "from sample.math import calculate\n"
+        "def test_delegation():\n"
+        " assert calculate(4) == calculate(4)\n"
+        "def test_independent():\n"
+        " assert calculate(4) == calculate(4)\n"
+    )
+
+    assert [item.line for item in oracle_scan(source, excluded)] == [5]
+
+
+def test_oracle_independence_is_independent_and_requires_a_production_scope() -> None:
+    source = (
+        "from sample.math import calculate\n"
+        "def test_shared():\n"
+        " assert calculate(4) == calculate(4)\n"
+    )
+    assert oracle_scan(source, POLICY) == []
+    with pytest.raises(ValidationError):
+        Policy(extensions=[".py"], oracle_independence=True)
+
+
+def test_oracle_exclusion_requires_a_reasoned_test_scope() -> None:
+    with pytest.raises(ValidationError):
+        OracleExclusion(
+            path="tests/test_oracle.py",
+            test_function="test_delegation",
+            reason="waiver",
+        )
+
+
+def test_oracle_policy_json_schema_exposes_the_opt_in_contract() -> None:
+    schema = Policy.model_json_schema()
+
+    assert schema["properties"]["oracle_independence"]["default"] is False
+    assert "oracle_production_modules" in schema["properties"]
+    assert "TestQualityExclusion" in schema["$defs"]
+
+
+def test_broken_algorithm_example_shows_why_the_shared_oracle_is_advisory() -> None:
+    def broken_total(values: Iterable[int]) -> int:
+        return sum(values) + 1
+
+    data = [1, 2]
+    assert broken_total(data) == broken_total(data)
+    with pytest.raises(AssertionError):
+        assert broken_total(data) == 3
