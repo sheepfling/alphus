@@ -39,6 +39,7 @@ from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
 from alphus.gates.source.python_style import StyleFindings
 from alphus.policy.base import MissingPolicyError
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
+from alphus.policy.function_shape import plan_function_shape
 from alphus.policy.intents import (
     PlannedIntentBindingRow,
     intent_bindings_for_steps,
@@ -814,6 +815,13 @@ def _command(
         str | None,
         typer.Option("--profile", help="Choose a configured orchestration profile."),
     ] = None,
+    plan_function_shape_only: Annotated[
+        bool,
+        typer.Option(
+            "--plan-function-shape",
+            help="Print the native function-shape mapping without running a checker.",
+        ),
+    ] = False,
     json_output: Annotated[
         bool,
         typer.Option("--json", help="Emit one plain JSON value on stdout."),
@@ -870,6 +878,42 @@ def _command(
     ] = False,
 ) -> None:
     """Run the default profile from this repository, or select a rule/profile."""
+    if plan_function_shape_only:
+        if any(
+            (
+                run,
+                rule is not None,
+                profile is not None,
+                json_output,
+                report,
+                verbose,
+                plan,
+                fix_plan,
+                apply_fixes,
+                bool(fix_step),
+                init_config is not None,
+            )
+        ):
+            raise typer.BadParameter(
+                "--plan-function-shape cannot be combined with run, rule, report, "
+                "or other plan/fix options"
+            )
+        config_path = config if config.is_absolute() else root / config
+        policy = _load_policy(config_path).checks.function_shape
+        if policy is None:
+            typer.echo(
+                "the selected configuration has no [checks.function_shape] policy",
+                err=True,
+            )
+            raise typer.Exit(2)
+        try:
+            typer.echo(
+                json.dumps(plan_function_shape(policy, root).to_dict(), indent=2)
+            )
+        except ValueError as error:
+            typer.echo(f"Function-shape plan failed: {error}", err=True)
+            raise typer.Exit(2) from error
+        raise typer.Exit(0)
     if output_format.lower() not in {"rich", "plain"}:
         raise typer.BadParameter("--output must be rich or plain")
     _OUTPUT_FORMAT.set(output_format.lower())
