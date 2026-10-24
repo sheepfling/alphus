@@ -960,5 +960,8 @@ def test_cli_policy_cli_uses_configured_contract_and_manifest(
     ]
 
     assert main(arguments) == 1
-    assert len(json.loads(capsys.readouterr().out)) == 7
+    output = json.loads(capsys.readouterr().out)
+    assert len(output) == 5
+    assert any(message.startswith("[presentation:error]") for message in output)
+    assert not any("output-style" in message for message in output)
     assert main([*arguments, "--report"]) == 0

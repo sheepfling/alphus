@@ -178,10 +178,12 @@ typer_package = "typer"
 typer_calls = ["Typer", "run"]
 rich_package = "rich"
 rich_calls = ["Console", "print"]
+renderer_enforcement = "enforce"
 json_option = "--json"
 json_serializers = ["dumps", "model_dump_json"]
 verbose_option = "--verbose"
-output_option = "--output"
+output_style_enforcement = "enforce"
+style_option = "--output"
 rich_output = "rich"
 plain_output = "plain"
 

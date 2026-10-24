@@ -13,7 +13,7 @@ from contextvars import ContextVar
 from functools import partial
 from io import StringIO
 from pathlib import Path
-from typing import Annotated, NamedTuple, NotRequired, TextIO, TypedDict, cast
+from typing import Annotated, Literal, NamedTuple, NotRequired, TextIO, TypedDict, cast
 
 import typer
 from pydantic import ValidationError
@@ -53,6 +53,7 @@ from alphus.execution.profile_history import (
 from alphus.execution.results import RuleEvaluation, RuleOutput
 from alphus.execution.scheduler import WorkUnit, run_work_units
 from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
+from alphus.gates.source.cli_policy import CliPolicyReport
 from alphus.gates.source.cyclomatic_complexity import (
     CyclomaticReport,
     build_cyclomatic_plan,
@@ -110,6 +111,9 @@ _RUNTIME_TYPE_TAG = rule_tag(
 )
 _CLI_CONTRACT_TAG = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.CORRECTNESS, "cli-contract-violation"
+)
+_CLI_PRESENTATION_TAG = rule_tag(
+    Scope.PYTHON, Framework.NONE, Category.STYLE, "cli-presentation-policy"
 )
 _SCRIPT_POLICY_TAG = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.SECURITY, "script-policy-violation"
@@ -415,13 +419,25 @@ def _render_runtime_types(issues: Sequence[str]) -> None:
     _human_print(f"Runtime type checks: {len(issues)} violation(s)")
 
 
-def _render_cli_policy(issues: Sequence[str]) -> None:
-    """Render the CLI migration inventory and endpoint count."""
-    for issue in issues:
-        _human_print(f"{_CLI_CONTRACT_TAG}: {issue}")
-    endpoints = {issue.partition(": ")[0] for issue in issues}
+def _render_cli_policy(report: CliPolicyReport | Sequence[str]) -> None:
+    """Render classified findings or a legacy list of CLI messages."""
+    if isinstance(report, CliPolicyReport):
+        for finding in report.findings:
+            tag = (
+                _CLI_PRESENTATION_TAG
+                if finding.classification == "presentation"
+                else _CLI_CONTRACT_TAG
+            )
+            _human_print(f"{tag}: {finding.to_legacy_message()}")
+        finding_count = len(report.findings)
+        endpoint_count = len(report.endpoints)
+    else:
+        for issue in report:
+            _human_print(f"{_CLI_CONTRACT_TAG}: {issue}")
+        finding_count = len(report)
+        endpoint_count = 0
     _human_print(
-        f"CLI policy: {len(issues)} violation(s) in {len(endpoints)} endpoint(s)"
+        f"CLI policy: {finding_count} finding(s) in {endpoint_count} endpoint(s)"
     )
 
 
@@ -680,13 +696,24 @@ def _execute(
         return exit_code
 
     if shape is RuleOutputShape.MESSAGES:
+        if rule == "cli":
+            cli_output = cast(CliPolicyReport | list[str], output)
+            if hasattr(cli_output, "legacy_messages"):
+                cli_report = cast(CliPolicyReport, cli_output)
+                if json_output:
+                    typer.echo(json.dumps(cli_report.legacy_messages()))
+                else:
+                    _render_cli_policy(cli_report)
+            elif json_output:
+                typer.echo(json.dumps(cli_output))
+            else:
+                _render_cli_policy(cli_output)
+            return exit_code
         issues = cast(list[str], output)
         if json_output:
             typer.echo(json.dumps(issues))
         elif rule == "script-policy":
             _render_script_policy(issues)
-        elif rule == "cli":
-            _render_cli_policy(issues)
         elif rule == "runtime-types":
             _render_runtime_types(issues)
         else:
@@ -1310,7 +1337,7 @@ def _command(
         typer.Option("--json", help="Emit one plain JSON value on stdout."),
     ] = False,
     output_format: Annotated[
-        str,
+        Literal["auto", "plain", "rich", "json"],
         typer.Option(
             "--output",
             help="Output format: auto, plain, rich, or json.",
