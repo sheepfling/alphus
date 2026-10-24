@@ -1,42 +1,44 @@
 # Alphus installability and distribution status
 
-## Current source-install verification (2026-10-24)
+## Verified source-install revision (2026-10-24)
 
-Main is at commit `20221e76720e170b7a37895b8fa2e1c56a658396`, which includes
-the FastAPI contract integration and the common-lint evaluation. `pyproject.toml`
-declares package version `0.0.1`, Python `>=3.11,<3.16`, eight console
-commands, and the `py.typed` marker. After PR #37 merged, the exact main commit
-passed its push-triggered self-quality and hygiene workflows, including Python
-3.11–3.15, minimum-dependency, and optional-gate checks.
+The exact source revision tested for this record is `b94a7ab26248db819581a8f5fb5f37337e8057d7`. It was the
+`main` head when the smoke test ran. The package metadata and `src/` tree
+match commit `20221e76720e170b7a37895b8fa2e1c56a658396`; the intervening
+main changes were documentation-only. The package version is `0.0.1`,
+supports Python `>=3.11,<3.16`, and includes eight console commands and
+`py.typed` markers.
+
+The exact-main push checks passed: [self-quality run 27](https://github.com/sheepfling/alphus/actions/runs/40073098177)
+passed the Python 3.11–3.15 matrix, minimum dependencies, optional gates, and
+JavaScript profile. [Repository-hygiene run 27](https://github.com/sheepfling/alphus/actions/runs/40073098173)
+passed; its `history-audit` job was skipped.
 
 The verified pre-registry trial route is a direct GitHub source install pinned
 to the full commit SHA:
 
 ```shell
-python -m pip install "alphus @ git+https://github.com/sheepfling/alphus.git@20221e76720e170b7a37895b8fa2e1c56a658396"
+python -m pip install \
+  "alphus @ git+https://github.com/sheepfling/alphus.git@b94a7ab26248db819581a8f5fb5f37337e8057d7"
 ```
 
-The package metadata remains at `0.0.1`; the full source SHA in the consumer's
-requirement distinguishes this exact revision from other source builds with
-that same metadata version. This records a pinned-source install for a
-pre-registry trial. It does not approve a public package-index channel. No
-release tag or package-index publication was created.
+A clean Python 3.12.14 environment resolved that requirement to the exact SHA.
+A second clean environment installed the locally built wheel, and a third
+installed the source distribution. Each passed `pip check`, `alphus --help`,
+and `alphus-history --help`. Imports resolved from that environment's
+`site-packages`, outside the checkout. The installed `alphus` and
+`alphus_stub_quality` packages both contained `py.typed`; all eight console
+entry points were present.
 
-Using Python 3.12.14 and `build` 1.6.1, both a wheel and source distribution
-were built from that exact commit with isolated setuptools 84.2.1. The wheel
-SHA-256 is
-`5eef38ac951832ee8ddd522ec4affa167923a05b01f92c2ad5cf6623fc4f3c95`; the
+The wheel and source archive were built from the exact `b94a7ab` source using
+Python 3.12.14, setuptools 84.2.1, and wheel 0.48.0. The wheel SHA-256 is
+`52b5a667036e74c5477d4c0343e0757002880115824afdac0220505603875763`; the
 source archive SHA-256 is
-`24951e227024319ef2b71562e8cc35f5eb71d387bde8a68d0eda813428c83685`.
-
-The GitHub source install resolved to the recorded full SHA in a clean Python
-3.12.14 environment. That install, the locally built wheel, and the source
-archive each passed `pip check`; `alphus --help`, `alphus-history --help`,
-package import, installed `py.typed`, and both primary console entry points
-were verified from their isolated environments. This establishes installation
-from the recorded GitHub source revision and local artifact installability. It
-does not establish a PyPI package-index install or approve publication.
-
+`29258bb09c1c3139778d6d685063b5953db6831c1e96da523deeafeba21af4fa`.
+The wheel, source archive, and direct GitHub install all passed the same
+install smoke. This records a verified pre-registry trial route; it does not
+approve a public package-index channel. No release tag, package-index
+publication, or downstream repository change was made.
 ## Historical install proofs
 
 The dated sections below preserve earlier install evidence and its exact
