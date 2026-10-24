@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import subprocess
-from collections.abc import Mapping
+from dataclasses import dataclass
 from io import StringIO
 from pathlib import Path
 from typing import Literal
 
 import pytest
+from pydantic import TypeAdapter
+from typing_extensions import TypedDict
 
 from alphus.config import (
     CommandRunStep,
@@ -20,11 +22,47 @@ from alphus.config import (
     SharedQualityIntent,
 )
 from alphus.execution.orchestration import run_orchestration
-from alphus.support.data_access import (
-    JsonValue,
-    require_json_object,
-    validate_json_value,
-)
+
+
+class _FindingEvidence(TypedDict, total=False):
+    rule_id: str
+    severity: str
+
+
+class _IntentEvidence(TypedDict, total=False):
+    rule_id: str
+    native_rule: str
+    language: str
+    status: str
+    failure_kind: str | None
+    evidence_step: str | None
+
+
+class _StepEvidence(TypedDict, total=False):
+    stdout: str
+    stderr: str
+    findings: list[_FindingEvidence]
+    status: str
+    exit_code: int | None
+
+
+class _ExecutionReport(TypedDict, total=False):
+    profile: str
+    passed: int
+    failed: int
+    disabled: int
+    unsupported: int
+    intent_bindings: list[_IntentEvidence]
+    steps: list[_StepEvidence]
+
+
+_EXECUTION_REPORT_ADAPTER: TypeAdapter[_ExecutionReport] = TypeAdapter(_ExecutionReport)
+
+
+@dataclass(frozen=True, slots=True)
+class _RunResult:
+    exit_code: int
+    report: _ExecutionReport
 
 
 def _intent(
@@ -102,8 +140,7 @@ def _policy(
         "-c",
         (
             "import sys; print('native stdout'); "
-            "print('native stderr', file=sys.stderr); "
-            f"raise SystemExit({exit_code})"
+            f"print('native stderr', file=sys.stderr); raise SystemExit({exit_code})"
         ),
     )
     command_step = CommandRunStep(
@@ -128,7 +165,7 @@ def _policy(
 
 def _run(
     tmp_path: Path, policy: OrchestrationPolicy, profile_name: str = "check"
-) -> tuple[int, Mapping[str, JsonValue]]:
+) -> _RunResult:
     output = StringIO()
     errors = StringIO()
     code = run_orchestration(
@@ -141,8 +178,9 @@ def _run(
         stdout=output,
         stderr=errors,
     )
-    return code, require_json_object(
-        validate_json_value(output.getvalue()), "expected a JSON object report"
+    return _RunResult(
+        exit_code=code,
+        report=_EXECUTION_REPORT_ADAPTER.validate_json(output.getvalue()),
     )
 
 
@@ -154,10 +192,10 @@ def test_intent_failure_kinds_link_semantic_identity_to_raw_tool_evidence(
     tmp_path: Path, native_exit: int, failure_kind: str
 ) -> None:
     policy = _policy(tmp_path, exit_code=native_exit, intent=_intent())
-    code, report = _run(tmp_path, policy)
+    result = _run(tmp_path, policy)
 
-    assert code == 1
-    binding = report["intent_bindings"][0]
+    assert result.exit_code == 1
+    binding = result.report["intent_bindings"][0]
     assert binding["rule_id"] == (
         "alphus/any/none/maintainability/function-complexity-review"
     )
@@ -165,7 +203,7 @@ def test_intent_failure_kinds_link_semantic_identity_to_raw_tool_evidence(
     assert binding["status"] == "failed"
     assert binding["failure_kind"] == failure_kind
     assert binding["evidence_step"] == "Native complexity"
-    evidence = report["steps"][0]
+    evidence = result.report["steps"][0]
     assert evidence["stdout"] == "native stdout\n"
     assert evidence["stderr"].startswith("native stderr\n")
 
@@ -178,23 +216,23 @@ def test_missing_tool_is_operational_failure_not_a_clean_intent(
         intent=_intent(exit_codes=(127,)),
         command=("tool-that-does-not-exist-alphus-test",),
     )
-    code, report = _run(tmp_path, policy)
+    result = _run(tmp_path, policy)
 
-    assert code == 1
-    assert report["intent_bindings"][0]["failure_kind"] == "operational_error"
-    assert report["intent_bindings"][0]["status"] == "failed"
-    assert "tool-that-does-not-exist-alphus-test" in report["steps"][0]["stderr"]
+    assert result.exit_code == 1
+    assert result.report["intent_bindings"][0]["failure_kind"] == "operational_error"
+    assert result.report["intent_bindings"][0]["status"] == "failed"
+    assert "tool-that-does-not-exist-alphus-test" in result.report["steps"][0]["stderr"]
 
 
 def test_intent_profile_is_selected_through_an_included_profile(
     tmp_path: Path,
 ) -> None:
     policy = _policy(tmp_path, intent=_intent())
-    code, report = _run(tmp_path, policy, "aggregate")
+    result = _run(tmp_path, policy, "aggregate")
 
-    assert code == 0
-    assert report["profile"] == "aggregate"
-    assert report["intent_bindings"][0]["status"] == "passed"
+    assert result.exit_code == 0
+    assert result.report["profile"] == "aggregate"
+    assert result.report["intent_bindings"][0]["status"] == "passed"
 
 
 @pytest.mark.parametrize(
@@ -211,22 +249,22 @@ def test_disabled_intent_does_not_execute_its_native_command(
             "{python}",
             "-c",
             (
-                f"from pathlib import Path; Path({str(marker)!r}).write_text('ran'); "
-                "raise SystemExit(1)"
+                "from pathlib import Path; "
+                f"Path({str(marker)!r}).write_text('ran'); raise SystemExit(1)"
             ),
         ),
     )
 
-    code, report = _run(tmp_path, policy)
+    result = _run(tmp_path, policy)
 
-    assert code == 0
+    assert result.exit_code == 0
     assert not marker.exists()
-    assert report["passed"] == 0
-    assert report["failed"] == 0
-    assert report["disabled"] == 1
-    assert report["steps"][0]["status"] == "disabled"
-    assert report["steps"][0]["exit_code"] is None
-    assert report["intent_bindings"][0]["status"] == "disabled"
+    assert result.report["passed"] == 0
+    assert result.report["failed"] == 0
+    assert result.report["disabled"] == 1
+    assert result.report["steps"][0]["status"] == "disabled"
+    assert result.report["steps"][0]["exit_code"] is None
+    assert result.report["intent_bindings"][0]["status"] == "disabled"
 
 
 def test_shared_native_command_runs_when_another_selected_binding_is_enabled(
@@ -243,13 +281,13 @@ def test_shared_native_command_runs_when_another_selected_binding_is_enabled(
         ),
     )
 
-    code, report = _run(tmp_path, policy)
+    result = _run(tmp_path, policy)
 
-    assert code == 0
+    assert result.exit_code == 0
     assert marker.read_text(encoding="utf-8") == "ran"
-    assert report.get("disabled", 0) == 0
-    assert report["steps"][0]["status"] == "passed"
-    bindings = {item["language"]: item for item in report["intent_bindings"]}
+    assert result.report.get("disabled", 0) == 0
+    assert result.report["steps"][0]["status"] == "passed"
+    bindings = {item["language"]: item for item in result.report["intent_bindings"]}
     assert bindings["python"]["status"] == "disabled"
     assert bindings["cpp"]["status"] == "passed"
 
@@ -275,15 +313,18 @@ def test_declared_json_evidence_is_validated_without_rewriting_raw_output(
         intent=_intent(evidence_format="json-array", exit_codes=(127,)),
         command=("{python}", "-c", f"print({output!r})"),
     )
-    code, report = _run(tmp_path, policy)
+    result = _run(tmp_path, policy)
 
-    assert code == expected_code
-    binding = report["intent_bindings"][0]
+    assert result.exit_code == expected_code
+    binding = result.report["intent_bindings"][0]
     assert binding["status"] == expected_status
     assert binding["failure_kind"] == expected_failure_kind
-    assert report["steps"][0]["stdout"] == f"{output}\n"
+    assert result.report["steps"][0]["stdout"] == f"{output}\n"
     if expected_failure_kind:
-        assert "command-output-invalid" in str(report["steps"][0]["findings"])
+        assert (
+            "command-output-invalid"
+            in result.report["steps"][0]["findings"][0]["rule_id"]
+        )
 
 
 @pytest.mark.parametrize(
@@ -307,16 +348,16 @@ def test_declared_json_object_evidence_is_validated_without_rewriting_raw_output
         command=("{python}", "-c", f"print({output!r})"),
     )
 
-    code, report = _run(tmp_path, policy)
+    result = _run(tmp_path, policy)
 
-    assert code == expected_code
-    binding = report["intent_bindings"][0]
+    assert result.exit_code == expected_code
+    binding = result.report["intent_bindings"][0]
     assert binding["status"] == expected_status
     assert binding["failure_kind"] == expected_failure_kind
-    assert report["steps"][0]["stdout"] == f"{output}\n"
+    assert result.report["steps"][0]["stdout"] == f"{output}\n"
     if expected_failure_kind:
         assert "expected a valid JSON object on stdout" in str(
-            report["steps"][0]["stderr"]
+            result.report["steps"][0]["stderr"]
         )
 
 
@@ -333,24 +374,24 @@ def test_command_timeout_is_operational_failure_with_partial_output(
             "import sys,time; print('before timeout', flush=True); time.sleep(2)",
         ),
     )
-    code, report = _run(tmp_path, policy)
+    result = _run(tmp_path, policy)
 
-    assert code == 1
-    assert report["intent_bindings"][0]["failure_kind"] == "operational_error"
-    assert report["steps"][0]["stdout"] == "before timeout\n"
-    assert "timed out after 0.1 seconds" in report["steps"][0]["stderr"]
+    assert result.exit_code == 1
+    assert result.report["intent_bindings"][0]["failure_kind"] == "operational_error"
+    assert result.report["steps"][0]["stdout"] == "before timeout\n"
+    assert "timed out after 0.1 seconds" in result.report["steps"][0]["stderr"]
 
 
 def test_empty_inventory_is_reported_separately_from_success(tmp_path: Path) -> None:
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     intent = _intent()
     policy = _policy(tmp_path, intent=intent, with_source=False)
-    code, report = _run(tmp_path, policy)
+    result = _run(tmp_path, policy)
 
-    assert code == 0
-    assert report["steps"][0]["status"] == "not_applicable"
-    assert report["intent_bindings"][0]["status"] == "not_applicable"
-    assert report["intent_bindings"][0]["failure_kind"] == "no_matching_files"
+    assert result.exit_code == 0
+    assert result.report["steps"][0]["status"] == "not_applicable"
+    assert result.report["intent_bindings"][0]["status"] == "not_applicable"
+    assert result.report["intent_bindings"][0]["failure_kind"] == "no_matching_files"
 
 
 @pytest.mark.parametrize(
@@ -388,9 +429,7 @@ def test_unsupported_capabilities_are_explicit_and_only_required_mainline_blocks
         stdout=output,
         stderr=StringIO(),
     )
-    report = require_json_object(
-        validate_json_value(output.getvalue()), "expected a JSON object report"
-    )
+    report = _EXECUTION_REPORT_ADAPTER.validate_json(output.getvalue())
 
     assert code == expected_code
     assert report["unsupported"] == 1

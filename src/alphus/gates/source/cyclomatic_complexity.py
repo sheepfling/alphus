@@ -22,7 +22,9 @@ from alphus.contracts.findings import (
     Severity,
     severity_meets_threshold,
 )
+from alphus.contracts.process import ExitCode
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.gates.source._lizard_contracts import LizardWorkerResponse as _LizardPayload
 from alphus.policy.metrics import (
     CyclomaticBackendBinding,
     CyclomaticComplexityPolicy,
@@ -82,24 +84,6 @@ class _EslintDiagnostic(_NativeRecord):
 class _EslintFileResult(_NativeRecord):
     file_path: Annotated[str | None, Field(alias="filePath")] = None
     messages: tuple[_EslintDiagnostic, ...] | None = None
-
-
-class _LizardFunction(_NativeRecord):
-    name: str
-    line: int
-    value: int
-
-
-class _LizardFileResult(_NativeRecord):
-    path: str
-    functions: tuple[_LizardFunction, ...]
-
-
-class _LizardPayload(_NativeRecord):
-    version: str | None = None
-    analyzed_file_count: int | None = None
-    files: tuple[_LizardFileResult, ...] | None = None
-    error: str | None = None
 
 
 _RUFF_DIAGNOSTICS: TypeAdapter[tuple[_RuffDiagnostic, ...]] = TypeAdapter(
@@ -271,6 +255,7 @@ def _native_command(
             return (
                 executable,
                 "--no-config-lookup",
+                "--no-inline-config",
                 "--rule",
                 f'complexity:["error",{options}]',
                 "--format",
@@ -943,21 +928,23 @@ def report_exit_code(
     failure_threshold: Severity,
     *,
     report_only: bool = False,
-) -> int:
+) -> ExitCode:
     """Map report state to CLI status without masking operational failures."""
     if report.outcome in {
         "operational_failure",
         "incomplete_coverage",
         "no_matching_files",
     }:
-        return 2
+        return ExitCode.OPERATIONAL_FAILURE
     if report_only:
-        return 0
-    return int(
-        any(
+        return ExitCode.SUCCESS
+    return (
+        ExitCode.QUALITY_FAILURE
+        if any(
             severity_meets_threshold(diagnostic.severity, failure_threshold)
             for diagnostic in report.diagnostics
         )
+        else ExitCode.SUCCESS
     )
 
 

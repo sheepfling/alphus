@@ -290,8 +290,11 @@ Add `--verbose` to write diagnostics to stderr. Human reports use Rich by
 default; pass `--output plain` for unstyled text. `--json` emits one plain JSON
 value on stdout and is independent of the human output style.
 
-The generic Markdown checks include configured line-length and hard file-size
-limits. Python files support those checks plus the AST-based policy rules.
+The generic checks include configured Unicode-code-point line lengths,
+physical-line limits, and optional advisory raw-byte limits. Their units,
+newline behavior, backward-compatible names, path precedence, and native-tool
+ownership are described in the [source hygiene guide](docs/SOURCE-HYGIENE.md).
+Python files support those checks plus the AST-based policy rules.
 The `comment-markers` rule can reject configurable temporary-work words in
 Python, TOML, JavaScript, TypeScript, C/C++, and Java comments. It ignores
 strings and reports file and line; add its `[checks.comment_markers]` policy

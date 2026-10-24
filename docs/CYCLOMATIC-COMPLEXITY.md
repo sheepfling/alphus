@@ -32,6 +32,11 @@ alphus --root /path/to/consumer \
   --rule cyclomatic-complexity --json
 ```
 
+`--output auto` selects rich text for a terminal and plain text when output is
+redirected. Choose `--output plain` or `--output rich` to set the human format;
+`--output json` is equivalent to `--json`. JSON output cannot be combined with
+an explicit human format.
+
 The same rule can be added to an orchestration profile using
 `rule = "cyclomatic-complexity"`. Profile JSON includes a `report` object on
 that step. Existing profile steps keep their current output fields. Direct
@@ -40,6 +45,8 @@ tools, version mismatches, malformed native output, timeouts, parse failures,
 and missing coverage. A configured language with no matching files is
 `no_matching_files` (or `incomplete_coverage` when another backend selected
 files), with exit code 2; this is never reported as a clean metric.
+Threshold violations return exit code 1. Operational failures, including
+missing coverage, return exit code 2 even with `--report`.
 
 Pass `--jobs N` to run independent configured backends under one worker budget.
 A profile step opts in with `parallel = true`. See
@@ -71,16 +78,15 @@ records are collapsed deterministically.
 These backends share an inclusive maximum (`value > maximum` fails), not a
 promise that they count every construct identically:
 
-- Python uses Ruff C901 as a native McCabe threshold gate. It sets
-  `lint.mccabe.max-complexity`; numeric values for passing functions are
-  unavailable. Ruff parser errors fail the run.
-- C/C++ uses Lizard's Python API for numeric `cyclomatic_complexity` function
-  records. `standard` uses default counting; `modified` selects the `mccabe`
-  extension, which treats consecutive switch cases differently. It does not
-  expand preprocessor macros or use compiler/template semantics.
-- JavaScript uses ESLint's native `complexity` threshold gate. `classic` and
-  `modified` are explicit rule options. The adapter disables config lookup,
-  so project plugins and other ESLint rules are outside this check.
+| Language | Backend | Gate or count method | Variant and limits |
+| --- | --- | --- | --- |
+| Python | Ruff C901 | Native McCabe threshold gate | Passing scores are unavailable; parser errors fail. |
+| C/C++ | Lizard API | Numeric function records | `standard` is default; `modified` changes switch counting. |
+| JavaScript | ESLint `complexity` | Native threshold gate | Ignores project rules and source comments. |
+
+ESLint runs with `--no-config-lookup --no-inline-config`, so project settings
+and source comments cannot change the configured complexity limit or enable
+unrelated rules.
 
 Ruff C901 is derived from McCabe complexity. ESLint's classic and modified
 variants have different switch, optional-chain, and default-initializer

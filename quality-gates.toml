@@ -65,6 +65,7 @@ opaque_boundary_paths = [
   "src/alphus/execution/step_results.py",
   "src/alphus/execution/worker_protocol.py",
   "src/alphus/gates/source/cyclomatic_complexity.py",
+  "src/alphus/policy/sources.py",
   "tests/execution/test_shared_quality_intent_execution.py",
 ]
 opaque_boundary_marker_prefix = "# opaque-boundary: "
@@ -81,7 +82,9 @@ semantic_result_paths = [
   "src/alphus/gates/review/positional_interfaces.py",
   "src/alphus/gates/repository/**",
   "src/alphus/gates/hygiene/comment_markers.py",
+  "src/alphus/gates/hygiene/rules.py",
   "src/alphus/gates/vcs/worktree_hygiene.py",
+  "src/alphus/policy/sources.py",
 ]
 pattern_kind_paths = [
   "src/alphus/gates/cpp/artifact_scan.py",
@@ -133,8 +136,10 @@ report_unvalidated_construct = false
 report_unvalidated_copy_update = false
 report_validator_fallthrough = false
 report_field_positional_default = false
-report_external_model_docs = false
-external_model_names = []
+report_external_model_docs = true
+external_model_names = [
+  "ExtensionLimit", "FileSizePolicy", "LineLengthPolicy", "PathLimit",
+]
 
 [checks.fastapi_practices]
 extensions = [".py"]

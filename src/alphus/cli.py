@@ -29,6 +29,7 @@ from alphus.contracts.findings import (
     Finding,
     SeverityCounts,
 )
+from alphus.contracts.process import ExitCode
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.execution.dispatch import run_builtin_rule
 from alphus.execution.fixes import apply_fixes as apply_configured_fixes
@@ -48,10 +49,7 @@ from alphus.gates.source.cyclomatic_complexity import (
 from alphus.gates.source.python_style import StyleFindings
 from alphus.policy.base import MissingPolicyError
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
-from alphus.policy.intents import (
-    PlannedIntentBindingRow,
-    intent_bindings_for_steps,
-)
+from alphus.policy.intents import intent_bindings_for_steps
 from alphus.policy.recipes import render_recipe
 from alphus.support.data_access import JsonValue
 from alphus.support.inventory import candidate_files
@@ -67,10 +65,10 @@ class _ProfilePlanPayload(TypedDict):
     failure_threshold: str
     steps: list[JsonValue]
     execution: NotRequired[dict[str, int]]
-    intents: NotRequired[list[PlannedIntentBindingRow]]
+    intents: NotRequired[list[JsonValue]]
 
 
-_OUTPUT_FORMAT: ContextVar[str] = ContextVar("alphus_output_format", default="rich")
+_OUTPUT_FORMAT: ContextVar[str] = ContextVar("alphus_output_format", default="auto")
 _DIRECT_GIT_SUBPROCESS_TAG = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.MAINTAINABILITY, "direct-git-subprocess"
 )
@@ -82,6 +80,9 @@ _CLI_CONTRACT_TAG = rule_tag(
 )
 _SCRIPT_POLICY_TAG = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.SECURITY, "script-policy-violation"
+)
+_LINE_TOO_LONG_TAG = rule_tag(
+    Scope.ANY, Framework.NONE, Category.STYLE, "line-too-long"
 )
 
 
@@ -131,19 +132,41 @@ app = typer.Typer(
 )
 
 
+def _select_output_format(
+    output_format: str,
+    *,
+    json_requested: bool,
+    stdout_is_terminal: bool,
+) -> tuple[str, bool]:
+    """Resolve auto and JSON aliases into one renderer and payload mode."""
+    selected = output_format.lower()
+    if selected not in {"auto", "plain", "rich", "json"}:
+        raise ValueError("--output must be auto, plain, rich, or json")
+    if json_requested and selected in {"plain", "rich"}:
+        raise ValueError("--json cannot be combined with --output plain or rich")
+    if json_requested or selected == "json":
+        return "plain", True
+    if selected == "auto":
+        return ("rich" if stdout_is_terminal else "plain"), False
+    return selected, False
+
+
 def _human_print(message: str) -> None:
     """Render one human-facing line in the selected terminal style."""
-    if _OUTPUT_FORMAT.get() == "plain":
+    selected_format = _OUTPUT_FORMAT.get()
+    if selected_format == "plain" or (
+        selected_format == "auto" and not sys.stdout.isatty()
+    ):
         print(message)
         return
     console = Console(
         markup=False,
         highlight=False,
         soft_wrap=True,
-        color_system="auto" if _OUTPUT_FORMAT.get() == "rich" else None,
+        color_system="auto" if selected_format == "rich" else None,
     )
     text = Text(message)
-    if _OUTPUT_FORMAT.get() == "rich":
+    if selected_format == "rich":
         first_word = message.partition(" ")[0].rstrip(":")
         style = {
             "ERROR": "bold red",
@@ -238,27 +261,37 @@ def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
         _render_severity_totals(findings)
         return
     if rule == "line-length":
-        counts = Counter(finding.path for finding in findings)
+        line_findings = [
+            finding for finding in findings if finding.line_length is not None
+        ]
+        for finding in findings:
+            if finding.line_length is None:
+                _render_finding(finding)
+
+        counts = Counter(finding.path for finding in line_findings)
         for name, count in sorted(counts.items()):
             lines = [
                 finding.line
-                for finding in findings
+                for finding in line_findings
                 if finding.path == name and finding.line is not None
             ]
             limit = next(
-                finding.message.rsplit("limit ", maxsplit=1)[1].rstrip(")")
-                for finding in findings
-                if finding.path == name
+                finding.line_length.limit_codepoints
+                for finding in line_findings
+                if finding.path == name and finding.line_length is not None
             )
             sample = ", ".join(str(line) for line in lines[:5])
             _human_print(
-                f"{rule_tag(Scope.ANY, Framework.NONE, Category.STYLE, 'line-too-long')} {name}: "
-                f"{count} lines exceed {limit} columns (example lines: {sample})"
+                f"{_LINE_TOO_LONG_TAG} {name}: "
+                f"{count} lines exceed {limit} Unicode code points "
+                f"(example lines: {sample})"
             )
-        _human_print(
-            f"{rule_tag(Scope.ANY, Framework.NONE, Category.STYLE, 'line-too-long')}: "
-            f"{len(findings)} violation(s) in {len(counts)} files"
-        )
+        if line_findings or not findings:
+            _human_print(
+                f"{_LINE_TOO_LONG_TAG}: "
+                f"{len(line_findings)} violation(s) "
+                f"in {len(counts)} files"
+            )
         _render_severity_totals(findings)
         return
     if rule == "json-structure":
@@ -385,11 +418,16 @@ def _python_style_categories(
         _StyleCategory("raw_reporting_prints", issues["raw_reporting_prints"]),
         _StyleCategory("magic_exit_codes", issues["magic_exit_codes"]),
         _StyleCategory("repeated_literals", issues["repeated_literals"]),
-        _StyleCategory(
-            "heterogeneous_tuple_returns", issues["heterogeneous_tuple_returns"]
-        ),
+        _StyleCategory("unnamed_tuple_returns", issues["unnamed_tuple_returns"]),
         _StyleCategory(
             "undifferentiated_patterns", issues["undifferentiated_patterns"]
+        ),
+        _StyleCategory(
+            "concrete_classmethod_returns", issues["concrete_classmethod_returns"]
+        ),
+        _StyleCategory(
+            "concrete_model_validator_returns",
+            issues["concrete_model_validator_returns"],
         ),
         _StyleCategory("concrete_self_returns", issues["concrete_self_returns"]),
         _StyleCategory("direct_text_reads", issues["direct_text_reads"]),
@@ -649,7 +687,7 @@ def run_profile_rule(
     except typer.BadParameter as error:
         return RuleRunResult(
             execution_failure=str(error),
-            exit_code=2,
+            exit_code=ExitCode.CONFIG_ERROR,
             stderr=captured_error.getvalue(),
         )
     except typer.Exit as error:
@@ -661,28 +699,30 @@ def run_profile_rule(
     except (ValidationError, TypeError, ValueError) as error:
         return RuleRunResult(
             execution_failure=f"Alphus rule output could not be normalized: {error}",
-            exit_code=2,
+            exit_code=ExitCode.OPERATIONAL_FAILURE,
             stderr=captured_error.getvalue(),
         )
     if captured_output.getvalue():
         return RuleRunResult(
             execution_failure="Alphus rule printed output instead of returning it.",
-            exit_code=2,
+            exit_code=ExitCode.OPERATIONAL_FAILURE,
             stderr=captured_error.getvalue(),
         )
     report = None
     stdout = ""
-    exit_code = int(evaluation.failed)
-    if rule == "cyclomatic-complexity":
-        cyclomatic_report = cast(CyclomaticReport, evaluation.output)
-        report = report_payload(cyclomatic_report)
-        stdout = report_summary(cyclomatic_report) + "\n"
-        if cyclomatic_report.outcome in {
-            "operational_failure",
-            "incomplete_coverage",
-            "no_matching_files",
-        }:
-            exit_code = 2
+    exit_code = ExitCode.QUALITY_FAILURE if evaluation.failed else ExitCode.SUCCESS
+    match evaluation.output:
+        case CyclomaticReport() as cyclomatic_report:
+            report = report_payload(cyclomatic_report)
+            stdout = report_summary(cyclomatic_report) + "\n"
+            if cyclomatic_report.outcome in {
+                "operational_failure",
+                "incomplete_coverage",
+                "no_matching_files",
+            }:
+                exit_code = ExitCode.OPERATIONAL_FAILURE
+        case _:
+            pass
     return RuleRunResult(
         findings=tuple(evaluation.diagnostics),
         exit_code=exit_code,
@@ -710,7 +750,7 @@ def _execute_profile(
     policy = config.orchestration
     if policy is None:
         _human_error("The selected policy has no [orchestration] section.")
-        return 2
+        return ExitCode.CONFIG_ERROR
     selected_profile = profile_name or policy.default_profile
     plan = policy.resolve_profile(selected_profile)
     if plan is not None:
@@ -724,7 +764,7 @@ def _execute_profile(
                     config.checks.require_rule(step.rule)
         except MissingPolicyError as error:
             _human_error(str(error))
-            return 2
+            return ExitCode.CONFIG_ERROR
 
     def run_rule(rule: QualityRule) -> RuleRunResult:
         return run_profile_rule(checkout, resolved_config, rule, verbose, config)
@@ -908,7 +948,7 @@ def _execute_plan_profile(
         return 2
 
     by_name = {step.name: step for step in policy.steps}
-    intent_rows: list[PlannedIntentBindingRow] = list(
+    intent_rows = list(
         intent_bindings_for_steps(
             policy.intents,
             plan.steps,
@@ -918,15 +958,21 @@ def _execute_plan_profile(
         )
     )
     entries_by_name = {entry.name: entry for entry in entries}
-    for row in intent_rows:
-        step_name = row["step"]
+    for index, row in enumerate(intent_rows):
+        step_name = row.step
         if step_name is not None and step_name in entries_by_name:
             entry = entries_by_name[step_name]
             step = by_name[step_name]
-            row["selected_files"] = entry.files
-            if step.kind == "command":
-                row["applicable"] = step.files is None or bool(entry.files)
-            row["expanded_argv"] = entry.check_argv
+            applicable = (
+                step.files is None or bool(entry.files)
+                if step.kind == "command"
+                else None
+            )
+            intent_rows[index] = row.with_execution_plan(
+                selected_files=entry.files,
+                applicable=applicable,
+                expanded_argv=entry.check_argv,
+            )
 
     if json_output:
         details: list[JsonValue] = []
@@ -961,7 +1007,9 @@ def _execute_plan_profile(
         if max_jobs > 1:
             payload["execution"] = {"max_jobs": max_jobs}
         if intent_rows:
-            payload["intents"] = intent_rows
+            payload["intents"] = [
+                row.model_dump(mode="json", exclude_none=True) for row in intent_rows
+            ]
         typer.echo(json.dumps(payload, sort_keys=True))
         return 0
 
@@ -996,30 +1044,30 @@ def _execute_plan_profile(
     if intent_rows:
         _human_print("Shared quality intents:")
         for row in intent_rows:
-            status = str(row["status"]).replace("_", " ").upper()
-            if row.get("applicable") is False:
+            status = row.status.replace("_", " ").upper()
+            if row.applicable is False:
                 status = "NOT APPLICABLE"
-            metric = f"{row['metric']} ({row['unit']})"
+            metric = f"{row.metric} ({row.unit})"
             _human_print(
-                f"{status} {row['rule_id']} [{row['language']}]: "
-                f"{row['backend']} {row['native_rule']}; {row['mapping']} mapping; "
-                f"{metric}; severity={row['severity']}, failure threshold="
-                f"{row['failure_threshold']}, rollout={row['rollout']}"
+                f"{status} {row.rule_id} [{row.language}]: "
+                f"{row.backend} {row.native_rule}; {row.mapping} mapping; "
+                f"{metric}; severity={row.severity}, failure threshold="
+                f"{row.failure_threshold}, rollout={row.rollout}"
             )
             _human_print(
-                f"  scope={json.dumps(row['files'], sort_keys=True)}; "
+                f"  scope={json.dumps(row.files.model_dump(mode='json'), sort_keys=True)}; "
                 "effective config="
-                f"{json.dumps(row['effective_configuration'], sort_keys=True)}"
+                f"{json.dumps(row.effective_configuration, sort_keys=True)}"
             )
-            step_name = row["step"]
+            step_name = row.step
             if step_name is not None:
                 entry = entries_by_name.get(step_name)
                 if entry is not None:
                     _human_print(
-                        f"  owner={row['ownership']}; evidence step={step_name}; "
+                        f"  owner={row.ownership}; evidence step={step_name}; "
                         f"{len(entry.files)} file(s) selected"
                     )
-            elif row["status"] == "unsupported":
+            elif row.status == "unsupported":
                 _human_print("  no native command is configured for this capability")
     return 0
 
@@ -1077,10 +1125,10 @@ def _command(
         str,
         typer.Option(
             "--output",
-            help="Human-readable output style: rich (default) or plain.",
+            help="Output format: auto, plain, rich, or json.",
             case_sensitive=False,
         ),
-    ] = "rich",
+    ] = "auto",
     report: Annotated[
         bool,
         typer.Option("--report", help="Report findings without failing."),
@@ -1125,18 +1173,23 @@ def _command(
     ] = False,
 ) -> None:
     """Run the default profile from this repository, or select a rule/profile."""
-    if output_format.lower() not in {"rich", "plain"}:
-        raise typer.BadParameter("--output must be rich or plain")
+    try:
+        selected_format, json_output = _select_output_format(
+            output_format,
+            json_requested=json_output,
+            stdout_is_terminal=sys.stdout.isatty(),
+        )
+    except ValueError as error:
+        raise typer.BadParameter(str(error), param_hint="--output") from error
     if jobs is not None and not 1 <= jobs <= 64:
         raise typer.BadParameter("--jobs must be between 1 and 64")
-    _OUTPUT_FORMAT.set(output_format.lower())
+    _OUTPUT_FORMAT.set(selected_format)
     if init_config is not None:
         if any(
             (
                 run,
                 rule is not None,
                 profile is not None,
-                json_output,
                 report,
                 verbose,
                 plan,
@@ -1168,8 +1221,11 @@ def _command(
             )
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(document, encoding="utf-8", newline="\n")
-        _human_print(f"Wrote {destination}")
-        raise typer.Exit(0)
+        if json_output:
+            typer.echo(json.dumps({"path": str(destination)}, sort_keys=True))
+        else:
+            _human_print(f"Wrote {destination}")
+        raise typer.Exit(ExitCode.SUCCESS)
     if add_language or add_tool or overwrite_config:
         raise typer.BadParameter(
             "--add-language, --add-tool, and --overwrite-config require --init-config"
@@ -1266,19 +1322,19 @@ app.callback(invoke_without_command=True)(_command)
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the Typer command and return its process exit status."""
-    _OUTPUT_FORMAT.set("rich")
+    _OUTPUT_FORMAT.set("auto")
     try:
         app(args=list(argv) if argv is not None else None)
     except SystemExit as error:
         if error.code is None:
-            return 0
+            return ExitCode.SUCCESS
         try:
             return int(error.code)
         except (TypeError, ValueError):
-            return 1
+            return ExitCode.QUALITY_FAILURE
     finally:
-        _OUTPUT_FORMAT.set("rich")
-    return 0
+        _OUTPUT_FORMAT.set("auto")
+    return ExitCode.SUCCESS
 
 
 def main_for_rule(rule: str) -> int:

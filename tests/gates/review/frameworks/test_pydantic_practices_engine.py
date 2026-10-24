@@ -359,6 +359,30 @@ def test_external_model_docs_can_be_configured_for_other_interfaces() -> None:
     ]
 
 
+def test_external_model_docs_support_imported_custom_pydantic_bases() -> None:
+    source = (
+        "from pydantic import Field\n"
+        "from alphus.policy.base import StrictModel\n"
+        "class PublicPolicy(StrictModel):\n"
+        '    """A public policy model."""\n'
+        "    name: str = Field(description='Policy name')\n"
+        "class PrivatePolicy(StrictModel):\n"
+        "    name: str\n"
+    )
+    findings = pydantic_practice_findings(
+        source,
+        _policy(
+            report_external_model_docs=True,
+            external_model_names=("PublicPolicy", "PrivatePolicy"),
+        ),
+    )
+
+    assert [(item.line, item.message) for item in findings] == [
+        (6, "add a class description for this external model's JSON Schema"),
+        (7, "add a JSON Schema description for external field 'name'"),
+    ]
+
+
 @pytest.mark.parametrize(
     "options",
     [

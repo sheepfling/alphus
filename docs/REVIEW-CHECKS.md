@@ -411,8 +411,12 @@ without a model description or field descriptions. It identifies models used
 by locally declared FastAPI routes (route parameter/return annotations and
 `response_model`) and their nested local model fields. Add names to
 `external_model_names` for models declared in a scanned file whose route or
-other external use is in another module or framework. The checker does not
-load imported model definitions across files. For a local model, a class
+other external use is in another module or framework. A configured name also
+selects a declared class that inherits an imported custom Pydantic base, which
+the single-file scan cannot resolve. The checker does not load imported model
+definitions across files. Alphus enables this check for its public file and
+line-limit policy models because their JSON Schema is a configuration
+interface. For a local model, a class
 docstring or literal model-level JSON Schema description satisfies the
 model check; `Field(description=...)` or field-level
 `json_schema_extra={"description": ...}` satisfies a field check. Dynamic

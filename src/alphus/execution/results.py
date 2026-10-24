@@ -57,9 +57,7 @@ _PYTHON_STYLE: TypeAdapter[PythonStyleOutput] = TypeAdapter(PythonStyleOutput)
 _SHARED_UTILITIES: TypeAdapter[_SharedUtilitiesWire] = TypeAdapter(_SharedUtilitiesWire)
 _SHARED_REPORT: TypeAdapter[SharedUtilitiesReport] = TypeAdapter(SharedUtilitiesReport)
 _CYCLOMATIC_WIRE: TypeAdapter[_CyclomaticWire] = TypeAdapter(_CyclomaticWire)
-_ADVISORY_STYLE_CATEGORIES = frozenset(
-    {"opaque_mappings", "heterogeneous_tuple_returns"}
-)
+_ADVISORY_STYLE_CATEGORIES = frozenset({"opaque_mappings", "unnamed_tuple_returns"})
 
 _MESSAGE_RULE_IDS: Mapping[QualityRuleName, str] = MappingProxyType(
     {

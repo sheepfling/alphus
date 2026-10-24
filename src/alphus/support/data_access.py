@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
-from math import isfinite
 from pathlib import Path
 from types import NoneType
 from typing import Any, TypeAlias, cast
@@ -74,26 +74,30 @@ def nested_value(value: object, key: str) -> object:
     return current
 
 
-def _validate_finite_json_numbers(value: JsonValue) -> None:
-    """Reject non-standard numeric constants accepted by permissive JSON parsers."""
-    match value:
-        case float() if not isfinite(value):
-            raise ValueError("JSON numbers must be finite")
-        case None | bool() | int() | float() | str():
-            return
-        case Sequence() as items:
-            for item in items:
-                _validate_finite_json_numbers(item)
-        case Mapping() as items:
-            for item in items.values():
-                _validate_finite_json_numbers(item)
-
-
 def validate_json_value(source: str | bytes) -> JsonValue:
-    """Decode standard JSON and expose its structure through read-only types."""
+    """Decode JSON and expose its recursive structure through read-only types."""
     value = cast(JsonValue, _JSON_VALUE_ADAPTER.validate_json(source))
-    _validate_finite_json_numbers(value)
+    _validate_standard_json_numbers(value)
     return value
+
+
+def _validate_standard_json_numbers(value: JsonValue) -> None:
+    """Reject non-finite values that Pydantic's permissive JSON parser accepts."""
+    match value:
+        case str():
+            return
+        case float() as number if not math.isfinite(number):
+            raise ValueError("JSON numbers must be finite")
+        case Mapping():
+            mapping = cast(Mapping[str, JsonValue], value)
+            for nested in mapping.values():
+                _validate_standard_json_numbers(nested)
+        case Sequence():
+            sequence = cast(Sequence[JsonValue], value)
+            for nested in sequence:
+                _validate_standard_json_numbers(nested)
+        case _:
+            return
 
 
 def nested_json_value(payload: JsonValue, dotted: str) -> JsonValue:

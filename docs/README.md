@@ -12,6 +12,7 @@ path that matches the repository being checked.
 | Check Python stubs in an isolated target                  | [Stub package CI](STUB-PACKAGE-CI.md)       |
 | Check C++ source, builds, and artifacts                   | [C++ quality](CPP-QUALITY.md)               |
 | Check Git ignores or historical repository artifacts      | [Repository hygiene](REPOSITORY-HYGIENE.md) |
+| Understand shared text and file-size measurements          | [Source hygiene](SOURCE-HYGIENE.md)         |
 | Review advisory test, input, and framework checks         | [Review checks](REVIEW-CHECKS.md)           |
 | Gate cyclomatic complexity across Python, C/C++, and JS    | [Cyclomatic complexity](CYCLOMATIC-COMPLEXITY.md) |
 | Review positional argument interfaces                      | [Positional interfaces](POSITIONAL-INTERFACES.md) |
