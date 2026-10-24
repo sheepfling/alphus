@@ -32,7 +32,7 @@ def _intent(
     extra_binding_language: Literal["cpp"] | None = None,
     step: str | None = "Native complexity",
     language: Literal["python", "cpp"] = "python",
-    evidence_format: Literal["raw", "json-array"] = "raw",
+    evidence_format: Literal["raw", "json-array", "json-object"] = "raw",
     exit_codes: tuple[int, ...] = (1,),
     config_codes: tuple[int, ...] = (2,),
 ) -> SharedQualityIntent:
@@ -272,6 +272,40 @@ def test_declared_json_evidence_is_validated_without_rewriting_raw_output(
     assert report["steps"][0]["stdout"] == f"{output}\n"
     if expected_failure_kind:
         assert "command-output-invalid" in str(report["steps"][0]["findings"])
+
+
+@pytest.mark.parametrize(
+    ("output", "expected_status", "expected_failure_kind", "expected_code"),
+    [
+        ('{"diagnostics": []}', "passed", None, 0),
+        ("[]", "failed", "operational_error", 1),
+        ("not valid json", "failed", "operational_error", 1),
+    ],
+)
+def test_declared_json_object_evidence_is_validated_without_rewriting_raw_output(
+    tmp_path: Path,
+    output: str,
+    expected_status: str,
+    expected_failure_kind: str | None,
+    expected_code: int,
+) -> None:
+    policy = _policy(
+        tmp_path,
+        intent=_intent(evidence_format="json-object", exit_codes=(127,)),
+        command=("{python}", "-c", f"print({output!r})"),
+    )
+
+    code, report = _run(tmp_path, policy)
+
+    assert code == expected_code
+    binding = report["intent_bindings"][0]
+    assert binding["status"] == expected_status
+    assert binding["failure_kind"] == expected_failure_kind
+    assert report["steps"][0]["stdout"] == f"{output}\n"
+    if expected_failure_kind:
+        assert "expected a valid JSON object on stdout" in str(
+            report["steps"][0]["stderr"]
+        )
 
 
 def test_command_timeout_is_operational_failure_with_partial_output(

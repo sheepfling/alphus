@@ -5,9 +5,10 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import asdict, dataclass, field
+from enum import StrEnum
 from io import StringIO
 from pathlib import Path
 from typing import Literal, TextIO
@@ -41,6 +42,8 @@ from alphus.execution.commands import (
 )
 from alphus.execution.profile_reporting import ProfileReporter
 from alphus.policy.intents import (
+    EvidenceFormat,
+    EvidenceStream,
     FailureKind,
     ResolvedIntentBinding,
     resolve_intent_bindings,
@@ -68,12 +71,33 @@ _UNSUPPORTED_CAPABILITY = rule_tag(
 )
 
 
+class StepStatus(StrEnum):
+    """Closed set of orchestration step outcomes."""
+
+    DISABLED = "disabled"
+    PASSED = "passed"
+    FAILED = "failed"
+    NOT_APPLICABLE = "not_applicable"
+    UNSUPPORTED = "unsupported"
+
+
+class IntentStatus(StrEnum):
+    """Closed set of language-specific intent outcomes."""
+
+    DISABLED = "disabled"
+    UNSUPPORTED = "unsupported"
+    NOT_SELECTED = "not_selected"
+    NOT_APPLICABLE = "not_applicable"
+    PASSED = "passed"
+    FAILED = "failed"
+
+
 @dataclass(frozen=True, slots=True)
 class OrchestrationStepResult:
     """Machine-readable outcome for one configured profile step."""
 
     name: str
-    status: Literal["disabled", "passed", "failed", "not_applicable", "unsupported"]
+    status: StepStatus
     exit_code: int | None
     diagnostics: tuple[str, ...] = ()
     findings: tuple[Diagnostic, ...] = ()
@@ -102,14 +126,7 @@ class IntentExecutionResult:
     backend: str
     native_rule: str
     mapping: str
-    status: Literal[
-        "disabled",
-        "unsupported",
-        "not_selected",
-        "not_applicable",
-        "passed",
-        "failed",
-    ]
+    status: IntentStatus
     failure_kind: FailureKind | None = None
     required: bool = True
     severity: Severity | None = None
@@ -182,6 +199,19 @@ def _reject_nonstandard_json_constant(value: str) -> None:
     raise ValueError(f"non-standard JSON constant: {value}")
 
 
+def _matches_json_evidence_format(
+    value: object, evidence_format: EvidenceFormat
+) -> bool:
+    """Check decoded JSON by the selected top-level container protocol."""
+    if evidence_format == "json-array":
+        return isinstance(value, Sequence) and not isinstance(
+            value, (str, bytes, bytearray)
+        )
+    if evidence_format == "json-object":
+        return isinstance(value, Mapping)
+    return True
+
+
 def run_orchestration(
     root: Path,
     config_path: Path,
@@ -223,13 +253,16 @@ def run_orchestration(
         binding = item.binding
         if binding.step is not None:
             intent_bindings_by_step.setdefault(binding.step, []).append(item)
-    json_evidence_by_step = {
-        item.binding.step: item.binding.evidence_stream
+    json_evidence_by_step: dict[str, tuple[EvidenceFormat, EvidenceStream]] = {
+        item.binding.step: (
+            item.binding.evidence_format,
+            item.binding.evidence_stream,
+        )
         for item in resolved_intents
         if item.enabled
         and active_profiles.intersection(item.intent.profiles)
         and item.binding.mapping != "unsupported"
-        and item.binding.evidence_format == "json-array"
+        and item.binding.evidence_format != "raw"
         and item.binding.step in plan.steps
     }
     if profile.includes and not json_output:
@@ -251,7 +284,7 @@ def run_orchestration(
             results.append(
                 OrchestrationStepResult(
                     name=step.name,
-                    status="disabled",
+                    status=StepStatus.DISABLED,
                     exit_code=None,
                     diagnostics=(
                         "All selected intent bindings for this step are disabled.",
@@ -406,8 +439,14 @@ def run_orchestration(
                         exit_code = result.returncode
                         step_stdout = result.stdout or ""
                         step_stderr = result.stderr or ""
-                        evidence_stream = json_evidence_by_step.get(step.name)
-                        if evidence_stream is not None:
+                        evidence_contract = json_evidence_by_step.get(step.name)
+                        if evidence_contract is not None:
+                            evidence_format, evidence_stream = evidence_contract
+                            expected_shape = (
+                                "JSON array"
+                                if evidence_format == "json-array"
+                                else "JSON object"
+                            )
                             evidence = (
                                 step_stdout
                                 if evidence_stream == "stdout"
@@ -418,8 +457,12 @@ def run_orchestration(
                                     evidence,
                                     parse_constant=_reject_nonstandard_json_constant,
                                 )
-                                if not isinstance(parsed_evidence, list):
-                                    raise TypeError("expected a top-level JSON array")
+                                if not _matches_json_evidence_format(
+                                    parsed_evidence, evidence_format
+                                ):
+                                    raise TypeError(
+                                        f"expected a top-level {expected_shape}"
+                                    )
                             except (
                                 json.JSONDecodeError,
                                 ValueError,
@@ -429,7 +472,7 @@ def run_orchestration(
                                 output_invalid_steps.add(step.name)
                                 operational_error_steps.add(step.name)
                                 message = (
-                                    f"{step.name}: expected a valid JSON array on "
+                                    f"{step.name}: expected a valid {expected_shape} on "
                                     f"{evidence_stream}"
                                 )
                                 step_stderr = f"{step_stderr}{message}\n"
@@ -458,9 +501,19 @@ def run_orchestration(
                                 )
                             )
                         elif step.name in output_invalid_steps:
-                            legacy_diagnostics = (
-                                f"{step.name}: expected a valid JSON array on {evidence_stream}",
+                            invalid_format, invalid_stream = json_evidence_by_step[
+                                step.name
+                            ]
+                            invalid_shape = (
+                                "JSON array"
+                                if invalid_format == "json-array"
+                                else "JSON object"
                             )
+                            invalid_message = (
+                                f"{step.name}: expected a valid {invalid_shape} "
+                                f"on {invalid_stream}"
+                            )
+                            legacy_diagnostics = (invalid_message,)
         except subprocess.TimeoutExpired as error:
             operational_error_steps.add(step.name)
             step_stdout = _timeout_output(error.stdout)
@@ -518,7 +571,7 @@ def run_orchestration(
             results.append(
                 OrchestrationStepResult(
                     step.name,
-                    "not_applicable",
+                    StepStatus.NOT_APPLICABLE,
                     exit_code,
                     diagnostics=("No files matched the configured command scope.",),
                     rollout=step.rollout,
@@ -532,7 +585,7 @@ def run_orchestration(
             results.append(
                 OrchestrationStepResult(
                     step.name,
-                    "passed",
+                    StepStatus.PASSED,
                     exit_code,
                     diagnostics=legacy_diagnostics,
                     findings=tuple(findings),
@@ -557,7 +610,7 @@ def run_orchestration(
             results.append(
                 OrchestrationStepResult(
                     step.name,
-                    "failed",
+                    StepStatus.FAILED,
                     exit_code,
                     diagnostics=legacy_diagnostics,
                     findings=tuple(findings),
@@ -592,7 +645,7 @@ def run_orchestration(
                     binding.backend,
                     binding.native_rule,
                     binding.mapping,
-                    "disabled",
+                    IntentStatus.DISABLED,
                     required=intent.required,
                     severity=item.severity,
                     failure_threshold=item.failure_threshold,
@@ -602,12 +655,12 @@ def run_orchestration(
             )
             continue
         if not active_profiles.intersection(intent.profiles):
-            status = "not_selected"
+            status = IntentStatus.NOT_SELECTED
             failure_kind = None
             step_result = None
         elif binding.mapping == "unsupported":
-            status = "unsupported"
-            failure_kind = "unsupported_capability"
+            status = IntentStatus.UNSUPPORTED
+            failure_kind = FailureKind.UNSUPPORTED_CAPABILITY
             step_result = None
             unsupported_count += 1
             blocking = intent.required and intent.rollout == "mainline"
@@ -625,7 +678,7 @@ def run_orchestration(
             results.append(
                 OrchestrationStepResult(
                     name=f"unsupported capability: {intent.rule_id} [{binding.language}]",
-                    status="unsupported",
+                    status=StepStatus.UNSUPPORTED,
                     exit_code=ExitCode.CONFIG_ERROR,
                     diagnostics=(message,),
                     findings=(finding,),
@@ -641,32 +694,32 @@ def run_orchestration(
                 else:
                     reporter.info(f"UNSUPPORTED {message} (advisory)")
         elif binding.step not in plan.steps:
-            status = "not_selected"
+            status = IntentStatus.NOT_SELECTED
             failure_kind = None
             step_result = None
         else:
             step_result = step_results.get(binding.step or "")
             if step_result is None:
-                status = "failed"
-                failure_kind = "operational_error"
-            elif step_result.status == "not_applicable":
-                status = "not_applicable"
-                failure_kind = "no_matching_files"
-            elif step_result.status == "passed":
-                status = "passed"
+                status = IntentStatus.FAILED
+                failure_kind = FailureKind.OPERATIONAL_ERROR
+            elif step_result.status == StepStatus.NOT_APPLICABLE:
+                status = IntentStatus.NOT_APPLICABLE
+                failure_kind = FailureKind.NO_MATCHING_FILES
+            elif step_result.status == StepStatus.PASSED:
+                status = IntentStatus.PASSED
                 failure_kind = None
             elif binding.step in operational_error_steps:
-                status = "failed"
-                failure_kind = "operational_error"
+                status = IntentStatus.FAILED
+                failure_kind = FailureKind.OPERATIONAL_ERROR
             elif step_result.exit_code in binding.violation_exit_codes:
-                status = "failed"
-                failure_kind = "violation"
+                status = IntentStatus.FAILED
+                failure_kind = FailureKind.VIOLATION
             elif step_result.exit_code in binding.configuration_exit_codes:
-                status = "failed"
-                failure_kind = "configuration_error"
+                status = IntentStatus.FAILED
+                failure_kind = FailureKind.CONFIGURATION_ERROR
             else:
-                status = "failed"
-                failure_kind = "operational_error"
+                status = IntentStatus.FAILED
+                failure_kind = FailureKind.OPERATIONAL_ERROR
         intent_results.append(
             IntentExecutionResult(
                 intent.rule_id,

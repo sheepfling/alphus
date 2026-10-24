@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Annotated, Literal, TypeAlias, cast
 
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
@@ -28,14 +29,19 @@ IntentLanguage: TypeAlias = Literal[
     "typescript",
 ]
 NativeOptionValue: TypeAlias = str | int | float | bool
-FailureKind: TypeAlias = Literal[
-    "violation",
-    "configuration_error",
-    "operational_error",
-    "unsupported_capability",
-    "no_matching_files",
-]
-EvidenceFormat: TypeAlias = Literal["raw", "json-array"]
+
+
+class FailureKind(StrEnum):
+    """Closed classification for why a selected intent did not pass."""
+
+    VIOLATION = "violation"
+    CONFIGURATION_ERROR = "configuration_error"
+    OPERATIONAL_ERROR = "operational_error"
+    UNSUPPORTED_CAPABILITY = "unsupported_capability"
+    NO_MATCHING_FILES = "no_matching_files"
+
+
+EvidenceFormat: TypeAlias = Literal["raw", "json-array", "json-object"]
 EvidenceStream: TypeAlias = Literal["stdout", "stderr"]
 
 _IDENTIFIER = re.compile(r"[a-z][a-z0-9_.-]*\Z")

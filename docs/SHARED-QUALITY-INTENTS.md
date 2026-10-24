@@ -85,11 +85,13 @@ shared by another selected, enabled binding still runs, and the disabled
 binding remains visible in the result.
 
 Output is raw by default and is retained on the command result. A binding may
-declare `evidence_format = "json-array"` and choose `stdout` or `stderr` for
-the evidence stream. Alphus then checks for a valid top-level JSON array;
-invalid JSON or a different top-level shape fails operationally. It does not
-interpret array entries or extract metric values. Use `raw` when a backend
-does not provide that output shape.
+declare `evidence_format = "json-array"` or `"json-object"` and choose `stdout`
+or `stderr` for the evidence stream. Alphus checks that decoded output has the
+requested top-level sequence/list or mapping/object shape; invalid JSON or a
+different shape fails operationally. It does not interpret container contents
+or extract metric values. Use `raw` when a backend does not provide one of
+those output shapes. Status and failure-kind classifications use closed
+string-valued enums and retain their string values in JSON reports.
 
 Native tools remain opt-in. Their installation and build requirements belong
 to the consumer. In particular, C++ projects supply their own compiler and
