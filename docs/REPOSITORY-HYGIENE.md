@@ -63,7 +63,7 @@ The history gate defaults to a 5 MiB blob threshold. Set `max_blob_mib` under
 not secret contents. A deletion commit does not erase reachable history;
 review findings before rewriting shared history.
 
-`.github/workflows/repository-hygiene.yml` runs the fast profile on pull
+`.github/workflows/self-repository-hygiene.yml` runs the fast profile on pull
 requests and pushes, and schedules the history profile monthly. Cadence lives
 in CI or a scheduler, not in individual rule settings. A local history audit
 covers only refs available in that checkout.

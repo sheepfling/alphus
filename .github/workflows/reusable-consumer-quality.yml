@@ -1,0 +1,68 @@
+name: Alphus reusable consumer quality
+
+on:
+  workflow_call:
+    inputs:
+      alphus-ref:
+        description: Immutable Alphus commit to install.
+        required: true
+        type: string
+      requirements-file:
+        description: Consumer-owned requirements for selected native quality tools.
+        required: true
+        type: string
+      runtime-requirements-file:
+        description: Optional consumer runtime requirements used by tests.
+        required: false
+        default: ""
+        type: string
+      python-version:
+        description: Python version for the quality environment.
+        required: false
+        default: "3.12"
+        type: string
+      config-file:
+        description: Alphus TOML policy, relative to the caller checkout.
+        required: false
+        default: quality-gates.toml
+        type: string
+      profile:
+        description: Configured Alphus profile to run.
+        required: false
+        default: check
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ inputs['python-version'] }}
+      - name: Install pinned Alphus and consumer tools
+        env:
+          ALPHUS_REF: ${{ inputs['alphus-ref'] }}
+          TOOL_REQUIREMENTS: ${{ inputs['requirements-file'] }}
+          RUNTIME_REQUIREMENTS: ${{ inputs['runtime-requirements-file'] }}
+        run: |
+          : "${ALPHUS_REF:?Provide a pinned Alphus commit SHA}"
+          : "${TOOL_REQUIREMENTS:?Provide consumer tool requirements}"
+          requirements=(-r "$TOOL_REQUIREMENTS")
+          if [[ -n "$RUNTIME_REQUIREMENTS" ]]; then
+            requirements+=(-r "$RUNTIME_REQUIREMENTS")
+          fi
+          python -m pip install --disable-pip-version-check \
+            "alphus @ https://github.com/sheepfling/alphus/archive/${ALPHUS_REF}.zip" \
+            "${requirements[@]}"
+      - name: Run the configured Alphus profile
+        env:
+          QUALITY_CONFIG: ${{ inputs['config-file'] }}
+          QUALITY_PROFILE: ${{ inputs['profile'] }}
+        run: >-
+          python -m alphus --root "$GITHUB_WORKSPACE"
+          --config "$QUALITY_CONFIG" --run --profile "$QUALITY_PROFILE"
+          --output plain

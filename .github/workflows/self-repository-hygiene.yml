@@ -1,4 +1,4 @@
-name: Repository hygiene
+name: Alphus self repository hygiene
 
 on:
   pull_request:

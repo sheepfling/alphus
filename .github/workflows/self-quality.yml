@@ -1,4 +1,4 @@
-name: Alphus quality
+name: Alphus self quality
 
 on:
   pull_request:

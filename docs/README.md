@@ -9,6 +9,7 @@ path that matches the repository being checked.
 | Understand installed native tools and their configuration | [Subtools](SUBTOOLS.md)                     |
 | Plan and apply available fixes                            | [Fixes](FIXES.md)                           |
 | Check Python stubs in an isolated target                  | [Stub package CI](STUB-PACKAGE-CI.md)       |
+| Reuse CI integrations across providers                    | [CI integrations](CI-INTEGRATIONS.md)       |
 | Check C++ source, builds, and artifacts                   | [C++ quality](CPP-QUALITY.md)               |
 | Check Git ignores or historical repository artifacts      | [Repository hygiene](REPOSITORY-HYGIENE.md) |
 | Review advisory test, input, and framework checks         | [Review checks](REVIEW-CHECKS.md)           |
