@@ -137,8 +137,9 @@ package being installed. Existing true-negative fixtures continue to ensure
 an unused Rich helper, an unrelated serializer, or a file-output option cannot
 satisfy a command's policy.
 
-The final candidate wheel
-(`8623216fd38cb35e7030bafe5584b8527763a82c4a2d29b3dcc85da3d730ce52`) ran the
+The wheel built from commit
+`36f176effa79c76089777ee5a85c9525d574fbb6` (SHA-256
+`1d13c1b20d5baa07b2bd16d442b98a2c8256a3b3da4b2986b3bab91545558c66`) ran the
 same rule against that TITAN checkout under Python 3.12 and returned `[]` with
 exit 0. The wheel itself was imported from its installed artifact, matching the
 syntax used in TITAN's current sources. An initial Python 3.11 attempt stopped
