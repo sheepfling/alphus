@@ -48,6 +48,28 @@ def test_sequence_advice_follows_visible_operations(body: str, interface: str) -
     assert findings[0].line == 1
 
 
+def test_abstract_sequence_advice_is_opt_in_by_path(tmp_path: Path) -> None:
+    relative = Path("src/read.py")
+    target = tmp_path / relative
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        "from collections.abc import Sequence\n"
+        "def read(values: Sequence[str]):\n"
+        "    for value in values:\n"
+        "        consume(value)\n",
+        encoding="utf-8",
+    )
+
+    assert check_input_contracts(tmp_path, [relative], POLICY) == []
+
+    scoped = POLICY.model_copy(update={"sequence_narrowing_paths": ["src/read.py"]})
+    findings = check_input_contracts(tmp_path, [relative], scoped)
+
+    assert len(findings) == 1
+    assert "Iterable[str]" in findings[0].message
+    assert "declared Sequence[str]" in findings[0].message
+
+
 def test_imported_list_and_dict_aliases_are_resolved() -> None:
     findings = analyze("""
         from typing import Dict as D, List as L

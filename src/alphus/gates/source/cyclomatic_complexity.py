@@ -7,11 +7,14 @@ import re
 import shutil
 import subprocess
 import sys
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Literal, cast
+from types import MappingProxyType
+from typing import Annotated, Literal
 
 from packaging.version import InvalidVersion, Version
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 from alphus.contracts.findings import (
     Diagnostic,
@@ -30,13 +33,15 @@ from alphus.policy.metrics import (
 from alphus.support.inventory import candidate_files
 from alphus.support.platform_utils import is_windows
 
-_EXTENSIONS: dict[str, frozenset[str]] = {
-    "python": frozenset({".py"}),
-    "cpp": frozenset(
-        {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".ipp", ".tpp"}
-    ),
-    "javascript": frozenset({".js", ".mjs", ".cjs"}),
-}
+_EXTENSIONS: Mapping[str, frozenset[str]] = MappingProxyType(
+    {
+        "python": frozenset({".py"}),
+        "cpp": frozenset(
+            {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".ipp", ".tpp"}
+        ),
+        "javascript": frozenset({".js", ".mjs", ".cjs"}),
+    }
+)
 _THRESHOLD_RULE_ID = rule_tag(
     Scope.ANY,
     Framework.NONE,
@@ -45,6 +50,63 @@ _THRESHOLD_RULE_ID = rule_tag(
 )
 _BACKEND_FAILURE_RULE_ID = rule_tag(
     Scope.ANY, Framework.NONE, Category.CONFIGURATION, "cyclomatic-backend-failure"
+)
+
+
+class _NativeRecord(BaseModel):
+    """Strictly validate used native fields while allowing tool metadata."""
+
+    model_config = ConfigDict(strict=True, extra="ignore")
+
+
+class _NativeLocation(_NativeRecord):
+    row: int | None = None
+    column: int | None = None
+
+
+class _RuffDiagnostic(_NativeRecord):
+    code: str | None = None
+    filename: str | None = None
+    location: _NativeLocation | None = None
+    message: str | None = None
+
+
+class _EslintDiagnostic(_NativeRecord):
+    rule_id: Annotated[str | None, Field(alias="ruleId")] = None
+    fatal: bool = False
+    message: str | None = None
+    line: int | None = None
+    column: int | None = None
+
+
+class _EslintFileResult(_NativeRecord):
+    file_path: Annotated[str | None, Field(alias="filePath")] = None
+    messages: tuple[_EslintDiagnostic, ...] | None = None
+
+
+class _LizardFunction(_NativeRecord):
+    name: str
+    line: int
+    value: int
+
+
+class _LizardFileResult(_NativeRecord):
+    path: str
+    functions: tuple[_LizardFunction, ...]
+
+
+class _LizardPayload(_NativeRecord):
+    version: str | None = None
+    analyzed_file_count: int | None = None
+    files: tuple[_LizardFileResult, ...] | None = None
+    error: str | None = None
+
+
+_RUFF_DIAGNOSTICS: TypeAdapter[tuple[_RuffDiagnostic, ...]] = TypeAdapter(
+    tuple[_RuffDiagnostic, ...]
+)
+_ESLINT_RESULTS: TypeAdapter[tuple[_EslintFileResult, ...]] = TypeAdapter(
+    tuple[_EslintFileResult, ...]
 )
 
 
@@ -170,7 +232,7 @@ def _rule_and_method(binding: CyclomaticBackendBinding) -> tuple[str, str, bool]
 
 
 def _files_for_backend(
-    selected: list[Path], binding: CyclomaticBackendBinding
+    selected: Sequence[Path], binding: CyclomaticBackendBinding
 ) -> tuple[str, ...]:
     extensions = _EXTENSIONS[binding.language]
     return tuple(
@@ -263,7 +325,7 @@ def build_cyclomatic_plan(
                 command=_native_command(binding, _maximum(policy, binding), files),
                 api_call=(
                     "lizard.analyze_files(paths, exts=lizard.get_extensions(extensions))"
-                    if isinstance(binding, LizardCyclomaticBinding)
+                    if binding.backend == "lizard"
                     else None
                 ),
                 numeric_inventory=numeric_inventory,
@@ -290,8 +352,8 @@ def _actual_version(output: str) -> str:
         raise ValueError("native tool returned an invalid version string") from error
 
 
-def _relative_path(root: Path, value: object) -> str:
-    if not isinstance(value, str) or not value:
+def _relative_path(root: Path, value: str | None) -> str:
+    if not value:
         raise ValueError("native diagnostic has no file path")
     path = Path(value)
     resolved = (
@@ -304,27 +366,20 @@ def _relative_path(root: Path, value: object) -> str:
     return resolved.relative_to(root).as_posix()
 
 
-def _line(value: object) -> int:
-    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+def _line(value: int | None) -> int:
+    if type(value) is not int or value < 1:
         raise ValueError("native diagnostic has an invalid source line")
     return value
 
 
-def _json_object(value: object, description: str) -> dict[str, object]:
-    """Narrow a decoded JSON object to string-keyed, untrusted values."""
-    if not isinstance(value, dict):
-        raise TypeError(f"{description} must be a JSON object")
-    return cast(dict[str, object], value)
-
-
-def _column(value: object) -> int:
-    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+def _column(value: int | None) -> int:
+    if type(value) is not int or value < 1:
         raise ValueError("native diagnostic has an invalid source column")
     return value
 
 
-def _ruff_identity(message: object) -> str:
-    if not isinstance(message, str):
+def _ruff_identity(message: str | None) -> str:
+    if message is None:
         raise TypeError("Ruff diagnostic has no message")
     match = re.fullmatch(r"`([^`]+)` is too complex \(\d+ > \d+\)", message)
     if match is None:
@@ -332,8 +387,8 @@ def _ruff_identity(message: object) -> str:
     return match.group(1)
 
 
-def _eslint_identity(message: object) -> str:
-    if not isinstance(message, str):
+def _eslint_identity(message: str | None) -> str:
+    if message is None:
         raise TypeError("ESLint diagnostic has no message")
     match = re.fullmatch(
         r"(.+) has a complexity of \d+\. Maximum allowed is \d+\.", message
@@ -393,30 +448,26 @@ def _parse_ruff(
     output: str, root: Path, plan: CyclomaticBackendPlan, version: str
 ) -> tuple[tuple[CyclomaticFunctionMetric, ...], tuple[Finding, ...]]:
     try:
-        payload = json.loads(output)
-    except json.JSONDecodeError as error:
+        diagnostics = _RUFF_DIAGNOSTICS.validate_json(output)
+    except ValidationError as error:
         raise ValueError("Ruff returned malformed JSON diagnostics") from error
-    if not isinstance(payload, list):
-        raise TypeError("Ruff JSON diagnostics must be an array")
-    diagnostics = cast(list[object], payload)
     records: list[CyclomaticFunctionMetric] = []
     findings: list[Finding] = []
     seen: set[tuple[str, str, int, int]] = set()
-    for raw_diagnostic in diagnostics:
-        diagnostic = _json_object(raw_diagnostic, "Ruff diagnostic")
-        code = diagnostic.get("code")
+    for diagnostic in diagnostics:
+        code = diagnostic.code
         if code == "invalid-syntax":
             raise ValueError("Ruff could not parse a selected Python source file")
         if code != "C901":
             raise ValueError(f"Ruff returned unexpected diagnostic code {code!r}")
-        location = _json_object(diagnostic.get("location"), "Ruff location")
-        message = diagnostic.get("message")
-        if not isinstance(message, str):
-            raise TypeError("Ruff diagnostic has no message")
+        location = diagnostic.location
+        if location is None:
+            raise TypeError("Ruff diagnostic has no location")
+        message = diagnostic.message
         identity = _ruff_identity(message)
-        path = _relative_path(root, diagnostic.get("filename"))
-        line = _line(location.get("row"))
-        column = _column(location.get("column"))
+        path = _relative_path(root, diagnostic.filename)
+        line = _line(location.row)
+        column = _column(location.column)
         key = (path, identity, line, column)
         if key in seen:
             continue
@@ -442,35 +493,28 @@ def _parse_eslint(
     output: str, root: Path, plan: CyclomaticBackendPlan, version: str
 ) -> tuple[tuple[CyclomaticFunctionMetric, ...], tuple[Finding, ...]]:
     try:
-        payload = json.loads(output)
-    except json.JSONDecodeError as error:
+        file_results = _ESLINT_RESULTS.validate_json(output)
+    except ValidationError as error:
         raise ValueError("ESLint returned malformed JSON diagnostics") from error
-    if not isinstance(payload, list):
-        raise TypeError("ESLint JSON diagnostics must be an array")
-    file_results = cast(list[object], payload)
     records: list[CyclomaticFunctionMetric] = []
     findings: list[Finding] = []
     seen: set[tuple[str, str, int, int]] = set()
-    for raw_file_result in file_results:
-        file_result = _json_object(raw_file_result, "ESLint file result")
-        messages = file_result.get("messages")
-        if not isinstance(messages, list):
+    for file_result in file_results:
+        messages = file_result.messages
+        if messages is None:
             raise TypeError("ESLint returned an unexpected JSON file result")
-        path = _relative_path(root, file_result.get("filePath"))
-        for raw_diagnostic in cast(list[object], messages):
-            diagnostic = _json_object(raw_diagnostic, "ESLint diagnostic")
-            if diagnostic.get("ruleId") != "complexity":
-                if diagnostic.get("fatal") is True:
+        path = _relative_path(root, file_result.file_path)
+        for diagnostic in messages:
+            if diagnostic.rule_id != "complexity":
+                if diagnostic.fatal:
                     raise ValueError(
                         "ESLint could not parse a selected JavaScript file"
                     )
                 raise ValueError("ESLint returned a non-complexity diagnostic")
-            message = diagnostic.get("message")
-            if not isinstance(message, str):
-                raise TypeError("ESLint diagnostic has no message")
+            message = diagnostic.message
             identity = _eslint_identity(message)
-            line = _line(diagnostic.get("line"))
-            column = _column(diagnostic.get("column"))
+            line = _line(diagnostic.line)
+            column = _column(diagnostic.column)
             key = (path, identity, line, column)
             if key in seen:
                 continue
@@ -496,33 +540,26 @@ def _parse_lizard(
     output: str, root: Path, plan: CyclomaticBackendPlan, version: str
 ) -> tuple[tuple[CyclomaticFunctionMetric, ...], tuple[Finding, ...], int]:
     try:
-        payload = json.loads(output)
-    except json.JSONDecodeError as error:
+        payload = _LizardPayload.model_validate_json(output)
+    except ValidationError as error:
         raise ValueError("Lizard API adapter returned malformed JSON") from error
-    payload = _json_object(payload, "Lizard API result")
-    if payload.get("version") != version:
+    if payload.version != version:
         raise ValueError("Lizard API adapter returned an unexpected result shape")
-    file_results = payload.get("files")
-    if not isinstance(file_results, list):
+    file_results = payload.files
+    if file_results is None:
         raise TypeError("Lizard API adapter result has no file inventory")
-    files = cast(list[object], file_results)
     records: list[CyclomaticFunctionMetric] = []
     findings: list[Finding] = []
     seen: set[tuple[str, str, int]] = set()
-    for raw_file_result in files:
-        file_result = _json_object(raw_file_result, "Lizard file record")
-        path = _relative_path(root, file_result.get("path"))
-        functions = file_result.get("functions")
-        if not isinstance(functions, list):
-            raise TypeError("Lizard API adapter returned an invalid function list")
-        for raw_function in cast(list[object], functions):
-            function = _json_object(raw_function, "Lizard function record")
-            identity = function.get("name")
-            value = function.get("value")
-            line = _line(function.get("line"))
-            if not isinstance(identity, str) or not identity:
+    for file_result in file_results:
+        path = _relative_path(root, file_result.path)
+        for function in file_result.functions:
+            identity = function.name
+            value = function.value
+            line = _line(function.line)
+            if not identity:
                 raise ValueError("Lizard function record has no identity")
-            if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+            if value < 1:
                 raise ValueError("Lizard function record has an invalid CCN value")
             key = (path, identity, line)
             if key in seen:
@@ -541,8 +578,8 @@ def _parse_lizard(
             records.append(record)
             if finding is not None:
                 findings.append(finding)
-    analyzed = payload.get("analyzed_file_count")
-    if not isinstance(analyzed, int) or isinstance(analyzed, bool) or analyzed < 0:
+    analyzed = payload.analyzed_file_count
+    if analyzed is None or analyzed < 0:
         raise ValueError("Lizard API adapter returned an invalid coverage count")
     return tuple(records), tuple(findings), analyzed
 
@@ -748,13 +785,11 @@ def _run_lizard(
             plan, policy, f"Lizard API adapter could not be launched: {error}"
         )
     try:
-        decoded: object = json.loads(result.stdout)
-        payload = _json_object(decoded, "Lizard API adapter output")
-        error_message = payload.get("error")
-        if isinstance(error_message, str):
-            return _failure(plan, policy, error_message)
-        version_value = payload.get("version")
-        if not isinstance(version_value, str):
+        payload = _LizardPayload.model_validate_json(result.stdout)
+        if payload.error is not None:
+            return _failure(plan, policy, payload.error)
+        version_value = payload.version
+        if version_value is None:
             raise TypeError("Lizard API adapter returned malformed output")
         version = _actual_version(version_value)
         if version != binding.version:
@@ -765,7 +800,7 @@ def _run_lizard(
                 actual_version=version,
             )
         records, findings, analyzed = _parse_lizard(result.stdout, root, plan, version)
-    except (json.JSONDecodeError, TypeError, ValueError) as error:
+    except (TypeError, ValueError) as error:
         return _failure(plan, policy, str(error))
     if result.returncode != 0:
         return _failure(
@@ -895,11 +930,13 @@ def report_exit_code(
     )
 
 
+# opaque-boundary: Dataclass serialization produces a heterogeneous JSON plan.
 def plan_payload(plan: CyclomaticPlan) -> dict[str, object]:
     """Serialize a deterministic plan for the CLI and consumer automation."""
     return asdict(plan)
 
 
+# opaque-boundary: Dataclass serialization preserves native report fields.
 def report_payload(report: CyclomaticReport) -> dict[str, object]:
     """Serialize the structured report for JSON output and orchestration."""
     payload = asdict(report)

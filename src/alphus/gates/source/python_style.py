@@ -285,7 +285,7 @@ class StyleFindings(TypedDict):
     repeated_literals: list[int]
     heterogeneous_tuple_returns: list[int]
     undifferentiated_patterns: list[int]
-    concrete_classmethod_returns: list[int]
+    concrete_self_returns: list[int]
     direct_text_reads: list[int]
     duplicate_literal_catalogs: list[int]
     unused_public_constants: list[int]
@@ -402,7 +402,7 @@ class StyleVisitor(ast.NodeVisitor):
             "repeated_literals": [],
             "heterogeneous_tuple_returns": [],
             "undifferentiated_patterns": [],
-            "concrete_classmethod_returns": [],
+            "concrete_self_returns": [],
             "direct_text_reads": [],
             "duplicate_literal_catalogs": [],
             "unused_public_constants": [],
@@ -761,14 +761,23 @@ class StyleVisitor(ast.NodeVisitor):
                 classmethod_decorators = {
                     type_name(decorator) for decorator in statement.decorator_list
                 }
+                after_model_validator = any(
+                    isinstance(decorator, ast.Call)
+                    and type_name(decorator.func) == "model_validator"
+                    and any(
+                        keyword.arg == "mode"
+                        and isinstance(keyword.value, ast.Constant)
+                        and keyword.value.value == "after"
+                        for keyword in decorator.keywords
+                    )
+                    for decorator in statement.decorator_list
+                )
                 if (
-                    "classmethod" in classmethod_decorators
+                    ("classmethod" in classmethod_decorators or after_model_validator)
                     and statement.returns is not None
                     and type_name(statement.returns) == node.name
                 ):
-                    self.findings["concrete_classmethod_returns"].append(
-                        statement.lineno
-                    )
+                    self.findings["concrete_self_returns"].append(statement.lineno)
         self.pydantic_model_stack.append(is_pydantic_model)
         self.frozen_model_stack.append(frozen_model)
         for decorator in node.decorator_list:

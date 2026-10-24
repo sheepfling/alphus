@@ -176,6 +176,8 @@ policy files and explicit composition of Markdown, TOML, JSON, Python, and
 stub-testing profiles. Start with its one-file example and add native tools as
 needed. The [subtool guide](docs/SUBTOOLS.md) explains how Alphus coordinates
 rumdl, mdrepo, Taplo, and Prettier. The
+[shared intent guide](docs/SHARED-QUALITY-INTENTS.md) describes explicit
+cross-language native mappings, resolved plans, and evidence handling. The
 [shared stub-package CI action](docs/STUB-PACKAGE-CI.md) hosts reusable
 PEP 561 build, checker, and runtime-compatibility gates without adding an
 Alphus dependency to published stub packages. The

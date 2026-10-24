@@ -41,13 +41,22 @@ class _SharedUtilitiesWire(BaseModel):
     direct_git_calls: tuple[str, ...] = ()
 
 
+class _CyclomaticWire(BaseModel):
+    """Validate the direct-rule report and diagnostic envelope together."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    diagnostics: tuple[Diagnostic, ...]
+    report: CyclomaticReport
+    summary: str
+
+
 _FINDINGS: TypeAdapter[list[Finding]] = TypeAdapter(list[Finding])
 _MESSAGES: TypeAdapter[list[str]] = TypeAdapter(list[str])
 _PYTHON_STYLE: TypeAdapter[PythonStyleOutput] = TypeAdapter(PythonStyleOutput)
 _SHARED_UTILITIES: TypeAdapter[_SharedUtilitiesWire] = TypeAdapter(_SharedUtilitiesWire)
 _SHARED_REPORT: TypeAdapter[SharedUtilitiesReport] = TypeAdapter(SharedUtilitiesReport)
-_DIAGNOSTICS: TypeAdapter[list[Diagnostic]] = TypeAdapter(list[Diagnostic])
-_WIRE_OBJECT: TypeAdapter[dict[str, object]] = TypeAdapter(dict[str, object])
+_CYCLOMATIC_WIRE: TypeAdapter[_CyclomaticWire] = TypeAdapter(_CyclomaticWire)
 _ADVISORY_STYLE_CATEGORIES = frozenset(
     {"opaque_mappings", "heterogeneous_tuple_returns"}
 )
@@ -205,17 +214,10 @@ def diagnostics_from_json(rule: QualityRuleName, encoded: str) -> list[Diagnosti
     if shape is RuleOutputShape.PYTHON_STYLE:
         return _style_diagnostics(_PYTHON_STYLE.validate_json(encoded))
     if shape is RuleOutputShape.CYCLOMATIC_REPORT:
-        payload = _WIRE_OBJECT.validate_json(encoded)
-        if set(payload) != {
-            "diagnostics",
-            "report",
-            "summary",
-        }:
-            raise ValueError("cyclomatic complexity output has an unexpected shape")
-        report = _WIRE_OBJECT.validate_python(payload["report"])
-        if report.get("diagnostics") != payload["diagnostics"]:
+        payload = _CYCLOMATIC_WIRE.validate_json(encoded)
+        if payload.report.diagnostics != payload.diagnostics:
             raise ValueError("cyclomatic complexity report diagnostics do not match")
-        return _DIAGNOSTICS.validate_python(payload["diagnostics"])
+        return list(payload.diagnostics)
     if shape is not RuleOutputShape.SHARED_UTILITIES:
         raise ValueError(f"rule {rule!r} has no JSON output normalizer")
     report = _SHARED_UTILITIES.validate_json(encoded)

@@ -27,6 +27,7 @@ def test_plan_shows_native_and_custom_steps_without_running_them(
     payload = json.loads(capsys.readouterr().out)
     assert payload["profile"] == "check"
     assert payload["profiles"] == ["check"]
+    assert "intents" not in payload
     assert [step["name"] for step in payload["steps"]] == [
         "Markdown style",
         "JSON format",

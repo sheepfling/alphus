@@ -24,6 +24,14 @@ def test_validate_json_value_rejects_malformed_json() -> None:
         validate_json_value("{")
 
 
+@pytest.mark.parametrize("source", ("NaN", "[Infinity]", '{"nested": [-Infinity]}'))
+def test_validate_json_value_rejects_nonstandard_numeric_constants(
+    source: str,
+) -> None:
+    with pytest.raises(ValueError, match="JSON numbers must be finite"):
+        validate_json_value(source)
+
+
 def test_collection_helpers_accept_sequence_and_mapping_interfaces() -> None:
     assert contains_member(("one", "two"), "two")
     assert contains_member(["one", "two"], "one")

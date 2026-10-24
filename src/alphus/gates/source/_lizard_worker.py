@@ -9,7 +9,28 @@ import json
 import sys
 from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import Protocol, cast
+from typing import Protocol, TypedDict, cast
+
+
+class _FunctionRecord(TypedDict):
+    name: str
+    line: int
+    value: int
+
+
+class _FileRecord(TypedDict):
+    path: str
+    functions: list[_FunctionRecord]
+
+
+class _LizardResult(TypedDict):
+    version: str
+    analyzed_file_count: int
+    files: list[_FileRecord]
+
+
+class _LizardError(TypedDict):
+    error: str
 
 
 class _FunctionInfo(Protocol):
@@ -32,7 +53,7 @@ class _LizardApi(Protocol):
     ) -> Iterable[_FileInfo | None]: ...
 
 
-def _analyze(root: Path, variant: str, files: Sequence[str]) -> dict[str, object]:
+def _analyze(root: Path, variant: str, files: Sequence[str]) -> _LizardResult:
     """Analyze only the explicitly selected C-family paths with Lizard."""
     lizard = cast(_LizardApi, importlib.import_module("lizard"))
 
@@ -46,7 +67,7 @@ def _analyze(root: Path, variant: str, files: Sequence[str]) -> dict[str, object
 
     extension_names = ["mccabe"] if variant == "modified" else []
     extensions = lizard.get_extensions(extension_names)
-    file_results: list[dict[str, object]] = []
+    file_results: list[_FileRecord] = []
     analyzed_file_count = 0
     for source_file in lizard.analyze_files(
         [str(path) for path in paths], exts=extensions
@@ -59,7 +80,7 @@ def _analyze(root: Path, variant: str, files: Sequence[str]) -> dict[str, object
             raise ValueError(
                 f"Lizard returned a path outside the checkout: {source_file.filename}"
             )
-        functions: list[dict[str, object]] = []
+        functions: list[_FunctionRecord] = []
         for function in source_file.function_list:
             if function is None or function.name == "*global*":
                 continue
@@ -93,7 +114,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("files", nargs="+")
     arguments = parser.parse_args(argv)
     try:
-        payload = _analyze(arguments.root, arguments.variant, arguments.files)
+        payload: _LizardResult | _LizardError = _analyze(
+            arguments.root, arguments.variant, arguments.files
+        )
     except Exception as error:  # noqa: BLE001 - opaque optional API failures are gates.
         payload = {"error": f"Lizard API analysis failed: {error}"}
         json.dump(payload, sys.stdout, sort_keys=True)

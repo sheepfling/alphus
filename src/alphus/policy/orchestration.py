@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Sequence
-from typing import Annotated, Literal, NamedTuple, cast
+from typing import Annotated, Literal, NamedTuple, Self, cast
 
 from pydantic import Field, field_validator, model_validator
 
@@ -24,6 +24,11 @@ from alphus.policy.base import (
     validate_single_path,
 )
 from alphus.policy.catalog import RULE_SPECS
+from alphus.policy.intents import (
+    NativeOptionValue,
+    SharedQualityIntent,
+    resolve_intent_bindings,
+)
 from alphus.policy.metrics import CyclomaticComplexityPolicy
 from alphus.policy.repository import (
     DependencyLockPolicy,
@@ -35,6 +40,7 @@ from alphus.policy.review import (
     FastApiPracticePolicy,
     InputContractPolicy,
     NumericLiteralPolicy,
+    PositionalInterfacePolicy,
     PydanticPracticePolicy,
     ScipyConstantsPolicy,
     TestQualityPolicy,
@@ -67,6 +73,7 @@ class CheckPolicies(StrictModel):
     scipy_constants: ScipyConstantsPolicy | None = None
     test_quality: TestQualityPolicy | None = None
     input_contracts: InputContractPolicy | None = None
+    positional_interfaces: PositionalInterfacePolicy | None = None
     pydantic_practices: PydanticPracticePolicy | None = None
     fastapi_practices: FastApiPracticePolicy | None = None
     shared_utilities: SharedUtilitiesPolicy | None = None
@@ -116,6 +123,9 @@ class CommandRunStep(StrictModel):
     fix_argv: Annotated[tuple[str, ...] | None, Field(min_length=1)] = None
     working_directory: str = "."
     files: FileInventoryPolicy | None = None
+    timeout_seconds: Annotated[int | float, Field(gt=0, allow_inf_nan=False)] | None = (
+        None
+    )
     rollout: Literal["mainline", "provisional"] = "mainline"
 
     @field_validator("name")
@@ -140,7 +150,7 @@ class CommandRunStep(StrictModel):
         return validate_single_path(path, "command working directory")
 
     @model_validator(mode="after")
-    def validate_file_arguments(self) -> CommandRunStep:
+    def validate_file_arguments(self) -> Self:
         placeholders = sum(argument == "{files}" for argument in self.argv)
         embedded = any(
             "{files}" in argument and argument != "{files}" for argument in self.argv
@@ -201,7 +211,7 @@ class OrchestrationProfile(StrictModel):
         return tuple(includes)
 
     @model_validator(mode="after")
-    def require_selection(self) -> OrchestrationProfile:
+    def require_selection(self) -> Self:
         if not self.steps and not self.includes:
             raise ValueError("a profile must select steps or include another profile")
         return self
@@ -225,9 +235,10 @@ class OrchestrationPolicy(StrictModel):
     profiles: Annotated[tuple[OrchestrationProfile, ...], Field(min_length=1)]
     default_profile: str = "check"
     failure_threshold: Severity = "error"
+    intents: tuple[SharedQualityIntent, ...] = ()
 
     @model_validator(mode="after")
-    def validate_plan(self) -> OrchestrationPolicy:
+    def validate_plan(self) -> Self:
         names = [step.name for step in self.steps]
         require_unique(names, "orchestration step names must be unique")
         profile_names = [profile.name for profile in self.profiles]
@@ -258,6 +269,88 @@ class OrchestrationPolicy(StrictModel):
             )
         for profile in self.profiles:
             self.resolve_profile(profile.name)
+        intent_ids = tuple(intent.rule_id for intent in self.intents)
+        require_unique(intent_ids, "shared quality intent rule IDs must be unique")
+        steps_by_name: dict[str, OrchestrationStep] = {
+            step.name: step for step in self.steps
+        }
+        resolved_intents = resolve_intent_bindings(self.intents)
+        seen_native_rules: set[tuple[str, str, str]] = set()
+        declared_native_options: dict[tuple[str, str], NativeOptionValue] = {}
+        declared_evidence_formats: dict[str, tuple[str, str]] = {}
+        selected_profiles: dict[str, tuple[str, ...]] = {}
+        for profile in self.profiles:
+            resolved = self.resolve_profile(profile.name)
+            if resolved is None:
+                raise ValueError(f"unknown orchestration profile: {profile.name}")
+            selected_profiles[profile.name] = resolved.steps
+        unknown_intent_profiles = {
+            name
+            for intent in self.intents
+            for name in intent.profiles
+            if name not in profile_names
+        }
+        if unknown_intent_profiles:
+            raise ValueError(
+                "shared quality intents reference unknown profiles: "
+                f"{', '.join(sorted(unknown_intent_profiles))}"
+            )
+        for item in resolved_intents:
+            binding = item.binding
+            if not item.enabled or binding.mapping == "unsupported":
+                continue
+            assert binding.step is not None
+            step = steps_by_name.get(binding.step)
+            if step is None or step.kind != "command":
+                raise ValueError(
+                    f"native capability {item.intent.rule_id} for {binding.language} "
+                    f"references unknown command step {binding.step!r}"
+                )
+            if step.files != item.files:
+                raise ValueError(
+                    f"native capability {item.intent.rule_id} for {binding.language} "
+                    "must use the same file inventory as its command step"
+                )
+            if step.fix_argv is not None:
+                raise ValueError(
+                    f"native capability {item.intent.rule_id} for {binding.language} "
+                    "cannot use an automatic fixer"
+                )
+            if step.rollout != item.intent.rollout:
+                raise ValueError(
+                    f"native capability {item.intent.rule_id} for {binding.language} "
+                    "must use the same rollout as its command step"
+                )
+            if not any(
+                binding.step in selected_profiles[name] for name in item.intent.profiles
+            ):
+                raise ValueError(
+                    f"native capability {item.intent.rule_id} for {binding.language} "
+                    "references a command step that no intent profile selects"
+                )
+            evidence_format = (binding.evidence_format, binding.evidence_stream)
+            previous_format = declared_evidence_formats.get(binding.step)
+            if previous_format is not None and previous_format != evidence_format:
+                raise ValueError(
+                    f"native capabilities sharing command step {binding.step!r} "
+                    "must agree on evidence format and stream"
+                )
+            declared_evidence_formats[binding.step] = evidence_format
+            native_identity = (binding.step, binding.language, binding.native_rule)
+            if native_identity in seen_native_rules:
+                raise ValueError(
+                    "a native rule may bind to only one semantic intent per language"
+                )
+            seen_native_rules.add(native_identity)
+            for option, value in binding.effective_configuration:
+                native_option = (binding.step, option)
+                previous = declared_native_options.get(native_option)
+                if previous is not None and previous != value:
+                    raise ValueError(
+                        f"conflicting effective values for native option {option!r} "
+                        f"on command step {binding.step!r}"
+                    )
+                declared_native_options[native_option] = value
         return self
 
     def resolve_profile(self, name: str) -> ProfilePlan | None:

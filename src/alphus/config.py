@@ -5,7 +5,7 @@ from __future__ import annotations
 import tomllib
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Annotated, Literal, TextIO
+from typing import Annotated, Literal, Self, TextIO
 
 from pydantic import Field, TypeAdapter, field_validator, model_validator
 
@@ -23,6 +23,12 @@ from alphus.policy.base import (
     StrictModel,
     require_unique,
     validate_single_path,
+)
+from alphus.policy.intents import (
+    IntentFileOverride,
+    IntentLanguageOverride,
+    NativeCapabilityBinding,
+    SharedQualityIntent,
 )
 from alphus.policy.metrics import (
     CyclomaticBackendBinding,
@@ -64,8 +70,10 @@ from alphus.policy.review import (
     InputContractPolicy,
     NumericLiteralPolicy,
     NumericLiteralSpec,
+    PositionalInterfacePolicy,
     PydanticPracticePolicy,
     ScipyConstantsPolicy,
+    TestQualityExclusion,
     TestQualityPolicy,
 )
 from alphus.policy.sources import (
@@ -107,12 +115,15 @@ __all__ = [
     "InputContractPolicy",
     "InstructionRouterPolicy",
     "InstructionRouterRoute",
+    "IntentFileOverride",
+    "IntentLanguageOverride",
     "JsonArrayRule",
     "LineLengthPolicy",
     "LizardCyclomaticBinding",
     "LockfilePair",
     "ModuleRolePolicy",
     "ModuleRoleRule",
+    "NativeCapabilityBinding",
     "NodeCliPolicy",
     "NonEmptyTomlRule",
     "NumericLiteralPolicy",
@@ -123,6 +134,7 @@ __all__ = [
     "PackageBoundaryPolicy",
     "PathDiscoveryPolicy",
     "PathRule",
+    "PositionalInterfacePolicy",
     "ProfilePlan",
     "PydanticPracticePolicy",
     "PythonCliPolicy",
@@ -137,8 +149,10 @@ __all__ = [
     "RuntimeTypePolicy",
     "ScipyConstantsPolicy",
     "ScriptPolicy",
+    "SharedQualityIntent",
     "SharedUtilitiesPolicy",
     "SourceScanPolicy",
+    "TestQualityExclusion",
     "TestQualityPolicy",
     "TrackedPathRule",
     "TrackedSuffixRule",
@@ -201,6 +215,7 @@ class _PartialOrchestration(StrictModel):
     profiles: tuple[OrchestrationProfile, ...] = ()
     default_profile: str = "check"
     failure_threshold: Severity = "error"
+    intents: tuple[SharedQualityIntent, ...] = ()
 
 
 class _SplitPolicy(StrictModel):
@@ -215,7 +230,7 @@ class _SplitPolicy(StrictModel):
     orchestration: _PartialOrchestration
 
     @model_validator(mode="after")
-    def validate_native_selection(self) -> _SplitPolicy:
+    def validate_native_selection(self) -> Self:
         selected = _selected_native_tools(self.languages, self.tools)
         if selected is not None:
             native_tool_policy(selected)
@@ -290,6 +305,7 @@ def load_config(path: Path) -> QualityGateConfig:
         profiles=(*profiles, *root.orchestration.profiles),
         default_profile=root.orchestration.default_profile,
         failure_threshold=root.orchestration.failure_threshold,
+        intents=root.orchestration.intents,
     )
     selected = _selected_native_tools(root.languages, root.tools)
     orchestration = (
@@ -300,6 +316,7 @@ def load_config(path: Path) -> QualityGateConfig:
             profiles=declared.profiles,
             default_profile=declared.default_profile,
             failure_threshold=declared.failure_threshold,
+            intents=declared.intents,
         )
     )
     return QualityGateConfig(
@@ -329,6 +346,7 @@ def _compose_native_orchestration(
         profiles=_merge_profiles(native.profiles, declared_profiles),
         default_profile=declared.default_profile,
         failure_threshold=declared.failure_threshold,
+        intents=declared.intents,
     )
 
 
@@ -363,4 +381,5 @@ def _with_native_profile(policy: OrchestrationPolicy) -> OrchestrationPolicy:
     return OrchestrationPolicy(
         steps=policy.steps,
         profiles=(*policy.profiles[:-1], native, check),
+        intents=policy.intents,
     )

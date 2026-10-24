@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
@@ -13,6 +14,7 @@ from pydantic import ValidationError
 
 from alphus import cli
 from alphus.cli import main
+from alphus.config import load_config
 from alphus.contracts.findings import Diagnostic
 from alphus.gates.source import _lizard_worker as lizard_worker
 from alphus.gates.source import cyclomatic_complexity as complexity
@@ -20,6 +22,7 @@ from alphus.policy.metrics import (
     CyclomaticComplexityPolicy,
     RuffCyclomaticBinding,
 )
+from alphus.support.data_access import JsonValue
 
 FIXTURES = Path(__file__).parent / "fixtures" / "cyclomatic"
 
@@ -33,7 +36,7 @@ def _repository(root: Path, *files: str) -> Path:
     return root
 
 
-def _policy(*bindings: dict[str, object]) -> CyclomaticComplexityPolicy:
+def _policy(*bindings: Mapping[str, JsonValue]) -> CyclomaticComplexityPolicy:
     return CyclomaticComplexityPolicy.model_validate(
         {
             "metric": "cyclomatic",
@@ -47,7 +50,7 @@ def _policy(*bindings: dict[str, object]) -> CyclomaticComplexityPolicy:
     )
 
 
-def _ruff() -> dict[str, object]:
+def _ruff() -> dict[str, JsonValue]:
     return {
         "language": "python",
         "backend": "ruff",
@@ -55,7 +58,7 @@ def _ruff() -> dict[str, object]:
     }
 
 
-def _eslint(variant: str = "classic") -> dict[str, object]:
+def _eslint(variant: str = "classic") -> dict[str, JsonValue]:
     return {
         "language": "javascript",
         "backend": "eslint",
@@ -64,7 +67,7 @@ def _eslint(variant: str = "classic") -> dict[str, object]:
     }
 
 
-def _lizard(variant: str = "standard") -> dict[str, object]:
+def _lizard(variant: str = "standard") -> dict[str, JsonValue]:
     return {
         "language": "cpp",
         "backend": "lizard",
@@ -225,7 +228,7 @@ def test_lizard_numeric_records_use_inclusive_limits_and_deduplicate(
     tmp_path: Path,
     variant: str,
     fixture: str,
-    expected_values: list[int],
+    expected_values: Sequence[int],
 ) -> None:
     root = _repository(tmp_path, "sample.cpp")
     policy = _policy(_lizard(variant))
@@ -253,19 +256,19 @@ def test_lizard_worker_uses_the_pinned_api_and_filters_global_records(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     variant: str,
-    expected_extensions: list[str],
+    expected_extensions: Sequence[str],
 ) -> None:
     root = _repository(tmp_path, "sample.cpp")
-    observed: dict[str, object] = {}
+    observed: dict[str, JsonValue] = {}
     fake_lizard = SimpleNamespace()
 
-    def get_extensions(names: list[str]) -> list[str]:
-        observed["extensions"] = names
+    def get_extensions(names: Sequence[str]) -> Sequence[str]:
+        observed["extensions"] = list(names)
         return names
 
-    def analyze_files(paths: list[str], *, exts: list[str]) -> list[object]:
-        observed["paths"] = paths
-        observed["used_extensions"] = exts
+    def analyze_files(paths: Sequence[str], *, exts: Sequence[str]) -> list[object]:
+        observed["paths"] = list(paths)
+        observed["used_extensions"] = list(exts)
         function = SimpleNamespace(
             name="run",
             long_name="Engine::run(int)",
@@ -423,11 +426,11 @@ version = "0.16.1"
     assert "C901" in plan["backends"][0]["command"]
 
 
-def test_installed_package_example_loads_all_three_opt_in_backends() -> None:
-    from alphus.config import load_config
-
+def test_installed_package_example_loads_all_three_opt_in_backends(
+    pytestconfig: pytest.Config,
+) -> None:
     config_path = (
-        Path(__file__).parents[1] / "examples" / "cyclomatic" / "quality-gates.toml"
+        pytestconfig.rootpath / "examples" / "cyclomatic" / "quality-gates.toml"
     )
     config = load_config(config_path)
 

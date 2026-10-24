@@ -1,4 +1,7 @@
-def branch_loop_exception(value: int, items: list[int]) -> int:
+from collections.abc import Sequence
+
+
+def branch_loop_exception(value: int, items: Sequence[int]) -> int:
     assert items
     try:
         total = 0
@@ -12,7 +15,7 @@ def branch_loop_exception(value: int, items: list[int]) -> int:
         return 0
 
 
-def comprehension_and_match(value: int, items: list[int]) -> list[int]:
+def comprehension_and_match(value: int, items: Sequence[int]) -> list[int]:
     selected = [item for item in items if item > value and item % 2 == 0]
     match value:
         case 0 | 1:

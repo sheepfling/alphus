@@ -57,7 +57,13 @@ minimum_ast_nodes = 15
 [checks.python_style]
 extensions = [".py"]
 exclude = []
-opaque_boundary_paths = ["src/alphus/config.py"]
+opaque_boundary_paths = [
+  "src/alphus/config.py",
+  "src/alphus/cli.py",
+  "src/alphus/execution/orchestration.py",
+  "src/alphus/gates/source/cyclomatic_complexity.py",
+  "tests/execution/test_shared_quality_intent_execution.py",
+]
 opaque_boundary_marker_prefix = "# opaque-boundary: "
 opaque_boundary_min_reason_chars = 12
 forbidden_main_imports = ["main"]
@@ -69,6 +75,7 @@ repeated_literal_paths = [
   "src/alphus/contracts/findings.py",
 ]
 semantic_result_paths = [
+  "src/alphus/gates/review/positional_interfaces.py",
   "src/alphus/gates/repository/**",
   "src/alphus/gates/hygiene/comment_markers.py",
   "src/alphus/gates/vcs/worktree_hygiene.py",
@@ -111,6 +118,7 @@ ephemeral_document_patterns = ["docs/**"]
 [checks.input_contracts]
 extensions = [".py"]
 exclude = []
+sequence_narrowing_paths = ["src/alphus/gates/review/positional_interfaces.py"]
 
 [checks.pydantic_practices]
 extensions = [".py"]
