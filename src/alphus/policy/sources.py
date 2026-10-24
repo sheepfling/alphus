@@ -5,7 +5,8 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping, Sequence
 from pathlib import PurePosixPath
-from typing import Annotated, Literal, cast
+from types import MappingProxyType
+from typing import Annotated, Final, Literal, cast
 
 from packaging.version import InvalidVersion, Version
 from pydantic import Field, field_validator, model_validator
@@ -21,6 +22,31 @@ from alphus.policy.base import (
 FunctionShapeMetricName = Literal["parameters", "nesting", "statements"]
 FunctionShapeLanguage = Literal["python", "javascript", "cpp"]
 FunctionShapeBackend = Literal["ruff", "pylint", "eslint", "clang-tidy"]
+
+_CPP_LANGUAGE: Final = "cpp"
+_FUNCTION_SHAPE_BACKENDS_BY_LANGUAGE: Final = MappingProxyType(
+    {
+        "python": frozenset({"ruff", "pylint"}),
+        "javascript": frozenset({"eslint"}),
+        _CPP_LANGUAGE: frozenset({"clang-tidy"}),
+    }
+)
+_COMMENT_MARKER_EXTENSIONS_BY_LANGUAGE: Final = MappingProxyType(
+    {
+        "python": frozenset({".py", ".pyi"}),
+        "toml": frozenset({".toml"}),
+        "javascript": frozenset(
+            {".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"}
+        ),
+        "cpp": frozenset(
+            {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx"}
+        ),
+        "java": frozenset({".java"}),
+    }
+)
+_SUPPORTED_COMMENT_MARKER_EXTENSIONS: Final = frozenset().union(
+    *_COMMENT_MARKER_EXTENSIONS_BY_LANGUAGE.values()
+)
 
 
 class FunctionShapeMetric(StrictModel):
@@ -112,12 +138,7 @@ class FunctionShapeTarget(StrictModel):
 
     @model_validator(mode="after")
     def validate_binding(self) -> FunctionShapeTarget:
-        compatible = {
-            "python": {"ruff", "pylint"},
-            "javascript": {"eslint"},
-            "cpp": {"clang-tidy"},
-        }
-        if self.backend not in compatible[self.language]:
+        if self.backend not in _FUNCTION_SHAPE_BACKENDS_BY_LANGUAGE[self.language]:
             raise ValueError(f"{self.backend} does not support {self.language}")
         minimums = {
             "ruff": {
@@ -151,7 +172,7 @@ class FunctionShapeTarget(StrictModel):
             raise ValueError(
                 f"{self.backend} {self.minimum_version} predates configured metrics: {', '.join(unsupported)}"
             )
-        if self.language == "cpp":
+        if self.language == _CPP_LANGUAGE:
             if self.compilation_database is None:
                 raise ValueError("cpp requires a compilation_database")
             path = PurePosixPath(self.compilation_database)
@@ -164,7 +185,7 @@ class FunctionShapeTarget(StrictModel):
                 raise ValueError("compilation_database must be a relative POSIX path")
         elif self.compilation_database is not None:
             raise ValueError("compiler context is only valid for cpp targets")
-        if self.language != "cpp" and (
+        if self.language != _CPP_LANGUAGE and (
             self.ignore_macros is not None
             or self.count_member_initializers_as_statements is not None
         ):
@@ -218,27 +239,10 @@ class CommentMarkerPolicy(StrictModel):
             "comment-marker extensions must be lowercase suffixes",
             require_one=True,
         )
-        supported = {
-            ".py",
-            ".pyi",
-            ".toml",
-            ".js",
-            ".jsx",
-            ".mjs",
-            ".cjs",
-            ".ts",
-            ".tsx",
-            ".c",
-            ".cc",
-            ".cpp",
-            ".cxx",
-            ".h",
-            ".hh",
-            ".hpp",
-            ".hxx",
-            ".java",
-        }
-        if any(extension not in supported for extension in selected):
+        if any(
+            extension not in _SUPPORTED_COMMENT_MARKER_EXTENSIONS
+            for extension in selected
+        ):
             raise ValueError(
                 "comment-marker extensions must use a supported comment syntax"
             )
