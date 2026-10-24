@@ -87,6 +87,8 @@ mdrepo, rumdl, and Python-tool example. The
 [shared stub-package CI action](docs/STUB-PACKAGE-CI.md) hosts reusable
 PEP 561 build, checker, and runtime-compatibility gates without adding an
 Alphus dependency to published stub packages. The
+[C++ quality gates](docs/CPP-QUALITY.md) provide reusable source, build,
+test, package, artifact, and worktree checks through Alphus profiles. The
 [extension and diagnostics proposal](docs/EXTENSIBILITY.md) records a staged
 design for categories, shared findings, and future third-party rules. The
 [installability report](docs/INSTALLABILITY.md) records the current wheel,

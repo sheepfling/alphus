@@ -106,9 +106,12 @@ Python namespace packages become useful if independently installed and
 versioned distributions need to share one import namespace. They are not needed
 to organize modules inside the current distribution. If third-party gate
 packages become necessary, discover them through an explicit, versioned entry
-point contract rather than by scanning a namespace for imports. C++ and
-JavaScript tools can continue as native command steps until Alphus owns a
-language-specific check that warrants Python code.
+point contract rather than by scanning a namespace for imports. JavaScript
+projects can continue to use consumer-owned native command steps. Alphus now
+includes the C++ quality workflow described in
+[C++ quality gates](CPP-QUALITY.md); its engines keep their JSON reports and
+run through the existing command-step contract rather than introducing a
+second rule registry.
 
 ### Hook contract
 

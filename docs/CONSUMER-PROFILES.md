@@ -19,6 +19,7 @@ activate gates. Ordinary Python repositories can combine `python` and
 | `markdown` | Document links/graph, style/format | mdrepo and rumdl |
 | `python` | Lint, formatting, project tests/tooling types | Ruff, pytest/unittest, Mypy/Pyright |
 | `stubs` | Build/install, API, typed examples, stubtest, smoke | Alphus and native checkers |
+| `cpp` | C++ source, build, test, package, and artifact checks | Alphus C++ engines and consumer tools |
 | `toml` | TOML document syntax | Python `tomllib` or a consumer-selected validator |
 | `json` | JSON document syntax | Python `json` or a consumer-selected validator |
 | `python-policy` | Optional repository-specific source conventions | Explicit Alphus source policy |
@@ -71,9 +72,12 @@ JSON Lines and JSON with comments are distinct document formats. A consumer
 can add separate command steps for the formats it uses; their parsers, file
 patterns, and failure behavior should stay out of the Python-source
 `json-structure` rule.
-The same command-step mechanism lets a C++ or JavaScript consumer define its
-own native build, lint, and test profiles without changing the Python, stub,
-or Markdown selections.
+The C++ engines are shipped in Alphus and have an opt-in consumer profile
+example at [`examples/cpp/quality-gates.toml`](../examples/cpp/quality-gates.toml).
+See [C++ quality gates](CPP-QUALITY.md) for the source and artifact commands
+and the build, test, and package evidence they accept. JavaScript consumers
+can use the same command-step mechanism for their native build, lint, and test
+profiles without changing the Python, stub, Markdown, or C++ selections.
 
 Portable policy sections are optional when their gates are unselected. A
 command-only Markdown consumer can omit `[checks]` entirely; see the

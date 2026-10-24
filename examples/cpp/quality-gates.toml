@@ -1,0 +1,41 @@
+schema_version = 1
+
+[files]
+include = [
+  "**/*.c", "**/*.cc", "**/*.cpp", "**/*.cxx",
+  "**/*.h", "**/*.hh", "**/*.hpp", "**/*.hxx",
+  "**/*.inc", "**/*.inl", "**/*.ipp", "**/*.tpp",
+]
+exclude = []
+
+[orchestration]
+default_profile = "cpp-source"
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "command"
+name = "C++ source ownership"
+argv = [
+  "{python}", "{root}/portable_gates/cpp/common_quality.py", "source", "{root}",
+  "--config", "{root}/cpp-common-quality.json",
+]
+
+[[orchestration.steps]]
+kind = "command"
+name = "C++ artifact budgets"
+argv = [
+  "{python}", "{root}/portable_gates/cpp/artifact_quality.py", "check",
+  "{root}/build", "--policy", "{root}/cpp-artifact-policy.json",
+]
+
+[[orchestration.profiles]]
+name = "cpp-source"
+steps = ["C++ source ownership"]
+
+[[orchestration.profiles]]
+name = "cpp-artifacts"
+steps = ["C++ artifact budgets"]
+
+[[orchestration.profiles]]
+name = "cpp"
+includes = ["cpp-source", "cpp-artifacts"]

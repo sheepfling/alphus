@@ -14,13 +14,13 @@ from alphus import (
     source_scanning,
     test_quality,
 )
+from alphus.gates.languages.python import runtime_types as language_runtime_types
+from alphus.gates.languages.python import style as language_python_style
 from alphus.gates.review import input_contracts as review_input_contracts
 from alphus.gates.review import numeric_literals as review_numeric_literals
 from alphus.gates.review import test_quality as review_test_quality
 from alphus.gates.review.runners import REVIEW_RULE_RUNNERS
 from alphus.gates.source import json_structure as source_json_structure
-from alphus.gates.source import python_style as source_python_style
-from alphus.gates.source import runtime_types as source_runtime_types
 from alphus.gates.source.runners import SOURCE_RULE_RUNNERS
 from alphus.rule_execution import RULE_RUNNERS
 from alphus.support import source_scanning as support_source_scanning
@@ -89,5 +89,5 @@ def test_source_theme_owns_its_runners_and_old_imports_remain_valid() -> None:
         json_structure.check_json_structure
         is source_json_structure.check_json_structure
     )
-    assert python_style.findings_for is source_python_style.findings_for
-    assert runtime_types.policy_issues is source_runtime_types.policy_issues
+    assert python_style.findings_for is language_python_style.findings_for
+    assert runtime_types.policy_issues is language_runtime_types.policy_issues

@@ -26,12 +26,13 @@ commands ship in the same `alphus` distribution. The separate
 helpers copied into the isolated target environment, plus legacy import
 adapters. This runtime boundary is why the helper package is separate; it is
 not a second distribution or a second quality framework.
-Keep language-specific workflow gates under `alphus.gates.<language>` in the
-same distribution while they share a release cycle and dependency set.
-Independent namespace distributions would add installation and compatibility
-coordination; introduce them only when a language gate needs its own release
-cycle or substantial optional dependencies. The core profile runner remains
-language neutral.
+The Python gate implementations ship in the Alphus package. Source-language
+engines live under `alphus.gates.languages/<language>`; shared inventory and
+dispatch live under `alphus.gates.source`. Standalone polyglot tools live in
+`portable_gates/<theme>` when they need to run without importing Alphus
+internals. The C++ and repository hygiene tools use this boundary: consumers
+copy the relevant small package into their repository, then let Alphus
+profiles coordinate it through the language-neutral command-step contract.
 
 ## Package map
 
@@ -39,11 +40,18 @@ language neutral.
   AST name resolution. These utilities do not emit findings or register rules.
 - `alphus.gates.review` owns numeric-literal, test-quality, and input-contract
   checkers. Its `runners.py` binds their selectors to validated policies.
-- `alphus.gates.source` owns portable source and launcher checks for Python,
-  JavaScript, and JSON. Its `runners.py` binds these selectors to validated
-  policies. Language-specific analysis remains inside each checker.
+- `alphus.gates.source` owns shared source inventory and check dispatch.
+  `alphus.gates.languages.python` and
+  `alphus.gates.languages.javascript` own language-specific analysis.
+  `alphus.gates.source.runners` binds those engines to the existing validated,
+  language-neutral policy selectors.
 - `alphus.gates.stubs` owns the installed stub-package workflow and fixture
   controller.
+- `portable_gates.cpp` owns the standalone C++ source, build-graph, test,
+  package, and artifact tools; `portable_gates.repository` owns repository-wide
+  checks such as worktree hygiene. The boundary keeps these tools independent
+  of Alphus internals while consumer profiles coordinate them through
+  Alphus's command-step support.
 - `alphus.config*`, `alphus.rule_catalog`, `alphus.rule_execution`, and
   `alphus.rule_results` own validated policy, selector catalog, runner
   composition, and normalized results.
@@ -51,6 +59,16 @@ language neutral.
   planning, native command execution, and exit status.
 - `alphus_stub_quality` contains small audit helpers copied into the Python
   3.10 target environment.
+
+## Where a language check belongs
+
+Put analysis that understands a language's syntax or runtime conventions in
+`alphus.gates.languages.<language>`. Put shared file selection, extension
+routing, policy binding, and rule registration in `alphus.gates.source`.
+Language-specific implementation modules should not each rediscover files or
+parse the consumer's top-level TOML. For standalone checkers that consumers
+copy into non-Python projects, use `portable_gates/<theme>` and keep their
+consumer policy and adapters beside the consumer's build.
 
 Existing root imports such as `alphus.numeric_literals`, `alphus.python_style`,
 and `alphus.source_scanning` remain compatibility modules. New code in a gate

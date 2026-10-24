@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "name": "example-cpp-static-archive-budget",
+  "limits": {
+    "min_static_library_count": 1,
+    "max_static_library_bytes": 536870912,
+    "max_total_static_library_bytes": 2147483648
+  }
+}

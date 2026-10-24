@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, TypeAdapter
 
 from alphus.config_base import QualityRuleName
 from alphus.findings import Diagnostic, Finding, Severity, severity_meets_threshold
-from alphus.gates.source.python_style import StyleFindings
+from alphus.gates.languages.python.style import StyleFindings
 from alphus.rule_catalog import RULE_SPECS
 from alphus.shared_utilities import SharedUtilitiesReport
 

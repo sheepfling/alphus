@@ -1,6 +1,6 @@
 """Compatibility imports for the python-style source gate."""
 
-from alphus.gates.source.python_style import (
+from alphus.gates.languages.python.style import (
     ABSTRACT_PYDANTIC_COLLECTIONS,
     BARE_CONTAINERS,
     CONCRETE,
