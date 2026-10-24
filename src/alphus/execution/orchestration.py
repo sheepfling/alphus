@@ -40,6 +40,7 @@ from alphus.execution.profile_history import (
     latest_profile_record,
     write_profile_record,
 )
+from alphus.execution.profile_manifest import gate_manifest_entry
 from alphus.execution.profile_reporting import ProfileReporter
 from alphus.execution.profile_results import (
     IntentExecutionResult,
@@ -177,6 +178,7 @@ def run_orchestration(
         reporter.error("consumer identity requires --history-dir")
         return ExitCode.CONFIG_ERROR
     history_context = None
+    loaded_config: QualityGateConfig | None = None
     previous_failures: frozenset[str] = frozenset()
     if history_dir is not None:
         try:
@@ -208,6 +210,8 @@ def run_orchestration(
     parallel_results: dict[str, StepExecution] = {}
     step_durations_seconds: dict[str, float] = {}
     work_unit_durations_seconds: dict[str, float] = {}
+    work_unit_steps: dict[str, str] = {}
+    step_attempted: dict[str, bool] = {}
 
     failed = 0
     provisional_passed = 0
@@ -300,6 +304,10 @@ def run_orchestration(
         precomputed = parallel_results.pop(step_name)
         step_durations_seconds[step.name] = precomputed.duration_seconds
         work_unit_durations_seconds.update(precomputed.work_unit_durations)
+        step_attempted[step.name] = bool(precomputed.work_unit_durations)
+        work_unit_steps.update(
+            {unit: step.name for unit, _ in precomputed.work_unit_durations}
+        )
         captured_stdout = StringIO()
         captured_stderr = StringIO()
         step_stdout = ""
@@ -792,6 +800,16 @@ def run_orchestration(
                 ),
                 step_durations_seconds=step_durations_seconds,
                 work_unit_durations_seconds=work_unit_durations_seconds,
+                gate_manifest=tuple(
+                    gate_manifest_entry(
+                        selected_steps[name],
+                        cast(QualityGateConfig, loaded_config),
+                        failure_threshold=policy.failure_threshold,
+                    )
+                    for name in plan.steps
+                ),
+                step_attempted=step_attempted,
+                work_unit_steps=work_unit_steps,
             )
         except (OSError, ValueError) as error:
             reporter.error(f"Cannot write profile history: {error}")

@@ -135,6 +135,7 @@ class CommandRunStep(StrictModel):
 
     kind: Literal["command"]
     name: str
+    gate_id: str | None = None
     argv: Annotated[tuple[str, ...], Field(min_length=1)]
     fix_argv: Annotated[tuple[str, ...] | None, Field(min_length=1)] = None
     working_directory: str = "."
@@ -155,6 +156,13 @@ class CommandRunStep(StrictModel):
         if "\x00" in name:
             raise ValueError("orchestration step names cannot contain NUL")
         return validate_one_line_message(name)
+
+    @field_validator("gate_id")
+    @classmethod
+    def validate_gate_id(cls, gate_id: str | None) -> str | None:
+        if gate_id is not None and re.fullmatch(r"[a-z][a-z0-9._/-]*", gate_id) is None:
+            raise ValueError("gate_id must be a lowercase portable identifier")
+        return gate_id
 
     @field_validator("locks", "after")
     @classmethod

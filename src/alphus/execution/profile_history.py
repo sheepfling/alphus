@@ -102,7 +102,7 @@ class ProfileHistoryRecord(_ProfileHistoryFields):
 
 
 class ProfileHistoryRecordV3(_ProfileHistoryFields):
-    """Current record with an identified or explicitly unavailable VCS."""
+    """Record with an identified or explicitly unavailable VCS."""
 
     schema_version: Literal[3] = 3
     consumer_id: str | None = None
@@ -110,10 +110,38 @@ class ProfileHistoryRecordV3(_ProfileHistoryFields):
     vcs: str | None = None
 
 
-HistoryRecord = ProfileHistoryRecordV1 | ProfileHistoryRecord | ProfileHistoryRecordV3
+class GateManifestEntry(StrictModel):
+    """Portable gate identity and policy snapshot for a selected profile step."""
+
+    step_name: str
+    gate_id: str | None
+    kind: Literal["rule", "command"]
+    gate_policy_sha256: str
 
 
-def _envelope_digest(record: ProfileHistoryRecord | ProfileHistoryRecordV3) -> str:
+class ProfileHistoryRecordV4(_ProfileHistoryFields):
+    """Gate-aware record with explicit execution and work-unit attribution."""
+
+    schema_version: Literal[4] = 4
+    consumer_id: str | None = None
+    envelope_sha256: str = ""
+    vcs: str | None = None
+    gate_manifest: tuple[GateManifestEntry, ...]
+    step_attempted: dict[str, bool]
+    work_unit_steps: dict[str, str]
+
+
+HistoryRecord = (
+    ProfileHistoryRecordV1
+    | ProfileHistoryRecord
+    | ProfileHistoryRecordV3
+    | ProfileHistoryRecordV4
+)
+
+
+def _envelope_digest(
+    record: ProfileHistoryRecord | ProfileHistoryRecordV3 | ProfileHistoryRecordV4,
+) -> str:
     """Protect timing and provenance as well as the embedded result."""
     payload = record.model_dump(mode="json", exclude={"envelope_sha256"})
     encoded = json.dumps(
@@ -182,6 +210,10 @@ def read_profile_record(path: Path) -> HistoryRecord:
             record = ProfileHistoryRecordV3.model_validate_json(encoded)
             if _envelope_digest(record) != record.envelope_sha256:
                 raise ValueError(f"profile history envelope digest mismatch: {path}")
+        elif version == 4:
+            record = ProfileHistoryRecordV4.model_validate_json(encoded)
+            if _envelope_digest(record) != record.envelope_sha256:
+                raise ValueError(f"profile history envelope digest mismatch: {path}")
         else:
             raise ValueError(f"unsupported profile history schema version: {version!r}")
     except (OSError, ValueError) as error:
@@ -217,11 +249,17 @@ def iter_profile_records(
         ):
             continue
         record: (
-            ProfileHistoryRecordV1 | ProfileHistoryRecord | ProfileHistoryRecordV3
+            ProfileHistoryRecordV1
+            | ProfileHistoryRecord
+            | ProfileHistoryRecordV3
+            | ProfileHistoryRecordV4
         ) = read_profile_record(path)
         record_consumer = (
             record.consumer_id
-            if isinstance(record, (ProfileHistoryRecord, ProfileHistoryRecordV3))
+            if isinstance(
+                record,
+                (ProfileHistoryRecord, ProfileHistoryRecordV3, ProfileHistoryRecordV4),
+            )
             else None
         )
         if (
@@ -274,34 +312,48 @@ def write_profile_record(
     failed_steps: tuple[str, ...],
     step_durations_seconds: Mapping[str, float],
     work_unit_durations_seconds: Mapping[str, float],
+    gate_manifest: tuple[GateManifestEntry, ...] | None = None,
+    step_attempted: Mapping[str, bool] | None = None,
+    work_unit_steps: Mapping[str, str] | None = None,
 ) -> Path:
     """Append one complete result through an atomic same-directory replacement."""
     completed = datetime.now(UTC)
-    record = ProfileHistoryRecordV3(
-        record_id=str(uuid4()),
-        started_at_utc=utc_text(context.started_at_utc),
-        completed_at_utc=utc_text(completed),
-        duration_seconds=max(0.0, time.monotonic() - context.started_monotonic),
-        step_durations_seconds=dict(step_durations_seconds),
-        work_unit_durations_seconds=dict(work_unit_durations_seconds),
-        source_root=context.source_root,
-        profile=context.profile,
-        config_sha256=context.config_sha256,
-        branch=context.branch,
-        revision=context.revision,
-        consumer_id=context.consumer_id,
-        vcs=context.vcs,
-        total_steps=total_steps,
-        passed=passed,
-        failed=failed,
-        provisional_passed=provisional_passed,
-        provisional_failed=provisional_failed,
-        not_applicable=not_applicable,
-        exit_code=exit_code,
-        failed_steps=failed_steps,
-        result_sha256=_result_digest(result),
-        result=dict(result),
-    )
+    # opaque-boundary: Versioned history fields combine the full result envelope.
+    fields: dict[str, object] = {
+        "record_id": str(uuid4()),
+        "started_at_utc": utc_text(context.started_at_utc),
+        "completed_at_utc": utc_text(completed),
+        "duration_seconds": max(0.0, time.monotonic() - context.started_monotonic),
+        "step_durations_seconds": dict(step_durations_seconds),
+        "work_unit_durations_seconds": dict(work_unit_durations_seconds),
+        "source_root": context.source_root,
+        "profile": context.profile,
+        "config_sha256": context.config_sha256,
+        "branch": context.branch,
+        "revision": context.revision,
+        "consumer_id": context.consumer_id,
+        "vcs": context.vcs,
+        "total_steps": total_steps,
+        "passed": passed,
+        "failed": failed,
+        "provisional_passed": provisional_passed,
+        "provisional_failed": provisional_failed,
+        "not_applicable": not_applicable,
+        "exit_code": exit_code,
+        "failed_steps": failed_steps,
+        "result_sha256": _result_digest(result),
+        "result": dict(result),
+    }
+    record: ProfileHistoryRecordV3 | ProfileHistoryRecordV4
+    if gate_manifest is None:
+        record = ProfileHistoryRecordV3.model_validate(fields)
+    else:
+        fields.update(
+            gate_manifest=gate_manifest,
+            step_attempted=dict(step_attempted or {}),
+            work_unit_steps=dict(work_unit_steps or {}),
+        )
+        record = ProfileHistoryRecordV4.model_validate(fields)
     record = record.model_copy(update={"envelope_sha256": _envelope_digest(record)})
     directory = (
         history_dir.resolve()

@@ -14,6 +14,7 @@ from alphus.execution.profile_history import (
     ProfileHistoryRecord,
     ProfileHistoryRecordV1,
     ProfileHistoryRecordV3,
+    ProfileHistoryRecordV4,
 )
 from alphus.policy.base import StrictModel
 
@@ -123,22 +124,30 @@ class _GroupAccumulator:
 
 def summarize_profile_entry(entry: ProfileHistoryEntry) -> ProfileRunSummary:
     """Project one validated record into a compact archive index row."""
-    record: ProfileHistoryRecordV1 | ProfileHistoryRecord | ProfileHistoryRecordV3 = (
-        entry.record
-    )
+    record: (
+        ProfileHistoryRecordV1
+        | ProfileHistoryRecord
+        | ProfileHistoryRecordV3
+        | ProfileHistoryRecordV4
+    ) = entry.record
     return ProfileRunSummary(
         path=str(entry.path),
         record_id=record.record_id,
         schema_version=record.schema_version,
         consumer_id=(
             record.consumer_id
-            if isinstance(record, (ProfileHistoryRecord, ProfileHistoryRecordV3))
+            if isinstance(
+                record,
+                (ProfileHistoryRecord, ProfileHistoryRecordV3, ProfileHistoryRecordV4),
+            )
             else None
         ),
         source_root=record.source_root,
         profile=record.profile,
         config_sha256=record.config_sha256,
-        vcs=record.vcs if isinstance(record, ProfileHistoryRecordV3) else None,
+        vcs=record.vcs
+        if isinstance(record, (ProfileHistoryRecordV3, ProfileHistoryRecordV4))
+        else None,
         branch=record.branch,
         revision=record.revision,
         completed_at_utc=record.completed_at_utc,
@@ -177,11 +186,17 @@ def rollup_profile_history(
     failures = 0
     for entry in entries:
         record: (
-            ProfileHistoryRecordV1 | ProfileHistoryRecord | ProfileHistoryRecordV3
+            ProfileHistoryRecordV1
+            | ProfileHistoryRecord
+            | ProfileHistoryRecordV3
+            | ProfileHistoryRecordV4
         ) = entry.record
         consumer = (
             record.consumer_id
-            if isinstance(record, (ProfileHistoryRecord, ProfileHistoryRecordV3))
+            if isinstance(
+                record,
+                (ProfileHistoryRecord, ProfileHistoryRecordV3, ProfileHistoryRecordV4),
+            )
             else None
         )
         identity = (

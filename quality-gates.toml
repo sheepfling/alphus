@@ -61,6 +61,7 @@ opaque_boundary_paths = [
   "src/alphus/config.py",
   "src/alphus/cli.py",
   "src/alphus/execution/orchestration.py",
+  "src/alphus/execution/history_index.py",
   "src/alphus/execution/profile_history.py",
   "src/alphus/execution/profile_results.py",
   "src/alphus/execution/step_results.py",
@@ -68,6 +69,7 @@ opaque_boundary_paths = [
   "src/alphus/gates/source/cyclomatic_complexity.py",
   "src/alphus/policy/sources.py",
   "tests/execution/test_shared_quality_intent_execution.py",
+  "tests/execution/test_history_index.py",
 ]
 opaque_boundary_marker_prefix = "# opaque-boundary: "
 opaque_boundary_min_reason_chars = 12

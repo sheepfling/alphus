@@ -50,7 +50,18 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
       - name: Install Alphus and run wheel self-check
+        env:
+          ALPHUS_PROFILE_HISTORY_DIR: ${{ runner.temp }}/alphus-history
+          ALPHUS_CONSUMER_ID: sheepfling/alphus
         run: python scripts/ci.py --root . --wheel
+      - name: Retain verified profile history
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: alphus-history-py${{ matrix.python-version }}
+          path: ${{ runner.temp }}/alphus-history
+          if-no-files-found: ignore
+          retention-days: 90
 
   minimum-dependencies:
     runs-on: ubuntu-latest

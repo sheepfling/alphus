@@ -45,6 +45,7 @@ from alphus.execution.profile_history import (
     ProfileHistoryRecord,
     ProfileHistoryRecordV1,
     ProfileHistoryRecordV3,
+    ProfileHistoryRecordV4,
     iter_profile_records,
     latest_profile_record,
 )
@@ -860,7 +861,11 @@ def _execute_history(
         _human_error(f"Cannot read profile history: {error}")
         return 2
     record: (
-        ProfileHistoryRecordV1 | ProfileHistoryRecord | ProfileHistoryRecordV3 | None
+        ProfileHistoryRecordV1
+        | ProfileHistoryRecord
+        | ProfileHistoryRecordV3
+        | ProfileHistoryRecordV4
+        | None
     )
     if record is None:
         _human_error(
@@ -878,7 +883,11 @@ def _execute_history(
             f"{record.not_applicable} not applicable "
             f"({record.completed_at_utc})"
         )
-        vcs = record.vcs if isinstance(record, ProfileHistoryRecordV3) else "git"
+        vcs = (
+            record.vcs
+            if isinstance(record, (ProfileHistoryRecordV3, ProfileHistoryRecordV4))
+            else "git"
+        )
         _human_print(
             f"Revision ({vcs or 'unavailable'}): {record.revision or 'unavailable'}"
         )

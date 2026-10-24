@@ -173,7 +173,8 @@ def test_orchestration_saves_consumer_provided_vcs(tmp_path: Path) -> None:
         == 0
     )
     record = next(history.iter_profile_records(history_dir)).record
-    assert isinstance(record, history.ProfileHistoryRecordV3)
+    assert isinstance(record, history.ProfileHistoryRecordV4)
+    assert record.gate_manifest[0].gate_id == "alphus/rule/line-length"
     assert (record.vcs, record.branch, record.revision) == (
         "sapling",
         "main",

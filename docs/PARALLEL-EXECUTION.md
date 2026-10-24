@@ -87,10 +87,11 @@ path, and revision when available.
 Set `--consumer-id ID` (or `ALPHUS_CONSUMER_ID`) when saving runs from CI or
 multiple worktrees. Use a stable, user-chosen identity such as
 `sheepfling/alphus`; the absolute checkout path is still recorded for
-provenance. New records use schema version 3 with a digest covering the timing
-and provenance envelope as well as the embedded result. Existing version 1
-and 2 records remain readable and group by their recorded checkout path when
-they have no consumer identity. Version 2 records carry a consumer identity
+provenance. New profile runs use schema version 4 with a digest covering the
+timing, provenance, gate manifest, and execution attribution as well as the
+embedded result. Existing version 1–3 records remain readable. Version 1
+records group by their recorded checkout path when they have no consumer
+identity. Version 2 records carry a consumer identity
 but do not identify which VCS supplied their Git-oriented branch and revision.
 Profile history probes Git and then local Subversion metadata. A missing VCS
 or unavailable command leaves those provenance fields null; it does not stop
@@ -126,6 +127,8 @@ Python consumers can call `read_profile_record(path)` to validate one record,
 rejects unknown schema versions, malformed records, and result digest
 mismatches rather than silently dropping them. These reports cover profile
 archives; standalone C++ report history uses its own archive and trend API.
+For cross-repository gate comparison, use the
+[quality history analytics](QUALITY-HISTORY-ANALYTICS.md) index.
 To analyze records produced by separate CI jobs or consumers, collect their
 `profiles/YYYY/MM/*.json` files under one history directory before running
 the CLI report. Python callers can also combine iterators from separate
