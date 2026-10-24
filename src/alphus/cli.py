@@ -346,9 +346,7 @@ def _python_style_categories(
         _StyleCategory(
             "undifferentiated_patterns", issues["undifferentiated_patterns"]
         ),
-        _StyleCategory(
-            "concrete_classmethod_returns", issues["concrete_classmethod_returns"]
-        ),
+        _StyleCategory("concrete_self_returns", issues["concrete_self_returns"]),
         _StyleCategory("direct_text_reads", issues["direct_text_reads"]),
         _StyleCategory(
             "duplicate_literal_catalogs", issues["duplicate_literal_catalogs"]

@@ -5,7 +5,7 @@ from __future__ import annotations
 import tomllib
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Annotated, Literal, TextIO
+from typing import Annotated, Literal, Self, TextIO
 
 from pydantic import Field, TypeAdapter, field_validator, model_validator
 
@@ -65,6 +65,7 @@ from alphus.policy.review import (
     NumericLiteralSpec,
     PydanticPracticePolicy,
     ScipyConstantsPolicy,
+    TestQualityExclusion,
     TestQualityPolicy,
 )
 from alphus.policy.sources import (
@@ -137,6 +138,7 @@ __all__ = [
     "SharedQualityIntent",
     "SharedUtilitiesPolicy",
     "SourceScanPolicy",
+    "TestQualityExclusion",
     "TestQualityPolicy",
     "TrackedPathRule",
     "TrackedSuffixRule",
@@ -214,7 +216,7 @@ class _SplitPolicy(StrictModel):
     orchestration: _PartialOrchestration
 
     @model_validator(mode="after")
-    def validate_native_selection(self) -> _SplitPolicy:
+    def validate_native_selection(self) -> Self:
         selected = _selected_native_tools(self.languages, self.tools)
         if selected is not None:
             native_tool_policy(selected)

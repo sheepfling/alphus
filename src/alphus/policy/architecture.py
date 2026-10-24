@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from pathlib import PurePosixPath
-from typing import Annotated, Literal, cast
+from typing import Annotated, Literal, Self, cast
 
 from pydantic import Field, field_validator, model_validator
 
@@ -252,7 +252,7 @@ class ModuleRoleRule(StrictModel):
         return tuple(names)
 
     @model_validator(mode="after")
-    def require_a_boundary(self) -> ModuleRoleRule:
+    def require_a_boundary(self) -> Self:
         if not any(
             (
                 self.forbidden_imports,
@@ -272,7 +272,7 @@ class ModuleRolePolicy(StrictModel):
     modules: Annotated[tuple[ModuleRoleRule, ...], Field(min_length=1)]
 
     @model_validator(mode="after")
-    def require_unique_modules(self) -> ModuleRolePolicy:
+    def require_unique_modules(self) -> Self:
         paths = [rule.path for rule in self.modules]
         require_unique(paths, "module-role paths must be unique")
         return self

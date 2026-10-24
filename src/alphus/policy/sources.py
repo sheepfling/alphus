@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping, Sequence
 from pathlib import PurePosixPath
-from typing import Annotated, cast
+from typing import Annotated, Self, cast
 
 from pydantic import Field, field_validator, model_validator
 
@@ -332,7 +332,7 @@ class PythonCliPolicy(PythonSourceScanPolicy):
         return style
 
     @model_validator(mode="after")
-    def validate_distinct_output_styles(self) -> PythonCliPolicy:
+    def validate_distinct_output_styles(self) -> Self:
         if self.rich_output.casefold() == self.plain_output.casefold():
             raise ValueError("Rich and plain CLI output styles must differ")
         return self
