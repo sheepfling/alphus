@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
@@ -45,6 +45,7 @@ from alphus.policy.intents import (
     EvidenceFormat,
     EvidenceStream,
     FailureKind,
+    IntentMapping,
     ResolvedIntentBinding,
     resolve_intent_bindings,
 )
@@ -73,9 +74,10 @@ _UNSUPPORTED_CAPABILITY = rule_tag(
 _STATUS_DISABLED = "disabled"
 _STATUS_NOT_APPLICABLE = "not_applicable"
 _STATUS_UNSUPPORTED = "unsupported"
-_JSON_ARRAY_FORMAT = "json-array"
-_MAINLINE_ROLLOUT = "mainline"
-_PROVISIONAL_ROLLOUT = "provisional"
+_UNSUPPORTED_MAPPING: IntentMapping = _STATUS_UNSUPPORTED
+_MAINLINE_ROLLOUT: Literal["mainline", "provisional"] = "mainline"
+_PROVISIONAL_ROLLOUT: Literal["mainline", "provisional"] = "provisional"
+_JSON_ARRAY_EVIDENCE_FORMAT: EvidenceFormat = "json-array"
 
 
 class StepStatus(StrEnum):
@@ -202,15 +204,18 @@ def _timeout_output(value: bytes | str | None) -> str:
 
 
 def _matches_json_evidence_format(
-    value: Sequence[JsonValue] | Mapping[str, JsonValue] | str | float | bool | None,
-    evidence_format: EvidenceFormat,
+    value: JsonValue, evidence_format: EvidenceFormat
 ) -> bool:
     """Check decoded JSON by the selected top-level container protocol."""
-    if evidence_format == _JSON_ARRAY_FORMAT:
-        return isinstance(value, Sequence) and not isinstance(value, str)
-    if evidence_format == "json-object":
-        return isinstance(value, Mapping)
-    return True
+    if evidence_format == "raw":
+        return True
+    match value:
+        case list():
+            return evidence_format == _JSON_ARRAY_EVIDENCE_FORMAT
+        case dict():
+            return evidence_format == "json-object"
+        case _:
+            return False
 
 
 def run_orchestration(
@@ -262,7 +267,7 @@ def run_orchestration(
         for item in resolved_intents
         if item.enabled
         and active_profiles.intersection(item.intent.profiles)
-        and item.binding.mapping != _STATUS_UNSUPPORTED
+        and item.binding.mapping != _UNSUPPORTED_MAPPING
         and item.binding.evidence_format != "raw"
         and item.binding.step in plan.steps
     }
@@ -445,7 +450,7 @@ def run_orchestration(
                             evidence_format, evidence_stream = evidence_contract
                             expected_shape = (
                                 "JSON array"
-                                if evidence_format == _JSON_ARRAY_FORMAT
+                                if evidence_format == _JSON_ARRAY_EVIDENCE_FORMAT
                                 else "JSON object"
                             )
                             evidence = (
@@ -504,7 +509,7 @@ def run_orchestration(
                             ]
                             invalid_shape = (
                                 "JSON array"
-                                if invalid_format == _JSON_ARRAY_FORMAT
+                                if invalid_format == _JSON_ARRAY_EVIDENCE_FORMAT
                                 else "JSON object"
                             )
                             invalid_message = (
@@ -656,7 +661,7 @@ def run_orchestration(
             status = IntentStatus.NOT_SELECTED
             failure_kind = None
             step_result = None
-        elif binding.mapping == _STATUS_UNSUPPORTED:
+        elif binding.mapping == _UNSUPPORTED_MAPPING:
             status = IntentStatus.UNSUPPORTED
             failure_kind = FailureKind.UNSUPPORTED_CAPABILITY
             step_result = None
