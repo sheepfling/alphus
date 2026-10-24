@@ -69,6 +69,8 @@ Run `alphus --root . --config quality-gates.toml --plan-function-shape` to
 print JSON containing the backend, consumer-declared minimum version, enabled
 metrics, exact native rule/option, native count description, scope, and preview
 requirements. The command is read-only and does not add a native config file.
+The Python planner returns a frozen plan object; `to_dict()` creates fresh
+JSON-compatible data for callers that need serialization or mutation.
 An unsupported setting is rejected by policy validation rather than omitted.
 Path overrides replace the target's full metric set when `metrics` is
 specified; otherwise they inherit it. An override can also change severity.

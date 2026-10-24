@@ -854,7 +854,9 @@ def _command(
             )
             raise typer.Exit(2)
         try:
-            typer.echo(json.dumps(plan_function_shape(policy, root), indent=2))
+            typer.echo(
+                json.dumps(plan_function_shape(policy, root).to_dict(), indent=2)
+            )
         except ValueError as error:
             typer.echo(f"Function-shape plan failed: {error}", err=True)
             raise typer.Exit(2) from error

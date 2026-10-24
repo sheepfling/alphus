@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
-from typing import TypedDict, cast
+from types import MappingProxyType
+from typing import Any, TypeAlias, cast
 
 from alphus.policy.sources import (
     FunctionShapeMetric,
@@ -14,66 +16,145 @@ from alphus.policy.sources import (
     FunctionShapeTarget,
 )
 
+JsonScalar: TypeAlias = str | int | float | bool | None
+FrozenJson: TypeAlias = (
+    JsonScalar | tuple["FrozenJson", ...] | Mapping[str, "FrozenJson"]
+)
 
-class FunctionShapeMetricPlan(TypedDict):
+
+@dataclass(frozen=True, slots=True)
+class FunctionShapeMetricPlan:
     metric: str
     native_rule: str
     definition: str
     maximum: int
-    native_options: Mapping[str, object]
+    native_options: FrozenJson
     severity: str
     severity_mapping: str
 
 
-class FunctionShapeTargetPlan(TypedDict):
-    language: str
-    backend: str
-    minimum_version: str
-    scope: Mapping[str, object]
-    metrics: list[FunctionShapeMetricPlan]
-    overrides: list[FunctionShapeOverridePlan]
-    advisory_rollout: bool
-    preview_requirements: list[str]
-
-
-class FunctionShapePlan(TypedDict):
-    schema_version: int
-    policy: str
-    targets: list[FunctionShapeTargetPlan]
-
-
-class FunctionShapeOverridePlan(TypedDict):
-    scope: Mapping[str, object]
+@dataclass(frozen=True, slots=True)
+class FunctionShapeOverridePlan:
+    scope: Mapping[str, FrozenJson]
     metrics_replace_target: bool
-    metrics: list[FunctionShapeMetricPlan]
+    metrics: tuple[FunctionShapeMetricPlan, ...]
     severity: str
 
 
+@dataclass(frozen=True, slots=True)
+class FunctionShapeTargetPlan:
+    language: str
+    backend: str
+    minimum_version: str
+    scope: Mapping[str, FrozenJson]
+    metrics: tuple[FunctionShapeMetricPlan, ...]
+    overrides: tuple[FunctionShapeOverridePlan, ...]
+    advisory_rollout: bool
+    preview_requirements: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class FunctionShapePlan:
+    """An immutable native plan with an explicit JSON serialization boundary."""
+
+    schema_version: int
+    policy: str
+    targets: tuple[FunctionShapeTargetPlan, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize this immutable plan into fresh mutable JSON-compatible data."""
+        return {
+            "schema_version": self.schema_version,
+            "policy": self.policy,
+            "targets": [_target_dict(target) for target in self.targets],
+        }
+
+
+def _freeze_json(value: object) -> FrozenJson:
+    """Recursively freeze JSON-compatible planner data for safe sharing."""
+    if isinstance(value, Mapping):
+        entries = cast(Mapping[object, object], value)
+        return MappingProxyType(
+            {str(key): _freeze_json(item) for key, item in entries.items()}
+        )
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze_json(item) for item in cast(Sequence[object], value))
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    raise TypeError(f"plan values must be JSON-compatible, got {type(value).__name__}")
+
+
+def _thaw_json(value: FrozenJson) -> object:
+    if isinstance(value, Mapping):
+        return {key: _thaw_json(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [_thaw_json(item) for item in value]
+    return value
+
+
+def _metric_dict(metric: FunctionShapeMetricPlan) -> dict[str, Any]:
+    return {
+        "metric": metric.metric,
+        "native_rule": metric.native_rule,
+        "definition": metric.definition,
+        "maximum": metric.maximum,
+        "native_options": _thaw_json(metric.native_options),
+        "severity": metric.severity,
+        "severity_mapping": metric.severity_mapping,
+    }
+
+
+def _override_dict(override: FunctionShapeOverridePlan) -> dict[str, Any]:
+    return {
+        "scope": _thaw_json(override.scope),
+        "metrics_replace_target": override.metrics_replace_target,
+        "metrics": [_metric_dict(metric) for metric in override.metrics],
+        "severity": override.severity,
+    }
+
+
+def _target_dict(target: FunctionShapeTargetPlan) -> dict[str, Any]:
+    return {
+        "language": target.language,
+        "backend": target.backend,
+        "minimum_version": target.minimum_version,
+        "scope": _thaw_json(target.scope),
+        "metrics": [_metric_dict(metric) for metric in target.metrics],
+        "overrides": [_override_dict(item) for item in target.overrides],
+        "advisory_rollout": target.advisory_rollout,
+        "preview_requirements": list(target.preview_requirements),
+    }
+
+
 def _valid_compilation_entries(value: object) -> bool:
-    if not isinstance(value, list) or not value:
+    """Validate compile commands structurally and tolerate mapping-like records."""
+    entries = cast(Sequence[Mapping[str, object]], value)
+    try:
+        if not entries:
+            return False
+        for entry in entries:
+            if not _has_text(entry["directory"]) or not _has_text(entry["file"]):
+                return False
+            command = entry.get("command")
+            if command is not None:
+                if _has_text(command):
+                    continue
+                return False
+            arguments = entry.get("arguments")
+            if not arguments or any(
+                not _has_text(argument)
+                for argument in cast(Iterable[object], arguments)
+            ):
+                return False
+    except (AttributeError, KeyError, TypeError):
         return False
-    for entry in cast(list[object], value):
-        if not isinstance(entry, dict):
-            return False
-        record = cast(Mapping[object, object], entry)
-        if not isinstance(record.get("directory"), str) or not record["directory"]:
-            return False
-        if not isinstance(record.get("file"), str) or not record["file"]:
-            return False
-        command = record.get("command")
-        arguments = record.get("arguments")
-        if isinstance(command, str) and command:
-            continue
-        if (
-            not isinstance(arguments, list)
-            or not arguments
-            or any(
-                not isinstance(argument, str) or not argument
-                for argument in cast(list[object], arguments)
-            )
-        ):
-            return False
     return True
+
+
+def _has_text(value: object) -> bool:
+    """Check text-like values by behavior instead of concrete runtime type."""
+    strip = getattr(value, "strip", None)
+    return callable(strip) and bool(strip())
 
 
 _DEFINITIONS: dict[str, dict[str, tuple[str, str, str]]] = {
@@ -211,65 +292,72 @@ def plan_function_shape(policy: FunctionShapePolicy, root: Path) -> FunctionShap
             scope["operational_requirement"] = (
                 "Run clang-tidy with valid compilation context; missing or invalid context is an execution failure, not a clean result."
             )
-        overrides = [_override_plan(target, item) for item in target.overrides]
+        overrides = tuple(_override_plan(target, item) for item in target.overrides)
         targets.append(
-            {
-                "language": target.language,
-                "backend": target.backend,
-                "minimum_version": target.minimum_version,
-                "scope": scope,
-                "metrics": metrics,
-                "overrides": overrides,
-                "advisory_rollout": True,
-                "preview_requirements": (
-                    ["Ruff PLR1702 requires preview mode."]
+            FunctionShapeTargetPlan(
+                language=target.language,
+                backend=target.backend,
+                minimum_version=target.minimum_version,
+                scope=cast(Mapping[str, FrozenJson], _freeze_json(scope)),
+                metrics=metrics,
+                overrides=overrides,
+                advisory_rollout=True,
+                preview_requirements=(
+                    ("Ruff PLR1702 requires preview mode.",)
                     if target.backend == "ruff"
                     and any(m.name == "nesting" for m in target.metrics)
-                    else []
+                    else ()
                 ),
-            }
+            )
         )
-    return {"schema_version": 1, "policy": "function-shape", "targets": targets}
+    return FunctionShapePlan(
+        schema_version=1,
+        policy="function-shape",
+        targets=tuple(targets),
+    )
 
 
 def _metric_plans(
     target: FunctionShapeTarget,
     metrics: tuple[FunctionShapeMetric, ...],
     severity: str,
-) -> list[FunctionShapeMetricPlan]:
+) -> tuple[FunctionShapeMetricPlan, ...]:
     result: list[FunctionShapeMetricPlan] = []
     for metric in metrics:
         native_rule, _, definition = _DEFINITIONS[target.backend][metric.name]
         result.append(
-            {
-                "metric": metric.name,
-                "native_rule": native_rule,
-                "definition": definition,
-                "maximum": metric.maximum,
-                "native_options": _native_option(target, metric),
-                "severity": severity,
-                "severity_mapping": (
+            FunctionShapeMetricPlan(
+                metric=metric.name,
+                native_rule=native_rule,
+                definition=definition,
+                maximum=metric.maximum,
+                native_options=_freeze_json(_native_option(target, metric)),
+                severity=severity,
+                severity_mapping=(
                     "native rule severity is retained; use the native command's advisory exit behavior"
                     if target.backend == "ruff"
                     else "severity is represented by the native rule configuration"
                     if target.backend == "eslint"
                     else "native diagnostic severity and command exit behavior remain backend-owned"
                 ),
-            }
+            )
         )
-    return result
+    return tuple(result)
 
 
 def _override_plan(
     target: FunctionShapeTarget, override: FunctionShapeOverride
 ) -> FunctionShapeOverridePlan:
-    return {
-        "scope": {"include": override.include, "exclude": override.exclude},
-        "metrics_replace_target": override.metrics is not None,
-        "metrics": _metric_plans(
+    return FunctionShapeOverridePlan(
+        scope=cast(
+            Mapping[str, FrozenJson],
+            _freeze_json({"include": override.include, "exclude": override.exclude}),
+        ),
+        metrics_replace_target=override.metrics is not None,
+        metrics=_metric_plans(
             target,
             override.metrics or target.metrics,
             override.severity or target.severity,
         ),
-        "severity": override.severity or target.severity,
-    }
+        severity=override.severity or target.severity,
+    )

@@ -100,8 +100,8 @@ def test_native_mapping_names_rule_and_definition(
     plan = plan_function_shape(
         FunctionShapePolicy(targets=(target(language, backend, (metric, 4), **extra),)),
         tmp_path,
-    )
-    entry = plan["targets"][0]["metrics"][0]  # type: ignore[index]
+    ).to_dict()
+    entry = plan["targets"][0]["metrics"][0]
     assert entry["native_rule"] == rule
     assert entry["maximum"] == 4
     assert option in str(entry["native_options"])
@@ -116,8 +116,8 @@ def test_only_configured_metrics_are_enabled_and_ruff_preview_is_visible(
             targets=(target("python", "ruff", ("nesting", 2), ("parameters", 5)),)
         ),
         tmp_path,
-    )
-    selected = plan["targets"][0]  # type: ignore[index]
+    ).to_dict()
+    selected = plan["targets"][0]
     assert [item["metric"] for item in selected["metrics"]] == ["nesting", "parameters"]
     assert selected["preview_requirements"] == ["Ruff PLR1702 requires preview mode."]
     assert selected["advisory_rollout"] is True
@@ -139,12 +139,26 @@ def test_path_override_replaces_metrics_and_severity(tmp_path: Path) -> None:
             }
         ],
     )
-    plan = plan_function_shape(FunctionShapePolicy(targets=(configured,)), tmp_path)
+    plan = plan_function_shape(
+        FunctionShapePolicy(targets=(configured,)), tmp_path
+    ).to_dict()
     override = plan["targets"][0]["overrides"][0]
     assert override["metrics_replace_target"] is True
-    assert override["scope"]["include"] == ("src/api/**",)
+    assert override["scope"]["include"] == ["src/api/**"]
     assert override["metrics"][0]["maximum"] == 8
     assert override["metrics"][0]["severity"] == "info"
+
+
+def test_native_plan_is_immutable_until_json_serialization(tmp_path: Path) -> None:
+    plan = plan_function_shape(
+        FunctionShapePolicy(targets=(target("python", "ruff", ("parameters", 4)),)),
+        tmp_path,
+    )
+
+    assert isinstance(plan.targets, tuple)
+    with pytest.raises(TypeError):
+        plan.targets[0].scope["include"] = ()  # type: ignore[index]
+    assert plan.to_dict()["targets"][0]["metrics"][0]["metric"] == "parameters"
 
 
 def test_backend_language_and_metric_duplicates_are_rejected() -> None:
@@ -219,7 +233,9 @@ def test_clang_tidy_exposes_macro_and_member_initializer_controls(
         ignore_macros=True,
         count_member_initializers_as_statements=False,
     )
-    plan = plan_function_shape(FunctionShapePolicy(targets=(configured,)), tmp_path)
+    plan = plan_function_shape(
+        FunctionShapePolicy(targets=(configured,)), tmp_path
+    ).to_dict()
     options = plan["targets"][0]["metrics"][0]["native_options"]["CheckOptions"]
     assert options == [
         {"key": "readability-function-size.StatementThreshold", "value": "20"},
@@ -255,7 +271,9 @@ def test_cpp_shape_fixture_compiles_with_native_compile_arguments(
         ("statements", 20),
         compilation_database="build/compile_commands.json",
     )
-    plan = plan_function_shape(FunctionShapePolicy(targets=(configured,)), tmp_path)
+    plan = plan_function_shape(
+        FunctionShapePolicy(targets=(configured,)), tmp_path
+    ).to_dict()
     assert plan["targets"][0]["scope"]["compilation_database"] == (
         "build/compile_commands.json"
     )
