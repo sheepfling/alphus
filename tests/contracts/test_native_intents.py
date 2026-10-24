@@ -10,11 +10,14 @@ import sys
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from alphus.config import load_config
 from alphus.contracts.findings import (
     Diagnostic,
+    DiagnosticWire,
     FindingRollups,
+    FindingWire,
     deduplicate_semantic_diagnostics,
 )
 from alphus.contracts.rule_tags import Category, Scope
@@ -22,6 +25,7 @@ from alphus.policy.intents import (
     NATIVE_RULE_BINDINGS,
     CommonIntent,
     NativeIntentContextError,
+    NativeRuleBinding,
     NativeRuleResolution,
     NativeToolContext,
     VersionPolicy,
@@ -41,6 +45,108 @@ def ruff_context(**overrides: object) -> NativeToolContext:
             **overrides,
         }
     )
+
+
+def context_for_binding(binding: NativeRuleBinding) -> NativeToolContext:
+    version = {
+        VersionPolicy.VERIFIED_RANGE: "0.16.1",
+        VersionPolicy.CONSUMER_PINNED: "1.0.0",
+        VersionPolicy.TOOLCHAIN_MATCHED: "18.1.0",
+    }[binding.version_policy]
+    return NativeToolContext(
+        backend=binding.backend,
+        executable_available=True,
+        version=version,
+        compiler_version=(
+            version
+            if binding.version_policy is VersionPolicy.TOOLCHAIN_MATCHED
+            else None
+        ),
+        compiler_arguments=("-std=c++20",) if binding.requires_compiler_context else (),
+        effective_settings=binding.required_settings,
+        plugin_versions=tuple((name, "8.72.0") for name in binding.required_plugins),
+        compile_database_available=binding.requires_compile_database,
+    )
+
+
+EXPECTED_NATIVE_RULES = (
+    (
+        "python.naming.ruff",
+        (
+            "N801",
+            "N802",
+            "N803",
+            "N804",
+            "N805",
+            "N806",
+            "N807",
+            "N811",
+            "N812",
+            "N813",
+            "N814",
+            "N815",
+            "N816",
+            "N817",
+            "N818",
+            "N999",
+        ),
+    ),
+    ("python.naming.pylint", ("C0103",)),
+    ("javascript.naming.camelcase", ("camelcase",)),
+    ("javascript.naming.id-match", ("id-match",)),
+    ("cpp.naming.clang-tidy", ("readability-identifier-naming",)),
+    (
+        "python.unused.ruff",
+        (
+            "F401",
+            "F841",
+            "ARG001",
+            "ARG002",
+            "ARG003",
+            "ARG004",
+            "ARG005",
+        ),
+    ),
+    ("python.unused.pylint", ("W0611", "W0612", "W0613", "W0614", "W0238")),
+    ("javascript.unused.eslint", ("no-unused-vars",)),
+    ("typescript.unused.eslint", ("@typescript-eslint/no-unused-vars",)),
+    (
+        "c-cpp.unused.compiler",
+        (
+            "-Wunused-variable",
+            "-Wunused-function",
+            "-Wunused-parameter",
+        ),
+    ),
+    (
+        "cpp.unused.clang-tidy-local",
+        ("bugprone-unused-local-non-trivial-variable",),
+    ),
+    ("python.unreachable.ruff", ()),
+    ("python.unreachable.pylint", ("W0101",)),
+    ("javascript.unreachable.eslint", ("no-unreachable",)),
+    ("typescript.unreachable.compiler", ("7027",)),
+    (
+        "c-cpp.unreachable.clang",
+        (
+            "-Wunreachable-code",
+            "-Wunreachable-code-aggressive",
+        ),
+    ),
+)
+
+SUPPORTED_BINDING_CASES = tuple(
+    pytest.param(
+        binding,
+        language,
+        native_rule_id,
+        id=f"{binding.key}-{language.value}-{native_rule_id}",
+    )
+    for binding in NATIVE_RULE_BINDINGS
+    if binding.status == "partial"
+    for language in binding.languages
+    for native_rule_id in binding.native_rule_ids
+)
 
 
 def test_catalog_maps_distinct_native_rules_without_claiming_equivalence() -> None:
@@ -75,6 +181,72 @@ def test_catalog_maps_distinct_native_rules_without_claiming_equivalence() -> No
     assert ruff_unreachable.status == "unsupported"
     assert ruff_unreachable.version_policy is VersionPolicy.VERIFIED_RANGE
     assert binding_for_native_rule("tsc", "7027", Scope.TYPESCRIPT) is not None
+
+
+def test_catalog_has_explicit_expected_rules_for_every_binding() -> None:
+    expected = dict(EXPECTED_NATIVE_RULES)
+    assert {binding.key for binding in NATIVE_RULE_BINDINGS} == set(expected)
+    assert {
+        binding.key: binding.native_rule_ids for binding in NATIVE_RULE_BINDINGS
+    } == expected
+
+
+@pytest.mark.parametrize(
+    ("binding", "language", "native_rule_id"), SUPPORTED_BINDING_CASES
+)
+def test_every_catalog_rule_resolves_and_maps_with_native_evidence(
+    binding: NativeRuleBinding,
+    language: Scope,
+    native_rule_id: str,
+) -> None:
+    assert binding_for_native_rule(binding.backend, native_rule_id, language) is binding
+    native = Diagnostic(
+        source=binding.backend,
+        rule_id=native_rule_id,
+        message="native diagnostic evidence",
+        severity="error",
+        path="src/example.ext",
+        line=7,
+        priority="high",
+    )
+
+    mapped = bind_native_diagnostic(
+        native, binding, language, context_for_binding(binding)
+    )
+
+    assert mapped.source == native.source
+    assert mapped.rule_id == native.rule_id
+    assert mapped.message == native.message
+    assert mapped.path == native.path
+    assert mapped.line == native.line
+    assert mapped.priority == native.priority
+    assert mapped.severity == binding.severity
+    assert mapped.tag == binding.rule_tag(language)
+
+
+def test_wire_models_validate_exact_shapes_at_serialization_edges() -> None:
+    diagnostic = {
+        "source": "ruff",
+        "rule_id": "F401",
+        "message": "unused import",
+        "severity": "warning",
+        "path": "src/example.py",
+        "line": 3,
+        "priority": None,
+    }
+    finding = {
+        "rule_id": "alphus/python/none/style/naming-convention",
+        "path": "src/example.py",
+        "message": "bad name",
+        "line": 3,
+        "severity": "warning",
+    }
+    assert DiagnosticWire.model_validate(diagnostic).model_dump() == diagnostic
+    assert FindingWire.model_validate(finding).model_dump() == finding
+    with pytest.raises(ValidationError):
+        DiagnosticWire.model_validate({**diagnostic, "extra": "rejected"})
+    with pytest.raises(ValidationError):
+        FindingWire.model_validate({**finding, "severity": "fatal"})
 
 
 def test_native_mapping_adds_typed_category_without_changing_wire_fields() -> None:
@@ -344,8 +516,10 @@ def test_ruff_native_intent_fixtures_preserve_supported_evidence(
             "--isolated",
             "--ignore-noqa",
             "--select",
-            "F401,F841,ARG001,N801,N802,N803,N804,N805,N806,N807,N811,N812,"
-            "N813,N814,N815,N816,N817,N818,N999",
+            (
+                "F401,F841,ARG001,N801,N802,N803,N804,N805,N806,N807,N811,N812,"
+                "N813,N814,N815,N816,N817,N818,N999"
+            ),
             "--config",
             'lint.dummy-variable-rgx = "^_"',
             "--config",

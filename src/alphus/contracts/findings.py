@@ -5,16 +5,26 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
-from typing import Literal, NamedTuple, Self, TypeAlias, TypedDict, TypeVar, get_args
+from typing import Literal, NamedTuple, Self, TypeAlias, TypeVar, get_args
+
+from pydantic import BaseModel, ConfigDict
 
 from alphus.contracts.rule_tags import NAMESPACE, Category, RuleTag, Scope
 
 Severity: TypeAlias = Literal["error", "warning", "info"]
 RemediationPriority: TypeAlias = Literal["low", "normal", "high", "urgent"]
+WireValue: TypeAlias = str | int | None
+WirePayload: TypeAlias = dict[str, WireValue]
 REMEDIATION_PRIORITIES: frozenset[str] = frozenset(get_args(RemediationPriority))
 
 
-class DiagnosticWire(TypedDict):
+class _WireModel(BaseModel):
+    """Strict schema used only when data crosses the public wire boundary."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+
+class DiagnosticWire(_WireModel):
     """Stable public JSON shape for one normalized diagnostic."""
 
     source: str
@@ -26,7 +36,7 @@ class DiagnosticWire(TypedDict):
     priority: RemediationPriority | None
 
 
-class FindingWire(TypedDict):
+class FindingWire(_WireModel):
     """Stable public JSON shape for one direct rule finding."""
 
     rule_id: str
@@ -108,17 +118,17 @@ class Diagnostic:
         """Match a finding by its typed category without parsing its wire ID."""
         return self._rule_tag is not None and self._rule_tag.category is category
 
-    def to_wire(self) -> DiagnosticWire:
+    def to_wire(self) -> WirePayload:
         """Serialize only the established public diagnostic fields."""
-        return {
-            "source": self.source,
-            "rule_id": self.rule_id,
-            "message": self.message,
-            "severity": self.severity,
-            "path": self.path,
-            "line": self.line,
-            "priority": self.priority,
-        }
+        return DiagnosticWire(
+            source=self.source,
+            rule_id=self.rule_id,
+            message=self.message,
+            severity=self.severity,
+            path=self.path,
+            line=self.line,
+            priority=self.priority,
+        ).model_dump()
 
 
 @dataclass(frozen=True, slots=True)
@@ -269,15 +279,15 @@ class Finding:
         """Return the validated semantic identity for internal consumers."""
         return self._rule_tag
 
-    def to_wire(self) -> FindingWire:
+    def to_wire(self) -> WirePayload:
         """Serialize only the established public finding fields."""
-        return {
-            "rule_id": self.rule_id,
-            "path": self.path,
-            "message": self.message,
-            "line": self.line,
-            "severity": self.severity,
-        }
+        return FindingWire(
+            rule_id=self.rule_id,
+            path=self.path,
+            message=self.message,
+            line=self.line,
+            severity=self.severity,
+        ).model_dump()
 
     def as_diagnostic(self, *, source: str = "alphus") -> Diagnostic:
         """Add checker provenance while retaining the public finding fields."""
