@@ -76,6 +76,10 @@ def _native_output(report: _ProfileReport) -> str:
     return str(step["stdout"]) + str(step["stderr"])
 
 
+def _has_rule(output: str, rule_id: str) -> bool:
+    return f"({rule_id})" in output or f"[{rule_id}]" in output
+
+
 @pytest.mark.parametrize(
     ("filename", "content"),
     [
@@ -115,7 +119,9 @@ def test_duplicate_keys_retain_native_rule_id_and_source_location(
 
     assert code == 1
     assert "duplicate.yaml\n" in output
-    assert "  2:1 " in output
+    assert "  2:1 " in output or (
+        "::error file=duplicate.yaml,line=2,col=1::2:1 " in output
+    )
     assert "key-duplicates" in output
 
 
@@ -133,7 +139,9 @@ def test_yaml11_truthy_keys_and_values_warn_but_strings_do_not(
     code, report = _run(root, config_path)
     step = report["steps"][0]
     warnings = [
-        line for line in _native_output(report).splitlines() if "(truthy)" in line
+        line
+        for line in _native_output(report).splitlines()
+        if _has_rule(line, "truthy")
     ]
 
     assert code == step["exit_code"] == 0
@@ -154,7 +162,7 @@ def test_yaml12_boolean_spellings_and_legacy_words_follow_the_directive(
     code, report = _run(root, config_path)
 
     assert code == 0
-    assert "(truthy)" not in _native_output(report)
+    assert not _has_rule(_native_output(report), "truthy")
 
 
 def test_yaml12_decimal_gets_token_warning_but_quoted_identifier_does_not(
@@ -168,16 +176,13 @@ def test_yaml12_decimal_gets_token_warning_but_quoted_identifier_does_not(
 
     code, report = _run(root, config_path)
     output_lines = _native_output(report).splitlines()
+    output = "\n".join(output_lines)
 
     assert code == report["steps"][0]["exit_code"] == 0
-    assert any(
-        line.lstrip().startswith("3:") and "(octal-values)" in line and '"010"' in line
-        for line in output_lines
-    )
-    assert not any(
-        line.lstrip().startswith("4:") and "(octal-values)" in line
-        for line in output_lines
-    )
+    assert _has_rule(output, "octal-values")
+    assert '"010"' in output
+    assert "line=3,col=" in output or "\n  3:" in output
+    assert "line=4,col=" not in output and "\n  4:" not in output
 
 
 def test_multi_document_block_scalars_aliases_and_custom_tags_are_not_executed(
