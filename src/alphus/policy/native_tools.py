@@ -129,6 +129,16 @@ NATIVE_TOOLS = MappingProxyType(
                 ),
             ),
         ),
+        "yamllint": NativeTool(
+            "yaml",
+            (
+                NativeStep(
+                    "YAML lint",
+                    ("yamllint", "{files}"),
+                    include=("**/*.yaml", "**/*.yml"),
+                ),
+            ),
+        ),
         "prettier": NativeTool(
             "json",
             (
@@ -246,6 +256,7 @@ LANGUAGE_TOOLS = MappingProxyType(
         "python": ("ruff", "pyright", "pytest"),
         "markdown": ("rumdl", "mdrepo"),
         "toml": ("taplo",),
+        "yaml": ("yamllint",),
         "json": ("prettier",),
         "javascript": ("eslint", "prettier-javascript"),
         "typescript": ("eslint-typescript", "prettier-typescript"),

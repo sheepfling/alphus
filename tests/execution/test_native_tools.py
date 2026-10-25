@@ -145,6 +145,24 @@ def test_plain_web_language_bundles_share_check_and_language_profiles() -> None:
             assert step.fix_argv[:4] == ("npm", "exec", "--no", "--")
 
 
+def test_yaml_bundle_uses_yamllint_without_rewriting_native_diagnostics() -> None:
+    config = load_config_stream(StringIO('schema_version = 1\nlanguages = ["yaml"]\n'))
+    policy = config.orchestration
+    assert policy is not None
+    check = policy.resolve_profile("check")
+    yaml_profile = policy.resolve_profile("yaml")
+    assert check is not None and yaml_profile is not None
+    assert check.steps == yaml_profile.steps == ("YAML lint",)
+
+    step = policy.steps[0]
+    assert isinstance(step, CommandRunStep)
+    assert step.argv == ("yamllint", "{files}")
+    assert step.fix_argv is None
+    assert step.files is not None
+    assert step.files.include == ("**/*.yaml", "**/*.yml")
+    assert step.files.exclude == ()
+
+
 def test_language_bundles_and_extra_tools_compose_in_order() -> None:
     config = load_config_stream(
         StringIO(
@@ -195,6 +213,16 @@ def test_javascript_consumer_example_selects_the_shared_profile() -> None:
     javascript = policy.resolve_profile("javascript")
     assert check is not None and javascript is not None
     assert check.steps == javascript.steps == ("JavaScript lint", "JavaScript format")
+
+
+def test_yaml_consumer_example_selects_the_yaml_bundle() -> None:
+    config = load_config(Path("examples/yaml/quality-gates.toml"))
+    policy = config.orchestration
+    assert policy is not None
+    check = policy.resolve_profile("check")
+    yaml_profile = policy.resolve_profile("yaml")
+    assert check is not None and yaml_profile is not None
+    assert check.steps == yaml_profile.steps == ("YAML lint",)
 
 
 def test_framework_shortcuts_keep_typescript_and_templates_scoped() -> None:
