@@ -385,6 +385,66 @@ class VersionSyncPolicy(StrictModel):
     sources: Annotated[tuple[VersionSource, ...], Field(min_length=2)]
 
 
+class DocumentationConfigSuppression(StrictModel):
+    """Suppress one known intentional documentation/configuration duplication."""
+
+    path: str
+    symbol: str
+    reason: str
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, path: str) -> str:
+        return validate_single_path(path, "documentation suppression path")
+
+    @field_validator("symbol")
+    @classmethod
+    def validate_symbol(cls, symbol: str) -> str:
+        if not symbol or any(not part.isidentifier() for part in symbol.split(".")):
+            raise ValueError("suppression symbols must be dotted Python identifiers")
+        return symbol
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, reason: str) -> str:
+        text = validate_one_line_message(reason)
+        if len(text) < 20:
+            raise ValueError("suppression reasons must be at least 20 characters")
+        return text
+
+
+class DocumentationConfigPolicy(StrictModel):
+    """Opt-in, advisory scan for explicitly named Python defaults in Markdown."""
+
+    source_patterns: Annotated[
+        tuple[str, ...], Field(default_factory=lambda: ("**/*.py",))
+    ]
+    documentation_patterns: Annotated[
+        tuple[str, ...], Field(default_factory=lambda: ("**/*.md",))
+    ]
+    exclude: Annotated[tuple[str, ...], Field(default_factory=tuple)]
+    suppressions: Annotated[
+        tuple[DocumentationConfigSuppression, ...], Field(default_factory=tuple)
+    ]
+
+    @field_validator("source_patterns", "documentation_patterns", "exclude")
+    @classmethod
+    def validate_patterns(cls, patterns: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(patterns)
+
+    @field_validator("suppressions")
+    @classmethod
+    def validate_suppressions(
+        cls, suppressions: Sequence[DocumentationConfigSuppression]
+    ) -> tuple[DocumentationConfigSuppression, ...]:
+        entries = tuple(suppressions)
+        require_unique(
+            tuple((item.path, item.symbol) for item in entries),
+            "documentation suppressions must not repeat a path and symbol",
+        )
+        return entries
+
+
 class LockfilePair(StrictModel):
     """A requirement declaration and its resolved lock file."""
 

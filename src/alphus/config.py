@@ -50,6 +50,8 @@ from alphus.policy.orchestration import (
 )
 from alphus.policy.repository import (
     DependencyLockPolicy,
+    DocumentationConfigPolicy,
+    DocumentationConfigSuppression,
     GitRepositoryPolicy,
     GlobRule,
     InstructionRouterPolicy,
@@ -112,6 +114,8 @@ __all__ = [
     "CyclomaticBackendBinding",
     "CyclomaticComplexityPolicy",
     "DependencyLockPolicy",
+    "DocumentationConfigPolicy",
+    "DocumentationConfigSuppression",
     "ErrorCodeCallSpec",
     "EslintCyclomaticBinding",
     "FastApiFindingOverride",

@@ -32,6 +32,7 @@ from alphus.policy.intents import (
 from alphus.policy.metrics import CyclomaticComplexityPolicy
 from alphus.policy.repository import (
     DependencyLockPolicy,
+    DocumentationConfigPolicy,
     GitRepositoryPolicy,
     RepositoryLayoutPolicy,
     VersionSyncPolicy,
@@ -88,6 +89,7 @@ class CheckPolicies(StrictModel):
     module_roles: ModuleRolePolicy | None = None
     architecture_graph: ArchitectureGraphCheckPolicy | None = None
     repository_layout: RepositoryLayoutPolicy | None = None
+    documentation_config: DocumentationConfigPolicy | None = None
     version_sync: VersionSyncPolicy | None = None
     callable_registry: CallableRegistryPolicy | None = None
     dependency_locks: DependencyLockPolicy | None = None
