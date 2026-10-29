@@ -16,6 +16,7 @@ path that matches the repository being checked.
 | Check Git ignores or historical repository artifacts      | [Repository hygiene](REPOSITORY-HYGIENE.md) |
 | Understand shared text and file-size measurements          | [Source hygiene](SOURCE-HYGIENE.md)         |
 | Review advisory test, input, and framework checks         | [Review checks](REVIEW-CHECKS.md)           |
+| Detect docs/default drift                   | [Docs/config drift](DOCUMENTATION-CONFIG-COUPLING.md) |
 | Gate cyclomatic complexity across Python, C/C++, and JS    | [Cyclomatic complexity](CYCLOMATIC-COMPLEXITY.md) |
 | Review positional argument interfaces                      | [Positional interfaces](POSITIONAL-INTERFACES.md) |
 | Add FastAPI-specific static checks                        | [FastAPI quality](FASTAPI-QUALITY.md)        |

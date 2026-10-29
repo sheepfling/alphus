@@ -1,0 +1,13 @@
+GLOBAL_FILE_LIMIT = 64
+ALIAS_FILE_LIMIT = GLOBAL_FILE_LIMIT
+
+
+class IncludeLimits:
+    max_include_files: int = 16
+    max_file_count: int = ALIAS_FILE_LIMIT
+    max_document_bytes: int = 1_048_576
+    max_transfer_bytes: int = 1_048_576
+    max_archive_bytes: int = 8_388_608
+    max_computed_bytes: int = 8 * 1024 * 1024
+    max_dynamic_bytes: int = build_default()
+    retry_limit: int = 1
