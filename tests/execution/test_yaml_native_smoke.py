@@ -139,9 +139,7 @@ def test_leading_dash_duplicate_keys_keep_native_diagnostic_and_location(
     assert code == step["exit_code"] == 1
     assert step["status"] == "failed"
     assert f"{filename}\n" in output
-    assert "  2:1 " in output or (
-        "::error file=-bad.yaml,line=2,col=1::2:1 " in output
-    )
+    assert "  2:1 " in output or ("::error file=-bad.yaml,line=2,col=1::2:1 " in output)
     assert "key-duplicates" in output
 
 
