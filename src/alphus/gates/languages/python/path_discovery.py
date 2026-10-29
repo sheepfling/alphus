@@ -8,6 +8,7 @@ from collections.abc import Set as AbstractSet
 from alphus.contracts.findings import SourceFinding
 
 _URL_SCHEME_SEPARATOR = "://"
+_PATH_CONSTRUCTORS = frozenset({"Path", "PurePath", "PurePosixPath", "PureWindowsPath"})
 SYS_PATH_MUTATORS = frozenset(
     {
         "append",
@@ -295,12 +296,43 @@ def python_path_findings(source: str) -> list[SourceFinding]:
     return sorted(findings)
 
 
+def _stringified_path_in_comparison(expression: ast.AST) -> bool:
+    """Recognize path-like values converted to strings for comparison."""
+    for node in ast.walk(expression):
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "str"
+            and len(node.args) == 1
+        ):
+            continue
+        match node.args[0]:
+            case ast.Name(id=name) if name == "path" or name.endswith("_path"):
+                return True
+            case ast.Call(func=ast.Name(id=constructor)) if (
+                constructor in _PATH_CONSTRUCTORS
+            ):
+                return True
+            case _:
+                pass
+    return False
+
+
 def python_inspection_findings(source: str) -> list[SourceFinding]:
     """Find path and URL interpretation through raw string operations."""
     tree = ast.parse(source)
     findings: set[SourceFinding] = set()
     for node in ast.walk(tree):
         match node:
+            case ast.Compare() as comparison if _stringified_path_in_comparison(
+                comparison
+            ):
+                findings.add(
+                    SourceFinding(
+                        comparison.lineno,
+                        "path string comparison; use as_posix() at the boundary",
+                    )
+                )
             case ast.Call(func=ast.Attribute(attr=method), args=arguments) as call:
                 values: list[str] = []
                 for argument in arguments:
