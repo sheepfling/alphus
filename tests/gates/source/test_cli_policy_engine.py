@@ -236,6 +236,59 @@ def test_complete_python_cli_accepts_literal_style_and_command_local_json() -> N
     assert python_cli_findings(source, POLICY.python) == ()
 
 
+def test_custom_python_cli_policy_matches_synthetic_project_configuration(
+    tmp_path: Path,
+) -> None:
+    relative_path = Path("tools/report.py")
+    source_path = tmp_path / relative_path
+    source_path.parent.mkdir()
+    source_path.write_text(
+        "from typing import Literal\n"
+        "from json import dumps\n"
+        "from demo_cli import Application, Option\n"
+        "from demo_renderer import Terminal\n"
+        "app = Application()\n"
+        "@app.command()\n"
+        "def report(\n"
+        "    machine: bool = Option(False, '--machine'),\n"
+        "    verbose: bool = Option(False, '--diagnostics'),\n"
+        "    output_style: Literal['terminal', 'plain'] = "
+        "Option('terminal', '--format'),\n"
+        ") -> None:\n"
+        "    if machine:\n"
+        "        print(dumps({'ok': True}))\n"
+        "    else:\n"
+        "        Terminal().render('Ready')\n"
+        "if __name__ == '__main__':\n"
+        "    app()\n",
+        encoding="utf-8",
+    )
+    custom_policy = CliPolicy(
+        python=PythonCliPolicy(
+            extensions=[".py"],
+            exclude=[],
+            typer_package="demo_cli",
+            typer_calls=["Application"],
+            rich_package="demo_renderer",
+            rich_calls=["Terminal", "render"],
+            json_option="--machine",
+            json_serializers=["dumps"],
+            verbose_option="--diagnostics",
+            renderer_enforcement="enforce",
+            output_style_enforcement="enforce",
+            style_option="--format",
+            rich_output="terminal",
+            plain_output="plain",
+        ),
+        node=None,
+        node_endpoint_message="move Node commands to the configured Python CLI",
+    )
+
+    report = policy_findings(tmp_path, [relative_path], custom_policy)
+
+    assert report.findings == ()
+
+
 def test_named_annotated_option_aliases_preserve_cli_contracts() -> None:
     source = (
         "from typing import Annotated, Literal\n"

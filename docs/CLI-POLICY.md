@@ -7,6 +7,9 @@ framework. Options and serializers are resolved within each command and its
 reachable local helpers; another command's option or an unused helper cannot
 satisfy the check.
 
+The Python analyzer targets Typer command wiring and optional Rich presentation;
+it is not a framework-neutral CLI smell detector.
+
 Presentation is a separate project policy. Alphus does not infer that every
 consumer must use Rich or expose a plain/Rich selector. An absent preference
 does not create a presentation finding. When a project adopts a renderer or a
