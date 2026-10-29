@@ -12,6 +12,7 @@ from alphus.gates.vcs.worktree_hygiene import (
     WorktreeRecord,
     _inspect,
     _logical_size,
+    _unregistered,
     main,
 )
 
@@ -70,3 +71,20 @@ def test_inspect_keeps_status_and_size_errors_separate(
     result = _inspect(tmp_path, record, None, True, ())
 
     assert result["errors"] == ["status unavailable", "size unavailable"]
+
+
+def test_nested_scan_roots_do_not_double_count_a_covered_orphan(
+    tmp_path: Path,
+) -> None:
+    storage = tmp_path / "storage"
+    orphan = storage / "orphan"
+    build = orphan / "build"
+    build.mkdir(parents=True)
+    (build / "artifact.bin").write_bytes(b"x" * 100)
+
+    for roots in ([storage, orphan], [orphan, storage]):
+        unregistered = _unregistered(roots, [], measure_size=True)
+
+        assert [item["path"] for item in unregistered] == [str(orphan)]
+        assert unregistered[0]["logical_bytes"] == 100
+        assert unregistered[0]["file_count"] == 1
