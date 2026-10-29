@@ -125,6 +125,40 @@ def test_duplicate_keys_retain_native_rule_id_and_source_location(
     assert "key-duplicates" in output
 
 
+def test_leading_dash_duplicate_keys_keep_native_diagnostic_and_location(
+    tmp_path: Path,
+) -> None:
+    root, config_path = _consumer(tmp_path)
+    filename = "-bad.yaml"
+    (root / filename).write_text("key: first\nkey: second\n", encoding="utf-8")
+
+    code, report = _run(root, config_path)
+    step = report["steps"][0]
+    output = _native_output(report)
+
+    assert code == step["exit_code"] == 1
+    assert step["status"] == "failed"
+    assert f"{filename}\n" in output
+    assert "  2:1 " in output or (
+        "::error file=-bad.yaml,line=2,col=1::2:1 " in output
+    )
+    assert "key-duplicates" in output
+
+
+def test_leading_c_filename_is_linted_as_yaml_not_used_as_config(
+    tmp_path: Path,
+) -> None:
+    root, config_path = _consumer(tmp_path)
+    filename = "-csettings.yaml"
+    (root / filename).write_text("key: value\n", encoding="utf-8")
+
+    code, report = _run(root, config_path)
+    step = report["steps"][0]
+
+    assert code == step["exit_code"] == 0
+    assert step["status"] == "passed"
+
+
 def test_yaml11_truthy_keys_and_values_warn_but_strings_do_not(
     tmp_path: Path,
 ) -> None:

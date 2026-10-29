@@ -156,7 +156,7 @@ def test_yaml_bundle_uses_yamllint_without_rewriting_native_diagnostics() -> Non
 
     step = policy.steps[0]
     assert isinstance(step, CommandRunStep)
-    assert step.argv == ("yamllint", "{files}")
+    assert step.argv == ("yamllint", "--", "{files}")
     assert step.fix_argv is None
     assert step.files is not None
     assert step.files.include == ("**/*.yaml", "**/*.yml")

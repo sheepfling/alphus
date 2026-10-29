@@ -134,7 +134,7 @@ NATIVE_TOOLS = MappingProxyType(
             (
                 NativeStep(
                     "YAML lint",
-                    ("yamllint", "{files}"),
+                    ("yamllint", "--", "{files}"),
                     include=("**/*.yaml", "**/*.yml"),
                 ),
             ),

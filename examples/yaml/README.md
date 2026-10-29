@@ -1,7 +1,7 @@
 # YAML consumer profile
 
 Select the YAML bundle with `languages = ["yaml"]` or run
-`alphus --init-config yaml`. It adds one read-only `yamllint {files}` command
+`alphus --init-config yaml`. It adds one read-only `yamllint -- {files}` command
 for Git-tracked and non-ignored untracked `.yaml` and `.yml` files. Install and
 pin `yamllint` in the consumer's development or CI dependencies; Alphus does
 not install it or fetch packages when checks run.
@@ -26,7 +26,7 @@ schema_version = 1
 [[orchestration.steps]]
 kind = "command"
 name = "YAML lint"
-argv = ["yamllint", "{files}"]
+argv = ["yamllint", "--", "{files}"]
 files.include = ["**/*.yaml", "**/*.yml"]
 files.exclude = ["**/generated/**", "**/vendor/**"]
 
