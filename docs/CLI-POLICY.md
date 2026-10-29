@@ -1,5 +1,11 @@
 # Python CLI policy
 
+Python command analysis lives in `alphus.gates.languages.python.cli_policy`;
+`alphus.gates.languages.javascript.cli_policy` discovers JavaScript CLI
+endpoints. The source-level adapter in `alphus.gates.source.cli_policy`
+applies the configured source inventory and combines both languages’
+findings. Shared finding types live in `alphus.contracts.cli_policy`.
+
 The `cli` check covers command wiring and machine-output contracts. It checks
 that each recognized Typer command exposes the configured JSON and verbose
 options, reaches a configured JSON serializer, and uses the selected CLI
