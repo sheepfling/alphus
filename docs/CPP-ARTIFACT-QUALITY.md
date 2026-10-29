@@ -95,19 +95,19 @@ needed. Keep the adapter in the consuming repository.
 
 ## Common C++ quality sequence
 
-1. 1. **Before linking:** inspect target topology and flags. Flag a large number of small test executables that
+1. **Before linking:** inspect target topology and flags. Flag a large number of small test executables that
    each link the same static library, especially when the library is built with full debug information. Check the
    effective compiler flags for the library and each test, not only the test source or link command. Enforce the
    static archive budget as soon as the archive is built. Keep timing, target count, and configuration in the build
    record.
-2. 2. **After the first link:** measure that executable's total bytes, debug bytes, and text bytes. Enforce the
+2. **After the first link:** measure that executable's total bytes, debug bytes, and text bytes. Enforce the
    per-executable policy now, while the cause is still local to a small build. A large `-g` static archive can
    inject its debug sections into each executable. Compiling only the test runner with `-g0` does not remove debug
    data already in linked objects.
-3. 3. **After the full build:** enforce executable count, individual and total byte budgets. Record the largest
+3. **After the full build:** enforce executable count, individual and total byte budgets. Record the largest
    artifacts, the combined footprint, and the change from a comparable baseline. This catches repeated costs that
    appear harmless when each target is reviewed alone.
-4. 4. **On a schedule or a significant toolchain change:** compare Debug, release, and distributed artifacts
+4. **On a schedule or a significant toolchain change:** compare Debug, release, and distributed artifacts
    separately. Check whether debug symbols are embedded, externalized, compressed, or stripped as intended.
    External symbol files still consume storage, so include `.pdb`, `.debug`, and `.dwp` in the total artifact
    budget where applicable. Track compile and link time alongside disk use.
@@ -119,13 +119,13 @@ configuration, representative compile and link commands, and a target dependency
 it to:
 
 - Point to exact artifact paths, byte counts, section measurements, flags, and linked libraries for every finding.
-- - Separate observed facts from a suspected cause. Similar file sizes alone do not prove duplicate code. Verify
+- Separate observed facts from a suspected cause. Similar file sizes alone do not prove duplicate code. Verify
   repeated static linkage or common debug sections from link commands and section data.
-- - Identify whether the cost is in executable code, embedded debug sections, static archives, separate symbols, or
+- Identify whether the cost is in executable code, embedded debug sections, static archives, separate symbols, or
   the number of targets.
-- - Propose the smallest build change with an expected size effect, then request a before/after measurement under
+- Propose the smallest build change with an expected size effect, then request a before/after measurement under
   the same configuration.
-- - Flag suspicious gate configuration: missing minimum count, a stale baseline, mismatched build profiles, debug
+- Flag suspicious gate configuration: missing minimum count, a stale baseline, mismatched build profiles, debug
   section budgets with no section tool, or an exclusion broad enough to hide outputs.
 
 The deterministic policy decides CI pass/fail. AI review explains the evidence and suggests changes; it does not
@@ -136,7 +136,7 @@ it.
 
 A reusable review request is:
 
-> > Review the attached artifact report and build evidence as a C++ build-quality smell check. List each observed
+> Review the attached artifact report and build evidence as a C++ build-quality smell check. List each observed
   issue with its exact artifact path, measured bytes, policy limit, effective compile or link flag, and source of
   evidence. Distinguish observations from hypotheses. Prioritize the earliest gate that could have caught each
   issue. Recommend one controlled build change per hypothesis and specify the before/after measurements needed to
