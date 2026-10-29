@@ -287,8 +287,9 @@ def _unregistered(
                 }
             )
 
-    for root in roots:
-        if root.is_dir() and root not in registered_paths:
+    for root in sorted(roots, key=lambda path: (len(path.parts), path.as_posix())):
+        already_covered = root in seen or not seen.isdisjoint(root.parents)
+        if root.is_dir() and root not in registered_paths and not already_covered:
             walk(root)
     return sorted(unknown, key=lambda item: item["path"])
 

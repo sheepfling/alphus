@@ -15,13 +15,13 @@ from pydantic import ValidationError
 from alphus.config import CliPolicy, NodeCliPolicy, PythonCliPolicy
 from alphus.contracts.findings import Diagnostic
 from alphus.execution.results import RuleEvaluation, diagnostics_from_json
+from alphus.gates.languages.python.cli_policy import python_cli_issues
 from alphus.gates.source.cli_policy import (
     CliPolicyFinding,
     CliPolicyReport,
     policy_findings,
     policy_issues,
     python_cli_findings,
-    python_cli_issues,
 )
 
 

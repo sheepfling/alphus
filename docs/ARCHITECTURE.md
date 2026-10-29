@@ -64,9 +64,15 @@ language neutral.
   checkers. `review.frameworks` contains the Pydantic and FastAPI practice
   modules so each framework can grow independently. The theme's `runners.py`
   binds their selectors to validated policies.
-- `alphus.gates.source` owns portable source and launcher checks for Python,
-  JavaScript, and JSON. Its `runners.py` binds these selectors to validated
-  policies. Language-specific analysis remains inside each checker.
+- `alphus.gates.source` owns shared source inventory, dispatch, and policy
+  binding for portable source checks. `alphus.gates.languages.python` and
+  `alphus.gates.languages.javascript` own language-specific analysis engines.
+  The source runner binds those engines to validated, language-neutral
+  selectors.
+- `alphus.gates.cpp` owns Alphus's C++ source, build, test, package, and
+  artifact engines. The `quality_gates` directory contains their calibrated
+  consumer policy examples and evidence contracts, not another copy of the
+  engines.
 - `alphus.gates.repository` owns architecture, package, dependency-lock, and
   repository-layout checks. Its runner mapping also adds graph, version, and
   callable-registry findings to the package-boundary selector.
@@ -98,7 +104,7 @@ Import checker implementations from their owning `alphus.gates.<theme>`
 package and shared mechanics from `alphus.support`. Former root module
 forwarders have been removed. For example, replace `alphus.numeric_literals`
 with `alphus.gates.review.numeric_literals`, `alphus.python_style` with
-`alphus.gates.source.python_style`, and `alphus.repository_layout` with
+`alphus.gates.languages.python.style`, and `alphus.repository_layout` with
 `alphus.gates.repository.repository_layout`. The `alphus` package still exports
 its documented core configuration, finding, inventory, and checker functions.
 

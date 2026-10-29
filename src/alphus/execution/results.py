@@ -9,6 +9,7 @@ from typing import Self, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, TypeAdapter
 
+from alphus.contracts.cli_policy import CliPolicyReport
 from alphus.contracts.findings import (
     Diagnostic,
     Finding,
@@ -17,9 +18,8 @@ from alphus.contracts.findings import (
 )
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
-from alphus.gates.source.cli_policy import CliPolicyReport
+from alphus.gates.languages.python.style import StyleFindings
 from alphus.gates.source.cyclomatic_complexity import CyclomaticReport
-from alphus.gates.source.python_style import StyleFindings
 from alphus.policy.base import QualityRuleName
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
 

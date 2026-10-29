@@ -53,6 +53,7 @@ from alphus.execution.profile_history import (
 from alphus.execution.results import RuleEvaluation, RuleOutput
 from alphus.execution.scheduler import WorkUnit, run_work_units
 from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
+from alphus.gates.languages.python.style import StyleFindings
 from alphus.gates.source.cli_policy import CliPolicyReport
 from alphus.gates.source.cyclomatic_complexity import (
     CyclomaticReport,
@@ -61,7 +62,6 @@ from alphus.gates.source.cyclomatic_complexity import (
     report_payload,
     report_summary,
 )
-from alphus.gates.source.python_style import StyleFindings
 from alphus.policy.base import MissingPolicyError
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
 from alphus.policy.function_shape import plan_function_shape

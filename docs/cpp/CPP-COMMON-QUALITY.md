@@ -46,6 +46,11 @@ python -m alphus.gates.cpp.cpp_common_quality source . --config cpp-common-quali
 
 The source check inventories Git-tracked and nonignored untracked C/C++ files. Outside Git, it scans the supplied root. `include` and `exclude` glob lists define scope. It measures physical lines and bytes, then recursively adds locally included implementation fragments to the owning file's expanded totals. Both `hard_lines` and `hard_bytes` apply to the expanded owner, so splitting a large `.cpp` into a single included chunk does not lower its measured size.
 
+The built-in source inventory recognizes `.hxx` alongside `.h`, `.hh`, and
+`.hpp` headers. These suffixes are included in default source globs and local
+include matching, so selected `.hxx` files receive the same size and ownership
+checks.
+
 The check fails on any `#include` of a `.c`, `.cc`, `.cpp`, or `.cxx` source, even if the included path cannot be resolved. It also fails on a `.inc`, `.inl`, `.ipp`, or `.tpp` fragment with fewer than two direct consumers. A large header with one direct consumer is a review warning; set `single_consumer_header_lines` to tune that signal. This is a structural check: a preprocessor branch may be inactive, and a single header may be a legitimate interface. Review findings in context.
 
 `legacy` exceptions need a reason and `max_physical_lines`; they may also set `max_expanded_lines` and `max_expanded_bytes`. The old file cannot grow past its recorded bounds. A rare single-consumer fragment exception belongs in `fragment_exceptions` with a reason and `max_lines`. Such an exception documents ownership; it should not be used to justify moving ordinary code out of its sole owner. Warnings remain visible in JSON; errors fail the gate.

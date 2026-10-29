@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from alphus.config import RuntimeTypePolicy
-from alphus.gates.source.runtime_type_facts import (
+from alphus.gates.languages.python.runtime_type_facts import (
     BUILTINS,
     INSPECTION_CLASSES,
     MAPPINGS,
