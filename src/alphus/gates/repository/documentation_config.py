@@ -47,7 +47,8 @@ _UNSAFE_PROSE = re.compile(
 _VALUE = re.compile(
     r"(?:`([^`]+)`|\"([^\"]+)\"|'([^']+)'|"
     r"(true|false|null|none)\b|"
-    r"([+-]?\d[\d_]*(?:\.\d+)?)(?:\s*(B|bytes?|KiB|MiB|GiB|KB|MB|GB|TB|files?))?\b)",
+    r"([+-]?\d[\d_]*(?:\.\d+)?)(?:\s*(B|bytes?|KiB|MiB|GiB|KB|MB|GB|TB|files?))?"
+    r"(?![A-Za-z0-9_]|[.][A-Za-z0-9_]))",
     re.IGNORECASE,
 )
 _RELATION = re.compile(r"\s*(?:defaults?\s+to|is|equals?|=|:)\s*", re.IGNORECASE)
@@ -56,6 +57,10 @@ _UNITS = re.compile(
     r"with\b|for\b|to\b|in\b|on\b|by\b|as\b|per\b)"
     r"([A-Za-zµ°][A-Za-z0-9_/-]*)\b",
     re.IGNORECASE,
+)
+_QUALIFIED_SYMBOL = re.compile(
+    r"(?<![A-Za-z0-9_.])(?:`[A-Za-z_]\w*`|[A-Za-z_]\w*)\s*\.\s*"
+    r"(?:`([A-Za-z_]\w*)`|([A-Za-z_]\w*))(?![A-Za-z0-9_])"
 )
 _BYTE_MULTIPLIERS: Mapping[str, int] = MappingProxyType(
     {
@@ -182,14 +187,37 @@ def _written_names(statement: ast.stmt) -> dict[str, int]:
     return writes.names
 
 
+class _ImportedNames(ast.NodeVisitor):
+    """Collect imports in one module-level control-flow statement."""
+
+    def __init__(self) -> None:
+        self.names: list[str] = []
+
+    def visit_Import(self, node: ast.Import) -> None:
+        self.names.extend(
+            item.asname or item.name.split(".", 1)[0] for item in node.names
+        )
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        self.names.extend(item.asname or item.name for item in node.names)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        return None
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        return None
+
+    def visit_Lambda(self, node: ast.Lambda) -> None:
+        return None
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        return None
+
+
 def _imported_names(statement: ast.stmt) -> tuple[str, ...]:
-    match statement:
-        case ast.Import(names=names):
-            return tuple(item.asname or item.name.split(".", 1)[0] for item in names)
-        case ast.ImportFrom(names=names):
-            return tuple(item.asname or item.name for item in names)
-        case _:
-            return ()
+    imports = _ImportedNames()
+    imports.visit(statement)
+    return tuple(imports.names)
 
 
 def _base_name(expression: ast.expr) -> str | None:
@@ -313,27 +341,22 @@ def _extract_facts(root: Path, path: Path) -> list[_Fact]:
     return _module_facts(tree, path.as_posix())
 
 
-def _symbol_matches(line: str, symbol: str) -> bool:
+def _symbol_pattern(symbol: str) -> str:
     if "." in symbol:
-        return (
-            re.search(
-                rf"(?<![A-Za-z0-9_]){re.escape(symbol.split('.')[0])}\s*\.\s*"
-                rf"{re.escape(symbol.split('.')[-1])}(?![A-Za-z0-9_])",
-                line,
-            )
-            is not None
-        )
-    return (
-        re.search(rf"(?<![A-Za-z0-9_]){re.escape(symbol)}(?![A-Za-z0-9_])", line)
-        is not None
-    )
+        qualifier, attribute = symbol.split(".", 1)
+        name = rf"{re.escape(qualifier)}\s*\.\s*{re.escape(attribute)}"
+    else:
+        name = re.escape(symbol)
+    return rf"(?<![A-Za-z0-9_.])(?:`{name}`|{name})(?![A-Za-z0-9_])"
+
+
+def _symbol_matches(line: str, symbol: str) -> bool:
+    return re.search(_symbol_pattern(symbol), line) is not None
 
 
 def _matched_facts(line: str, facts: Sequence[_Fact]) -> list[_Fact]:
-    qualified_classes = {
-        fact.symbol.split(".", 1)[0]
-        for fact in facts
-        if "." in fact.symbol and _symbol_matches(line, fact.symbol)
+    qualified_short_names = {
+        match.group(1) or match.group(2) for match in _QUALIFIED_SYMBOL.finditer(line)
     }
     matched: list[_Fact] = []
     for fact in facts:
@@ -342,11 +365,7 @@ def _matched_facts(line: str, facts: Sequence[_Fact]) -> list[_Fact]:
             continue
         if not _symbol_matches(line, fact.short_name):
             continue
-        if (
-            "." in fact.symbol
-            and qualified_classes
-            and fact.symbol.split(".", 1)[0] not in qualified_classes
-        ):
+        if "." in fact.symbol and fact.short_name in qualified_short_names:
             continue
         matched.append(fact)
     return matched
@@ -355,11 +374,26 @@ def _matched_facts(line: str, facts: Sequence[_Fact]) -> list[_Fact]:
 def _parse_claim_value(raw: str, reason: str) -> _Claim | None:
     match = _VALUE.match(raw.strip())
     if match is None:
-        return None
+        numeric = re.match(r"[+-]?\d[\w.+-]*", raw.strip())
+        if numeric is None:
+            return None
+        value = numeric.group().rstrip(".,;:!?")
+        return _Claim(value, None, value, reason)
     backticked = match.group(1)
     if backticked is not None:
         parsed = _parse_claim_value(backticked, reason)
-        return parsed or _Claim(backticked, None, backticked, reason)
+        if parsed is None:
+            return _Claim(backticked, None, backticked, reason)
+        remainder = raw.strip()[match.end() :]
+        if (
+            type(parsed.value) in {int, float}
+            and parsed.unit is None
+            and _UNITS.match(remainder) is not None
+        ):
+            combined = _parse_claim_value(f"{backticked}{remainder}", reason)
+            if combined is not None:
+                return combined
+        return parsed
     quoted = next((value for value in match.groups()[1:3] if value is not None), None)
     if quoted is not None:
         return _Claim(quoted, None, quoted, reason)
@@ -409,13 +443,7 @@ def _prose_claims(line: str, fact: _Fact) -> list[_Claim]:
     claims: list[_Claim] = []
     names = tuple(dict.fromkeys((fact.symbol, fact.short_name)))
     for name in names:
-        if "." in name:
-            name_pattern = (
-                rf"(?<![A-Za-z0-9_]){re.escape(name.split('.')[0])}\s*\.\s*"
-                rf"{re.escape(name.split('.')[-1])}(?![A-Za-z0-9_])"
-            )
-        else:
-            name_pattern = rf"(?<![A-Za-z0-9_]){re.escape(name)}(?![A-Za-z0-9_])"
+        name_pattern = _symbol_pattern(name)
         for occurrence in re.finditer(name_pattern, line):
             tail = line[occurrence.end() : occurrence.end() + 120]
             relation = _RELATION.match(tail)

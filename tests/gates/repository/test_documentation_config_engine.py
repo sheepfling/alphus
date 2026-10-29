@@ -31,6 +31,69 @@ def _policy(
     )
 
 
+def _run_documentation_case(
+    tmp_path: Path, source_text: str, documentation_text: str
+) -> list[Finding]:
+    source = tmp_path / "src" / "settings.py"
+    guide = tmp_path / "docs" / "guide.md"
+    source.parent.mkdir()
+    guide.parent.mkdir()
+    source.write_text(source_text, encoding="utf-8")
+    guide.write_text(documentation_text, encoding="utf-8")
+    files = [Path("src/settings.py"), Path("docs/guide.md")]
+    return check_documentation_config(tmp_path, _policy(), files)
+
+
+def test_unknown_qualified_class_does_not_match_other_classes_short_name(
+    tmp_path: Path,
+) -> None:
+    findings = _run_documentation_case(
+        tmp_path,
+        "class IncludeLimits:\n    max_files: int = 4\n",
+        "IncludeLimits.max_files is 4.\nOtherLimits.max_files is 99.\n",
+    )
+
+    assert [(item.rule_id, item.line) for item in findings] == [(_DUPLICATED, 1)]
+
+
+def test_backticked_numeric_value_preserves_explicit_unit(tmp_path: Path) -> None:
+    findings = _run_documentation_case(
+        tmp_path, "MAX_BYTES = 1048576\n", "MAX_BYTES is `1` MiB.\n"
+    )
+
+    assert [(item.rule_id, item.line) for item in findings] == [(_DUPLICATED, 1)]
+    assert "normalized explicit byte unit MiB" in findings[0].message
+
+
+def test_scientific_numeric_notation_is_reported_as_uncertain(tmp_path: Path) -> None:
+    findings = _run_documentation_case(
+        tmp_path, "MAX_BYTES = 1000\n", "MAX_BYTES is 1.0e3.\n"
+    )
+
+    assert [(item.rule_id, item.line) for item in findings] == [(_UNKNOWN, 1)]
+    assert "documentation value '1.0e3'" in findings[0].message
+    assert "different scalar types" in findings[0].message
+
+
+def test_conditional_import_invalidates_earlier_literal_binding(tmp_path: Path) -> None:
+    findings = _run_documentation_case(
+        tmp_path,
+        "MAX_FILES = 64\nif condition:\n    from settings import MAX_FILES\n",
+        "MAX_FILES is 64.\n",
+    )
+
+    assert [(item.rule_id, item.line) for item in findings] == [(_UNKNOWN, 1)]
+    assert "dynamic or outside the literal/alias subset" in findings[0].message
+
+
+def test_backticked_setting_name_matches_explicit_relation(tmp_path: Path) -> None:
+    findings = _run_documentation_case(
+        tmp_path, "MAX_RETRIES = 8\n", "`MAX_RETRIES` is 8.\n"
+    )
+
+    assert [(item.rule_id, item.line) for item in findings] == [(_DUPLICATED, 1)]
+
+
 def test_matches_explicit_defaults_and_ignores_non_claims_and_unsupported_values(
     tmp_path: Path,
 ) -> None:
