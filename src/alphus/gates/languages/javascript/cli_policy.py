@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from alphus.config import NodeCliPolicy
 from alphus.support.inventory import matches_path
+from alphus.support.source_text import read_utf8_text
 
 
 class NodePackageManifest(BaseModel):
@@ -84,7 +85,7 @@ def node_cli_files(
             relative in commands
             or re.search(
                 rf"\b{re.escape(policy.argument_access_marker)}\b",
-                (checkout / relative).read_text(encoding="utf-8"),
+                read_utf8_text(checkout / relative),
             )
             is not None
         )

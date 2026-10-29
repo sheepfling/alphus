@@ -8,7 +8,10 @@ import pytest
 from pydantic import ValidationError
 
 from alphus.config import ScriptPolicy
-from alphus.gates.languages.python.script_policy import is_python_cmd_router, policy_issues
+from alphus.gates.languages.python.script_policy import (
+    is_python_cmd_router,
+    policy_issues,
+)
 
 POLICY = ScriptPolicy(
     extensions=[".sh", ".ps1", ".cmd", ".bat"],

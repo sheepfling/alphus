@@ -20,59 +20,75 @@ from alphus.gates.languages.python.path_discovery import (
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source, read_utf8_sig_text
 
-
 _PATH_TAGS: Mapping[str, tuple[Category, str]] = MappingProxyType(
     {
         "module URL used as an implicit path root": (
-            Category.PORTABILITY, "implicit-module-root"
+            Category.PORTABILITY,
+            "implicit-module-root",
         ),
         "module directory used as an implicit path root": (
-            Category.PORTABILITY, "implicit-module-root"
+            Category.PORTABILITY,
+            "implicit-module-root",
         ),
         "current working directory used as an implicit path root": (
-            Category.PORTABILITY, "implicit-working-directory"
+            Category.PORTABILITY,
+            "implicit-working-directory",
         ),
         "Git checkout discovery used as an implicit path root": (
-            Category.PORTABILITY, "implicit-git-root"
+            Category.PORTABILITY,
+            "implicit-git-root",
         ),
         "URL prefix test; parse with URL": (
-            Category.CORRECTNESS, "url-string-inspection"
+            Category.CORRECTNESS,
+            "url-string-inspection",
         ),
         "URL scheme substring test; parse with URL": (
-            Category.CORRECTNESS, "url-string-inspection"
+            Category.CORRECTNESS,
+            "url-string-inspection",
         ),
         "slash prefix test; parse the declared path flavor": (
-            Category.PORTABILITY, "path-string-inspection"
+            Category.PORTABILITY,
+            "path-string-inspection",
         ),
         "separator rewrite; parse the declared path flavor": (
-            Category.PORTABILITY, "path-string-inspection"
+            Category.PORTABILITY,
+            "path-string-inspection",
         ),
         "module __file__ used to infer a parent root": (
-            Category.PORTABILITY, "implicit-module-root"
+            Category.PORTABILITY,
+            "implicit-module-root",
         ),
         "raw os.name comparison; use a shared platform probe": (
-            Category.PORTABILITY, "raw-platform-detection"
+            Category.PORTABILITY,
+            "raw-platform-detection",
         ),
         "sys.path mutated for local module discovery": (
-            Category.ARCHITECTURE, "import-path-mutation"
+            Category.ARCHITECTURE,
+            "import-path-mutation",
         ),
         "sys.executable used to derive a path": (
-            Category.PORTABILITY, "implicit-executable-root"
+            Category.PORTABILITY,
+            "implicit-executable-root",
         ),
         "Path.cwd() used as an implicit path root": (
-            Category.PORTABILITY, "implicit-working-directory"
+            Category.PORTABILITY,
+            "implicit-working-directory",
         ),
         "os.getcwd() used as an implicit path root": (
-            Category.PORTABILITY, "implicit-working-directory"
+            Category.PORTABILITY,
+            "implicit-working-directory",
         ),
         "path string comparison; use as_posix() at the boundary": (
-            Category.CORRECTNESS, "path-string-comparison"
+            Category.CORRECTNESS,
+            "path-string-comparison",
         ),
         "URL prefix test; parse with urlsplit": (
-            Category.CORRECTNESS, "url-string-inspection"
+            Category.CORRECTNESS,
+            "url-string-inspection",
         ),
         "URL scheme substring test; parse with urlsplit": (
-            Category.CORRECTNESS, "url-string-inspection"
+            Category.CORRECTNESS,
+            "url-string-inspection",
         ),
     }
 )
