@@ -57,7 +57,10 @@ def test_fastapi_profile_is_opt_in_and_does_not_offer_fixes(
     assert orchestration is not None
     profile = orchestration.resolve_profile("fastapi")
     assert profile is not None
-    assert profile.steps == ("FastAPI Ruff checks", "FastAPI style advisory")
+    assert profile.steps == (
+        "FastAPI Ruff checks",
+        "FastAPI source and route contracts",
+    )
 
     step = next(
         item for item in orchestration.steps if item.name == "FastAPI Ruff checks"
@@ -66,6 +69,8 @@ def test_fastapi_profile_is_opt_in_and_does_not_offer_fixes(
     assert "ruff.fastapi.toml" in step.argv
     assert step.fix_argv is None
     assert config.checks.fastapi_practices is not None
+    assert config.checks.fastapi_practices.application == "routes:app"
+    assert config.checks.fastapi_practices.protected_route_paths == ("/items/*",)
 
 
 def test_native_profile_accepts_valid_fastapi_fixture(

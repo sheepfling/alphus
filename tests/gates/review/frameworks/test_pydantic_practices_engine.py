@@ -272,6 +272,53 @@ def test_field_positional_default_is_advisory_and_alias_aware() -> None:
     ]
 
 
+def test_unconstrained_any_is_limited_to_designated_public_model_paths() -> None:
+    source = (
+        "from typing import Any as Loose, ClassVar\n"
+        "from pydantic import BaseModel\n"
+        "class PublicRequest(BaseModel):\n"
+        "    payload: list[Loose]\n"
+        '    legacy: "Loose"\n'
+        "    cache: ClassVar[Loose] = None\n"
+        "    _private: Loose\n"
+    )
+    policy = _policy(
+        report_unconstrained_any=True,
+        public_model_paths=("src/api/**",),
+    )
+    assert pydantic_practice_findings(source, _policy(), path="src/api/models.py") == []
+
+    findings = pydantic_practice_findings(source, policy, path="src/api/models.py")
+
+    assert [(item.rule_id, item.line, item.severity) for item in findings] == [
+        ("alphus/python/pydantic/validation/public-unconstrained-any", 4, "warning"),
+        ("alphus/python/pydantic/validation/public-unconstrained-any", 5, "warning"),
+    ]
+    assert (
+        pydantic_practice_findings(source, policy, path="src/internal/models.py") == []
+    )
+
+
+def test_custom_model_initializer_is_reviewed_but_plain_classes_are_ignored() -> None:
+    source = (
+        "from pydantic import BaseModel as Model\n"
+        "class Item(Model):\n"
+        "    value: str\n"
+        "    def __init__(self, **data):\n"
+        "        super().__init__(**data)\n"
+        "class Plain:\n"
+        "    def __init__(self):\n"
+        "        pass\n"
+    )
+
+    assert pydantic_practice_findings(source, _policy()) == []
+    findings = pydantic_practice_findings(source, _policy(report_custom_init=True))
+
+    assert [(item.rule_id, item.line, item.severity) for item in findings] == [
+        ("alphus/python/pydantic/validation/custom-init", 4, "info")
+    ]
+
+
 def test_external_schema_docs_follow_fastapi_routes_and_nested_models() -> None:
     source = (
         "from typing import Annotated, ClassVar\n"
@@ -390,6 +437,8 @@ def test_external_model_docs_support_imported_custom_pydantic_bases() -> None:
         (("report_unsupported_rule", True),),
         (("external_model_names", ("not-a-name",)),),
         (("external_model_names", ("PublicModel", "PublicModel")),),
+        (("report_unconstrained_any", True),),
+        (("public_model_paths", ("src/api/**", "src/api/**")),),
     ],
 )
 def test_pydantic_policy_rejects_malformed_or_unknown_options(

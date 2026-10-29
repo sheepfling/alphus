@@ -1,5 +1,9 @@
 # Self-checking Alphus
 
+The root `quality-gates.toml` selects the policy for checking this
+Alphus checkout. `examples/**/quality-gates.toml` files show consumer
+profiles, and some are loaded by focused tests as fixtures.
+
 The `check` profile validates the package against its own repository policy. It
 runs Alphus portable rules, shared-utility analysis, the comment-marker and review rules, TOML syntax, installed-package
 import smoke and compatibility-import removal checks, native Ruff lint and
@@ -56,8 +60,12 @@ are visible through `--fix-plan` and run only through `--apply-fixes` with
 named steps; see [fix plans](FIXES.md).
 
 The [runtime-type contract](RUNTIME-TYPES.md) describes typed AST dispatch and
-explicit reflection-value annotations. The existing exclusions below remain
-unchanged; that correction adds no file exclusions or threshold relaxation.
+explicit reflection-value annotations. Its existing exclusions remain
+unchanged. The FastAPI application loader has one exact path-discovery
+exclusion and one matching package-boundary allowance because it temporarily
+adds explicitly configured consumer import paths while importing the selected
+application, then restores `sys.path`. Other package files retain both checks,
+and file-backed module loading remains rejected.
 
 ## Self-profile scope and exclusions
 
@@ -120,10 +128,11 @@ checks still cover tests. `tests/gates/source/test_path_discovery_engine.py` ver
 test file's `Path(__file__).resolve().parents[1]` finding remains while its
 `startswith("/")` inspection finding is suppressed.
 
-All other configured rule `exclude` lists are empty: file size, line length,
-comment markers,
-output escaping, Python structure, and structural path handling. There is no
-global file exclusion. The numeric, test-quality, input-contract,
+All other configured rule `exclude` lists are empty: file size, comment
+markers, output escaping, Python structure, and structural path handling.
+Line length excludes `docs/cpp/**` because its runnable command examples can
+exceed the prose width; the JavaScript job checks those guides with Prettier.
+There is no global file exclusion. The numeric, test-quality, input-contract,
 Pydantic-practice, and FastAPI-practice review scanners also have empty
 exclusion lists. These targeted exceptions do
 not relax Ruff or Pyright.
@@ -175,14 +184,13 @@ diagnostics; Alphus does not duplicate or reinterpret them.
 
 ## C++ and Markdown self-checks
 
-The C++ engine fixtures now import the installed `alphus.gates.cpp` modules
-from `tests/gates/cpp/test_cpp_quality_engine.py`. No duplicate executable scripts are
-kept in `quality_gates/bin`. The self-profile also runs the shared-utilities
-rule, which flags duplicate helpers, extra file hash implementations, and
-direct Git subprocess calls outside `alphus.support.git`. The path rule flags
+The C++ engine fixtures import the installed `alphus.gates.cpp` modules
+from `tests/gates/cpp/test_cpp_quality_engine.py`. The self-profile also runs
+the shared-utilities rule, which flags duplicate helpers, extra file hash
+implementations, and direct Git subprocess calls outside `alphus.support.git`. The path rule flags
 raw `os.name` checks so code uses the shared platform probe.
 
-The JavaScript CI job checks formatting of `quality_gates/**/*.md` with the
+The JavaScript CI job checks formatting of `docs/cpp/**/*.md` with the
 locally installed Prettier package. Run `npm run format:markdown` to fix those
 files, then `npm run format:markdown:check` to verify. Formatting is an
 explicit fix action; ordinary checks do not rewrite documentation.

@@ -5,11 +5,16 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Sequence
+from enum import StrEnum
+from pathlib import PurePosixPath
 from typing import Annotated, Literal, Self
 
+from packaging.specifiers import InvalidSpecifier, SpecifierSet
+from packaging.version import InvalidVersion, Version
 from pydantic import Field, field_validator, model_validator
 
 from alphus.contracts.findings import Severity
+from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.policy.base import (
     StrictModel,
     require_unique,
@@ -202,7 +207,10 @@ class PydanticPracticePolicy(PythonSourceScanPolicy):
     report_validator_fallthrough: bool = False
     report_field_positional_default: bool = False
     report_external_model_docs: bool = False
+    report_custom_init: bool = False
+    report_unconstrained_any: bool = False
     external_model_names: tuple[str, ...] = ()
+    public_model_paths: tuple[str, ...] = ()
 
     @field_validator("external_model_names")
     @classmethod
@@ -211,6 +219,21 @@ class PydanticPracticePolicy(PythonSourceScanPolicy):
             raise ValueError("external model names must be Python identifiers")
         require_unique(values, "external model names must be unique")
         return tuple(values)
+
+    @field_validator("public_model_paths")
+    @classmethod
+    def validate_public_model_paths(cls, paths: Sequence[str]) -> tuple[str, ...]:
+        normalized = validate_patterns(paths)
+        require_unique(normalized, "public model paths must be unique")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_public_any_scope(self) -> Self:
+        if self.report_unconstrained_any and not self.public_model_paths:
+            raise ValueError(
+                "public_model_paths must be configured when unconstrained Any review is enabled"
+            )
+        return self
 
 
 class ErrorCodeCallSpec(StrictModel):
@@ -235,12 +258,96 @@ class ErrorCodeCallSpec(StrictModel):
         return value
 
 
+class FastApiRuleID(StrEnum):
+    """Canonical FastAPI identifiers accepted by finding overrides."""
+
+    LITERAL_HTTP_STATUS = rule_tag(
+        Scope.PYTHON, Framework.FASTAPI, Category.CORRECTNESS, "literal-http-status"
+    )
+    LITERAL_ERROR_CODE = rule_tag(
+        Scope.PYTHON, Framework.FASTAPI, Category.CORRECTNESS, "literal-error-code"
+    )
+    DUPLICATE_ROUTE = rule_tag(
+        Scope.PYTHON, Framework.FASTAPI, Category.CORRECTNESS, "duplicate-route"
+    )
+    MISSING_OPERATION_ID = rule_tag(
+        Scope.PYTHON, Framework.FASTAPI, Category.METADATA, "missing-operation-id"
+    )
+    DUPLICATE_OPERATION_ID = rule_tag(
+        Scope.PYTHON, Framework.FASTAPI, Category.METADATA, "duplicate-operation-id"
+    )
+    MISSING_RESPONSE_CONTRACT = rule_tag(
+        Scope.PYTHON,
+        Framework.FASTAPI,
+        Category.VALIDATION,
+        "missing-response-contract",
+    )
+    MISSING_ROUTE_METADATA = rule_tag(
+        Scope.PYTHON,
+        Framework.FASTAPI,
+        Category.METADATA,
+        "missing-route-metadata",
+    )
+    MISSING_OPENAPI_SECURITY = rule_tag(
+        Scope.PYTHON,
+        Framework.FASTAPI,
+        Category.SECURITY,
+        "missing-openapi-security",
+    )
+    OPENAPI_BREAKING_CHANGE = rule_tag(
+        Scope.PYTHON,
+        Framework.FASTAPI,
+        Category.VALIDATION,
+        "openapi-breaking-change",
+    )
+
+
+class FastApiFindingOverride(StrictModel):
+    """Consumer-owned severity adjustment or reasoned source-path exclusion."""
+
+    rule_id: Annotated[FastApiRuleID, Field(strict=False)]
+    severity: Severity | None = None
+    exclude_paths: tuple[str, ...] = ()
+    reason: str
+
+    @field_validator("exclude_paths")
+    @classmethod
+    def validate_excluded_paths(cls, patterns: Sequence[str]) -> tuple[str, ...]:
+        normalized = validate_patterns(patterns)
+        require_unique(normalized, "FastAPI override exclusions must be unique")
+        return normalized
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, value: str) -> str:
+        reason = validate_one_line_message(value)
+        if len(reason) < 20:
+            raise ValueError("FastAPI override reasons must be at least 20 characters")
+        return reason
+
+    @model_validator(mode="after")
+    def require_an_adjustment(self) -> Self:
+        if self.severity is None and not self.exclude_paths:
+            raise ValueError("FastAPI override must change severity or exclude paths")
+        return self
+
+
 class FastApiPracticePolicy(PythonSourceScanPolicy):
-    """Optional FastAPI/Starlette status and configured error-code advice."""
+    """Optional FastAPI/Starlette source advice and application contract review."""
 
     report_literal_status: bool = True
     error_code_calls: tuple[ErrorCodeCallSpec, ...] = ()
     check_http_exception_detail_codes: bool = False
+    application: str | None = None
+    application_factory: bool = False
+    application_python_paths: tuple[str, ...] = ()
+    exclude_route_paths: tuple[str, ...] = ()
+    required_route_metadata: tuple[Literal["summary", "description", "tags"], ...] = ()
+    require_response_contract: bool = False
+    protected_route_paths: tuple[str, ...] = ()
+    finding_overrides: tuple[FastApiFindingOverride, ...] = ()
+    openapi_baseline: str | None = None
+    openapi_breaking_threshold: Literal["ERR", "WARN"] = "WARN"
 
     @model_validator(mode="after")
     def validate_error_code_calls(self) -> Self:
@@ -248,4 +355,137 @@ class FastApiPracticePolicy(PythonSourceScanPolicy):
             tuple(spec.call for spec in self.error_code_calls),
             "error-code calls must be unique",
         )
+        require_unique(
+            self.required_route_metadata,
+            "required route metadata fields must be unique",
+        )
+        require_unique(
+            self.application_python_paths,
+            "application Python paths must be unique",
+        )
+        require_unique(
+            tuple(item.rule_id for item in self.finding_overrides),
+            "FastAPI finding overrides must be unique by rule ID",
+        )
+        for path in self.application_python_paths:
+            validate_single_path(path, "application Python paths")
+        for patterns in (self.exclude_route_paths, self.protected_route_paths):
+            _validate_route_patterns(patterns)
+            require_unique(patterns, "route path patterns must be unique")
+        if self.openapi_baseline is not None:
+            validate_single_path(self.openapi_baseline, "OpenAPI baseline")
+        elif self.openapi_breaking_threshold != "WARN":
+            raise ValueError("openapi_breaking_threshold requires an openapi_baseline")
+
+        route_review_enabled = (
+            self.application_factory
+            or self.application_python_paths
+            or self.exclude_route_paths
+            or self.required_route_metadata
+            or self.require_response_contract
+            or self.protected_route_paths
+            or self.openapi_baseline is not None
+        )
+        if route_review_enabled and self.application is None:
+            raise ValueError(
+                "application is required when FastAPI route or OpenAPI review is enabled"
+            )
+        if self.application is not None:
+            module, separator, attribute = self.application.partition(":")
+            if (
+                not separator
+                or not module
+                or not attribute
+                or any(not part.isidentifier() for part in module.split("."))
+                or any(not part.isidentifier() for part in attribute.split("."))
+            ):
+                raise ValueError(
+                    "application must be a dotted module and attribute, such as 'myapp.api:app'"
+                )
+        return self
+
+
+def _validate_route_patterns(patterns: Sequence[str]) -> None:
+    """Require absolute-looking route globs without filesystem traversal."""
+    for pattern in patterns:
+        path = PurePosixPath(pattern)
+        if (
+            not path.is_absolute()
+            or path.anchor != "/"
+            or "\\" in pattern
+            or any(character in pattern for character in "[]")
+            or "\n" in pattern
+            or "\r" in pattern
+            or ".." in path.parts
+        ):
+            raise ValueError(
+                "route path patterns must be absolute POSIX globs using * and ?"
+            )
+
+
+class SqlAlchemyPracticePolicy(PythonSourceScanPolicy):
+    """Opt-in, conservative SQLAlchemy 2.x source review."""
+
+    target_sqlalchemy: str | None = None
+    report_legacy_query: bool = True
+    report_legacy_declarative_base: bool = True
+    report_backref: bool = True
+    report_literal_execute: bool = True
+    report_module_session: bool = False
+    report_repository_commit: bool = False
+    repository_paths: tuple[str, ...] = ()
+
+    @field_validator("target_sqlalchemy")
+    @classmethod
+    def validate_target_sqlalchemy(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        message = (
+            "target_sqlalchemy must be a bounded SQLAlchemy 2.x range, "
+            "for example '>=2.0,<3.0'"
+        )
+        try:
+            specifiers = tuple(SpecifierSet(value))
+        except InvalidSpecifier as error:
+            raise ValueError(message) from error
+        lower = [item for item in specifiers if item.operator == ">="]
+        upper = [item for item in specifiers if item.operator == "<"]
+        if len(specifiers) != 2 or len(lower) != 1 or len(upper) != 1:
+            raise ValueError(message)
+        try:
+            minimum = Version(lower[0].version)
+            maximum = Version(upper[0].version)
+        except InvalidVersion as error:
+            raise ValueError(message) from error
+        if (
+            minimum < Version("2.0")
+            or minimum >= Version("3.0")
+            or maximum <= minimum
+            or maximum > Version("3.0")
+            or minimum.is_prerelease
+            or minimum.is_devrelease
+            or maximum.is_prerelease
+            or maximum.is_devrelease
+        ):
+            raise ValueError(message)
+        return value.strip()
+
+    @field_validator("repository_paths")
+    @classmethod
+    def validate_repository_paths(cls, paths: Sequence[str]) -> tuple[str, ...]:
+        normalized = validate_patterns(paths)
+        require_unique(normalized, "repository paths must be unique")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_required_settings(self) -> Self:
+        if self.target_sqlalchemy is None:
+            raise ValueError(
+                "target_sqlalchemy is required; set a bounded SQLAlchemy 2.x range "
+                "such as '>=2.0,<3.0'"
+            )
+        if self.report_repository_commit and not self.repository_paths:
+            raise ValueError(
+                "repository_paths must be configured when repository commit review is enabled"
+            )
         return self

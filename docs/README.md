@@ -11,6 +11,7 @@ path that matches the repository being checked.
 | Run independent quality checks concurrently               | [Parallel execution](PARALLEL-EXECUTION.md) |
 | Analyze gate history across repositories                   | [History analytics](QUALITY-HISTORY-ANALYTICS.md) |
 | Check Python stubs in an isolated target                  | [Stub package CI](STUB-PACKAGE-CI.md)       |
+| Reuse CI integrations across providers                    | [CI integrations](CI-INTEGRATIONS.md)       |
 | Check C++ source, builds, and artifacts                   | [C++ quality](CPP-QUALITY.md)               |
 | Check Git ignores or historical repository artifacts      | [Repository hygiene](REPOSITORY-HYGIENE.md) |
 | Understand shared text and file-size measurements          | [Source hygiene](SOURCE-HYGIENE.md)         |
@@ -29,7 +30,12 @@ explains how to add a rule or language theme. [Version support](VERSION-SUPPORT.
 lists the supported Python and dependency ranges. [Installability](INSTALLABILITY.md)
 records wheel and editable-install checks.
 
-C++ policy examples and the report contracts live in
-[quality_gates](../quality_gates/README.md); their implementations ship in
-`alphus.gates.cpp`. Tests for those engines live in `tests/` and run in the
-same Alphus suite as the Python and repository gates.
+The root [`quality-gates.toml`](../quality-gates.toml) configures Alphus's
+own self-check. Files named `quality-gates.toml` under `examples/` are
+consumer starting points; tests load some of them as fixtures. They are
+not part of the root self-check configuration.
+
+The C++ checker implementations ship in `src/alphus/gates/cpp/`. Their
+detailed evidence contracts live in [the C++ guide index](cpp/README.md),
+and sample JSON policy inputs live under
+[`examples/cpp/policies/`](../examples/cpp/policies/).
