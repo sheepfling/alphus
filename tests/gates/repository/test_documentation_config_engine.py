@@ -72,7 +72,7 @@ def test_scientific_numeric_notation_is_reported_as_uncertain(tmp_path: Path) ->
 
     assert [(item.rule_id, item.line) for item in findings] == [(_UNKNOWN, 1)]
     assert "documentation value '1.0e3'" in findings[0].message
-    assert "different scalar types" in findings[0].message
+    assert "unsupported or uncertain numeric syntax" in findings[0].message
 
 
 def test_conditional_import_invalidates_earlier_literal_binding(tmp_path: Path) -> None:
@@ -291,3 +291,103 @@ def test_rule_runs_from_validated_policy_and_warning_is_nonblocking(
     assert finding.rule_id == _DUPLICATED
     assert finding.severity == "warning"
     assert not evaluation.failed
+
+
+def test_unsupported_numeric_forms_do_not_compare_as_values(tmp_path: Path) -> None:
+    findings = _run_documentation_case(
+        tmp_path,
+        "DEFAULT_RATE = '1e3'\n"
+        "MAX_FILES = 1024\n"
+        "MAX_RATIO = 0.5\n"
+        "MIN_FILES = 1\n"
+        "MAX_PLUS = 1\n",
+        "DEFAULT_RATE is 1e4.\n"
+        "DEFAULT_RATE is 1e3.\n"
+        "DEFAULT_RATE is '1e3'.\n"
+        "DEFAULT_RATE is '1e4'.\n"
+        "MAX_FILES is 1,024.\n"
+        "MAX_RATIO is 1/2.\n"
+        "MIN_FILES is 1-2.\n"
+        "MIN_FILES is 1 - 2.\n"
+        "MAX_PLUS is 1+2.\n"
+        "MIN_FILES is 1.\n"
+        "MIN_FILES is 1, with additional context.\n",
+    )
+
+    assert [(item.rule_id, item.line) for item in findings] == [
+        (_UNKNOWN, 1),
+        (_UNKNOWN, 2),
+        (_DUPLICATED, 3),
+        (_CONFLICT, 4),
+        (_UNKNOWN, 5),
+        (_UNKNOWN, 6),
+        (_UNKNOWN, 7),
+        (_UNKNOWN, 8),
+        (_UNKNOWN, 9),
+        (_DUPLICATED, 10),
+        (_DUPLICATED, 11),
+    ]
+    assert [
+        (item.line, item.severity) for item in findings if item.rule_id == _UNKNOWN
+    ] == [(line, "info") for line in (1, 2, 5, 6, 7, 8, 9)]
+    assert "documentation value '1,024'" in findings[4].message
+    assert "documentation value '1/2'" in findings[5].message
+    assert "documentation value '1-2'" in findings[6].message
+    assert "documentation value '1 - 2'" in findings[7].message
+    assert "documentation value '1+2'" in findings[8].message
+
+
+def test_final_punctuation_and_comma_followed_by_prose_stay_numeric(
+    tmp_path: Path,
+) -> None:
+    findings = _run_documentation_case(
+        tmp_path,
+        "MAX_FILES = 1\n",
+        "MAX_FILES is 1.\nMAX_FILES is 1, with additional context.\n",
+    )
+
+    assert [(item.rule_id, item.line) for item in findings] == [
+        (_DUPLICATED, 1),
+        (_DUPLICATED, 2),
+    ]
+
+
+def test_class_scope_conditional_import_invalidates_fields_and_aliases(
+    tmp_path: Path,
+) -> None:
+    findings = _run_documentation_case(
+        tmp_path,
+        "class IncludeLimits:\n"
+        "    max_files = 4\n"
+        "    if condition:\n"
+        "        from settings import max_files\n"
+        "    field_alias = max_files\n",
+        "IncludeLimits.max_files is 8.\nIncludeLimits.field_alias is 4.\n",
+    )
+
+    assert [(item.rule_id, item.line) for item in findings] == [
+        (_UNKNOWN, 1),
+        (_UNKNOWN, 2),
+    ]
+    assert all(item.severity == "info" for item in findings)
+
+
+def test_nested_function_imports_do_not_invalidate_outer_defaults(
+    tmp_path: Path,
+) -> None:
+    findings = _run_documentation_case(
+        tmp_path,
+        "MAX_MODULE_FILES = 8\n"
+        "def module_helper():\n"
+        "    from settings import MAX_MODULE_FILES\n"
+        "class ControlLimits:\n"
+        "    max_files = 4\n"
+        "    def helper():\n"
+        "        from settings import max_files\n",
+        "MAX_MODULE_FILES is 8.\nControlLimits.max_files is 4.\n",
+    )
+
+    assert [(item.rule_id, item.line) for item in findings] == [
+        (_DUPLICATED, 1),
+        (_DUPLICATED, 2),
+    ]

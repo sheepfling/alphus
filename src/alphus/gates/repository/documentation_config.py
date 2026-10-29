@@ -51,6 +51,10 @@ _VALUE = re.compile(
     r"(?![A-Za-z0-9_]|[.][A-Za-z0-9_]))",
     re.IGNORECASE,
 )
+_UNCERTAIN_NUMERIC_CONTINUATION = re.compile(
+    r"\s*(?:,\s*\d[\d_]*(?:,\s*\d[\d_]*)*|/\s*\d[\d_]*|"
+    r"[+-]\s*\d[\d_]*)(?:\.\d[\d_]*)?(?=$|[\s.,;:!?])"
+)
 _RELATION = re.compile(r"\s*(?:defaults?\s+to|is|equals?|=|:)\s*", re.IGNORECASE)
 _UNITS = re.compile(
     r"\s*(?!and\b|or\b|which\b|that\b|when\b|if\b|then\b|where\b|"
@@ -97,6 +101,7 @@ class _Claim:
     unit: str | None
     display: str
     reason: str
+    supported: bool = True
 
 
 class _Resolution(NamedTuple):
@@ -188,7 +193,7 @@ def _written_names(statement: ast.stmt) -> dict[str, int]:
 
 
 class _ImportedNames(ast.NodeVisitor):
-    """Collect imports in one module-level control-flow statement."""
+    """Collect imports in one scope-level control-flow statement."""
 
     def __init__(self) -> None:
         self.names: list[str] = []
@@ -297,6 +302,15 @@ def _module_facts(tree: ast.Module, path: str) -> list[_Fact]:
                         item.lineno,
                         resolution.supported,
                     )
+                for name in _imported_names(item):
+                    class_bindings.pop(name, None)
+                    class_values[name] = _Fact(
+                        f"{configuration_class.name}.{name}",
+                        None,
+                        path,
+                        item.lineno,
+                        False,
+                    )
             class_facts.extend(class_values.values())
             continue
         assignments = _simple_names(statement)
@@ -371,14 +385,19 @@ def _matched_facts(line: str, facts: Sequence[_Fact]) -> list[_Fact]:
     return matched
 
 
+def _unsupported_numeric_claim(raw: str, reason: str) -> _Claim | None:
+    numeric = re.match(r"[+-]?\d[\w.+-]*", raw)
+    if numeric is None:
+        return None
+    display = numeric.group().rstrip(".,;:!?")
+    return _Claim(display, None, display, reason, supported=False)
+
+
 def _parse_claim_value(raw: str, reason: str) -> _Claim | None:
-    match = _VALUE.match(raw.strip())
+    raw = raw.strip()
+    match = _VALUE.match(raw)
     if match is None:
-        numeric = re.match(r"[+-]?\d[\w.+-]*", raw.strip())
-        if numeric is None:
-            return None
-        value = numeric.group().rstrip(".,;:!?")
-        return _Claim(value, None, value, reason)
+        return _unsupported_numeric_claim(raw, reason)
     backticked = match.group(1)
     if backticked is not None:
         parsed = _parse_claim_value(backticked, reason)
@@ -412,7 +431,12 @@ def _parse_claim_value(raw: str, reason: str) -> _Claim | None:
         float(normalized_number) if "." in normalized_number else int(normalized_number)
     )
     unit = match.group(6)
-    remainder = raw.strip()[match.end() :]
+    remainder = raw[match.end() :]
+    if unit is None:
+        continuation = _UNCERTAIN_NUMERIC_CONTINUATION.match(remainder)
+        if continuation is not None:
+            display = f"{number}{continuation.group()}".strip().rstrip(".!?;:")
+            return _Claim(display, None, display, reason, supported=False)
     if unit is None and match.group(5) is not None:
         unknown_unit = _UNITS.match(remainder)
         if unknown_unit is not None:
@@ -505,6 +529,10 @@ def _fractional_bytes(value: int | float) -> bool:
 
 def _compare(fact: _Fact, claim: _Claim) -> _Comparison:
     """Compare scalar claims only when their units are explicit and compatible."""
+    if not claim.supported:
+        return _Comparison(
+            None, "documentation value uses unsupported or uncertain numeric syntax"
+        )
     if not fact.supported:
         return _Comparison(
             None, "code default is dynamic or outside the literal/alias subset"
