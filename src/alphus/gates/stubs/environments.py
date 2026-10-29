@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 from collections.abc import Mapping
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, ValidationError
+
+from alphus.support.tool_probe import probe_command
 
 
 class PythonRuntime(BaseModel):
@@ -42,7 +43,7 @@ print(json.dumps(dict(executable=sys.executable, version=list(sys.version_info[:
 
 def probe_python(executable: str) -> PythonRuntime:
     """Preserve virtualenv executable paths; resolving symlinks loses the venv."""
-    command = shutil.which(executable)
+    command = probe_command(executable).resolved
     if command is None:
         raise ValueError(f"Python executable not found: {executable}")
     try:

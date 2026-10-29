@@ -14,6 +14,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from alphus.gates.stubs.environments import child_environment, probe_python
+from alphus.support.python_runtime import current_python_executable
+from alphus.support.source_text import read_python_source
+from alphus.support.tool_probe import probe_python_module
 
 ERROR_LINE = re.compile(r"\berror(?::|\[[^\]]+\]:?)\s")
 
@@ -27,6 +30,7 @@ class Checker:
 CHECKERS = (Checker("mypy", "mypy"), Checker("pyright", "pyright"))
 OPTIONAL_CHECKERS = (Checker("ty", "ty"),)
 AVAILABLE_CHECKERS = CHECKERS + OPTIONAL_CHECKERS
+DEFAULT_CHECKERS = (CHECKERS[1],)
 ProcessRunner = Callable[..., subprocess.CompletedProcess[str]]
 
 
@@ -63,7 +67,7 @@ def build_command(
     """Build an argv vector using this interpreter and no shell wrapper."""
     if target_python is not None and python_version is None:
         raise ValueError("target_python requires explicit python_version")
-    command = [sys.executable, "-m", checker.module]
+    command = [current_python_executable(), "-m", checker.module]
     if checker.name == "mypy":
         if cache_directory is None:
             raise ValueError("mypy requires a temporary cache directory")
@@ -73,7 +77,7 @@ def build_command(
         if python_version is not None:
             command.extend(("--python-version", python_version))
     elif checker.name == "pyright":
-        command.extend(("--pythonpath", target_python or sys.executable))
+        command.extend(("--pythonpath", target_python or current_python_executable()))
         if python_version is not None:
             command.extend(("--pythonversion", python_version))
     elif checker.name == "ty":
@@ -108,7 +112,7 @@ def check_result(
             )
         return issues
 
-    expected_lines = expected_error_lines(fixture.read_text(encoding="utf-8"))
+    expected_lines = expected_error_lines(read_python_source(fixture))
     observed_lines = observed_error_lines(output, fixture.name)
     if returncode == 0:
         issues.append("negative fixture unexpectedly passed")
@@ -202,7 +206,7 @@ def run_case(
                 errors="replace",
                 check=False,
                 timeout=180,
-                env=child_environment(os.environ, sys.executable),
+                env=child_environment(os.environ, current_python_executable()),
             )
         except subprocess.TimeoutExpired as error:
             output = "\n".join(
@@ -253,7 +257,7 @@ def run_case(
         return invoke(actual_fixture, None)
 
     if expect_errors:
-        source = resolved_fixture.read_text(encoding="utf-8")
+        source = read_python_source(resolved_fixture)
         if not expected_error_lines(source) and expected_count is None:
             print(
                 "negative fixture has no markers or configured expected diagnostic count",
@@ -276,7 +280,7 @@ def run_suite(
     mypy_diagnostics: Sequence[str] = (),
     pyright_diagnostics: Sequence[str] = (),
     ty_diagnostics: Sequence[str] = (),
-    checkers: Sequence[Checker] = CHECKERS,
+    checkers: Sequence[Checker] = DEFAULT_CHECKERS,
     target_python: str | None = None,
     python_version: str | None = None,
 ) -> bool:
@@ -324,7 +328,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--checkers",
         nargs="+",
         choices=tuple(checker.name for checker in AVAILABLE_CHECKERS),
-        default=("mypy", "pyright"),
+        default=("pyright",),
     )
     parser.add_argument("--target-python")
     parser.add_argument("--python-version")
@@ -339,6 +343,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     checkers = tuple(
         checker for checker in AVAILABLE_CHECKERS if checker.name in options.checkers
     )
+    for checker in checkers:
+        probe = probe_python_module(current_python_executable(), checker.module)
+        if not probe.available:
+            parser.error(
+                f"{checker.name} is not installed in {current_python_executable()}; "
+                f"install it or remove it from --checkers"
+            )
     try:
         if options.target_python is not None:
             target = probe_python(options.target_python)

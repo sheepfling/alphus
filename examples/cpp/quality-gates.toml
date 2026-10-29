@@ -16,7 +16,7 @@ failure_threshold = "error"
 kind = "command"
 name = "C++ source ownership"
 argv = [
-  "{python}", "{root}/portable_gates/cpp/common_quality.py", "source", "{root}",
+  "{python}", "-m", "alphus.gates.cpp.cpp_common_quality", "source", "{root}",
   "--config", "{root}/cpp-common-quality.json",
 ]
 
@@ -24,9 +24,28 @@ argv = [
 kind = "command"
 name = "C++ artifact budgets"
 argv = [
-  "{python}", "{root}/portable_gates/cpp/artifact_quality.py", "check",
+  "{python}", "-m", "alphus.gates.cpp.cpp_artifact_quality", "check",
   "{root}/build", "--policy", "{root}/cpp-artifact-policy.json",
 ]
+
+[[orchestration.steps]]
+kind = "command"
+name = "C/C++ style candidates"
+argv = [
+  "{python}", "-m", "alphus.gates.cpp.cpp_advisory_quality", "style", "{root}",
+  "--output", "{root}/out/quality/cpp-style.json", "--fail-on-findings",
+]
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "command"
+name = "C++ include-impact trends"
+argv = [
+  "{python}", "-m", "alphus.gates.cpp.cpp_advisory_quality", "trend",
+  "--history-root", "{root}", "--output",
+  "{root}/out/quality/cpp-impact-trend.json", "--fail-on-worsening",
+]
+rollout = "provisional"
 
 [[orchestration.profiles]]
 name = "cpp-source"
@@ -39,3 +58,15 @@ steps = ["C++ artifact budgets"]
 [[orchestration.profiles]]
 name = "cpp"
 includes = ["cpp-source", "cpp-artifacts"]
+
+[[orchestration.profiles]]
+name = "cpp-style"
+steps = ["C/C++ style candidates"]
+
+[[orchestration.profiles]]
+name = "cpp-trends"
+steps = ["C++ include-impact trends"]
+
+[[orchestration.profiles]]
+name = "cpp-advisory"
+includes = ["cpp-style", "cpp-trends"]

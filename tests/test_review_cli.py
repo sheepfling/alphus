@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -47,30 +48,62 @@ _CASES = (
         "source.py",
         "result = 3.14 * radius ** 2\n",
         '[checks.numeric_literals]\nextensions = [".py"]\n',
-        "numeric-literals.inline-constant",
+        "alphus/python/none/style/inline-constant",
     ),
     (
         "test-quality",
         "tests/test_report.py",
         f"def test_report():\n assert render() == {_PROSE!r}\n",
         '[checks.test_quality]\nextensions = [".py"]\n',
-        "test-quality.large-prose-assertion",
+        "alphus/python/none/testing/large-prose-assertion",
     ),
     (
         "test-quality",
         "tests/test_plan.py",
-        "from pathlib import Path\ndef test_plan():\n"
-        ' assert Path("docs/plans/today.md").exists()\n',
-        '[checks.test_quality]\nextensions = [".py"]\n'
-        'ephemeral_document_patterns = ["docs/plans/**"]\n',
-        "test-quality.ephemeral-plan-dependency",
+        (
+            "from pathlib import Path\ndef test_plan():\n"
+            ' assert Path("docs/plans/today.md").exists()\n'
+        ),
+        (
+            '[checks.test_quality]\nextensions = [".py"]\n'
+            'ephemeral_document_patterns = ["docs/plans/**"]\n'
+        ),
+        "alphus/python/none/testing/ephemeral-plan-dependency",
+    ),
+    (
+        "test-quality",
+        "tests/test_oracle.py",
+        (
+            "from sample.math import compute\n"
+            "def test_compute():\n assert compute(4) == compute(4)\n"
+        ),
+        (
+            '[checks.test_quality]\nextensions = [".py"]\n'
+            "oracle_independence = true\n"
+            'oracle_production_modules = ["sample"]\n'
+        ),
+        "alphus/python/none/testing/shared-oracle",
     ),
     (
         "input-contracts",
         "source.py",
         "def add(values: list[str]):\n values.append('x')\n",
         '[checks.input_contracts]\nextensions = [".py"]\n',
-        "input-contracts.argument-mutation",
+        "alphus/python/none/correctness/argument-mutation",
+    ),
+    (
+        "pydantic-practices",
+        "source.py",
+        "def output(model):\n return Model.model_validate(model.model_dump())\n",
+        '[checks.pydantic_practices]\nextensions = [".py"]\n',
+        "alphus/python/pydantic/validation/dump-revalidation",
+    ),
+    (
+        "fastapi-practices",
+        "source.py",
+        "from fastapi import HTTPException\nraise HTTPException(404)\n",
+        '[checks.fastapi_practices]\nextensions = [".py"]\n',
+        "alphus/python/fastapi/correctness/literal-http-status",
     ),
 )
 
@@ -107,8 +140,31 @@ def test_new_review_rules_emit_structured_advisory_findings(
     assert payload[0]["line"] > 0
 
 
+def test_scipy_direct_rule_uses_its_own_label(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    arguments = repository(
+        tmp_path,
+        "physics.py",
+        "energy = frequency * 6.62607015e-34\n",
+        '[checks.scipy_constants]\nextensions = [".py"]\n',
+    )
+
+    assert main([*arguments, "--rule", "scipy-constants"]) == 0
+    output = capsys.readouterr().out
+    assert "SciPy constants: 1 finding(s)" in output
+    assert "File size:" not in output
+
+
 @pytest.mark.parametrize(
-    "selector", ["numeric-literals", "test-quality", "input-contracts"]
+    "selector",
+    [
+        "numeric-literals",
+        "test-quality",
+        "input-contracts",
+        "pydantic-practices",
+        "fastapi-practices",
+    ],
 )
 def test_unconfigured_review_rules_report_missing_policy(
     tmp_path: Path,
@@ -157,7 +213,7 @@ steps = ["Numeric review"]
     assert payload["severity_counts"] == {"error": 0, "warning": 1, "info": 0}
     diagnostic = payload["steps"][0]["findings"][0]
     assert diagnostic["source"] == "alphus"
-    assert diagnostic["rule_id"] == "numeric-literals.inline-constant"
+    assert diagnostic["rule_id"] == "alphus/python/none/style/inline-constant"
     assert diagnostic["severity"] == "warning"
 
 
@@ -168,6 +224,90 @@ def test_older_configs_leave_review_checks_opt_in(tmp_path: Path) -> None:
     assert checks.numeric_literals is None
     assert checks.test_quality is None
     assert checks.input_contracts is None
+    assert checks.positional_interfaces is None
+    assert checks.pydantic_practices is None
+    assert checks.fastapi_practices is None
+
+
+def test_confusable_positional_consumer_preserves_native_output_and_json_shapes(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    example = Path("examples/consumer/confusable-positional").resolve()
+    config_text = (example / "quality-gates.toml").read_text(encoding="utf-8")
+    native_argv = json.dumps(
+        [
+            sys.executable,
+            "-c",
+            "print('pylint: W1114 native diagnostic')",
+            "{files}",
+        ]
+    )
+    config_text = config_text.replace(
+        'argv = ["pylint", "{files}"]', f"argv = {native_argv}"
+    )
+    config_path = tmp_path / "quality-gates.toml"
+    config_path.write_text(config_text, encoding="utf-8")
+
+    assert (
+        main(
+            [
+                "--root",
+                str(example),
+                "--config",
+                str(config_path),
+                "--run",
+                "--profile",
+                "argument-review-with-pylint",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    payload = json.loads(capsys.readouterr().out)
+    steps = {step["name"]: step for step in payload["steps"]}
+    positional = steps["Positional interface review"]["findings"]
+    native = steps["Pylint native call-order review"]
+
+    assert len(positional) == 1
+    assert (
+        positional[0]["rule_id"]
+        == "alphus/python/none/correctness/confusable-positional-parameters"
+    )
+    assert positional[0]["severity"] == "info"
+    assert set(positional[0]) == {
+        "source",
+        "rule_id",
+        "message",
+        "severity",
+        "path",
+        "line",
+    }
+    assert native["status"] == "passed"
+    assert native["stdout"] == "pylint: W1114 native diagnostic\n"
+
+
+def test_oracle_policy_loads_production_scope_and_reasoned_exclusion(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "quality.toml"
+    config_path.write_text(
+        _BASE
+        + '[checks.test_quality]\nextensions = [".py"]\n'
+        + "oracle_independence = true\n"
+        + 'oracle_production_modules = ["sample"]\n'
+        + "[[checks.test_quality.oracle_exclusions]]\n"
+        + 'path = "tests/test_contracts.py"\n'
+        + 'test_function = "TestApi.test_delegates"\n'
+        + 'reason = "This test documents the public wrapper delegation contract."\n',
+        encoding="utf-8",
+    )
+
+    policy = load_config(config_path).checks.test_quality
+
+    assert policy is not None
+    assert policy.oracle_independence is True
+    assert policy.oracle_production_modules == ("sample",)
+    assert policy.oracle_exclusions[0].test_function == "TestApi.test_delegates"
 
 
 @pytest.mark.parametrize(

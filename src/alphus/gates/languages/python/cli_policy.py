@@ -96,4 +96,14 @@ def python_cli_issues(source: str, policy: PythonCliPolicy) -> list[str]:
         issues.append("serialize machine output as JSON")
     if policy.verbose_option not in constants:
         issues.append(f"offer an explicit {policy.verbose_option} logging option")
+    if policy.output_option not in constants:
+        issues.append(f"offer an explicit {policy.output_option} human output option")
+    missing_styles = [
+        style
+        for style in (policy.rich_output, policy.plain_output)
+        if style not in constants
+    ]
+    if missing_styles:
+        styles = " and ".join(repr(style) for style in missing_styles)
+        issues.append(f"support both configured human output styles ({styles})")
     return issues

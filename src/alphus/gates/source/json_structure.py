@@ -6,7 +6,8 @@ from collections.abc import Iterable
 from pathlib import Path
 
 from alphus.config import SourceScanPolicy
-from alphus.findings import Finding, SourceFinding
+from alphus.contracts.findings import Finding, SourceFinding
+from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.gates.languages.javascript.json_decoding import (
     json_findings as js_json_findings,
 )
@@ -14,6 +15,7 @@ from alphus.gates.languages.python.json_decoding import (
     json_findings as python_json_findings,
 )
 from alphus.support.inventory import matches_path
+from alphus.support.source_text import read_python_source, read_utf8_sig_text
 
 
 def check_json_structure(
@@ -32,15 +34,24 @@ def check_json_structure(
         path = checkout / relative
         if not path.is_file():
             continue
-        source = path.read_text(encoding="utf-8-sig")
+        source = (
+            read_python_source(path) if suffix == ".py" else read_utf8_sig_text(path)
+        )
         source_findings: list[SourceFinding]
         if suffix == ".py":
             source_findings = python_json_findings(source)
+            scope = Scope.PYTHON
         else:
             source_findings = js_json_findings(source)
+            scope = Scope.JAVASCRIPT
         findings.extend(
             Finding(
-                rule_id="data.json-structure",
+                rule_id=rule_tag(
+                    scope,
+                    Framework.NONE,
+                    Category.VALIDATION,
+                    "unvalidated-json-decode",
+                ),
                 path=name,
                 line=source_finding.line,
                 message=source_finding.message,

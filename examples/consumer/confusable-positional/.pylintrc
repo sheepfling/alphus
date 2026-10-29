@@ -1,0 +1,5 @@
+[MESSAGES CONTROL]
+enable = too-many-positional-arguments,arguments-out-of-order
+
+[DESIGN]
+max-positional-arguments = 5

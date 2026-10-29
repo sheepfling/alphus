@@ -9,6 +9,7 @@ from alphus.config import CliPolicy
 from alphus.gates.languages.javascript.cli_policy import node_cli_files
 from alphus.gates.languages.python.cli_policy import python_cli_issues
 from alphus.support.inventory import matches_path
+from alphus.support.source_text import read_python_source
 
 
 def policy_issues(root: Path, paths: Iterable[Path], policy: CliPolicy) -> list[str]:
@@ -22,7 +23,7 @@ def policy_issues(root: Path, paths: Iterable[Path], policy: CliPolicy) -> list[
             for exclusion in policy.python.exclude
         ):
             continue
-        source = (checkout / relative).read_text(encoding="utf-8-sig")
+        source = read_python_source(checkout / relative)
         for issue in python_cli_issues(source, policy.python):
             issues.append(f"{relative.as_posix()}: {issue}")
     if policy.node is not None:

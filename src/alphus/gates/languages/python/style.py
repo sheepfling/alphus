@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import ast
+import re
+from collections import Counter
 from collections.abc import Sequence
 from collections.abc import Set as AbstractSet
 from pathlib import Path
@@ -10,6 +12,7 @@ from typing import TypedDict
 
 from alphus.config import PythonStylePolicy
 from alphus.support.inventory import matches_path
+from alphus.support.source_text import read_python_source
 
 CONCRETE = frozenset({"list", "dict", "set", "List", "Dict"})
 BARE_CONTAINERS = frozenset(
@@ -141,6 +144,22 @@ def has_concrete_input(
     )
 
 
+def is_typer_option_input(node: ast.expr) -> bool:
+    """Recognize a framework-owned CLI collection converted at the boundary."""
+    if not isinstance(node, ast.Subscript) or type_name(node.value) != "Annotated":
+        return False
+    if not isinstance(node.slice, ast.Tuple):
+        return False
+    return any(
+        isinstance(item, ast.Call)
+        and isinstance(item.func, ast.Attribute)
+        and isinstance(item.func.value, ast.Name)
+        and item.func.value.id == "typer"
+        and item.func.attr == "Option"
+        for item in node.slice.elts[1:]
+    )
+
+
 def is_container_type(
     node: ast.expr, names: AbstractSet[str], modules: AbstractSet[str]
 ) -> bool:
@@ -190,6 +209,59 @@ def has_abstract_pydantic_collection(node: ast.expr, names: AbstractSet[str]) ->
     return isinstance(node, (ast.Name, ast.Attribute)) and type_name(node) in names
 
 
+def has_undifferentiated_pattern_name(name: str, value: ast.expr) -> bool:
+    """Require scoped module pattern constants to identify glob or regex syntax."""
+    if (
+        isinstance(value, ast.Call)
+        and type_name(value.func) == "compile"
+        and isinstance(value.func, ast.Attribute)
+        and isinstance(value.func.value, ast.Name)
+        and value.func.value.id == "re"
+    ):
+        return not name.endswith(("_REGEX", "_REGEXES"))
+    if any(
+        isinstance(item, ast.Constant)
+        and isinstance(item.value, str)
+        and any(character in item.value for character in "*?[")
+        for item in ast.walk(value)
+    ):
+        return not name.endswith(("_GLOB", "_GLOBS"))
+    return False
+
+
+def has_unnamed_tuple_result(annotation: ast.expr) -> bool:
+    """Require a named record for fixed-position tuple results."""
+    if isinstance(annotation, ast.BinOp) and isinstance(annotation.op, ast.BitOr):
+        return has_unnamed_tuple_result(annotation.left) or has_unnamed_tuple_result(
+            annotation.right
+        )
+    if isinstance(annotation, ast.Subscript) and type_name(annotation.value) == "tuple":
+        if not isinstance(annotation.slice, ast.Tuple):
+            return False
+        items = annotation.slice.elts
+        return len(items) >= 2 and not any(
+            isinstance(item, ast.Constant) and item.value is Ellipsis for item in items
+        )
+    if isinstance(annotation, ast.Subscript):
+        return has_unnamed_tuple_result(annotation.slice)
+    return False
+
+
+def is_unnamed_tuple_value(value: ast.expr | None) -> bool:
+    """Recognize a returned fixed-position tuple literal without evaluating it."""
+    return isinstance(value, ast.Tuple) and len(value.elts) >= 2
+
+
+def literal_string_values(items: Sequence[ast.expr]) -> frozenset[str] | None:
+    """Read a string-only literal collection without evaluating expressions."""
+    values: list[str] = []
+    for item in items:
+        if not isinstance(item, ast.Constant) or not isinstance(item.value, str):
+            return None
+        values.append(item.value)
+    return frozenset(values)
+
+
 class StyleFindings(TypedDict):
     """Named Python-style finding categories with their source line numbers."""
 
@@ -206,6 +278,19 @@ class StyleFindings(TypedDict):
     legacy_pydantic_fields: list[int]
     pydantic_collection_contracts: list[int]
     mutable_module_constants: list[int]
+    literal_rule_ids: list[int]
+    literal_rule_dimensions: list[int]
+    raw_reporting_prints: list[int]
+    magic_exit_codes: list[int]
+    repeated_literals: list[int]
+    unnamed_tuple_returns: list[int]
+    undifferentiated_patterns: list[int]
+    concrete_classmethod_returns: list[int]
+    concrete_model_validator_returns: list[int]
+    concrete_self_returns: list[int]
+    direct_text_reads: list[int]
+    duplicate_literal_catalogs: list[int]
+    unused_public_constants: list[int]
 
 
 def is_mutable_literal(node: ast.expr) -> bool:
@@ -287,6 +372,16 @@ class StyleVisitor(ast.NodeVisitor):
         *,
         source: str = "",
         boundary_file: bool = False,
+        semantic_rule_ids: bool = False,
+        structured_reporting: bool = False,
+        repeated_literals: bool = False,
+        semantic_results: bool = False,
+        pattern_kinds: bool = False,
+        self_returns: bool = False,
+        shared_text_readers: bool = False,
+        public_constants: bool = False,
+        module_name: str = "",
+        imported_symbols: AbstractSet[str] = frozenset(),
     ) -> None:
         self.findings: StyleFindings = {
             "bare_containers": [],
@@ -302,13 +397,37 @@ class StyleVisitor(ast.NodeVisitor):
             "legacy_pydantic_fields": [],
             "pydantic_collection_contracts": [],
             "mutable_module_constants": [],
+            "literal_rule_ids": [],
+            "literal_rule_dimensions": [],
+            "raw_reporting_prints": [],
+            "magic_exit_codes": [],
+            "repeated_literals": [],
+            "unnamed_tuple_returns": [],
+            "undifferentiated_patterns": [],
+            "concrete_classmethod_returns": [],
+            "concrete_model_validator_returns": [],
+            "concrete_self_returns": [],
+            "direct_text_reads": [],
+            "duplicate_literal_catalogs": [],
+            "unused_public_constants": [],
         }
         self.source_lines = source.splitlines()
         self.boundary_file = boundary_file
+        self.semantic_rule_ids = semantic_rule_ids
+        self.structured_reporting = structured_reporting
+        self.check_repeated_literals = repeated_literals
+        self.semantic_results = semantic_results
+        self.pattern_kinds = pattern_kinds
+        self.self_returns = self_returns
+        self.shared_text_readers = shared_text_readers
+        self.public_constants = public_constants
+        self.module_name = module_name
+        self.imported_symbols = imported_symbols
         self.boundary_marker_prefix = policy.opaque_boundary_marker_prefix
         self.boundary_min_reason_chars = policy.opaque_boundary_min_reason_chars
         self.forbidden_main_imports = set(policy.forbidden_main_imports)
         self.function_depth = 0
+        self.tuple_result_functions: list[tuple[int, bool]] = []
         self.type_checking_depth = 0
         self.type_checking_names = {"TYPE_CHECKING"}
         self.typing_names = {"typing"}
@@ -331,6 +450,32 @@ class StyleVisitor(ast.NodeVisitor):
         self.mutable_pydantic_collection_names = set(MUTABLE_PYDANTIC_COLLECTIONS)
         self.abstract_pydantic_collection_names = set(ABSTRACT_PYDANTIC_COLLECTIONS)
 
+    def visit_Constant(self, node: ast.Constant) -> None:
+        """Require semantic construction of canonical finding IDs in selected code."""
+        if (
+            self.semantic_rule_ids
+            and isinstance(node.value, str)
+            and re.fullmatch(
+                r"alphus/[a-z]+/[a-z]+/[a-z]+/[a-z0-9]+(?:-[a-z0-9]+)*",
+                node.value,
+            )
+        ):
+            self.findings["literal_rule_ids"].append(node.lineno)
+
+    def visit_JoinedStr(self, node: ast.JoinedStr) -> None:
+        """Reject manually formatted Alphus IDs, preserving ID-string boundaries."""
+        if self.semantic_rule_ids and any(
+            isinstance(value, ast.Constant)
+            and isinstance(value.value, str)
+            and re.search(
+                r"alphus/(?:[a-z]+/){3}",
+                value.value,
+            )
+            for value in node.values
+        ):
+            self.findings["literal_rule_ids"].append(node.lineno)
+        self.generic_visit(node)
+
     def opaque_allowed(self, line: int) -> bool:
         """Require a reason directly above an approved boundary declaration."""
         if not self.boundary_file or not 1 < line <= len(self.source_lines) + 1:
@@ -352,7 +497,59 @@ class StyleVisitor(ast.NodeVisitor):
             self.findings["opaque_mappings"].append(line)
 
     def visit_Module(self, node: ast.Module) -> None:
-        """Treat uppercase module names as stable constants, not mutable stores."""
+        """Check module constants and selected repeated symbolic values."""
+        if self.check_repeated_literals:
+            type_literals = {
+                id(child)
+                for expression in ast.walk(node)
+                if isinstance(expression, ast.Subscript)
+                and type_name(expression.value) == "Literal"
+                for child in ast.walk(expression.slice)
+                if isinstance(child, ast.Constant)
+            }
+            strings = [
+                child
+                for child in ast.walk(node)
+                if isinstance(child, ast.Constant)
+                and id(child) not in type_literals
+                and isinstance(child.value, str)
+                and len(child.value) >= 8
+            ]
+            counts = Counter(child.value for child in strings)
+            self.findings["repeated_literals"].extend(
+                child.lineno for child in strings if counts[child.value] >= 3
+            )
+            literal_aliases: set[frozenset[str]] = set()
+            alias_slices: set[int] = set()
+            for statement in node.body:
+                value = (
+                    statement.value
+                    if isinstance(statement, (ast.Assign, ast.AnnAssign))
+                    else None
+                )
+                if (
+                    not isinstance(value, ast.Subscript)
+                    or type_name(value.value) != "Literal"
+                ):
+                    continue
+                if not isinstance(value.slice, ast.Tuple):
+                    continue
+                names = literal_string_values(value.slice.elts)
+                if (
+                    names is not None
+                    and len(names) >= 3
+                    and len(names) == len(value.slice.elts)
+                ):
+                    literal_aliases.add(names)
+                    alias_slices.add(id(value.slice))
+            self.findings["duplicate_literal_catalogs"].extend(
+                expression.lineno
+                for expression in ast.walk(node)
+                if isinstance(expression, (ast.Set, ast.Tuple, ast.List))
+                and id(expression) not in alias_slices
+                and len(expression.elts) >= 3
+                and literal_string_values(expression.elts) in literal_aliases
+            )
         for statement in node.body:
             if isinstance(statement, ast.Assign):
                 targets = statement.targets
@@ -362,6 +559,26 @@ class StyleVisitor(ast.NodeVisitor):
                 value = statement.value
             else:
                 continue
+            if self.public_constants:
+                self.findings["unused_public_constants"].extend(
+                    statement.lineno
+                    for target in targets
+                    if isinstance(target, ast.Name)
+                    and target.id.isupper()
+                    and not target.id.startswith("_")
+                    and f"{self.module_name}.{target.id}" not in self.imported_symbols
+                )
+            if (
+                self.pattern_kinds
+                and value is not None
+                and any(
+                    isinstance(target, ast.Name)
+                    and target.id.isupper()
+                    and has_undifferentiated_pattern_name(target.id, value)
+                    for target in targets
+                )
+            ):
+                self.findings["undifferentiated_patterns"].append(statement.lineno)
             if (
                 value is not None
                 and is_mutable_literal(value)
@@ -414,7 +631,7 @@ class StyleVisitor(ast.NodeVisitor):
                 self.typing_names,
                 self.container_modules,
                 self.concrete_input_names,
-            ):
+            ) and not is_typer_option_input(arg.annotation):
                 self.findings["concrete_inputs"].append(arg.lineno)
             if has_quoted_type(arg.annotation):
                 self.findings["quoted_types"].append(arg.lineno)
@@ -427,6 +644,12 @@ class StyleVisitor(ast.NodeVisitor):
             ):
                 self.findings["bare_containers"].append(arg.lineno)
             self.check_opaque(arg.annotation, declaration_line)
+        has_tuple_result = (
+            self.semantic_results
+            and node.returns is not None
+            and has_unnamed_tuple_result(node.returns)
+        )
+        self.tuple_result_functions.append((node.lineno, has_tuple_result))
         if node.returns is not None and has_quoted_type(node.returns):
             self.findings["quoted_types"].append(node.lineno)
         if node.returns is not None:
@@ -442,9 +665,24 @@ class StyleVisitor(ast.NodeVisitor):
         self.function_depth += 1
         for statement in node.body:
             self.visit(statement)
+        tuple_result_line, has_tuple_result = self.tuple_result_functions.pop()
+        if has_tuple_result:
+            self.findings["unnamed_tuple_returns"].append(tuple_result_line)
+            self.findings["unnamed_tuple_returns"].sort()
         self.function_depth -= 1
 
     visit_AsyncFunctionDef = visit_FunctionDef
+
+    def visit_Return(self, node: ast.Return) -> None:
+        """Flag tuple values returned by functions with semantic result checks."""
+        if (
+            self.semantic_results
+            and self.tuple_result_functions
+            and is_unnamed_tuple_value(node.value)
+        ):
+            function_line, _ = self.tuple_result_functions[-1]
+            self.tuple_result_functions[-1] = (function_line, True)
+        self.generic_visit(node)
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
         """Check variable annotations as well as function signatures."""
@@ -536,6 +774,39 @@ class StyleVisitor(ast.NodeVisitor):
             self.pydantic_models.add(node.name)
         if frozen_model:
             self.frozen_pydantic_models.add(node.name)
+        if self.self_returns:
+            for statement in node.body:
+                if not isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                classmethod_decorators = {
+                    type_name(decorator) for decorator in statement.decorator_list
+                }
+                after_model_validator = any(
+                    isinstance(decorator, ast.Call)
+                    and type_name(decorator.func) == "model_validator"
+                    and any(
+                        keyword.arg == "mode"
+                        and isinstance(keyword.value, ast.Constant)
+                        and keyword.value.value == "after"
+                        for keyword in decorator.keywords
+                    )
+                    for decorator in statement.decorator_list
+                )
+                returns_current_model = (
+                    statement.returns is not None
+                    and type_name(statement.returns) == node.name
+                )
+                is_classmethod = "classmethod" in classmethod_decorators
+                if is_classmethod and returns_current_model:
+                    self.findings["concrete_classmethod_returns"].append(
+                        statement.lineno
+                    )
+                if after_model_validator and returns_current_model:
+                    self.findings["concrete_model_validator_returns"].append(
+                        statement.lineno
+                    )
+                if (is_classmethod or after_model_validator) and returns_current_model:
+                    self.findings["concrete_self_returns"].append(statement.lineno)
         self.pydantic_model_stack.append(is_pydantic_model)
         self.frozen_model_stack.append(frozen_model)
         for decorator in node.decorator_list:
@@ -647,6 +918,46 @@ class StyleVisitor(ast.NodeVisitor):
 
     visit_ImportFrom = visit_Import
 
+    def visit_Call(self, node: ast.Call) -> None:
+        """Require symbolic rule dimensions and scoped reporting."""
+        if (
+            self.shared_text_readers
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "read_text"
+        ):
+            self.findings["direct_text_reads"].append(node.lineno)
+        if (
+            self.semantic_rule_ids
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "rule_tag"
+            and any(
+                isinstance(argument, ast.Constant) and isinstance(argument.value, str)
+                for argument in node.args[:3]
+            )
+        ):
+            self.findings["literal_rule_dimensions"].append(node.lineno)
+        if (
+            self.structured_reporting
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "print"
+        ):
+            self.findings["raw_reporting_prints"].append(node.lineno)
+        self.generic_visit(node)
+
+    def visit_Assign(self, node: ast.Assign) -> None:
+        """Require names for process statuses at selected call sites."""
+        if (
+            self.structured_reporting
+            and isinstance(node.value, ast.Constant)
+            and type(node.value.value) is int
+            and any(
+                isinstance(target, ast.Name) and target.id == "exit_code"
+                for target in node.targets
+            )
+        ):
+            self.findings["magic_exit_codes"].append(node.lineno)
+        self.generic_visit(node)
+
     def visit_Attribute(self, node: ast.Attribute) -> None:
         """Prefer host-aware pathlib operations to os.path string functions."""
         if (
@@ -664,6 +975,21 @@ def findings_for(
     """Parse selected Python source files, failing on syntax errors."""
     findings: dict[str, StyleFindings] = {}
     checkout = root.resolve(strict=True)
+    imported_symbols: set[str] = set()
+    if policy.public_constant_paths:
+        for relative in paths:
+            path = checkout / relative
+            if relative.suffix != ".py" or not path.is_file():
+                continue
+            tree = ast.parse(read_python_source(path), filename=str(relative))
+            imported_symbols.update(
+                f"{node.module}.{alias.name}"
+                for node in ast.walk(tree)
+                if isinstance(node, ast.ImportFrom)
+                and node.level == 0
+                and node.module is not None
+                for alias in node.names
+            )
     for relative in paths:
         if relative.suffix.lower() not in policy.extensions or any(
             matches_path(relative.as_posix(), pattern) for pattern in policy.exclude
@@ -672,11 +998,45 @@ def findings_for(
         path = checkout / relative
         if not path.is_file():
             continue
-        source = path.read_text(encoding="utf-8")
+        source = read_python_source(path)
         visitor = StyleVisitor(
             policy,
             source=source,
             boundary_file=is_boundary_file(relative.as_posix(), policy),
+            semantic_rule_ids=any(
+                matches_path(relative.as_posix(), pattern)
+                for pattern in policy.semantic_rule_id_paths
+            ),
+            structured_reporting=any(
+                matches_path(relative.as_posix(), pattern)
+                for pattern in policy.structured_reporting_paths
+            ),
+            repeated_literals=any(
+                matches_path(relative.as_posix(), pattern)
+                for pattern in policy.repeated_literal_paths
+            ),
+            semantic_results=any(
+                matches_path(relative.as_posix(), pattern)
+                for pattern in policy.semantic_result_paths
+            ),
+            pattern_kinds=any(
+                matches_path(relative.as_posix(), pattern)
+                for pattern in policy.pattern_kind_paths
+            ),
+            self_returns=any(
+                matches_path(relative.as_posix(), pattern)
+                for pattern in policy.self_return_paths
+            ),
+            shared_text_readers=any(
+                matches_path(relative.as_posix(), pattern)
+                for pattern in policy.shared_text_reader_paths
+            ),
+            public_constants=any(
+                matches_path(relative.as_posix(), pattern)
+                for pattern in policy.public_constant_paths
+            ),
+            module_name=".".join(relative.with_suffix("").parts[1:]),
+            imported_symbols=frozenset(imported_symbols),
         )
         visitor.visit(ast.parse(source, filename=str(relative)))
         if any(visitor.findings.values()):

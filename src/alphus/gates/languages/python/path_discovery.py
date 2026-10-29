@@ -5,7 +5,7 @@ from __future__ import annotations
 import ast
 from collections.abc import Set as AbstractSet
 
-from alphus.findings import SourceFinding
+from alphus.contracts.findings import SourceFinding
 
 _URL_SCHEME_SEPARATOR = "://"
 SYS_PATH_MUTATORS = frozenset(
@@ -174,6 +174,13 @@ def python_path_findings(source: str) -> list[SourceFinding]:
                 findings.add(
                     SourceFinding(
                         node.lineno, "module __file__ used to infer a parent root"
+                    )
+                )
+            case ast.Attribute(attr="name", value=ast.Name(id="os")):
+                findings.add(
+                    SourceFinding(
+                        node.lineno,
+                        "raw os.name comparison; use a shared platform probe",
                     )
                 )
             case _:

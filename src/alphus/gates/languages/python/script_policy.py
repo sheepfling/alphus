@@ -8,6 +8,7 @@ from pathlib import Path
 
 from alphus.config import ScriptPolicy
 from alphus.support.inventory import matches_path
+from alphus.support.source_text import read_utf8_sig_text
 
 _CMD_DIRECTORY = re.compile(r'(?i)^cd /d "%~dp0(?:\.\.(?:[\\/]\.\.)*)?"$')
 _PYTHON_EXECUTABLE = (
@@ -84,7 +85,7 @@ def policy_issues(root: Path, paths: Iterable[Path], policy: ScriptPolicy) -> li
             continue
         suffix = relative.suffix.lower()
         if suffix == ".cmd" and is_python_cmd_router(
-            path.read_text(encoding="utf-8-sig"), checkout, policy
+            read_utf8_sig_text(path), checkout, policy
         ):
             continue
         message = policy.cmd_message if suffix == ".cmd" else policy.launcher_message

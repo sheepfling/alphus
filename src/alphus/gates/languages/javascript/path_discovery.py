@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from re import Pattern
 from types import MappingProxyType
 
-from alphus.findings import SourceFinding
+from alphus.contracts.findings import SourceFinding
 
 JS_PATTERNS: Mapping[str, Pattern[str]] = MappingProxyType(
     {

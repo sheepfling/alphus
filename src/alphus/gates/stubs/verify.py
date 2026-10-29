@@ -21,6 +21,8 @@ from alphus.gates.stubs.environments import (
     child_environment,
     probe_python,
 )
+from alphus.support.python_runtime import current_python_executable
+from alphus.support.source_text import read_utf8_text
 
 ACTION_ROOT = Path(alphus_stub_quality.__file__).resolve().parent
 IGNORED_BUILD_PATHS = frozenset(
@@ -55,7 +57,7 @@ class VerificationConfig(BaseModel):
     negative_expected_count: Annotated[int, Field(strict=True, ge=1)] | None = None
     typing_checkers: Annotated[
         tuple[Literal["mypy", "pyright", "ty"], ...], Field(min_length=1)
-    ] = ("mypy", "pyright")
+    ] = ("pyright",)
     mypy_diagnostics: tuple[NonEmptyString, ...] = ()
     pyright_diagnostics: tuple[NonEmptyString, ...] = ()
     ty_diagnostics: tuple[NonEmptyString, ...] = ()
@@ -109,7 +111,7 @@ def read_config(root: Path, config_path: Path) -> VerificationConfig:
     resolved = config_path if config_path.is_absolute() else root / config_path
     try:
         return VerificationDocument.model_validate_json(
-            resolved.read_text(encoding="utf-8")
+            read_utf8_text(resolved)
         ).verification
     except (OSError, ValidationError) as error:
         raise SystemExit(
@@ -179,7 +181,7 @@ def module_command(module: str, *, python: str | None = None) -> list[str]:
         raise SystemExit(f"invalid Python module name: {module!r}")
     if not all(part.isidentifier() for part in module.split(".")):
         raise SystemExit(f"invalid Python module name: {module!r}")
-    return [python or sys.executable, "-m", module]
+    return [python or current_python_executable(), "-m", module]
 
 
 def prepare_shared_helpers(destination: Path) -> None:
@@ -203,14 +205,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--with-twine", action="store_true")
     parser.add_argument(
         "--target-python",
-        default=os.environ.get("ALPHUS_TARGET_PYTHON", sys.executable),
+        default=os.environ.get("ALPHUS_TARGET_PYTHON", current_python_executable()),
     )
     parser.add_argument("--report", type=Path)
     options = parser.parse_args(argv)
     if options.report is not None:
         options.report.unlink(missing_ok=True)
     try:
-        checker = probe_python(sys.executable)
+        checker = probe_python(current_python_executable())
         target = probe_python(options.target_python)
         if checker.version[:2] < (3, 11):
             raise ValueError(

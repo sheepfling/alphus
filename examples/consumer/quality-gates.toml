@@ -1,4 +1,10 @@
 schema_version = 1
+orchestration_files = [
+  "languages/python.toml",
+  "languages/markdown.toml",
+  "languages/toml.toml",
+  "languages/json.toml",
+]
 
 [files]
 include = [
@@ -23,6 +29,7 @@ exclude = []
 ".md" = 120
 
 [checks.json_structure]
+# Extensions are literal suffixes; list each one separately. Excludes are globs.
 extensions = [".py"]
 exclude = ["tests/**"]
 
@@ -50,116 +57,9 @@ exclude = ["tests/**"]
 [orchestration]
 default_profile = "check"
 
-[[orchestration.steps]]
-kind = "rule"
-name = "Python structure"
-rule = "python-style"
-
-[[orchestration.steps]]
-kind = "rule"
-name = "Runtime type narrowing"
-rule = "runtime-types"
-
-[[orchestration.steps]]
-kind = "rule"
-name = "JSON structure"
-rule = "json-structure"
-
-[[orchestration.steps]]
-kind = "rule"
-name = "Output escaping"
-rule = "output-escaping"
-
-[[orchestration.steps]]
-kind = "rule"
-name = "Path discovery"
-rule = "path-discovery"
-
-[[orchestration.steps]]
-kind = "rule"
-name = "Line length"
-rule = "line-length"
-
-[[orchestration.steps]]
-kind = "rule"
-name = "File size"
-rule = "file-size"
-
-[[orchestration.steps]]
-kind = "command"
-name = "Markdown links and graph"
-argv = [
-  "{python}", "-m", "mdrepo", "--root", "{root}", "--config",
-  "{root}/mdrepo.toml", "check",
-]
-
-[[orchestration.steps]]
-kind = "command"
-name = "Markdown format"
-argv = ["rumdl", "fmt", "--check", "--no-cache", "{files}"]
-files = { include = ["**/*.[mM][dD]", "*.[mM][dD]"] }
-
-[[orchestration.steps]]
-kind = "command"
-name = "Python lint"
-argv = ["{python}", "-m", "ruff", "check", "src", "tests"]
-
-[[orchestration.steps]]
-kind = "command"
-name = "Python types"
-argv = ["pyright", "--pythonpath", "{python}", "src", "tests"]
-
-[[orchestration.steps]]
-kind = "command"
-name = "Python tests"
-argv = ["{python}", "-m", "pytest", "tests", "-q"]
-
-[[orchestration.steps]]
-kind = "command"
-name = "TOML syntax"
-argv = [
-  "{python}", "-c",
-  "import sys, tomllib; from pathlib import Path; [tomllib.loads(Path(p).read_text(encoding='utf-8')) for p in sys.argv[1:]]",
-  "{files}",
-]
-files = { include = ["**/*.toml", "*.toml"] }
-
-[[orchestration.steps]]
-kind = "command"
-name = "JSON syntax"
-argv = [
-  "{python}", "-c",
-  "import json, sys; from pathlib import Path; [json.loads(Path(p).read_text(encoding='utf-8')) for p in sys.argv[1:]]",
-  "{files}",
-]
-files = { include = ["**/*.json", "*.json"] }
-
-[[orchestration.profiles]]
-name = "python-policy"
-steps = [
-  "Python structure", "Runtime type narrowing", "JSON structure",
-  "Output escaping", "Path discovery", "Line length", "File size",
-]
-
-[[orchestration.profiles]]
-name = "python"
-steps = ["Python lint", "Python types", "Python tests"]
-
-[[orchestration.profiles]]
-name = "markdown"
-steps = ["Markdown links and graph", "Markdown format"]
-
-[[orchestration.profiles]]
-name = "toml"
-steps = ["TOML syntax"]
-
-[[orchestration.profiles]]
-name = "json"
-steps = ["JSON syntax"]
-
 [[orchestration.profiles]]
 name = "check"
-includes = ["python-policy", "markdown", "python"]
+includes = ["python-policy", "markdown", "toml", "json", "python"]
 
 [[orchestration.profiles]]
 name = "docs"

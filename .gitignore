@@ -51,6 +51,7 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 .pytest_temp/
+.pytest-basetemp-codex-*/
 cover/
 
 # Translations
@@ -97,6 +98,7 @@ ipython_config.py
 # Pipfile.lock
 
 # uv
+uv.lock
 #   Similar to Pipfile.lock, it is generally recommended to include uv.lock in version control.
 #   This is especially recommended for binary packages to ensure reproducibility, and is more
 #   commonly ignored for libraries.
@@ -218,4 +220,27 @@ marimo/_lsp/
 __marimo__/
 
 # Streamlit
-.streamlit/secrets.toml
+**/.streamlit/secrets.toml
+
+# Local Temp
+tmp/
+.tmp/
+temp/
+.temp/
+.local/
+artifacts/
+node_modules/
+*.tgz
+
+# JavaScript and TypeScript tool state
+*.tsbuildinfo
+.eslintcache
+
+# C and C++ build outputs
+cmake-build-*/
+CMakeFiles/
+*.o
+*.obj
+*.pdb
+*.exe
+*.a

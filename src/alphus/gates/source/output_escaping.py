@@ -6,7 +6,8 @@ from collections.abc import Iterable
 from pathlib import Path
 
 from alphus.config import SourceScanPolicy
-from alphus.findings import Finding
+from alphus.contracts.findings import Finding
+from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.gates.languages.javascript.output_escaping import (
     escape_findings as js_escape_findings,
 )
@@ -14,6 +15,7 @@ from alphus.gates.languages.python.output_escaping import (
     escape_findings as python_escape_findings,
 )
 from alphus.support.inventory import matches_path
+from alphus.support.source_text import read_utf8_sig_text
 
 
 def check_output_escaping(
@@ -32,15 +34,21 @@ def check_output_escaping(
         path = checkout / relative
         if not path.is_file():
             continue
-        source = path.read_text(encoding="utf-8-sig")
+        source = read_utf8_sig_text(path)
         source_findings = (
             python_escape_findings(source)
             if suffix == ".py"
             else js_escape_findings(source)
         )
+        scope = Scope.PYTHON if suffix == ".py" else Scope.JAVASCRIPT
         findings.extend(
             Finding(
-                rule_id="output.manual-escaping",
+                rule_id=rule_tag(
+                    scope,
+                    Framework.NONE,
+                    Category.SECURITY,
+                    "manual-output-escaping",
+                ),
                 path=name,
                 line=line,
                 message=f"{message}; use a library or tested shared utility",

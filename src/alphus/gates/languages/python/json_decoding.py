@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ast
 
-from alphus.findings import SourceFinding
+from alphus.contracts.findings import SourceFinding
 
 DECODER_MODULES: frozenset[str] = frozenset({"json", "orjson", "ujson", "rapidjson"})
 

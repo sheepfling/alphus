@@ -8,7 +8,7 @@ from types import MappingProxyType
 from typing import TypeAlias
 
 from alphus.config import QualityGateConfig, QualityRuleName
-from alphus.config_base import require_policy
+from alphus.execution.results import RuleOutput
 from alphus.gates.languages.python.runtime_types import (
     policy_issues as runtime_type_issues,
 )
@@ -17,10 +17,11 @@ from alphus.gates.languages.python.script_policy import (
 )
 from alphus.gates.languages.python.style import findings_for as python_style_findings
 from alphus.gates.source.cli_policy import policy_issues as cli_policy_issues
+from alphus.gates.source.cyclomatic_complexity import run_cyclomatic_complexity
 from alphus.gates.source.json_structure import check_json_structure
 from alphus.gates.source.output_escaping import check_output_escaping
 from alphus.gates.source.path_discovery import check_path_discovery
-from alphus.rule_results import RuleOutput
+from alphus.policy.base import require_policy
 
 SourceRunner: TypeAlias = Callable[
     [Path, Sequence[Path], QualityGateConfig], RuleOutput
@@ -60,6 +61,12 @@ SOURCE_RULE_RUNNERS: Mapping[QualityRuleName, SourceRunner] = MappingProxyType(
             root,
             files,
             require_policy(config.checks.script_policy, "script_policy"),
+        ),
+        "cyclomatic-complexity": lambda root, files, config: run_cyclomatic_complexity(
+            root,
+            require_policy(
+                config.checks.cyclomatic_complexity, "cyclomatic_complexity"
+            ),
         ),
     }
 )

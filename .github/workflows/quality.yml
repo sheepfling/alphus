@@ -10,12 +10,38 @@ permissions:
   contents: read
 
 jobs:
+  javascript-profile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install JavaScript profile tools
+        run: npm ci
+      - name: Test reusable JavaScript policy
+        run: npm test
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Check Alphus JavaScript orchestration profile
+        run: |
+          python -m pip install --disable-pip-version-check -e .
+          alphus --profile javascript
+      - name: Check JavaScript lint, format, and types
+        run: |
+          npm run lint
+          npm run format:check
+          npm run format:markdown:check
+          npm run typecheck
+
   self-check:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.11", "3.12", "3.13", "3.14", "3.15"]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -23,17 +49,87 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
           cache-dependency-path: pyproject.toml
-      - name: Check editable installation
+      - name: Install Alphus and run wheel self-check
+        run: >-
+          python scripts/ci.py --root . --wheel
+          --history-dir "${{ runner.temp }}/alphus-history"
+          --consumer-id sheepfling/alphus
+      - name: Retain verified profile history
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: alphus-history-py${{ matrix.python-version }}
+          path: ${{ runner.temp }}/alphus-history
+          if-no-files-found: ignore
+          retention-days: 90
+
+  minimum-dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install declared dependency floors and run self-check
+        run: python scripts/ci.py --root . --minimum
+
+  optional-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        id: target-python
+        with:
+          python-version: "3.10"
+      - uses: actions/setup-python@v7
+        id: checker-python
+        with:
+          python-version: "3.11"
+      - name: Provision separate native checker and target environments
+        shell: bash
         run: |
-          python -m pip install --disable-pip-version-check -e ".[dev]"
-          alphus --help
-      - name: Build and install the wheel
+          "${{ steps.checker-python.outputs.python-path }}" -m venv "$RUNNER_TEMP/alphus-checker"
+          "${{ steps.target-python.outputs.python-path }}" -m venv "$RUNNER_TEMP/alphus-target"
+          "$RUNNER_TEMP/alphus-checker/bin/python" -m pip install --disable-pip-version-check -e '.[python,mypy,ty]'
+          "$RUNNER_TEMP/alphus-target/bin/python" -m pip install --disable-pip-version-check 'snakemd==2.4.1' 'mdutils==1.8.1'
+      - name: Verify optional typing checker extras
         run: |
-          mkdir -p "$RUNNER_TEMP/alphus-wheels"
-          python -m pip wheel --no-deps --wheel-dir "$RUNNER_TEMP/alphus-wheels" .
-          python -m pip install --disable-pip-version-check --no-deps \
-            --force-reinstall "$RUNNER_TEMP"/alphus-wheels/alphus-*.whl
-      - name: Run Alphus quality profile
+          "$RUNNER_TEMP/alphus-checker/bin/python" -m mypy --version
+          "$RUNNER_TEMP/alphus-checker/bin/python" -m ty --version
+      - name: Exercise optional Ty fixture checker
+        shell: bash
         run: |
-          python -m alphus --root . --config quality-gates.toml \
-            --run --profile check
+          fixtures="$RUNNER_TEMP/alphus-ty-fixtures"
+          mkdir -p "$fixtures"
+          printf '%s\n' 'value: int = 1' > "$fixtures/positive.py"
+          printf '%s\n' 'value: int = "bad"  # expect-error' > "$fixtures/negative.py"
+          "$RUNNER_TEMP/alphus-checker/bin/python" -m alphus.gates.stubs.typing_fixtures \
+            --positive-fixture "$fixtures/positive.py" \
+            --negative-fixture "$fixtures/negative.py" \
+            --root "$fixtures" --checkers ty
+      - name: Check Alphus JSON orchestration profile
+        run: |
+          "$RUNNER_TEMP/alphus-checker/bin/alphus" --profile json
+      - name: Exercise optional gates and require no skipped cases
+        shell: bash
+        env:
+          ALPHUS_TEST_CHECKER_PYTHON: ${{ runner.temp }}/alphus-checker/bin/python
+          ALPHUS_TEST_TARGET_PYTHONS: ${{ runner.temp }}/alphus-target/bin/python
+        run: |
+          if ! output=$("$ALPHUS_TEST_CHECKER_PYTHON" -m pytest -q -rs \
+            tests/gates/stubs/test_target_runtime_integration.py \
+            tests/gates/python/test_module_roles_engine.py::test_module_role_rejects_symlinked_source_outside_root \
+            tests/gates/source/test_script_policy_engine.py::test_cmd_router_rejects_a_symlinked_module_outside_the_root \
+            tests/gates/cpp/test_cpp_quality.py::test_cpp_advisory_profile_runs_both_provisional_gates \
+            tests/gates/review/test_scipy_constants_engine.py \
+            tests/test_review_cli.py::test_scipy_direct_rule_uses_its_own_label 2>&1); then
+            printf '%s\n' "$output"
+            exit 1
+          fi
+          printf '%s\n' "$output"
+          if [[ "$output" =~ [0-9]+[[:space:]]skipped ]]; then
+            echo "Optional gate coverage skipped a selected test" >&2
+            exit 1
+          fi

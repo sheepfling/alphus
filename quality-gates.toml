@@ -1,8 +1,10 @@
+# Root policy for checks and profile composition; optional orchestration_files can split language steps.
 schema_version = 1
-
 [files]
 include = [
-  "src/**/*.py", "tests/**/*.py", "README.md", "docs/**/*.md",
+  "src/**/*.py", "tests/**/*.py", "scripts/**/*.py",
+  "README.md", "docs/**/*.md",
+  "javascript/**/*.js", "javascript/**/*.mjs", "javascript/**/*.d.ts",
   "**/*.toml", "*.toml", "**/*.json", "*.json",
 ]
 exclude = []
@@ -13,6 +15,14 @@ code_limit = 3000
 hard_limit = 5000
 initializer_name = "__init__.py"
 initializer_limit = 100
+exclude = []
+
+[checks.comment_markers]
+extensions = [
+  ".py", ".pyi", ".toml", ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx",
+  ".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".java",
+]
+markers = ["TODO", "FIXME", "HACK", "XXX", "XXXX"]
 exclude = []
 
 [checks.line_length]
@@ -35,13 +45,57 @@ extensions = [".py"]
 exclude = []
 inspection_exclude = ["tests/**"]
 
+[checks.shared_utilities]
+extensions = [".py"]
+exclude = ["tests/**"]
+canonical_file_hash_path = "src/alphus/support/file_hash.py"
+canonical_file_hash_function = "sha256_file"
+canonical_git_path = "src/alphus/support/git.py"
+minimum_body_statements = 3
+minimum_ast_nodes = 15
+
 [checks.python_style]
 extensions = [".py"]
 exclude = []
-opaque_boundary_paths = []
+opaque_boundary_paths = [
+  "src/alphus/config.py",
+  "src/alphus/cli.py",
+  "src/alphus/execution/orchestration.py",
+  "src/alphus/execution/history_index.py",
+  "src/alphus/execution/profile_history.py",
+  "src/alphus/execution/profile_results.py",
+  "src/alphus/execution/step_results.py",
+  "src/alphus/execution/worker_protocol.py",
+  "src/alphus/gates/source/cyclomatic_complexity.py",
+  "src/alphus/policy/sources.py",
+  "tests/execution/test_shared_quality_intent_execution.py",
+  "tests/execution/test_history_index.py",
+]
 opaque_boundary_marker_prefix = "# opaque-boundary: "
 opaque_boundary_min_reason_chars = 12
 forbidden_main_imports = ["main"]
+semantic_rule_id_paths = ["src/alphus/**"]
+structured_reporting_paths = ["src/alphus/execution/orchestration.py"]
+repeated_literal_paths = [
+  "src/alphus/execution/orchestration.py",
+  "src/alphus/gates/python/compatibility.py",
+  "src/alphus/contracts/findings.py",
+]
+semantic_result_paths = [
+  "src/alphus/gates/review/positional_interfaces.py",
+  "src/alphus/gates/repository/**",
+  "src/alphus/gates/hygiene/comment_markers.py",
+  "src/alphus/gates/hygiene/rules.py",
+  "src/alphus/gates/vcs/worktree_hygiene.py",
+  "src/alphus/policy/sources.py",
+]
+pattern_kind_paths = [
+  "src/alphus/gates/cpp/artifact_scan.py",
+  "src/alphus/gates/cpp/cpp_common_quality.py",
+]
+self_return_paths = ["src/alphus/**"]
+shared_text_reader_paths = ["src/alphus/config.py", "src/alphus/gates/**"]
+public_constant_paths = ["src/alphus/gates/cpp/**"]
 
 [checks.runtime_types]
 extensions = [".py"]
@@ -49,12 +103,20 @@ exclude = [
   "tests/**",
   "src/alphus/gates/languages/python/style.py",
   "src/alphus/gates/languages/python/runtime_types.py",
+  "src/alphus/gates/python/compatibility.py",
 ]
 
 [checks.numeric_literals]
 extensions = [".py"]
 exclude = []
 math_constants = true
+
+[checks.scipy_constants]
+extensions = [".py"]
+exclude = []
+physical_constants = true
+unit_conversions = true
+inverse_conversions = true
 
 [checks.test_quality]
 extensions = [".py"]
@@ -65,6 +127,56 @@ ephemeral_document_patterns = ["docs/**"]
 [checks.input_contracts]
 extensions = [".py"]
 exclude = []
+sequence_narrowing_paths = ["src/alphus/gates/review/positional_interfaces.py"]
+
+[checks.pydantic_practices]
+extensions = [".py"]
+exclude = []
+report_dump_revalidation = true
+require_explicit_frozen = false
+report_deprecated_v1_apis = false
+report_unvalidated_construct = false
+report_unvalidated_copy_update = false
+report_validator_fallthrough = false
+report_field_positional_default = false
+report_external_model_docs = true
+external_model_names = [
+  "ExtensionLimit", "FileSizePolicy", "LineLengthPolicy", "PathLimit",
+]
+
+[checks.fastapi_practices]
+extensions = [".py"]
+exclude = []
+
+[checks.cli]
+
+[checks.cli.python]
+extensions = [".py"]
+exclude = [
+  "src/alphus/__main__.py",
+  # Private JSON worker transport is not a human-facing command-line interface.
+  "src/alphus/execution/_worker_entry.py",
+  "src/alphus/gates/**",
+  "scripts/**",
+  "tests/**",
+]
+typer_package = "typer"
+typer_calls = ["Typer", "run"]
+rich_package = "rich"
+rich_calls = ["Console", "print"]
+json_option = "--json"
+json_serializers = ["dumps", "model_dump_json"]
+verbose_option = "--verbose"
+output_option = "--output"
+rich_output = "rich"
+plain_output = "plain"
+
+[checks.git]
+attributes = [
+  { path = "javascript/example.js", attribute = "eol", value = "lf" },
+  { path = "package.json", attribute = "text", value = "set" },
+  { path = "package-lock.json", attribute = "eol", value = "lf" },
+]
 
 [checks.package_boundaries]
 metadata_patterns = ["pyproject.toml"]
@@ -125,8 +237,18 @@ rule = "python-style"
 
 [[orchestration.steps]]
 kind = "rule"
+name = "Shared utilities"
+rule = "shared-utilities"
+
+[[orchestration.steps]]
+kind = "rule"
 name = "Runtime type usage"
 rule = "runtime-types"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "CLI contracts"
+rule = "cli"
 
 [[orchestration.steps]]
 kind = "rule"
@@ -154,12 +276,38 @@ name = "File size"
 rule = "file-size"
 
 [[orchestration.steps]]
+kind = "rule"
+name = "Comment markers"
+rule = "comment-markers"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Git ignore policy"
+rule = "git-ignores"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Git attributes"
+rule = "git-attributes"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Git history"
+rule = "git-history"
+
+[[orchestration.steps]]
 kind = "command"
 name = "Python lint"
+parallel = true
+locks = ["ruff-cache"]
 argv = [
-  "{python}", "-m", "ruff", "check", "src", "tests", "--select",
-  "E4,E7,E9,F,ANN,I",
+  "{python}", "-m", "ruff", "check", "--force-exclude", "--select", "E4,E7,E9,F,ANN,I", "{files}",
 ]
+fix_argv = [
+  "{python}", "-m", "ruff", "check", "--fix", "--force-exclude", "--select", "E4,E7,E9,F,ANN,I",
+  "{files}",
+]
+files = { include = ["src/**/*.py", "src/**/*.pyi", "tests/**/*.py", "scripts/**/*.py"] }
 
 [[orchestration.steps]]
 kind = "command"
@@ -170,17 +318,49 @@ argv = [
 
 [[orchestration.steps]]
 kind = "command"
+name = "JavaScript tests"
+argv = ["npm", "test"]
+
+[[orchestration.steps]]
+kind = "command"
+name = "JavaScript types"
+argv = ["npm", "run", "typecheck"]
+
+[[orchestration.steps]]
+kind = "command"
+name = "Python package imports"
+argv = [
+  "{python}", "-m", "alphus.gates.python.importability",
+  "--source-root", "src",
+]
+
+[[orchestration.steps]]
+kind = "command"
+name = "Python compatibility imports"
+argv = [
+  "{python}", "-m", "alphus.gates.python.compatibility_cli",
+  "--source-root", "src",
+]
+
+[[orchestration.steps]]
+kind = "command"
 name = "Python format"
-argv = ["{python}", "-m", "ruff", "format", "--check", "src", "tests"]
+parallel = true
+locks = ["ruff-cache"]
+argv = ["{python}", "-m", "ruff", "format", "--check", "--force-exclude", "{files}"]
+fix_argv = ["{python}", "-m", "ruff", "format", "--force-exclude", "{files}"]
+files = { include = ["src/**/*.py", "src/**/*.pyi", "tests/**/*.py", "scripts/**/*.py"] }
 
 [[orchestration.steps]]
 kind = "command"
 name = "Python types"
-argv = ["{python}", "-m", "pyright", "--pythonpath", "{python}", "src"]
+parallel = true
+argv = ["{python}", "-m", "pyright", "--pythonpath", "{python}", "src", "scripts"]
 
 [[orchestration.steps]]
 kind = "command"
 name = "TOML syntax"
+parallel = true
 argv = [
   "{python}", "-c",
   "import sys, tomllib; from pathlib import Path; [tomllib.loads(Path(p).read_text(encoding='utf-8')) for p in sys.argv[1:]]",
@@ -201,14 +381,17 @@ files = { include = ["**/*.json", "*.json"] }
 [[orchestration.profiles]]
 name = "python-policy"
 steps = [
-  "Package boundaries", "Target audit isolation", "Python structure", "Runtime type usage",
-  "JSON structure", "Output escaping", "Path handling", "Line length",
-  "File size",
+  "Package boundaries", "Target audit isolation", "Python structure", "Shared utilities", "Runtime type usage",
+  "CLI contracts", "JSON structure", "Output escaping", "Path handling", "Line length",
+  "File size", "Comment markers",
 ]
 
 [[orchestration.profiles]]
 name = "python"
-steps = ["Python lint", "Python format", "Python types", "Package tests"]
+steps = [
+  "Python lint", "Python format", "Python types", "Python package imports",
+  "Python compatibility imports", "Package tests",
+]
 
 [[orchestration.profiles]]
 name = "toml"
@@ -219,13 +402,32 @@ name = "json"
 steps = ["JSON syntax"]
 
 [[orchestration.profiles]]
+name = "javascript"
+steps = ["JavaScript tests", "JavaScript types"]
+
+[[orchestration.profiles]]
+name = "git"
+steps = ["Git ignore policy", "Git attributes"]
+
+[[orchestration.profiles]]
+name = "repository-history"
+includes = ["git"]
+steps = ["Git history"]
+
+[[orchestration.profiles]]
 name = "check"
-includes = ["python-policy", "toml", "python", "review"]
+includes = ["python-policy", "toml", "python", "review", "git"]
 
 [[orchestration.steps]]
 kind = "rule"
 name = "Numeric review"
 rule = "numeric-literals"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "SciPy constants review"
+rule = "scipy-constants"
+rollout = "provisional"
 
 [[orchestration.steps]]
 kind = "rule"
@@ -237,6 +439,19 @@ kind = "rule"
 name = "Input contract review"
 rule = "input-contracts"
 
+[[orchestration.steps]]
+kind = "rule"
+name = "Pydantic practice review"
+rule = "pydantic-practices"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "FastAPI practice review"
+rule = "fastapi-practices"
+
 [[orchestration.profiles]]
 name = "review"
-steps = ["Numeric review", "Test review", "Input contract review"]
+steps = [
+  "Numeric review", "SciPy constants review", "Test review", "Input contract review",
+  "Pydantic practice review", "FastAPI practice review",
+]

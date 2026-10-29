@@ -10,9 +10,11 @@ from textwrap import dedent
 
 from pydantic import JsonValue, RootModel, ValidationError
 
-from alphus.config import TestQualityPolicy
-from alphus.findings import Finding
+from alphus.config import TestQualityPolicy as _TestQualityPolicy
+from alphus.contracts.findings import Finding
+from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.support.inventory import matches_path
+from alphus.support.source_text import read_python_source
 
 _PATH_READS = frozenset({"read_text", "read_bytes", "stat", "exists", "is_file"})
 _PATH_WRITES = frozenset({"write_text", "write_bytes", "touch"})
@@ -28,11 +30,21 @@ class _StaticPath:
     temporary: bool = False
 
 
+@dataclass(frozen=True, slots=True)
+class _OracleUse:
+    qualified_name: str
+    line: int
+    column: int
+    end_line: int
+    end_column: int
+
+
 @dataclass(slots=True)
 class _Scope:
     symbols: dict[str, str | None] = field(default_factory=dict[str, str | None])
     strings: dict[str, str] = field(default_factory=dict[str, str])
     paths: dict[str, _StaticPath] = field(default_factory=dict[str, _StaticPath])
+    oracle_values: dict[str, _OracleUse] = field(default_factory=dict[str, _OracleUse])
     created: set[str] = field(default_factory=set[str])
 
     def copy(self) -> _Scope:
@@ -40,6 +52,7 @@ class _Scope:
             self.symbols.copy(),
             self.strings.copy(),
             self.paths.copy(),
+            self.oracle_values.copy(),
             self.created.copy(),
         )
 
@@ -47,6 +60,7 @@ class _Scope:
         self.symbols[name] = None
         self.strings.pop(name, None)
         self.paths.pop(name, None)
+        self.oracle_values.pop(name, None)
 
 
 def _symbol(node: ast.expr, scope: _Scope) -> str | None:
@@ -157,7 +171,7 @@ def _bound_names(statements: Sequence[ast.stmt]) -> set[str]:
     return names
 
 
-def _is_prose(value: str, policy: TestQualityPolicy) -> bool:
+def _is_prose(value: str, policy: _TestQualityPolicy) -> bool:
     if (
         len(value) < policy.large_prose_min_chars
         or len(value.split()) < policy.large_prose_min_words
@@ -188,14 +202,27 @@ def _calls_in_order(node: ast.AST) -> Iterable[ast.Call]:
 
 
 class _TestScanner:
-    def __init__(self, path: str, policy: TestQualityPolicy) -> None:
+    def __init__(self, path: str, policy: _TestQualityPolicy) -> None:
         self.path = path
         self.policy = policy
         self.findings: list[Finding] = []
+        self.class_stack: list[str] = []
+        self.active_test_function: str | None = None
 
     def add(self, category: str, line: int, message: str) -> None:
         self.findings.append(
-            Finding(f"test-quality.{category}", self.path, message, line, "warning")
+            Finding(
+                rule_tag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.TESTING,
+                    category.replace("_", "-"),
+                ),
+                self.path,
+                message,
+                line,
+                "warning",
+            )
         )
 
     def assertion(self, node: ast.Assert, scope: _Scope) -> None:
@@ -212,8 +239,79 @@ class _TestScanner:
                         "large exact prose comparison; review whether the full text "
                         "is a stable contract",
                     )
+                self.oracle_assertion(left, right, node, scope)
             case _:
                 pass
+
+    def oracle_assertion(
+        self, actual: ast.expr, expected: ast.expr, assertion: ast.Assert, scope: _Scope
+    ) -> None:
+        if not self.policy.oracle_independence or self.oracle_test_excluded():
+            return
+        actual_use = self.oracle_value(actual, scope)
+        expected_use = self.oracle_value(expected, scope)
+        if (
+            actual_use is None
+            or expected_use is None
+            or actual_use.qualified_name != expected_use.qualified_name
+        ):
+            return
+        name = actual_use.qualified_name
+        self.add(
+            "shared-oracle",
+            assertion.lineno,
+            "actual operand "
+            f"{self.span(actual)} and expected operand {self.span(expected)} "
+            f"both use {name} (calls at {self.span(actual_use)} and "
+            f"{self.span(expected_use)}); this test does not supply independent "
+            "evidence for that calculation",
+        )
+
+    def oracle_value(self, node: ast.expr, scope: _Scope) -> _OracleUse | None:
+        match node:
+            case ast.Name(id=name):
+                return scope.oracle_values.get(name)
+            case ast.Call(func=function):
+                name = _symbol(function, scope)
+                if name is not None and self.is_production_function(name):
+                    return _OracleUse(
+                        name,
+                        node.lineno,
+                        node.col_offset,
+                        node.end_lineno or node.lineno,
+                        node.end_col_offset or node.col_offset,
+                    )
+            case _:
+                pass
+        return None
+
+    def is_production_function(self, name: str) -> bool:
+        return name not in self.policy.oracle_helper_allowlist and any(
+            name.startswith(f"{module}.")
+            for module in self.policy.oracle_production_modules
+        )
+
+    def oracle_test_excluded(self) -> bool:
+        test_function = self.active_test_function
+        if test_function is None:
+            return False
+        return any(
+            self.path == exclusion.path
+            and exclusion.test_function
+            in {test_function, test_function.rsplit(".", maxsplit=1)[-1]}
+            for exclusion in self.policy.oracle_exclusions
+        )
+
+    @staticmethod
+    def span(node: ast.expr | _OracleUse) -> str:
+        if isinstance(node, _OracleUse):
+            return (
+                f"{node.line}:{node.column + 1}-{node.end_line}:{node.end_column + 1}"
+            )
+        return (
+            f"{node.lineno}:{node.col_offset + 1}-"
+            f"{node.end_lineno or node.lineno}:{(node.end_col_offset or node.col_offset) + 1}"
+        )
 
     def calls(self, expression: ast.expr, scope: _Scope) -> None:
         for child in _calls_in_order(expression):
@@ -284,12 +382,26 @@ class _TestScanner:
     def assign(self, target: ast.expr, value: ast.expr | None, scope: _Scope) -> None:
         text = _text(value, scope) if value is not None else None
         path = _path(value, scope, self.path) if value is not None else None
+        symbol = (
+            _symbol(value, scope)
+            if isinstance(value, (ast.Name, ast.Attribute))
+            else None
+        )
+        oracle = (
+            self.oracle_value(value, scope)
+            if value is not None and isinstance(target, ast.Name)
+            else None
+        )
         for name in _targets(target):
             scope.forget(name)
             if text is not None:
                 scope.strings[name] = text
             if path is not None:
                 scope.paths[name] = path
+            if symbol is not None:
+                scope.symbols[name] = symbol
+            if oracle is not None:
+                scope.oracle_values[name] = oracle
 
     def imports(self, node: ast.Import | ast.ImportFrom, scope: _Scope) -> None:
         match node:
@@ -337,11 +449,17 @@ class _TestScanner:
                                 local.paths[argument.arg] = _StaticPath(
                                     ".", temporary=True
                                 )
+                        previous_test = self.active_test_function
+                        self.active_test_function = ".".join(
+                            (*self.class_stack, node.name)
+                        )
                         self.block(node.body, local, testing=True)
+                        self.active_test_function = previous_test
                     scope.forget(node.name)
                     continue
                 case ast.ClassDef(body=body, name=name):
                     if not testing:
+                        self.class_stack.append(name)
                         for member in body:
                             match member:
                                 case (
@@ -352,6 +470,7 @@ class _TestScanner:
                                     self.block((member,), scope.copy(), testing=False)
                                 case _:
                                     pass
+                        self.class_stack.pop()
                     scope.forget(name)
                     continue
                 case ast.Assert() if testing:
@@ -414,7 +533,9 @@ class _TestScanner:
                     pass
 
 
-def python_findings(source: str, path: str, policy: TestQualityPolicy) -> list[Finding]:
+def python_findings(
+    source: str, path: str, policy: _TestQualityPolicy
+) -> list[Finding]:
     """Inspect a module without reading any document mentioned by its tests."""
     scanner = _TestScanner(path, policy)
     scanner.block(ast.parse(source, filename=path).body, _Scope(), testing=False)
@@ -425,7 +546,7 @@ def python_findings(source: str, path: str, policy: TestQualityPolicy) -> list[F
 
 
 def check_test_quality(
-    root: Path, paths: Iterable[Path], policy: TestQualityPolicy
+    root: Path, paths: Iterable[Path], policy: _TestQualityPolicy
 ) -> list[Finding]:
     """Inspect selected Python test files and return deterministic warnings."""
     findings: list[Finding] = []
@@ -440,7 +561,5 @@ def check_test_quality(
             continue
         path = checkout / relative
         if path.is_file():
-            findings.extend(
-                python_findings(path.read_text(encoding="utf-8-sig"), name, policy)
-            )
+            findings.extend(python_findings(read_python_source(path), name, policy))
     return findings

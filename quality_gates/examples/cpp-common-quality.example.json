@@ -1,0 +1,77 @@
+{
+  "schema": 1,
+  "source": {
+    "exclude": [".git/*", "out/*", "build/*", "vendor/*", "third_party/*"],
+    "min_files": 1,
+    "soft_lines": 3000,
+    "hard_lines": 10000,
+    "hard_bytes": 1048576,
+    "single_consumer_header_lines": 500,
+    "legacy": {},
+    "fragment_exceptions": {}
+  },
+  "graph": {
+    "min_executable_targets": 1,
+    "max_executable_targets": 64,
+    "max_executables_per_static_library": 8,
+    "max_sources_per_executable": 400,
+    "require_executable_artifacts": true,
+    "min_measured_translation_units": 1,
+    "max_header_fanout": 200,
+    "max_evidence_age_seconds": 21600
+  },
+  "impact": {
+    "include_roots": ["include", "src"],
+    "min_files": 1,
+    "max_blast_radius": 500,
+    "max_heaviness": 250,
+    "max_hotspot_score": 100000,
+    "max_indirectness": 20,
+    "max_include_amplification": 40,
+    "max_translation_unit_fanout": 200,
+    "min_measured_translation_units": 1,
+    "max_evidence_age_seconds": 21600
+  },
+  "tests": {
+    "min_cases": 1,
+    "allow_extra_tests": false,
+    "require_execution": true,
+    "require_source_anchor": true,
+    "max_evidence_age_seconds": 21600,
+    "cases": []
+  },
+  "package": {
+    "prefix": "out/example-install",
+    "binding_report": "out/quality/package-bindings.json",
+    "binding_keys": ["package_config", "api_include"],
+    "required_globs": ["include/**/*.hpp", "lib/*"],
+    "require_consumer_smoke": true,
+    "max_evidence_age_seconds": 21600
+  },
+  "verdict": {
+    "min_reports": 7,
+    "max_age_seconds": 21600,
+    "require_manifest": true,
+    "require_clean_source": true,
+    "manifest_source_root": "../..",
+    "reports": [
+      {"name": "source", "path": "../../out/quality/source.json", "expected_schema": 1, "expected_gate": "source"},
+      {"name": "graph", "path": "../../out/quality/graph.json", "expected_schema": 1, "expected_gate": "graph"},
+      {"name": "impact", "path": "../../out/quality/impact.json", "expected_schema": 1, "expected_gate": "impact"},
+      {"name": "tests", "path": "../../out/quality/tests.json", "expected_schema": 1, "expected_gate": "tests"},
+      {"name": "package", "path": "../../out/quality/package.json", "expected_schema": 1, "expected_gate": "package"},
+      {"name": "artifacts", "path": "../../out/quality/artifacts.json", "expected_schema": 1, "pass_field": "gate.passed"},
+      {"name": "build", "path": "../../out/quality/build.json", "expected_schema": 1, "expected_gate": "build"}
+    ],
+    "set_checks": [
+      {"name": "selected-executables", "left_report": "@manifest", "left_field": "build.expected_executables", "right_report": "graph", "right_field": "metrics.executable_names"},
+      {"name": "built-executables", "left_report": "graph", "left_field": "metrics.executable_paths", "right_report": "artifacts", "right_field": "totals.executable_paths"},
+      {"name": "test-discovery", "left_report": "tests", "left_field": "metrics.declared_selectors", "right_report": "tests", "right_field": "metrics.discovered_selectors"},
+      {"name": "test-execution", "left_report": "tests", "left_field": "metrics.declared_selectors", "right_report": "tests", "right_field": "metrics.executed_selectors"}
+    ],
+    "value_checks": [
+      {"name": "configuration", "left_report": "@manifest", "left_field": "build.configuration", "right_report": "graph", "right_field": "metrics.configuration"},
+      {"name": "artifact-root", "left_report": "@manifest", "left_field": "build.artifact_root", "right_report": "artifacts", "right_field": "root"}
+    ]
+  }
+}

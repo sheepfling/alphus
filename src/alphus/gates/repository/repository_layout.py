@@ -1,0 +1,322 @@
+"""Apply declarative required and forbidden repository layout rules."""
+
+from __future__ import annotations
+
+import ast
+import tomllib
+from collections.abc import Sequence
+from enum import StrEnum
+from pathlib import Path, PurePosixPath
+
+from alphus.config import InstructionRouterPolicy, RepositoryLayoutPolicy
+from alphus.contracts.findings import Finding
+from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.support.data_access import (
+    contains_member,
+    is_nonempty_mapping,
+    nested_value,
+    validate_json_value,
+)
+from alphus.support.inventory import matches_path
+from alphus.support.source_text import read_python_source, read_utf8_text
+
+
+class LayoutRuleId(StrEnum):
+    """Stable identifiers emitted by repository layout checks."""
+
+    ROUTER_ROOT_MISSING = rule_tag(
+        Scope.REPOSITORY, Framework.NONE, Category.CONFIGURATION, "router-root-missing"
+    )
+    BRIDGE_ROOT_MISSING = rule_tag(
+        Scope.REPOSITORY, Framework.NONE, Category.CONFIGURATION, "bridge-root-missing"
+    )
+    BRIDGE_ROOT_MARKER_MISSING = rule_tag(
+        Scope.REPOSITORY,
+        Framework.NONE,
+        Category.CONFIGURATION,
+        "bridge-root-marker-missing",
+    )
+    ROUTER_AREA_MISSING = rule_tag(
+        Scope.REPOSITORY, Framework.NONE, Category.CONFIGURATION, "router-area-missing"
+    )
+    BRIDGE_AREA_MISSING = rule_tag(
+        Scope.REPOSITORY, Framework.NONE, Category.CONFIGURATION, "bridge-area-missing"
+    )
+    BRIDGE_SCOPE_MISSING = rule_tag(
+        Scope.REPOSITORY, Framework.NONE, Category.CONFIGURATION, "bridge-scope-missing"
+    )
+    BRIDGE_ROUTER_IMPORT_MISSING = rule_tag(
+        Scope.REPOSITORY,
+        Framework.NONE,
+        Category.CONFIGURATION,
+        "bridge-router-import-missing",
+    )
+    PATH_REQUIRED = rule_tag(
+        Scope.REPOSITORY, Framework.NONE, Category.CONFIGURATION, "path-required"
+    )
+    PATH_FORBIDDEN = rule_tag(
+        Scope.REPOSITORY, Framework.NONE, Category.CONFIGURATION, "path-forbidden"
+    )
+    GLOB_FORBIDDEN = rule_tag(
+        Scope.REPOSITORY, Framework.NONE, Category.CONFIGURATION, "glob-forbidden"
+    )
+    JSON_ARRAY_VALUE_REQUIRED = rule_tag(
+        Scope.REPOSITORY,
+        Framework.NONE,
+        Category.CONFIGURATION,
+        "json-array-value-required",
+    )
+    PYTHON_SYMBOL_REQUIRED = rule_tag(
+        Scope.REPOSITORY,
+        Framework.NONE,
+        Category.CONFIGURATION,
+        "python-symbol-required",
+    )
+    TOML_TABLE_REQUIRED = rule_tag(
+        Scope.REPOSITORY, Framework.NONE, Category.CONFIGURATION, "toml-table-required"
+    )
+    TRACKED_SUFFIX_FORBIDDEN = rule_tag(
+        Scope.REPOSITORY, Framework.NONE, Category.HYGIENE, "tracked-suffix-forbidden"
+    )
+    TRACKED_PATH_FORBIDDEN = rule_tag(
+        Scope.REPOSITORY, Framework.NONE, Category.HYGIENE, "tracked-path-forbidden"
+    )
+    ROOT_DOCUMENT_FORBIDDEN = rule_tag(
+        Scope.REPOSITORY, Framework.NONE, Category.HYGIENE, "root-document-forbidden"
+    )
+
+
+def _safe_path(root: Path, relative: str) -> Path | None:
+    path = root / relative
+    try:
+        path.resolve(strict=True).relative_to(root)
+    except (OSError, ValueError):
+        return None
+    return path
+
+
+def _safe_file(root: Path, relative: str) -> Path | None:
+    path = _safe_path(root, relative)
+    return path if path is not None and path.is_file() else None
+
+
+def _router_findings(root: Path, policy: InstructionRouterPolicy) -> list[Finding]:
+    findings: list[Finding] = []
+    instruction = _safe_file(root, policy.root_instruction_path)
+    if instruction is None:
+        findings.append(
+            Finding(
+                rule_id=LayoutRuleId.ROUTER_ROOT_MISSING,
+                path=policy.root_instruction_path,
+                message=policy.missing_root_instruction_message,
+            )
+        )
+    bridge = _safe_file(root, policy.root_bridge_path)
+    if bridge is None:
+        findings.append(
+            Finding(
+                rule_id=LayoutRuleId.BRIDGE_ROOT_MISSING,
+                path=policy.root_bridge_path,
+                message=policy.missing_root_bridge_message,
+            )
+        )
+    elif policy.root_bridge_marker not in read_utf8_text(bridge):
+        findings.append(
+            Finding(
+                rule_id=LayoutRuleId.BRIDGE_ROOT_MARKER_MISSING,
+                path=policy.root_bridge_path,
+                message=policy.missing_root_marker_message,
+            )
+        )
+    for route in policy.routes:
+        router = _safe_file(root, route.router_path)
+        if router is None:
+            findings.append(
+                Finding(
+                    rule_id=LayoutRuleId.ROUTER_AREA_MISSING,
+                    path=route.router_path,
+                    message=policy.missing_area_router_message.replace(
+                        "{area}", route.area
+                    ),
+                )
+            )
+        area_bridge = _safe_file(root, route.bridge_path)
+        if area_bridge is None:
+            findings.append(
+                Finding(
+                    rule_id=LayoutRuleId.BRIDGE_AREA_MISSING,
+                    path=route.bridge_path,
+                    message=policy.missing_area_bridge_message.replace(
+                        "{area}", route.area
+                    ),
+                )
+            )
+            continue
+        contents = read_utf8_text(area_bridge)
+        if route.scope_marker not in contents:
+            findings.append(
+                Finding(
+                    rule_id=LayoutRuleId.BRIDGE_SCOPE_MISSING,
+                    path=route.bridge_path,
+                    message=policy.missing_scope_message.replace("{area}", route.area),
+                )
+            )
+        if route.import_marker not in contents:
+            findings.append(
+                Finding(
+                    rule_id=LayoutRuleId.BRIDGE_ROUTER_IMPORT_MISSING,
+                    path=route.bridge_path,
+                    message=policy.missing_import_message.replace("{area}", route.area),
+                )
+            )
+    for router_path in policy.required_router_paths:
+        if _safe_file(root, router_path) is None:
+            findings.append(
+                Finding(
+                    rule_id=LayoutRuleId.ROUTER_AREA_MISSING,
+                    path=router_path,
+                    message=policy.missing_nested_router_message.replace(
+                        "{path}", router_path
+                    ),
+                )
+            )
+    return findings
+
+
+def check_repository_layout(
+    root: Path,
+    policy: RepositoryLayoutPolicy,
+    tracked_files: Sequence[Path] = (),
+) -> list[Finding]:
+    """Report configured missing paths, retired paths, and manifest violations."""
+    checkout = root.resolve(strict=True)
+    findings: list[Finding] = []
+    for rule in policy.required_paths:
+        path = checkout / rule.path
+        if not path.exists() or _safe_path(checkout, rule.path) is None:
+            findings.append(
+                Finding(
+                    rule_id=LayoutRuleId.PATH_REQUIRED,
+                    path=rule.path,
+                    message=rule.message,
+                )
+            )
+    for rule in policy.forbidden_paths:
+        path = checkout / rule.path
+        if path.exists():
+            findings.append(
+                Finding(
+                    rule_id=LayoutRuleId.PATH_FORBIDDEN,
+                    path=rule.path,
+                    message=rule.message,
+                )
+            )
+    for rule in policy.forbidden_globs:
+        matches = sorted(
+            path
+            for path in checkout.glob(rule.pattern)
+            if path.is_file()
+            and _safe_file(checkout, path.relative_to(checkout).as_posix())
+        )
+        if matches:
+            findings.append(
+                Finding(
+                    rule_id=LayoutRuleId.GLOB_FORBIDDEN,
+                    path=rule.pattern,
+                    message=rule.message.replace("{count}", str(len(matches))),
+                )
+            )
+    for rule in policy.required_json_array_values:
+        path = _safe_file(checkout, rule.path)
+        try:
+            value: object = validate_json_value(read_utf8_text(path)) if path else None
+        except (OSError, ValueError):
+            value = None
+        array = nested_value(value, rule.key)
+        if not contains_member(array, rule.value):
+            findings.append(
+                Finding(
+                    rule_id=LayoutRuleId.JSON_ARRAY_VALUE_REQUIRED,
+                    path=rule.path,
+                    message=rule.message,
+                )
+            )
+    for rule in policy.required_python_symbols:
+        path = _safe_file(checkout, rule.path)
+        try:
+            tree = ast.parse(read_python_source(path)) if path else None
+        except (OSError, SyntaxError):
+            tree = None
+        present = False
+        if tree is not None:
+            for node in tree.body:
+                match node:
+                    case ast.FunctionDef(name=name) if (
+                        rule.kind == "function" and name == rule.symbol
+                    ):
+                        present = True
+                    case ast.ClassDef(name=name) if (
+                        rule.kind == "class" and name == rule.symbol
+                    ):
+                        present = True
+                    case _:
+                        continue
+        if not present:
+            findings.append(
+                Finding(
+                    rule_id=LayoutRuleId.PYTHON_SYMBOL_REQUIRED,
+                    path=rule.path,
+                    message=rule.message,
+                )
+            )
+    for rule in policy.required_nonempty_toml_tables:
+        path = _safe_file(checkout, rule.path)
+        try:
+            value: object = tomllib.loads(read_utf8_text(path)) if path else None
+        except (OSError, tomllib.TOMLDecodeError):
+            value = None
+        table = nested_value(value, rule.key)
+        if not is_nonempty_mapping(table):
+            findings.append(
+                Finding(
+                    rule_id=LayoutRuleId.TOML_TABLE_REQUIRED,
+                    path=rule.path,
+                    message=rule.message,
+                )
+            )
+    allowed_root_documents = set(policy.allowed_root_documents)
+    for relative in tracked_files:
+        name = relative.as_posix()
+        for rule in policy.tracked_suffix_rules:
+            if relative.suffix.lower() in rule.suffixes:
+                findings.append(
+                    Finding(
+                        rule_id=LayoutRuleId.TRACKED_SUFFIX_FORBIDDEN,
+                        path=name,
+                        message=f"tracked {rule.label} file: {name}",
+                    )
+                )
+        for rule in policy.tracked_path_rules:
+            if matches_path(name, rule.pattern):
+                findings.append(
+                    Finding(
+                        rule_id=LayoutRuleId.TRACKED_PATH_FORBIDDEN,
+                        path=name,
+                        message=rule.message.replace("{path}", name),
+                    )
+                )
+        if (
+            len(PurePosixPath(name).parts) == 1
+            and relative.suffix.lower() == policy.root_document_extension
+            and relative.name not in allowed_root_documents
+        ):
+            findings.append(
+                Finding(
+                    rule_id=LayoutRuleId.ROOT_DOCUMENT_FORBIDDEN,
+                    path=name,
+                    message=policy.root_document_message.replace("{path}", name),
+                )
+            )
+    if policy.instruction_router is not None:
+        findings.extend(_router_findings(checkout, policy.instruction_router))
+    return findings

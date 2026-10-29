@@ -1,0 +1,98 @@
+{
+  "name": "@alphus/javascript-quality",
+  "version": "0.1.0",
+  "description": "Reusable JavaScript, TypeScript, HTML, and CSS quality policy for Alphus consumers",
+  "type": "module",
+  "engines": {
+    "node": "^20.19.0 || ^22.13.0 || >=24"
+  },
+  "files": [
+    "javascript"
+  ],
+  "exports": {
+    "./eslint": {
+      "types": "./javascript/eslint.config.d.ts",
+      "import": "./javascript/eslint.config.js"
+    },
+    "./eslint/react": {
+      "types": "./javascript/react.config.d.ts",
+      "import": "./javascript/react.config.js"
+    },
+    "./eslint/angular": {
+      "types": "./javascript/angular.config.d.ts",
+      "import": "./javascript/angular.config.js"
+    },
+    "./html-validate": {
+      "types": "./javascript/html-validate.config.d.ts",
+      "import": "./javascript/html-validate.config.js"
+    },
+    "./stylelint": {
+      "types": "./javascript/stylelint.config.d.ts",
+      "import": "./javascript/stylelint.config.js"
+    },
+    "./prettier": {
+      "types": "./javascript/prettier.config.d.ts",
+      "import": "./javascript/prettier.config.js"
+    },
+    "./tsconfig": "./javascript/tsconfig.json"
+  },
+  "scripts": {
+    "test": "node --test javascript/tests/*.test.mjs",
+    "lint": "eslint javascript",
+    "format:check": "prettier --check javascript package.json",
+    "typecheck": "tsc -p javascript/tsconfig.check.json",
+    "format:markdown:check": "prettier --check docs/SOURCE-HYGIENE.md \"quality_gates/**/*.md\"",
+    "format:markdown": "prettier --write docs/SOURCE-HYGIENE.md \"quality_gates/**/*.md\""
+  },
+  "dependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint-plugin-jsdoc": "^63.3.3",
+    "globals": "^16.5.0"
+  },
+  "devDependencies": {
+    "@eslint-react/eslint-plugin": "^5.28.8",
+    "@types/node": "^22.20.5",
+    "angular-eslint": "^22.6.0",
+    "eslint": "^10.13.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "html-validate": "^10.17.0",
+    "prettier": "^3.9.9",
+    "stylelint": "^17.16.0",
+    "stylelint-config-standard": "^40.0.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.72.0"
+  },
+  "peerDependencies": {
+    "@eslint-react/eslint-plugin": "^5.28.8",
+    "angular-eslint": "^22.6.0",
+    "eslint": "^10.0.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "html-validate": "^10.17.0",
+    "stylelint": "^17.16.0",
+    "stylelint-config-standard": "^40.0.0",
+    "typescript-eslint": "^8.72.0"
+  },
+  "peerDependenciesMeta": {
+    "@eslint-react/eslint-plugin": {
+      "optional": true
+    },
+    "angular-eslint": {
+      "optional": true
+    },
+    "eslint-plugin-react-hooks": {
+      "optional": true
+    },
+    "html-validate": {
+      "optional": true
+    },
+    "stylelint": {
+      "optional": true
+    },
+    "stylelint-config-standard": {
+      "optional": true
+    },
+    "typescript-eslint": {
+      "optional": true
+    }
+  }
+}
