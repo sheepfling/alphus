@@ -1,15 +1,15 @@
-"""Shared synthetic renderer and serializer used by the TITAN regression map."""
+"""Synthetic renderer and serializer helpers shared by CLI controls."""
 
 import json
 
 from rich.console import Console
 
 
-def render_doctor(report: object, console: Console) -> None:
+def render_report(report: object, console: Console) -> None:
     console.print(report)
 
 
-def serialize_doctor(report: object) -> str:
+def serialize_report(report: object) -> str:
     return json.dumps(report, default=str)
 
 

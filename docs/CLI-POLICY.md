@@ -68,6 +68,12 @@ resolve to exactly one function in the declared source inventory, and treats
 both sides of a conditional as possible. It does not execute imports or
 evaluate branch feasibility.
 
+The local helper walk has a 256-function work budget per command. This fixed
+heuristic ceiling bounds analysis work; it is not a calibrated CLI policy
+threshold. If additional unvisited reachable functions remain after the budget
+is used, renderer evidence is inconclusive; already-visited queued functions
+are discarded without making the result inconclusive.
+
 Alphus reports `could not verify Rich output` when an imported call cannot be
 resolved to one in-scope function (for example, it is outside the inventory,
 ambiguous, unparseable, or not a module-level function) and the call visibly
@@ -89,13 +95,11 @@ evidence; Alphus does not execute the import. Other dynamic-import forms,
 reflection, runtime monkey-patching, indirect console flow through containers,
 and general control-flow behavior may remain unanalyzed.
 
-This distinction matters for tools with first-run fallbacks. TITAN's
-`scripts/build_standard.py` and `scripts/setup_titan.py` keep a standard-library
-command path available before optional Typer and Rich dependencies are
-installed. Their registered Typer commands use the richer presentation once
-those dependencies exist. The CLI policy evaluates that registered command
-path; it does not make installing Rich or Typer a prerequisite for the
-standard-library bootstrap path.
+This distinction matters for tools with first-run fallbacks. A CLI can keep a
+standard-library command path available before optional Typer and Rich
+dependencies are installed, then use those packages for registered commands
+when present. The CLI policy evaluates the registered command path without
+making optional packages a prerequisite for static analysis.
 
 ## Diagnostic and JSON compatibility
 
@@ -118,61 +122,12 @@ presentation prefix continue to normalize to the contract ID. Consumers that
 persist diagnostics should use the normalized diagnostic records and the exact
 IDs above instead of treating message text as a stable identifier.
 
-## TITAN comparison
+## Regression coverage
 
-The focused comparison ran `python -m alphus --root <TITAN checkout> --rule cli
---json` against one TITAN worktree at
-`0fac470cac009ee2aaa318d8d327d6013c781495`. The worktree already contained
-local edits; its `git status --porcelain -uall` SHA-256 was
-`f78fa29acfd6a803c068774193714eec7ffd8bbf2a80ed704eed2961645a9000` before and
-after both read-only rule invocations. The baseline used the archived Alphus
-`b4b6055a6ae0286912b461cd2b4262b3318c5a0c` environment and exited 1 with three
-messages: two requests for an explicit `--output` human mode and one request to
-support both configured Rich and plain styles. The first candidate run reported
-21 messages. Source review classified 17 as analyzer false positives: one
-imported Doctor serializer, twelve Rich renderer cases (typed helpers,
-module-level consoles, or imported shared renderers), and four conditional
-Typer `--json`/`--verbose` registrations. Four additional messages concerned
-the deliberate standard-library bootstrap paths described above; they are
-policy-scope decisions rather than reasons to install optional dependencies.
-
-The synthetic regression inventory maps all 17 cases and all four bootstrap
-cases to focused source fixtures in `tests/fixtures/cli_policy/titan/`. The map
-in `tests/gates/source/test_cli_policy_engine.py` records each TITAN source
-path, synthetic fixture endpoint, fixture file, and finding category. Its
-bootstrap check blocks imports of Typer and Rich while analyzing the fallback
-fixtures, so passing the static check does not depend on either optional
-package being installed. Existing true-negative fixtures continue to ensure
-an unused Rich helper, an unrelated serializer, or a file-output option cannot
-satisfy a command's policy.
-
-The wheel built from commit
-`36f176effa79c76089777ee5a85c9525d574fbb6` (SHA-256
-`1d13c1b20d5baa07b2bd16d442b98a2c8256a3b3da4b2986b3bab91545558c66`) ran the
-same rule against that TITAN checkout under Python 3.12 and returned `[]` with
-exit 0. The wheel itself was imported from its installed artifact, matching the
-syntax used in TITAN's current sources. An initial Python 3.11 attempt stopped
-at TITAN's PEP 695 `type` alias during AST parsing, before findings could be
-evaluated; that attempt is not consumer evidence. No unresolved-renderer
-message was reported for this inventory. The TITAN worktree status fingerprint
-was `f78fa29acfd6a803c068774193714eec7ffd8bbf2a80ed704eed2961645a9000` both
-before and after the read-only comparison.
-
-A negative control used a temporary copy of TITAN's quality policy with its
-required JSON option changed to a deliberately absent flag. The candidate
-exited 1 and reported the missing option for 47 recognized commands. The
-original TITAN policy and checkout were not changed.
-
-The wheel-backed self-profile passed all 26 steps with 0 failures, including
-1,083 package tests passed and 1 skipped. Both provisional review rollouts
-passed with no findings. The wheel was built using the already installed build
-tools and installed into a temporary target; the self-profile and consumer
-controls imported that artifact. A prior attempt to use the CI wrapper's
-editable-install phase could not fetch `setuptools>=68` in this network-
-restricted environment.
-
-Alphus passing its own profile does not establish acceptance by TITAN: Alphus's
-self-profile only checks the rules and source inventory selected by Alphus's
-own configuration. The consumer comparison must be run against TITAN's policy
-and recorded separately. This section records the observed trial; it is not a
-claim that other TITAN profiles or its complete CI passed.
+Synthetic source fixtures cover imported serializers and renderers, typed
+local helpers, module-level renderer instances, conditional Typer registration,
+and optional-dependency fallbacks. Positive and negative controls distinguish
+an output-file destination from an output-style selector and ensure unused
+helpers or unrelated serializers do not satisfy a command contract. This
+coverage exercises the configured Python/Typer model; it does not claim support
+for other CLI frameworks or stand in for consumer CI.

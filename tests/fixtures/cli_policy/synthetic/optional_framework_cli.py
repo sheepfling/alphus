@@ -1,4 +1,4 @@
-"""Optional-dependency CLI with a standard-library setup fallback."""
+"""Synthetic CLI with one shared optional-dependency fallback."""
 
 import json
 import sys
@@ -26,7 +26,17 @@ def fallback_main(arguments: Sequence[str]) -> int:
 if app is not None:
 
     @app.command()
-    def setup_titan(
+    def command_one(
+        json_output: bool = typer.Option(False, "--json"),
+        verbose: bool = typer.Option(False, "--verbose"),
+    ) -> None:
+        if json_output:
+            typer.echo(json.dumps({"ready": True}))
+        else:
+            Console().print("ready")
+
+    @app.command()
+    def command_two(
         json_output: bool = typer.Option(False, "--json"),
         verbose: bool = typer.Option(False, "--verbose"),
     ) -> None:

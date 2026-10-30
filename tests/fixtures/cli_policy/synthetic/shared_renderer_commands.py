@@ -1,16 +1,16 @@
-"""Commands whose output is rendered by a uniquely resolved imported helper."""
+"""Synthetic commands that delegate presentation to one imported renderer."""
 
 import json
 
 import typer
 from rich.console import Console
-from titan.output import render_shared
+from synthetic.renderer_helpers import render_shared
 
 app = typer.Typer()
 
 
 @app.command()
-def dis_network_send(
+def command_1(
     json_output: bool = typer.Option(False, "--json"),
     verbose: bool = typer.Option(False, "--verbose"),
 ) -> None:
@@ -21,7 +21,7 @@ def dis_network_send(
 
 
 @app.command()
-def dis_network_receive(
+def command_2(
     json_output: bool = typer.Option(False, "--json"),
     verbose: bool = typer.Option(False, "--verbose"),
 ) -> None:
@@ -32,7 +32,7 @@ def dis_network_receive(
 
 
 @app.command()
-def dis_network_interop(
+def command_3(
     json_output: bool = typer.Option(False, "--json"),
     verbose: bool = typer.Option(False, "--verbose"),
 ) -> None:
@@ -43,7 +43,7 @@ def dis_network_interop(
 
 
 @app.command()
-def dis_soak_test(
+def command_4(
     json_output: bool = typer.Option(False, "--json"),
     verbose: bool = typer.Option(False, "--verbose"),
 ) -> None:
@@ -54,7 +54,7 @@ def dis_soak_test(
 
 
 @app.command()
-def offline_map_pack_audit(
+def command_5(
     json_output: bool = typer.Option(False, "--json"),
     verbose: bool = typer.Option(False, "--verbose"),
 ) -> None:

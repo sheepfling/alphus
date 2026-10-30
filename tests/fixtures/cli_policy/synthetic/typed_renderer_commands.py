@@ -1,4 +1,4 @@
-"""Commands whose renderer evidence reaches typed local helpers."""
+"""Synthetic commands that pass typed Rich consoles through a local helper."""
 
 import json
 
@@ -13,7 +13,7 @@ def _render(report: object, console: Console) -> None:
 
 
 @app.command()
-def deployment_acceptance(
+def command_1(
     json_output: bool = typer.Option(False, "--json"),
     verbose: bool = typer.Option(False, "--verbose"),
 ) -> None:
@@ -24,7 +24,7 @@ def deployment_acceptance(
 
 
 @app.command()
-def grill(
+def command_2(
     json_output: bool = typer.Option(False, "--json"),
     verbose: bool = typer.Option(False, "--verbose"),
 ) -> None:
@@ -35,7 +35,7 @@ def grill(
 
 
 @app.command()
-def install_test_classes(
+def command_3(
     json_output: bool = typer.Option(False, "--json"),
     verbose: bool = typer.Option(False, "--verbose"),
 ) -> None:
@@ -46,7 +46,7 @@ def install_test_classes(
 
 
 @app.command()
-def stream_titan_mission(
+def command_4(
     json_output: bool = typer.Option(False, "--json"),
     verbose: bool = typer.Option(False, "--verbose"),
 ) -> None:
@@ -57,7 +57,7 @@ def stream_titan_mission(
 
 
 @app.command()
-def taoryx_compatibility(
+def command_5(
     json_output: bool = typer.Option(False, "--json"),
     verbose: bool = typer.Option(False, "--verbose"),
 ) -> None:

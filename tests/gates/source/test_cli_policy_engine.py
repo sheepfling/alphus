@@ -5,6 +5,7 @@ import builtins
 import json
 from collections import Counter
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
 from typing import cast
@@ -15,7 +16,10 @@ from pydantic import ValidationError
 from alphus.config import CliPolicy, NodeCliPolicy, PythonCliPolicy
 from alphus.contracts.findings import Diagnostic
 from alphus.execution.results import RuleEvaluation, diagnostics_from_json
-from alphus.gates.languages.python.cli_policy import python_cli_issues
+from alphus.gates.languages.python.cli_policy import (
+    _MAX_SOURCE_REACHABLE_FUNCTIONS,
+    python_cli_issues,
+)
 from alphus.gates.source.cli_policy import (
     CliPolicyFinding,
     CliPolicyReport,
@@ -57,136 +61,69 @@ POLICY = CliPolicy(
     node_endpoint_message="move Node commands to the configured Python CLI",
 )
 
-_TITAN_FALSE_POSITIVE_CASES = (
-    (
-        "apps/titan-server/src/titan_server/doctor_cli.py",
-        "titan/doctor.py",
-        "doctor",
+
+@dataclass(frozen=True, slots=True)
+class _CliNoFindingCase:
+    fixture_path: Path
+    command_name: str
+    evidence: str
+
+
+@dataclass(frozen=True, slots=True)
+class _OptionalImportCase:
+    fixture_path: Path
+    package_name: str
+
+
+_CLI_NO_FINDING_CASES = (
+    _CliNoFindingCase(
+        Path("synthetic/imported_helpers.py"),
+        "command_uses_imported_helpers",
         "imported serializer",
     ),
-    (
-        "apps/titan-server/src/titan_server/doctor_cli.py",
-        "titan/doctor.py",
-        "doctor",
+    _CliNoFindingCase(
+        Path("synthetic/imported_helpers.py"),
+        "command_uses_imported_helpers",
         "imported Rich renderer",
     ),
-    (
-        "integrations/deployment_acceptance/cli.py",
-        "titan/typed_helpers.py",
-        "deployment_acceptance",
-        "typed Rich helper",
+    *(
+        _CliNoFindingCase(
+            Path("synthetic/typed_renderer_commands.py"),
+            f"command_{index}",
+            "typed Rich helper",
+        )
+        for index in range(1, 6)
     ),
-    (
-        "integrations/grill/cli.py",
-        "titan/typed_helpers.py",
-        "grill",
-        "typed Rich helper",
+    *(
+        _CliNoFindingCase(
+            Path("synthetic/shared_renderer_commands.py"),
+            f"command_{index}",
+            "imported shared Rich renderer",
+        )
+        for index in range(1, 6)
     ),
-    (
-        "integrations/grill/harness/install_test_classes.py",
-        "titan/typed_helpers.py",
-        "install_test_classes",
-        "typed Rich helper",
-    ),
-    (
-        "integrations/grill/harness/stream_titan_mission.py",
-        "titan/typed_helpers.py",
-        "stream_titan_mission",
-        "typed Rich helper",
-    ),
-    (
-        "integrations/taoryx_compatibility/cli.py",
-        "titan/typed_helpers.py",
-        "taoryx_compatibility",
-        "typed Rich helper",
-    ),
-    (
-        "scripts/dis_network_acceptance/cli.py",
-        "titan/shared_cli.py",
-        "dis_network_send",
-        "imported shared Rich renderer",
-    ),
-    (
-        "scripts/dis_network_acceptance/cli.py",
-        "titan/shared_cli.py",
-        "dis_network_receive",
-        "imported shared Rich renderer",
-    ),
-    (
-        "scripts/dis_network_acceptance/cli.py",
-        "titan/shared_cli.py",
-        "dis_network_interop",
-        "imported shared Rich renderer",
-    ),
-    (
-        "scripts/dis_soak_test/cli.py",
-        "titan/shared_cli.py",
-        "dis_soak_test",
-        "imported shared Rich renderer",
-    ),
-    (
-        "scripts/offline_map_pack_audit/cli.py",
-        "titan/shared_cli.py",
-        "offline_map_pack_audit",
-        "imported shared Rich renderer",
-    ),
-    (
-        "scripts/install_git_hooks.py",
-        "titan/module_console.py",
-        "install_git_hooks",
+    _CliNoFindingCase(
+        Path("synthetic/module_renderer.py"),
+        "command_uses_module_renderer",
         "module-level Rich Console",
     ),
-    (
-        "scripts/build_standard.py",
-        "titan/conditional_build.py",
-        "build_standard",
-        "conditional --json registration",
-    ),
-    (
-        "scripts/build_standard.py",
-        "titan/conditional_build.py",
-        "build_standard",
-        "conditional --verbose registration",
-    ),
-    (
-        "scripts/setup_titan.py",
-        "titan/conditional_setup.py",
-        "setup_titan",
-        "conditional --json registration",
-    ),
-    (
-        "scripts/setup_titan.py",
-        "titan/conditional_setup.py",
-        "setup_titan",
-        "conditional --verbose registration",
+    *(
+        _CliNoFindingCase(
+            Path("synthetic/optional_framework_cli.py"),
+            command,
+            option,
+        )
+        for command in ("command_one", "command_two")
+        for option in (
+            "conditional --json registration",
+            "conditional --verbose registration",
+        )
     ),
 )
 
-_TITAN_BOOTSTRAP_CASES = (
-    (
-        "scripts/build_standard.py",
-        "titan/conditional_build.py",
-        "build_standard",
-        "Typer remains optional for the standard-library fallback",
-    ),
-    (
-        "scripts/build_standard.py",
-        "titan/conditional_build.py",
-        "build_standard",
-        "Rich remains optional for the standard-library fallback",
-    ),
-    (
-        "scripts/setup_titan.py",
-        "titan/conditional_setup.py",
-        "setup_titan",
-        "Typer remains optional for the standard-library fallback",
-    ),
-    (
-        "scripts/setup_titan.py",
-        "titan/conditional_setup.py",
-        "setup_titan",
-        "Rich remains optional for the standard-library fallback",
-    ),
+_OPTIONAL_IMPORT_CASES = (
+    _OptionalImportCase(Path("synthetic/optional_framework_cli.py"), "typer"),
+    _OptionalImportCase(Path("synthetic/optional_framework_cli.py"), "rich"),
 )
 
 
@@ -531,6 +468,150 @@ def test_unreachable_rich_helper_does_not_satisfy_a_command_renderer_policy() ->
     ]
 
 
+def _local_call_chain_source(
+    helper_count: int,
+    *,
+    cycle_at_end: bool,
+) -> str:
+    lines = [
+        "import json",
+        "import typer",
+        "from rich.console import Console",
+        "app = typer.Typer()",
+        "@app.command()",
+        (
+            "def show(json_output: bool = typer.Option(False, '--json'), "
+            "verbose: bool = typer.Option(False, '--verbose')):"
+        ),
+        "    if json_output: typer.echo(json.dumps({'ready': True}))",
+        "    else: _step_0()",
+    ]
+    for index in range(helper_count):
+        if index + 1 < helper_count:
+            body = f"_step_{index + 1}()"
+        elif cycle_at_end:
+            body = "_step_0()"
+        else:
+            body = "Console().print('ready')"
+        lines.extend((f"def _step_{index}():", f"    {body}"))
+    lines.extend(("if __name__ == '__main__':", "    app()"))
+    return "\n".join(lines)
+
+
+def test_call_graph_budget_marks_unvisited_renderer_evidence_inconclusive() -> None:
+    source = _local_call_chain_source(
+        _MAX_SOURCE_REACHABLE_FUNCTIONS,
+        cycle_at_end=False,
+    )
+
+    findings = tuple(
+        finding
+        for finding in python_cli_findings(
+            source, _python_policy(output_style_enforcement="off")
+        )
+        if finding.classification == "presentation"
+    )
+
+    assert len(findings) == 1
+    assert findings[0].evidence == "unresolved"
+    assert findings[0].severity == "info"
+    assert (
+        f"local call graph limit ({_MAX_SOURCE_REACHABLE_FUNCTIONS} functions)"
+        in findings[0].message
+    )
+
+
+def test_call_graph_at_budget_with_only_seen_nodes_is_complete() -> None:
+    source = _local_call_chain_source(
+        _MAX_SOURCE_REACHABLE_FUNCTIONS - 1,
+        cycle_at_end=True,
+    )
+
+    findings = tuple(
+        finding
+        for finding in python_cli_findings(
+            source, _python_policy(output_style_enforcement="off")
+        )
+        if finding.classification == "presentation"
+    )
+
+    assert len(findings) == 1
+    assert findings[0].evidence == "missing"
+    assert findings[0].severity == "error"
+    assert findings[0].message == "use Rich for human-readable output"
+
+
+@pytest.mark.parametrize(
+    ("app_setup", "registration", "entrypoint"),
+    (
+        ("", "", "typer.run(main)"),
+        ("app = typer.Typer()\n", "app.command()(main)\n", "app()"),
+    ),
+)
+def test_module_scope_call_registrations_analyze_the_named_command(
+    app_setup: str,
+    registration: str,
+    entrypoint: str,
+) -> None:
+    source = (
+        "import json\n"
+        "import typer\n"
+        "from rich.console import Console\n"
+        f"{app_setup}"
+        "def main(json_output: bool = typer.Option(False, '--json'), "
+        "verbose: bool = typer.Option(False, '--verbose')):\n"
+        "    if json_output: typer.echo(json.dumps({'ready': True}))\n"
+        "    else: Console().print('ready')\n"
+        f"{registration}"
+        "if __name__ == '__main__':\n"
+        f"    {entrypoint}\n"
+    )
+
+    assert (
+        python_cli_findings(source, _python_policy(output_style_enforcement="off"))
+        == ()
+    )
+
+
+@pytest.mark.parametrize(
+    ("app_setup", "nested_registration", "entrypoint"),
+    (
+        ("", "typer.run(main)", "configure()"),
+        ("app = typer.Typer()\n", "app.command()(main)", "configure()\n    app()"),
+    ),
+)
+def test_nested_call_registrations_do_not_create_commands(
+    app_setup: str,
+    nested_registration: str,
+    entrypoint: str,
+) -> None:
+    source = (
+        "import json\n"
+        "import typer\n"
+        "from rich.console import Console\n"
+        f"{app_setup}"
+        "def main(json_output: bool = typer.Option(False, '--json'), "
+        "verbose: bool = typer.Option(False, '--verbose')):\n"
+        "    if json_output: typer.echo(json.dumps({'ready': True}))\n"
+        "    else: Console().print('ready')\n"
+        "def configure():\n"
+        f"    {nested_registration}\n"
+        "if __name__ == '__main__':\n"
+        f"    {entrypoint}\n"
+    )
+
+    findings = python_cli_findings(
+        source, _python_policy(output_style_enforcement="off")
+    )
+
+    assert any(
+        finding.command == "<module>"
+        and finding.message == "offer an explicit --json machine output option"
+        for finding in findings
+    )
+    assert all(finding.command != "main" for finding in findings)
+
+
 def test_imported_renderer_and_serializer_are_followed_within_source_inventory(
     tmp_path: Path,
 ) -> None:
@@ -624,39 +705,8 @@ def test_unresolved_imported_renderer_is_reported_as_unverified_not_missing() ->
 
 
 def test_conditional_typer_import_and_command_registration_are_resolved() -> None:
-    source = (
-        "from typing import Any\n"
-        "import json\n"
-        "import sys\n"
-        "typer: Any = None\n"
-        "Console: Any = None\n"
-        "app: Any = None\n"
-        "try:\n"
-        "    import typer as _typer_module\n"
-        "    from rich.console import Console as _rich_console\n"
-        "except ModuleNotFoundError:\n"
-        "    pass\n"
-        "else:\n"
-        "    typer = _typer_module\n"
-        "    Console = _rich_console\n"
-        "    app = typer.Typer()\n"
-        "def fallback_main(arguments: list[str]) -> int:\n"
-        "    return 0\n"
-        "if app is not None:\n"
-        "    @app.command()\n"
-        "    def setup(json_output: bool = typer.Option(False, '--json'), "
-        "verbose: bool = typer.Option(False, '--verbose')) -> None:\n"
-        "        if json_output:\n"
-        "            typer.echo(json.dumps({'ok': True}))\n"
-        "        else:\n"
-        "            Console().print('ready')\n"
-        "def main() -> None:\n"
-        "    if app is None:\n"
-        "        raise SystemExit(fallback_main(sys.argv[1:]))\n"
-        "    app()\n"
-        "if __name__ == '__main__':\n"
-        "    main()\n"
-    )
+    fixture = Path("tests/fixtures/cli_policy/synthetic/optional_framework_cli.py")
+    source = fixture.read_text(encoding="utf-8")
 
     assert (
         python_cli_findings(source, _python_policy(output_style_enforcement="off"))
@@ -664,10 +714,10 @@ def test_conditional_typer_import_and_command_registration_are_resolved() -> Non
     )
 
 
-def test_titan_regression_cases_have_explicit_synthetic_fixture_coverage() -> None:
+def test_synthetic_cli_controls_have_semantic_fixture_coverage() -> None:
     fixture_root = Path("tests/fixtures/cli_policy")
-    assert len(_TITAN_FALSE_POSITIVE_CASES) == 17
-    assert Counter(case[3] for case in _TITAN_FALSE_POSITIVE_CASES) == {
+    assert len(_CLI_NO_FINDING_CASES) == 17
+    assert Counter(case.evidence for case in _CLI_NO_FINDING_CASES) == {
         "imported serializer": 1,
         "imported Rich renderer": 1,
         "typed Rich helper": 5,
@@ -676,25 +726,42 @@ def test_titan_regression_cases_have_explicit_synthetic_fixture_coverage() -> No
         "conditional --json registration": 2,
         "conditional --verbose registration": 2,
     }
-    assert len(_TITAN_BOOTSTRAP_CASES) == 4
+    assert len(_OPTIONAL_IMPORT_CASES) == 2
+    assert {case.package_name for case in _OPTIONAL_IMPORT_CASES} == {"typer", "rich"}
+    optional_import_paths = {case.fixture_path for case in _OPTIONAL_IMPORT_CASES}
+    assert optional_import_paths == {Path("synthetic/optional_framework_cli.py")}
 
     fixture_paths = {
-        Path(case[1])
-        for case in (*_TITAN_FALSE_POSITIVE_CASES, *_TITAN_BOOTSTRAP_CASES)
+        case.fixture_path for case in (*_CLI_NO_FINDING_CASES, *_OPTIONAL_IMPORT_CASES)
     }
-    fixture_paths.add(Path("titan/output.py"))
-    for _titan_path, fixture_path, command, _case in _TITAN_FALSE_POSITIVE_CASES:
-        source = (fixture_root / fixture_path).read_text(encoding="utf-8")
+    fixture_paths.add(Path("synthetic/renderer_helpers.py"))
+    for case in _CLI_NO_FINDING_CASES:
+        source = (fixture_root / case.fixture_path).read_text(encoding="utf-8")
         functions = {
             node.name
             for node in ast.walk(ast.parse(source))
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
         }
-        assert command in functions
+        assert case.command_name in functions
+
+    optional_import_fixtures: set[Path] = set()
+    optional_import_guard_count = 0
+    for fixture in (fixture_root / "synthetic").glob("*.py"):
+        tree = ast.parse(fixture.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Try) and any(
+                isinstance(handler.type, ast.Name)
+                and handler.type.id == "ModuleNotFoundError"
+                for handler in node.handlers
+            ):
+                optional_import_fixtures.add(fixture.relative_to(fixture_root))
+                optional_import_guard_count += 1
+    assert optional_import_fixtures == optional_import_paths
+    assert optional_import_guard_count == 1
 
     policy = CliPolicy(
         python=_python_policy(
-            json_serializers=["dumps", "model_dump_json", "serialize_doctor"],
+            json_serializers=["dumps", "model_dump_json", "serialize_report"],
             output_style_enforcement="off",
         ),
         node=None,
@@ -705,13 +772,13 @@ def test_titan_regression_cases_have_explicit_synthetic_fixture_coverage() -> No
     assert report.findings == ()
 
 
-def test_titan_bootstrap_fixtures_are_scanned_without_importing_optional_packages(
+def test_optional_framework_fixture_scans_without_importing_dependencies(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fixture_root = Path("tests/fixtures/cli_policy")
     policy = CliPolicy(
         python=_python_policy(
-            json_serializers=["dumps", "model_dump_json", "serialize_doctor"],
+            json_serializers=["dumps", "model_dump_json", "serialize_report"],
             output_style_enforcement="off",
         ),
         node=None,
@@ -729,14 +796,14 @@ def test_titan_bootstrap_fixtures_are_scanned_without_importing_optional_package
     monkeypatch.setattr(builtins, "__import__", reject_optional_import)
     report = policy_findings(
         fixture_root,
-        [Path("titan/conditional_build.py"), Path("titan/conditional_setup.py")],
+        [Path("synthetic/optional_framework_cli.py")],
         policy,
     )
 
     assert report.findings == ()
 
 
-def test_current_consumer_fixture_separates_file_output_and_style_selector() -> None:
+def test_typer_fixture_separates_file_output_and_style_selector() -> None:
     fixture = Path("tests/fixtures/cli_policy/typer_output_style.py")
     source = fixture.read_text(encoding="utf-8")
 

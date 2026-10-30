@@ -1,4 +1,4 @@
-"""Command with a module-level Rich Console instance."""
+"""Synthetic command that uses a module-level Rich Console instance."""
 
 import json
 
@@ -10,7 +10,7 @@ console = Console()
 
 
 @app.command()
-def install_git_hooks(
+def command_uses_module_renderer(
     json_output: bool = typer.Option(False, "--json"),
     verbose: bool = typer.Option(False, "--verbose"),
 ) -> None:

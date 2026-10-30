@@ -18,6 +18,11 @@ from alphus.contracts.cli_policy import (
 from alphus.contracts.findings import Severity
 from alphus.support.source_scanning import canonical_expression_name, import_aliases
 
+# Keep each command's helper walk within a fixed power-of-two work budget. The
+# 256-function ceiling is a heuristic, not an empirical threshold; exceeding it
+# leaves renderer evidence inconclusive.
+_MAX_SOURCE_REACHABLE_FUNCTIONS = 256
+
 
 def _name_target(target: ast.expr) -> str | None:
     match target:
@@ -416,11 +421,16 @@ def _source_reachable_functions(
     found: list[_FunctionEvidence] = []
     seen: set[tuple[Path | None, str]] = set()
     unsupported: set[str] = set()
-    while pending and len(found) < 256:
+    while pending:
         evidence, import_depth = pending.popleft()
         key = (evidence.module.path, evidence.function.name)
         if key in seen:
             continue
+        if len(found) >= _MAX_SOURCE_REACHABLE_FUNCTIONS:
+            unsupported.add(
+                f"local call graph limit ({_MAX_SOURCE_REACHABLE_FUNCTIONS} functions)"
+            )
+            break
         seen.add(key)
         found.append(evidence)
         instances = _function_rich_instances(
@@ -467,8 +477,6 @@ def _source_reachable_functions(
                 call, evidence.module.names, instances, package, required_calls
             ):
                 unsupported.add(target)
-    if pending:
-        unsupported.add("local call graph limit")
     return tuple(found), tuple(sorted(unsupported))
 
 
@@ -741,6 +749,7 @@ def _registered_commands(
     functions = _function_map(tree)
     commands: dict[str, list[tuple[str, str]]] = {}
     callbacks: dict[str, list[str]] = {}
+    direct_commands: list[_Command] = []
     for function in functions.values():
         for decorator in function.decorator_list:
             registration = _registration(decorator, apps)
@@ -756,8 +765,23 @@ def _registered_commands(
     for statement in _module_scope_statements(tree.body):
         if not isinstance(statement, ast.Expr):
             continue
+        expression = statement.value
+        if isinstance(expression, ast.Call) and names.matches_call(
+            expression, policy.typer_package, policy.typer_calls
+        ):
+            target_name = names.canonical_name(expression.func).rsplit(".", 1)[-1]
+            if (
+                target_name == "run"
+                and expression.args
+                and isinstance(expression.args[0], ast.Name)
+                and expression.args[0].id in functions
+            ):
+                function_name = expression.args[0].id
+                direct_commands.append(
+                    _Command(function_name, functions[function_name], None)
+                )
         registration = _registration(statement.value, apps)
-        if registration is None or registration[1] != "callback":
+        if registration is None:
             continue
         app_name, kind, display_name = registration
         nested_call = statement.value
@@ -765,7 +789,12 @@ def _registered_commands(
             case ast.Call(func=ast.Call(), args=[ast.Name(id=target), *_]) if (
                 target in functions
             ):
-                callbacks.setdefault(app_name, []).append(target)
+                if kind == "command":
+                    commands.setdefault(app_name, []).append(
+                        (target, display_name or target)
+                    )
+                elif kind == "callback":
+                    callbacks.setdefault(app_name, []).append(target)
             case _:
                 pass
     output: list[_Command] = []
@@ -778,6 +807,7 @@ def _registered_commands(
             for name, display_name in registered
             if name in functions
         )
+    output.extend(direct_commands)
     if output:
         return tuple(output)
     callback_commands = [
