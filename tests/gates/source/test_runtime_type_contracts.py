@@ -83,6 +83,16 @@ def test_explicit_contract_boundaries(source: str, allowed: bool) -> None:
             "import ast\ndef f(tree: ast.Module):\n return [x.id for x in ast.walk(tree) if i"
             "sinstance(x, ast.Name)]"
         ),
+        (
+            "import ast\ndef f(tree: ast.Module):\n"
+            " for statement in tree.body:\n"
+            "  if not isinstance(statement, ast.Expr):\n"
+            "   continue\n"
+            "  expression = statement.value\n"
+            "  if isinstance(expression, ast.Call) and expression.args and "
+            "isinstance(expression.args[0], ast.Name):\n"
+            "   return expression.args[0].id"
+        ),
         "import ast\ndef f(xs: list[ast.expr]):\n for x in xs:\n  if isinstance(x, ast.Name): pass",
         (
             "import ast\nfrom collections.abc import Mapping\ndef f(xs: Mapping[str, ast.Clas"

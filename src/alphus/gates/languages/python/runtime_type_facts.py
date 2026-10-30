@@ -180,6 +180,10 @@ def ast_field(shape: ValueShape, attribute: str) -> ValueShape:
                 name, "ast.operator"
             )
             values.append(named(family))
+        elif attribute == "args" and name == "ast.Call":
+            values.append(
+                ValueShape(frozenset({"builtins.list"}), (named("ast.expr"),))
+            )
         elif attribute == "args" and name in {
             "ast.FunctionDef",
             "ast.AsyncFunctionDef",
