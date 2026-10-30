@@ -57,8 +57,6 @@ _IMPLEMENTATION_SUFFIXES = frozenset({".c", ".cc", ".cpp", ".cxx"})
 _HEADER_SUFFIXES = frozenset({".h", ".hh", ".hpp", ".hxx"})
 _SOURCE_SUFFIXES = _FRAGMENT_SUFFIXES | _IMPLEMENTATION_SUFFIXES | _HEADER_SUFFIXES
 _OWNER_SUFFIXES = _SOURCE_SUFFIXES - _FRAGMENT_SUFFIXES
-_IMPACT_HEADER_SUFFIXES = _HEADER_SUFFIXES
-_IMPACT_SOURCE_SUFFIXES = _SOURCE_SUFFIXES
 _INCLUDE_REGEX = re.compile(
     r'^\s*#\s*include\s*[<"]([^">]+\.(?:inc|inl|ipp|tpp|c|cc|cpp|cxx|h|hh|hpp|hxx))[>"]'
 )
@@ -922,7 +920,7 @@ def check_impact(
         for path in _files(root)
         if path.is_file()
         and not path.is_symlink()
-        and path.suffix.lower() in _IMPACT_SOURCE_SUFFIXES
+        and path.suffix.lower() in _SOURCE_SUFFIXES
         and _matches(path.relative_to(root).as_posix(), includes)
         and not _matches(path.relative_to(root).as_posix(), excludes)
     }
@@ -957,7 +955,7 @@ def check_impact(
     header_paths = [
         path
         for path in forward
-        if Path(path).suffix.lower() in _IMPACT_HEADER_SUFFIXES | _FRAGMENT_SUFFIXES
+        if Path(path).suffix.lower() in _HEADER_SUFFIXES | _FRAGMENT_SUFFIXES
     ]
     dependency_closures = {
         path: _include_closure(forward, path) for path in header_paths
@@ -1026,7 +1024,7 @@ def check_impact(
                     )
                 relative = header_path.as_posix()
             if relative not in reverse or Path(relative).suffix.lower() not in (
-                _IMPACT_HEADER_SUFFIXES | _FRAGMENT_SUFFIXES
+                _HEADER_SUFFIXES | _FRAGMENT_SUFFIXES
             ):
                 continue
             if relative in translation_units:
