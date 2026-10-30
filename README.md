@@ -5,6 +5,21 @@ the river Heracles put to work on the Augean stables.
 The package keeps rule implementations independent of a project's layout and
 loads file scopes, thresholds, and repository conventions from TOML.
 
+## Repository map
+
+- `src/alphus/` contains the checker implementation and CLI.
+- `tests/` contains the package's automated tests.
+- The root `quality-gates.toml` is the active policy for checking this
+  Alphus checkout; local runs and CI use it.
+- `examples/**/quality-gates.toml` files are consumer starting points.
+  Some are also test fixtures, but they do not configure the root
+  self-check.
+- `examples/cpp/policies/*.json` contains example inputs for the C++
+  checkers. Consumers copy and calibrate them for their own builds.
+- `docs/` contains user and checker guides; `docs/cpp/` holds the
+  detailed C++ evidence contracts.
+- `javascript/` contains Alphus's installable JavaScript policy package.
+
 ## Source layout
 
 `src/alphus/gates/` groups the checks by theme: `source` for source and
@@ -76,6 +91,10 @@ commit rather than a branch name:
 python -m pip install \
   "alphus @ git+https://github.com/sheepfling/alphus.git@<commit-sha>"
 ```
+
+For reusable GitHub Actions, GitLab CI, and Azure Pipelines integrations, see
+[CI integrations](docs/CI-INTEGRATIONS.md). They all invoke the same Python
+CLI and leave project-specific tools and policy in the consumer repository.
 
 ## Web quality package
 
@@ -181,6 +200,8 @@ cross-language native mappings, resolved plans, and evidence handling. The
 [shared stub-package CI action](docs/STUB-PACKAGE-CI.md) hosts reusable
 PEP 561 build, checker, and runtime-compatibility gates without adding an
 Alphus dependency to published stub packages. The
+[C++ quality gates](docs/CPP-QUALITY.md) provide reusable source, build,
+test, package, artifact, and worktree checks through Alphus profiles. The
 [extension and diagnostics proposal](docs/EXTENSIBILITY.md) records a staged
 design for categories, shared findings, and future third-party rules. The
 [cyclomatic complexity guide](docs/CYCLOMATIC-COMPLEXITY.md) documents the

@@ -1,0 +1,451 @@
+"""Plan opt-in native function-shape rules without measuring source ourselves."""
+
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from pathlib import Path
+from types import MappingProxyType
+from typing import Final, TypeAlias, cast
+
+from pydantic import ConfigDict, TypeAdapter, ValidationError
+
+from alphus.contracts.findings import Severity
+from alphus.policy.base import StrictModel
+from alphus.policy.sources import (
+    FunctionShapeMetric,
+    FunctionShapeOverride,
+    FunctionShapePolicy,
+    FunctionShapeTarget,
+)
+
+JsonScalar: TypeAlias = str | int | float | bool | None
+JsonContainer: TypeAlias = Mapping[str, object] | Sequence[object]
+JsonCompatible: TypeAlias = JsonScalar | JsonContainer
+FrozenJson: TypeAlias = (
+    JsonScalar | tuple["FrozenJson", ...] | Mapping[str, "FrozenJson"]
+)
+MutableJson: TypeAlias = JsonScalar | list["MutableJson"] | dict[str, "MutableJson"]
+
+
+class _CompilationCommand(StrictModel):
+    """One validated entry in a clang compilation database."""
+
+    model_config = ConfigDict(extra="allow", frozen=True, strict=True)
+
+    directory: str
+    file: str
+    command: str | None = None
+    arguments: tuple[str, ...] | None = None
+
+
+_COMPILATION_COMMANDS: TypeAdapter[list[_CompilationCommand]] = TypeAdapter(
+    list[_CompilationCommand]
+)
+
+
+@dataclass(frozen=True, slots=True)
+class FunctionShapeMetricPlan:
+    metric: str
+    native_rule: str
+    definition: str
+    maximum: int
+    native_options: FrozenJson
+    severity: str
+    severity_mapping: str
+
+
+@dataclass(frozen=True, slots=True)
+class FunctionShapeOverridePlan:
+    scope: Mapping[str, FrozenJson]
+    metrics_replace_target: bool
+    metrics: tuple[FunctionShapeMetricPlan, ...]
+    severity: str
+
+
+@dataclass(frozen=True, slots=True)
+class FunctionShapeTargetPlan:
+    language: str
+    backend: str
+    minimum_version: str
+    scope: Mapping[str, FrozenJson]
+    metrics: tuple[FunctionShapeMetricPlan, ...]
+    overrides: tuple[FunctionShapeOverridePlan, ...]
+    advisory_rollout: bool
+    preview_requirements: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class FunctionShapePlan:
+    """An immutable native plan with an explicit JSON serialization boundary."""
+
+    schema_version: int
+    policy: str
+    targets: tuple[FunctionShapeTargetPlan, ...]
+
+    def to_dict(self) -> dict[str, MutableJson]:
+        """Serialize this immutable plan into fresh mutable JSON-compatible data."""
+        return {
+            "schema_version": self.schema_version,
+            "policy": self.policy,
+            "targets": [_target_dict(target) for target in self.targets],
+        }
+
+
+def _freeze_json(value: object) -> FrozenJson:
+    """Recursively freeze JSON-compatible planner data for safe sharing."""
+    match value:
+        case None | str() | int() | float() | bool():
+            return value
+        case Mapping():
+            entries = cast(Mapping[object, object], value)
+            return MappingProxyType(
+                {
+                    str(key): _freeze_json(cast(JsonCompatible, item))
+                    for key, item in entries.items()
+                }
+            )
+        case Sequence():
+            return tuple(
+                _freeze_json(cast(JsonCompatible, item))
+                for item in cast(Sequence[object], value)
+            )
+        case _:
+            raise TypeError(
+                f"plan values must be JSON-compatible, got {type(value).__name__}"
+            )
+
+
+def _thaw_json(value: FrozenJson) -> MutableJson:
+    if isinstance(value, Mapping):
+        return {key: _thaw_json(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [_thaw_json(item) for item in value]
+    return value
+
+
+def _metric_dict(metric: FunctionShapeMetricPlan) -> dict[str, MutableJson]:
+    return {
+        "metric": metric.metric,
+        "native_rule": metric.native_rule,
+        "definition": metric.definition,
+        "maximum": metric.maximum,
+        "native_options": _thaw_json(metric.native_options),
+        "severity": metric.severity,
+        "severity_mapping": metric.severity_mapping,
+    }
+
+
+def _override_dict(override: FunctionShapeOverridePlan) -> dict[str, MutableJson]:
+    return {
+        "scope": _thaw_json(override.scope),
+        "metrics_replace_target": override.metrics_replace_target,
+        "metrics": [_metric_dict(metric) for metric in override.metrics],
+        "severity": override.severity,
+    }
+
+
+def _target_dict(target: FunctionShapeTargetPlan) -> dict[str, MutableJson]:
+    return {
+        "language": target.language,
+        "backend": target.backend,
+        "minimum_version": target.minimum_version,
+        "scope": _thaw_json(target.scope),
+        "metrics": [_metric_dict(metric) for metric in target.metrics],
+        "overrides": [_override_dict(item) for item in target.overrides],
+        "advisory_rollout": target.advisory_rollout,
+        "preview_requirements": list(target.preview_requirements),
+    }
+
+
+def _valid_compilation_entries(entries: Sequence[_CompilationCommand]) -> bool:
+    """Validate required compile command fields after model validation."""
+    return bool(entries) and all(
+        _has_text(entry.directory)
+        and _has_text(entry.file)
+        and (
+            _has_text(entry.command)
+            if entry.command is not None
+            else bool(entry.arguments)
+            and all(_has_text(argument) for argument in entry.arguments)
+        )
+        for entry in entries
+    )
+
+
+def _has_text(value: object) -> bool:
+    """Check text-like values by behavior instead of concrete runtime type."""
+    strip = getattr(value, "strip", None)
+    return callable(strip) and bool(strip())
+
+
+_DEFINITIONS: Final = MappingProxyType(
+    {
+        "ruff": MappingProxyType(
+            {
+                "parameters": (
+                    "PLR0913",
+                    "lint.pylint.max-args",
+                    (
+                        "Ruff PLR0913 count: bound self/cls receivers and *args/**kwargs "
+                        "are excluded; defaulted and keyword-only parameters count. "
+                        "The positional-only metric is separate."
+                    ),
+                ),
+                "nesting": (
+                    "PLR1702",
+                    "lint.pylint.max-nested-blocks",
+                    (
+                        "Nested block count as implemented by Ruff PLR1702; preview "
+                        "rule and requires preview mode."
+                    ),
+                ),
+                "statements": (
+                    "PLR0915",
+                    "lint.pylint.max-statements",
+                    "Statement count as implemented by Ruff PLR0915.",
+                ),
+            }
+        ),
+        "pylint": MappingProxyType(
+            {
+                "parameters": (
+                    "R0913",
+                    "design.max-args",
+                    "Pylint R0913 argument count.",
+                ),
+                "nesting": (
+                    "R1702",
+                    "design.max-nested-blocks",
+                    "Pylint R1702 nested-block count.",
+                ),
+                "statements": (
+                    "R0915",
+                    "design.max-statements",
+                    "Pylint R0915 statement count.",
+                ),
+            }
+        ),
+        "eslint": MappingProxyType(
+            {
+                "parameters": (
+                    "max-params",
+                    "max-params",
+                    (
+                        "ESLint max-params counts declared parameters, including "
+                        "defaulted and rest parameters; a destructured parameter "
+                        "counts once. TypeScript this handling is separate."
+                    ),
+                ),
+                "nesting": (
+                    "max-depth",
+                    "max-depth",
+                    (
+                        "ESLint max-depth counts nested blocks; callback nesting is a "
+                        "separate metric."
+                    ),
+                ),
+                "statements": (
+                    "max-statements",
+                    "max-statements",
+                    "ESLint max-statements counts statements in a function body.",
+                ),
+            }
+        ),
+        "clang-tidy": MappingProxyType(
+            {
+                "parameters": (
+                    "readability-function-size",
+                    "ParameterThreshold",
+                    (
+                        "clang-tidy readability-function-size parameter threshold; "
+                        "macros and template behavior follows the selected version."
+                    ),
+                ),
+                "nesting": (
+                    "readability-function-size",
+                    "NestingThreshold",
+                    (
+                        "clang-tidy readability-function-size nesting threshold; macro "
+                        "expansion can affect counts unless IgnoreMacros is enabled."
+                    ),
+                ),
+                "statements": (
+                    "readability-function-size",
+                    "StatementThreshold",
+                    (
+                        "clang-tidy readability-function-size statement threshold; "
+                        "CountMemberInitAsStmt is a separate native option."
+                    ),
+                ),
+            }
+        ),
+    }
+)
+
+
+def _native_option(
+    target: FunctionShapeTarget,
+    metric: FunctionShapeMetric,
+    severity: Severity,
+    configured_metrics: Sequence[FunctionShapeMetric],
+) -> dict[str, MutableJson]:
+    native_rule, option, _ = _DEFINITIONS[target.backend][metric.name]
+    if target.backend == "eslint":
+        eslint_severity = {"warning": "warn", "error": "error"}[severity]
+        return {"rule": native_rule, "value": [eslint_severity, metric.maximum]}
+    if target.backend == "clang-tidy":
+        thresholds = {
+            "parameters": "ParameterThreshold",
+            "nesting": "NestingThreshold",
+            "statements": "StatementThreshold",
+        }
+        configured = {item.name: item.maximum for item in configured_metrics}
+        return cast(
+            dict[str, MutableJson],
+            {
+                "Checks": f"{native_rule}",
+                "CheckOptions": [
+                    {
+                        "key": f"{native_rule}.{thresholds[name]}",
+                        "value": str(configured.get(name, -1)),
+                    }
+                    for name in thresholds
+                ]
+                + [
+                    {
+                        "key": f"{native_rule}.IgnoreMacros",
+                        "value": str(target.ignore_macros or False).lower(),
+                    },
+                    {
+                        "key": f"{native_rule}.CountMemberInitAsStmt",
+                        "value": str(
+                            target.count_member_initializers_as_statements
+                            if target.count_member_initializers_as_statements
+                            is not None
+                            else True
+                        ).lower(),
+                    },
+                ],
+            },
+        )
+    if target.backend == "ruff":
+        settings: dict[str, MutableJson] = {
+            "lint.extend-select": [native_rule],
+            option: metric.maximum,
+        }
+        if metric.name == "nesting":
+            settings["preview"] = True
+        return settings
+    return {"enable": [native_rule], option: metric.maximum}
+
+
+def plan_function_shape(policy: FunctionShapePolicy, root: Path) -> FunctionShapePlan:
+    """Return a stable, read-only native configuration plan for each target."""
+    checkout = root.resolve(strict=True)
+    targets: list[FunctionShapeTargetPlan] = []
+    for target in policy.targets:
+        metrics = _metric_plans(target, target.metrics, target.severity)
+        scope: dict[str, MutableJson] = {
+            "include": list(target.include),
+            "exclude": list(target.exclude),
+        }
+        if target.language == "cpp":
+            if target.compilation_database is not None:
+                database = (checkout / target.compilation_database).resolve()
+                if not database.is_relative_to(checkout) or not database.is_file():
+                    raise ValueError(
+                        "clang-tidy compilation database is missing or outside "
+                        f"the checkout: {target.compilation_database}"
+                    )
+                try:
+                    encoded = database.read_text(encoding="utf-8")
+                    entries = _COMPILATION_COMMANDS.validate_json(encoded)
+                except (OSError, UnicodeError, ValidationError) as error:
+                    raise ValueError(
+                        "clang-tidy compilation database is unreadable or invalid: "
+                        f"{target.compilation_database}"
+                    ) from error
+                if not _valid_compilation_entries(entries):
+                    raise ValueError(
+                        "clang-tidy compilation database has no valid command "
+                        f"entries: {target.compilation_database}"
+                    )
+                scope["compilation_database"] = target.compilation_database
+            scope["operational_requirement"] = (
+                "Run clang-tidy with valid compilation context; missing or invalid "
+                "context is an execution failure, not a clean result."
+            )
+        overrides = tuple(_override_plan(target, item) for item in target.overrides)
+        targets.append(
+            FunctionShapeTargetPlan(
+                language=target.language,
+                backend=target.backend,
+                minimum_version=target.minimum_version,
+                scope=cast(Mapping[str, FrozenJson], _freeze_json(scope)),
+                metrics=metrics,
+                overrides=overrides,
+                advisory_rollout=True,
+                preview_requirements=(
+                    ("Ruff PLR1702 requires preview mode.",)
+                    if target.backend == "ruff"
+                    and any(m.name == "nesting" for m in target.metrics)
+                    else ()
+                ),
+            )
+        )
+    return FunctionShapePlan(
+        schema_version=1,
+        policy="function-shape",
+        targets=tuple(targets),
+    )
+
+
+def _metric_plans(
+    target: FunctionShapeTarget,
+    metrics: tuple[FunctionShapeMetric, ...],
+    severity: Severity,
+) -> tuple[FunctionShapeMetricPlan, ...]:
+    result: list[FunctionShapeMetricPlan] = []
+    for metric in metrics:
+        native_rule, _, definition = _DEFINITIONS[target.backend][metric.name]
+        result.append(
+            FunctionShapeMetricPlan(
+                metric=metric.name,
+                native_rule=native_rule,
+                definition=definition,
+                maximum=metric.maximum,
+                native_options=_freeze_json(
+                    _native_option(target, metric, severity, metrics)
+                ),
+                severity=severity,
+                severity_mapping=(
+                    "native rule severity is retained; use the native command's "
+                    "advisory exit behavior"
+                    if target.backend == "ruff"
+                    else "severity is represented by the native rule configuration"
+                    if target.backend == "eslint"
+                    else "native diagnostic severity and command exit behavior "
+                    "remain backend-owned"
+                ),
+            )
+        )
+    return tuple(result)
+
+
+def _override_plan(
+    target: FunctionShapeTarget, override: FunctionShapeOverride
+) -> FunctionShapeOverridePlan:
+    return FunctionShapeOverridePlan(
+        scope=cast(
+            Mapping[str, FrozenJson],
+            _freeze_json({"include": override.include, "exclude": override.exclude}),
+        ),
+        metrics_replace_target=override.metrics is not None,
+        metrics=_metric_plans(
+            target,
+            override.metrics or target.metrics,
+            override.severity or target.severity,
+        ),
+        severity=override.severity or target.severity,
+    )

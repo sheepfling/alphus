@@ -1,0 +1,56 @@
+parameters:
+  - name: alphusRef
+    type: string
+  - name: requirementsFile
+    type: string
+  - name: runtimeRequirementsFile
+    type: string
+    default: ''
+  - name: pythonVersion
+    type: string
+    default: '3.12'
+  - name: configFile
+    type: string
+    default: quality-gates.toml
+  - name: profile
+    type: string
+    default: check
+
+steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: ${{ parameters.pythonVersion }}
+      addToPath: true
+  - bash: |
+      set -euo pipefail
+      : "${ALPHUS_REF:?Provide a pinned Alphus commit SHA}"
+      : "${ALPHUS_REQUIREMENTS_FILE:?Provide consumer tool requirements}"
+      requirements_file="$ALPHUS_REQUIREMENTS_FILE"
+      case "$requirements_file" in
+        /*) ;;
+        *) requirements_file="$ALPHUS_ROOT/$requirements_file" ;;
+      esac
+      install_args=(
+        "alphus @ https://github.com/sheepfling/alphus/archive/${ALPHUS_REF}.zip"
+        -r "$requirements_file"
+      )
+      if [[ -n "$ALPHUS_RUNTIME_REQUIREMENTS_FILE" ]]; then
+        runtime_file="$ALPHUS_RUNTIME_REQUIREMENTS_FILE"
+        case "$runtime_file" in
+          /*) ;;
+          *) runtime_file="$ALPHUS_ROOT/$runtime_file" ;;
+        esac
+        install_args+=(-r "$runtime_file")
+      fi
+      python -m pip install --disable-pip-version-check "${install_args[@]}"
+      python -m alphus --root "$ALPHUS_ROOT" --config "$QUALITY_CONFIG" \
+        --run --profile "$QUALITY_PROFILE" --output plain
+    displayName: Install Alphus and run quality profile
+    workingDirectory: $(Build.SourcesDirectory)
+    env:
+      ALPHUS_ROOT: $(Build.SourcesDirectory)
+      ALPHUS_REF: ${{ parameters.alphusRef }}
+      ALPHUS_REQUIREMENTS_FILE: ${{ parameters.requirementsFile }}
+      ALPHUS_RUNTIME_REQUIREMENTS_FILE: ${{ parameters.runtimeRequirementsFile }}
+      QUALITY_CONFIG: ${{ parameters.configFile }}
+      QUALITY_PROFILE: ${{ parameters.profile }}

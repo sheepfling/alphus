@@ -5,15 +5,29 @@ from pathlib import Path
 import pytest
 
 from alphus.config import PathDiscoveryPolicy
-from alphus.gates.source.path_discovery import (
+from alphus.gates.languages.javascript.path_discovery import (
     JS_INSPECTION_PATTERNS,
     JS_PATTERNS,
-    check_path_discovery,
     js_inspection_findings,
     js_path_findings,
+)
+from alphus.gates.languages.javascript.path_discovery import (
+    __all__ as JAVASCRIPT_PATH_DISCOVERY_EXPORTS,
+)
+from alphus.gates.languages.python.path_discovery import (
     python_inspection_findings,
     python_path_findings,
 )
+from alphus.gates.source.path_discovery import check_path_discovery
+
+
+def test_javascript_path_discovery_exports_are_explicit() -> None:
+    assert JAVASCRIPT_PATH_DISCOVERY_EXPORTS == [
+        "JS_INSPECTION_PATTERNS",
+        "JS_PATTERNS",
+        "js_inspection_findings",
+        "js_path_findings",
+    ]
 
 
 def test_selected_parent_walk_is_flagged(tmp_path: Path) -> None:

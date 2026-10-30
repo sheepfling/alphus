@@ -69,7 +69,7 @@ def test_declared_script_entry_points_resolve_to_callables() -> None:
 
 def test_checker_python_range_matches_hosted_matrix() -> None:
     metadata = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
-    workflow = Path(".github/workflows/quality.yml").read_text(encoding="utf-8")
+    workflow = Path(".github/workflows/self-quality.yml").read_text(encoding="utf-8")
     match = re.search(r"^\s+python-version: (\[[^\n]+\])$", workflow, re.MULTILINE)
     assert match is not None
 
@@ -82,7 +82,7 @@ def test_checker_python_range_matches_hosted_matrix() -> None:
 
 
 def test_hosted_dependency_floor_uses_package_metadata() -> None:
-    workflow = Path(".github/workflows/quality.yml").read_text(encoding="utf-8")
+    workflow = Path(".github/workflows/self-quality.yml").read_text(encoding="utf-8")
     floor_job = workflow.split("  minimum-dependencies:", 1)[1]
     assert "python scripts/ci.py --root . --minimum" in floor_job
 

@@ -1,11 +1,11 @@
-# Root policy for checks and profile composition; optional orchestration_files can split language steps.
+# Alphus self-check policy; consumer starter policies live under examples/.
 schema_version = 1
 [files]
 include = [
   "src/**/*.py", "tests/**/*.py", "scripts/**/*.py",
   "README.md", "docs/**/*.md",
   "javascript/**/*.js", "javascript/**/*.mjs", "javascript/**/*.d.ts",
-  "**/*.toml", "*.toml", "**/*.json", "*.json",
+  "**/*.toml", "**/*.json",
 ]
 exclude = []
 
@@ -26,7 +26,7 @@ markers = ["TODO", "FIXME", "HACK", "XXX", "XXXX"]
 exclude = []
 
 [checks.line_length]
-exclude = []
+exclude = ["docs/cpp/**"]
 
 [checks.line_length.limits]
 ".py" = 100
@@ -42,7 +42,9 @@ exclude = []
 
 [checks.path_discovery]
 extensions = [".py"]
-exclude = []
+# This isolated adapter is the approved consumer-app import boundary; all other
+# package modules remain subject to path-discovery checks.
+exclude = ["src/alphus/gates/review/frameworks/fastapi_application_loader.py"]
 inspection_exclude = ["tests/**"]
 
 [checks.shared_utilities]
@@ -101,8 +103,8 @@ public_constant_paths = ["src/alphus/gates/cpp/**"]
 extensions = [".py"]
 exclude = [
   "tests/**",
-  "src/alphus/gates/source/python_style.py",
-  "src/alphus/gates/source/runtime_types.py",
+  "src/alphus/gates/languages/python/style.py",
+  "src/alphus/gates/languages/python/runtime_types.py",
   "src/alphus/gates/python/compatibility.py",
 ]
 
@@ -148,6 +150,18 @@ external_model_names = [
 extensions = [".py"]
 exclude = []
 
+[checks.sqlalchemy_practices]
+target_sqlalchemy = ">=2.0,<3.0"
+extensions = [".py"]
+exclude = []
+report_legacy_query = true
+report_legacy_declarative_base = true
+report_backref = true
+report_literal_execute = true
+report_module_session = false
+report_repository_commit = false
+repository_paths = []
+
 [checks.cli]
 
 [checks.cli.python]
@@ -186,6 +200,9 @@ loose_module_directories = []
 forbidden_import_roots = ["src", "tests"]
 vendor_path_components = ["vendor"]
 file_loader_calls = ["spec_from_file_location", "SourceFileLoader", "run_path"]
+# This isolated adapter intentionally imports a configured consumer module and
+# restores sys.path immediately after import.
+approved_dynamic_loading_paths = ["src/alphus/gates/review/frameworks/fastapi_application_loader.py"]
 reject_sys_path_mutations = true
 reject_dynamic_imports = true
 require_import_packages = true
@@ -366,7 +383,7 @@ argv = [
   "import sys, tomllib; from pathlib import Path; [tomllib.loads(Path(p).read_text(encoding='utf-8')) for p in sys.argv[1:]]",
   "{files}",
 ]
-files = { include = ["**/*.toml", "*.toml"] }
+files = { include = ["**/*.toml"] }
 
 [[orchestration.steps]]
 kind = "command"
@@ -376,7 +393,7 @@ argv = [
   "import json, sys; from pathlib import Path; [json.loads(Path(p).read_text(encoding='utf-8')) for p in sys.argv[1:]]",
   "{files}",
 ]
-files = { include = ["**/*.json", "*.json"] }
+files = { include = ["**/*.json"] }
 
 [[orchestration.profiles]]
 name = "python-policy"
@@ -449,9 +466,15 @@ kind = "rule"
 name = "FastAPI practice review"
 rule = "fastapi-practices"
 
+[[orchestration.steps]]
+kind = "rule"
+name = "SQLAlchemy practices review"
+rule = "sqlalchemy-practices"
+rollout = "provisional"
+
 [[orchestration.profiles]]
 name = "review"
 steps = [
   "Numeric review", "SciPy constants review", "Test review", "Input contract review",
-  "Pydantic practice review", "FastAPI practice review",
+  "Pydantic practice review", "FastAPI practice review", "SQLAlchemy practices review",
 ]

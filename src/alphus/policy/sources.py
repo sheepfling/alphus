@@ -5,15 +5,221 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping, Sequence
 from pathlib import PurePosixPath
-from typing import Annotated, Literal, Self, cast
+from types import MappingProxyType
+from typing import Annotated, Final, Literal, Self, cast
 
+from packaging.version import InvalidVersion, Version
 from pydantic import AliasChoices, Field, field_validator, model_validator
 
+from alphus.contracts.findings import Severity
 from alphus.policy.base import (
     StrictModel,
+    require_unique,
     validate_extensions,
     validate_patterns,
 )
+
+FunctionShapeMetricName = Literal["parameters", "nesting", "statements"]
+FunctionShapeLanguage = Literal["python", "javascript", "cpp"]
+FunctionShapeBackend = Literal["ruff", "pylint", "eslint", "clang-tidy"]
+
+_CPP_LANGUAGE: Final = "cpp"
+_FUNCTION_SHAPE_BACKENDS_BY_LANGUAGE: Final = MappingProxyType(
+    {
+        "python": frozenset({"ruff", "pylint"}),
+        "javascript": frozenset({"eslint"}),
+        _CPP_LANGUAGE: frozenset({"clang-tidy"}),
+    }
+)
+_COMMENT_MARKER_EXTENSIONS_BY_LANGUAGE: Final[Mapping[str, frozenset[str]]] = (
+    MappingProxyType(
+        {
+            "python": frozenset({".py", ".pyi"}),
+            "toml": frozenset({".toml"}),
+            "javascript": frozenset({".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"}),
+            "cpp": frozenset(
+                {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx"}
+            ),
+            "java": frozenset({".java"}),
+        }
+    )
+)
+_SUPPORTED_COMMENT_MARKER_EXTENSIONS: Final[frozenset[str]] = frozenset(
+    extension
+    for extensions in _COMMENT_MARKER_EXTENSIONS_BY_LANGUAGE.values()
+    for extension in extensions
+)
+
+
+class FunctionShapeMetric(StrictModel):
+    """One explicitly enabled native function-shape metric and inclusive cap."""
+
+    name: FunctionShapeMetricName
+    maximum: Annotated[int, Field(ge=0)]
+
+
+class FunctionShapeOverride(StrictModel):
+    """A path-scoped replacement for a target's enabled metrics or severity."""
+
+    include: Annotated[tuple[str, ...], Field(min_length=1)]
+    exclude: Annotated[tuple[str, ...], Field(default_factory=tuple)]
+    metrics: Annotated[tuple[FunctionShapeMetric, ...], Field(min_length=1)] | None = (
+        None
+    )
+    severity: Severity | None = None
+
+    @field_validator("include", "exclude")
+    @classmethod
+    def validate_paths(cls, patterns: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(patterns)
+
+    @field_validator("metrics")
+    @classmethod
+    def validate_metrics(
+        cls, metrics: Sequence[FunctionShapeMetric] | None
+    ) -> tuple[FunctionShapeMetric, ...] | None:
+        if metrics is None:
+            return None
+        require_unique(
+            tuple(metric.name for metric in metrics), "metric names must be unique"
+        )
+        return tuple(metrics)
+
+
+class FunctionShapeTarget(StrictModel):
+    """One native backend binding; omitted metrics remain disabled."""
+
+    language: FunctionShapeLanguage
+    backend: FunctionShapeBackend
+    minimum_version: str
+    severity: Severity = "warning"
+    metrics: Annotated[tuple[FunctionShapeMetric, ...], Field(min_length=1)]
+    include: Annotated[tuple[str, ...], Field(default_factory=tuple)]
+    exclude: Annotated[tuple[str, ...], Field(default_factory=tuple)]
+    overrides: Annotated[
+        tuple[FunctionShapeOverride, ...], Field(default_factory=tuple)
+    ]
+    compilation_database: str | None = None
+    ignore_macros: bool | None = None
+    count_member_initializers_as_statements: bool | None = None
+
+    @field_validator("minimum_version")
+    @classmethod
+    def validate_version(cls, value: str) -> str:
+        try:
+            Version(value)
+        except InvalidVersion as error:
+            raise ValueError("minimum_version must be a PEP 440 version") from error
+        return value
+
+    @field_validator("metrics")
+    @classmethod
+    def validate_metrics(
+        cls, metrics: Sequence[FunctionShapeMetric]
+    ) -> tuple[FunctionShapeMetric, ...]:
+        require_unique(
+            tuple(metric.name for metric in metrics), "metric names must be unique"
+        )
+        return tuple(metrics)
+
+    @field_validator("include", "exclude")
+    @classmethod
+    def validate_paths(cls, patterns: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(patterns)
+
+    @field_validator("overrides")
+    @classmethod
+    def validate_overrides(
+        cls, overrides: Sequence[FunctionShapeOverride]
+    ) -> tuple[FunctionShapeOverride, ...]:
+        require_unique(
+            tuple(override.include for override in overrides),
+            "function-shape path override scopes must be unique",
+        )
+        return tuple(overrides)
+
+    @model_validator(mode="after")
+    def validate_binding(self) -> Self:
+        if self.backend not in _FUNCTION_SHAPE_BACKENDS_BY_LANGUAGE[self.language]:
+            raise ValueError(f"{self.backend} does not support {self.language}")
+        if self.backend == "eslint" and (
+            self.severity == "info"
+            or any(override.severity == "info" for override in self.overrides)
+        ):
+            raise ValueError(
+                "ESLint does not support info severity; use warning or error"
+            )
+        minimums = {
+            "ruff": {
+                "parameters": "0.0.238",
+                "nesting": "0.1.15",
+                "statements": "0.0.240",
+            },
+            "pylint": {"parameters": "1.9", "nesting": "1.9", "statements": "1.9"},
+            "eslint": {
+                "parameters": "0.0.9",
+                "nesting": "0.0.9",
+                "statements": "0.0.9",
+            },
+            "clang-tidy": {},
+        }
+        unsupported = [
+            metric.name
+            for metric in (
+                *self.metrics,
+                *(
+                    metric
+                    for override in self.overrides
+                    for metric in (override.metrics or ())
+                ),
+            )
+            if metric.name in minimums[self.backend]
+            and Version(self.minimum_version)
+            < Version(minimums[self.backend][metric.name])
+        ]
+        if unsupported:
+            raise ValueError(
+                f"{self.backend} {self.minimum_version} predates configured "
+                f"metrics: {', '.join(unsupported)}"
+            )
+        if self.language == _CPP_LANGUAGE:
+            if self.compilation_database is None:
+                raise ValueError("cpp requires a compilation_database")
+            path = PurePosixPath(self.compilation_database)
+            if (
+                path.is_absolute()
+                or path.as_posix() != self.compilation_database
+                or ".." in path.parts
+                or "\\" in self.compilation_database
+            ):
+                raise ValueError("compilation_database must be a relative POSIX path")
+        elif self.compilation_database is not None:
+            raise ValueError("compiler context is only valid for cpp targets")
+        if self.language != _CPP_LANGUAGE and (
+            self.ignore_macros is not None
+            or self.count_member_initializers_as_statements is not None
+        ):
+            raise ValueError(
+                "macro and member-initializer options are only valid for cpp targets"
+            )
+        return self
+
+
+class FunctionShapePolicy(StrictModel):
+    """Opt-in native function-shape checks; no shared metric is computed here."""
+
+    targets: Annotated[tuple[FunctionShapeTarget, ...], Field(min_length=1)]
+
+    @field_validator("targets")
+    @classmethod
+    def validate_targets(
+        cls, targets: Sequence[FunctionShapeTarget]
+    ) -> tuple[FunctionShapeTarget, ...]:
+        require_unique(
+            tuple((target.language, target.backend) for target in targets),
+            "function-shape language/backend targets must be unique",
+        )
+        return tuple(targets)
 
 
 class ExtensionLimit(StrictModel):
@@ -57,27 +263,10 @@ class CommentMarkerPolicy(StrictModel):
             "comment-marker extensions must be lowercase suffixes",
             require_one=True,
         )
-        supported = {
-            ".py",
-            ".pyi",
-            ".toml",
-            ".js",
-            ".jsx",
-            ".mjs",
-            ".cjs",
-            ".ts",
-            ".tsx",
-            ".c",
-            ".cc",
-            ".cpp",
-            ".cxx",
-            ".h",
-            ".hh",
-            ".hpp",
-            ".hxx",
-            ".java",
-        }
-        if any(extension not in supported for extension in selected):
+        if any(
+            extension not in _SUPPORTED_COMMENT_MARKER_EXTENSIONS
+            for extension in selected
+        ):
             raise ValueError(
                 "comment-marker extensions must use a supported comment syntax"
             )

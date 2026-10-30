@@ -181,6 +181,9 @@ syntax in extensions. Ordinary Python repositories can combine `python` and
 | `css`           | Opt-in CSS lint and format                          | Stylelint, Prettier                       |
 | `python-policy` | Optional repository-specific source conventions     | Explicit Alphus source policy             |
 
+The optional `sqlalchemy-practices` profile applies bounded SQLAlchemy 2.x AST
+advisories under an explicit consumer policy.
+
 Path-discovery findings now use semantic categories and complaints: implicit
 roots are portability issues, import-path mutation is architecture, and raw
 path or URL string comparisons are correctness. Consumers filtering the old
@@ -241,6 +244,12 @@ its documented built-in recipes. Other tools use explicit command steps. There
 is no plugin import, category rewrite, or automatic type detection. Package-specific
 API expectations and runtime assertions remain in each stub repository.
 The shared checking algorithms and their unit tests live in Alphus.
+
+SQLAlchemy consumers can add `sqlalchemy-practices` as a provisional rule step
+in their own profile. It parses Python source without importing SQLAlchemy or
+connecting to a database. Consumers still own their SQLAlchemy runtime,
+transaction, migration, and database-test checks. See the
+[synthetic SQLAlchemy profile](../examples/consumer/sqlalchemy-practices/README.md).
 
 The consumer example defines independent `toml` and `json` profiles and
 includes both in `check`. Their syntax steps use strict document parsers and
@@ -440,3 +449,7 @@ reads its own config or uses its defaults. See [Composing subtools](SUBTOOLS.md)
 for the rumdl/mdrepo boundary, Taplo and Prettier config locations, and the
 read-only check and explicit fixer contracts. Command arrays can also call a
 repository wrapper when its file scope and exit status remain clear.
+For opt-in native function-shape mappings across Python, JavaScript, and C++,
+see [native function-shape policy](FUNCTION-SHAPE.md). Its dry-run mapper
+preserves backend rule IDs and count definitions without replacing consumer
+lint configuration.

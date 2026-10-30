@@ -53,15 +53,15 @@
     "max_age_seconds": 21600,
     "require_manifest": true,
     "require_clean_source": true,
-    "manifest_source_root": "../..",
+    "manifest_source_root": ".",
     "reports": [
-      {"name": "source", "path": "../../out/quality/source.json", "expected_schema": 1, "expected_gate": "source"},
-      {"name": "graph", "path": "../../out/quality/graph.json", "expected_schema": 1, "expected_gate": "graph"},
-      {"name": "impact", "path": "../../out/quality/impact.json", "expected_schema": 1, "expected_gate": "impact"},
-      {"name": "tests", "path": "../../out/quality/tests.json", "expected_schema": 1, "expected_gate": "tests"},
-      {"name": "package", "path": "../../out/quality/package.json", "expected_schema": 1, "expected_gate": "package"},
-      {"name": "artifacts", "path": "../../out/quality/artifacts.json", "expected_schema": 1, "pass_field": "gate.passed"},
-      {"name": "build", "path": "../../out/quality/build.json", "expected_schema": 1, "expected_gate": "build"}
+      {"name": "source", "path": "out/quality/source.json", "expected_schema": 1, "expected_gate": "source"},
+      {"name": "graph", "path": "out/quality/graph.json", "expected_schema": 1, "expected_gate": "graph"},
+      {"name": "impact", "path": "out/quality/impact.json", "expected_schema": 1, "expected_gate": "impact"},
+      {"name": "tests", "path": "out/quality/tests.json", "expected_schema": 1, "expected_gate": "tests"},
+      {"name": "package", "path": "out/quality/package.json", "expected_schema": 1, "expected_gate": "package"},
+      {"name": "artifacts", "path": "out/quality/artifacts.json", "expected_schema": 1, "pass_field": "gate.passed"},
+      {"name": "build", "path": "out/quality/build.json", "expected_schema": 1, "expected_gate": "build"}
     ],
     "set_checks": [
       {"name": "selected-executables", "left_report": "@manifest", "left_field": "build.expected_executables", "right_report": "graph", "right_field": "metrics.executable_names"},

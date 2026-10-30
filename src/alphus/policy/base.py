@@ -41,6 +41,7 @@ QualityRuleName: TypeAlias = Literal[
     "positional-interfaces",
     "pydantic-practices",
     "fastapi-practices",
+    "sqlalchemy-practices",
     "cyclomatic-complexity",
 ]
 

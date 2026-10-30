@@ -9,13 +9,13 @@ For source ownership, build-graph, test-selection, package-provenance, and aggre
 After the main static library is built, run the archive policy on its output directory. This catches excessive archive growth before any executable links:
 
 ```shell
-python -m alphus.gates.cpp.cpp_artifact_quality check build/lib --policy quality_gates/examples/cpp-static-archive-policy.example.json --output build/archive-quality.json
+python -m alphus.gates.cpp.cpp_artifact_quality check build/lib --policy cpp-static-archive-policy.json --output build/archive-quality.json
 ```
 
 After the **first representative executable** links, run the executable policy on its output directory:
 
 ```shell
-python -m alphus.gates.cpp.cpp_artifact_quality check build/tests --policy quality_gates/examples/cpp-artifact-policy.example.json --output build/artifact-quality.json
+python -m alphus.gates.cpp.cpp_artifact_quality check build/tests --policy cpp-artifact-policy.json --output build/artifact-quality.json
 ```
 
 Run the executable check after the full build to enforce fleet totals. A policy should be copied into the consuming project and calibrated for each build profile; the example's 512 MiB archive, 128 MiB executable, and 64 MiB debug limits are starting values, not universal limits. Use separate policies for Debug, RelWithDebInfo, and release or distribution builds. The check exits `0` on pass, `1` on a budget violation, and `2` on invalid input or a scanning error. An unavailable debug measurement violates any debug byte limit, so it fails closed with exit `1`. The checker prints each failed budget even when writing JSON to a file. Put these commands in CI after their respective build steps; CI should fail on either nonzero exit code.

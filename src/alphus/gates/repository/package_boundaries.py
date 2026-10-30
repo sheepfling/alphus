@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 from alphus.config import PackageBoundaryPolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source, read_utf8_text
 
 
@@ -459,6 +460,10 @@ def _source_findings(
             if not _inside_root(checkout, source):
                 continue
             relative = source.relative_to(checkout).as_posix()
+            approved_dynamic_loading = any(
+                matches_path(relative, pattern)
+                for pattern in policy.approved_dynamic_loading_paths
+            )
             tree = ast.parse(read_python_source(source), filename=relative)
             module_aliases = {"importlib"}
             function_aliases: set[str] = set()
@@ -558,7 +563,10 @@ def _source_findings(
                         for imported in _imported_roots(node):
                             check_import(imported, node.lineno, distribution, relative)
                     case ast.Call(func=ast.Attribute(attr=call_name)):
-                        if policy.reject_dynamic_imports:
+                        if (
+                            policy.reject_dynamic_imports
+                            and not approved_dynamic_loading
+                        ):
                             imported = _dynamic_import_root(
                                 node, module_aliases, function_aliases
                             )
@@ -598,7 +606,9 @@ def _source_findings(
                                     message="file-backed module loading",
                                 )
                             )
-                    case ast.Call() if policy.reject_dynamic_imports:
+                    case ast.Call() if (
+                        policy.reject_dynamic_imports and not approved_dynamic_loading
+                    ):
                         imported = _dynamic_import_root(
                             node, module_aliases, function_aliases
                         )
@@ -620,7 +630,7 @@ def _source_findings(
                             check_import(imported, node.lineno, distribution, relative)
                     case _:
                         pass
-                if policy.reject_sys_path_mutations:
+                if policy.reject_sys_path_mutations and not approved_dynamic_loading:
                     match node:
                         case (
                             ast.Call()

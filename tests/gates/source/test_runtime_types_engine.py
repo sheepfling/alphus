@@ -5,7 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from alphus.config import RuntimeTypePolicy
-from alphus.gates.source.runtime_types import policy_issues, type_check_findings
+from alphus.gates.languages.python.runtime_types import (
+    policy_issues,
+    type_check_findings,
+)
 
 POLICY = RuntimeTypePolicy(
     extensions=(".py",),
