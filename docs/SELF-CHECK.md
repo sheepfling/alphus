@@ -105,8 +105,8 @@ The configured source exclusions are:
 - **Runtime type usage, `tests/**`:** tests deliberately exercise dynamic and
   broad runtime-type
   cases to verify the rule; this policy is for application code.
-- **Runtime type usage, `src/alphus/gates/source/python_style.py`,
-  `src/alphus/gates/source/runtime_types.py`, and
+- **Runtime type usage, `src/alphus/gates/languages/python/style.py`,
+  `src/alphus/gates/languages/python/runtime_types.py`, and
   `src/alphus/gates/python/compatibility.py`:** these AST analyzers inspect
   syntax node types, not application runtime values.
 - **JSON structure, `tests/**`:** tests include decoder calls in source
