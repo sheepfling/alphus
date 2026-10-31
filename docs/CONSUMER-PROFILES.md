@@ -20,8 +20,8 @@ alphus --init-config starter
 alphus --plan
 ```
 
-Choose `python`, `markdown`, `toml`, `json`, `javascript`, or `polyglot` instead
-of `starter` to generate a different bundle. Extend a recipe with repeatable
+Choose `python`, `markdown`, `toml`, `json`, `javascript`, `yaml`, or `polyglot`
+instead of `starter` to generate a different bundle. Extend a recipe with repeatable
 `--add-language` and `--add-tool` options; `--init-config custom` starts with
 only the selections you supply. `--config` selects the output path under
 `--root`. Alphus validates the generated policy before writing it and refuses
@@ -55,8 +55,9 @@ bundles. C++ remains project-specific because its build, test, and artifact
 commands depend on the repository's compiler and build setup.
 
 The default bundles are Python (Ruff, Pyright, pytest), Markdown (rumdl,
-mdrepo), TOML (Taplo), JSON (Prettier), JavaScript and TypeScript (ESLint,
-Prettier), plain HTML (HTML-validate, Prettier), and CSS (Stylelint, Prettier).
+mdrepo), TOML (Taplo), YAML (yamllint), JSON (Prettier), JavaScript and
+TypeScript (ESLint, Prettier), plain HTML (HTML-validate, Prettier), and CSS
+(Stylelint, Prettier).
 Install and pin the selected tools in the consumer environment and configure
 each tool for the repository's source layout. The Python bundle runs the
 project's normal Ruff, Pyright, and pytest configuration. Select individual
@@ -100,8 +101,8 @@ Add tools one step at a time. The
 rumdl with mdrepo using `tools = ["rumdl", "mdrepo"]`. The shortcut also
 accepts `ruff`, `pyright`, `pytest`, `taplo`, `prettier`, `eslint`,
 `prettier-javascript`, `eslint-typescript`, `prettier-typescript`, and
-`eslint-angular-template`, `html-validate`, `prettier-html`, `stylelint`, and
-`prettier-css`; selection order is execution and fix order.
+`eslint-angular-template`, `html-validate`, `prettier-html`, `stylelint`,
+`prettier-css`, and `yamllint`; selection order is execution and fix order.
 File-scoped lint and format steps pair a read-only
 check with an explicit fixer. Pyright and pytest run without a file scope or
 fixer. Alphus supplies a default `check` profile plus language profiles. The
@@ -174,6 +175,7 @@ syntax in extensions. Ordinary Python repositories can combine `python` and
 | `python`        | Lint, formatting, project tests/tooling types       | Ruff, pytest, Pyright/Mypy                |
 | `stubs`         | Build/install, API, typed examples, stubtest, smoke | Alphus and native checkers                |
 | `toml`          | TOML syntax and formatting                          | Python `tomllib` and Taplo                |
+| `yaml`          | YAML syntax and selected native lint rules          | yamllint                                  |
 | `json`          | JSON syntax and formatting                          | Python `json` and Prettier                |
 | `javascript`    | JS lint, format, tests, and types                   | ESLint, Prettier, app commands            |
 | `typescript`    | Opt-in TS/TSX lint and format                       | ESLint, Prettier                          |
@@ -203,7 +205,10 @@ Angular HTML templates; the general `eslint` tool retains its JavaScript-only
 scope. See the JavaScript profile guide for plugin setup and composition.
 Standard HTML documents can select `html-validate` and `prettier-html`; CSS
 files can select `stylelint` and `prettier-css`. Keep the generic HTML tool
-off Angular template files.
+off Angular template files. YAML consumers can start with
+[`examples/yaml/quality-gates.toml`](../examples/yaml/quality-gates.toml) or
+generate `alphus --init-config yaml`; see its README for the consumer-owned
+`.yamllint` example and scope limits.
 
 Define each profile's steps in the consumer policy, then compose them:
 

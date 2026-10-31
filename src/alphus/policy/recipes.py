@@ -22,6 +22,7 @@ RECIPES = MappingProxyType(
         "python": ConfigRecipe(languages=("python",)),
         "markdown": ConfigRecipe(languages=("markdown",)),
         "toml": ConfigRecipe(languages=("toml",)),
+        "yaml": ConfigRecipe(languages=("yaml",)),
         "json": ConfigRecipe(languages=("json",)),
         "javascript": ConfigRecipe(languages=("javascript",)),
         "polyglot": ConfigRecipe(
