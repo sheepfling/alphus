@@ -103,8 +103,8 @@ public_constant_paths = ["src/alphus/gates/cpp/**"]
 extensions = [".py"]
 exclude = [
   "tests/**",
-  "src/alphus/gates/source/python_style.py",
-  "src/alphus/gates/source/runtime_types.py",
+  "src/alphus/gates/languages/python/style.py",
+  "src/alphus/gates/languages/python/runtime_types.py",
   "src/alphus/gates/python/compatibility.py",
 ]
 
@@ -178,10 +178,12 @@ typer_package = "typer"
 typer_calls = ["Typer", "run"]
 rich_package = "rich"
 rich_calls = ["Console", "print"]
+renderer_enforcement = "enforce"
 json_option = "--json"
 json_serializers = ["dumps", "model_dump_json"]
 verbose_option = "--verbose"
-output_option = "--output"
+output_style_enforcement = "enforce"
+style_option = "--output"
 rich_output = "rich"
 plain_output = "plain"
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from alphus.gates.source.runtime_types import type_check_findings
+from alphus.gates.languages.python.runtime_types import type_check_findings
 
 
 @pytest.mark.parametrize(

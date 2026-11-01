@@ -534,6 +534,42 @@ class EngineQualityFixture(unittest.TestCase):
         report = quality.check_source(self.root, {"min_files": 1}, self.run_id)
         self.assertIn("single_consumer_fragment", _codes(report))
 
+    def test_hxx_header_is_in_source_inventory(self) -> None:
+        header = self.root / "large.hxx"
+        header.write_text(
+            "".join(f"int value_{index};\n" for index in range(100)),
+            encoding="utf-8",
+        )
+        owner = self.root / "owner.cpp"
+        owner.write_text('#include "large.hxx"\n', encoding="utf-8")
+
+        report = quality.check_source(
+            self.root,
+            {
+                "min_files": 1,
+                "soft_lines": 10,
+                "hard_lines": 10,
+                "single_consumer_header_lines": 10,
+            },
+            self.run_id,
+        )
+
+        self.assertEqual(report["metrics"]["file_count"], 3)
+        self.assertTrue(
+            any(
+                finding["code"] == "source_hard_lines"
+                and finding["path"] == "large.hxx"
+                for finding in report["findings"]
+            )
+        )
+        self.assertTrue(
+            any(
+                finding["code"] == "large_single_consumer_header"
+                and finding["path"] == "large.hxx"
+                for finding in report["findings"]
+            )
+        )
+
     def test_missing_artifact_tree(self) -> None:
         empty = self.base / "empty"
         empty.mkdir()

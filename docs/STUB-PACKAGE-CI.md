@@ -144,6 +144,33 @@ the configured expected errors. Multiple diagnostics on one marked line are
 allowed unless an explicit count says otherwise. Timeouts and spawn failures
 fail.
 
+### Keep intentional negative fixtures readable in IDEs
+
+Put expected-invalid examples in clearly named negative-fixture files or
+directories and label each offending statement. In PyCharm, place its
+inspection suppression immediately before the statement, without suppressing
+the command-line checker:
+
+```python
+# Intentional negative fixture: this call must remain invalid.
+# noinspection PyTypeChecker
+Item(1)  # expect-error
+```
+
+Do not add `# type: ignore`, checker-specific ignore comments, or a suppression
+that makes Mypy, Pyright, or Ty accept the example. The runner must still find
+the expected error on the marked line and reject missing, extra, or unrelated
+diagnostics. Keep the fixture near the package's other tests so future edits
+see why the error is deliberate.
+
+For CLion, avoid adding `NOLINT`, compiler pragmas, or source-level inspection
+suppression to an expected-invalid C++ example. Put those examples in a
+dedicated fixture directory and create a narrow CLion inspection scope for
+that directory if editor noise needs to be reduced. Keep the normal command-
+line quality profile outside that IDE-only scope. The C++ fixture harness
+should assert the intended diagnostic code or message and fail if the
+diagnostic disappears; a generic nonzero compiler exit is not enough.
+
 `alphus-stub-quality` runs the isolated build/install consumer gate. It retains
 native tool output and delegates type semantics and runtime compatibility to
 Mypy, Pyright and stubtest. Package-specific runtime smoke modules stay local.
