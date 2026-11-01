@@ -133,14 +133,18 @@ theme package; removed root module forwarders are not extension points.
 
 ### Package layout for additional languages
 
-Group built-in checks by their actual dependency and policy boundaries. A
-Python-specific checker can live in an ordinary `alphus` subpackage, while
-repository-wide and data-format checks remain separate from any one language.
-Keep the core inventory, orchestration, diagnostics, and rule IDs stable during
-such moves. The stub workflow's controller and fixture runner live under
-`alphus.gates.stubs`. The sibling `alphus_stub_quality` import package contains
-the small audit helpers that must run under a Python 3.10 target interpreter;
-it is shipped in the same Alphus distribution, not installed separately.
+Group built-in checks by their actual dependency and policy boundaries.
+Language-specific parsing and analysis belongs under
+`alphus.gates.languages.<language>`; shared inventory, selector dispatch, and
+policy binding belong under `alphus.gates.source`. Repository-wide and
+workflow checks remain in their own gate themes. A new format such as JSONC
+can have its own language package without adding its parser to Python-source
+analysis. Keep the core inventory, orchestration, diagnostics, and rule IDs
+stable during these moves. The stub workflow's controller and fixture runner
+live under `alphus.gates.stubs`. The sibling `alphus_stub_quality` import
+package contains the small audit helpers that must run under a Python 3.10
+target interpreter; it is shipped in the same Alphus distribution, not
+installed separately.
 
 Possible future rules include JSONC/JSONL parsing and broader numeric
 constant recognition. Define those formats and precision policies explicitly
@@ -151,9 +155,12 @@ Python namespace packages become useful if independently installed and
 versioned distributions need to share one import namespace. They are not needed
 to organize modules inside the current distribution. If third-party gate
 packages become necessary, discover them through an explicit, versioned entry
-point contract rather than by scanning a namespace for imports. C++ and
-JavaScript tools can continue as native command steps until Alphus owns a
-language-specific check that warrants Python code.
+point contract rather than by scanning a namespace for imports. JavaScript
+projects can continue to use consumer-owned native command steps. Alphus now
+includes the C++ quality workflow described in
+[C++ quality gates](CPP-QUALITY.md); its engines keep their JSON reports and
+run through the existing command-step contract rather than introducing a
+second rule registry.
 
 ### Hook contract
 
