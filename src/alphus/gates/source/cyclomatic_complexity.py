@@ -142,6 +142,7 @@ class CyclomaticPlan:
     maximum: int
     severity: Severity
     timeout_seconds: int
+    lizard_manifest_max_bytes: int
     backends: tuple[CyclomaticBackendPlan, ...]
 
 
@@ -323,6 +324,7 @@ def build_cyclomatic_plan(
         maximum=policy.maximum,
         severity=policy.severity,
         timeout_seconds=policy.timeout_seconds,
+        lizard_manifest_max_bytes=policy.lizard_manifest_max_bytes,
         backends=tuple(plans),
     )
 
@@ -761,6 +763,8 @@ def _run_lizard(
         "alphus.gates.source._lizard_worker",
         str(root),
         binding.variant,
+        "--manifest-max-bytes",
+        str(policy.lizard_manifest_max_bytes),
     ]
     manifest = json.dumps(
         {"files": plan.files}, ensure_ascii=False, separators=(",", ":")

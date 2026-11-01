@@ -16,7 +16,20 @@ from alphus.gates.source._lizard_contracts import (
     LizardWorkerResponse,
 )
 
-_MAX_MANIFEST_BYTES = 64 * 1024 * 1024
+_DEFAULT_MAX_MANIFEST_BYTES = 64 * 1024 * 1024
+_MAX_CONFIGURABLE_MANIFEST_BYTES = 256 * 1024 * 1024
+
+
+def _manifest_limit(value: str) -> int:
+    try:
+        limit = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("manifest limit must be an integer") from error
+    if not 1 <= limit <= _MAX_CONFIGURABLE_MANIFEST_BYTES:
+        raise argparse.ArgumentTypeError(
+            "manifest limit must be between 1 and 268435456 bytes"
+        )
+    return limit
 
 
 def main(argv: Sequence[str] | None = None) -> ExitCode:
@@ -24,14 +37,19 @@ def main(argv: Sequence[str] | None = None) -> ExitCode:
     parser = argparse.ArgumentParser(prog="alphus.gates.source._lizard_worker")
     parser.add_argument("root", type=Path)
     parser.add_argument("variant", choices=("standard", "modified"))
+    parser.add_argument(
+        "--manifest-max-bytes",
+        type=_manifest_limit,
+        default=_DEFAULT_MAX_MANIFEST_BYTES,
+    )
     arguments = parser.parse_args(argv)
     try:
-        manifest = sys.stdin.buffer.read(_MAX_MANIFEST_BYTES + 1)
+        manifest = sys.stdin.buffer.read(arguments.manifest_max_bytes + 1)
     except OSError:
         response = LizardWorkerResponse(error="Lizard file manifest could not be read")
         exit_code = ExitCode.OPERATIONAL_FAILURE
     else:
-        if len(manifest) > _MAX_MANIFEST_BYTES:
+        if len(manifest) > arguments.manifest_max_bytes:
             response = LizardWorkerResponse(
                 error="Lizard file manifest exceeds the size limit"
             )

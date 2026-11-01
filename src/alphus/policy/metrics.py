@@ -88,6 +88,9 @@ class CyclomaticComplexityPolicy(StrictModel):
     files: FileInventoryPolicy
     backends: Annotated[tuple[CyclomaticBackendBinding, ...], Field(min_length=1)]
     timeout_seconds: Annotated[int, Field(gt=0, le=600)] = 60
+    lizard_manifest_max_bytes: Annotated[int, Field(gt=0, le=256 * 1024 * 1024)] = (
+        64 * 1024 * 1024
+    )
 
     @field_validator("backends")
     @classmethod
