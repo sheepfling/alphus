@@ -32,6 +32,7 @@ class Framework(StrEnum):
     GIT = "git"
     NONE = "none"
     PYDANTIC = "pydantic"
+    PYPROJ = "pyproj"
     SCIPY = "scipy"
     SQLALCHEMY = "sqlalchemy"
 

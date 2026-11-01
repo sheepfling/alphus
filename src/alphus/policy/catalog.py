@@ -52,8 +52,10 @@ RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
         "git-history": RuleSpec("git", RuleOutputShape.FINDINGS, requires_files=False),
         "numeric-literals": RuleSpec("numeric_literals", RuleOutputShape.FINDINGS),
         "scipy-constants": RuleSpec("scipy_constants", RuleOutputShape.FINDINGS),
+        "geodesy-constants": RuleSpec("geodesy_constants", RuleOutputShape.FINDINGS),
         "test-quality": RuleSpec("test_quality", RuleOutputShape.FINDINGS),
         "input-contracts": RuleSpec("input_contracts", RuleOutputShape.FINDINGS),
+        "source-families": RuleSpec("source_families", RuleOutputShape.FINDINGS),
         "pydantic-practices": RuleSpec("pydantic_practices", RuleOutputShape.FINDINGS),
         "fastapi-practices": RuleSpec("fastapi_practices", RuleOutputShape.FINDINGS),
     }

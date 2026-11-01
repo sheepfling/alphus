@@ -5,6 +5,7 @@ path that matches the repository being checked.
 
 | Need                                                      | Read                                        |
 | --------------------------------------------------------- | ------------------------------------------- |
+| Adopt, audit, tune, or add Alphus to CI                     | [Adoption guide](ADOPTION.md)              |
 | Choose language bundles and configure one profile         | [Consumer profiles](CONSUMER-PROFILES.md)   |
 | Understand installed native tools and their configuration | [Subtools](SUBTOOLS.md)                     |
 | Plan and apply available fixes                            | [Fixes](FIXES.md)                           |
@@ -12,6 +13,7 @@ path that matches the repository being checked.
 | Check C++ source, builds, and artifacts                   | [C++ quality](CPP-QUALITY.md)               |
 | Check Git ignores or historical repository artifacts      | [Repository hygiene](REPOSITORY-HYGIENE.md) |
 | Review advisory test, input, and framework checks         | [Review checks](REVIEW-CHECKS.md)           |
+| See the ranked open issue backlog                         | [Backlog priorities](BACKLOG-PRIORITIES.md) |
 | Verify Alphus with its own policy                         | [Self-check](SELF-CHECK.md)                 |
 
 ## How the pieces fit

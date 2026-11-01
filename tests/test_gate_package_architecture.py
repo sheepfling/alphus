@@ -73,8 +73,10 @@ def test_gate_themes_own_their_runner_mappings() -> None:
             {
                 "numeric-literals",
                 "scipy-constants",
+                "geodesy-constants",
                 "test-quality",
                 "input-contracts",
+                "source-families",
                 "pydantic-practices",
                 "fastapi-practices",
             },

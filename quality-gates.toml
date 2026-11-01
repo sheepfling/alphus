@@ -99,6 +99,11 @@ physical_constants = true
 unit_conversions = true
 inverse_conversions = true
 
+[checks.geodesy_constants]
+extensions = [".py"]
+exclude = []
+wgs84_ellipsoid = true
+
 [checks.test_quality]
 extensions = [".py"]
 exclude = []
@@ -108,6 +113,20 @@ ephemeral_document_patterns = ["docs/**"]
 [checks.input_contracts]
 extensions = [".py"]
 exclude = []
+
+[checks.source_families]
+extensions = [
+  ".py", ".pyi", ".c", ".h", ".cc", ".hh", ".cpp", ".hpp",
+  ".cxx", ".hxx", ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx",
+]
+include = ["**/*"]
+exclude = ["**/vendor/**", "**/generated/**", "**/tests/**"]
+min_family_files = 5
+min_prefix_characters = 4
+max_files = 20000
+max_findings = 100
+max_reported_members = 40
+max_scope_patterns = 64
 
 [checks.pydantic_practices]
 extensions = [".py"]
@@ -401,6 +420,12 @@ rollout = "provisional"
 
 [[orchestration.steps]]
 kind = "rule"
+name = "Geodesy constants review"
+rule = "geodesy-constants"
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "rule"
 name = "Test review"
 rule = "test-quality"
 
@@ -408,6 +433,12 @@ rule = "test-quality"
 kind = "rule"
 name = "Input contract review"
 rule = "input-contracts"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Source family review"
+rule = "source-families"
+rollout = "provisional"
 
 [[orchestration.steps]]
 kind = "rule"
@@ -422,6 +453,8 @@ rule = "fastapi-practices"
 [[orchestration.profiles]]
 name = "review"
 steps = [
-  "Numeric review", "SciPy constants review", "Test review", "Input contract review",
+  "Numeric review", "SciPy constants review", "Geodesy constants review",
+  "Test review", "Input contract review",
+  "Source family review",
   "Pydantic practice review", "FastAPI practice review",
 ]

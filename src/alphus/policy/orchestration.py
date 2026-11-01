@@ -32,10 +32,12 @@ from alphus.policy.repository import (
 )
 from alphus.policy.review import (
     FastApiPracticePolicy,
+    GeodesyConstantsPolicy,
     InputContractPolicy,
     NumericLiteralPolicy,
     PydanticPracticePolicy,
     ScipyConstantsPolicy,
+    SourceFamilyPolicy,
     TestQualityPolicy,
 )
 from alphus.policy.sources import (
@@ -64,8 +66,10 @@ class CheckPolicies(StrictModel):
     path_discovery: PathDiscoveryPolicy | None = None
     numeric_literals: NumericLiteralPolicy | None = None
     scipy_constants: ScipyConstantsPolicy | None = None
+    geodesy_constants: GeodesyConstantsPolicy | None = None
     test_quality: TestQualityPolicy | None = None
     input_contracts: InputContractPolicy | None = None
+    source_families: SourceFamilyPolicy | None = None
     pydantic_practices: PydanticPracticePolicy | None = None
     fastapi_practices: FastApiPracticePolicy | None = None
     shared_utilities: SharedUtilitiesPolicy | None = None

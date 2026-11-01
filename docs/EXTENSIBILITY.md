@@ -141,10 +141,12 @@ such moves. The stub workflow's controller and fixture runner live under
 the small audit helpers that must run under a Python 3.10 target interpreter;
 it is shipped in the same Alphus distribution, not installed separately.
 
-Possible future rules include JSONC/JSONL parsing and broader numeric
-constant recognition. Define those formats and precision policies explicitly
-before adding dependencies such as SciPy. Git inventory failures also need
-a typed operational error contract before introducing recovery policy.
+Possible future rules include JSONC/JSONL parsing and additional numeric
+catalog realms. Define syntax, authority, precision, and source-context
+semantics before adding catalog entries; stable values should remain checked
+in rather than depending on a consumer's installed scientific package. Git
+inventory failures also need a typed operational error contract before
+introducing recovery policy.
 
 Python namespace packages become useful if independently installed and
 versioned distributions need to share one import namespace. They are not needed
@@ -162,16 +164,16 @@ many languages, while parsing and deciding which syntax counts as evidence
 remain language-specific. Do not label a rule language-neutral just because
 its policy or output model is shared.
 
-The numeric-literal review is the first example of this boundary. Its Python
-frontend uses the Python AST to extract normalized arithmetic occurrences
-(line, value, operation, and identifier context); the shared numeric engine
-matches those observations against the configured value catalog and creates
-the Alphus finding. The current selector still analyzes Python only. Its
-configured extensions do not imply support for another grammar. A future
-frontend can be added when a second language is in scope, with its own parser
-and explicit handling of declarations, assertions, and other intentional
-contexts. It should feed the shared matcher only where those observations have
-the same meaning.
+The numeric catalogs demonstrate this boundary. Their Python frontend uses
+the Python AST to extract normalized observations (line, value, syntax
+context, arithmetic operation, canonical call name, and keyword argument).
+The shared matcher applies realm-specific entries with source provenance and
+context constraints, then creates the Alphus finding. The current catalogs
+still analyze Python only. Configured extensions do not imply support for
+another grammar. A future frontend can be added when a second language is in
+scope, with its own parser and explicit handling of declarations, assertions,
+and other intentional contexts. It should feed the shared matcher only where
+those observations have the same meaning.
 
 Keep findings scoped to the language that was analyzed so rollups retain that
 information. Use `any` only when the evidence and rule semantics are truly

@@ -19,7 +19,8 @@ The portable rules without fixers are `file-size`, `line-length`,
 `comment-markers`, `json-structure`, `output-escaping`, `path-discovery`,
 `shared-utilities`, `module-roles`, `python-style`, `runtime-types`, `cli`,
 `script-policy`, `package-boundaries`, `dependency-locks`,
-`repository-layout`, `numeric-literals`, `test-quality`, `input-contracts`,
+`repository-layout`, `numeric-literals`, `scipy-constants`,
+`geodesy-constants`, `test-quality`, `input-contracts`,
 `pydantic-practices`, and `fastapi-practices`. A formatter may happen to remove
 an individual
 `line-length` finding, but Alphus does not promise that result.

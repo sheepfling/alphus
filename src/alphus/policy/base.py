@@ -31,8 +31,10 @@ QualityRuleName: TypeAlias = Literal[
     "git-history",
     "numeric-literals",
     "scipy-constants",
+    "geodesy-constants",
     "test-quality",
     "input-contracts",
+    "source-families",
     "pydantic-practices",
     "fastapi-practices",
 ]

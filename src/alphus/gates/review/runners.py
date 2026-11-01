@@ -11,6 +11,7 @@ from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.contracts.findings import Finding
 from alphus.gates.review.frameworks.fastapi_practices import check_fastapi_practices
 from alphus.gates.review.frameworks.pydantic_practices import check_pydantic_practices
+from alphus.gates.review.geodesy_constants import check_geodesy_constants
 from alphus.gates.review.input_contracts import check_input_contracts
 from alphus.gates.review.numeric_literals import check_numeric_literals
 from alphus.gates.review.scipy_constants import check_scipy_constants
@@ -33,6 +34,11 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
             root,
             files,
             require_policy(config.checks.scipy_constants, "scipy_constants"),
+        ),
+        "geodesy-constants": lambda root, files, config: check_geodesy_constants(
+            root,
+            files,
+            require_policy(config.checks.geodesy_constants, "geodesy_constants"),
         ),
         "test-quality": lambda root, files, config: check_test_quality(
             root,

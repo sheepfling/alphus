@@ -13,6 +13,7 @@ from alphus.config import NumericLiteralPolicy, NumericLiteralSpec
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Framework, Scope
 from alphus.gates.review.numeric_engine import (
+    NumericCatalog,
     NumericLiteralFinding,
     match_numeric_occurrences,
 )
@@ -47,8 +48,12 @@ def numeric_literal_findings(
     occurrences = scan_python_numeric_occurrences(source)
     return match_numeric_occurrences(
         occurrences,
-        specs,
-        framework=Framework.NONE,
+        NumericCatalog(
+            realm="numeric-literals",
+            framework=Framework.NONE,
+            provenance="Python math module and consumer configuration",
+            specs=specs,
+        ),
         scope=Scope.PYTHON,
     )
 

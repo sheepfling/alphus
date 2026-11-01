@@ -158,10 +158,13 @@ def _load_policy(path: Path) -> QualityGateConfig:
         raise typer.Exit(2) from error
 
 
+# TODO this seems fragile ? Shouldn't new rules be registered instead of enumerated ???
 def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
     """Keep concise text summaries while offering a stable JSON format."""
     review_labels = {
         "numeric-literals": "Numeric literals",
+        "scipy-constants": "SciPy constants",
+        "geodesy-constants": "Geodesy constants",
         "test-quality": "Test quality",
         "input-contracts": "Input contracts",
         "pydantic-practices": "Pydantic practices",

@@ -1,11 +1,20 @@
-"""Extract numeric arithmetic occurrences from Python source."""
+"""Extract normalized numeric occurrences from Python source."""
 
 from __future__ import annotations
 
 import ast
 import re
 
-from alphus.gates.review.numeric_engine import NumericOccurrence, NumericOperation
+from alphus.gates.review.numeric_engine import (
+    NumericContext,
+    NumericOccurrence,
+    NumericOperation,
+)
+from alphus.support.source_scanning import (
+    ImportAliases,
+    canonical_expression_name,
+    import_aliases,
+)
 
 
 def _literal_number(expression: ast.expr) -> tuple[int | float, int] | None:
@@ -94,9 +103,10 @@ def _numeric_operation(operator: ast.operator) -> NumericOperation | None:
 
 
 class _PythonNumericVisitor(ast.NodeVisitor):
-    def __init__(self) -> None:
+    def __init__(self, aliases: ImportAliases) -> None:
         self.function_names: list[str] = []
         self.occurrences: set[NumericOccurrence] = set()
+        self.aliases = aliases
 
     def visit_Module(self, node: ast.Module) -> None:
         for statement in node.body:
@@ -145,22 +155,61 @@ class _PythonNumericVisitor(ast.NodeVisitor):
                 NumericOccurrence(
                     line=line,
                     value=value,
+                    context=NumericContext.ARITHMETIC,
                     operation=operation,
                     tokens=frozenset(tokens),
                 )
             )
 
+    def visit_Call(self, node: ast.Call) -> None:
+        """Extract literal keyword arguments with their canonical call target."""
+        callee = canonical_expression_name(node.func, self.aliases)
+        if callee is not None:
+            numeric_arguments: list[tuple[str, int | float]] = []
+            for keyword in node.keywords:
+                if keyword.arg is None:
+                    continue
+                argument_literal = _literal_number(keyword.value)
+                if argument_literal is not None:
+                    numeric_arguments.append((keyword.arg, argument_literal[0]))
+            call_arguments = tuple(numeric_arguments)
+            for keyword in node.keywords:
+                if keyword.arg is None:
+                    continue
+                literal = _literal_number(keyword.value)
+                if literal is None:
+                    continue
+                value, line = literal
+                self.occurrences.add(
+                    NumericOccurrence(
+                        line=line,
+                        value=value,
+                        context=NumericContext.CALL_ARGUMENT,
+                        operation=None,
+                        tokens=frozenset(),
+                        callee=callee,
+                        argument=keyword.arg,
+                        call_arguments=call_arguments,
+                    )
+                )
+        self.generic_visit(node)
+
 
 def scan_python_numeric_occurrences(source: str) -> list[NumericOccurrence]:
-    """Extract arithmetic literals, leaving catalog matching to the shared engine."""
-    visitor = _PythonNumericVisitor()
-    visitor.visit(ast.parse(source))
+    """Extract numeric observations, leaving catalog matching to shared engine."""
+    tree = ast.parse(source)
+    visitor = _PythonNumericVisitor(import_aliases(tree))
+    visitor.visit(tree)
     return sorted(
         visitor.occurrences,
         key=lambda occurrence: (
             occurrence.line,
             occurrence.value,
-            occurrence.operation.value,
+            occurrence.context.value,
+            occurrence.operation.value if occurrence.operation is not None else "",
             tuple(sorted(occurrence.tokens)),
+            occurrence.callee or "",
+            occurrence.argument or "",
+            tuple(sorted(occurrence.call_arguments)),
         ),
     )

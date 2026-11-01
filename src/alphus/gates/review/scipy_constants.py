@@ -13,6 +13,7 @@ from alphus.config import NumericLiteralSpec, ScipyConstantsPolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Framework, Scope
 from alphus.gates.review.numeric_engine import (
+    NumericCatalog,
     NumericLiteralFinding,
     match_numeric_occurrences,
 )
@@ -79,8 +80,12 @@ def scipy_literal_findings(
     occurrences = scan_python_numeric_occurrences(source)
     return match_numeric_occurrences(
         occurrences,
-        specs,
-        framework=Framework.SCIPY,
+        NumericCatalog(
+            realm="scipy",
+            framework=Framework.SCIPY,
+            provenance="https://docs.scipy.org/doc/scipy/reference/constants.html",
+            specs=specs,
+        ),
         scope=Scope.PYTHON,
     )
 

@@ -54,11 +54,13 @@ from alphus.policy.repository import (
 from alphus.policy.review import (
     ErrorCodeCallSpec,
     FastApiPracticePolicy,
+    GeodesyConstantsPolicy,
     InputContractPolicy,
     NumericLiteralPolicy,
     NumericLiteralSpec,
     PydanticPracticePolicy,
     ScipyConstantsPolicy,
+    SourceFamilyPolicy,
     TestQualityPolicy,
 )
 from alphus.policy.sources import (
@@ -92,6 +94,7 @@ __all__ = [
     "FastApiPracticePolicy",
     "FileInventoryPolicy",
     "FileSizePolicy",
+    "GeodesyConstantsPolicy",
     "GitRepositoryPolicy",
     "GlobRule",
     "InputContractPolicy",
@@ -126,6 +129,7 @@ __all__ = [
     "ScipyConstantsPolicy",
     "ScriptPolicy",
     "SharedUtilitiesPolicy",
+    "SourceFamilyPolicy",
     "SourceScanPolicy",
     "TestQualityPolicy",
     "TrackedPathRule",

@@ -67,6 +67,10 @@ dependency bounds, stub targets, and native tool ownership.
 
 ## Use from another repository
 
+For a guided rollout of Alphus into an existing repository, including policy
+audits, severity and rollout, false positives, agent instructions, and CI, see
+the [adoption guide](docs/ADOPTION.md).
+
 Until the project chooses a package index, consumers can install from a local
 source checkout, pin a Git commit, or build and distribute the wheel through an
 existing package channel. For a reproducible Git dependency, pin an immutable

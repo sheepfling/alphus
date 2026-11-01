@@ -5,7 +5,7 @@ review of intent; they do not prove numeric correctness, test quality, or the
 absence of side effects. Existing policies remain valid without their optional
 sections. Ruff, Pyright, pytest, mdrepo, and rumdl retain their own checks.
 
-Alphus applies all six scanners to its real source/test inventory through the
+Alphus applies all eight scanners to its real source/test inventory through the
 `review` profile and includes them in `check` with a warning failure threshold.
 Build/install the wheel using [the self-check guide](SELF-CHECK.md), then
 invoke the installed command from the temporary directory:
@@ -24,9 +24,9 @@ Native command failures still fail.
 Selector: `numeric-literals`. IDs: `alphus/python/none/style/inline-constant` and
 `alphus/python/none/style/inline-conversion`.
 
-This rule currently analyzes Python only. The Python AST frontend extracts
-arithmetic occurrences; a shared matcher applies the configured catalog. The
-matcher boundary is an internal seam for a future language frontend, not a
+This rule currently analyzes Python only. A Python AST frontend extracts
+normalized occurrences; a shared matcher applies realm-specific catalogs. The
+frontend boundary is an internal seam for future language frontends, not a
 claim that non-Python files are supported.
 
 The built-in catalog recognizes these exact values in binary or augmented
@@ -74,6 +74,12 @@ ratios, scientific literals, and offset conversions have no inferred unit
 meaning. Evaluating formulas to infer units or derive factors, external constant
 authorities, and dimensional correctness remain outside this checker.
 
+Catalog entries can also target named call arguments. Set `context =
+"call-argument"`, `call_names` to canonical qualified call names, and
+`argument_names` to the matching keyword names. `required_call_arguments` can
+require other exact numeric keyword values from the same call. The Python
+frontend resolves imported call aliases before matching.
+
 ## SciPy constants and conversions
 
 Selector: `scipy-constants`. IDs:
@@ -103,9 +109,34 @@ Alphus does not import SciPy, compare floating-point values approximately, or
 infer physical dimensions. The gate is provisional in Alphus's own `review`
 profile, so its findings are visible without blocking the profile.
 
+## Geodesy constants
+
+Selector: `geodesy-constants`. ID: `alphus/python/pyproj/style/inline-constant`.
+
+Enable the built-in WGS 84 ellipsoid catalog with:
+
+```toml
+[checks.geodesy_constants]
+extensions = [".py"]
+wgs84_ellipsoid = true
+```
+
+The first geodesy entries target the paired `a=6378137` and
+`rf=298.257223563` keyword arguments to `pyproj.Geod`, including imported
+aliases. Each finding recommends `pyproj.Geod(ellps="WGS84")`. The pair is
+required because the semi-major axis alone is shared by other ellipsoids. The
+catalog records the WGS 84 ellipsoid from the
+[PROJ ellipsoid table](https://proj.org/en/stable/usage/ellipsoids.html) and
+[PROJJSON EPSG:4326 example](https://proj.org/en/stable/specifications/projjson.html).
+Alphus stores these values and provenance in its catalog; it does not import
+pyproj or consult the consumer's installed PROJ database. This check covers
+these explicit ellipsoid parameters, not every WGS 84 datum realization or CRS
+configuration. It is provisional in Alphus's `review` profile.
+
 ## Test quality
 
-Selector: `test-quality`. IDs: `alphus/python/none/testing/large-prose-assertion` and
+Selector: `test-quality`. IDs:
+`alphus/python/none/testing/large-prose-assertion` and
 `alphus/python/none/testing/ephemeral-plan-dependency`.
 
 ```toml
@@ -149,7 +180,8 @@ file exclusion.
 
 ## Input contracts
 
-Selector: `input-contracts`. IDs: `alphus/python/none/correctness/argument-mutation` and
+Selector: `input-contracts`. IDs:
+`alphus/python/none/correctness/argument-mutation` and
 `alphus/python/none/correctness/read-only-interface-violation`.
 
 ```toml
@@ -289,7 +321,8 @@ for a complete opt-in policy, plan command, and JSON findings run.
 
 ## FastAPI and Starlette practices
 
-Selector: `fastapi-practices`. IDs: `alphus/python/fastapi/correctness/literal-http-status` and
+Selector: `fastapi-practices`. IDs:
+`alphus/python/fastapi/correctness/literal-http-status` and
 `alphus/python/fastapi/correctness/literal-error-code`.
 
 ```toml
