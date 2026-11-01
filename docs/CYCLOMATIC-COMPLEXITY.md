@@ -101,6 +101,10 @@ diagnostic shapes; unknown rule codes, message formats, or parse diagnostics
 fail closed. Lizard is called through its Python API rather than its human
 reporting CLI. Missing executables, API failures, malformed output, timeout,
 and incomplete file coverage produce operational failures, never a zero score.
+The Lizard worker receives the deterministic selected-path list as a UTF-8 JSON
+manifest on stdin, so the operating-system command line stays fixed as the
+inventory grows. The manifest is limited to 64 MiB; an oversized or malformed
+request is an operational failure. It contains paths only, not source text.
 
 ## Fixture and upgrade policy
 
