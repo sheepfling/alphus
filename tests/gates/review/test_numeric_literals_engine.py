@@ -3,6 +3,14 @@
 from pathlib import Path
 
 from alphus.config import NumericLiteralPolicy, NumericLiteralSpec
+from alphus.contracts.rule_tags import Framework, Scope
+from alphus.gates.review.numeric_engine import (
+    NumericCatalog,
+    NumericContext,
+    NumericOccurrence,
+    NumericOperation,
+    match_numeric_occurrences,
+)
 from alphus.gates.review.numeric_literals import (
     check_numeric_literals,
     numeric_literal_findings,
@@ -173,7 +181,7 @@ def test_signed_literals_are_exact_and_booleans_are_not_numeric_matches() -> Non
     assert [finding.line for finding in findings] == [1, 4]
 
 
-def test_arithmetic_operators_and_duplicate_findings_are_bounded() -> None:
+def test_binary_operations_and_duplicate_findings_are_bounded() -> None:
     source = (
         "first = value + 3.14\n"
         "second = value - 3.14\n"
@@ -181,13 +189,64 @@ def test_arithmetic_operators_and_duplicate_findings_are_bounded() -> None:
         "fourth = value // 3.14\n"
         "fifth = value % 3.14\n"
         "repeated = 3.14 * value * 3.14\n"
-        "bitwise = value | 3.14\n"
+        "bitwise_or = value | 3.14\n"
+        "bitwise_and = value & 3.14\n"
+        "bitwise_xor = value ^ 3.14\n"
+        "shift_left = value << 3.14\n"
+        "shift_right = value >> 3.14\n"
+        "matrix_product = value @ 3.14\n"
         "argument = consume(3.14)\n"
     )
 
     assert [
         finding.line for finding in numeric_literal_findings(source, _policy())
-    ] == [1, 2, 3, 4, 5, 6]
+    ] == list(range(1, 13))
+
+
+def test_normalized_array_division_operations_can_match_conversion_catalogs() -> None:
+    conversion = NumericLiteralSpec(
+        name="unit scale",
+        values=(1000,),
+        kind="conversion",
+        replacement="named scale",
+        name_tokens=("meter",),
+    )
+    operations = (
+        NumericOperation.MULTIPLY,
+        NumericOperation.DIVIDE,
+        NumericOperation.MATRIX_MULTIPLY,
+        NumericOperation.ELEMENTWISE_MULTIPLY,
+        NumericOperation.ELEMENTWISE_DIVIDE,
+        NumericOperation.ELEMENTWISE_LEFT_DIVIDE,
+        NumericOperation.MATRIX_LEFT_DIVIDE,
+        NumericOperation.MATRIX_RIGHT_DIVIDE,
+        NumericOperation.POWER,
+        NumericOperation.MATRIX_POWER,
+        NumericOperation.ELEMENTWISE_POWER,
+    )
+    occurrences = tuple(
+        NumericOccurrence(
+            line=line,
+            value=1000,
+            context=NumericContext.BINARY_OPERATION,
+            operation=operation,
+            tokens=frozenset({"meter"}),
+        )
+        for line, operation in enumerate(operations, start=1)
+    )
+
+    findings = match_numeric_occurrences(
+        occurrences,
+        NumericCatalog(
+            realm="test",
+            framework=Framework.NONE,
+            provenance=None,
+            specs=(conversion,),
+        ),
+        scope=Scope.ANY,
+    )
+
+    assert [finding.line for finding in findings] == list(range(1, 9))
 
 
 def test_scanner_preserves_scope_paths_and_warning_severity(tmp_path: Path) -> None:

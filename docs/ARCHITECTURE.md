@@ -143,18 +143,18 @@ processes, or discover a checkout from the current directory or module path.
 Policy models are grouped under `alphus.policy` by source scanning,
 architecture, repository metadata, and orchestration. `alphus.config`
 re-exports the public models and TOML loader.
-`alphus.policy.catalog` records each built-in rule's required policy field and
-JSON output shape. Policy validation and profile diagnostic decoding share
-that catalog. Theme packages own their runner mappings;
-`alphus.execution.dispatch` composes the built-in checker dispatch, and
-`alphus.execution.results` validates each result against its declared shape
-while normalizing diagnostics. The package tests require
-both registries to cover every public rule selector. The CLI retains rendering
-adapters because some older rules have distinct direct-command output formats.
-`RuleEvaluation` keeps the checker output, normalized diagnostics, and threshold
-decision together before rendering. Direct CLI modes serialize that result to
-their established text or JSON formats; profiles consume its diagnostics
-directly, without parsing the CLI's own output.
+`alphus.policy.catalog` records each built-in rule's required policy field,
+output shape, summary metadata, and human-renderer key. Policy validation and
+profile diagnostic decoding share that catalog. Theme packages own their
+runner mappings; `alphus.execution.dispatch` composes the built-in checker
+dispatch, and `alphus.execution.results` validates each result against its
+declared shape while normalizing diagnostics. The package tests require both
+the runner and human-renderer registries to cover every public rule selector.
+The CLI owns immutable renderer adapters for the established direct-command
+formats. `RuleEvaluation` keeps the checker output, normalized diagnostics,
+and threshold decision together before rendering. Direct CLI modes serialize
+that result to their established text or JSON formats; profiles consume its
+diagnostics directly, without parsing the CLI's own output.
 Selected command steps can separately declare a file-scoped `fix_argv`.
 The [fix plan](FIXES.md) lists those commands without running them; applying
 fixes requires explicit step names and remains separate from profile checks.

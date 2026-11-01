@@ -21,9 +21,11 @@ from alphus.gates.review.numeric_python import scan_python_numeric_occurrences
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 
-# Keep these reviewed values aligned with SciPy's checked-in CODATA dataset;
-# findings point to SciPy's public API and its constants reference.
-_PHYSICAL_CONSTANTS = (
+# Keep reviewed defaults in declarative, version-independent registries. Policy
+# flags select groups and `constants` adds consumer-owned entries without loading
+# SciPy at runtime.
+_SCIPY_CONSTANTS_REFERENCE = "https://docs.scipy.org/doc/scipy/reference/constants.html"
+_BUILTIN_PHYSICAL_CONSTANTS = (
     NumericLiteralSpec(
         name="speed of light",
         values=(299792458,),
@@ -62,14 +64,13 @@ _PHYSICAL_CONSTANTS = (
 )
 
 # Each factor is the number of SI units in one named unit.
-_UNIT_FACTORS = (
+_BUILTIN_UNIT_FACTORS = (
     ("inch", 0.0254, ("inch", "inches", "meter", "meters", "metre", "metres")),
     ("foot", 0.3048, ("foot", "feet", "meter", "meters", "metre", "metres")),
     ("mile", 1609.344, ("mile", "miles", "meter", "meters", "metre", "metres")),
     ("hour", 3600, ("hour", "hours", "second", "seconds")),
     ("day", 86400, ("day", "days", "second", "seconds")),
 )
-# TODO HANDLE EVERY CONSTANT FROM SCIPY constants and CONVERSIONS!
 
 
 def _unit_specs(include_inverses: bool) -> tuple[NumericLiteralSpec, ...]:
@@ -82,7 +83,7 @@ def _unit_specs(include_inverses: bool) -> tuple[NumericLiteralSpec, ...]:
             replacement=f"scipy.constants.{unit} or its reciprocal (check direction)",
             name_tokens=tokens,
         )
-        for unit, factor, tokens in _UNIT_FACTORS
+        for unit, factor, tokens in _BUILTIN_UNIT_FACTORS
     )
 
 
@@ -91,7 +92,7 @@ def scipy_literal_findings(
 ) -> list[NumericLiteralFinding]:
     """Review exact configured SciPy values in arithmetic source expressions."""
     builtin_specs = (
-        *(_PHYSICAL_CONSTANTS if policy.physical_constants else ()),
+        *(_BUILTIN_PHYSICAL_CONSTANTS if policy.physical_constants else ()),
         *(_unit_specs(policy.inverse_conversions) if policy.unit_conversions else ()),
     )
     occurrences = scan_python_numeric_occurrences(source)
@@ -100,7 +101,7 @@ def scipy_literal_findings(
         NumericCatalog(
             realm="scipy",
             framework=Framework.SCIPY,
-            provenance="https://docs.scipy.org/doc/scipy/reference/constants.html",
+            provenance=_SCIPY_CONSTANTS_REFERENCE,
             specs=builtin_specs,
         ),
         scope=Scope.PYTHON,

@@ -180,18 +180,23 @@ its policy or output model is shared.
 The numeric catalogs demonstrate this boundary. Their Python frontend uses
 the Python AST to extract normalized observations (line, value, syntax
 context, arithmetic operation, canonical call name, and keyword argument).
-The shared matcher applies realm-specific entries with source provenance and
-context constraints, then creates the Alphus finding with both the recommended
-API and its source. SciPy's constants database also provides a discovery path
-for additional chemistry constants; curated entries are checked in so they do
-not change with an installed dependency version. Atomic weights and
-compound-specific properties need keyed data catalogs with element or compound
-identity and, where relevant, measurement conditions. The current catalogs
-still analyze Python only. Configured extensions do not imply support for
-another grammar. A future frontend can be added when a second language is in
-scope, with its own parser and explicit handling of declarations, assertions,
-and other intentional contexts. It should feed the shared matcher only where
-those observations have the same meaning.
+The shared operation vocabulary covers arithmetic, bitwise, shift, and matrix
+multiplication operators. A future frontend can add language-specific
+operations, such as elementwise operators, when their semantics can be
+preserved during normalization. The matcher applies realm-specific entries
+with source provenance and context constraints, then creates the Alphus finding
+with both the recommended API and its source. Conversion catalogs can match
+normalized multiplication and division forms while excluding powers. SciPy's
+constants database also provides a discovery path for additional chemistry
+constants; curated entries are checked in so they do not change with an
+installed dependency version.
+Atomic weights and compound-specific properties need keyed data catalogs with
+element or compound identity and, where relevant, measurement conditions. The
+current catalogs still analyze Python only. Configured extensions do not imply
+support for another grammar. A future frontend can be added when a second
+language is in scope, with its own parser and explicit handling of declarations,
+assertions, and other intentional contexts. It should feed the shared matcher
+only where those observations have the same meaning.
 
 Keep findings scoped to the language that was analyzed so rollups retain that
 information. Use `any` only when the evidence and rule semantics are truly
@@ -204,13 +209,14 @@ analyzers.
 
 ### Hook contract
 
-The internal `RuleSpec` catalog now gives every built-in selector one primary
-policy field and output shape; a matching runner table holds concrete checker
-dispatch. The next step is to migrate older rule outputs to common findings,
-then attach selector-group metadata and a typed checker callable to each
-specification. Those groups are distinct from diagnostic-tag categories. Keep
-the current CLI selectors as adapters while that contract is exercised across
-existing rules.
+The internal `RuleSpec` catalog gives every built-in selector one primary
+policy field, output shape, and text-renderer key; summary metadata lives with
+that contract. A matching runner table holds concrete checker dispatch. The
+next step is to migrate older rule outputs to common findings, then attach
+selector-group metadata and a typed checker callable to each specification.
+Those groups are distinct from diagnostic-tag categories. Keep the current
+CLI selectors as adapters while that contract is exercised across existing
+rules.
 
 Only after consumers need third-party checks should Alphus expose a versioned
 plugin API, potentially through an entry-point group and pytest-style hook

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import ast
 import re
+from collections.abc import Mapping
+from types import MappingProxyType
 
 from alphus.gates.review.numeric_engine import (
     NumericContext,
@@ -82,24 +84,28 @@ def _module_constant(statement: ast.stmt) -> bool:
             return False
 
 
+_NUMERIC_OPERATIONS: Mapping[type[ast.operator], NumericOperation] = MappingProxyType(
+    {
+        ast.Add: NumericOperation.ADD,
+        ast.Sub: NumericOperation.SUBTRACT,
+        ast.Mult: NumericOperation.MULTIPLY,
+        ast.Div: NumericOperation.DIVIDE,
+        ast.FloorDiv: NumericOperation.FLOOR_DIVIDE,
+        ast.Mod: NumericOperation.MODULO,
+        ast.Pow: NumericOperation.POWER,
+        ast.BitAnd: NumericOperation.BITWISE_AND,
+        ast.BitOr: NumericOperation.BITWISE_OR,
+        ast.BitXor: NumericOperation.BITWISE_XOR,
+        ast.LShift: NumericOperation.LEFT_SHIFT,
+        ast.RShift: NumericOperation.RIGHT_SHIFT,
+        ast.MatMult: NumericOperation.MATRIX_MULTIPLY,
+    }
+)
+
+
 def _numeric_operation(operator: ast.operator) -> NumericOperation | None:
-    match operator:
-        case ast.Add():
-            return NumericOperation.ADD
-        case ast.Sub():
-            return NumericOperation.SUBTRACT
-        case ast.Mult():
-            return NumericOperation.MULTIPLY
-        case ast.Div():
-            return NumericOperation.DIVIDE
-        case ast.FloorDiv():
-            return NumericOperation.FLOOR_DIVIDE
-        case ast.Mod():
-            return NumericOperation.MODULO
-        case ast.Pow():
-            return NumericOperation.POWER
-        case _:
-            return None
+    """Normalize every Python binary operator supported by the AST frontend."""
+    return _NUMERIC_OPERATIONS.get(type(operator))
 
 
 class _PythonNumericVisitor(ast.NodeVisitor):
@@ -155,7 +161,7 @@ class _PythonNumericVisitor(ast.NodeVisitor):
                 NumericOccurrence(
                     line=line,
                     value=value,
-                    context=NumericContext.ARITHMETIC,
+                    context=NumericContext.BINARY_OPERATION,
                     operation=operation,
                     tokens=frozenset(tokens),
                 )

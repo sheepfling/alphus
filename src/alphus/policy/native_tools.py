@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from types import MappingProxyType
 
 from alphus.policy.orchestration import (
-    CommandRunStep,
     DEFAULT_PROFILE_NAME,
+    CommandRunStep,
     OrchestrationPolicy,
     OrchestrationProfile,
 )

@@ -185,7 +185,10 @@ class InputContractPolicy(PythonSourceScanPolicy):
 class SourceFamilyPolicy(StrictModel):
     """Bounded, lexical-only review of similarly named source siblings."""
 
-    extensions: tuple[str, ...] = (
+    extensions: Annotated[
+        tuple[str, ...],
+        Field(description="Lowercase source-file suffixes included in the scan."),
+    ] = (
         ".py",
         ".pyi",
         ".c",
@@ -203,19 +206,97 @@ class SourceFamilyPolicy(StrictModel):
         ".ts",
         ".tsx",
     )
-    # TODO; these should have Annotated field descrptions that give notes .. because if they
-    # support globs or not etc.
-    include: tuple[str, ...] = ("**/*",)
-    exclude: tuple[str, ...] = ("**/vendor/**", "**/generated/**", "**/tests/**")
-    language_overrides: tuple[tuple[str, str], ...] = ()
-    path_language_overrides: tuple[tuple[str, str], ...] = ()
-    min_family_files: int = 5
-    min_prefix_characters: int = 4
-    max_files: int = 20_000
-    max_findings: int = 100
-    max_reported_members: int = 40
-    max_scope_patterns: int = 64
-    file_length_limits: tuple[tuple[str, int], ...] = ()
+    include: Annotated[
+        tuple[str, ...],
+        Field(
+            description=(
+                "POSIX-relative glob patterns selecting paths from the configured "
+                "file inventory; ** matches zero or more path segments."
+            )
+        ),
+    ] = ("**/*",)
+    exclude: Annotated[
+        tuple[str, ...],
+        Field(
+            description=(
+                "POSIX-relative glob patterns removed from the selected paths; ** "
+                "matches zero or more path segments."
+            )
+        ),
+    ] = ("**/vendor/**", "**/generated/**", "**/tests/**")
+    language_overrides: Annotated[
+        tuple[tuple[str, str], ...],
+        Field(
+            description=(
+                "Pairs of source suffix and display language name, overriding the "
+                "built-in language inferred from each suffix."
+            )
+        ),
+    ] = ()
+    path_language_overrides: Annotated[
+        tuple[tuple[str, str], ...],
+        Field(
+            description=(
+                "Pairs of POSIX-relative glob and display language name; the last "
+                "matching pair takes precedence over suffix-based language names."
+            )
+        ),
+    ] = ()
+    min_family_files: Annotated[
+        int,
+        Field(
+            gt=0,
+            description=(
+                "Minimum number of distinct logical source units required for a "
+                "family candidate; paired C/C++ headers and implementations count "
+                "as one unit."
+            ),
+        ),
+    ] = 5
+    min_prefix_characters: Annotated[
+        int,
+        Field(
+            gt=0,
+            description=(
+                "Minimum number of letters and digits in a proper filename-token "
+                "prefix considered as a family."
+            ),
+        ),
+    ] = 4
+    max_files: Annotated[
+        int,
+        Field(gt=0, description="Maximum selected source files processed by the scan."),
+    ] = 20_000
+    max_findings: Annotated[
+        int,
+        Field(gt=0, description="Maximum findings returned by the source-family scan."),
+    ] = 100
+    max_reported_members: Annotated[
+        int,
+        Field(
+            gt=0,
+            description="Maximum family member paths included in one finding.",
+        ),
+    ] = 40
+    max_scope_patterns: Annotated[
+        int,
+        Field(
+            gt=0,
+            description=(
+                "Maximum combined count of include, exclude, and path-language "
+                "override patterns."
+            ),
+        ),
+    ] = 64
+    file_length_limits: Annotated[
+        tuple[tuple[str, int], ...],
+        Field(
+            description=(
+                "Pairs of source suffix and advisory physical-line limit, reported "
+                "as context for matching families."
+            )
+        ),
+    ] = ()
 
     @model_validator(mode="after")
     def validate_limits(self) -> SourceFamilyPolicy:

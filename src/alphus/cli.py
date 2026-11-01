@@ -7,12 +7,13 @@ import logging
 import sys
 import tomllib
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import redirect_stderr, redirect_stdout
 from contextvars import ContextVar
 from dataclasses import asdict
 from io import StringIO
 from pathlib import Path
+from types import MappingProxyType
 from typing import Annotated, NamedTuple, TextIO, cast
 
 import typer
@@ -30,11 +31,11 @@ from alphus.execution.dispatch import run_builtin_rule
 from alphus.execution.fixes import apply_fixes as apply_configured_fixes
 from alphus.execution.fixes import resolve_fix_plan
 from alphus.execution.orchestration import RuleRunResult, run_orchestration
-from alphus.execution.results import RuleEvaluation
+from alphus.execution.results import RuleEvaluation, RuleOutput
 from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
 from alphus.gates.source.python_style import StyleFindings
 from alphus.policy.base import MissingPolicyError
-from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
+from alphus.policy.catalog import RULE_SPECS, RuleOutputShape, RuleTextRenderer
 from alphus.policy.orchestration import DEFAULT_FAILURE_THRESHOLD
 from alphus.support.inventory import candidate_files
 
@@ -159,81 +160,40 @@ def _load_policy(path: Path) -> QualityGateConfig:
         raise typer.Exit(2) from error
 
 
-# TODO: Replace legacy direct summaries with registry-bound renderer adapters.
-def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
-    """Keep concise text summaries while offering a stable JSON format."""
-    review_labels = {
-        "numeric-literals": "Numeric literals",
-        "scipy-constants": "SciPy constants",
-        "geodesy-constants": "Geodesy constants",
-        "test-quality": "Test quality",
-        "input-contracts": "Input contracts",
-        "pydantic-practices": "Pydantic practices",
-        "fastapi-practices": "FastAPI practices",
-    }
-    if rule in review_labels:
-        for finding in findings:
-            _render_finding(finding)
-        _human_print(f"{review_labels[rule]}: {len(findings)} finding(s)")
-        _render_severity_totals(findings)
-        return
-    if rule == "line-length":
-        counts = Counter(finding.path for finding in findings)
-        for name, count in sorted(counts.items()):
-            lines = [
-                finding.line
-                for finding in findings
-                if finding.path == name and finding.line is not None
-            ]
-            limit = next(
-                finding.message.rsplit("limit ", maxsplit=1)[1].rstrip(")")
-                for finding in findings
-                if finding.path == name
-            )
-            sample = ", ".join(str(line) for line in lines[:5])
-            _human_print(
-                f"{rule_tag(Scope.ANY, Framework.NONE, Category.STYLE, 'line-too-long')} {name}: "
-                f"{count} lines exceed {limit} columns (example lines: {sample})"
-            )
-        _human_print(
-            f"{rule_tag(Scope.ANY, Framework.NONE, Category.STYLE, 'line-too-long')}: "
-            f"{len(findings)} violation(s) in {len(counts)} files"
+def _render_line_length(findings: Sequence[Finding]) -> None:
+    """Render line-length counts grouped by file and configured limit."""
+    counts = Counter(finding.path for finding in findings)
+    for name, count in sorted(counts.items()):
+        lines = [
+            finding.line
+            for finding in findings
+            if finding.path == name and finding.line is not None
+        ]
+        limit = next(
+            finding.message.rsplit("limit ", maxsplit=1)[1].rstrip(")")
+            for finding in findings
+            if finding.path == name
         )
-        _render_severity_totals(findings)
-        return
-    if rule == "json-structure":
-        for finding in findings:
-            _render_finding(finding)
-        _human_print(f"JSON structure: {len(findings)} violation(s)")
-        _render_severity_totals(findings)
-        return
-    if rule == "output-escaping":
-        for finding in findings:
-            _render_finding(finding)
-        _human_print(f"Output escaping: {len(findings)} finding(s)")
-        _render_severity_totals(findings)
-        return
-    if rule == "path-discovery":
-        for finding in findings:
-            _render_finding(finding)
-        _human_print(f"Path handling: {len(findings)} violation(s)")
-        _render_severity_totals(findings)
-        return
-    if rule == "module-roles":
-        for finding in findings:
-            _render_finding(finding)
-        _human_print(f"Module roles: {len(findings)} violation(s)")
-        _render_severity_totals(findings)
-        return
-    if rule == "comment-markers":
-        for finding in findings:
-            _render_finding(finding)
-        _human_print(f"Comment markers: {len(findings)} violation(s)")
-        _render_severity_totals(findings)
-        return
+        sample = ", ".join(str(line) for line in lines[:5])
+        _human_print(
+            f"{rule_tag(Scope.ANY, Framework.NONE, Category.STYLE, 'line-too-long')} {name}: "
+            f"{count} lines exceed {limit} columns (example lines: {sample})"
+        )
+    _human_print(
+        f"{rule_tag(Scope.ANY, Framework.NONE, Category.STYLE, 'line-too-long')}: "
+        f"{len(findings)} violation(s) in {len(counts)} files"
+    )
+    _render_severity_totals(findings)
+
+
+def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
+    """Render findings and the summary registered with their rule contract."""
     for finding in findings:
         _render_finding(finding)
-    _human_print(f"File size: {len(findings)} violation(s)")
+    spec = RULE_SPECS[rule]
+    if spec.summary_label is None:
+        raise ValueError(f"rule {rule!r} has no finding summary registered")
+    _human_print(f"{spec.summary_label}: {len(findings)} {spec.summary_unit}")
     _render_severity_totals(findings)
 
 
@@ -352,22 +312,6 @@ def _render_script_policy(issues: Sequence[str]) -> None:
     _human_print(f"Script policy: {len(issues)} violation(s)")
 
 
-def _render_package_boundaries(findings: Sequence[Finding]) -> None:
-    """Render the package, layout, registry, and metadata boundary findings."""
-    for finding in findings:
-        _render_finding(finding)
-    _human_print(f"Package boundaries: {len(findings)} violation(s)")
-    _render_severity_totals(findings)
-
-
-def _render_dependency_locks(findings: Sequence[Finding]) -> None:
-    """Render requirement and exact-pin findings."""
-    for finding in findings:
-        _render_finding(finding)
-    _human_print(f"Dependency locks: {len(findings)} violation(s)")
-    _render_severity_totals(findings)
-
-
 def _render_repository_layout(findings: Sequence[Finding]) -> None:
     """Render configured artifact, path, and instruction-router findings."""
     for finding in findings:
@@ -377,6 +321,54 @@ def _render_repository_layout(findings: Sequence[Finding]) -> None:
     else:
         _human_print("Tracked-file layout is clean.")
     _render_severity_totals(findings)
+
+
+def _render_findings_output(rule: QualityRule, output: RuleOutput) -> None:
+    _render(rule, cast(list[Finding], output))
+
+
+def _render_line_length_output(_rule: QualityRule, output: RuleOutput) -> None:
+    _render_line_length(cast(list[Finding], output))
+
+
+def _render_repository_layout_output(_rule: QualityRule, output: RuleOutput) -> None:
+    _render_repository_layout(cast(list[Finding], output))
+
+
+def _render_runtime_types_output(_rule: QualityRule, output: RuleOutput) -> None:
+    _render_runtime_types(cast(list[str], output))
+
+
+def _render_cli_policy_output(_rule: QualityRule, output: RuleOutput) -> None:
+    _render_cli_policy(cast(list[str], output))
+
+
+def _render_script_policy_output(_rule: QualityRule, output: RuleOutput) -> None:
+    _render_script_policy(cast(list[str], output))
+
+
+def _render_python_style_output(_rule: QualityRule, output: RuleOutput) -> None:
+    _render_python_style(cast(dict[str, StyleFindings], output))
+
+
+def _render_shared_utilities_output(_rule: QualityRule, output: RuleOutput) -> None:
+    _render_shared_utilities(cast(SharedUtilitiesReport, output))
+
+
+_TEXT_RENDERERS: Mapping[
+    RuleTextRenderer, Callable[[QualityRule, RuleOutput], None]
+] = MappingProxyType(
+    {
+        RuleTextRenderer.FINDINGS: _render_findings_output,
+        RuleTextRenderer.LINE_LENGTH: _render_line_length_output,
+        RuleTextRenderer.REPOSITORY_LAYOUT: _render_repository_layout_output,
+        RuleTextRenderer.RUNTIME_TYPES: _render_runtime_types_output,
+        RuleTextRenderer.CLI_POLICY: _render_cli_policy_output,
+        RuleTextRenderer.SCRIPT_POLICY: _render_script_policy_output,
+        RuleTextRenderer.PYTHON_STYLE: _render_python_style_output,
+        RuleTextRenderer.SHARED_UTILITIES: _render_shared_utilities_output,
+    }
+)
 
 
 def _evaluate_rule(
@@ -427,59 +419,35 @@ def _execute(
     output = evaluation.output
     exit_code = int(evaluation.failed and not report)
     shape = RULE_SPECS[rule].output_shape
-    if shape is RuleOutputShape.FINDINGS:
-        findings = cast(list[Finding], output)
-        if json_output:
+    if json_output:
+        if shape is RuleOutputShape.FINDINGS:
+            findings = cast(list[Finding], output)
             typer.echo(
                 json.dumps([asdict(finding) for finding in findings], sort_keys=True)
             )
-        elif rule == "dependency-locks":
-            _render_dependency_locks(findings)
-        elif rule == "repository-layout":
-            _render_repository_layout(findings)
-        elif rule == "package-boundaries":
-            _render_package_boundaries(findings)
-        else:
-            _render(rule, findings)
-        return exit_code
-
-    if shape is RuleOutputShape.MESSAGES:
-        issues = cast(list[str], output)
-        if json_output:
+        elif shape is RuleOutputShape.MESSAGES:
+            issues = cast(list[str], output)
             typer.echo(json.dumps(issues))
-        elif rule == "script-policy":
-            _render_script_policy(issues)
-        elif rule == "cli":
-            _render_cli_policy(issues)
-        elif rule == "runtime-types":
-            _render_runtime_types(issues)
-        else:
-            raise ValueError(f"rule {rule!r} has no message renderer")
-        return exit_code
-
-    if shape is RuleOutputShape.PYTHON_STYLE:
-        style_findings = cast(dict[str, StyleFindings], output)
-        if json_output:
+        elif shape is RuleOutputShape.PYTHON_STYLE:
+            style_findings = cast(dict[str, StyleFindings], output)
             typer.echo(json.dumps(style_findings, sort_keys=True))
         else:
-            _render_python_style(style_findings)
+            shared_report = cast(SharedUtilitiesReport, output)
+            typer.echo(
+                json.dumps(
+                    {
+                        "direct_git_calls": shared_report.direct_git_calls,
+                        "duplicate_groups": shared_report.duplicate_groups,
+                        "failed": shared_report.failed,
+                        "file_hash_implementations": shared_report.file_hash_implementations,
+                    },
+                    sort_keys=True,
+                )
+            )
         return exit_code
 
-    shared_report = cast(SharedUtilitiesReport, output)
-    if json_output:
-        typer.echo(
-            json.dumps(
-                {
-                    "direct_git_calls": shared_report.direct_git_calls,
-                    "duplicate_groups": shared_report.duplicate_groups,
-                    "failed": shared_report.failed,
-                    "file_hash_implementations": shared_report.file_hash_implementations,
-                },
-                sort_keys=True,
-            )
-        )
-    else:
-        _render_shared_utilities(shared_report)
+    renderer = _TEXT_RENDERERS[RULE_SPECS[rule].text_renderer]
+    renderer(rule, output)
     return exit_code
 
 

@@ -15,6 +15,8 @@ from alphus.gates.source.output_escaping import check_output_escaping
 from alphus.gates.source.path_discovery import check_path_discovery
 from alphus.gates.source.python_style import (
     StyleFindings,
+)
+from alphus.gates.source.python_style import (
     findings_for as python_style_findings,
 )
 from alphus.gates.source.runtime_types import policy_issues as runtime_type_issues

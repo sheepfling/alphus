@@ -293,21 +293,24 @@ def test_unreadable_source_remains_in_lexical_candidate_and_marks_scan_incomplet
     assert "line count unavailable" in candidate.message
 
 
-@pytest.mark.parametrize(
-    "values",
-    [
-        {"min_family_files": 0},
-        {"max_files": 0},
-        {"max_reported_members": 0},
-        {"extensions": (".py", ".py")},
-        {"exclude": ("../private/**",)},
-        {"file_length_limits": ((".py", 0),)},
-        {"language_overrides": ((".py", "Python"), (".py", "Py"))},
-        {"language_overrides": (("not-an-extension", "Py"),)},
-        {"path_language_overrides": (("../outside/**", "C"),)},
-        {"max_scope_patterns": 1},
-    ],
-)
-def test_rejects_invalid_source_family_policy(values: dict[str, object]) -> None:
+def test_rejects_invalid_source_family_policy() -> None:
     with pytest.raises(ValueError):
-        SourceFamilyPolicy(**values)
+        SourceFamilyPolicy(min_family_files=0)
+    with pytest.raises(ValueError):
+        SourceFamilyPolicy(max_files=0)
+    with pytest.raises(ValueError):
+        SourceFamilyPolicy(max_reported_members=0)
+    with pytest.raises(ValueError):
+        SourceFamilyPolicy(extensions=(".py", ".py"))
+    with pytest.raises(ValueError):
+        SourceFamilyPolicy(exclude=("../private/**",))
+    with pytest.raises(ValueError):
+        SourceFamilyPolicy(file_length_limits=((".py", 0),))
+    with pytest.raises(ValueError):
+        SourceFamilyPolicy(language_overrides=((".py", "Python"), (".py", "Py")))
+    with pytest.raises(ValueError):
+        SourceFamilyPolicy(language_overrides=(("not-an-extension", "Py"),))
+    with pytest.raises(ValueError):
+        SourceFamilyPolicy(path_language_overrides=(("../outside/**", "C"),))
+    with pytest.raises(ValueError):
+        SourceFamilyPolicy(max_scope_patterns=1)

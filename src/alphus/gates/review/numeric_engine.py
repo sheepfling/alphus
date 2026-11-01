@@ -14,7 +14,7 @@ NumericValue: TypeAlias = int | float
 
 
 class NumericOperation(StrEnum):
-    """Arithmetic context normalized by a source-language frontend."""
+    """Operator semantics normalized by a source-language frontend."""
 
     ADD = "add"
     SUBTRACT = "subtract"
@@ -23,17 +23,40 @@ class NumericOperation(StrEnum):
     FLOOR_DIVIDE = "floor-divide"
     MODULO = "modulo"
     POWER = "power"
+    BITWISE_AND = "bitwise-and"
+    BITWISE_OR = "bitwise-or"
+    BITWISE_XOR = "bitwise-xor"
+    LEFT_SHIFT = "left-shift"
+    RIGHT_SHIFT = "right-shift"
+    MATRIX_MULTIPLY = "matrix-multiply"
+    ELEMENTWISE_MULTIPLY = "elementwise-multiply"
+    ELEMENTWISE_DIVIDE = "elementwise-divide"
+    ELEMENTWISE_LEFT_DIVIDE = "elementwise-left-divide"
+    ELEMENTWISE_POWER = "elementwise-power"
+    MATRIX_LEFT_DIVIDE = "matrix-left-divide"
+    MATRIX_RIGHT_DIVIDE = "matrix-right-divide"
+    MATRIX_POWER = "matrix-power"
+
+
+_CONVERSION_OPERATIONS = frozenset(
+    {
+        NumericOperation.MULTIPLY,
+        NumericOperation.DIVIDE,
+        NumericOperation.MATRIX_MULTIPLY,
+        NumericOperation.ELEMENTWISE_MULTIPLY,
+        NumericOperation.ELEMENTWISE_DIVIDE,
+        NumericOperation.ELEMENTWISE_LEFT_DIVIDE,
+        NumericOperation.MATRIX_LEFT_DIVIDE,
+        NumericOperation.MATRIX_RIGHT_DIVIDE,
+    }
+)
 
 
 class NumericContext(StrEnum):
     """Syntax context normalized by a source-language frontend."""
 
-    ARITHMETIC = "arithmetic"
+    BINARY_OPERATION = "arithmetic"
     CALL_ARGUMENT = "call-argument"
-
-
-# TODO add other ops like the bianry ops and shifts and also @ for matmul
-# we should probably add extras like elementwise or other ops that are endemic to octave + matlab
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,7 +105,7 @@ def match_numeric_occurrences(
             if occurrence.value not in spec.values:
                 continue
             if spec.context == "arithmetic":
-                if occurrence.context != NumericContext.ARITHMETIC:
+                if occurrence.context != NumericContext.BINARY_OPERATION:
                     continue
                 if spec.name_tokens and not occurrence.tokens.intersection(
                     token.casefold() for token in spec.name_tokens
@@ -100,10 +123,10 @@ def match_numeric_occurrences(
                     for argument, value in spec.required_call_arguments
                 ):
                     continue
-            if spec.kind == "conversion" and occurrence.operation not in {
-                NumericOperation.MULTIPLY,
-                NumericOperation.DIVIDE,
-            }:
+            if (
+                spec.kind == "conversion"
+                and occurrence.operation not in _CONVERSION_OPERATIONS
+            ):
                 continue
             provenance = spec.source or catalog.provenance
             source_note = f"; source: {provenance}" if provenance is not None else ""

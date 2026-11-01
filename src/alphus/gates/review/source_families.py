@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import re
 from collections import Counter, defaultdict
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from heapq import nsmallest
 from pathlib import Path, PurePosixPath
+from types import MappingProxyType
 
 from alphus.config import SourceFamilyPolicy as _SourceFamilyPolicy
 from alphus.contracts.findings import Finding
@@ -15,24 +16,26 @@ from alphus.support.inventory import matches_path
 
 _SEPARATORS = re.compile(r"[_\-. ]+")
 _CAMEL_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
-_LANGUAGE_EXTENSIONS = {
-    ".py": "Python",
-    ".pyi": "Python",
-    ".c": "C",
-    ".h": "C/C++",
-    ".cc": "C++",
-    ".hh": "C++",
-    ".cpp": "C++",
-    ".hpp": "C++",
-    ".cxx": "C++",
-    ".hxx": "C++",
-    ".js": "JavaScript",
-    ".jsx": "JavaScript",
-    ".mjs": "JavaScript",
-    ".cjs": "JavaScript",
-    ".ts": "TypeScript",
-    ".tsx": "TypeScript",
-}
+_LANGUAGE_EXTENSIONS: Mapping[str, str] = MappingProxyType(
+    {
+        ".py": "Python",
+        ".pyi": "Python",
+        ".c": "C",
+        ".h": "C/C++",
+        ".cc": "C++",
+        ".hh": "C++",
+        ".cpp": "C++",
+        ".hpp": "C++",
+        ".cxx": "C++",
+        ".hxx": "C++",
+        ".js": "JavaScript",
+        ".jsx": "JavaScript",
+        ".mjs": "JavaScript",
+        ".cjs": "JavaScript",
+        ".ts": "TypeScript",
+        ".tsx": "TypeScript",
+    }
+)
 _C_CPP_HEADERS = frozenset({".h", ".hh", ".hpp", ".hxx"})
 _C_CPP_IMPLEMENTATIONS = frozenset({".c", ".cc", ".cpp", ".cxx"})
 

@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from alphus.cli import main
+from alphus.cli import _TEXT_RENDERERS, main
 from alphus.config import (
     NodeCliPolicy,
     PythonStylePolicy,
@@ -28,6 +28,7 @@ from alphus.execution.results import (
 )
 from alphus.gates.hygiene.rules import check_file_size, check_line_length
 from alphus.gates.source import runners as source_runners
+from alphus.policy.catalog import RULE_SPECS
 from alphus.support import git, inventory
 from alphus.support.inventory import candidate_files, matches_path, tracked_files
 
@@ -107,6 +108,10 @@ executable = "node"
 command_path_prefixes = ["scripts/"]
 argument_access_marker = "process.argv"
 """
+
+
+def test_every_rule_selects_a_registered_human_renderer() -> None:
+    assert {spec.text_renderer for spec in RULE_SPECS.values()} == set(_TEXT_RENDERERS)
 
 
 def _write(root: Path, name: str, content: str) -> None:

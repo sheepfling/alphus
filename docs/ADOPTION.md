@@ -81,7 +81,7 @@ decides whether a step's failure blocks the profile at all.
 | `failure_threshold = "warning"` | Errors and warnings fail. |
 | `failure_threshold = "info"` | Every finding fails. |
 | `severity = "warning"` on a rule step | Classifies all findings from that Alphus rule as warnings. |
-| `rollout = "provisional"` on a step | Runs and reports the step, but its failure does not fail the aggregate profile. |
+| `rollout = "provisional"` | Runs and reports a step; its failure does not fail the aggregate profile. |
 | `rollout = "mainline"` | The step participates in the aggregate result. This is the default. |
 
 In a complete policy with the sniffer settings and a profile that selects this
