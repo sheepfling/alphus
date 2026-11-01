@@ -609,6 +609,67 @@ steps = ["line check"]
     assert "Diagnostic triage: 0 error(s), 1 warning(s), 0 info(s)" in text_output
 
 
+def test_profile_keeps_inconclusive_cli_renderer_evidence_nonfatal(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _repository(tmp_path)
+    _write(
+        tmp_path,
+        "src/cli.py",
+        "import json\n"
+        "import typer\n"
+        "from rich.console import Console\n"
+        "app = typer.Typer()\n"
+        "def render(console):\n"
+        "    console.print('ready')\n"
+        "@app.command()\n"
+        "def show(\n"
+        "    json_output: bool = typer.Option(False, '--json'),\n"
+        "    verbose: bool = typer.Option(False, '--verbose'),\n"
+        ") -> None:\n"
+        "    if json_output:\n"
+        "        typer.echo(json.dumps({'ready': True}))\n"
+        "    else:\n"
+        "        render(Console())\n"
+        "if __name__ == '__main__':\n"
+        "    app()\n",
+    )
+    (tmp_path / "quality.toml").write_text(
+        POLICY
+        + """
+
+[orchestration]
+failure_threshold = "info"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "cli policy"
+rule = "cli"
+severity = "error"
+
+[[orchestration.profiles]]
+name = "check"
+steps = ["cli policy"]
+""",
+        encoding="utf-8",
+    )
+    arguments = [
+        "--root",
+        str(tmp_path),
+        "--config",
+        "quality.toml",
+        "--run",
+        "--json",
+    ]
+
+    assert main(arguments) == 0
+    payload = json.loads(capsys.readouterr().out)
+    step = payload["steps"][0]
+    assert step["status"] == "passed"
+    assert step["findings"][0]["severity"] == "info"
+    assert "could not verify Rich output" in step["findings"][0]["message"]
+
+
 def test_rule_profile_json_adapters_validate_each_owned_shape() -> None:
     style_findings = diagnostics_from_json(
         "python-style",

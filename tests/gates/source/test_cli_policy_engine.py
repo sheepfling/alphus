@@ -440,6 +440,32 @@ def test_local_console_argument_without_renderer_use_remains_proven_missing() ->
     assert findings[0].message == "use Rich for human-readable output"
 
 
+def test_rich_print_satisfies_renderer_policy_without_console_construction() -> None:
+    source = (
+        "import json\n"
+        "import rich\n"
+        "import typer\n"
+        "app = typer.Typer()\n"
+        "@app.command()\n"
+        "def show(\n"
+        "    json_output: bool = typer.Option(False, '--json'),\n"
+        "    verbose: bool = typer.Option(False, '--verbose'),\n"
+        ") -> None:\n"
+        "    if json_output:\n"
+        "        typer.echo(json.dumps({'ready': True}))\n"
+        "    else:\n"
+        "        rich.print('ready')\n"
+        "if __name__ == '__main__':\n"
+        "    app()\n"
+    )
+
+    findings = python_cli_findings(
+        source, _python_policy(output_style_enforcement="off")
+    )
+
+    assert not any(finding.classification == "presentation" for finding in findings)
+
+
 def test_unreachable_rich_helper_does_not_satisfy_a_command_renderer_policy() -> None:
     source = (
         "import json\n"

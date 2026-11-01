@@ -34,7 +34,8 @@ plain_output = "plain"
 ```
 
 `renderer_enforcement` applies only when a `rich_package` and its `rich_calls`
-are configured. `output_style_enforcement` checks the selected `style_option`
+are configured; any configured call that is observed satisfies the renderer
+policy. `output_style_enforcement` checks the selected `style_option`
 and its accepted plain/Rich values. Advisory findings have warning severity;
 they do not fail a run whose failure threshold is `error`, and can be promoted
 by an orchestration profile that selects a `warning` threshold.

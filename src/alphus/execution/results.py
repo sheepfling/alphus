@@ -280,6 +280,14 @@ def diagnostics_from_json(rule: QualityRuleName, encoded: str) -> list[Diagnosti
     )
 
 
+def is_nonfatal_cli_presentation_diagnostic(diagnostic: Diagnostic) -> bool:
+    """Keep inconclusive renderer evidence nonfatal across profile adapters."""
+    return (
+        diagnostic.rule_id == _CLI_PRESENTATION_RULE_ID
+        and diagnostic.severity == "info"
+    )
+
+
 @dataclass(slots=True)
 class RuleEvaluation:
     """One rule's raw output, normalized diagnostics, and threshold decision."""

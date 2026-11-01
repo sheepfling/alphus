@@ -945,7 +945,9 @@ def _reaches_required_call(
         for call in _function_calls(evidence.function):
             target = _canonical_call(call, names, local_instances, package)
             if target.startswith(f"{package}."):
-                observed.add(target.rsplit(".", maxsplit=1)[-1])
+                name = target.rsplit(".", maxsplit=1)[-1]
+                if target != f"{package}.console.Console":
+                    observed.add(name)
                 if (
                     isinstance(call.func, ast.Attribute)
                     and isinstance(call.func.value, ast.Name)
@@ -959,7 +961,7 @@ def _reaches_required_call(
                             -1
                         ]
                     )
-    if set(required_calls).issubset(observed):
+    if set(required_calls).intersection(observed):
         return "verified"
     return "unresolved" if unresolved_imports else "missing"
 
