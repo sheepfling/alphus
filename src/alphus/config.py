@@ -20,6 +20,7 @@ from alphus.policy.architecture import (
 )
 from alphus.policy.base import (
     QualityRuleName,
+    RuleSelector,
     StrictModel,
     require_unique,
     validate_single_path,
@@ -48,6 +49,7 @@ from alphus.policy.orchestration import (
     ProfilePlan,
     RuleRunStep,
 )
+from alphus.policy.plugins import PluginPolicy
 from alphus.policy.repository import (
     DependencyLockPolicy,
     DocumentationConfigPolicy,
@@ -68,6 +70,8 @@ from alphus.policy.repository import (
     VersionSyncPolicy,
 )
 from alphus.policy.review import (
+    DynamicMarkdownException,
+    DynamicMarkdownPolicy,
     ErrorCodeCallSpec,
     FastApiFindingOverride,
     FastApiPracticePolicy,
@@ -116,6 +120,8 @@ __all__ = [
     "DependencyLockPolicy",
     "DocumentationConfigPolicy",
     "DocumentationConfigSuppression",
+    "DynamicMarkdownException",
+    "DynamicMarkdownPolicy",
     "ErrorCodeCallSpec",
     "EslintCyclomaticBinding",
     "FastApiFindingOverride",
@@ -150,6 +156,7 @@ __all__ = [
     "PackageBoundaryPolicy",
     "PathDiscoveryPolicy",
     "PathRule",
+    "PluginPolicy",
     "PositionalInterfacePolicy",
     "ProfilePlan",
     "PydanticPracticePolicy",
@@ -162,6 +169,7 @@ __all__ = [
     "RepositoryLayoutPolicy",
     "RuffCyclomaticBinding",
     "RuleRunStep",
+    "RuleSelector",
     "RuntimeTypePolicy",
     "ScipyConstantsPolicy",
     "ScriptPolicy",
@@ -187,6 +195,7 @@ class QualityGateConfig(StrictModel):
     files: FileInventoryPolicy | None = None
     checks: Annotated[CheckPolicies, Field(default_factory=CheckPolicies)]
     orchestration: OrchestrationPolicy | None = None
+    plugins: PluginPolicy = PluginPolicy()
 
     # opaque-boundary: raw TOML mapping before policy model validation
     @model_validator(mode="before")
@@ -224,6 +233,37 @@ class QualityGateConfig(StrictModel):
         document["orchestration"] = orchestration
         return document
 
+    @model_validator(mode="after")
+    def validate_rule_plugins(self) -> Self:
+        """Resolve only allowlisted plugins and validate their selected settings."""
+        from alphus.plugins.registry import (
+            enabled_plugin_registry,
+            validate_plugin_settings,
+        )
+        from alphus.policy.catalog import RULE_SPECS
+
+        registry = enabled_plugin_registry(self.plugins)
+        validate_plugin_settings(self.plugins)
+        if self.orchestration is None:
+            return self
+        for step in self.orchestration.steps:
+            if step.kind != "rule" or step.rule in RULE_SPECS:
+                continue
+            binding = registry.get(step.rule)
+            if binding is None:
+                raise ValueError(
+                    f"unknown built-in or enabled plugin rule {step.rule!r}"
+                )
+            try:
+                binding.rule.config_model.model_validate(
+                    self.plugins.settings_for(step.rule), strict=True
+                )
+            except Exception as error:
+                raise ValueError(
+                    f"invalid settings for plugin rule {step.rule!r}: {error}"
+                ) from error
+        return self
+
 
 class _PartialOrchestration(StrictModel):
     """Root-owned aggregate settings before language profiles are combined."""
@@ -245,6 +285,7 @@ class _SplitPolicy(StrictModel):
     languages: tuple[str, ...] | None = None
     files: FileInventoryPolicy | None = None
     checks: Annotated[CheckPolicies, Field(default_factory=CheckPolicies)]
+    plugins: PluginPolicy = PluginPolicy()
     orchestration: _PartialOrchestration
 
     @model_validator(mode="after")
@@ -344,6 +385,7 @@ def load_config(path: Path) -> QualityGateConfig:
         files=root.files,
         checks=root.checks,
         orchestration=orchestration,
+        plugins=root.plugins,
     )
 
 

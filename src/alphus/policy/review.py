@@ -196,6 +196,49 @@ class PositionalInterfacePolicy(PythonSourceScanPolicy):
     report_same_type_primitives: bool = True
 
 
+class DynamicMarkdownException(StrictModel):
+    """A documented path excluded from dynamic Markdown review."""
+
+    paths: tuple[str, ...]
+    reason: str
+
+    @field_validator("paths")
+    @classmethod
+    def validate_paths(cls, paths: Sequence[str]) -> tuple[str, ...]:
+        normalized = validate_patterns(paths)
+        if not normalized:
+            raise ValueError("Markdown exception paths must not be empty")
+        require_unique(normalized, "Markdown exception paths must be unique")
+        return normalized
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, value: str) -> str:
+        reason = validate_one_line_message(value)
+        if len(reason) < 20:
+            raise ValueError(
+                "Markdown exception reasons must be at least 20 characters"
+            )
+        return reason
+
+
+class DynamicMarkdownPolicy(PythonSourceScanPolicy):
+    """Opt-in advisory scoped to explicitly selected Python Markdown producers."""
+
+    producer_paths: tuple[str, ...]
+    severity: Severity = "warning"
+    exceptions: tuple[DynamicMarkdownException, ...] = ()
+
+    @field_validator("producer_paths")
+    @classmethod
+    def validate_producer_paths(cls, paths: Sequence[str]) -> tuple[str, ...]:
+        normalized = validate_patterns(paths)
+        if not normalized:
+            raise ValueError("producer_paths must select at least one Python path")
+        require_unique(normalized, "producer_paths must be unique")
+        return normalized
+
+
 class PydanticPracticePolicy(PythonSourceScanPolicy):
     """Opt-in review of Pydantic model validation and declaration practices."""
 

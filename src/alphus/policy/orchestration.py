@@ -17,6 +17,7 @@ from alphus.policy.architecture import (
 )
 from alphus.policy.base import (
     QualityRuleName,
+    RuleSelector,
     StrictModel,
     require_policy,
     require_unique,
@@ -38,6 +39,7 @@ from alphus.policy.repository import (
     VersionSyncPolicy,
 )
 from alphus.policy.review import (
+    DynamicMarkdownPolicy,
     FastApiPracticePolicy,
     InputContractPolicy,
     NumericLiteralPolicy,
@@ -80,6 +82,7 @@ class CheckPolicies(StrictModel):
     pydantic_practices: PydanticPracticePolicy | None = None
     fastapi_practices: FastApiPracticePolicy | None = None
     sqlalchemy_practices: SqlAlchemyPracticePolicy | None = None
+    dynamic_markdown: DynamicMarkdownPolicy | None = None
     shared_utilities: SharedUtilitiesPolicy | None = None
     python_style: PythonStylePolicy | None = None
     runtime_types: RuntimeTypePolicy | None = None
@@ -109,7 +112,7 @@ class RuleRunStep(StrictModel):
 
     kind: Literal["rule"]
     name: str
-    rule: QualityRuleName
+    rule: RuleSelector
     severity: Severity | None = None
     priority: RemediationPriority | None = None
     rollout: Literal["mainline", "provisional"] = "mainline"
@@ -126,6 +129,21 @@ class RuleRunStep(StrictModel):
         if "\x00" in name:
             raise ValueError("orchestration step names cannot contain NUL")
         return validate_one_line_message(name)
+
+    @field_validator("rule")
+    @classmethod
+    def validate_rule_selector(cls, rule: RuleSelector) -> RuleSelector:
+        if (
+            re.fullmatch(
+                r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?::[a-z][a-z0-9]*(?:-[a-z0-9]+)*)?",
+                rule,
+            )
+            is None
+        ):
+            raise ValueError(
+                "rule selectors must be lowercase slugs, optionally namespaced"
+            )
+        return rule
 
     @field_validator("locks", "after")
     @classmethod

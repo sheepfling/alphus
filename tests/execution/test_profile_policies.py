@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 from typing import get_args
@@ -11,7 +12,7 @@ from pydantic import ValidationError
 
 from alphus.cli import main
 from alphus.config import CheckPolicies, QualityRuleName, load_config
-from alphus.execution.dispatch import RULE_RUNNERS
+from alphus.execution.dispatch import BUILTIN_RULES, RULE_RUNNERS
 from alphus.gates.hygiene.rules import check_file_size, check_line_length
 from alphus.policy.base import MissingPolicyError
 from alphus.policy.catalog import RULE_SPECS
@@ -106,9 +107,29 @@ def test_each_selected_portable_rule_requires_its_policy(rule: QualityRuleName) 
 def test_rule_catalog_covers_every_public_selector_and_policy_field() -> None:
     assert set(RULE_SPECS) == set(get_args(QualityRuleName))
     assert set(RULE_RUNNERS) == set(RULE_SPECS)
+    assert set(BUILTIN_RULES) == set(RULE_SPECS)
+    assert all(
+        BUILTIN_RULES[selector].spec is spec
+        and BUILTIN_RULES[selector].runner is RULE_RUNNERS[selector]
+        for selector, spec in RULE_SPECS.items()
+    )
     assert all(
         spec.policy_field in CheckPolicies.model_fields for spec in RULE_SPECS.values()
     )
+
+
+def test_cli_catalog_exposes_domain_recommendation_metadata(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["--root", str(tmp_path), "--catalog", "--json"]) == 0
+    catalog = json.loads(capsys.readouterr().out)
+    assert catalog["domain_tags_are_advisory"] is True
+    rules = {entry["selector"]: entry for entry in catalog["rules"]}
+    assert rules["numeric-literals"]["policy_section"] == "checks.numeric_literals"
+    assert "trajectory-analysis" in rules["numeric-literals"]["domains"]
+    assert "earth-science" in rules["scipy-constants"]["domains"]
+    assert "coordinate systems" in rules["scipy-constants"]["summary"]
+    assert "documentation-generation" in rules["dynamic-markdown"]["domains"]
 
 
 @pytest.mark.parametrize("rule", get_args(QualityRuleName))

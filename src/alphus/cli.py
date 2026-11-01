@@ -10,7 +10,6 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from contextlib import redirect_stderr, redirect_stdout
 from contextvars import ContextVar
-from functools import partial
 from io import StringIO
 from pathlib import Path
 from typing import Annotated, Literal, NamedTuple, NotRequired, TextIO, TypedDict, cast
@@ -23,6 +22,7 @@ from rich.text import Text
 from alphus.config import (
     QualityGateConfig,
     QualityRuleName,
+    RuleSelector,
     SourceScanPolicy,
     load_config,
     load_config_stream,
@@ -33,7 +33,13 @@ from alphus.contracts.findings import (
 )
 from alphus.contracts.process import ExitCode
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
-from alphus.execution.dispatch import run_builtin_rule
+from alphus.execution.dispatch import (
+    rule_requires_files,
+    run_builtin_rule,
+)
+from alphus.execution.dispatch import (
+    run_rule as run_selected_rule,
+)
 from alphus.execution.fixes import apply_fixes as apply_configured_fixes
 from alphus.execution.fixes import resolve_fix_plan
 from alphus.execution.orchestration import RuleRunResult, run_orchestration
@@ -62,6 +68,11 @@ from alphus.gates.source.cyclomatic_complexity import (
     report_payload,
     report_summary,
 )
+from alphus.plugins.registry import (
+    PluginRuleBinding,
+    enabled_plugin_registry,
+    installed_plugin_names,
+)
 from alphus.policy.base import MissingPolicyError
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
 from alphus.policy.function_shape import plan_function_shape
@@ -70,7 +81,7 @@ from alphus.policy.recipes import render_recipe
 from alphus.support.data_access import JsonValue
 from alphus.support.inventory import candidate_files, matches_path
 
-QualityRule = QualityRuleName
+QualityRule = RuleSelector
 
 
 class _ProfilePlanPayload(TypedDict):
@@ -551,9 +562,9 @@ def _evaluate_rule(
     )
     if not 1 <= max_jobs <= 64:
         raise typer.BadParameter("--jobs must be between 1 and 64")
-    if config.files is None and RULE_SPECS[rule].requires_files:
+    if config.files is None and rule_requires_files(rule, config):
         raise typer.BadParameter(
-            "a built-in rule requires a top-level [files] inventory in the policy"
+            "the selected rule requires a top-level [files] inventory in the policy"
         )
     threshold = (
         config.orchestration.failure_threshold
@@ -568,19 +579,27 @@ def _evaluate_rule(
         raise typer.BadParameter(str(error), param_hint="--root") from error
     if verbose:
         _log_verbose(rule, checkout, len(files))
+
+    def dispatch_rule() -> RuleOutput:
+        if rule in RULE_SPECS:
+            return run_builtin_rule(
+                cast(QualityRuleName, rule), checkout, files, config
+            )
+        return run_selected_rule(rule, checkout, files, config)
+
     try:
         if rule == "cyclomatic-complexity" and max_jobs > 1:
             output = run_parallel_cyclomatic(
                 checkout, resolved_config, config, max_jobs
             )
         elif already_scheduled:
-            output = run_builtin_rule(rule, checkout, files, config)
+            output = dispatch_rule()
         else:
             outcome = run_work_units(
                 (
                     WorkUnit(
                         key=rule,
-                        run=partial(run_builtin_rule, rule, checkout, files, config),
+                        run=dispatch_rule,
                     ),
                 ),
                 1,
@@ -588,11 +607,11 @@ def _evaluate_rule(
             if outcome.error is not None:
                 raise outcome.error
             if outcome.value is None:
-                raise RuntimeError("built-in rule returned no result")
+                raise RuntimeError("rule returned no result")
             output = cast(RuleOutput, outcome.value)
     except MissingPolicyError as error:
         raise typer.BadParameter(str(error)) from error
-    except (OSError, RuntimeError) as error:
+    except (OSError, RuntimeError, TypeError, ValueError) as error:
         raise typer.BadParameter(str(error), param_hint="--root") from error
     return RuleEvaluation.from_output(rule, output, threshold)
 
@@ -653,7 +672,27 @@ def _execute(
     evaluation = _evaluate_rule(root, config_path, rule, verbose, jobs)
     output = evaluation.output
     exit_code = int(evaluation.failed and not report)
-    shape = RULE_SPECS[rule].output_shape
+    spec = RULE_SPECS.get(rule)
+    if spec is None:
+        if json_output:
+            typer.echo(
+                json.dumps(
+                    [item.to_wire() for item in evaluation.diagnostics], sort_keys=True
+                )
+            )
+        else:
+            for item in evaluation.diagnostics:
+                location = (
+                    f"{item.path}:{item.line}"
+                    if item.path is not None and item.line is not None
+                    else item.path or ""
+                )
+                _human_print(
+                    f"{item.rule_id} {location} [{item.severity}]: {item.message}".strip()
+                )
+            _human_print(f"{rule}: {len(evaluation.diagnostics)} finding(s)")
+        return exit_code
+    shape = spec.output_shape
     if shape is RuleOutputShape.CYCLOMATIC_REPORT:
         complexity_report = cast(CyclomaticReport, output)
         if json_output:
@@ -841,16 +880,17 @@ def _execute_profile(
         try:
             for step in policy.steps:
                 if step.name in plan.steps and step.kind == "rule":
-                    if config.files is None and RULE_SPECS[step.rule].requires_files:
+                    if config.files is None and rule_requires_files(step.rule, config):
                         raise MissingPolicyError(
-                            "a selected built-in rule requires a top-level [files] inventory"
+                            "a selected rule requires a top-level [files] inventory"
                         )
-                    config.checks.require_rule(step.rule)
+                    if step.rule in RULE_SPECS:
+                        config.checks.require_rule(cast(QualityRuleName, step.rule))
         except MissingPolicyError as error:
             _human_error(str(error))
             return ExitCode.CONFIG_ERROR
 
-    def run_rule(rule: QualityRule) -> RuleRunResult:
+    def run_rule(rule: RuleSelector) -> RuleRunResult:
         return run_profile_rule(checkout, resolved_config, rule, verbose, config)
 
     return run_orchestration(
@@ -1096,11 +1136,12 @@ def _execute_plan_profile(
     try:
         for step in policy.steps:
             if step.name in plan.steps and step.kind == "rule":
-                if config.files is None and RULE_SPECS[step.rule].requires_files:
+                if config.files is None and rule_requires_files(step.rule, config):
                     raise MissingPolicyError(
-                        "a selected built-in rule requires a top-level [files] inventory"
+                        "a selected rule requires a top-level [files] inventory"
                     )
-                config.checks.require_rule(step.rule)
+                if step.rule in RULE_SPECS:
+                    config.checks.require_rule(cast(QualityRuleName, step.rule))
         entries = resolve_fix_plan(checkout, resolved_config, policy, selected_profile)
     except (MissingPolicyError, OSError, ValueError) as error:
         _human_error(str(error))
@@ -1152,7 +1193,13 @@ def _execute_plan_profile(
                     detail.pop(field_name, None)
             detail["fixable"] = entry.fixable
             if step.kind == "rule":
-                selected = _selected_rule_files(checkout, config, step.rule)
+                selected = (
+                    _selected_rule_files(
+                        checkout, config, cast(QualityRuleName, step.rule)
+                    )
+                    if step.rule in RULE_SPECS
+                    else None
+                )
                 if selected is not None:
                     detail["selected_files"] = selected
             else:
@@ -1193,7 +1240,11 @@ def _execute_plan_profile(
                 f"locks={list(step.locks)}, after={list(step.after)}"
             )
         if step.kind == "rule":
-            selected = _selected_rule_files(checkout, config, step.rule)
+            selected = (
+                _selected_rule_files(checkout, config, cast(QualityRuleName, step.rule))
+                if step.rule in RULE_SPECS
+                else None
+            )
             scope = (
                 f"{len(selected)} file(s)"
                 if selected is not None
@@ -1263,6 +1314,101 @@ def _selected_rule_files(
             matches_path(relative.as_posix(), pattern) for pattern in policy.exclude
         )
     ]
+
+
+def _rule_catalog_payload(config: QualityGateConfig | None = None) -> dict[str, object]:
+    """Describe built-in and explicitly enabled plugin checks."""
+    rules: list[dict[str, object]] = [
+        {
+            "selector": selector,
+            "plugin": None,
+            "policy_section": f"checks.{spec.policy_field}",
+            "summary": spec.summary,
+            "applies_to": list(spec.applies_to),
+            "domains": list(spec.domains),
+            "output_shape": spec.output_shape.value,
+            "requires_files": spec.requires_files,
+        }
+        for selector, spec in RULE_SPECS.items()
+    ]
+    bindings: Mapping[str, PluginRuleBinding] = (
+        enabled_plugin_registry(config.plugins) if config is not None else {}
+    )
+    rules.extend(
+        {
+            "selector": selector,
+            "plugin": binding.plugin.name,
+            "policy_section": f"plugins.rules.{selector}",
+            "summary": binding.rule.summary,
+            "applies_to": list(binding.rule.applies_to),
+            "domains": list(binding.rule.domains),
+            "output_shape": "diagnostics",
+            "requires_files": binding.rule.requires_files,
+        }
+        for selector, binding in bindings.items()
+    )
+    enabled_names: set[str] = (
+        set(config.plugins.enabled) if config is not None else set()
+    )
+    return {
+        "schema_version": 1,
+        "scope": (
+            "Built-in and explicitly enabled Alphus rule selectors. Native command "
+            "steps are consumer-defined and appear in configured profiles and --plan output."
+        ),
+        "activation": (
+            "Built-ins need checks.<policy_field>; plugins must be listed under "
+            "plugins.enabled and have a rule step in a consumer-owned profile."
+        ),
+        "domain_tags_are_advisory": True,
+        "plugins": [
+            {
+                "name": name,
+                "enabled": name in enabled_names,
+                "rules_loaded": name in enabled_names,
+            }
+            for name in installed_plugin_names()
+        ],
+        "rules": sorted(rules, key=lambda item: str(item["selector"])),
+    }
+
+
+def _show_rule_catalog(
+    json_output: bool,
+    config: QualityGateConfig | None = None,
+) -> int:
+    """Render the check catalog for people and agent tooling."""
+    if json_output:
+        typer.echo(json.dumps(_rule_catalog_payload(config), sort_keys=True))
+        return 0
+
+    catalog = _rule_catalog_payload(config)
+    _human_print("Available Alphus checks:")
+    for entry in cast(list[dict[str, object]], catalog["rules"]):
+        selector = cast(str, entry["selector"])
+        applies_to = ", ".join(cast(list[str], entry["applies_to"]))
+        domains = ", ".join(cast(list[str], entry["domains"])) or "general-purpose"
+        _human_print(
+            f"  {selector} [{applies_to}; domains: {domains}; "
+            f"policy: {entry['policy_section']}]"
+        )
+        _human_print(f"    {entry['summary']}")
+    disabled = [
+        plugin
+        for plugin in cast(list[dict[str, object]], catalog["plugins"])
+        if not plugin["enabled"]
+    ]
+    if disabled:
+        _human_print("Installed plugins not loaded:")
+        for plugin in disabled:
+            _human_print(
+                f"  {plugin['name']}: add to [plugins].enabled to load its rule metadata"
+            )
+    _human_print(
+        "Domain tags suggest possible relevance; confirm language support, "
+        "policy scope, and limitations before adding a rule step."
+    )
+    return 0
 
 
 def _command(
@@ -1336,6 +1482,12 @@ def _command(
         bool,
         typer.Option("--json", help="Emit one plain JSON value on stdout."),
     ] = False,
+    catalog: Annotated[
+        bool,
+        typer.Option(
+            "--catalog", help="List built-in and explicitly enabled plugin checks."
+        ),
+    ] = False,
     output_format: Annotated[
         Literal["auto", "plain", "rich", "json"],
         typer.Option(
@@ -1407,6 +1559,36 @@ def _command(
     if history_report is not None and history_report not in {"runs", "rollup"}:
         raise typer.BadParameter("--history-report must be runs or rollup")
     _OUTPUT_FORMAT.set(selected_format)
+    if catalog:
+        if any(
+            (
+                run,
+                rule is not None,
+                profile is not None,
+                plan_function_shape_only,
+                jobs is not None,
+                history_dir is not None,
+                show_history,
+                history_report is not None,
+                report,
+                verbose,
+                plan,
+                fix_plan,
+                apply_fixes,
+                bool(fix_step),
+                init_config is not None,
+                add_language is not None,
+                add_tool is not None,
+                overwrite_config,
+                consumer_id is not None,
+            )
+        ):
+            raise typer.BadParameter(
+                "--catalog cannot be combined with check execution or other operations"
+            )
+        catalog_path = config if config.is_absolute() else root / config
+        catalog_config = _load_policy(catalog_path) if catalog_path.is_file() else None
+        raise typer.Exit(_show_rule_catalog(json_output, catalog_config))
     if plan_function_shape_only:
         if any(
             (
