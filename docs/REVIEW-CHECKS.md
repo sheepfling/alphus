@@ -54,6 +54,7 @@ math_constants = true
 name = "project gravity approximation"
 values = [9.81]
 replacement = "a named constant with documented units and provenance"
+source = "https://example.org/project-constants"
 
 [[checks.numeric_literals.constants]]
 name = "inch to centimeter factor"
@@ -64,7 +65,9 @@ name_tokens = ["inch", "inches"]
 ```
 
 Catalog values must be finite and unique within an entry; entry names must be
-unique. Set `math_constants = false` to supply a fully consumer-owned catalog.
+unique. `source` is optional and appears in the finding when supplied; the
+built-in math constants link to the Python `math` documentation. Set
+`math_constants = false` to supply a fully consumer-owned catalog.
 Conversion entries apply only to multiplication/division, including `*=` and
 `/=`. Optional tokens match identifiers or snake/camel case words in the
 arithmetic expression and nearest function name. Ordinary assignment output
@@ -94,20 +97,48 @@ extensions = [".py"]
 ```
 
 The catalog reviews exact arithmetic literals for `speed_of_light`, `Planck`,
-`Boltzmann`, and `Avogadro`, plus the `inch`, `foot`, `mile`, `hour`, and
-`day` unit factors. It checks each unit factor and its reciprocal. Unit
+`Boltzmann`, `Avogadro`, the molar gas constant, the Faraday constant, and the
+atomic mass constant, plus the `inch`, `foot`, `mile`, `hour`, and `day` unit
+factors. It checks each unit factor and its reciprocal. Unit
 factors require a related identifier or enclosing function name, such as
 `inches` or `meters`. Dividing by a factor also matches; the direction of a
 conversion still needs human review. Add consumer-specific entries through
 `[[checks.scipy_constants.constants]]` using the same fields as the numeric
-catalog. Disable groups with `physical_constants = false`,
-`unit_conversions = false`, or `inverse_conversions = false`.
+catalog, including optional `source` attribution. Disable groups with
+`physical_constants = false`, `unit_conversions = false`, or
+`inverse_conversions = false`.
 
-The built-in symbols and units follow the
-[SciPy constants reference](https://docs.scipy.org/doc/scipy/reference/constants.html).
-Alphus does not import SciPy, compare floating-point values approximately, or
-infer physical dimensions. The gate is provisional in Alphus's own `review`
-profile, so its findings are visible without blocking the profile.
+Findings recommend the relevant public `scipy.constants` API and include the
+[SciPy constants reference](https://docs.scipy.org/doc/scipy/reference/constants.html)
+as their source. These built-ins follow the SciPy reference's 2022 CODATA
+database, maintained from the [NIST fundamental constants data](https://physics.nist.gov/cuu/Constants/).
+SciPy exposes more chemistry-related values through
+`physical_constants`; use `find()` to discover keys and inspect each tuple's
+value, unit, and uncertainty before adding a reviewed entry:
+
+```python
+from scipy.constants import find, physical_constants
+
+for key in find("molar", disp=False):
+    print(key, physical_constants[key])
+```
+
+Keep the detector catalog curated and checked in so its results do not depend
+on the SciPy version installed in the consumer's environment. Record the
+replacement API, units, and source when adding a value. The checker does not
+import SciPy, compare floating-point values approximately, or infer physical
+dimensions. The gate is provisional in Alphus's own `review` profile, so its
+findings are visible without blocking the profile.
+
+This covers physical chemistry constants represented in SciPy's CODATA
+database. Standard atomic weights belong to the
+[IUPAC Commission on Isotopic Abundances and Atomic Weights](https://ciaaw.org/atomic-weights.htm),
+and compound-specific properties are available from the
+[NIST Chemistry WebBook](https://webbook.nist.gov/chemistry/). Those are
+separate data realms: atomic weights need element-keyed entries, while
+compound data also needs identity and measurement-condition context. A future
+chemistry catalog should model those keys and conditions explicitly instead
+of treating them as context-free scalar matches.
 
 ## Geodesy constants
 

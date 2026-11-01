@@ -44,18 +44,35 @@ def numeric_literal_findings(
     source: str, policy: NumericLiteralPolicy
 ) -> list[NumericLiteralFinding]:
     """Review exact configured literals in arithmetic without guessing dimensions."""
-    specs = (*(_MATH_CONSTANTS if policy.math_constants else ()), *policy.constants)
     occurrences = scan_python_numeric_occurrences(source)
-    return match_numeric_occurrences(
-        occurrences,
-        NumericCatalog(
-            realm="numeric-literals",
-            framework=Framework.NONE,
-            provenance="Python math module and consumer configuration",
-            specs=specs,
-        ),
-        scope=Scope.PYTHON,
-    )
+    findings: list[NumericLiteralFinding] = []
+    if policy.math_constants:
+        findings.extend(
+            match_numeric_occurrences(
+                occurrences,
+                NumericCatalog(
+                    realm="numeric-literals",
+                    framework=Framework.NONE,
+                    provenance="https://docs.python.org/3/library/math.html#constants",
+                    specs=_MATH_CONSTANTS,
+                ),
+                scope=Scope.PYTHON,
+            )
+        )
+    if policy.constants:
+        findings.extend(
+            match_numeric_occurrences(
+                occurrences,
+                NumericCatalog(
+                    realm="consumer",
+                    framework=Framework.NONE,
+                    provenance=None,
+                    specs=policy.constants,
+                ),
+                scope=Scope.PYTHON,
+            )
+        )
+    return sorted(set(findings))
 
 
 def check_numeric_literals(

@@ -153,6 +153,7 @@ def test_configured_factor_without_unit_tokens_is_explicitly_unrestricted() -> N
     assert [finding.rule_id for finding in findings] == [
         "alphus/python/none/style/inline-conversion"
     ]
+    assert "source:" not in findings[0].message
 
 
 def test_signed_literals_are_exact_and_booleans_are_not_numeric_matches() -> None:

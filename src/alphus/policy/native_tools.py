@@ -8,6 +8,7 @@ from types import MappingProxyType
 
 from alphus.policy.orchestration import (
     CommandRunStep,
+    DEFAULT_PROFILE_NAME,
     OrchestrationPolicy,
     OrchestrationProfile,
 )
@@ -296,6 +297,8 @@ def native_tool_policy(names: Sequence[str]) -> OrchestrationPolicy:
         for language, selected in languages.items()
     ]
     profiles.append(
-        OrchestrationProfile(name="check", steps=tuple(step.name for step in steps))
+        OrchestrationProfile(
+            name=DEFAULT_PROFILE_NAME, steps=tuple(step.name for step in steps)
+        )
     )
     return OrchestrationPolicy(steps=tuple(steps), profiles=tuple(profiles))

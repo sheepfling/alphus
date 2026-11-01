@@ -36,6 +36,26 @@ def test_physical_and_bidirectional_unit_factors_are_scoped() -> None:
     ]
     assert "scipy.constants.speed_of_light" in findings[0].message
     assert "scipy.constants.inch" in findings[1].message
+    assert "docs.scipy.org/doc/scipy/reference/constants.html" in findings[0].message
+
+
+def test_chemistry_constants_recommend_scipy_apis_and_documentation() -> None:
+    source = (
+        "energy = amount * 8.31446261815324\n"
+        "charge = amount * 96485.33212331001\n"
+        "mass = particles * 1.66053906892e-27\n"
+    )
+
+    findings = scipy_literal_findings(source, _policy())
+
+    assert [finding.line for finding in findings] == [1, 2, 3]
+    assert "scipy.constants.R (J mol^-1 K^-1)" in findings[0].message
+    assert 'scipy.constants.value("Faraday constant") (C mol^-1)' in findings[1].message
+    assert "scipy.constants.atomic_mass (kg)" in findings[2].message
+    assert all(
+        "docs.scipy.org/doc/scipy/reference/constants.html" in item.message
+        for item in findings
+    )
 
 
 def test_catalog_flags_and_explicit_extensions() -> None:
@@ -44,6 +64,7 @@ def test_catalog_flags_and_explicit_extensions() -> None:
         "meters = inches * 0.0254\n"
         "distance = seconds * 299792458\n"
         "custom = item * 9.81\n"
+        "gas = amount * 8.31446261815324\n"
     )
     policy = ScipyConstantsPolicy(
         extensions=(".py",),
@@ -54,6 +75,7 @@ def test_catalog_flags_and_explicit_extensions() -> None:
                 name="project gravity",
                 values=(9.81,),
                 replacement="project.GRAVITY",
+                source="https://example.invalid/physics",
             ),
         ),
     )
@@ -62,6 +84,10 @@ def test_catalog_flags_and_explicit_extensions() -> None:
 
     assert [finding.line for finding in findings] == [2, 4]
     assert "project.GRAVITY" in findings[1].message
+    assert "https://example.invalid/physics" in findings[1].message
+    assert (
+        "docs.scipy.org/doc/scipy/reference/constants.html" not in findings[1].message
+    )
 
 
 def test_repository_scan_emits_warning_findings(tmp_path: Path) -> None:

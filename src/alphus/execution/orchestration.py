@@ -40,6 +40,12 @@ from alphus.execution.commands import (
     windows_shell_required,
 )
 from alphus.execution.profile_reporting import ProfileReporter
+from alphus.policy.orchestration import (
+    DEFAULT_FAILURE_THRESHOLD,
+    MAINLINE_ROLLOUT,
+    PROVISIONAL_ROLLOUT,
+    Rollout,
+)
 from alphus.support.inventory import candidate_files
 
 _ORCHESTRATION_CATEGORY = Category.ORCHESTRATION
@@ -66,7 +72,7 @@ class OrchestrationStepResult:
     stdout: str = ""
     stderr: str = ""
     severity_counts: SeverityCounts = field(default_factory=SeverityCounts)
-    rollout: Literal["mainline", "provisional"] = "mainline"
+    rollout: Rollout = MAINLINE_ROLLOUT
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,7 +94,7 @@ class OrchestrationResult:
     failed: int
     exit_code: int
     steps: tuple[OrchestrationStepResult, ...]
-    failure_threshold: Severity = "error"
+    failure_threshold: Severity = DEFAULT_FAILURE_THRESHOLD
     severity_counts: SeverityCounts = field(default_factory=SeverityCounts)
     not_applicable: int = 0
     finding_rollups: FindingRollups = field(default_factory=FindingRollups)
@@ -344,7 +350,7 @@ def run_orchestration(
             _write_captured(errors, step_stderr)
 
         completed += 1
-        provisional = step.rollout == "provisional"
+        provisional = step.rollout == PROVISIONAL_ROLLOUT
         if skipped_empty_file_scope:
             not_applicable += 1
             results.append(
@@ -429,7 +435,7 @@ def run_orchestration(
         if not not_applicable:
             del payload["not_applicable"]
         for step_payload in payload["steps"]:
-            if step_payload["rollout"] == "mainline":
+            if step_payload["rollout"] == MAINLINE_ROLLOUT:
                 del step_payload["rollout"]
             for finding_payload in step_payload["findings"]:
                 if finding_payload["priority"] is None:

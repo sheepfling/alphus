@@ -35,6 +35,7 @@ from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
 from alphus.gates.source.python_style import StyleFindings
 from alphus.policy.base import MissingPolicyError
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
+from alphus.policy.orchestration import DEFAULT_FAILURE_THRESHOLD
 from alphus.support.inventory import candidate_files
 
 QualityRule = QualityRuleName
@@ -158,7 +159,7 @@ def _load_policy(path: Path) -> QualityGateConfig:
         raise typer.Exit(2) from error
 
 
-# TODO this seems fragile ? Shouldn't new rules be registered instead of enumerated ???
+# TODO: Replace legacy direct summaries with registry-bound renderer adapters.
 def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
     """Keep concise text summaries while offering a stable JSON format."""
     review_labels = {
@@ -394,7 +395,7 @@ def _evaluate_rule(
     threshold = (
         config.orchestration.failure_threshold
         if config.orchestration is not None
-        else "error"
+        else DEFAULT_FAILURE_THRESHOLD
     )
     try:
         files = (

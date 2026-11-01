@@ -120,14 +120,27 @@ checker receives an explicit root, selected files, and its validated policy;
 it returns findings or a typed report. A workflow gate such as the stub
 verifier runs through a command step instead.
 
-For a new built-in selector, add its policy model under `alphus.policy`,
-add the selector to `alphus.policy.base.QualityRuleName` and its policy field
-to `alphus.policy.catalog.RULE_SPECS`, register its runner in the theme package,
-and compose that mapping in `alphus.execution.dispatch`. Add an output adapter
-in `alphus.execution.results` only if it has a new shape. Add direct CLI and profile
-tests, then select the gate in a consumer profile. The registry completeness
-test catches missing selectors, and Alphus's `check` profile exercises the
-rule and native tooling together. Import each implementation from its owning
+For a new built-in rule, first define its problem contract: evidence,
+counterexamples, false-positive boundary, and non-goals. Decide which parts are
+source-language independent. Add a language frontend only to translate that
+language's syntax into normalized evidence for the shared rule; keep the
+selector's supported language scope tied to implemented frontends.
+
+The current built-in registry migration has several coordinated declarations:
+`QualityRuleName` is the static selector type, `RULE_SPECS` owns primary policy
+and output metadata, `CheckPolicies` validates rule settings, and each theme
+registers its typed runner. `alphus.execution.dispatch` composes the runner
+maps. Keep these declarations complete without adding another selector list.
+The target is for one typed rule specification to provide shared metadata and
+drive configuration validation, dispatch, result adaptation, rendering, and
+plan descriptions where layer boundaries allow it. Static typing may still
+require a declared selector type; validate that boundary against the runtime
+registry rather than maintaining a separate expected inventory.
+
+Use shared constants and contracts for stable names, tags, severity, rollout,
+and result states. Add an execution adapter only when a rule genuinely needs a
+distinct input or output shape, and keep it registered rather than adding a
+new selector branch in the CLI. Import each implementation from its owning
 theme package; removed root module forwarders are not extension points.
 
 ### Package layout for additional languages
@@ -168,7 +181,12 @@ The numeric catalogs demonstrate this boundary. Their Python frontend uses
 the Python AST to extract normalized observations (line, value, syntax
 context, arithmetic operation, canonical call name, and keyword argument).
 The shared matcher applies realm-specific entries with source provenance and
-context constraints, then creates the Alphus finding. The current catalogs
+context constraints, then creates the Alphus finding with both the recommended
+API and its source. SciPy's constants database also provides a discovery path
+for additional chemistry constants; curated entries are checked in so they do
+not change with an installed dependency version. Atomic weights and
+compound-specific properties need keyed data catalogs with element or compound
+identity and, where relevant, measurement conditions. The current catalogs
 still analyze Python only. Configured extensions do not imply support for
 another grammar. A future frontend can be added when a second language is in
 scope, with its own parser and explicit handling of declarations, assertions,
@@ -210,15 +228,19 @@ through the same apply workflow.
 
 ## Migration sequence
 
-1. Keep the built-in selector catalog complete while mapping current rules to
-   categories without changing defaults.
-2. Keep source-language parsing in explicit frontends and share only normalized
+1. Define each new rule's problem contract, evidence, counterexamples, and
+   false-positive boundary before choosing a parser or language.
+2. Consolidate selector metadata and shared vocabulary in the typed rule
+   registry. Keep static type declarations synchronized with that registry and
+   avoid new parallel selector inventories.
+3. Keep source-language parsing in explicit frontends and share only normalized
    observations whose meaning is consistent across those languages. Use a
    second frontend to validate this boundary before exposing it as an API.
-3. Extend the existing `--plan` and file-scoped `not_applicable` result to
+4. Extend the existing `--plan` and file-scoped `not_applicable` result to
    built-in prerequisites, disabled checks, and explicit `not run` outcomes.
-4. Migrate checkers to the shared rule specification one at a time, comparing
+   Build plan and report entries from the resolved execution profile.
+5. Migrate checkers to the shared rule specification one at a time, comparing
    normalized findings and JSON output with the existing contracts.
-5. Design and version third-party hooks only when an actual consumer requires
+6. Design and version third-party hooks only when an actual consumer requires
    them; test ordering, collisions, configuration failures, and diagnostics
    before release.

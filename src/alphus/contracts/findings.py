@@ -132,7 +132,7 @@ class Finding:
             raise ValueError(f"unsupported finding severity: {self.severity!r}")
         RuleTag.parse(str(self.rule_id))
 
-    def as_diagnostic(self, *, source: str = "alphus") -> Diagnostic:
+    def as_diagnostic(self, *, source: str = NAMESPACE) -> Diagnostic:
         """Add checker provenance while retaining the public finding fields."""
         return Diagnostic(
             source=source,

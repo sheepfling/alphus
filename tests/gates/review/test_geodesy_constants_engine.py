@@ -27,6 +27,10 @@ def test_wgs84_pair_matches_imported_pyproj_geod_alias() -> None:
         "WGS 84 reciprocal flattening" in finding.message for finding in findings
     )
     assert all('pyproj.Geod(ellps="WGS84")' in finding.message for finding in findings)
+    assert all(
+        "proj.org/en/stable/usage/ellipsoids.html" in finding.message
+        for finding in findings
+    )
 
 
 def test_wgs84_values_require_the_pair_in_a_pyproj_geod_call() -> None:

@@ -42,7 +42,7 @@ class NumericCatalog:
 
     realm: str
     framework: Framework
-    provenance: str
+    provenance: str | None
     specs: tuple[NumericLiteralSpec, ...]
 
 
@@ -105,6 +105,8 @@ def match_numeric_occurrences(
                 NumericOperation.DIVIDE,
             }:
                 continue
+            provenance = spec.source or catalog.provenance
+            source_note = f"; source: {provenance}" if provenance is not None else ""
             findings.add(
                 NumericLiteralFinding(
                     line=occurrence.line,
@@ -117,6 +119,7 @@ def match_numeric_occurrences(
                     message=(
                         f"possible inline {spec.name} {spec.kind} literal "
                         f"{occurrence.value!r}; review use of {spec.replacement}"
+                        f"{source_note}"
                     ),
                 )
             )

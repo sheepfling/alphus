@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
 
+from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.policy.base import QualityRuleName
 
 
@@ -24,6 +25,16 @@ class RuleSpec:
     policy_field: str
     output_shape: RuleOutputShape
     requires_files: bool = True
+    message_rule_id: str | None = None
+
+    def __post_init__(self) -> None:
+        """Keep legacy message adapters fully described by the rule catalog."""
+        if (self.output_shape is RuleOutputShape.MESSAGES) != (
+            self.message_rule_id is not None
+        ):
+            raise ValueError(
+                "message rule IDs must be registered only for message outputs"
+            )
 
 
 RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
@@ -39,9 +50,36 @@ RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
         ),
         "module-roles": RuleSpec("module_roles", RuleOutputShape.FINDINGS),
         "python-style": RuleSpec("python_style", RuleOutputShape.PYTHON_STYLE),
-        "runtime-types": RuleSpec("runtime_types", RuleOutputShape.MESSAGES),
-        "cli": RuleSpec("cli", RuleOutputShape.MESSAGES),
-        "script-policy": RuleSpec("script_policy", RuleOutputShape.MESSAGES),
+        "runtime-types": RuleSpec(
+            "runtime_types",
+            RuleOutputShape.MESSAGES,
+            message_rule_id=rule_tag(
+                Scope.PYTHON,
+                Framework.NONE,
+                Category.TYPING,
+                "runtime-type-contract-violation",
+            ),
+        ),
+        "cli": RuleSpec(
+            "cli",
+            RuleOutputShape.MESSAGES,
+            message_rule_id=rule_tag(
+                Scope.PYTHON,
+                Framework.NONE,
+                Category.CORRECTNESS,
+                "cli-contract-violation",
+            ),
+        ),
+        "script-policy": RuleSpec(
+            "script_policy",
+            RuleOutputShape.MESSAGES,
+            message_rule_id=rule_tag(
+                Scope.PYTHON,
+                Framework.NONE,
+                Category.SECURITY,
+                "script-policy-violation",
+            ),
+        ),
         "package-boundaries": RuleSpec("package_boundaries", RuleOutputShape.FINDINGS),
         "dependency-locks": RuleSpec("dependency_locks", RuleOutputShape.FINDINGS),
         "repository-layout": RuleSpec("repository_layout", RuleOutputShape.FINDINGS),

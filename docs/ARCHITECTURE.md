@@ -59,10 +59,11 @@ language neutral.
   findings or register rules.
 - `alphus.gates.review` owns numeric-literal catalogs, test-quality,
   input-contract, Pydantic-practice, and FastAPI-practice checkers. Its
-  `runners.py` binds selectors to validated policies. Catalogs identify their
-  value realm, rule attribution, provenance, and entries. Matching consumes
-  normalized observations from a language-specific frontend; the numeric
-  frontend currently supports Python arithmetic and named call arguments.
+  `runners.py` binds selectors to validated policies. Numeric entries identify
+  their value realm and rule attribution, recommend a canonical API, and carry
+  source provenance into the finding. Matching consumes normalized
+  observations from a language-specific frontend; the numeric frontend
+  currently supports Python arithmetic and named call arguments.
 - `alphus.gates.source` owns portable source and launcher checks for Python,
   JavaScript, and JSON. Its `runners.py` binds these selectors to validated
   policies. Language-specific analysis remains inside each checker.
@@ -185,6 +186,36 @@ formatting to Prettier, and Python lint, typing, and tests to their native
 tools, see [consumer quality profiles](CONSUMER-PROFILES.md).
 This keeps upstream rule ownership intact while Alphus aggregates profile
 status.
+
+## Rule design and registry ownership
+
+Start a rule with the problem it should identify, not with a parser or a
+language. Specify the evidence, expected behavior, counterexamples, false-
+positive boundary, and non-goals first. Keep the policy and matcher independent
+of source syntax when their semantics allow it. A language frontend then
+parses that language and emits normalized evidence for the shared rule. Do not
+claim language support from an extension list alone; each selected language
+needs a frontend with defined behavior. The numeric catalog and Python
+frontend in `alphus.gates.review` demonstrate this split.
+
+Use the shared contracts for stable vocabulary such as finding tags and
+severity. Keep one authoritative runtime registry for each kind of choice:
+`RULE_SPECS` owns built-in selector metadata, theme runner maps own their
+checker implementations, and `NATIVE_TOOLS` / `LANGUAGE_TOOLS` own native
+recipes and bundle expansion. Compose or derive dispatch, validation,
+rendering, and plan data from those registries and the resolved policy instead
+of adding parallel selector lists or repeated switch statements. The current
+`QualityRuleName` type, `CheckPolicies` model, theme maps, and legacy CLI
+adapters are coordinated declarations; treat them as migration seams, not
+invitations to add another inventory. Where a static type declaration cannot be
+derived, check it against the runtime registry.
+
+Execution plans, fix plans, and reports must use the same resolved profile
+selection as execution. Keep passed, failed, and not-applicable outcomes
+separate from rollout (`mainline` or `provisional`). Represent unselected or
+not-run checks explicitly when the plan exposes that information; do not infer
+a plan or status from human-readable output. This keeps the preview and the run
+aligned while the rule and plan registries evolve.
 
 The [extension and diagnostics proposal](EXTENSIBILITY.md) records how
 categories, findings, and future third-party hooks could evolve while current

@@ -43,3 +43,28 @@
   do not assume available checks are automatically enabled.
 - Summarize policy changes separately from code fixes and report the final
   selected profile and checks not run.
+
+## Rule and plan architecture
+
+- Define the problem, evidence, expected behavior, false-positive boundary, and
+  non-goals before choosing a source language or parser. Keep the rule contract
+  language-neutral when its meaning permits it; implement language-specific
+  parsing as a frontend that produces normalized evidence for the shared rule.
+- Do not claim a language is supported because its extension appears in a file
+  pattern. Enable a language only when a frontend with defined semantics exists.
+- Reuse shared constants, enums, and contracts for selector names, finding
+  tags, severities, rollout states, and other stable vocabularies. Avoid
+  repeating string literals or parallel lists across rules, plans, and output
+  adapters.
+- Use immutable registries for rule metadata, runner dispatch, and native tools.
+  Derive validation, dispatch, planning, and output from those registries and
+  the resolved policy where possible. Where static typing requires a separate
+  declaration, verify it against the registry rather than keeping another
+  hand-maintained inventory.
+- Build execution plans and reports from the same resolved profile data used
+  to run checks. Keep passed, failed, and not-applicable outcomes separate from
+  rollout (`mainline` or `provisional`); represent unselected/not-run checks
+  explicitly in plans when that information is available. Do not reconstruct
+  plan or report state from rendered text.
+- Follow `docs/ARCHITECTURE.md` and `docs/EXTENSIBILITY.md` for the current
+  package boundaries and the migration path toward a single rule contract.

@@ -21,6 +21,8 @@ from alphus.gates.review.numeric_python import scan_python_numeric_occurrences
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 
+# Keep these reviewed values aligned with SciPy's checked-in CODATA dataset;
+# findings point to SciPy's public API and its constants reference.
 _PHYSICAL_CONSTANTS = (
     NumericLiteralSpec(
         name="speed of light",
@@ -42,6 +44,21 @@ _PHYSICAL_CONSTANTS = (
         values=(6.02214076e23,),
         replacement="scipy.constants.Avogadro (1/mol)",
     ),
+    NumericLiteralSpec(
+        name="molar gas constant",
+        values=(8.31446261815324,),
+        replacement="scipy.constants.R (J mol^-1 K^-1)",
+    ),
+    NumericLiteralSpec(
+        name="Faraday constant",
+        values=(96485.33212331001,),
+        replacement='scipy.constants.value("Faraday constant") (C mol^-1)',
+    ),
+    NumericLiteralSpec(
+        name="atomic mass constant",
+        values=(1.66053906892e-27,),
+        replacement="scipy.constants.atomic_mass (kg)",
+    ),
 )
 
 # Each factor is the number of SI units in one named unit.
@@ -52,6 +69,7 @@ _UNIT_FACTORS = (
     ("hour", 3600, ("hour", "hours", "second", "seconds")),
     ("day", 86400, ("day", "days", "second", "seconds")),
 )
+# TODO HANDLE EVERY CONSTANT FROM SCIPY constants and CONVERSIONS!
 
 
 def _unit_specs(include_inverses: bool) -> tuple[NumericLiteralSpec, ...]:
@@ -72,22 +90,35 @@ def scipy_literal_findings(
     source: str, policy: ScipyConstantsPolicy
 ) -> list[NumericLiteralFinding]:
     """Review exact configured SciPy values in arithmetic source expressions."""
-    specs = (
+    builtin_specs = (
         *(_PHYSICAL_CONSTANTS if policy.physical_constants else ()),
         *(_unit_specs(policy.inverse_conversions) if policy.unit_conversions else ()),
-        *policy.constants,
     )
     occurrences = scan_python_numeric_occurrences(source)
-    return match_numeric_occurrences(
+    findings = match_numeric_occurrences(
         occurrences,
         NumericCatalog(
             realm="scipy",
             framework=Framework.SCIPY,
             provenance="https://docs.scipy.org/doc/scipy/reference/constants.html",
-            specs=specs,
+            specs=builtin_specs,
         ),
         scope=Scope.PYTHON,
     )
+    if policy.constants:
+        findings.extend(
+            match_numeric_occurrences(
+                occurrences,
+                NumericCatalog(
+                    realm="consumer",
+                    framework=Framework.SCIPY,
+                    provenance=None,
+                    specs=policy.constants,
+                ),
+                scope=Scope.PYTHON,
+            )
+        )
+    return sorted(set(findings))
 
 
 def check_scipy_constants(

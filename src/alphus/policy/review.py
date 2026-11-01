@@ -26,6 +26,7 @@ class NumericLiteralSpec(StrictModel):
     values: Annotated[tuple[int | float, ...], Field(min_length=1)]
     kind: Literal["constant", "conversion"] = "constant"
     replacement: str
+    source: str | None = None
     context: Literal["arithmetic", "call-argument"] = "arithmetic"
     name_tokens: tuple[str, ...] = ()
     call_names: tuple[str, ...] = ()
@@ -35,6 +36,13 @@ class NumericLiteralSpec(StrictModel):
     @field_validator("name", "replacement")
     @classmethod
     def validate_message(cls, value: str) -> str:
+        return validate_one_line_message(value)
+
+    @field_validator("source")
+    @classmethod
+    def validate_source(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         return validate_one_line_message(value)
 
     @field_validator("values")

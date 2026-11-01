@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from types import MappingProxyType
 from typing import Self, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, TypeAdapter
@@ -15,15 +14,17 @@ from alphus.contracts.findings import (
     Severity,
     severity_meets_threshold,
 )
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import NAMESPACE, Category, Framework, Scope, rule_tag
 from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
 from alphus.gates.source.python_style import StyleFindings
 from alphus.policy.base import QualityRuleName
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
 
+# Compatibility union until legacy rule outputs migrate to normalized findings.
 RuleOutput: TypeAlias = (
     list[Finding] | list[str] | dict[str, StyleFindings] | SharedUtilitiesReport
 )
+# Legacy direct-rule payload retained for its existing CLI/JSON contract.
 PythonStyleOutput: TypeAlias = dict[str, dict[str, list[int]]]
 
 
@@ -42,35 +43,15 @@ _PYTHON_STYLE: TypeAdapter[PythonStyleOutput] = TypeAdapter(PythonStyleOutput)
 _SHARED_UTILITIES: TypeAdapter[_SharedUtilitiesWire] = TypeAdapter(_SharedUtilitiesWire)
 _SHARED_REPORT: TypeAdapter[SharedUtilitiesReport] = TypeAdapter(SharedUtilitiesReport)
 
-_MESSAGE_RULE_IDS: Mapping[QualityRuleName, str] = MappingProxyType(
-    {
-        "runtime-types": rule_tag(
-            Scope.PYTHON,
-            Framework.NONE,
-            Category.TYPING,
-            "runtime-type-contract-violation",
-        ),
-        "cli": rule_tag(
-            Scope.PYTHON, Framework.NONE, Category.CORRECTNESS, "cli-contract-violation"
-        ),
-        "script-policy": rule_tag(
-            Scope.PYTHON, Framework.NONE, Category.SECURITY, "script-policy-violation"
-        ),
-    }
-)
-
 
 def _message_diagnostics(
     rule: QualityRuleName, messages: Sequence[str]
 ) -> list[Diagnostic]:
-    try:
-        rule_id = _MESSAGE_RULE_IDS[rule]
-    except KeyError as error:
-        raise ValueError(
-            f"no diagnostic tag registered for message rule {rule!r}"
-        ) from error
+    rule_id = RULE_SPECS[rule].message_rule_id
+    if rule_id is None:
+        raise ValueError(f"no diagnostic tag registered for message rule {rule!r}")
     return [
-        Diagnostic(source="alphus", rule_id=rule_id, message=message)
+        Diagnostic(source=NAMESPACE, rule_id=rule_id, message=message)
         for message in messages
     ]
 
@@ -80,7 +61,7 @@ def _style_diagnostics(
 ) -> list[Diagnostic]:
     return [
         Diagnostic(
-            source="alphus",
+            source=NAMESPACE,
             rule_id=rule_tag(
                 Scope.PYTHON, Framework.NONE, Category.STYLE, category.replace("_", "-")
             ),
@@ -103,7 +84,7 @@ def _shared_diagnostics(
 ) -> list[Diagnostic]:
     diagnostics = [
         Diagnostic(
-            source="alphus",
+            source=NAMESPACE,
             rule_id=rule_tag(
                 Scope.PYTHON,
                 Framework.NONE,
@@ -117,7 +98,7 @@ def _shared_diagnostics(
     if len(hash_implementations) > 1:
         diagnostics.append(
             Diagnostic(
-                source="alphus",
+                source=NAMESPACE,
                 rule_id=rule_tag(
                     Scope.PYTHON,
                     Framework.NONE,
@@ -132,7 +113,7 @@ def _shared_diagnostics(
         )
     diagnostics.extend(
         Diagnostic(
-            source="alphus",
+            source=NAMESPACE,
             rule_id=rule_tag(
                 Scope.PYTHON,
                 Framework.NONE,
@@ -146,7 +127,7 @@ def _shared_diagnostics(
     if failed and not diagnostics:
         diagnostics.append(
             Diagnostic(
-                source="alphus",
+                source=NAMESPACE,
                 rule_id=rule_tag(
                     Scope.PYTHON,
                     Framework.NONE,

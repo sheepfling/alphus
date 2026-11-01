@@ -28,6 +28,8 @@ from alphus.policy.native_tools import native_tool_policy, native_tools_for_lang
 from alphus.policy.orchestration import (
     CheckPolicies,
     CommandRunStep,
+    DEFAULT_FAILURE_THRESHOLD,
+    DEFAULT_PROFILE_NAME,
     OrchestrationPolicy,
     OrchestrationProfile,
     OrchestrationStep,
@@ -191,8 +193,8 @@ class _PartialOrchestration(StrictModel):
 
     steps: tuple[OrchestrationStep, ...] = ()
     profiles: tuple[OrchestrationProfile, ...] = ()
-    default_profile: str = "check"
-    failure_threshold: Severity = "error"
+    default_profile: str = DEFAULT_PROFILE_NAME
+    failure_threshold: Severity = DEFAULT_FAILURE_THRESHOLD
 
 
 class _SplitPolicy(StrictModel):
@@ -307,13 +309,14 @@ def _compose_native_orchestration(
 ) -> OrchestrationPolicy:
     """Combine generated tool recipes with root-owned steps and profiles."""
     declared_profiles = declared.profiles
-    if any(profile.name == "check" for profile in declared_profiles):
+    if any(profile.name == DEFAULT_PROFILE_NAME for profile in declared_profiles):
         native = _with_native_profile(native)
     elif declared.steps:
         declared_profiles = (
             *declared_profiles,
             OrchestrationProfile(
-                name="check", steps=tuple(step.name for step in declared.steps)
+                name=DEFAULT_PROFILE_NAME,
+                steps=tuple(step.name for step in declared.steps),
             ),
         )
     return OrchestrationPolicy(
@@ -351,7 +354,7 @@ def _with_native_profile(policy: OrchestrationPolicy) -> OrchestrationPolicy:
     native = OrchestrationProfile(
         name="native", steps=tuple(step.name for step in policy.steps)
     )
-    check = OrchestrationProfile(name="check", includes=("native",))
+    check = OrchestrationProfile(name=DEFAULT_PROFILE_NAME, includes=("native",))
     return OrchestrationPolicy(
         steps=policy.steps,
         profiles=(*policy.profiles[:-1], native, check),

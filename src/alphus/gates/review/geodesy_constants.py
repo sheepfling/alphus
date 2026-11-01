@@ -46,21 +46,38 @@ def geodesy_literal_findings(
     source: str, policy: GeodesyConstantsPolicy
 ) -> list[NumericLiteralFinding]:
     """Review configured geodetic values in their declared Python contexts."""
-    specs = (*(_WGS84_ELLIPSOID if policy.wgs84_ellipsoid else ()), *policy.constants)
-    catalog = NumericCatalog(
-        realm="geodesy",
-        framework=Framework.PYPROJ,
-        provenance=(
-            "https://proj.org/en/stable/usage/ellipsoids.html; "
-            "https://proj.org/en/stable/specifications/projjson.html"
-        ),
-        specs=specs,
-    )
-    return match_numeric_occurrences(
-        scan_python_numeric_occurrences(source),
-        catalog,
-        scope=Scope.PYTHON,
-    )
+    occurrences = scan_python_numeric_occurrences(source)
+    findings: list[NumericLiteralFinding] = []
+    if policy.wgs84_ellipsoid:
+        findings.extend(
+            match_numeric_occurrences(
+                occurrences,
+                NumericCatalog(
+                    realm="geodesy",
+                    framework=Framework.PYPROJ,
+                    provenance=(
+                        "https://proj.org/en/stable/usage/ellipsoids.html; "
+                        "https://proj.org/en/stable/specifications/projjson.html"
+                    ),
+                    specs=_WGS84_ELLIPSOID,
+                ),
+                scope=Scope.PYTHON,
+            )
+        )
+    if policy.constants:
+        findings.extend(
+            match_numeric_occurrences(
+                occurrences,
+                NumericCatalog(
+                    realm="consumer",
+                    framework=Framework.PYPROJ,
+                    provenance=None,
+                    specs=policy.constants,
+                ),
+                scope=Scope.PYTHON,
+            )
+        )
+    return sorted(set(findings))
 
 
 def check_geodesy_constants(

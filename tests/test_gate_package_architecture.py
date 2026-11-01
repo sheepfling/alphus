@@ -11,6 +11,7 @@ from alphus.gates.repository.runners import REPOSITORY_RULE_RUNNERS
 from alphus.gates.review.runners import REVIEW_RULE_RUNNERS
 from alphus.gates.source.runners import SOURCE_RULE_RUNNERS
 from alphus.gates.vcs.runners import VCS_RULE_RUNNERS
+from alphus.policy.catalog import RULE_SPECS
 
 
 def test_shared_support_modules_do_not_import_gate_implementations() -> None:
@@ -68,51 +69,17 @@ def test_policy_models_do_not_import_execution_or_gate_packages() -> None:
 
 def test_gate_themes_own_their_runner_mappings() -> None:
     themes = (
-        (
-            REVIEW_RULE_RUNNERS,
-            {
-                "numeric-literals",
-                "scipy-constants",
-                "geodesy-constants",
-                "test-quality",
-                "input-contracts",
-                "source-families",
-                "pydantic-practices",
-                "fastapi-practices",
-            },
-        ),
-        (
-            SOURCE_RULE_RUNNERS,
-            {
-                "json-structure",
-                "output-escaping",
-                "path-discovery",
-                "python-style",
-                "runtime-types",
-                "cli",
-                "script-policy",
-            },
-        ),
-        (
-            REPOSITORY_RULE_RUNNERS,
-            {
-                "module-roles",
-                "package-boundaries",
-                "dependency-locks",
-                "repository-layout",
-            },
-        ),
-        (
-            VCS_RULE_RUNNERS,
-            {"git-ignores", "git-attributes", "git-history"},
-        ),
-        (
-            HYGIENE_RULE_RUNNERS,
-            {"file-size", "line-length", "shared-utilities", "comment-markers"},
-        ),
+        REVIEW_RULE_RUNNERS,
+        SOURCE_RULE_RUNNERS,
+        REPOSITORY_RULE_RUNNERS,
+        VCS_RULE_RUNNERS,
+        HYGIENE_RULE_RUNNERS,
     )
-    for runners, expected in themes:
-        assert set(runners) == expected
+    registered = [name for runners in themes for name in runners]
+    assert len(registered) == len(set(registered))
+    assert set(registered) == set(RULE_SPECS)
+    assert len(RULE_RUNNERS) == len(registered)
+    for runners in themes:
         assert all(RULE_RUNNERS[name] is runner for name, runner in runners.items())
 
 

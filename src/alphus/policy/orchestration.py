@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Sequence
-from typing import Annotated, Literal, NamedTuple, cast
+from typing import Annotated, Final, Literal, NamedTuple, TypeAlias, cast
 
 from pydantic import Field, field_validator, model_validator
 
@@ -54,7 +54,15 @@ from alphus.policy.sources import (
     SourceScanPolicy,
 )
 
+Rollout: TypeAlias = Literal["mainline", "provisional"]
+MAINLINE_ROLLOUT: Final[Rollout] = "mainline"
+PROVISIONAL_ROLLOUT: Final[Rollout] = "provisional"
+DEFAULT_PROFILE_NAME: Final = "check"
+DEFAULT_FAILURE_THRESHOLD: Final[Severity] = "error"
 
+
+# Keep this strict schema explicit for static typing. RULE_SPECS maps selectors
+# to primary policy fields, and registry coverage is checked against this model.
 class CheckPolicies(StrictModel):
     """Settings for the currently available source gates."""
 
@@ -101,7 +109,7 @@ class RuleRunStep(StrictModel):
     rule: QualityRuleName
     severity: Severity | None = None
     priority: RemediationPriority | None = None
-    rollout: Literal["mainline", "provisional"] = "mainline"
+    rollout: Rollout = MAINLINE_ROLLOUT
 
     @field_validator("name")
     @classmethod
@@ -118,7 +126,7 @@ class CommandRunStep(StrictModel):
     fix_argv: Annotated[tuple[str, ...] | None, Field(min_length=1)] = None
     working_directory: str = "."
     files: FileInventoryPolicy | None = None
-    rollout: Literal["mainline", "provisional"] = "mainline"
+    rollout: Rollout = MAINLINE_ROLLOUT
 
     @field_validator("name")
     @classmethod
@@ -225,8 +233,8 @@ class OrchestrationPolicy(StrictModel):
 
     steps: Annotated[tuple[OrchestrationStep, ...], Field(min_length=1)]
     profiles: Annotated[tuple[OrchestrationProfile, ...], Field(min_length=1)]
-    default_profile: str = "check"
-    failure_threshold: Severity = "error"
+    default_profile: str = DEFAULT_PROFILE_NAME
+    failure_threshold: Severity = DEFAULT_FAILURE_THRESHOLD
 
     @model_validator(mode="after")
     def validate_plan(self) -> OrchestrationPolicy:
