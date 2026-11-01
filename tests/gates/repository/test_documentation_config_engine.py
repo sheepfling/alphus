@@ -255,6 +255,63 @@ def test_repeated_class_fields_require_qualified_context_or_report_unknown(
     assert "multiple code candidates" in findings[2].message
 
 
+def test_separately_qualified_claims_keep_their_own_comparison_groups(
+    tmp_path: Path,
+) -> None:
+    findings = _run_documentation_case(
+        tmp_path,
+        "class IncludeLimits:\n    max_files: int = 4\n"
+        "class ExportLimits:\n    max_files: int = 8\n",
+        "IncludeLimits.max_files is 4; ExportLimits.max_files is 99.\n",
+    )
+
+    assert {item.rule_id for item in findings} == {_DUPLICATED, _CONFLICT}
+    assert any(
+        item.rule_id == _DUPLICATED and "for IncludeLimits.max_files" in item.message
+        for item in findings
+    )
+    assert any(
+        item.rule_id == _CONFLICT and "for ExportLimits.max_files" in item.message
+        for item in findings
+    )
+
+
+def test_qualified_suppression_does_not_hide_another_field_with_same_short_name(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "src" / "settings.py"
+    guide = tmp_path / "docs" / "guide.md"
+    source.parent.mkdir()
+    guide.parent.mkdir()
+    source.write_text(
+        "class IncludeLimits:\n    max_files: int = 4\n"
+        "class ExportLimits:\n    max_files: int = 8\n",
+        encoding="utf-8",
+    )
+    guide.write_text(
+        "IncludeLimits.max_files is 4; ExportLimits.max_files is 99.\n",
+        encoding="utf-8",
+    )
+    policy = _policy(
+        suppressions=(
+            DocumentationConfigSuppression(
+                path="docs/guide.md",
+                symbol="IncludeLimits.max_files",
+                reason="This field is intentionally repeated in this guide.",
+            ),
+        )
+    )
+
+    findings = check_documentation_config(
+        tmp_path,
+        policy,
+        [Path("src/settings.py"), Path("docs/guide.md")],
+    )
+
+    assert [item.rule_id for item in findings] == [_CONFLICT]
+    assert "for ExportLimits.max_files" in findings[0].message
+
+
 def test_rule_runs_from_validated_policy_and_warning_is_nonblocking(
     tmp_path: Path,
 ) -> None:
@@ -335,6 +392,21 @@ def test_unsupported_numeric_forms_do_not_compare_as_values(tmp_path: Path) -> N
     assert "documentation value '1-2'" in findings[6].message
     assert "documentation value '1 - 2'" in findings[7].message
     assert "documentation value '1+2'" in findings[8].message
+
+
+def test_word_and_unicode_dash_ranges_remain_uncertain_numeric_claims(
+    tmp_path: Path,
+) -> None:
+    findings = _run_documentation_case(
+        tmp_path,
+        "MIN_FILES = 1\n",
+        "MIN_FILES is 1–2.\nMIN_FILES is 1 to 2.\n",
+    )
+
+    assert [item.rule_id for item in findings] == [_UNKNOWN, _UNKNOWN]
+    assert [item.severity for item in findings] == ["info", "info"]
+    assert "documentation value '1–2'" in findings[0].message
+    assert "documentation value '1 to 2'" in findings[1].message
 
 
 def test_final_punctuation_and_comma_followed_by_prose_stay_numeric(

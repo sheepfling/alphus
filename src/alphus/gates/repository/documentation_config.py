@@ -6,7 +6,7 @@ import ast
 import math
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from types import MappingProxyType
 from typing import NamedTuple, TypeAlias
@@ -53,7 +53,8 @@ _VALUE = re.compile(
 )
 _UNCERTAIN_NUMERIC_CONTINUATION = re.compile(
     r"\s*(?:,\s*\d[\d_]*(?:,\s*\d[\d_]*)*|/\s*\d[\d_]*|"
-    r"[+-]\s*\d[\d_]*)(?:\.\d[\d_]*)?(?=$|[\s.,;:!?])"
+    r"[+-–—]\s*\d[\d_]*|(?i:to)\s+[+-]?\d[\d_]*)"
+    r"(?:\.\d[\d_]*)?(?=$|[\s.,;:!?])"
 )
 _RELATION = re.compile(r"\s*(?:defaults?\s+to|is|equals?|=|:)\s*", re.IGNORECASE)
 _UNITS = re.compile(
@@ -102,6 +103,7 @@ class _Claim:
     display: str
     reason: str
     supported: bool = True
+    matched_symbol: str | None = None
 
 
 class _Resolution(NamedTuple):
@@ -459,6 +461,8 @@ def _table_claims(line: str, fact: _Fact) -> list[_Claim]:
             cells[index + 1], "table cell adjacent to the setting name"
         )
         if claim is not None:
+            if cell == fact.symbol and "." in fact.symbol:
+                claim = replace(claim, matched_symbol=fact.symbol)
             claims.append(claim)
     return claims
 
@@ -476,6 +480,8 @@ def _prose_claims(line: str, fact: _Fact) -> list[_Claim]:
             raw = tail[relation.end() :]
             claim = _parse_claim_value(raw, "explicit setting/value relation")
             if claim is not None:
+                if "." in name:
+                    claim = replace(claim, matched_symbol=name)
                 claims.append(claim)
     return claims
 
@@ -519,7 +525,7 @@ def _numeric_value(value: Scalar) -> int | float | None:
             return None
 
 
-def _fractional_bytes(value: int | float) -> bool:
+def _fractional_bytes(value: float) -> bool:
     match value:
         case float() as number:
             return not number.is_integer()
@@ -692,13 +698,10 @@ def check_documentation_config(
             if line_number in ignored:
                 continue
             matched = _matched_facts(line, facts)
-            suppressed_names = {
-                fact.short_name
-                for fact in matched
-                if _suppressed(doc_path.as_posix(), fact, policy)
-            }
             matched = [
-                fact for fact in matched if fact.short_name not in suppressed_names
+                fact
+                for fact in matched
+                if not _suppressed(doc_path.as_posix(), fact, policy)
             ]
             claims = [
                 (fact, claim)
@@ -709,7 +712,8 @@ def check_documentation_config(
                 continue
             grouped: dict[str, list[tuple[_Fact, _Claim]]] = {}
             for fact, claim in claims:
-                grouped.setdefault(fact.short_name, []).append((fact, claim))
+                group = claim.matched_symbol or fact.short_name
+                grouped.setdefault(group, []).append((fact, claim))
             for entries in grouped.values():
                 unique_facts = {
                     (entry[0].symbol, entry[0].path, entry[0].line): entry[0]
@@ -724,6 +728,7 @@ def check_documentation_config(
                         )
                     )
                     claim = entries[0][1]
+                    symbol = claim.matched_symbol or entries[0][0].short_name
                     findings.append(
                         Finding(
                             rule_id=_UNKNOWN,
@@ -732,7 +737,7 @@ def check_documentation_config(
                             severity="info",
                             message=(
                                 f"could not compare documentation value {claim.display!r} "
-                                f"for {entries[0][0].short_name}: repeated symbol has "
+                                f"for {symbol}: repeated symbol has "
                                 f"multiple code candidates ({candidates}); matched by an "
                                 "explicit setting name and value relation"
                             ),

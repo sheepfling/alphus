@@ -416,9 +416,7 @@ class DocumentationConfigSuppression(StrictModel):
 class DocumentationConfigPolicy(StrictModel):
     """Opt-in, advisory scan for explicitly named Python defaults in Markdown."""
 
-    source_patterns: Annotated[
-        tuple[str, ...], Field(default_factory=lambda: ("**/*.py",))
-    ]
+    source_patterns: tuple[str, ...] = ("**/*.py",)
     documentation_patterns: Annotated[
         tuple[str, ...], Field(default_factory=lambda: ("**/*.md",))
     ]
