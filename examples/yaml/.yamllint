@@ -1,0 +1,35 @@
+# A small safety-focused starting point; add style rules to suit the project.
+extends: default
+ignore:
+  - "/generated/"
+  - "/vendor/"
+rules:
+  braces: disable
+  brackets: disable
+  colons: disable
+  commas: disable
+  comments: disable
+  comments-indentation: disable
+  document-end: disable
+  document-start: disable
+  empty-lines: disable
+  empty-values: disable
+  float-values: disable
+  hyphens: disable
+  indentation: disable
+  key-duplicates:
+    level: error
+  key-ordering: disable
+  line-length: disable
+  new-line-at-end-of-file: disable
+  new-lines: disable
+  truthy:
+    level: warning
+    allowed-values: ["true", "false", "True", "TRUE", "False", "FALSE"]
+    check-keys: true
+  octal-values:
+    level: warning
+    forbid-implicit-octal: true
+    forbid-explicit-octal: false
+  quoted-strings: disable
+  trailing-spaces: disable
