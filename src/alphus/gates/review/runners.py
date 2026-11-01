@@ -8,17 +8,18 @@ from types import MappingProxyType
 from typing import TypeAlias
 
 from alphus.config import QualityGateConfig, QualityRuleName
-from alphus.execution.results import RuleOutput
+from alphus.contracts.findings import Finding
 from alphus.gates.review.frameworks.fastapi_practices import check_fastapi_practices
 from alphus.gates.review.frameworks.pydantic_practices import check_pydantic_practices
 from alphus.gates.review.input_contracts import check_input_contracts
 from alphus.gates.review.numeric_literals import check_numeric_literals
 from alphus.gates.review.scipy_constants import check_scipy_constants
+from alphus.gates.review.source_families import check_source_families
 from alphus.gates.review.test_quality import check_test_quality
 from alphus.policy.base import require_policy
 
 ReviewRunner: TypeAlias = Callable[
-    [Path, Sequence[Path], QualityGateConfig], RuleOutput
+    [Path, Sequence[Path], QualityGateConfig], list[Finding]
 ]
 
 REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
@@ -42,6 +43,11 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
             root,
             files,
             require_policy(config.checks.input_contracts, "input_contracts"),
+        ),
+        "source-families": lambda root, files, config: check_source_families(
+            root,
+            files,
+            require_policy(config.checks.source_families, "source_families"),
         ),
         "pydantic-practices": lambda root, files, config: check_pydantic_practices(
             root,

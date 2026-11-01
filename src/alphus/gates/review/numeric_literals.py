@@ -11,11 +11,12 @@ from pathlib import Path
 
 from alphus.config import NumericLiteralPolicy, NumericLiteralSpec
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Framework
+from alphus.contracts.rule_tags import Framework, Scope
 from alphus.gates.review.numeric_engine import (
     NumericLiteralFinding,
-    scan_numeric_literals,
+    match_numeric_occurrences,
 )
+from alphus.gates.review.numeric_python import scan_python_numeric_occurrences
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 
@@ -43,7 +44,13 @@ def numeric_literal_findings(
 ) -> list[NumericLiteralFinding]:
     """Review exact configured literals in arithmetic without guessing dimensions."""
     specs = (*(_MATH_CONSTANTS if policy.math_constants else ()), *policy.constants)
-    return scan_numeric_literals(source, specs, framework=Framework.NONE)
+    occurrences = scan_python_numeric_occurrences(source)
+    return match_numeric_occurrences(
+        occurrences,
+        specs,
+        framework=Framework.NONE,
+        scope=Scope.PYTHON,
+    )
 
 
 def check_numeric_literals(

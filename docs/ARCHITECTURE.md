@@ -59,7 +59,9 @@ language neutral.
   findings or register rules.
 - `alphus.gates.review` owns numeric-literal, test-quality, input-contract,
   Pydantic-practice, and FastAPI-practice checkers. Its `runners.py` binds their
-  selectors to validated policies.
+  selectors to validated policies. Numeric catalog matching consumes
+  normalized occurrences from a language-specific frontend; the numeric rule
+  currently has a Python frontend only.
 - `alphus.gates.source` owns portable source and launcher checks for Python,
   JavaScript, and JSON. Its `runners.py` binds these selectors to validated
   policies. Language-specific analysis remains inside each checker.
@@ -71,6 +73,9 @@ language neutral.
 - `alphus.gates.hygiene` owns file-size, line-length, comment-marker, and
   shared-utility checks. Comment markers use language-aware comment scanning
   while retaining one portable finding contract.
+- Theme runner modules declare their own return types beside their mappings.
+  `alphus.execution.results` owns the cross-theme compatibility union and
+  normalizes those outputs; gate packages do not import execution code.
 - `alphus.gates.stubs` owns the installed stub-package workflow and fixture
   controller.
 - `alphus.gates.python` owns the installed-package import smoke workflow

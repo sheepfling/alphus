@@ -9,7 +9,6 @@ from typing import TypeAlias
 
 from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.contracts.findings import Finding
-from alphus.execution.results import RuleOutput
 from alphus.gates.python.module_roles import check_module_roles
 from alphus.gates.repository.architecture_graph import check_architecture_graph
 from alphus.gates.repository.callable_registry import check_callable_registry
@@ -21,7 +20,7 @@ from alphus.policy.base import require_policy
 from alphus.support.inventory import tracked_files
 
 RepositoryRunner: TypeAlias = Callable[
-    [Path, Sequence[Path], QualityGateConfig], RuleOutput
+    [Path, Sequence[Path], QualityGateConfig], list[Finding]
 ]
 
 

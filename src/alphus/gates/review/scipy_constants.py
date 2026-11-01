@@ -11,11 +11,12 @@ from pathlib import Path
 
 from alphus.config import NumericLiteralSpec, ScipyConstantsPolicy
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Framework
+from alphus.contracts.rule_tags import Framework, Scope
 from alphus.gates.review.numeric_engine import (
     NumericLiteralFinding,
-    scan_numeric_literals,
+    match_numeric_occurrences,
 )
+from alphus.gates.review.numeric_python import scan_python_numeric_occurrences
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 
@@ -75,7 +76,13 @@ def scipy_literal_findings(
         *(_unit_specs(policy.inverse_conversions) if policy.unit_conversions else ()),
         *policy.constants,
     )
-    return scan_numeric_literals(source, specs, framework=Framework.SCIPY)
+    occurrences = scan_python_numeric_occurrences(source)
+    return match_numeric_occurrences(
+        occurrences,
+        specs,
+        framework=Framework.SCIPY,
+        scope=Scope.PYTHON,
+    )
 
 
 def check_scipy_constants(

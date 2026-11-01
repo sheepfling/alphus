@@ -24,6 +24,11 @@ Native command failures still fail.
 Selector: `numeric-literals`. IDs: `alphus/python/none/style/inline-constant` and
 `alphus/python/none/style/inline-conversion`.
 
+This rule currently analyzes Python only. The Python AST frontend extracts
+arithmetic occurrences; a shared matcher applies the configured catalog. The
+matcher boundary is an internal seam for a future language frontend, not a
+claim that non-Python files are supported.
+
 The built-in catalog recognizes these exact values in binary or augmented
 arithmetic: pi (`3.14`, `3.14159`, `3.141592653589793`), e (`2.71828`,
 `2.718281828459045`), and tau (`6.28318`, `6.283185307179586`). A coincidental
@@ -315,3 +320,80 @@ when enabled, literal `code` values in an HTTP exception's direct `detail`
 dictionary. The consumer owns its vocabulary and the rule does not import the
 application or assume any particular code registry. Aliased imports resolve
 to the configured name; dynamic factories and computed dictionaries do not.
+
+## Source-family organization review
+
+Selector: `source-families`. This opt-in review groups sibling source files by
+filename-token prefixes in the selected Git inventory. A name is split on
+underscores, hyphens, periods, and spaces, and at lower/digit-to-uppercase
+camel-case boundaries; tokens are case-folded and digit-only tokens are
+discarded. A candidate prefix must be a proper token prefix, meet
+`min_prefix_characters` after separators and digits are removed, and cover at
+least `min_family_files` logical units. Files in different directories are
+never grouped. When prefixes nest, the checker assigns each member to its
+deepest qualifying prefix and emits no duplicate member reports.
+
+Python, C, C++, JavaScript, and TypeScript extensions are recognized. Matching
+C/C++ header and implementation suffixes with the same stem in one directory
+count as one logical unit; other same-stem files with different extensions
+remain separate units. The diagnostic retains physical file counts. By default
+`.h` is labeled `C/C++`; consumers can relabel suffixes with
+`language_overrides`, or use ordered `path_language_overrides` when a suffix is
+ambiguous in particular directories. The last matching path override wins and
+path overrides take precedence over suffix overrides.
+
+The heuristic has no semantic or history evidence. Uppercase acronym runs are
+not split into separate words, digit-only tokens are ignored, and files outside
+the configured extensions or supplied inventory are invisible to it. Names
+that do not share a meaningful token prefix are not detected. These are limits
+of the lexical stage, not evidence that a family is cohesive.
+
+```toml
+[checks.source_families]
+extensions = [".py", ".c", ".h", ".cpp", ".hpp", ".js", ".ts"]
+include = ["src/**"]
+exclude = ["src/vendor/**", "src/generated/**"]
+min_family_files = 6
+min_prefix_characters = 4
+max_files = 20000
+max_findings = 100
+max_reported_members = 40
+language_overrides = [[".h", "C++"]]
+path_language_overrides = [["src/legacy_c/**", "C"]]
+file_length_limits = [[".py", 500], [".cpp", 800]]
+```
+
+The first slice is lexical-only and low-confidence. A shared prefix selects a
+review candidate; it does not establish responsibility, coupling, public
+surface, or a need to move files. Each finding reports the family key, selected
+sibling proportion, language counts, physical-line range and distribution,
+per-member line counts, and applicable configured file limits. Member and
+distribution evidence are capped; truncation is stated in the finding. The
+configured family threshold and minimum prefix, extensions, scope, exclusions,
+and language overrides are included so reviewers can see the effective
+settings. The scan streams line counts and never imports or executes consumer
+code. Inventory, per-finding evidence, and total-finding limits are bounded;
+incomplete or truncated scans produce explicit warnings instead of implying a
+complete clean result. Candidate findings are advisory and this rule is
+provisional in Alphus's self-review profile.
+
+A typical finding begins: `src/service: Family gateway_*: 12 logical units
+across 12 physical files; 12 of 20 selected sibling source files (60%);
+language mix Python=12; physical lines 38–190 (12 counted; distribution: 1
+file(s) at 38 lines, ...); configured file limits .py≤500 lines. lexical-only,
+low-confidence review candidate.` It also lists bounded member evidence and
+states that coupling, imports, responsibility, and public surface were not
+assessed.
+
+Use `include`, `exclude`, and `extensions` to scope intentional generated,
+vendor, schema-output, fixture, compatibility, test, public-reexport, platform,
+or interface families. Keep a short reason beside each consumer exclusion in
+the TOML policy so the suppression remains reviewable. Broad names and large
+families can still be legitimate; treat the result as a prompt to inspect actual
+responsibilities and public contracts. Review listed members and preserve
+established import/include/export paths before changing a layout. File-length
+limits remain an independent hygiene control: splitting files below a limit
+does not demonstrate improved cohesion. Dependency, responsibility,
+public-surface, and history analysis are not part of this first slice. Fewer
+files, renamed prefixes, or a new directory do not by themselves demonstrate
+better boundaries.

@@ -154,6 +154,34 @@ point contract rather than by scanning a namespace for imports. C++ and
 JavaScript tools can continue as native command steps until Alphus owns a
 language-specific check that warrants Python code.
 
+### Shared rule semantics across source languages
+
+Keep the rule contract and the source-language parser as separate concerns.
+Shared policy, file inventory, findings, and profile execution can apply to
+many languages, while parsing and deciding which syntax counts as evidence
+remain language-specific. Do not label a rule language-neutral just because
+its policy or output model is shared.
+
+The numeric-literal review is the first example of this boundary. Its Python
+frontend uses the Python AST to extract normalized arithmetic occurrences
+(line, value, operation, and identifier context); the shared numeric engine
+matches those observations against the configured value catalog and creates
+the Alphus finding. The current selector still analyzes Python only. Its
+configured extensions do not imply support for another grammar. A future
+frontend can be added when a second language is in scope, with its own parser
+and explicit handling of declarations, assertions, and other intentional
+contexts. It should feed the shared matcher only where those observations have
+the same meaning.
+
+Keep findings scoped to the language that was analyzed so rollups retain that
+information. Use `any` only when the evidence and rule semantics are truly
+independent of source syntax. Extension lists describe file selection; they
+must not advertise parser support by themselves. A selected file without a
+matching frontend must be rejected or reported as not applicable, never
+silently treated as clean. Start with internal, rule-owned frontends; add a
+public registry or plugin contract only when real consumers need independent
+analyzers.
+
 ### Hook contract
 
 The internal `RuleSpec` catalog now gives every built-in selector one primary
@@ -182,10 +210,13 @@ through the same apply workflow.
 
 1. Keep the built-in selector catalog complete while mapping current rules to
    categories without changing defaults.
-2. Extend the existing `--plan` and file-scoped `not_applicable` result to
+2. Keep source-language parsing in explicit frontends and share only normalized
+   observations whose meaning is consistent across those languages. Use a
+   second frontend to validate this boundary before exposing it as an API.
+3. Extend the existing `--plan` and file-scoped `not_applicable` result to
    built-in prerequisites, disabled checks, and explicit `not run` outcomes.
-3. Migrate checkers to the shared rule specification one at a time, comparing
+4. Migrate checkers to the shared rule specification one at a time, comparing
    normalized findings and JSON output with the existing contracts.
-4. Design and version third-party hooks only when an actual consumer requires
+5. Design and version third-party hooks only when an actual consumer requires
    them; test ordering, collisions, configuration failures, and diagnostics
    before release.

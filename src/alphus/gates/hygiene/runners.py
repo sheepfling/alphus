@@ -8,14 +8,18 @@ from types import MappingProxyType
 from typing import TypeAlias
 
 from alphus.config import QualityGateConfig, QualityRuleName
-from alphus.execution.results import RuleOutput
+from alphus.contracts.findings import Finding
 from alphus.gates.hygiene.comment_markers import check_comment_markers
 from alphus.gates.hygiene.rules import check_file_size, check_line_length
-from alphus.gates.hygiene.shared_utilities import check_shared_utilities
+from alphus.gates.hygiene.shared_utilities import (
+    SharedUtilitiesReport,
+    check_shared_utilities,
+)
 from alphus.policy.base import require_policy
 
+HygieneOutput: TypeAlias = list[Finding] | SharedUtilitiesReport
 HygieneRunner: TypeAlias = Callable[
-    [Path, Sequence[Path], QualityGateConfig], RuleOutput
+    [Path, Sequence[Path], QualityGateConfig], HygieneOutput
 ]
 
 HYGIENE_RULE_RUNNERS: Mapping[QualityRuleName, HygieneRunner] = MappingProxyType(

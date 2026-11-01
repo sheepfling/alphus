@@ -8,11 +8,13 @@ from types import MappingProxyType
 from typing import TypeAlias
 
 from alphus.config import QualityGateConfig, QualityRuleName
-from alphus.execution.results import RuleOutput
+from alphus.contracts.findings import Finding
 from alphus.gates.vcs.git_quality import check_attributes, check_history, check_ignores
 from alphus.policy.base import require_policy
 
-VcsRunner: TypeAlias = Callable[[Path, Sequence[Path], QualityGateConfig], RuleOutput]
+VcsRunner: TypeAlias = Callable[
+    [Path, Sequence[Path], QualityGateConfig], list[Finding]
+]
 
 VCS_RULE_RUNNERS: Mapping[QualityRuleName, VcsRunner] = MappingProxyType(
     {
