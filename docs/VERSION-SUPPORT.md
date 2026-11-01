@@ -12,9 +12,9 @@ evidence establishes the combinations Alphus has actually exercised.
 installed-wheel profile on 3.11, 3.12, 3.13, 3.14, and 3.15.
 
 **Runtime packages:** `packaging>=23,<27`, `pydantic>=2.7,<3`,
-`rich>=15,<16`, `SQLAlchemy>=2.0.52,<2.2`, and `typer>=0.27.3,<0.28`. CI runs the full profile with
-resolved versions on each checker Python and with all direct lower bounds
-together on 3.11.
+`rich>=15,<16`, `SQLAlchemy>=2.0.52,<2.2`, and `typer>=0.27.3,<0.28`. CI runs
+the full profile with resolved versions on each checker Python and with all
+direct lower bounds together on 3.11.
 
 **Optional `python` extra:** `pyright>=1.1.414,<2`, `pytest>=8,<10`, and
 `ruff>=0.16,<1`. CI checks the resolved versions and direct lower bounds. These
@@ -46,7 +46,9 @@ the current checker CI matrix.
 The `tools` list selects commands; it does not declare tool version ranges in
 the policy. The `python` extra installs the Python recipe tools within the
 metadata ranges above. The consumer installs and pins rumdl, mdrepo, Taplo,
-Prettier, and any custom commands in its own development or CI environment.
+Prettier, yamllint, and any custom commands in its own development or CI
+environment. The YAML rule behavior follows the consumer's selected yamllint
+version; Alphus does not install or pin that command for consumers.
 Alphus retains their output and exit status without claiming that all versions
 of those tools have identical behavior. The optional React and Angular ESLint
 profiles use peer plugins installed by the consumer; this package checks its

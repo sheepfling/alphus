@@ -28,6 +28,14 @@ def test_custom_recipe_composes_language_and_named_tool() -> None:
     assert load_config_stream(StringIO(document)).orchestration is not None
 
 
+def test_yaml_recipe_selects_the_yaml_bundle() -> None:
+    document = render_recipe("yaml")
+    assert document == 'schema_version = 1\nlanguages = ["yaml"]\n'
+    policy = load_config_stream(StringIO(document)).orchestration
+    assert policy is not None
+    assert policy.resolve_profile("yaml") is not None
+
+
 @pytest.mark.parametrize(
     ("name", "languages", "tools", "message"),
     [

@@ -9,6 +9,13 @@ from types import MappingProxyType
 
 from alphus.contracts.findings import SourceFinding
 
+__all__ = [
+    "JS_INSPECTION_PATTERNS",
+    "JS_PATTERNS",
+    "js_inspection_findings",
+    "js_path_findings",
+]
+
 JS_PATTERNS: Mapping[str, Pattern[str]] = MappingProxyType(
     {
         "module URL used as an implicit path root": re.compile(

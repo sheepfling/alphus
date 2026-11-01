@@ -119,8 +119,9 @@ python -m pip install -e /path/to/alphus
 
 Generate a small, validated policy in a new consumer checkout with
 `alphus --init-config python` or choose `starter`, `markdown`, `toml`, `json`,
-`javascript`, or `polyglot`. Add a bundle with `--add-language markdown` or a
-single tool with `--add-tool mdrepo`. `--config` chooses the destination;
+`javascript`, `yaml`, or `polyglot`. Add a language with
+`--add-language markdown` or a single tool with `--add-tool mdrepo`.
+`--config` chooses the destination;
 existing files require `--overwrite-config` before replacement. Preview the
 result with `alphus --plan`.
 
@@ -156,11 +157,12 @@ line:
 
 ```toml
 schema_version = 1
-languages = ["python", "markdown", "toml", "json", "javascript"]
+languages = ["python", "markdown", "toml", "json", "javascript", "yaml"]
 ```
 
 This expands to generated language profiles plus a coordinated `check`.
-Plain TypeScript, HTML, and CSS have bundles too. Add `tools = [...]` for
+Plain TypeScript, HTML, CSS, and YAML have bundles too. The YAML bundle runs
+`yamllint` on `.yaml` and `.yml` files. Add `tools = [...]` for
 individual opt-in checks alongside the bundles; for example, Angular template
 lint can accompany the TypeScript bundle without selecting standard HTML
 validation. Custom profiles and `orchestration_files` compose with those
