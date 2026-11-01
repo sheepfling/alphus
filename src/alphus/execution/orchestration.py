@@ -49,6 +49,7 @@ from alphus.execution.profile_results import (
     OrchestrationStepResult,
     StepStatus,
 )
+from alphus.execution.results import is_nonfatal_cli_presentation_diagnostic
 from alphus.execution.step_results import RuleRunResult
 from alphus.policy.intents import (
     EvidenceFormat,
@@ -341,6 +342,9 @@ def run_orchestration(
                                     severity=(
                                         step.severity
                                         if step.severity is not None
+                                        and not is_nonfatal_cli_presentation_diagnostic(
+                                            item
+                                        )
                                         else item.severity
                                     ),
                                     path=item.path,
@@ -402,7 +406,8 @@ def run_orchestration(
                             exit_code = (
                                 ExitCode.QUALITY_FAILURE
                                 if any(
-                                    severity_meets_threshold(
+                                    not is_nonfatal_cli_presentation_diagnostic(finding)
+                                    and severity_meets_threshold(
                                         finding.severity, threshold
                                     )
                                     for finding in findings
