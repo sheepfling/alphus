@@ -25,9 +25,10 @@ from alphus.policy.base import (
     validate_extensions,
     validate_patterns,
 )
+from alphus.policy.languages import SourceLanguage
 
 FunctionShapeMetricName = Literal["parameters", "nesting", "statements"]
-FunctionShapeLanguage = Literal["python", "javascript", "cpp"]
+FunctionShapeLanguage = SourceLanguage
 FunctionShapeBackend = Literal["ruff", "pylint", "eslint", "clang-tidy"]
 CliPresentationEnforcement = Literal["off", "advisory", "enforce"]
 # opaque-boundary: Policy validator accepts heterogeneous config fields before parsing.

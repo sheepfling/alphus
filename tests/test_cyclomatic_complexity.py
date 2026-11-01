@@ -61,11 +61,13 @@ def _repository(root: Path, *files: str) -> Path:
 
 
 def _policy(
-    *bindings: Mapping[str, JsonValue], lizard_manifest_max_bytes: int | None = None
+    *bindings: Mapping[str, JsonValue],
+    maximum: int = 3,
+    lizard_manifest_max_bytes: int | None = None,
 ) -> CyclomaticComplexityPolicy:
     values: dict[str, JsonValue] = {
         "metric": "cyclomatic",
-        "maximum": 3,
+        "maximum": maximum,
         "files": {
             "include": ["**/*"],
             "exclude": ["generated/**", "vendor/**"],
@@ -119,6 +121,17 @@ def test_policy_has_explicit_advisory_thresholds_and_rejects_unsupported_options
         _policy(_ruff(), _ruff())
     with pytest.raises(ValidationError, match="canonical exact version"):
         _policy({**_ruff(), "version": "v0.16.1"})
+
+
+def test_policy_accepts_nonnegative_global_and_backend_thresholds() -> None:
+    policy = _policy({**_ruff(), "maximum": 0}, maximum=0)
+
+    assert policy.maximum == 0
+    assert policy.backends[0].maximum == 0
+    with pytest.raises(ValidationError):
+        _policy(_ruff(), maximum=-1)
+    with pytest.raises(ValidationError):
+        _policy({**_ruff(), "maximum": -1})
 
 
 def test_lizard_manifest_limit_is_configurable_and_bounded() -> None:
