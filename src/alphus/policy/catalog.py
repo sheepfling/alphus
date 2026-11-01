@@ -46,6 +46,9 @@ RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
         "package-boundaries": RuleSpec("package_boundaries", RuleOutputShape.FINDINGS),
         "dependency-locks": RuleSpec("dependency_locks", RuleOutputShape.FINDINGS),
         "repository-layout": RuleSpec("repository_layout", RuleOutputShape.FINDINGS),
+        "documentation-config": RuleSpec(
+            "documentation_config", RuleOutputShape.FINDINGS, requires_files=False
+        ),
         "git-ignores": RuleSpec("git", RuleOutputShape.FINDINGS, requires_files=False),
         "git-attributes": RuleSpec(
             "git", RuleOutputShape.FINDINGS, requires_files=False

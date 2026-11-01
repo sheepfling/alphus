@@ -31,6 +31,7 @@ QualityRuleName: TypeAlias = Literal[
     "package-boundaries",
     "dependency-locks",
     "repository-layout",
+    "documentation-config",
     "git-ignores",
     "git-attributes",
     "git-history",

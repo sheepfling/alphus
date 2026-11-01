@@ -14,6 +14,7 @@ from alphus.gates.python.module_roles import check_module_roles
 from alphus.gates.repository.architecture_graph import check_architecture_graph
 from alphus.gates.repository.callable_registry import check_callable_registry
 from alphus.gates.repository.dependency_locks import check_dependency_locks
+from alphus.gates.repository.documentation_config import check_documentation_config
 from alphus.gates.repository.package_boundaries import check_package_boundaries
 from alphus.gates.repository.repository_layout import check_repository_layout
 from alphus.gates.repository.version_sync import check_version_sync
@@ -56,6 +57,10 @@ REPOSITORY_RULE_RUNNERS: Mapping[QualityRuleName, RepositoryRunner] = MappingPro
             root,
             require_policy(config.checks.repository_layout, "repository_layout"),
             tracked_files(root),
+        ),
+        "documentation-config": lambda root, _files, config: check_documentation_config(
+            root,
+            require_policy(config.checks.documentation_config, "documentation_config"),
         ),
     }
 )
