@@ -16,6 +16,8 @@ fix it. Start with one `quality-gates.toml`; split language steps into
   such as orphan roots.
 - Taplo owns TOML formatting. Add its config only when changing defaults;
   keep it in the repository or pass `--config`.
+- yamllint owns YAML parsing and its configured safety/style rules. Add a
+  consumer-owned `.yamllint` file only when you need to change its defaults.
 - Prettier owns JSON formatting. Add the repository's Prettier config only
   when changing defaults.
 - Ruff owns Python lint and format rules. Its recipe uses `--force-exclude` so
@@ -39,6 +41,38 @@ that are not Python packages. A missing executable fails its step visibly.
 Node recipes use
 `npm exec --no` so they use the consumer's installed local tools and do not
 fetch missing packages during a quality run.
+
+The opt-in `yaml` bundle runs `yamllint` on Alphus-selected `.yaml` and `.yml`
+files. It passes file paths as separate arguments, leaves configuration with
+yamllint, and has no fixer. Install and pin `yamllint` in the consumer's
+development or CI environment. yamllint parses syntax and token streams; it
+does not construct YAML objects, invoke tag constructors, or execute document
+content. The command does not use strict mode or alter yamllint's exit
+behavior. Alphus retains its raw output and per-step exit code,
+including native rule IDs and locations; the profile report still uses the
+standard Alphus aggregate status and step provenance. A missing executable is
+a command launch failure, while an empty matching inventory is
+`not_applicable`.
+
+The starter in [`examples/yaml`](../examples/yaml/) enables syntax parsing and
+duplicate-key errors, with configurable warnings for selected YAML 1.1 truthy
+aliases such as `yes`, `no`, `on`, and `off`, plus implicit octal-looking
+values. In yamllint 1.38.0, `truthy` respects a YAML 1.2 directive, but
+`octal-values` warns on a bare `010` by token spelling even when YAML 1.2
+resolves it as decimal. Disable or adjust that warning for consumers where it
+is not useful. It leaves style rules disabled. Use the
+consumer's `.yamllint` `ignore` setting for native exclusions. If Alphus must
+exclude paths before invoking the executable, replace the shortcut with an
+explicit command step and its existing `files.exclude` inventory field.
+
+This is YAML syntax and selected-rule checking. It does not validate
+application schemas or runtime behavior. Kubernetes API checks and Ansible
+playbook checks remain separate future integrations; the YAML bundle does not
+execute manifests, construct application objects, or download schemas. For
+example, Kubernetes supports Services without selectors when paired with
+manually managed EndpointSlices, so absence of a selector alone is not an
+error. See the [YAML starter](../examples/yaml/README.md) for YAML 1.2 boolean
+and leading-zero integer caveats.
 
 For standard commands, select tools by name in the repository's
 `quality-gates.toml`:
