@@ -1,0 +1,26 @@
+.alphus-quality:
+  image: python:3.12-slim
+  script:
+    - |
+      set -eu
+      : "${ALPHUS_REF:?Set ALPHUS_REF to the pinned Alphus commit}"
+      : "${ALPHUS_REQUIREMENTS_FILE:?Set ALPHUS_REQUIREMENTS_FILE to consumer tool requirements}"
+      requirements_file="$ALPHUS_REQUIREMENTS_FILE"
+      case "$requirements_file" in
+        /*) ;;
+        *) requirements_file="$CI_PROJECT_DIR/$requirements_file" ;;
+      esac
+      set -- "alphus @ https://github.com/sheepfling/alphus/archive/${ALPHUS_REF}.zip" \
+        -r "$requirements_file"
+      if [ -n "${ALPHUS_RUNTIME_REQUIREMENTS_FILE:-}" ]; then
+        runtime_file="$ALPHUS_RUNTIME_REQUIREMENTS_FILE"
+        case "$runtime_file" in
+          /*) ;;
+          *) runtime_file="$CI_PROJECT_DIR/$runtime_file" ;;
+        esac
+        set -- "$@" -r "$runtime_file"
+      fi
+      python -m pip install --disable-pip-version-check "$@"
+      python -m alphus --root "$CI_PROJECT_DIR" \
+        --config "${ALPHUS_CONFIG_FILE:-quality-gates.toml}" \
+        --run --profile "${ALPHUS_PROFILE:-check}" --output plain

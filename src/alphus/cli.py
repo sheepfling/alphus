@@ -23,6 +23,7 @@ from rich.text import Text
 from alphus.config import (
     QualityGateConfig,
     QualityRuleName,
+    SourceScanPolicy,
     load_config,
     load_config_stream,
 )
@@ -52,6 +53,7 @@ from alphus.execution.profile_history import (
 from alphus.execution.results import RuleEvaluation, RuleOutput
 from alphus.execution.scheduler import WorkUnit, run_work_units
 from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
+from alphus.gates.languages.python.style import StyleFindings
 from alphus.gates.source.cyclomatic_complexity import (
     CyclomaticReport,
     build_cyclomatic_plan,
@@ -59,13 +61,13 @@ from alphus.gates.source.cyclomatic_complexity import (
     report_payload,
     report_summary,
 )
-from alphus.gates.source.python_style import StyleFindings
 from alphus.policy.base import MissingPolicyError
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
+from alphus.policy.function_shape import plan_function_shape
 from alphus.policy.intents import intent_bindings_for_steps
 from alphus.policy.recipes import render_recipe
 from alphus.support.data_access import JsonValue
-from alphus.support.inventory import candidate_files
+from alphus.support.inventory import candidate_files, matches_path
 
 QualityRule = QualityRuleName
 
@@ -82,6 +84,24 @@ class _ProfilePlanPayload(TypedDict):
 
 
 _OUTPUT_FORMAT: ContextVar[str] = ContextVar("alphus_output_format", default="auto")
+_SOURCE_SCAN_RULES: frozenset[QualityRuleName] = frozenset(
+    {
+        "json-structure",
+        "output-escaping",
+        "path-discovery",
+        "shared-utilities",
+        "python-style",
+        "runtime-types",
+        "numeric-literals",
+        "scipy-constants",
+        "test-quality",
+        "input-contracts",
+        "positional-interfaces",
+        "pydantic-practices",
+        "fastapi-practices",
+        "sqlalchemy-practices",
+    }
+)
 _DIRECT_GIT_SUBPROCESS_TAG = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.MAINTAINABILITY, "direct-git-subprocess"
 )
@@ -266,6 +286,7 @@ def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
         "positional-interfaces": "Positional interface review",
         "pydantic-practices": "Pydantic practices",
         "fastapi-practices": "FastAPI practices",
+        "sqlalchemy-practices": "SQLAlchemy practices",
     }
     if rule in review_labels:
         for finding in findings:
@@ -412,7 +433,7 @@ class _StyleCategory(NamedTuple):
 def _python_style_categories(
     issues: StyleFindings,
 ) -> tuple[_StyleCategory, ...]:
-    """Keep the style categories statically typed while rendering summaries."""
+    """Render specialized categories; the aggregate self-return key is an alias."""
     return (
         _StyleCategory("bare_containers", issues["bare_containers"]),
         _StyleCategory("bare_tuples", issues["bare_tuples"]),
@@ -442,7 +463,6 @@ def _python_style_categories(
             "concrete_model_validator_returns",
             issues["concrete_model_validator_returns"],
         ),
-        _StyleCategory("concrete_self_returns", issues["concrete_self_returns"]),
         _StyleCategory("direct_text_reads", issues["direct_text_reads"]),
         _StyleCategory(
             "duplicate_literal_catalogs", issues["duplicate_literal_catalogs"]
@@ -1104,7 +1124,11 @@ def _execute_plan_profile(
                 ):
                     detail.pop(field_name, None)
             detail["fixable"] = entry.fixable
-            if step.kind == "command":
+            if step.kind == "rule":
+                selected = _selected_rule_files(checkout, config, step.rule)
+                if selected is not None:
+                    detail["selected_files"] = selected
+            else:
                 detail["selected_files"] = entry.files
                 detail["applicable"] = step.files is None or bool(entry.files)
                 if entry.check_argv is not None:
@@ -1142,7 +1166,15 @@ def _execute_plan_profile(
                 f"locks={list(step.locks)}, after={list(step.after)}"
             )
         if step.kind == "rule":
-            _human_print(f"{step.rollout.upper()} RULE {step.name}: {step.rule}")
+            selected = _selected_rule_files(checkout, config, step.rule)
+            scope = (
+                f"{len(selected)} file(s)"
+                if selected is not None
+                else "repository scope"
+            )
+            _human_print(
+                f"{step.rollout.upper()} RULE {step.name}: {step.rule} ({scope})"
+            )
             continue
         scope = "unscoped" if step.files is None else f"{len(entry.files)} file(s)"
         label = (
@@ -1184,6 +1216,28 @@ def _execute_plan_profile(
     return 0
 
 
+def _selected_rule_files(
+    checkout: Path, config: QualityGateConfig, rule: QualityRuleName
+) -> list[str] | None:
+    """Resolve the file scope for source-scanning rules in a profile plan."""
+    if config.files is None or rule not in _SOURCE_SCAN_RULES:
+        return None
+    policy = cast(
+        SourceScanPolicy | None,
+        getattr(config.checks, RULE_SPECS[rule].policy_field),
+    )
+    if policy is None:
+        return None
+    return [
+        relative.as_posix()
+        for relative in candidate_files(checkout, config.files)
+        if relative.suffix in policy.extensions
+        and not any(
+            matches_path(relative.as_posix(), pattern) for pattern in policy.exclude
+        )
+    ]
+
+
 def _command(
     root: Annotated[
         Path,
@@ -1213,6 +1267,13 @@ def _command(
         str | None,
         typer.Option("--profile", help="Choose a configured orchestration profile."),
     ] = None,
+    plan_function_shape_only: Annotated[
+        bool,
+        typer.Option(
+            "--plan-function-shape",
+            help="Print the native function-shape mapping without running a checker.",
+        ),
+    ] = False,
     jobs: Annotated[
         int | None,
         typer.Option("--jobs", help="Maximum concurrent quality work units."),
@@ -1319,6 +1380,50 @@ def _command(
     if history_report is not None and history_report not in {"runs", "rollup"}:
         raise typer.BadParameter("--history-report must be runs or rollup")
     _OUTPUT_FORMAT.set(selected_format)
+    if plan_function_shape_only:
+        if any(
+            (
+                run,
+                rule is not None,
+                profile is not None,
+                json_output,
+                report,
+                verbose,
+                plan,
+                fix_plan,
+                apply_fixes,
+                bool(fix_step),
+                init_config is not None,
+                add_language is not None,
+                add_tool is not None,
+                overwrite_config,
+                jobs is not None,
+                history_dir is not None,
+                show_history,
+                history_report is not None,
+                consumer_id is not None,
+            )
+        ):
+            raise typer.BadParameter(
+                "--plan-function-shape cannot be combined with run, rule, report, "
+                "or other plan/fix options"
+            )
+        config_path = config if config.is_absolute() else root / config
+        policy = _load_policy(config_path).checks.function_shape
+        if policy is None:
+            typer.echo(
+                "the selected configuration has no [checks.function_shape] policy",
+                err=True,
+            )
+            raise typer.Exit(2)
+        try:
+            typer.echo(
+                json.dumps(plan_function_shape(policy, root).to_dict(), indent=2)
+            )
+        except ValueError as error:
+            typer.echo(f"Function-shape plan failed: {error}", err=True)
+            raise typer.Exit(2) from error
+        raise typer.Exit(0)
     if init_config is not None:
         if any(
             (

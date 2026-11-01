@@ -1,6 +1,6 @@
 # Common C++ quality checks
 
-`alphus.gates.cpp.cpp_common_quality` is the installed C++ common checker. It provides the `source`, `graph`, `impact`, `tests`, `package`, and `verdict` checks, which emit a common JSON result with `passed`, `findings`, `metrics`, and an optional `run_id`. Install Alphus and adapt [the example policy](../examples/cpp-common-quality.example.json) in a C++ repository. Values in that file are illustrative; its test and package sections intentionally need project-specific cases and paths before they can pass. Each command exits `0` for pass, `1` for a failed gate, and `2` for invalid configuration or unreadable evidence. See the [porting contract](QUALITY-GATE-PORTABILITY.md); consumer-specific producers and mappings belong in an adapter in the consuming repository.
+`alphus.gates.cpp.cpp_common_quality` is the installed C++ common checker. It provides the `source`, `graph`, `impact`, `tests`, `package`, and `verdict` checks, which emit a common JSON result with `passed`, `findings`, `metrics`, and an optional `run_id`. Install Alphus and copy [the example policy](../../examples/cpp/policies/cpp-common-quality.example.json) to `cpp-common-quality.json` in a C++ repository. Values in the sample are illustrative; its test and package sections intentionally need project-specific cases and paths before they can pass. Each command exits `0` for pass, `1` for a failed gate, and `2` for invalid configuration or unreadable evidence. See the [porting contract](QUALITY-GATE-PORTABILITY.md); consumer-specific producers and mappings belong in an adapter in the consuming repository.
 
 Use one run ID across all commands, such as the CI build ID. For a local shell session, run `RUN_ID=$(date -u +%Y%m%dT%H%M%SZ)` once before the commands below.
 
@@ -14,7 +14,7 @@ and toolchain values from the actual build. Repeat `--input` for the build
 definition, policy, toolchain file, and other inputs that must remain fixed.
 
 ```shell
-python -m alphus.gates.cpp.cpp_common_quality manifest --source-root . --run-id $RUN_ID --configuration Debug --toolchain "compiler-version-and-flags" --artifact-root build --target consumer --expected-executable consumer --input quality_gates/examples/cpp-common-quality.example.json --require-clean --output out/quality/build-manifest.json
+python -m alphus.gates.cpp.cpp_common_quality manifest --source-root . --run-id $RUN_ID --configuration Debug --toolchain "compiler-version-and-flags" --artifact-root build --target consumer --expected-executable consumer --input cpp-common-quality.json --require-clean --output out/quality/build-manifest.json
 ```
 
 Pass `--manifest out/quality/build-manifest.json` to each source, graph, test,
@@ -41,10 +41,15 @@ may instead emit the same schema from their captured process result.
 ## Source ownership and size
 
 ```shell
-python -m alphus.gates.cpp.cpp_common_quality source . --config quality_gates/examples/cpp-common-quality.example.json --run-id $RUN_ID --manifest out/quality/build-manifest.json --output out/quality/source.json
+python -m alphus.gates.cpp.cpp_common_quality source . --config cpp-common-quality.json --run-id $RUN_ID --manifest out/quality/build-manifest.json --output out/quality/source.json
 ```
 
 The source check inventories Git-tracked and nonignored untracked C/C++ files. Outside Git, it scans the supplied root. `include` and `exclude` glob lists define scope. It measures physical lines and bytes, then recursively adds locally included implementation fragments to the owning file's expanded totals. Both `hard_lines` and `hard_bytes` apply to the expanded owner, so splitting a large `.cpp` into a single included chunk does not lower its measured size.
+
+The built-in source inventory recognizes `.hxx` alongside `.h`, `.hh`, and
+`.hpp` headers. These suffixes are included in default source globs and local
+include matching, so selected `.hxx` files receive the same size and ownership
+checks.
 
 The check fails on any `#include` of a `.c`, `.cc`, `.cpp`, or `.cxx` source, even if the included path cannot be resolved. It also fails on a `.inc`, `.inl`, `.ipp`, or `.tpp` fragment with fewer than two direct consumers. A large header with one direct consumer is a review warning; set `single_consumer_header_lines` to tune that signal. This is a structural check: a preprocessor branch may be inactive, and a single header may be a legitimate interface. Review findings in context.
 
@@ -94,7 +99,7 @@ For CMake, the checker also reads its File API codemodel directly. Ask CMake for
 mkdir -p build/.cmake/api/v1/query
 touch build/.cmake/api/v1/query/codemodel-v2
 cmake -S . -B build -G Ninja
-python -m alphus.gates.cpp.cpp_common_quality graph build --config quality_gates/examples/cpp-common-quality.example.json --run-id $RUN_ID --manifest out/quality/build-manifest.json --output out/quality/graph.json
+python -m alphus.gates.cpp.cpp_common_quality graph build --config cpp-common-quality.json --run-id $RUN_ID --manifest out/quality/build-manifest.json --output out/quality/graph.json
 ```
 
 The graph check counts executable targets and compiled sources per executable, and reports how many executables depend on each static-library target. Build-system dependency data may include ordering dependencies; a high fanout is a review signal and must be confirmed against link commands before claiming duplicate code. `max_executable_targets`, `max_executables_per_static_library`, and `max_sources_per_executable` are profile-specific limits. A missing or ambiguous report fails closed.
@@ -102,7 +107,7 @@ The graph check counts executable targets and compiled sources per executable, a
 For header fanout after a Ninja build, supply a JSON report with `records` and `header_fanout` arrays. A repository adapter can produce it from compiler timing logs and dependency files:
 
 ```shell
-python -m alphus.gates.cpp.cpp_common_quality graph --graph-report out/quality/targets.json --compile-report out/quality/compile.json --config quality_gates/examples/cpp-common-quality.example.json --run-id $RUN_ID --manifest out/quality/build-manifest.json --output out/quality/graph.json
+python -m alphus.gates.cpp.cpp_common_quality graph --graph-report out/quality/targets.json --compile-report out/quality/compile.json --config cpp-common-quality.json --run-id $RUN_ID --manifest out/quality/build-manifest.json --output out/quality/graph.json
 ```
 
 `min_measured_translation_units` guards against an empty timing sample. Compare fanout within the same target scope. Raw compile duration remains a trend and investigation trigger unless the machine, toolchain, profile, and target selection are controlled.
@@ -118,7 +123,7 @@ inside the selected source inventory. Preprocessor branches and generated header
 can make it approximate.
 
     python -m alphus.gates.cpp.cpp_common_quality impact . \
-      --config quality_gates/examples/cpp-common-quality.example.json \
+      --config cpp-common-quality.json \
       --compile-report out/quality/compile.json --run-id $RUN_ID \
       --manifest out/quality/build-manifest.json --output out/quality/impact.json
 
@@ -183,7 +188,7 @@ Any test runner can supply `{"run_id":"build-123","tests":[{"name":"my.case.1"}]
 ```shell
 ctest --test-dir build -R '^my[.]case[.]1$' --show-only=json-v1 > out/quality/ctest.json
 ctest --test-dir build -R '^my[.]case[.]1$' --output-junit out/quality/ctest-junit.xml
-python -m alphus.gates.cpp.cpp_common_quality tests . --config quality_gates/examples/cpp-common-quality.example.json --inventory-json out/quality/ctest.json --junit out/quality/ctest-junit.xml --run-id $RUN_ID --manifest out/quality/build-manifest.json --output out/quality/tests.json
+python -m alphus.gates.cpp.cpp_common_quality tests . --config cpp-common-quality.json --inventory-json out/quality/ctest.json --junit out/quality/ctest-junit.xml --run-id $RUN_ID --manifest out/quality/build-manifest.json --output out/quality/tests.json
 ```
 
 Use the same selector for discovery and execution. With `allow_extra_tests:false`, discovered and executed names must match the manifest exactly. This detects a reused build that silently expands a focused selection. `min_cases` prevents an empty declaration from passing; failures, errors, and skips fail the gate. Preserve the result from the same run as the inventory.
@@ -193,7 +198,7 @@ Use the same selector for discovery and execution. With `allow_extra_tests:false
 Set `package.prefix` to the intended install tree. Use `binding_report` with `binding_keys`, or use a CMake consumer's `cache` with `cache_path_keys`. A normalized binding report has `{"schema":1,"run_id":"build-123","bindings":{"package_config":"<installed-config-directory>","api_include":"<installed-include-directory>"}}`. The checker rejects paths outside the install prefix and missing required installed artifacts. Add `package.consumer` with `executable`, `expected_sha256`, `result_json` or `junit`, and `min_cases` after building an external consumer once. Capture the SHA-256 before changing the provider, then run that unchanged consumer against the new shared library. The checker verifies the binary hash and passing, recent evidence; it does not itself prove which shared library the operating-system loader selected. Record the loader-resolved library path in the consumer test or package adapter when ABI compatibility is being claimed.
 
 ```shell
-python -m alphus.gates.cpp.cpp_common_quality package . --config quality_gates/examples/cpp-common-quality.example.json --run-id $RUN_ID --manifest out/quality/build-manifest.json --output out/quality/package.json
+python -m alphus.gates.cpp.cpp_common_quality package . --config cpp-common-quality.json --run-id $RUN_ID --manifest out/quality/build-manifest.json --output out/quality/package.json
 ```
 
 ## One verdict for CI
@@ -201,8 +206,8 @@ python -m alphus.gates.cpp.cpp_common_quality package . --config quality_gates/e
 Run [the artifact budget](CPP-ARTIFACT-QUALITY.md) with the same `--run-id`, then aggregate all required reports:
 
 ```shell
-python -m alphus.gates.cpp.cpp_artifact_quality check build --policy quality_gates/examples/cpp-artifact-policy.example.json --run-id $RUN_ID --manifest out/quality/build-manifest.json --output out/quality/artifacts.json
-python -m alphus.gates.cpp.cpp_common_quality verdict --config quality_gates/examples/cpp-common-quality.example.json --run-id $RUN_ID --manifest out/quality/build-manifest.json --output out/quality/verdict.json
+python -m alphus.gates.cpp.cpp_artifact_quality check build --policy cpp-artifact-policy.json --run-id $RUN_ID --manifest out/quality/build-manifest.json --output out/quality/artifacts.json
+python -m alphus.gates.cpp.cpp_common_quality verdict --config cpp-common-quality.json --run-id $RUN_ID --manifest out/quality/build-manifest.json --output out/quality/verdict.json
 ```
 
 The `verdict.reports` list names required reports and the JSON field that means pass (`passed` by default, `gate.passed` for artifact reports). `min_reports` counts required entries; optional entries cannot fill the minimum. Two entries cannot reuse the same resolved report path. Set `expected_schema` and, where the producer emits a string gate name, `expected_gate` so a report for one check cannot stand in for another. Missing, stale, failed, wrong-run, wrong-manifest, or wrong-identity evidence fails the aggregate. A legacy report can set `require_run_id:false` or `require_manifest:false` explicitly; keep a short `max_age_seconds` when weakening either binding. Keep build/test outcome separate from quality outcome; the aggregate is the CI quality verdict. Wire it after each producer has created its report, and archive all input reports with the verdict.

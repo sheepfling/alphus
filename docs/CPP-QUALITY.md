@@ -8,13 +8,12 @@ the TOML profile policy.
 
 ## Start with source and artifact profiles
 
-Install Alphus, then copy `examples/cpp/quality-gates.toml` into the C++ repository. Copy and calibrate
-`quality_gates/examples/cpp-common-quality.example.json` as
-`cpp-common-quality.json`, and
-`quality_gates/examples/cpp-artifact-policy.example.json` as
-`cpp-artifact-policy.json`. The example JSON values are starting points; each
-repository should set its own source scope, target counts, size limits, and
-artifact paths.
+Install Alphus, then copy `examples/cpp/quality-gates.toml` into the C++
+repository. Copy the [JSON policy examples](../examples/cpp/policies/) as
+`cpp-common-quality.json`, `cpp-artifact-policy.json`, and
+`cpp-static-archive-policy.json`. These are starting points; each repository
+should set its own source scope, target counts, size limits, and artifact
+paths. The commands below use the copied filenames in the consumer checkout.
 
 Install Alphus in the repository's quality-tool environment and run the source
 gate before building:
@@ -93,8 +92,8 @@ The supplied source gate checks C/C++ file ownership, expanded implementation
 size, and single-consumer fragments. The artifact gate inventories executables
 and libraries and can enforce size budgets, debug-section limits, and
 comparable-run growth. Start with the
-[porting contract](../quality_gates/docs/QUALITY-GATE-PORTABILITY.md) and
-[common checks guide](../quality_gates/docs/CPP-COMMON-QUALITY.md) before
+[porting contract](cpp/QUALITY-GATE-PORTABILITY.md) and
+[common checks guide](cpp/CPP-COMMON-QUALITY.md) before
 enabling build-graph, test-traceability, package, or aggregate-verdict checks.
 Those checks need evidence from the consumer's actual build, test, and package
 commands; their example policies deliberately do not invent it.

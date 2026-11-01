@@ -43,6 +43,7 @@ from alphus.policy.review import (
     PositionalInterfacePolicy,
     PydanticPracticePolicy,
     ScipyConstantsPolicy,
+    SqlAlchemyPracticePolicy,
     TestQualityPolicy,
 )
 from alphus.policy.sources import (
@@ -50,6 +51,7 @@ from alphus.policy.sources import (
     CommentMarkerPolicy,
     FileInventoryPolicy,
     FileSizePolicy,
+    FunctionShapePolicy,
     LineLengthPolicy,
     PathDiscoveryPolicy,
     PythonStylePolicy,
@@ -76,6 +78,7 @@ class CheckPolicies(StrictModel):
     positional_interfaces: PositionalInterfacePolicy | None = None
     pydantic_practices: PydanticPracticePolicy | None = None
     fastapi_practices: FastApiPracticePolicy | None = None
+    sqlalchemy_practices: SqlAlchemyPracticePolicy | None = None
     shared_utilities: SharedUtilitiesPolicy | None = None
     python_style: PythonStylePolicy | None = None
     runtime_types: RuntimeTypePolicy | None = None
@@ -89,6 +92,7 @@ class CheckPolicies(StrictModel):
     callable_registry: CallableRegistryPolicy | None = None
     dependency_locks: DependencyLockPolicy | None = None
     git: GitRepositoryPolicy | None = None
+    function_shape: FunctionShapePolicy | None = None
     cyclomatic_complexity: CyclomaticComplexityPolicy | None = None
 
     def require_rule(self, rule: QualityRuleName) -> None:

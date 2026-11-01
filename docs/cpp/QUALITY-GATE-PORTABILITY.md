@@ -6,9 +6,9 @@ architecture rules, see the [C/C++ quality-gate coverage map](CPP-QUALITY-GATE-C
 The reusable checkers ship in the Alphus distribution under
 `alphus.gates.cpp`. Install Alphus in the consumer quality environment and
 copy calibrated copies of
-[`cpp-artifact-policy.example.json`](../examples/cpp-artifact-policy.example.json),
-[`cpp-static-archive-policy.example.json`](../examples/cpp-static-archive-policy.example.json),
-and [`cpp-common-quality.example.json`](../examples/cpp-common-quality.example.json).
+[`cpp-artifact-policy.example.json`](../../examples/cpp/policies/cpp-artifact-policy.example.json),
+[`cpp-static-archive-policy.example.json`](../../examples/cpp/policies/cpp-static-archive-policy.example.json),
+and [`cpp-common-quality.example.json`](../../examples/cpp/policies/cpp-common-quality.example.json).
 The examples intentionally fail until the consumer supplies real evidence,
 paths, and limits. Keep each consumer's build, test, and package adapters outside this directory.
 

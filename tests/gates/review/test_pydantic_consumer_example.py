@@ -36,6 +36,7 @@ def test_pydantic_consumer_example_runs_plan_and_json_profile(
         "alphus/python/pydantic/correctness/validator-fallthrough",
         "alphus/python/pydantic/style/field-positional-default",
         "alphus/python/pydantic/metadata/external-schema-documentation",
+        "alphus/python/pydantic/validation/public-unconstrained-any",
     }
     assert {item["rule_id"] for item in findings} == expected_rule_ids
 

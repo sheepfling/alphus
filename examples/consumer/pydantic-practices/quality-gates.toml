@@ -16,6 +16,9 @@ report_validator_fallthrough = true
 report_field_positional_default = true
 report_external_model_docs = true
 external_model_names = ["PublicRequest"]
+report_custom_init = true
+report_unconstrained_any = true
+public_model_paths = ["src/**"]
 
 [orchestration]
 default_profile = "pydantic"

@@ -4,7 +4,7 @@ import ast
 from pathlib import Path
 
 from alphus.config import PythonStylePolicy
-from alphus.gates.source.python_style import (
+from alphus.gates.languages.python.style import (
     StyleVisitor,
     findings_for,
     is_boundary_file,

@@ -41,8 +41,8 @@
     "lint": "eslint javascript",
     "format:check": "prettier --check javascript package.json",
     "typecheck": "tsc -p javascript/tsconfig.check.json",
-    "format:markdown:check": "prettier --check docs/SOURCE-HYGIENE.md \"quality_gates/**/*.md\"",
-    "format:markdown": "prettier --write docs/SOURCE-HYGIENE.md \"quality_gates/**/*.md\""
+    "format:markdown:check": "prettier --check \"docs/cpp/**/*.md\" docs/COMMON-LINT-INTENTS.md docs/POSITIONAL-INTERFACES.md docs/SOURCE-HYGIENE.md",
+    "format:markdown": "prettier --write \"docs/cpp/**/*.md\" docs/COMMON-LINT-INTENTS.md docs/POSITIONAL-INTERFACES.md docs/SOURCE-HYGIENE.md"
   },
   "dependencies": {
     "@eslint/js": "^10.0.1",

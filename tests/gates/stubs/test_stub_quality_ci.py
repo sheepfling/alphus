@@ -110,6 +110,29 @@ def test_negative_fixture_requires_exact_error_lines(tmp_path: Path) -> None:
     assert any("expected 2 error diagnostics, got 1" in issue for issue in count_issues)
 
 
+def test_pycharm_suppression_preserves_negative_fixture_marker(
+    tmp_path: Path,
+) -> None:
+    fixture = tmp_path / "negative_typecheck.py"
+    fixture.write_text(
+        "# Intentional negative fixture: this call must remain invalid.\n"
+        "# noinspection PyTypeChecker\n"
+        "Item(1)  # expect-error\n",
+        encoding="utf-8",
+    )
+
+    assert expected_error_lines(fixture.read_text(encoding="utf-8")) == {3}
+    assert (
+        check_result(
+            fixture,
+            1,
+            "negative_typecheck.py:3: error: incompatible argument type",
+            expect_errors=True,
+        )
+        == []
+    )
+
+
 def test_ty_concise_diagnostics_and_target_flags(tmp_path: Path) -> None:
     fixture = tmp_path / "negative_typecheck.py"
     fixture.write_text("value = 1  # expect-error\n", encoding="utf-8")

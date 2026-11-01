@@ -76,7 +76,7 @@ def test_cpp_source_profile_passes_and_fails_with_source_evidence(
     subprocess.run(["git", "init", "--quiet", str(root)], check=True)
     shutil.copyfile(_PROFILE, root / "quality-gates.toml")
     shutil.copyfile(
-        Path("quality_gates/examples/cpp-common-quality.example.json"),
+        Path("examples/cpp/policies/cpp-common-quality.example.json"),
         root / "cpp-common-quality.json",
     )
     source = root / "src" / "sample.cpp"

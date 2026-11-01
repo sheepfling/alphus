@@ -8,6 +8,16 @@ exclude = []
 extensions = [".py"]
 exclude = []
 report_literal_status = true
+application = "routes:app"
+application_python_paths = ["src"]
+exclude_route_paths = ["/health*", "/metrics*", "/internal/*"]
+required_route_metadata = ["summary", "description", "tags"]
+require_response_contract = true
+protected_route_paths = ["/items/*"]
+# Set this only when oasdiff is installed and this checked-in spec is the
+# consumer-approved compatibility baseline.
+# openapi_baseline = "openapi-baseline.json"
+openapi_breaking_threshold = "WARN"
 
 [orchestration]
 default_profile = "fastapi"
@@ -24,10 +34,10 @@ files = { include = ["src/**/*.py", "tests/**/*.py"] }
 
 [[orchestration.steps]]
 kind = "rule"
-name = "FastAPI style advisory"
+name = "FastAPI source and route contracts"
 rule = "fastapi-practices"
 severity = "warning"
 
 [[orchestration.profiles]]
 name = "fastapi"
-steps = ["FastAPI Ruff checks", "FastAPI style advisory"]
+steps = ["FastAPI Ruff checks", "FastAPI source and route contracts"]
