@@ -224,7 +224,7 @@ class SourceFamilyPolicy(StrictModel):
     file_length_limits: tuple[tuple[str, int], ...] = ()
 
     @model_validator(mode="after")
-    def validate_limits(self) -> SourceFamilyPolicy:
+    def validate_limits(self) -> Self:
         if (
             min(
                 self.min_family_files,

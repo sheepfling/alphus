@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -423,20 +424,46 @@ def test_unreadable_source_remains_in_lexical_candidate_and_marks_scan_incomplet
 
 
 @pytest.mark.parametrize(
-    "values",
+    "invalid_policy",
     [
-        {"min_family_files": 0},
-        {"max_files": 0},
-        {"max_reported_members": 0},
-        {"extensions": (".py", ".py")},
-        {"exclude": ("../private/**",)},
-        {"file_length_limits": ((".py", 0),)},
-        {"language_overrides": ((".py", "Python"), (".py", "Py"))},
-        {"language_overrides": (("not-an-extension", "Py"),)},
-        {"path_language_overrides": (("../outside/**", "C"),)},
-        {"max_scope_patterns": 1},
+        pytest.param(lambda: SourceFamilyPolicy(min_family_files=0), id="min-family"),
+        pytest.param(lambda: SourceFamilyPolicy(max_files=0), id="max-files"),
+        pytest.param(
+            lambda: SourceFamilyPolicy(max_reported_members=0), id="max-members"
+        ),
+        pytest.param(
+            lambda: SourceFamilyPolicy(extensions=(".py", ".py")), id="extensions"
+        ),
+        pytest.param(
+            lambda: SourceFamilyPolicy(exclude=("../private/**",)), id="exclude"
+        ),
+        pytest.param(
+            lambda: SourceFamilyPolicy(file_length_limits=((".py", 0),)),
+            id="file-length",
+        ),
+        pytest.param(
+            lambda: SourceFamilyPolicy(
+                language_overrides=((".py", "Python"), (".py", "Py"))
+            ),
+            id="duplicate-language-override",
+        ),
+        pytest.param(
+            lambda: SourceFamilyPolicy(language_overrides=(("invalid", "Py"),)),
+            id="invalid-language-override",
+        ),
+        pytest.param(
+            lambda: SourceFamilyPolicy(
+                path_language_overrides=(("../outside/**", "C"),)
+            ),
+            id="invalid-path-language-override",
+        ),
+        pytest.param(
+            lambda: SourceFamilyPolicy(max_scope_patterns=1), id="scope-bound"
+        ),
     ],
 )
-def test_rejects_invalid_source_family_policy(values: dict[str, object]) -> None:
+def test_rejects_invalid_source_family_policy(
+    invalid_policy: Callable[[], SourceFamilyPolicy],
+) -> None:
     with pytest.raises(ValueError):
-        SourceFamilyPolicy(**values)
+        invalid_policy()
