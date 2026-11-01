@@ -911,8 +911,17 @@ steps = ["line check"]
 
     assert main(arguments) == 2
     captured = capsys.readouterr()
-    assert captured.out == ""
-    assert "Invalid quality policy" in captured.err
+    report = json.loads(captured.out)
+    assert report["schema"] == "alphus.execution-failure"
+    assert report["status"] == "execution_failure"
+    assert report["execution_failure"]["kind"] == "configuration_error"
+    assert "Invalid quality policy" in report["execution_failure"]["message"]
+    assert (
+        "configuration values failed validation"
+        in report["execution_failure"]["message"]
+    )
+    assert report["evidence_complete"] is False
+    assert captured.err == ""
     assert "Traceback" not in captured.err
 
 

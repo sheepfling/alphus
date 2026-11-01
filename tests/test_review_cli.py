@@ -204,7 +204,9 @@ def test_sqlalchemy_invalid_selected_policy_fails_with_validation_error(
     )
 
     assert main([*arguments, "--rule", "sqlalchemy-practices"]) == 2
-    assert "repository_paths" in capsys.readouterr().err
+    assert capsys.readouterr().err == (
+        "Invalid quality policy: configuration values failed validation.\n"
+    )
 
 
 def test_sqlalchemy_policy_requires_explicit_target_in_cli(
@@ -220,8 +222,7 @@ def test_sqlalchemy_policy_requires_explicit_target_in_cli(
 
     assert main([*arguments, "--rule", "sqlalchemy-practices"]) == 2
     error = capsys.readouterr().err
-    assert "target_sqlalchemy" in error
-    assert ">=2.0,<3.0" in error
+    assert error == "Invalid quality policy: configuration values failed validation.\n"
 
 
 @pytest.mark.parametrize(
@@ -262,6 +263,66 @@ steps = ["Numeric review"]
     assert diagnostic["source"] == "alphus"
     assert diagnostic["rule_id"] == "alphus/python/none/style/inline-constant"
     assert diagnostic["severity"] == "warning"
+
+
+def test_profile_configuration_failure_is_versioned_and_incomplete(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    arguments = repository(tmp_path, "source.py", "value = 1\n", "")
+
+    assert main([*arguments, "--json"]) == 2
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["schema"] == "alphus.execution-failure"
+    assert payload["schema_version"] == 1
+    assert payload["component"] == "alphus-profile"
+    assert payload["status"] == "execution_failure"
+    assert payload["execution_failure"]["kind"] == "configuration_error"
+    assert payload["execution_failure"]["exit_code"] == 2
+    assert payload["findings"] == []
+    assert payload["confidence"] is None
+    assert payload["enforcement"] is None
+    assert payload["raw_child_exit"] is None
+    assert payload["evidence_complete"] is False
+
+
+def test_profile_invalid_policy_emits_json_failure_envelope(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    secret = "PRIVATE_POLICY_SENTINEL_7D21"
+    (tmp_path / "quality.toml").write_text(
+        f'schema_version = "{secret}"\n', encoding="utf-8"
+    )
+
+    assert main(["--root", str(tmp_path), "--config", "quality.toml", "--json"]) == 2
+    output = capsys.readouterr().out
+    payload = json.loads(output)
+
+    assert payload["component"] == "alphus-profile"
+    assert payload["status"] == "execution_failure"
+    assert payload["execution_failure"]["kind"] == "configuration_error"
+    assert payload["evidence_complete"] is False
+    assert secret not in output
+    assert payload["execution_failure"]["message"] == (
+        "Invalid quality policy: configuration values failed validation."
+    )
+
+
+def test_profile_invalid_policy_redacts_config_values_from_stderr(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    secret = "PRIVATE_POLICY_STDERR_SENTINEL_316F"
+    (tmp_path / "quality.toml").write_text(
+        f'schema_version = "{secret}"\n', encoding="utf-8"
+    )
+
+    assert main(["--root", str(tmp_path), "--config", "quality.toml"]) == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == (
+        "Invalid quality policy: configuration values failed validation.\n"
+    )
+    assert secret not in captured.err
 
 
 def test_older_configs_leave_review_checks_opt_in(tmp_path: Path) -> None:

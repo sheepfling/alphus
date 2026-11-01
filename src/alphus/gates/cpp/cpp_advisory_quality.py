@@ -18,7 +18,7 @@ from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TypedDict
+from typing import Literal, TypedDict
 
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.gates.cpp.report_history import (
@@ -37,6 +37,10 @@ from alphus.support.data_access import (
     require_json_string,
 )
 from alphus.support.inventory import matches_path
+from alphus.support.reporting import (
+    emit_execution_failure,
+    execution_failure_payload,
+)
 from alphus.support.source_text import read_utf8_text
 
 _CPP_SUFFIXES = frozenset(
@@ -980,6 +984,43 @@ def _emit(
         print(f"history={saved}", file=sys.stderr)
 
 
+def _emit_operational_failure(
+    args: argparse.Namespace,
+    category: Literal[
+        "file_access", "malformed_json", "invalid_structure", "invalid_value"
+    ],
+) -> int:
+    stage = "style analysis" if args.command == "style" else "trend analysis"
+    details = {
+        "file_access": "failed during file access",
+        "malformed_json": "failed because an input JSON document is malformed",
+        "invalid_structure": "failed because input data has an invalid structure",
+        "invalid_value": "failed because an option or input value is invalid",
+    }
+    message = f"C++ advisory {stage} {details[category]}."
+    failure_report = execution_failure_payload(
+        component="cpp-advisory",
+        kind="operational_error",
+        message=message,
+        exit_code=2,
+        artifact_paths=(args.output,) if args.output is not None else (),
+    )
+    if args.output is None and sys.stdout.isatty():
+        print(f"cpp advisory quality: {message}", file=sys.stderr)
+        return 2
+    try:
+        emit_execution_failure(failure_report, output=args.output)
+    except OSError:
+        print(
+            f"cpp advisory quality: {message}; "
+            "could not write failure report artifact.",
+            file=sys.stderr,
+        )
+        return 2
+    print(f"cpp advisory quality: {message}", file=sys.stderr)
+    return 2
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
@@ -1016,9 +1057,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             if args.fail_on_worsening and raw_count is not None and raw_count > 0
             else 0
         )
-    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as error:
-        print(f"cpp advisory quality: {error}", file=sys.stderr)
-        return 2
+    except OSError:
+        return _emit_operational_failure(args, "file_access")
+    except json.JSONDecodeError:
+        return _emit_operational_failure(args, "malformed_json")
+    except (KeyError, TypeError):
+        return _emit_operational_failure(args, "invalid_structure")
+    except ValueError:
+        return _emit_operational_failure(args, "invalid_value")
 
 
 if __name__ == "__main__":
