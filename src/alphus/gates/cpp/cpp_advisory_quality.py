@@ -549,12 +549,14 @@ def _style_report(args: argparse.Namespace) -> dict[str, JsonValue]:
         "high_complexity_count": 0,
     }
 
-    def add(finding: Mapping[str, JsonValue]) -> None:
+    def add(finding: Mapping[str, JsonValue]) -> bool:
         nonlocal truncated
         if len(findings) < args.max_findings:
             findings.append(dict(finding))
+            return True
         else:
             truncated += 1
+            return False
 
     complexity_rows: list[ComplexityRow] = []
     include_count = 0
@@ -638,6 +640,8 @@ def _style_report(args: argparse.Namespace) -> dict[str, JsonValue]:
     )
     reported_duplicate_families = duplicate_families[: args.max_groups]
     counts["duplicate_code_group_count"] = len(duplicate_groups)
+    duplicate_families_displayed = 0
+    duplicate_groups_displayed = 0
     for family in reported_duplicate_families:
         family_locations = family["locations"]
         locations: list[dict[str, JsonValue]] = [
@@ -650,7 +654,7 @@ def _style_report(args: argparse.Namespace) -> dict[str, JsonValue]:
             for location in family_locations
         ]
         first_location = family_locations[0]
-        add(
+        displayed = add(
             _candidate(
                 "possible-duplicate-code",
                 first_location["path"],
@@ -671,6 +675,9 @@ def _style_report(args: argparse.Namespace) -> dict[str, JsonValue]:
                 },
             )
         )
+        if displayed:
+            duplicate_families_displayed += 1
+            duplicate_groups_displayed += int(family["window_group_count"])
 
     complexity_rows.sort(
         key=lambda row: (
@@ -694,17 +701,13 @@ def _style_report(args: argparse.Namespace) -> dict[str, JsonValue]:
         "finding_count": len(findings),
         "findings_truncated": truncated,
         "duplicate_window_lines": args.window_lines,
-        "duplicate_code_groups_reported": sum(
-            int(family["window_group_count"]) for family in reported_duplicate_families
-        ),
+        "duplicate_code_groups_reported": duplicate_groups_displayed,
         "duplicate_code_groups_truncated": len(duplicate_groups)
-        - sum(
-            int(family["window_group_count"]) for family in reported_duplicate_families
-        ),
+        - duplicate_groups_displayed,
         "duplicate_code_families_total": len(duplicate_families),
-        "duplicate_code_families_reported": len(reported_duplicate_families),
+        "duplicate_code_families_reported": duplicate_families_displayed,
         "duplicate_code_families_truncated": len(duplicate_families)
-        - len(reported_duplicate_families),
+        - duplicate_families_displayed,
         "top_complexity_files": top_complexity_files,
     }
     return {

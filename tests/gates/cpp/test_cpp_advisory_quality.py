@@ -135,6 +135,53 @@ def test_overlapping_duplicate_families_keep_disjoint_regions_separate() -> None
     assert [family["window_group_count"] for family in families] == [1, 1]
 
 
+def test_duplicate_family_metrics_reflect_global_finding_cap(tmp_path: Path) -> None:
+    source = """int calculate(int value) {
+  int adjusted = value + 3;
+  int scaled = adjusted * 7;
+  int shifted = scaled - 2;
+  int result = shifted / 4;
+  return result;
+}
+"""
+    (tmp_path / "a.cpp").write_text(
+        '#include "unused_marker.hpp"\n' + source, encoding="utf-8"
+    )
+    (tmp_path / "b.cpp").write_text(source, encoding="utf-8")
+    output = tmp_path / "style.json"
+
+    assert (
+        advisory.main(
+            [
+                "style",
+                str(tmp_path),
+                "--window-lines",
+                "3",
+                "--min-text-chars",
+                "10",
+                "--max-findings",
+                "1",
+                "--output",
+                str(output),
+            ]
+        )
+        == 0
+    )
+
+    report = json.loads(output.read_text(encoding="utf-8"))
+    metrics = report["metrics"]
+    assert metrics["finding_count"] == 1
+    assert metrics["findings_truncated"] > 0
+    assert metrics["duplicate_code_families_total"] == 1
+    assert metrics["duplicate_code_families_reported"] == 0
+    assert metrics["duplicate_code_families_truncated"] == 1
+    assert metrics["duplicate_code_groups_reported"] == 0
+    assert (
+        metrics["duplicate_code_groups_truncated"]
+        == metrics["duplicate_code_group_count"]
+    )
+
+
 def test_style_report_exposes_effective_custom_scope_patterns(
     tmp_path: Path,
 ) -> None:
