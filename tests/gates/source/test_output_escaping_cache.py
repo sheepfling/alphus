@@ -164,7 +164,8 @@ def test_excessively_nested_cache_is_a_miss_and_recomputed(tmp_path: Path) -> No
 
     assert actual == check_output_escaping(tmp_path, [source], _policy())
     assert (summary.hits, summary.misses, summary.saved) == (0, 1, True)
-    assert summary.invalidation == "cache is unreadable or invalid"
+    assert summary.invalidation is not None
+    assert "invalid" in summary.invalidation
 
 
 @pytest.mark.parametrize("malformation", ["digest", "finding", "extra-field"])

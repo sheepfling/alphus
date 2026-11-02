@@ -122,7 +122,7 @@ def _validate_payload(
 ) -> tuple[dict[str, JsonValue], str | None]:
     try:
         parsed = _CachePayloadWire.model_validate(payload, strict=True)
-    except (ValidationError, TypeError):
+    except (ValidationError, TypeError, RecursionError):
         return {}, "cache schema or entries are invalid"
     if parsed.header != dict(expected_header):
         return {}, "root, policy, schema, or rule version changed"
