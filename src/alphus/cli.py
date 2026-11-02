@@ -25,7 +25,7 @@ from typing import (
 )
 
 import typer
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 from rich.console import Console
 from rich.text import Text
 
@@ -42,6 +42,14 @@ from alphus.contracts.findings import (
 )
 from alphus.contracts.process import ExitCode
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.execution.audit_manifest import (
+    AuditManifest,
+    AuditPlanIntent,
+    AuditPlanStep,
+    ProfileAuditPlan,
+    ProfileAuditResult,
+    assess_profile_audit,
+)
 from alphus.execution.dispatch import run_builtin_rule
 from alphus.execution.fixes import apply_fixes as apply_configured_fixes
 from alphus.execution.fixes import resolve_fix_plan
@@ -76,7 +84,11 @@ from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
 from alphus.policy.function_shape import plan_function_shape
 from alphus.policy.intents import intent_bindings_for_steps
 from alphus.policy.recipes import render_recipe
-from alphus.support.data_access import JsonValue
+from alphus.support.data_access import (
+    JsonValue,
+    require_json_object,
+    validate_json_value,
+)
 from alphus.support.inventory import candidate_files, matches_path
 from alphus.support.reporting import (
     emit_execution_failure,
@@ -98,6 +110,15 @@ class _ProfilePlanPayload(TypedDict):
 
 
 _OUTPUT_FORMAT: ContextVar[str] = ContextVar("alphus_output_format", default="auto")
+_PROFILE_AUDIT_RESULT: TypeAdapter[ProfileAuditResult] = TypeAdapter(ProfileAuditResult)
+
+
+def _decode_json_object(source: str) -> dict[str, JsonValue]:
+    """Decode a JSON object with the shared finite-number validation policy."""
+    value = validate_json_value(source)
+    return dict(require_json_object(value, "expected a JSON object"))
+
+
 _SOURCE_SCAN_RULES: frozenset[QualityRuleName] = frozenset(
     {
         "json-structure",
@@ -334,6 +355,27 @@ def _profile_failure(message: str, *, json_output: bool) -> int:
     else:
         _human_error(message)
     return ExitCode.CONFIG_ERROR
+
+
+def _load_audit_manifest(root: Path, path: Path) -> AuditManifest:
+    """Load a bounded caller-supplied JSON manifest for profile execution."""
+    manifest_path = path if path.is_absolute() else root / path
+    try:
+        raw = manifest_path.read_bytes()
+    except OSError as error:
+        raise typer.BadParameter(
+            "audit manifest could not be read", param_hint="--audit-manifest"
+        ) from error
+    if len(raw) > 1_000_000:
+        raise typer.BadParameter(
+            "audit manifest exceeds the 1 MB limit", param_hint="--audit-manifest"
+        )
+    try:
+        return AuditManifest.model_validate_json(raw)
+    except (ValidationError, ValueError) as error:
+        raise typer.BadParameter(
+            "audit manifest is invalid", param_hint="--audit-manifest"
+        ) from error
 
 
 def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
@@ -880,25 +922,73 @@ def _execute_profile(
     jobs: int | None = None,
     history_dir: Path | None = None,
     consumer_id: str | None = None,
+    audit_manifest: AuditManifest | None = None,
 ) -> int:
     """Run the configured suite through the Python orchestration layer."""
     checkout = root.resolve(strict=True)
     resolved_config = (
         config_path if config_path.is_absolute() else checkout / config_path
     )
-    config = _load_policy(resolved_config, json_output=json_output)
+
+    def audit_preflight_failure(message: str) -> int:
+        if audit_manifest is None:
+            return _profile_failure(message, json_output=json_output)
+        payload = execution_failure_payload(
+            component="alphus-profile",
+            kind="configuration_error",
+            message=message,
+            exit_code=ExitCode.CONFIG_ERROR,
+        )
+        audit = assess_profile_audit(
+            audit_manifest,
+            None,
+            None,
+            unavailable_reason="profile configuration or selection failed before execution",
+        )
+        encoded = dict(payload)
+        encoded["audit_completion"] = cast(JsonValue, audit)
+        typer.echo(json.dumps(encoded, sort_keys=True))
+        return ExitCode.CONFIG_ERROR
+
+    if audit_manifest is None:
+        config = _load_policy(resolved_config, json_output=json_output)
+    else:
+        failure_output = StringIO()
+        try:
+            with redirect_stdout(failure_output):
+                config = _load_policy(resolved_config, json_output=True)
+        except typer.Exit:
+            try:
+                failure_payload = _decode_json_object(failure_output.getvalue())
+            except (TypeError, ValueError, ValidationError):
+                return audit_preflight_failure(
+                    "Invalid quality policy: the configuration could not be loaded."
+                )
+            failure_payload["audit_completion"] = cast(
+                JsonValue,
+                assess_profile_audit(
+                    audit_manifest,
+                    None,
+                    None,
+                    unavailable_reason="profile configuration failed before execution",
+                ),
+            )
+            typer.echo(json.dumps(failure_payload, sort_keys=True))
+            return ExitCode.CONFIG_ERROR
     policy = config.orchestration
     if policy is None:
-        return _profile_failure(
-            "The selected policy has no [orchestration] section.",
-            json_output=json_output,
+        return audit_preflight_failure(
+            "The selected policy has no [orchestration] section."
         )
     selected_profile = profile_name or policy.default_profile
+    if audit_manifest is not None and audit_manifest.profile != selected_profile:
+        return audit_preflight_failure(
+            "The requested profile does not match the audit manifest profile."
+        )
     plan = policy.resolve_profile(selected_profile)
     if plan is None:
-        return _profile_failure(
-            "The requested orchestration profile is not defined by the policy.",
-            json_output=json_output,
+        return audit_preflight_failure(
+            "The requested orchestration profile is not defined by the policy."
         )
     try:
         for step in policy.steps:
@@ -909,34 +999,135 @@ def _execute_profile(
                     )
                 config.checks.require_rule(step.rule)
     except MissingPolicyError as error:
-        return _profile_failure(str(error), json_output=json_output)
+        return audit_preflight_failure(str(error))
+
+    audit_plan: ProfileAuditPlan | None = None
+    if audit_manifest is not None:
+        try:
+            entries = resolve_fix_plan(
+                checkout, resolved_config, policy, selected_profile
+            )
+        except (OSError, ValueError) as error:
+            return audit_preflight_failure(
+                f"Cannot resolve profile scope for audit: {error}"
+            )
+        entries_by_name = {entry.name: entry for entry in entries}
+        selected_steps: list[AuditPlanStep] = []
+        for step in policy.steps:
+            if step.name not in plan.steps:
+                continue
+            entry = entries_by_name[step.name]
+            selected_files = (
+                _selected_rule_files(checkout, config, step.rule)
+                if step.kind == "rule"
+                else (list(entry.files) if step.files is not None else None)
+            )
+            row: AuditPlanStep = {
+                "name": step.name,
+                "kind": step.kind,
+                "selected_files": selected_files,
+            }
+            if step.kind == "command" and entry.check_argv is not None:
+                row["expanded_argv"] = list(entry.check_argv)
+            selected_steps.append(row)
+        intent_rows = intent_bindings_for_steps(
+            policy.intents,
+            plan.steps,
+            selected_profile,
+            selected_profiles=plan.profiles,
+            default_failure_threshold=policy.failure_threshold,
+        )
+        audit_intents: list[AuditPlanIntent] = [
+            {
+                "rule_id": row.rule_id,
+                "language": row.language,
+                "native_rule": row.native_rule,
+            }
+            for row in intent_rows
+        ]
+        audit_plan = {
+            "profile": selected_profile,
+            "steps": selected_steps,
+            "intents": audit_intents,
+        }
 
     def run_rule(rule: QualityRule) -> RuleRunResult:
         return run_profile_rule(checkout, resolved_config, rule, verbose, config)
 
-    return run_orchestration(
+    if audit_manifest is None:
+        return run_orchestration(
+            checkout,
+            resolved_config,
+            policy,
+            selected_profile,
+            run_rule,
+            json_output=json_output,
+            jobs=jobs,
+            verbose=verbose,
+            config=config,
+            history_dir=history_dir,
+            consumer_id=consumer_id,
+            stdout=(
+                cast(TextIO, _HumanStream())
+                if _OUTPUT_FORMAT.get() == "rich" and not json_output
+                else sys.stdout
+            ),
+            stderr=(
+                cast(TextIO, _HumanStream(stderr=True))
+                if _OUTPUT_FORMAT.get() == "rich" and not json_output
+                else sys.stderr
+            ),
+        )
+
+    captured_result = StringIO()
+    result_exit_code = run_orchestration(
         checkout,
         resolved_config,
         policy,
         selected_profile,
         run_rule,
-        json_output=json_output,
+        json_output=True,
         jobs=jobs,
         verbose=verbose,
         config=config,
         history_dir=history_dir,
         consumer_id=consumer_id,
-        stdout=(
-            cast(TextIO, _HumanStream())
-            if _OUTPUT_FORMAT.get() == "rich" and not json_output
-            else sys.stdout
-        ),
+        stdout=captured_result,
         stderr=(
             cast(TextIO, _HumanStream(stderr=True))
             if _OUTPUT_FORMAT.get() == "rich" and not json_output
             else sys.stderr
         ),
     )
+    audit_result: ProfileAuditResult | None
+    try:
+        result_payload = _decode_json_object(captured_result.getvalue())
+        audit_result = _PROFILE_AUDIT_RESULT.validate_python(result_payload)
+        unavailable_reason = None
+    except (TypeError, ValueError, ValidationError):
+        result_payload = dict(
+            execution_failure_payload(
+                component="alphus-profile",
+                kind="operational_error",
+                message="Profile execution did not produce a structured result.",
+                exit_code=ExitCode.OPERATIONAL_FAILURE,
+            )
+        )
+        audit_result = None
+        unavailable_reason = (
+            "profile execution did not produce a valid structured result"
+        )
+    assessment = assess_profile_audit(
+        audit_manifest,
+        audit_plan,
+        audit_result,
+        unavailable_reason=unavailable_reason,
+    )
+    result_payload["audit_completion"] = cast(JsonValue, assessment)
+    typer.echo(json.dumps(result_payload, sort_keys=True))
+    if assessment["status"] == "incomplete":
+        return ExitCode.OPERATIONAL_FAILURE
+    return result_exit_code
 
 
 def _execute_history(
@@ -1355,6 +1546,13 @@ def _command(
         str | None,
         typer.Option("--profile", help="Choose a configured orchestration profile."),
     ] = None,
+    audit_manifest_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--audit-manifest",
+            help="Assess profile execution against a versioned JSON audit manifest.",
+        ),
+    ] = None,
     plan_function_shape_only: Annotated[
         bool,
         typer.Option(
@@ -1459,6 +1657,36 @@ def _command(
         raise typer.BadParameter(str(error), param_hint="--output") from error
     if jobs is not None and not 1 <= jobs <= 64:
         raise typer.BadParameter("--jobs must be between 1 and 64")
+    audit_manifest = None
+    if audit_manifest_path is not None:
+        if not json_output:
+            raise typer.BadParameter("--audit-manifest requires --json")
+        if any(
+            (
+                plan_function_shape_only,
+                rule is not None,
+                report,
+                plan,
+                fix_plan,
+                apply_fixes,
+                bool(fix_step),
+                show_history,
+                history_report is not None,
+                init_config is not None,
+            )
+        ):
+            raise typer.BadParameter(
+                "--audit-manifest can only assess a profile execution"
+            )
+        audit_manifest = _load_audit_manifest(
+            root.resolve(strict=True), audit_manifest_path
+        )
+        selected_profile = profile
+        if selected_profile is not None and audit_manifest.profile != selected_profile:
+            raise typer.BadParameter(
+                "--profile must match the audit manifest profile",
+                param_hint="--audit-manifest",
+            )
     if (
         consumer_id is not None
         and history_dir is not None
@@ -1676,6 +1904,7 @@ def _command(
             jobs,
             history_dir,
             consumer_id if history_dir is not None else None,
+            audit_manifest,
         )
     )
 

@@ -1,0 +1,226 @@
+"""Caller-supplied manifests assess selected profile coverage explicitly."""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+from pathlib import Path
+
+import pytest
+
+from alphus.execution.audit_manifest import (
+    AuditCheckAssessment,
+    AuditCompletion,
+    AuditManifest,
+    AuditManifestCheck,
+    AuditPlanIntent,
+    AuditPlanStep,
+    ProfileAuditPlan,
+    ProfileAuditResult,
+    assess_profile_audit,
+)
+
+
+def _manifest(
+    *,
+    expected_files: Sequence[str] | None = ("src/example.py",),
+    required_argv: Sequence[str] = (),
+    rule_id: str | None = None,
+    language: str | None = None,
+    native_rule: str | None = None,
+) -> AuditManifest:
+    return AuditManifest(
+        format="alphus.audit-manifest",
+        schema_version=1,
+        profile="audit",
+        checks=(
+            AuditManifestCheck(
+                check_id="source-review",
+                step="Source review",
+                expected_files=(
+                    None if expected_files is None else tuple(expected_files)
+                ),
+                required_argv=tuple(required_argv),
+                rule_id=rule_id,
+                language=language,
+                native_rule=native_rule,
+            ),
+        ),
+    )
+
+
+def _plan(
+    *, kind: str = "rule", files: Sequence[str] | None = None
+) -> ProfileAuditPlan:
+    return {
+        "profile": "audit",
+        "steps": [
+            AuditPlanStep(
+                name="Source review",
+                kind=kind,
+                selected_files=(
+                    list(files) if files is not None else ["src/example.py"]
+                ),
+            )
+        ],
+        "intents": [],
+    }
+
+
+def _result(
+    *, status: str = "passed", findings: Sequence[object] = ()
+) -> ProfileAuditResult:
+    return {
+        "profile": "audit",
+        "steps": [
+            {
+                "name": "Source review",
+                "status": status,
+                "findings": list(findings),
+            }
+        ],
+    }
+
+
+def _checks(assessment: AuditCompletion) -> list[AuditCheckAssessment]:
+    return assessment["checks"]
+
+
+def _plan_step(plan: ProfileAuditPlan) -> AuditPlanStep:
+    return plan["steps"][0]
+
+
+def test_manifest_distinguishes_executed_zero_and_executed_findings() -> None:
+    manifest = _manifest()
+
+    zero = assess_profile_audit(manifest, _plan(), _result())
+    findings = assess_profile_audit(
+        manifest,
+        _plan(),
+        _result(findings=({"rule_id": "sample/rule", "severity": "warning"},)),
+    )
+
+    assert zero["status"] == "complete"
+    assert _checks(zero)[0]["status"] == "executed_zero"
+    assert _checks(zero)[0].get("findings_state") == "zero_findings"
+    assert findings["status"] == "complete"
+    assert _checks(findings)[0]["status"] == "executed_with_findings"
+    assert _checks(findings)[0].get("structured_finding_count") == 1
+
+
+def test_manifest_marks_requested_but_unselected_step_incomplete() -> None:
+    manifest = _manifest()
+
+    assessment = assess_profile_audit(
+        manifest,
+        {"profile": "audit", "steps": [], "intents": []},
+        {"profile": "audit", "steps": []},
+    )
+
+    assert assessment["status"] == "incomplete"
+    assert _checks(assessment)[0]["status"] == "not_selected"
+    assert _checks(assessment)[0]["complete"] is False
+
+
+def test_manifest_rejects_scope_mismatch_and_empty_inventory() -> None:
+    manifest = _manifest()
+    mismatch = assess_profile_audit(manifest, _plan(files=[]), _result())
+    empty = assess_profile_audit(manifest, _plan(), _result(status="not_applicable"))
+
+    assert _checks(mismatch)[0]["status"] == "scope_mismatch"
+    assert mismatch["status"] == "incomplete"
+    assert _checks(empty)[0]["status"] == "empty_inventory"
+    assert empty["status"] == "incomplete"
+
+
+def test_unstructured_command_result_does_not_claim_zero_findings() -> None:
+    manifest = _manifest()
+
+    assessment = assess_profile_audit(manifest, _plan(kind="command"), _result())
+
+    assert assessment["status"] == "complete"
+    assert _checks(assessment)[0]["status"] == "executed"
+    assert _checks(assessment)[0].get("findings_state") == "unknown"
+
+
+def test_manifest_checks_required_native_selector_tokens() -> None:
+    manifest = _manifest(required_argv=("--select=ANN",))
+    plan = _plan(kind="command")
+    _plan_step(plan)["expanded_argv"] = ["ruff", "check", "--select=ANN"]
+
+    selected = assess_profile_audit(manifest, plan, _result())
+    _plan_step(plan)["expanded_argv"] = ["ruff", "check", "--select=E"]
+    missing = assess_profile_audit(manifest, plan, _result())
+
+    assert _checks(selected)[0]["status"] == "executed"
+    assert selected["status"] == "complete"
+    assert _checks(missing)[0]["status"] == "selector_mismatch"
+    assert missing["status"] == "incomplete"
+
+
+def test_preflight_failure_marks_all_manifest_checks_incomplete() -> None:
+    manifest = _manifest()
+
+    assessment = assess_profile_audit(
+        manifest,
+        None,
+        None,
+        unavailable_reason="missing policy",
+    )
+
+    assert assessment["status"] == "incomplete"
+    assert _checks(assessment)[0]["status"] == "incomplete"
+    assert assessment.get("reason") == "missing policy"
+
+
+def test_manifest_rejects_parent_traversal() -> None:
+    manifest_file = Path("../outside.py")
+    with pytest.raises(ValueError, match="canonical relative POSIX paths"):
+        _manifest(expected_files=(manifest_file.as_posix(),))
+
+
+@pytest.mark.parametrize(
+    ("intent_status", "failure_kind", "expected"),
+    [
+        ("not_selected", None, "not_selected"),
+        ("disabled", None, "disabled"),
+        ("unsupported", "unsupported_capability", "unsupported"),
+        ("not_applicable", "no_matching_files", "empty_inventory"),
+        ("failed", "violation", "executed_with_findings"),
+        ("failed", "operational_error", "execution_failure"),
+        ("passed", None, "executed_zero"),
+    ],
+)
+def test_manifest_uses_explicit_intent_completion_states(
+    intent_status: str, failure_kind: str | None, expected: str
+) -> None:
+    selectors = AuditPlanIntent(
+        rule_id="alphus/python/none/testing/example",
+        language="python",
+        native_rule="ANN",
+    )
+    manifest = _manifest(
+        rule_id=selectors["rule_id"],
+        language=selectors["language"],
+        native_rule=selectors["native_rule"],
+    )
+    plan = _plan()
+    plan["intents"] = [selectors]
+    result = _result(status="failed" if intent_status == "failed" else "passed")
+    result["intent_bindings"] = [
+        {
+            "rule_id": selectors["rule_id"],
+            "language": selectors["language"],
+            "native_rule": selectors["native_rule"],
+            "status": intent_status,
+            "failure_kind": failure_kind,
+        }
+    ]
+
+    assessment = assess_profile_audit(manifest, plan, result)
+
+    assert _checks(assessment)[0]["status"] == expected
+    assert assessment["status"] == (
+        "complete"
+        if expected in {"executed_zero", "executed_with_findings"}
+        else "incomplete"
+    )
