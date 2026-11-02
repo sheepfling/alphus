@@ -166,6 +166,43 @@ def test_docx_headings_use_structural_styles_and_paragraph_anchors(
     )
 
 
+def test_docx_custom_heading_style_inherits_outline_level_and_ignores_cycles(
+    tmp_path: Path,
+) -> None:
+    document = tmp_path / "inherited.docx"
+    word = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+    styles = (
+        f'<w:styles xmlns:w="{word}">'
+        '<w:style w:type="paragraph" w:styleId="Heading2">'
+        '<w:pPr><w:outlineLvl w:val="1"/></w:pPr></w:style>'
+        '<w:style w:type="paragraph" w:styleId="CustomSection">'
+        '<w:basedOn w:val="Heading2"/></w:style>'
+        '<w:style w:type="paragraph" w:styleId="CycleA">'
+        '<w:basedOn w:val="CycleB"/></w:style>'
+        '<w:style w:type="paragraph" w:styleId="CycleB">'
+        '<w:basedOn w:val="CycleA"/></w:style>'
+        "</w:styles>"
+    )
+    paragraphs = (
+        '<w:p><w:pPr><w:pStyle w:val="CustomSection"/></w:pPr>'
+        "<w:r><w:t>From Inputs to Results</w:t></w:r></w:p>"
+        '<w:p><w:pPr><w:pStyle w:val="CycleA"/></w:pPr>'
+        "<w:r><w:t>Cycle is not a heading</w:t></w:r></w:p>"
+    )
+    with ZipFile(document, "w") as archive:
+        archive.writestr("word/styles.xml", styles)
+        archive.writestr(
+            "word/document.xml",
+            f'<w:document xmlns:w="{word}"><w:body>{paragraphs}</w:body></w:document>',
+        )
+
+    sections = extract_docx_sections(document, display_path="inherited.docx")
+
+    assert [
+        (section.text, section.level, section.position) for section in sections
+    ] == [("From Inputs to Results", 2, "paragraph 1")]
+
+
 def test_pptx_title_placeholders_are_anchored_by_slide(tmp_path: Path) -> None:
     document = tmp_path / "deck.pptx"
     presentation = "http://schemas.openxmlformats.org/presentationml/2006/main"

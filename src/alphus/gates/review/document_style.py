@@ -88,21 +88,58 @@ def _section_location(section: DocumentSection) -> str:
 
 
 def _word_style_levels(archive: zipfile.ZipFile) -> dict[str, int]:
-    """Read built-in and custom paragraph outline levels from DOCX styles."""
+    """Resolve paragraph outline levels through DOCX style inheritance."""
     try:
         styles = _read_package_xml(archive, "word/styles.xml")
     except KeyError:
         return {}
-    levels: dict[str, int] = {}
+    definitions: dict[str, tuple[str | None, int | None]] = {}
     for style in styles.findall(f"{{{_W_NS}}}style"):
         style_id = style.get(f"{{{_W_NS}}}styleId")
-        outline = style.find(f"{{{_W_NS}}}pPr/{{{_W_NS}}}outlineLvl")
-        if style_id and outline is not None:
+        if style_id:
+            based_on = style.find(f"{{{_W_NS}}}basedOn")
+            outline = style.find(f"{{{_W_NS}}}pPr/{{{_W_NS}}}outlineLvl")
+            level = None
+            if outline is not None:
+                try:
+                    level = int(outline.get(f"{{{_W_NS}}}val", "-1")) + 1
+                except ValueError:
+                    pass
+            definitions[style_id] = (
+                based_on.get(f"{{{_W_NS}}}val") if based_on is not None else None,
+                level,
+            )
+
+    resolved: dict[str, int] = {}
+
+    def resolve(style_id: str, visiting: frozenset[str] = frozenset()) -> int | None:
+        if style_id in resolved:
+            return resolved[style_id]
+        if style_id in visiting:
+            return None
+        definition = definitions.get(style_id)
+        if definition is not None:
+            parent, level = definition
+            if level is not None:
+                resolved[style_id] = level
+                return level
+            if parent:
+                inherited = resolve(parent, visiting | {style_id})
+                if inherited is not None:
+                    resolved[style_id] = inherited
+                    return inherited
+        if style_id.lower().startswith("heading"):
             try:
-                levels[style_id] = int(outline.get(f"{{{_W_NS}}}val", "-1")) + 1
+                return int(style_id[7:])
             except ValueError:
-                continue
-    return levels
+                return None
+        return None
+
+    return {
+        style_id: level
+        for style_id in definitions
+        if (level := resolve(style_id)) is not None
+    }
 
 
 def extract_docx_sections(
