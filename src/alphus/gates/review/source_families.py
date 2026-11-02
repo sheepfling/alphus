@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import codecs
+import posixpath
 import re
 import subprocess
 from collections import Counter, defaultdict
@@ -45,6 +46,8 @@ _C_CPP_HEADERS = frozenset({".h", ".hh", ".hpp", ".hxx"})
 _C_CPP_IMPLEMENTATIONS = frozenset({".c", ".cc", ".cpp", ".cxx"})
 _LINE_ENDINGS = frozenset("\n\v\f\x1c\x1d\x1e\x85\u2028\u2029")
 _GIT_SHA = re.compile(rb"^[0-9a-f]{40,64}$")
+_CPP_INCLUDE = re.compile(r'^\s*#\s*include\s*"([^"\\\r\n]+)"\s*$')
+_CPP_EXTENSIONS = frozenset({".c", ".h", ".cc", ".hh", ".cpp", ".hpp", ".cxx", ".hxx"})
 
 
 def _git_cochange_evidence(
@@ -736,6 +739,86 @@ def _python_import_evidence(
     return context, notes
 
 
+def _cpp_include_evidence(
+    checkout: Path,
+    members: AbstractSet[Path],
+    selected: Iterable[Path],
+    policy: _SourceFamilyPolicy,
+) -> tuple[str, list[str]]:
+    """Resolve literal quoted includes only when their target is selected."""
+    selected_names = {path.as_posix() for path in selected}
+    member_names = {path.as_posix() for path in members}
+    bytes_left = policy.max_import_analysis_bytes
+    resolved: list[tuple[str, int, str]] = []
+    unresolved = 0
+    failures = 0
+    sources = sorted(
+        (path for path in members if path.suffix.lower() in _CPP_EXTENSIONS),
+        key=lambda path: path.as_posix(),
+    )
+    for source in sources:
+        relative = source.as_posix()
+        source_path = (checkout / source).resolve(strict=False)
+        if not source_path.is_relative_to(checkout) or bytes_left <= 0:
+            failures += 1
+            continue
+        try:
+            with source_path.open("rb") as handle:
+                raw = handle.read(bytes_left + 1)
+            if len(raw) > bytes_left:
+                failures += 1
+                continue
+            bytes_left -= len(raw)
+            text = raw.decode("utf-8")
+        except (OSError, UnicodeError):
+            failures += 1
+            continue
+        for line_number, line in enumerate(text.splitlines(), 1):
+            match = _CPP_INCLUDE.fullmatch(line)
+            if match is None:
+                continue
+            include = match.group(1)
+            if "\\" in include or include.startswith("/"):
+                unresolved += 1
+                continue
+            target = posixpath.normpath(
+                posixpath.join(posixpath.dirname(relative), include)
+            )
+            if target in selected_names:
+                resolved.append((relative, line_number, target))
+            else:
+                unresolved += 1
+    internal = sum(1 for _, _, target in resolved if target in member_names)
+    shown = resolved[: policy.max_import_edges]
+    context = (
+        f"Direct quoted C/C++ include evidence: {internal} resolved edge(s) target "
+        f"another family member; {len(resolved) - internal} target other selected "
+        f"source files; {unresolved} literal include(s) did not resolve to the "
+        "selected inventory."
+    )
+    if shown:
+        context += (
+            " Examples: "
+            + ", ".join(f"{source}:{line} → {target}" for source, line, target in shown)
+            + "."
+        )
+    if len(shown) < len(resolved):
+        context += f" {len(resolved) - len(shown)} edge(s) omitted by max_import_edges."
+    context += (
+        " This is lexical include evidence, not compiler-resolved dependency data; "
+        "macro/angle-bracket includes, conditional activation, include search paths, "
+        "and unselected targets are not resolved."
+    )
+    notes: list[str] = []
+    if failures:
+        notes.append(f"{failures} C/C++ file(s) could not be analyzed")
+    if bytes_left == 0:
+        notes.append("the configured C/C++ include byte budget was exhausted")
+    if notes:
+        context += " Analysis incomplete: " + "; ".join(notes) + "."
+    return context, notes
+
+
 def source_family_findings(
     root: Path, paths: Iterable[Path], policy: _SourceFamilyPolicy
 ) -> list[Finding]:
@@ -820,6 +903,7 @@ def source_family_findings(
 
     retained.sort(key=lambda row: (row[0], row[1]))
     import_contexts: dict[tuple[str, ...], str] = {}
+    cpp_contexts: dict[tuple[str, ...], str] = {}
     history_contexts: dict[tuple[str, ...], str] = {}
     if policy.python_import_evidence:
         for _, _, members in retained:
@@ -828,6 +912,12 @@ def source_family_findings(
                 checkout, members, selected, policy
             )
             import_contexts[key] = context
+            incomplete_notes.extend(notes)
+    if policy.cpp_include_evidence:
+        for _, _, members in retained:
+            key = tuple(sorted(path.as_posix() for path in members))
+            context, notes = _cpp_include_evidence(checkout, members, selected, policy)
+            cpp_contexts[key] = context
             incomplete_notes.extend(notes)
     if policy.git_cochange_evidence:
         for _, _, members in retained:
@@ -966,6 +1056,7 @@ def source_family_findings(
             f"exclude={exclude_text}{override_text}. "
         )
         import_context = import_contexts.get(tuple(path.as_posix() for path in ordered))
+        cpp_context = cpp_contexts.get(tuple(path.as_posix() for path in ordered))
         history_context = history_contexts.get(
             tuple(path.as_posix() for path in ordered)
         )
@@ -974,6 +1065,10 @@ def source_family_findings(
                 label
                 for enabled, label in (
                     (bool(import_context), "bounded Python import evidence enabled"),
+                    (
+                        bool(cpp_context),
+                        "bounded C/C++ quoted include evidence enabled",
+                    ),
                     (bool(history_context), "bounded Git history evidence enabled"),
                 )
                 if enabled
@@ -993,6 +1088,7 @@ def source_family_findings(
                 "low-confidence advisory review candidate. "
                 f"{settings_text}{member_context}. "
                 f"{import_context + ' ' if import_context else ''}"
+                f"{cpp_context + ' ' if cpp_context else ''}"
                 f"{history_context + ' ' if history_context else ''}"
                 "Coupling, responsibility, "
                 "and public surface not assessed; filename similarity alone does not establish an "

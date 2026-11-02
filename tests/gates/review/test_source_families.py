@@ -182,6 +182,63 @@ def test_opt_in_python_import_evidence_reports_resolved_edges(tmp_path: Path) ->
     assert "No literal module-level __all__ was observed" in findings[0].message
 
 
+def test_cpp_include_evidence_resolves_only_literal_selected_quoted_targets(
+    tmp_path: Path,
+) -> None:
+    paths = [
+        _write(tmp_path, f"src/gateway_{name}.cpp")
+        for name in ("client", "routes", "auth", "cache")
+    ]
+    paths.append(_write(tmp_path, "src/gateway_server.hpp"))
+    paths.append(_write(tmp_path, "src/common.hpp"))
+    (tmp_path / "src/gateway_client.cpp").write_text(
+        '#include "gateway_server.hpp"\n'
+        '#include "common.hpp"\n'
+        '#include "outside.hpp"\n'
+        "#include HEADER_FROM_BUILD_FLAGS\n"
+        "#include <vector>\n",
+        encoding="utf-8",
+    )
+
+    findings = source_family_findings(
+        tmp_path,
+        paths,
+        SourceFamilyPolicy(
+            min_family_files=5, cpp_include_evidence=True, max_import_edges=1
+        ),
+    )
+
+    message = findings[0].message
+    assert "bounded C/C++ quoted include evidence enabled" in message
+    assert "1 resolved edge(s) target another family member" in message
+    assert "1 target other selected source files" in message
+    assert "1 literal include(s) did not resolve to the selected inventory" in message
+    assert "src/gateway_client.cpp:1 → src/gateway_server.hpp" in message
+    assert "1 edge(s) omitted by max_import_edges" in message
+    assert "conditional activation" in message
+
+
+def test_cpp_include_budget_exhaustion_is_an_incomplete_scan(tmp_path: Path) -> None:
+    paths = [
+        _write(tmp_path, f"src/gateway_{name}.cpp")
+        for name in ("client", "server", "routes", "auth", "cache")
+    ]
+
+    findings = source_family_findings(
+        tmp_path,
+        paths,
+        SourceFamilyPolicy(
+            min_family_files=5,
+            cpp_include_evidence=True,
+            max_import_analysis_bytes=1,
+        ),
+    )
+
+    assert len(findings) == 2
+    assert "C/C++ file(s) could not be analyzed" in findings[0].message
+    assert "no clean result can be inferred" in findings[0].message
+
+
 def test_import_evidence_reports_bounded_literal_module_exports(tmp_path: Path) -> None:
     paths = [
         _write(tmp_path, f"src/gateway_{name}.py")

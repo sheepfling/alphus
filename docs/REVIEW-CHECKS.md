@@ -666,6 +666,8 @@ file_length_limits = [[".py", 500], [".cpp", 800]]
 # Optional: direct Python import evidence for selected .py files under `src`.
 python_import_evidence = true
 python_module_roots = ["src"]
+# Optional: literal quoted C/C++ includes resolving inside the selected inventory.
+cpp_include_evidence = true
 max_import_edges = 12
 max_public_api_names = 20
 max_contract_declarations = 12
@@ -692,8 +694,9 @@ resolved direct `import` and `from ... import ...` module edges, and bounds
 file reads, bytes per family, and displayed edges. Unresolved, ambiguous,
 relative-import forms it cannot resolve, parse failures, and files outside the
 selected inventory are not treated as absent dependencies. It does not follow
-dynamic imports, aliases/re-exports, type-checker resolution, or imports in
-other languages. These edges are partial dependency evidence and do not prove
+dynamic imports, aliases/re-exports, or type-checker resolution. Other language
+evidence requires its own explicitly enabled analysis. These edges are partial
+dependency evidence and do not prove
 shared responsibility, coupling strength, or a public contract. For parsed
 Python family members, the optional pass also reports bounded names from a
 single direct literal module-level `__all__` assignment. Dynamic, augmented,
@@ -722,6 +725,15 @@ co-changes are explicitly not evidence of independence. Renames are not
 followed, and unrelated/historical path names outside the current family are
 not mapped.
 
+Optional `cpp_include_evidence` reports direct literal quoted include
+directives only when the normalized path is another selected source file. It
+does not use a compile database or resolve angle-bracket/macro includes,
+conditional activation, include search paths, or unselected targets. This is
+lexical path evidence, not compiler-resolved dependency data. JavaScript and
+TypeScript module imports remain unassessed; no parser-backed resolver is
+integrated. Unsupported or unresolved relationships are not evidence of zero
+coupling.
+
 A typical finding starts: `src/service: Family gateway_*: 12 logical units
 across 12 physical files; 12 of 20 selected sibling source files (60%);
 language mix Python=12; physical lines 38–190 (12 counted; distribution: 1
@@ -738,6 +750,9 @@ families can still be legitimate; treat a finding as a prompt to inspect actual
 responsibilities and public contracts. Preserve established import/include/
 export paths before changing a layout. File-length limits remain an independent
 hygiene control: splitting files below a limit does not demonstrate improved
-cohesion. Dependency, responsibility, public-surface, and history analysis are
-not part of this first slice. Fewer files, renamed prefixes, or a new directory
-do not by themselves demonstrate better boundaries.
+cohesion. Optional Python and C/C++ evidence supplements the lexical candidate
+with bounded source relationships, and optional Git history records correlation
+only. Responsibility and public-surface assessment remain incomplete;
+JavaScript/TypeScript dependencies are not assessed. Fewer files, renamed
+prefixes, or a new directory do not by themselves demonstrate better
+boundaries.
