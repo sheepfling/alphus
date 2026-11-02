@@ -11,6 +11,7 @@ from alphus.config import DocumentStylePolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.support.inventory import matches_path
+from alphus.support.source_text import read_utf8_text
 
 _RULE_ID = rule_tag(
     Scope.ANY, Framework.NONE, Category.STYLE, "rhetorical-heading-density"
@@ -126,7 +127,12 @@ def rhetorical_heading_findings(
                 line=matches[0].line,
                 severity=policy.severity,
                 message=(
-                    f"Repeated rhetorical heading pattern '{family}' appears {len(matches)} times among {len(headings)} headings ({len(matches) / len(headings):.0%}): {examples}. Review whether these headings help readers identify section content; a single creative heading is not flagged. Guidance: docs/writing/technical-headings.md"
+                    f"Repeated rhetorical heading pattern '{family}' appears "
+                    f"{len(matches)} times among {len(headings)} headings "
+                    f"({len(matches) / len(headings):.0%}): {examples}. "
+                    "Review whether these headings help readers identify section "
+                    "content; a single creative heading is not flagged. Guidance: "
+                    "docs/writing/technical-headings.md"
                 ),
             )
         )
@@ -145,7 +151,7 @@ def check_document_style(
             matches_path(name, pattern) for pattern in policy.exclude
         ):
             continue
-        source = (checkout / relative).read_text(encoding="utf-8")
+        source = read_utf8_text(checkout / relative)
         findings.extend(
             rhetorical_heading_findings(
                 extract_markdown_sections(source, path=name), policy
