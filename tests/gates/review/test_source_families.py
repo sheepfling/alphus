@@ -369,7 +369,7 @@ def test_import_evidence_reports_bounded_literal_module_exports(tmp_path: Path) 
     assert "src/gateway_client.py:1 exports Client" in message
     assert "src/gateway_client.py:1 exports connect" in message
     assert "1 declared name(s) omitted by max_public_api_names" in message
-    assert "Package-level re-exports, external consumers" in message
+    assert "consumers outside the selected Python inventory" in message
 
 
 def test_python_package_init_reports_bounded_namespace_import_candidates(
@@ -551,7 +551,9 @@ def test_import_evidence_reports_cross_file_protocol_type_references(
         "src/gateway_client.py:2 references Protocol type Port from "
         "src/gateway_contracts.py"
     ) in message
-    assert "external consumers, responsibility" in message
+    assert (
+        "consumers outside the selected Python inventory, dynamic references" in message
+    )
 
 
 def test_import_evidence_reports_qualified_typed_dict_contract_and_usage(
@@ -731,6 +733,68 @@ def test_python_import_evidence_shows_unresolved_edges_and_truncation(
     assert "1 edge(s) omitted by max_import_edges" in gateway.message
     assert "0 resolved edge(s) target another family member" in storage.message
     assert "5 import(s) unresolved/outside the configured inventory" in storage.message
+
+
+def test_python_import_evidence_reports_selected_external_consumers(
+    tmp_path: Path,
+) -> None:
+    paths = [
+        _write(tmp_path, f"src/gateway_{name}.py")
+        for name in ("client", "server", "routes", "auth", "cache")
+    ]
+    consumer = tmp_path / "src/app.py"
+    consumer.write_text(
+        "from gateway_client import Client\nimport gateway_server\n",
+        encoding="utf-8",
+    )
+
+    findings = source_family_findings(
+        tmp_path,
+        [*paths, consumer.relative_to(tmp_path)],
+        SourceFamilyPolicy(
+            min_family_files=5,
+            python_import_evidence=True,
+            python_module_roots=("src",),
+        ),
+    )
+
+    message = findings[0].message
+    assert "2 direct edge(s) target a family member" in message
+    assert "parsed 1 of 1 eligible file(s)" in message
+    assert "src/app.py:1 → src/gateway_client.py" in message
+    assert "src/app.py:2 → src/gateway_server.py" in message
+    assert "unselected consumers and dynamic references are not assessed" not in message
+
+
+def test_python_external_consumer_scan_reports_budget_exhaustion(
+    tmp_path: Path,
+) -> None:
+    paths = [
+        _write(tmp_path, f"src/gateway_{name}.py")
+        for name in ("client", "server", "routes", "auth", "cache")
+    ]
+    consumer = tmp_path / "src/app.py"
+    consumer.write_text("import gateway_client\n", encoding="utf-8")
+    family_bytes = sum((tmp_path / path).stat().st_size for path in paths)
+
+    findings = source_family_findings(
+        tmp_path,
+        [*paths, consumer.relative_to(tmp_path)],
+        SourceFamilyPolicy(
+            min_family_files=5,
+            python_import_evidence=True,
+            python_module_roots=("src",),
+            max_import_analysis_bytes=family_bytes,
+        ),
+    )
+
+    assert "could not be analyzed" in findings[0].message
+    message = next(
+        item.message for item in findings if "Family gateway_*" in item.message
+    )
+    assert "External reference scan incomplete" in message
+    assert "missing references are unknown" in message
+    assert "No direct external references were observed" not in message
 
 
 def test_import_evidence_requires_explicit_module_root() -> None:
