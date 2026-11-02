@@ -10,6 +10,7 @@ exclude = []
 workflow_paths = [".github/workflows/**"]
 azure_workflow_paths = []
 ignore_run_blocks = []
+ignore_setup_actions = []
 matrix_invariant_run_blocks = []
 minimum_run_lines = 2
 severity = "info"

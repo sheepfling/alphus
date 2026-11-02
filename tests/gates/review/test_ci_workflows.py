@@ -43,6 +43,72 @@ jobs:
     assert "not proof" in findings[0].message
 
 
+def test_identical_setup_action_and_inputs_across_jobs_are_reported_with_suppression() -> (
+    None
+):
+    source = """jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          cache: pip
+          python-version: '3.12'
+"""
+    findings = workflow_run_findings(source, ".github/workflows/ci.yml", policy())
+    assert len(findings) == 1
+    assert findings[0].rule_id.endswith("/repeated-workflow-setup-action")
+    assert "actions/setup-python@v5" in findings[0].message
+    assert "lint (line 5)" in findings[0].message
+    assert "audit (line 12)" in findings[0].message
+    assert "Jobs have isolated environments" in findings[0].message
+    assert (
+        workflow_run_findings(
+            source,
+            ".github/workflows/ci.yml",
+            policy(ignore_setup_actions=("actions/setup-python@v5",)),
+        )
+        == []
+    )
+
+
+def test_setup_action_review_preserves_version_context_and_skips_conditions() -> None:
+    versions_differ = """jobs:
+  py311:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+  py312:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+"""
+    assert (
+        workflow_run_findings(versions_differ, ".github/workflows/ci.yml", policy())
+        == []
+    )
+
+    conditional = versions_differ.replace(
+        "      - uses: actions/setup-python@v5",
+        "      - if: runner.os == 'Linux'\n        uses: actions/setup-python@v5",
+        1,
+    )
+    assert (
+        workflow_run_findings(conditional, ".github/workflows/ci.yml", policy()) == []
+    )
+
+
 def test_matrix_conditions_context_and_expressions_are_excluded() -> None:
     source = """jobs:
   linux:

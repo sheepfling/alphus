@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 from collections.abc import Iterable
 from pathlib import Path
@@ -63,6 +64,96 @@ def _fingerprint(node: Node | None) -> _Fingerprint | None:
             return None if any(item is None for item in fingerprints) else fingerprints
         case _:
             return None
+
+
+def _static_fingerprint(node: Node | None) -> _Fingerprint | None:
+    """Canonicalize a static scalar/sequence/map without evaluating YAML."""
+    match node:
+        case ScalarNode(tag="tag:yaml.org,2002:str", value=value):
+            if "${{" in value:
+                return None
+            return value
+        case SequenceNode(tag="tag:yaml.org,2002:seq", value=items):
+            fingerprints = tuple(_static_fingerprint(item) for item in items)
+            return None if any(item is None for item in fingerprints) else fingerprints
+        case MappingNode(tag="tag:yaml.org,2002:map", value=entries):
+            values: dict[str, _Fingerprint] = {}
+            for key, value in entries:
+                match key:
+                    case ScalarNode(value=key_text) if key_text not in values:
+                        pass
+                    case _:
+                        return None
+                fingerprint = _static_fingerprint(value)
+                if fingerprint is None:
+                    return None
+                values[key_text] = fingerprint
+            return tuple(sorted(values.items()))
+        case _:
+            return None
+
+
+def _setup_action_blocks(
+    source: str, path: str
+) -> list[tuple[str, str, str, _Fingerprint, int]]:
+    """Return exact static setup-action steps in simple, non-matrix jobs."""
+    yaml_api = cast(_YamlApi, yaml)
+    try:
+        events = tuple(yaml_api.parse(source, Loader=yaml.BaseLoader))
+        root = yaml_api.compose(source, Loader=yaml.BaseLoader)
+    except yaml.YAMLError as error:
+        raise ValueError(
+            f"cannot parse GitHub Actions workflow {path}: {error}"
+        ) from error
+    if any(_is_alias_event(event) for event in events):
+        return []
+    workflow = _mapping(root)
+    jobs = _mapping(workflow.get("jobs") if workflow is not None else None)
+    if jobs is None:
+        return []
+
+    records: list[tuple[str, str, str, _Fingerprint, int]] = []
+    for job_name, job_node in jobs.items():
+        job = _mapping(job_node)
+        if (
+            job is None
+            or not set(job) <= {"name", "runs-on", "steps"}
+            or "runs-on" not in job
+        ):
+            # Conditions, matrices and other job context are not compared.
+            continue
+        runner = _fingerprint(job["runs-on"])
+        if runner is None:
+            continue
+        steps = job.get("steps")
+        match steps:
+            case SequenceNode(value=step_nodes):
+                pass
+            case _:
+                continue
+        for step_node in step_nodes:
+            step = _mapping(step_node)
+            if step is None or not set(step) <= {"name", "uses", "with"}:
+                # Conditional or otherwise contextual setup is intentionally skipped.
+                continue
+            action_node = step.get("uses")
+            match action_node:
+                case ScalarNode(value=action, start_mark=mark) if (
+                    "${{" not in action
+                    and "@" in action
+                    and re.fullmatch(r"[^/\s]+/(?:.*/)?setup-[^@/\s]+@[^$\s]+", action)
+                    is not None
+                ):
+                    pass
+                case _:
+                    continue
+            settings = _static_fingerprint(step.get("with"))
+            if "with" in step and settings is None:
+                continue
+            records.append(
+                (repr(runner), job_name, action, settings or (), mark.line + 1)
+            )
+    return records
 
 
 def _literal_matrix_values(node: Node) -> bool:
@@ -260,6 +351,42 @@ def workflow_run_findings(
                 policy.severity,
             )
         )
+    if not azure:
+        setup_groups: dict[tuple[str, str, _Fingerprint], list[tuple[str, int]]] = (
+            defaultdict(list)
+        )
+        for runner, job, action, settings, line in _setup_action_blocks(source, path):
+            if action in policy.ignore_setup_actions:
+                continue
+            setup_groups[(runner, action, settings)].append((job, line))
+        for (_, action, _settings), occurrences in sorted(
+            setup_groups.items(),
+            key=lambda item: (item[0][0], item[0][1], repr(item[0][2])),
+        ):
+            jobs = sorted({job for job, _ in occurrences})
+            if len(jobs) < 2:
+                continue
+            locations = sorted((line, job) for job, line in occurrences)
+            examples = ", ".join(f"{job} (line {line})" for line, job in locations)
+            findings.append(
+                Finding(
+                    rule_tag(
+                        Scope.ANY,
+                        Framework.NONE,
+                        Category.ORCHESTRATION,
+                        "repeated-workflow-setup-action",
+                    ),
+                    path,
+                    (
+                        f"identical static setup action {action!r} appears in distinct jobs: "
+                        f"{examples}; review whether shared workflow configuration would help. "
+                        "Jobs have isolated environments, so repeated setup may be required; "
+                        "this is a duplication candidate, not a removal recommendation."
+                    ),
+                    locations[0][0],
+                    policy.severity,
+                )
+            )
     return findings
 
 

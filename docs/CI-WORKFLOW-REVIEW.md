@@ -1,11 +1,19 @@
 # CI workflow duplication review
 
 `ci-workflows` is an opt-in, read-only review rule for repeated static
-multiline GitHub Actions `run` blocks. It groups exact command text across
-distinct jobs with the same static `runs-on` value. By default matrix jobs,
+multiline GitHub Actions `run` blocks and repeated setup actions. It groups
+exact command text or an identical `setup-*` action with identical static
+`with` inputs across distinct jobs with the same static `runs-on` value. By default matrix jobs,
 conditions, dependencies, permissions, environments, step overrides, expressions,
 and aliases are excluded. Literal block scalars and configured minimum line
 counts constrain the scan.
+
+A repeated setup-action candidate is informational: jobs have isolated
+environments, so setup may be required in every job. It recommends reviewing
+whether shared workflow configuration would help; it does not recommend
+removing setup. Use `ignore_setup_actions` to suppress a repeated action by its
+exact `uses` value (for example, `actions/setup-python@v5`). Conditional steps,
+dynamic inputs, and jobs with additional execution context are skipped.
 
 A user may explicitly allowlist an exact normalized command string in
 `matrix_invariant_run_blocks`. Only simple literal matrix axes with no other

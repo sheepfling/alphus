@@ -101,6 +101,7 @@ class CiWorkflowPolicy(SourceScanPolicy):
     workflow_paths: tuple[str, ...] = (".github/workflows/**",)
     azure_workflow_paths: tuple[str, ...] = ()
     ignore_run_blocks: tuple[str, ...] = ()
+    ignore_setup_actions: tuple[str, ...] = ()
     matrix_invariant_run_blocks: tuple[str, ...] = ()
     minimum_run_lines: Annotated[int, Field(ge=2)] = 2
     severity: Severity = "info"
@@ -110,7 +111,9 @@ class CiWorkflowPolicy(SourceScanPolicy):
     def validate_workflow_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
         return validate_patterns(values)
 
-    @field_validator("ignore_run_blocks", "matrix_invariant_run_blocks")
+    @field_validator(
+        "ignore_run_blocks", "ignore_setup_actions", "matrix_invariant_run_blocks"
+    )
     @classmethod
     def validate_ignored_blocks(cls, values: Sequence[str]) -> tuple[str, ...]:
         if any(not value.strip() for value in values):
