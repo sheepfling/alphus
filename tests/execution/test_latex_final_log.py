@@ -54,6 +54,35 @@ def test_reports_duplicate_labels_and_hyperref_destinations(tmp_path: Path) -> N
     assert all("unresolved LaTeX" in issue for issue in issues)
 
 
+def test_reports_wrapped_pdftex_duplicate_destination_warning(tmp_path: Path) -> None:
+    log = tmp_path / "report.log"
+    pdf = tmp_path / "report.pdf"
+    pdf.write_bytes(b"pdf artifact")
+    log.write_text(
+        "Output written on report.pdf (14 pages, 123456 bytes).\n"
+        "pdfTeX warning (ext4): destination with the same identifier\n"
+        "(name{section.2}) has been already used,\n"
+        "duplicate ignored\n"
+    )
+
+    issues = validate_final_log(log, pdf)
+    assert len(issues) == 1
+    assert "unresolved LaTeX" in issues[0]
+
+
+def test_ignores_unrelated_duplicate_ignored_text(tmp_path: Path) -> None:
+    log = tmp_path / "report.log"
+    pdf = tmp_path / "report.pdf"
+    pdf.write_bytes(b"pdf artifact")
+    log.write_text(
+        "Output written on report.pdf (14 pages, 123456 bytes).\n"
+        "A destination with the same identifier is described in this note;\n"
+        "another unrelated check said duplicate ignored.\n"
+    )
+
+    assert validate_final_log(log, pdf) == []
+
+
 def test_missing_pdf_or_log_fails_closed(tmp_path: Path) -> None:
     log = tmp_path / "report.log"
     log.write_text("Output written on report.pdf (1 page, 100 bytes).\n")
