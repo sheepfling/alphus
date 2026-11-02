@@ -10,6 +10,10 @@ from typing import Annotated, Literal, Self, TextIO
 from pydantic import Field, TypeAdapter, field_validator, model_validator
 
 from alphus.contracts.findings import Severity
+from alphus.plugins.registry import (
+    enabled_plugin_registry,
+    validate_plugin_settings,
+)
 from alphus.policy.architecture import (
     ArchitectureGraphCheckPolicy,
     ArchitectureGraphPolicy,
@@ -25,6 +29,7 @@ from alphus.policy.base import (
     require_unique,
     validate_single_path,
 )
+from alphus.policy.catalog import RULE_SPECS
 from alphus.policy.intents import (
     IntentFileOverride,
     IntentLanguageOverride,
@@ -204,32 +209,42 @@ class QualityGateConfig(StrictModel):
     @classmethod
     def expand_native_tools(cls, value: Mapping[str, object] | None) -> object:
         """Keep the common-tool shortcut outside the full policy model."""
-        if not isinstance(value, Mapping) or not (
-            {"tools", "languages"} & value.keys()
-        ):
-            return value
-        if "orchestration_files" in value:
+        match value:
+            case Mapping():
+                document = dict(value)
+            case _:
+                return value
+        raw_plugins = document.get("plugins")
+        match raw_plugins:
+            case Mapping():
+                document["plugins"] = PluginPolicy.model_validate(raw_plugins)
+            case _:
+                pass
+        if not ({"tools", "languages"} & document.keys()):
+            return document
+        if "orchestration_files" in document:
             raise ValueError(
                 "native shortcuts cannot be combined with orchestration_files"
             )
         selected_languages = (
-            TypeAdapter(list[str]).validate_python(value["languages"], strict=True)
-            if "languages" in value
+            TypeAdapter(list[str]).validate_python(document["languages"], strict=True)
+            if "languages" in document
             else None
         )
         selected_tools = (
-            TypeAdapter(list[str]).validate_python(value["tools"], strict=True)
-            if "tools" in value
+            TypeAdapter(list[str]).validate_python(document["tools"], strict=True)
+            if "tools" in document
             else None
         )
         selected = _selected_native_tools(selected_languages, selected_tools)
         if selected is None:
             raise ValueError("native shortcut selection is empty")
-        declared = _PartialOrchestration.model_validate(value.get("orchestration", {}))
+        declared = _PartialOrchestration.model_validate(
+            document.get("orchestration", {})
+        )
         orchestration = _compose_native_orchestration(
             native_tool_policy(selected), declared
         )
-        document = dict(value)
         document.pop("languages", None)
         document.pop("tools", None)
         document["orchestration"] = orchestration
@@ -238,12 +253,6 @@ class QualityGateConfig(StrictModel):
     @model_validator(mode="after")
     def validate_rule_plugins(self) -> Self:
         """Resolve only allowlisted plugins and validate their selected settings."""
-        from alphus.plugins.registry import (
-            enabled_plugin_registry,
-            validate_plugin_settings,
-        )
-        from alphus.policy.catalog import RULE_SPECS
-
         registry = enabled_plugin_registry(self.plugins)
         validate_plugin_settings(self.plugins)
         if self.orchestration is None:

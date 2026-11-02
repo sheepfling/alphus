@@ -81,15 +81,18 @@ def load_enabled_plugins(
         entry_point = matches[0]
         try:
             factory = entry_point.load()
-            plugin = factory()
+            plugin_value: object = factory()
         except Exception as error:
             raise ValueError(
                 f"could not load enabled rule plugin {name!r}: {error}"
             ) from error
-        if not isinstance(plugin, RulePlugin):
-            raise TypeError(
-                f"entry point {name!r} must return an alphus.plugins.RulePlugin"
-            )
+        match plugin_value:
+            case RulePlugin() as plugin:
+                pass
+            case _:
+                raise TypeError(
+                    f"entry point {name!r} must return an alphus.plugins.RulePlugin"
+                )
         if plugin.api_version != PLUGIN_API_VERSION:
             raise ValueError(
                 f"plugin {name!r} uses API version {plugin.api_version}; "

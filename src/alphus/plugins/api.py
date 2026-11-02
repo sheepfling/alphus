@@ -19,16 +19,23 @@ ConfigT = TypeVar("ConfigT", bound=StrictModel)
 
 
 def _immutable_sequence(value: object, description: str) -> tuple[object, ...]:
-    if isinstance(value, tuple):
-        return cast(tuple[object, ...], value)
-    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
-        return tuple(cast(Sequence[object], value))
-    raise TypeError(f"{description} must be a sequence")
+    match value:
+        case str() | bytes():
+            raise TypeError(f"{description} must be a sequence")
+        case tuple():
+            return cast(tuple[object, ...], value)
+        case Sequence():
+            return tuple(cast(Sequence[object], value))
+        case _:
+            raise TypeError(f"{description} must be a sequence")
 
 
 def _require_config_model(value: object) -> None:
-    if not isinstance(value, type) or not issubclass(value, StrictModel):
-        raise TypeError("plugin rule config models must extend StrictModel")
+    match value:
+        case type() as model if issubclass(model, StrictModel):
+            return
+        case _:
+            raise TypeError("plugin rule config models must extend StrictModel")
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,8 +124,13 @@ class RulePlugin:
         object.__setattr__(self, "rules", rules)
         if _SLUG.fullmatch(self.name) is None:
             raise ValueError("plugin names must be lowercase slugs")
-        if type(self.api_version) is not int or self.api_version < 1:
-            raise ValueError("plugin API version must be a positive integer")
+        match self.api_version:
+            case bool():
+                raise ValueError("plugin API version must be a positive integer")
+            case int() if self.api_version >= 1:
+                pass
+            case _:
+                raise ValueError("plugin API version must be a positive integer")
         if not self.rules:
             raise ValueError("a rule plugin must provide at least one rule")
         names = tuple(rule.name for rule in self.rules)

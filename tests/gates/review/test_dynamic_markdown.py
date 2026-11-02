@@ -116,6 +116,23 @@ def test_list_append_join_and_code_delimiters_are_recognized() -> None:
     assert any("local append/join assembly" in message for message in contexts)
 
 
+def test_loop_appends_retain_one_reviewable_row_for_later_join() -> None:
+    findings = dynamic_markdown_findings(
+        "def render(values):\n"
+        "    parts = []\n"
+        "    for value in values:\n"
+        "        parts.append('| ')\n"
+        "        parts.append(value)\n"
+        "        parts.append(' |\\n')\n"
+        "    return ''.join(parts)\n"
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 5
+    assert "table cell" in findings[0].message
+    assert "local append/join assembly" in findings[0].message
+
+
 def test_static_prose_non_markdown_and_reassigned_aliases_are_ignored() -> None:
     source = (
         "def render(name, rate):\n"

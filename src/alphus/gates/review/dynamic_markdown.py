@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ast
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from string import Formatter
@@ -77,14 +77,15 @@ class _MarkdownAnalyzer:
         source: str,
         path: str,
         severity: Severity = "warning",
-        # TODO: findings key should be a semantic NamedTuple; confirm alphus catch;
-        findings: dict[tuple[str, int, str], Finding] | None = None,
+        findings: MutableMapping[tuple[str, int, str], Finding] | None = None,
         scope: _Scope | None = None,
     ) -> None:
         self.source = source
         self.path = path
         self.severity: Severity = severity
-        self.findings = findings if findings is not None else {}
+        self.findings: MutableMapping[tuple[str, int, str], Finding] = (
+            findings if findings is not None else {}
+        )
         self.scope = scope or _Scope()
 
     def analyze(self, nodes: Sequence[ast.stmt]) -> None:
@@ -244,11 +245,11 @@ class _MarkdownAnalyzer:
                         case ast.FormattedValue(
                             value=value, conversion=-1, format_spec=None
                         ):
-                            known = (
-                                self.scope.aliases.get(value.id)
-                                if isinstance(value, ast.Name)
-                                else self._resolve(value)
-                            )
+                            match value:
+                                case ast.Name(id=name):
+                                    known = self.scope.aliases.get(name)
+                                case _:
+                                    known = self._resolve(value)
                             part = (
                                 self._reframe(known, node, "f-string interpolation")
                                 if known is not None
@@ -291,7 +292,6 @@ class _MarkdownAnalyzer:
             case _:
                 return None
 
-    # TODO: outputting mutables is fine for return values; confirm alphus catch;
     def _contexts(self, fragment: _Fragment) -> Mapping[str, frozenset[str]]:
         contexts: dict[str, set[str]] = {
             value.token: set() for value in fragment.values
@@ -387,6 +387,7 @@ class _MarkdownAnalyzer:
         self,
         branches: Sequence[Sequence[ast.stmt]],
         starting: _Scope | None = None,
+        preserve_loop_list_appends: bool = False,
     ) -> None:
         starting = starting or _Scope(
             self.scope.aliases.copy(),
@@ -414,6 +415,17 @@ class _MarkdownAnalyzer:
             for name, value in outcomes[0].lists.items()
             if all(outcome.lists.get(name) == value for outcome in outcomes[1:])
         }
+        if preserve_loop_list_appends:
+            for name, initial in starting.lists.items():
+                after_body = outcomes[0].lists.get(name)
+                if (
+                    after_body is not None
+                    and after_body[: len(initial)] == initial
+                    and all(
+                        outcome.lists.get(name) == initial for outcome in outcomes[1:]
+                    )
+                ):
+                    self.scope.lists[name] = after_body
 
     def _scan(self, nodes: Sequence[ast.stmt]) -> None:
         for node in nodes:
@@ -463,7 +475,11 @@ class _MarkdownAnalyzer:
                     for name in self._target_names(target):
                         loop_scope.aliases.pop(name, None)
                         loop_scope.lists.pop(name, None)
-                    self._branch((body, otherwise, ()), starting=loop_scope)
+                    self._branch(
+                        (body, otherwise, ()),
+                        starting=loop_scope,
+                        preserve_loop_list_appends=True,
+                    )
                 case ast.While(body=body, orelse=otherwise):
                     self._branch((body, otherwise, ()))
                 case ast.With(body=body) | ast.AsyncWith(body=body):

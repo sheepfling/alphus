@@ -173,7 +173,8 @@ RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
         "numeric-literals": RuleSpec(
             "numeric_literals",
             RuleOutputShape.FINDINGS,
-            "Matches configured exact numeric constants in Python arithmetic; it does not inspect model semantics.",
+            "Matches configured exact numeric constants in Python arithmetic; "
+            "it does not inspect model semantics.",
             ("python",),
             (
                 "scientific-computing",
@@ -185,7 +186,8 @@ RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
         "scipy-constants": RuleSpec(
             "scipy_constants",
             RuleOutputShape.FINDINGS,
-            "Finds selected SciPy physical constants and unit-conversion factors in Python arithmetic; it does not validate units or coordinate systems.",
+            "Finds selected SciPy physical constants and unit-conversion factors "
+            "in Python arithmetic; it does not validate units or coordinate systems.",
             ("python",),
             (
                 "scientific-computing",
@@ -198,7 +200,8 @@ RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
         "test-quality": RuleSpec(
             "test_quality",
             RuleOutputShape.FINDINGS,
-            "Reviews configured Python tests for brittle prose assertions and transient-document handling.",
+            "Reviews configured Python tests for brittle prose assertions and "
+            "transient-document handling.",
             ("python",),
         ),
         "input-contracts": RuleSpec(

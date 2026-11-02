@@ -107,11 +107,19 @@ def run_rule(
 
 def _plugin_findings(value: object) -> Sequence[PluginFinding]:
     """Reject malformed values returned across the third-party callback boundary."""
-    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
-        raise TypeError("plugin checkers must return a sequence of PluginFinding")
-    findings = cast(Sequence[object], value)
-    if any(not isinstance(finding, PluginFinding) for finding in findings):
-        raise TypeError("plugin checkers must return PluginFinding records")
+    match value:
+        case str() | bytes():
+            raise TypeError("plugin checkers must return a sequence of PluginFinding")
+        case Sequence():
+            findings = cast(Sequence[object], value)
+        case _:
+            raise TypeError("plugin checkers must return a sequence of PluginFinding")
+    for finding in findings:
+        match finding:
+            case PluginFinding():
+                continue
+            case _:
+                raise TypeError("plugin checkers must return PluginFinding records")
     return cast(Sequence[PluginFinding], findings)
 
 

@@ -1377,9 +1377,11 @@ def _selected_rule_files(
     ]
 
 
-def _rule_catalog_payload(config: QualityGateConfig | None = None) -> dict[str, object]:
+def _rule_catalog_payload(
+    config: QualityGateConfig | None = None,
+) -> dict[str, JsonValue]:
     """Describe built-in and explicitly enabled plugin checks."""
-    rules: list[dict[str, object]] = [
+    rules: list[dict[str, JsonValue]] = [
         {
             "selector": selector,
             "plugin": None,
@@ -1430,7 +1432,10 @@ def _rule_catalog_payload(config: QualityGateConfig | None = None) -> dict[str, 
             }
             for name in installed_plugin_names()
         ],
-        "rules": sorted(rules, key=lambda item: str(item["selector"])),
+        "rules": sorted(
+            rules,
+            key=lambda item: str(cast(Mapping[str, JsonValue], item)["selector"]),
+        ),
     }
 
 

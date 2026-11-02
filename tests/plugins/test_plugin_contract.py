@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import importlib
 import json
+import subprocess
 import tomllib
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import replace
 from io import StringIO
 from pathlib import Path
-from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -22,18 +22,16 @@ from alphus.plugins.api import PLUGIN_ENTRY_POINT_GROUP
 from alphus.plugins.registry import load_enabled_plugins
 from alphus.policy.plugins import PluginPolicy
 
-EXAMPLE_ROOT = (
-    Path(__file__).parents[2] / "examples" / "plugins" / "alphus-example-rules"
-)
+EXAMPLE_ROOT = Path("examples/plugins/alphus-example-rules")
 
 
 class _EntryPoint:
-    def __init__(self, name: str, factory: Any) -> None:
+    def __init__(self, name: str, factory: Callable[[], object]) -> None:
         self.name = name
         self.dist = None
         self._factory = factory
 
-    def load(self) -> Any:
+    def load(self) -> Callable[[], object]:
         return self._factory
 
 
@@ -105,8 +103,6 @@ def test_example_plugin_runs_as_a_profile_rule(
     example_entry_point: _EntryPoint,
 ) -> None:
     del example_entry_point
-    import subprocess
-
     subprocess.run(["git", "init", "--quiet", str(tmp_path)], check=True)
     (tmp_path / "README.md").write_text("No heading here.\n", encoding="utf-8")
     config_path = tmp_path / "quality.toml"
@@ -191,9 +187,8 @@ def test_plugin_rule_settings_require_explicit_plugin_enablement() -> None:
 def test_enabled_plugins_must_match_the_entry_point_name(
     example_entry_point: _EntryPoint,
 ) -> None:
-    from alphus_example_rules import register
-
-    example_entry_point._factory = lambda: replace(register(), name="other")
+    original = example_entry_point._factory()
+    example_entry_point._factory = lambda: replace(original, name="other")
     load_enabled_plugins.cache_clear()
 
     with pytest.raises(ValueError, match="does not match entry point"):
@@ -203,9 +198,8 @@ def test_enabled_plugins_must_match_the_entry_point_name(
 def test_plugin_api_version_must_match_the_host(
     example_entry_point: _EntryPoint,
 ) -> None:
-    from alphus_example_rules import register
-
-    example_entry_point._factory = lambda: replace(register(), api_version=2)
+    original = example_entry_point._factory()
+    example_entry_point._factory = lambda: replace(original, api_version=2)
     load_enabled_plugins.cache_clear()
 
     with pytest.raises(ValueError, match="uses API version 2"):

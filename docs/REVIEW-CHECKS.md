@@ -580,7 +580,10 @@ Run that consumer-owned profile with `alphus --run --profile markdown-review`.
 
 The first supported patterns are f-strings, string concatenation, literal
 `.format()` templates, direct local aliases, and straight-line list
-`append`/`join` assembly. It reports values in pipe-delimited table rows,
+`append`/`join` assembly, including a list initialized before a loop and
+appended to with a recognizable one-iteration row pattern. For that loop case,
+the analyzer treats the loop body as a representative row; it does not infer
+iteration counts or execute the producer. It reports values in pipe-delimited table rows,
 simple Markdown link labels or destinations, and matched backtick spans or
 fences. Findings include the dynamic expression and observed source
 construction. They ask for context-specific review, such as table-cell
