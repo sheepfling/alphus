@@ -179,6 +179,9 @@ _RUFF_PER_FILE_TABLES = frozenset(
         "extend-per-file-ignores",
     }
 )
+_RUFF_NORMAL_PER_FILE_TABLES = frozenset(
+    table for table in _RUFF_PER_FILE_TABLES if "extend-per-file-ignores" not in table
+)
 
 
 def _split_toml_comment(value: str) -> tuple[str, str]:
@@ -402,6 +405,7 @@ def _ruff_config_suppression_findings(
     config_path: Path | None = None,
     seen: frozenset[Path] = frozenset(),
     depth: int = 0,
+    skip_inherited_normal_per_file: bool = False,
 ) -> list[Finding]:
     """Audit simple Ruff per-file-ignore table entries without executing Ruff."""
     findings: list[Finding] = []
@@ -478,14 +482,14 @@ def _ruff_config_suppression_findings(
     table = ""
     used_exceptions: set[tuple[str, int]] = set()
     inherited_config: str | None = None
-    local_per_file_table = False
+    local_normal_per_file = False
     for line_number, line in enumerate(source.splitlines(), start=1):
         stripped = line.strip()
         section = re.fullmatch(r"\[([^]]+)\]", stripped)
         if section:
             table = section.group(1).strip()
-            if table in _RUFF_PER_FILE_TABLES:
-                local_per_file_table = True
+            if table in _RUFF_NORMAL_PER_FILE_TABLES:
+                local_normal_per_file = True
             continue
         if table in {"", "tool.ruff"} and re.match(r"\s*extend\s*=", line):
             extension_value, _comment = _split_toml_comment(line.split("=", 1)[1])
@@ -521,7 +525,10 @@ def _ruff_config_suppression_findings(
                 parsed_entries = None
             entries = _toml_per_file_map(parsed_entries)
             if entries is not None:
-                local_per_file_table = True
+                normal_inline = not re.match(r"\s*extend-per-file-ignores\s*=", line)
+                local_normal_per_file = local_normal_per_file or normal_inline
+                if skip_inherited_normal_per_file and not normal_inline:
+                    continue
                 for pattern, code_values in entries.items():
                     selected_codes = sorted(
                         set(policy.rule_codes).intersection(code_values)
@@ -576,6 +583,8 @@ def _ruff_config_suppression_findings(
                         ),
                     )
                 )
+            continue
+        if skip_inherited_normal_per_file and table in _RUFF_NORMAL_PER_FILE_TABLES:
             continue
         if (
             table not in _RUFF_PER_FILE_TABLES
@@ -683,45 +692,34 @@ def _ruff_config_suppression_findings(
             )
         )
     if inherited_config is not None:
-        if local_per_file_table:
+        parent_path = config_path.parent / inherited_config
+        try:
+            resolved_parent = parent_path.resolve(strict=True)
+            resolved_parent.relative_to(root)
+        except (OSError, ValueError):
             findings.append(
                 Finding(
                     rule_id=_RULE_ID,
                     path=config_name,
                     severity=policy.severity,
                     message=(
-                        "Ruff inherited configuration was not traversed because this "
-                        "file also defines per-file-ignore tables; the effective merge "
-                        "semantics are left to Ruff."
+                        "Ruff inherited configuration was not evaluated because "
+                        "its target is missing or outside the repository root."
                     ),
                 )
             )
         else:
-            parent_path = config_path.parent / inherited_config
-            try:
-                resolved_parent = parent_path.resolve(strict=True)
-                resolved_parent.relative_to(root)
-            except (OSError, ValueError):
-                findings.append(
-                    Finding(
-                        rule_id=_RULE_ID,
-                        path=config_name,
-                        severity=policy.severity,
-                        message=(
-                            "Ruff inherited configuration was not evaluated because "
-                            "its target is missing or outside the repository root."
-                        ),
-                    )
+            findings.extend(
+                _ruff_config_suppression_findings(
+                    root,
+                    selected_files,
+                    policy,
+                    config_path=resolved_parent,
+                    seen=seen,
+                    depth=depth + 1,
+                    skip_inherited_normal_per_file=(
+                        skip_inherited_normal_per_file or local_normal_per_file
+                    ),
                 )
-            else:
-                findings.extend(
-                    _ruff_config_suppression_findings(
-                        root,
-                        selected_files,
-                        policy,
-                        config_path=resolved_parent,
-                        seen=seen,
-                        depth=depth + 1,
-                    )
-                )
+            )
     return findings

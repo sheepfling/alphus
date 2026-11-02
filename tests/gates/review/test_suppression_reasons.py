@@ -1,5 +1,6 @@
 """Tests for consumer-selected reasons on Ruff suppression comments."""
 
+import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -242,6 +243,57 @@ def test_inherited_ruff_config_is_scanned_within_the_repository_root(
     assert len(findings) == 1
     assert findings[0].path == "base.toml"
     assert "no rationale" in findings[0].message
+
+
+@pytest.mark.parametrize(
+    ("parent_key", "child_key", "expected_audit_count", "expected_ruff_codes"),
+    [
+        ("per-file-ignores", "per-file-ignores", 1, {"E402"}),
+        ("extend-per-file-ignores", "per-file-ignores", 2, set()),
+        ("per-file-ignores", "extend-per-file-ignores", 2, set()),
+        ("extend-per-file-ignores", "extend-per-file-ignores", 2, set()),
+    ],
+)
+def test_inherited_per_file_merge_matches_native_ruff(
+    tmp_path: Path,
+    parent_key: str,
+    child_key: str,
+    expected_audit_count: int,
+    expected_ruff_codes: set[str],
+) -> None:
+    ruff = shutil.which("ruff")
+    if ruff is None:
+        pytest.skip("Ruff executable is not installed in this test environment")
+    (tmp_path / "app.py").write_text("value = 1\nimport os\n", encoding="utf-8")
+    (tmp_path / "base.toml").write_text(
+        f'[lint.{parent_key}]\n"app.py" = ["E402"]\n', encoding="utf-8"
+    )
+    (tmp_path / "ruff.toml").write_text(
+        f'extend = "base.toml"\n[lint.{child_key}]\n"app.py" = ["F401"]\n',
+        encoding="utf-8",
+    )
+
+    native = subprocess.run(
+        [ruff, "check", "--select", "E402,F401", "--output-format", "json", "app.py"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert native.returncode in {0, 1}, native.stdout + native.stderr
+    diagnostics = json.loads(native.stdout)
+    assert {item["code"] for item in diagnostics} == expected_ruff_codes
+
+    findings = check_suppression_reasons(
+        tmp_path,
+        [Path("app.py")],
+        SuppressionReasonPolicy(extensions=(".py",), rule_codes=("E402", "F401")),
+    )
+    assert len(findings) == expected_audit_count
+    assert not any(
+        "merge semantics are left to Ruff" in item.message for item in findings
+    )
 
 
 def test_inherited_ruff_config_outside_root_is_not_evaluated(tmp_path: Path) -> None:
