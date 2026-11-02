@@ -14,7 +14,7 @@ from heapq import nsmallest
 from importlib import import_module
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
-from typing import Protocol, cast
+from typing import Protocol, TypeAlias, cast
 
 from alphus.config import SourceFamilyPolicy as _SourceFamilyPolicy
 from alphus.contracts.findings import Finding
@@ -51,6 +51,13 @@ _GIT_SHA = re.compile(rb"^[0-9a-f]{40,64}$")
 _CPP_INCLUDE = re.compile(r'^\s*#\s*include\s*"([^"\\\r\n]+)"\s*$')
 _CPP_EXTENSIONS = frozenset({".c", ".h", ".cc", ".hh", ".cpp", ".hpp", ".cxx", ".hxx"})
 _JAVASCRIPT_EXTENSIONS = frozenset({".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"})
+_CppIncludeEdge: TypeAlias = tuple[int, Path | None]
+_CppIncludeIndex: TypeAlias = tuple[
+    dict[Path, tuple[_CppIncludeEdge, ...] | None],
+    dict[Path, tuple[tuple[Path, int], ...]],
+    set[Path],
+    bool,
+]
 
 
 class _TreeSitterPoint(Protocol):
@@ -506,6 +513,93 @@ class _PythonImportParseCache:
             return None
         self.trees[source] = tree
         return tree
+
+
+def _cpp_include_index(
+    checkout: Path,
+    selected: Iterable[Path],
+    family_sources: AbstractSet[Path],
+    max_bytes: int,
+) -> _CppIncludeIndex:
+    """Index selected literal quoted includes under one run-wide byte budget."""
+    sources = sorted(
+        (path for path in selected if path.suffix.lower() in _CPP_EXTENSIONS),
+        key=lambda path: path.as_posix(),
+    )
+    selected_names = {path.as_posix() for path in sources}
+    core = sorted(
+        (path for path in sources if path in family_sources),
+        key=lambda path: path.as_posix(),
+    )
+    optional = [path for path in sources if path not in family_sources]
+    edges_by_source: dict[Path, tuple[tuple[int, Path | None], ...] | None] = {}
+    failed: set[Path] = set()
+    bytes_left = max_bytes
+    budget_exhausted = False
+
+    for source in (*core, *optional):
+        if bytes_left <= 0:
+            failed.add(source)
+            edges_by_source[source] = None
+            budget_exhausted = True
+            continue
+        source_path = (checkout / source).resolve(strict=False)
+        if not source_path.is_relative_to(checkout):
+            failed.add(source)
+            edges_by_source[source] = None
+            continue
+        try:
+            available = bytes_left
+            with source_path.open("rb") as handle:
+                raw = handle.read(available + 1)
+            bytes_left -= min(len(raw), available)
+            if len(raw) > available:
+                failed.add(source)
+                edges_by_source[source] = None
+                budget_exhausted = True
+                continue
+            text = raw.decode("utf-8")
+        except (OSError, UnicodeError):
+            failed.add(source)
+            edges_by_source[source] = None
+            continue
+
+        edges: list[tuple[int, Path | None]] = []
+        for line_number, line in enumerate(text.splitlines(), 1):
+            match = _CPP_INCLUDE.fullmatch(line)
+            if match is None:
+                continue
+            include = match.group(1)
+            if "\\" in include or PurePosixPath(include).is_absolute():
+                edges.append((line_number, None))
+                continue
+            target = posixpath.normpath(
+                posixpath.join(source.parent.as_posix(), include)
+            )
+            edges.append(
+                (
+                    line_number,
+                    Path(target) if target in selected_names else None,
+                )
+            )
+        edges_by_source[source] = tuple(edges)
+
+    incoming: dict[Path, list[tuple[Path, int]]] = defaultdict(list)
+    for source, cached_edges in edges_by_source.items():
+        if cached_edges is None:
+            continue
+        for line_number, target in cached_edges:
+            if target is not None:
+                incoming[target].append((source, line_number))
+    return (
+        edges_by_source,
+        {
+            target: tuple(sorted(rows, key=lambda row: (row[0].as_posix(), row[1])))
+            for target, rows in incoming.items()
+        },
+        failed,
+        budget_exhausted,
+    )
 
 
 def _python_import_evidence(
@@ -1002,80 +1096,78 @@ def _python_import_evidence(
 
 
 def _cpp_include_evidence(
-    checkout: Path,
     members: AbstractSet[Path],
-    selected: Iterable[Path],
     policy: _SourceFamilyPolicy,
+    index: _CppIncludeIndex,
 ) -> tuple[str, list[str]]:
-    """Resolve literal quoted includes only when their target is selected."""
-    selected_names = {path.as_posix() for path in selected}
-    member_names = {path.as_posix() for path in members}
-    bytes_left = policy.max_import_analysis_bytes
-    resolved: list[tuple[str, int, str]] = []
+    """Summarize selected literal include edges into and out of a family."""
+    edges_by_source, incoming_by_target, failed_sources, budget_exhausted = index
+    resolved: list[tuple[str, str, int, str]] = []
+    incoming: list[tuple[str, str, int, str]] = []
     unresolved = 0
-    failures = 0
     sources = sorted(
         (path for path in members if path.suffix.lower() in _CPP_EXTENSIONS),
         key=lambda path: path.as_posix(),
     )
     for source in sources:
-        relative = source.as_posix()
-        source_path = (checkout / source).resolve(strict=False)
-        if not source_path.is_relative_to(checkout) or bytes_left <= 0:
-            failures += 1
-            continue
-        try:
-            with source_path.open("rb") as handle:
-                raw = handle.read(bytes_left + 1)
-            if len(raw) > bytes_left:
-                failures += 1
+        for line_number, target_path in edges_by_source.get(source) or ():
+            if target_path is None:
                 continue
-            bytes_left -= len(raw)
-            text = raw.decode("utf-8")
-        except (OSError, UnicodeError):
-            failures += 1
-            continue
-        for line_number, line in enumerate(text.splitlines(), 1):
-            match = _CPP_INCLUDE.fullmatch(line)
-            if match is None:
-                continue
-            include = match.group(1)
-            if "\\" in include or PurePosixPath(include).is_absolute():
-                unresolved += 1
-                continue
-            target = posixpath.normpath(
-                posixpath.join(posixpath.dirname(relative), include)
-            )
-            if target in selected_names:
-                resolved.append((relative, line_number, target))
+            target = target_path.as_posix()
+            if target_path in members:
+                resolved.append(("member", source.as_posix(), line_number, target))
             else:
-                unresolved += 1
-    internal = sum(1 for _, _, target in resolved if target in member_names)
-    shown = resolved[: policy.max_import_edges]
+                resolved.append(("selected", source.as_posix(), line_number, target))
+        edges = edges_by_source.get(source)
+        if edges is not None:
+            unresolved += sum(1 for _, target in edges if target is None)
+
+    for target in sorted(members, key=lambda path: path.as_posix()):
+        for source, line_number in incoming_by_target.get(target, ()):
+            if source not in members:
+                incoming.append(
+                    ("incoming", source.as_posix(), line_number, target.as_posix())
+                )
+
+    internal = sum(1 for kind, _, _, _ in resolved if kind == "member")
+    all_edges = sorted(
+        (*resolved, *incoming), key=lambda row: (row[1], row[2], row[0], row[3])
+    )
+    shown = all_edges[: policy.max_import_edges]
     context = (
         f"Direct quoted C/C++ include evidence: {internal} resolved edge(s) target "
-        f"another family member; {len(resolved) - internal} target other selected "
-        f"source files; {unresolved} literal include(s) did not resolve to the "
-        "selected inventory."
+        f"another family member from family members; {len(resolved) - internal} "
+        f"target other selected source files; {len(incoming)} incoming edge(s) from "
+        f"selected external C/C++ files target a family member; {unresolved} literal "
+        "include(s) did not resolve to the selected inventory in family members."
     )
     if shown:
         context += (
             " Examples: "
-            + ", ".join(f"{source}:{line} → {target}" for source, line, target in shown)
+            + ", ".join(
+                f"{kind} {source}:{line} → {target}"
+                for kind, source, line, target in shown
+            )
             + "."
         )
-    if len(shown) < len(resolved):
-        context += f" {len(resolved) - len(shown)} edge(s) omitted by max_import_edges."
+    if len(shown) < len(all_edges):
+        context += (
+            f" {len(all_edges) - len(shown)} edge(s) omitted by max_import_edges."
+        )
     context += (
         " This is lexical include evidence, not compiler-resolved dependency data; "
         "macro/angle-bracket includes, conditional activation, include search paths, "
-        "and unselected targets are not resolved."
+        "and unselected targets are not resolved. Incoming references cover only "
+        "literal quoted includes from the selected C/C++ inventory and do not prove "
+        "public ownership or architectural coupling."
     )
     notes: list[str] = []
-    if failures:
-        notes.append(f"{failures} C/C++ file(s) could not be analyzed")
-    if bytes_left == 0:
-        notes.append("the configured C/C++ include byte budget was exhausted")
+    if failed_sources:
+        notes.append(
+            f"{len(failed_sources)} selected C/C++ file(s) could not be analyzed"
+        )
+    if budget_exhausted:
+        notes.append("the shared C/C++ include byte budget was exhausted")
     if notes:
         context += " Analysis incomplete: " + "; ".join(notes) + "."
     return context, notes
@@ -1363,9 +1455,21 @@ def source_family_findings(
             import_contexts[key] = context
             incomplete_notes.extend(notes)
     if policy.cpp_include_evidence:
+        family_sources = {
+            path
+            for _, _, members in retained
+            for path in members
+            if path.suffix.lower() in _CPP_EXTENSIONS
+        }
+        cpp_index = _cpp_include_index(
+            checkout,
+            selected,
+            family_sources,
+            policy.max_import_analysis_bytes,
+        )
         for _, _, members in retained:
             key = tuple(sorted(path.as_posix() for path in members))
-            context, notes = _cpp_include_evidence(checkout, members, selected, policy)
+            context, notes = _cpp_include_evidence(members, policy, cpp_index)
             cpp_contexts[key] = context
             incomplete_notes.extend(notes)
     if policy.javascript_import_evidence:

@@ -673,7 +673,7 @@ javascript_import_evidence = true
 max_import_edges = 12
 max_public_api_names = 20
 max_contract_declarations = 12
-# One run-wide Python import-analysis byte budget, shared across all families.
+# One run-wide Python or C/C++ pass byte budget, shared across all families.
 max_import_analysis_bytes = 8388608
 # Optional: bounded, read-only co-change evidence for selected family paths.
 git_cochange_evidence = true
@@ -701,9 +701,21 @@ The import walk remains family-specific, but selected files are not re-read or
 re-parsed for each family. Unresolved, ambiguous, above-package-root relative
 imports, parse failures, and files outside the selected inventory are not
 treated as absent dependencies. It does not follow dynamic imports,
-aliases/re-exports, or type-checker resolution. JavaScript and
-TypeScript import evidence is also disabled by default and requires the optional
-`alphus[javascript]` extra. Its Tree-sitter parsers inspect selected `.js`,
+aliases/re-exports, or type-checker resolution.
+
+The optional C/C++ pass is also disabled by default. It indexes literal quoted
+includes in selected C/C++ files under one run-wide `max_import_analysis_bytes`
+budget, reserving the budget for all retained family members before scanning
+selected external files. It reports literal include edges from family members
+to selected targets and incoming references from selected external files to
+family members, with source lines. Resolution is a relative-path match against
+the selected inventory, not compiler resolution: include search paths, macros,
+angle-bracket includes, conditional activation, and unselected targets are not
+assessed. Read failures or an exhausted shared budget produce incomplete-scan
+warnings; missing evidence is not treated as zero references.
+
+JavaScript and TypeScript import evidence is also disabled by default and
+requires the optional `alphus[javascript]` extra. Its Tree-sitter parsers inspect selected `.js`,
 `.jsx`, `.mjs`, `.cjs`, `.ts`, and `.tsx` files and report only literal relative
 `import`, `export ... from`, dynamic `import()`, and `require()` references
 resolving uniquely to selected files (including extensionless exact-file

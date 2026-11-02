@@ -261,6 +261,78 @@ def test_cpp_include_evidence_resolves_only_literal_selected_quoted_targets(
     assert "conditional activation" in message
 
 
+def test_cpp_include_evidence_reports_selected_external_family_consumers(
+    tmp_path: Path,
+) -> None:
+    family = [
+        _write(tmp_path, f"include/gateway_{name}.hpp")
+        for name in ("client", "server", "routes", "auth", "cache")
+    ]
+    (tmp_path / "include/gateway_client.hpp").write_text(
+        '#include "gateway_server.hpp"\n', encoding="utf-8"
+    )
+    consumer = _write(tmp_path, "src/runner.cpp")
+    (tmp_path / consumer).write_text(
+        '#include "../include/gateway_client.hpp"\n', encoding="utf-8"
+    )
+    policy = SourceFamilyPolicy(min_family_files=5, cpp_include_evidence=True)
+
+    with_consumer = source_family_findings(tmp_path, [*family, consumer], policy)
+    without_consumer = source_family_findings(tmp_path, family, policy)
+
+    assert len(with_consumer) == len(without_consumer) == 1
+    message = with_consumer[0].message
+    assert "1 resolved edge(s) target another family member" in message
+    assert "1 incoming edge(s) from selected external C/C++ files" in message
+    assert "incoming src/runner.cpp:1 → include/gateway_client.hpp" in message
+    assert "do not prove public ownership or architectural coupling" in message
+    assert "0 incoming edge(s) from selected external C/C++ files" in (
+        without_consumer[0].message
+    )
+
+
+def test_cpp_include_budget_reserves_all_family_cores_before_consumers(
+    tmp_path: Path,
+) -> None:
+    families: list[Path] = []
+    for prefix in ("gateway", "storage"):
+        members = [
+            _write(tmp_path, f"src/{prefix}_{name}.hpp")
+            for name in ("client", "server", "routes", "auth", "cache")
+        ]
+        (tmp_path / f"src/{prefix}_client.hpp").write_text(
+            f'#include "{prefix}_server.hpp"\n', encoding="utf-8"
+        )
+        families.extend(members)
+    consumer = _write(tmp_path, "src/00_consumer.cpp")
+    (tmp_path / consumer).write_text(" " * 128, encoding="utf-8")
+    core_bytes = sum((tmp_path / path).stat().st_size for path in families)
+
+    findings = source_family_findings(
+        tmp_path,
+        [*families, consumer],
+        SourceFamilyPolicy(
+            min_family_files=5,
+            cpp_include_evidence=True,
+            max_import_analysis_bytes=core_bytes,
+        ),
+    )
+
+    family_findings = [finding for finding in findings if "Family " in finding.message]
+    assert len(family_findings) == 2
+    assert all(
+        "1 resolved edge(s) target another family member" in finding.message
+        for finding in family_findings
+    )
+    assert any(
+        "shared C/C++ include byte budget was exhausted" in finding.message
+        for finding in findings
+    )
+    assert any(
+        "no clean result can be inferred" in finding.message for finding in findings
+    )
+
+
 def test_cpp_include_budget_exhaustion_is_an_incomplete_scan(tmp_path: Path) -> None:
     paths = [
         _write(tmp_path, f"src/gateway_{name}.cpp")
