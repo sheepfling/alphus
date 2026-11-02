@@ -151,13 +151,7 @@ def _local_bindings(function: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str
 def _path_is_not_rebound(
     function: ast.FunctionDef | ast.AsyncFunctionDef, name: str
 ) -> bool:
-    stores = sum(
-        isinstance(node, ast.Name)
-        and isinstance(node.ctx, ast.Store)
-        and node.id == name
-        for node in ast.walk(function)
-    )
-    return stores == 0
+    return name not in _assigned_names(function)
 
 
 def _failed_returncode_name(test: ast.expr, names: frozenset[str]) -> str | None:

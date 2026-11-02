@@ -308,6 +308,15 @@ def test_failure_evidence_order_abstains_when_path_or_helper_is_rebound() -> Non
             "        persist_failure(child.returncode, diagnostic_path)\n"
         ),
         (
+            "def run(diagnostic_path):\n"
+            "    def unrelated():\n"
+            "        diagnostic_path = temporary_path()\n"
+            "    child = run_child()\n"
+            "    if child.returncode != 0:\n"
+            "        remove_diagnostic(diagnostic_path)\n"
+            "        persist_failure(child.returncode, diagnostic_path)\n"
+        ),
+        (
             "def run(diagnostic_path, persist_failure):\n"
             "    child = run_child()\n"
             "    if child.returncode != 0:\n"
@@ -324,7 +333,8 @@ def test_failure_evidence_order_abstains_when_path_or_helper_is_rebound() -> Non
         ),
     )
     assert len(run_artifact_findings(controls[0], "src/harness.py", configured)) == 1
-    for source in controls[1:]:
+    assert len(run_artifact_findings(controls[2], "src/harness.py", configured)) == 1
+    for source in (controls[1], controls[3], controls[4]):
         assert run_artifact_findings(source, "src/harness.py", configured) == []
 
 
