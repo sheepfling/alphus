@@ -1,7 +1,7 @@
 """Synthetic Pydantic source contracts for optional review findings."""
 
 import pytest
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from alphus.config import PydanticPracticePolicy
 from alphus.gates.review.frameworks.pydantic_practices import pydantic_practice_findings
@@ -307,8 +307,6 @@ def test_static_mutable_default_factory_is_opt_in_and_narrow() -> None:
 
 
 def test_pydantic_copies_static_unhashable_defaults_per_instance() -> None:
-    from pydantic import BaseModel
-
     class Defaults(BaseModel):
         tags: list[str] = []
         options: dict[str, int] = {}
