@@ -144,7 +144,7 @@ The `review` profile selects the five warning scanners on its own.
 `check` now includes it and fails on warnings so test prose and input-contract
 regressions cannot be silently accepted. The test scan covers `tests/**` and
 flags direct reads from `docs/**`; temporary fixtures and paths created by the
-test remain allowed. See [review checks](REVIEW-CHECKS.md) for exact behavior
+test remain allowed. See [review checks](review/README.md) for exact behavior
 and current limits.
 
 ## Optional gate execution

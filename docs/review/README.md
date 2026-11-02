@@ -1,5 +1,10 @@
 # Python review checks
 
+This folder groups source-review guidance. This page covers the Python review
+profile and its selectors. The [semantic patchwork guide](semantic-patchwork/README.md)
+documents that advisory family; its [calibration record](semantic-patchwork/CALIBRATION.md)
+holds pinned-source observations and their limits.
+
 These bounded source checks emit structured **warning** and **info** findings.
 They prompt a review of intent; they do not prove numeric correctness, test
 quality, or the absence of side effects. Existing policies remain valid without
@@ -8,7 +13,7 @@ own checks.
 
 Alphus applies all six scanners to its real source/test inventory through the
 `review` profile and includes them in `check` with a warning failure threshold.
-Build/install the wheel using [the self-check guide](SELF-CHECK.md), then
+Build/install the wheel using [the self-check guide](../SELF-CHECK.md), then
 invoke the installed command from the temporary directory:
 
 ```shell
@@ -469,14 +474,14 @@ configuration. See Pydantic's guidance on
 [custom model initialization](https://pydantic.dev/docs/validation/latest/concepts/models/),
 and [performance](https://pydantic.dev/docs/validation/latest/concepts/performance/).
 
-See the [runnable Pydantic consumer example](../examples/consumer/pydantic-practices/README.md)
+See the [runnable Pydantic consumer example](../../examples/consumer/pydantic-practices/README.md)
 for a complete opt-in policy, plan command, and JSON findings run.
 
 ## FastAPI and Starlette practices
 
 This opt-in rule supports source advice and, when explicitly configured, route
 and generated OpenAPI review. The native Ruff profile and execution limits are
-described in the [FastAPI quality guide](FASTAPI-QUALITY.md).
+described in the [FastAPI quality guide](../FASTAPI-QUALITY.md).
 
 Selector: `fastapi-practices`. Source-only IDs:
 `alphus/python/fastapi/correctness/literal-http-status` and
@@ -532,7 +537,7 @@ Selector: `positional-interfaces`. ID:
 This opt-in pilot reports directly annotated, consecutive positional parameters
 with the same builtin primitive type. It defaults to informational severity and
 does not infer that any call is wrong. Native parameter-count and call-order
-diagnostics remain separate. See the [positional interface guide](POSITIONAL-INTERFACES.md)
+diagnostics remain separate. See the [positional interface guide](../POSITIONAL-INTERFACES.md)
 for the Python boundaries, native capability matrix, and runnable consumer example.
 
 ## SQLAlchemy 2.x practices
@@ -619,7 +624,7 @@ counts scale with result size; exercise intended relationship loaders,
 boundaries, and async session ownership. Those runtime checks need the
 consumer's database fixtures and do not belong in Alphus's portable scanner.
 
-See the [synthetic SQLAlchemy consumer example](../examples/consumer/sqlalchemy-practices/README.md)
+See the [synthetic SQLAlchemy consumer example](../../examples/consumer/sqlalchemy-practices/README.md)
 for an opt-in provisional profile, representative findings, and runnable
 plan/report commands.
 

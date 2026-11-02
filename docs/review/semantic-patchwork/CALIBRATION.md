@@ -1,9 +1,29 @@
 # Semantic patchwork calibration sample
 
+## Purpose and evidence limits
+
+This is a committed evidence note for one bounded scan of public consumer
+snapshots. It preserves the consumer revisions, selected-file counts, observed
+lossy-rewrite candidates, their review dispositions, and the summarized rule
+settings. It supports the narrow claim that these observations occurred under
+those stated scopes; it does not show that the rules are correct generally,
+that other defects are absent, or that production precision or recall meets a
+target. The sample has no reviewed production positive examples, so it cannot
+estimate precision.
+
+This record is durable as a historical report, but not fully replayable: it
+does not pin the Alphus scanner commit, the exact command, or complete
+per-repository policy files. Do not treat its timings or results as a current
+benchmark. A future scan should add a new dated record with the full Alphus
+commit, full consumer commits, exact command, policy contents or hashes,
+selected and excluded paths, raw candidates, and a reasoned disposition for
+each candidate. Preserve prior results rather than replacing them. Do not
+report precision or recall until reviewed positive and negative examples have
+clear labels and denominators.
+
 This calibration reruns the opt-in rules with the literal `.replace()` detector
-on three public Python source trees. Checkouts were read-only; only the Alphus
-policy config supplied the exact source boundaries, helper names, and reviewed
-rewrite exceptions shown below.
+on three public Python source trees. Checkouts were read-only; the scopes,
+helper names, and reviewed rewrite exceptions are summarized below.
 
 | Repository | Revision | Selected Python files | Runtime | Findings after reviewed exceptions |
 | --- | --- | ---: | ---: | ---: |
