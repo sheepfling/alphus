@@ -86,7 +86,72 @@ def test_opt_in_python_import_evidence_reports_resolved_edges(tmp_path: Path) ->
     assert len(findings) == 1
     assert "2 resolved edge(s) target another family member" in findings[0].message
     assert "src/gateway_client.py:1 → src/gateway_server.py" in findings[0].message
-    assert "Direct imports are partial evidence only" in findings[0].message
+    assert (
+        "Direct imports and literal __all__ declarations are partial syntax evidence"
+        in findings[0].message
+    )
+    assert "No literal module-level __all__ was observed" in findings[0].message
+
+
+def test_import_evidence_reports_bounded_literal_module_exports(tmp_path: Path) -> None:
+    paths = [
+        _write(tmp_path, f"src/gateway_{name}.py")
+        for name in ("client", "server", "routes", "auth", "cache")
+    ]
+    (tmp_path / "src/gateway_client.py").write_text(
+        "__all__ = ['Client', 'connect', 'Gateway']\n", encoding="utf-8"
+    )
+
+    findings = source_family_findings(
+        tmp_path,
+        paths,
+        SourceFamilyPolicy(
+            min_family_files=5,
+            python_import_evidence=True,
+            python_module_roots=("src",),
+            max_public_api_names=2,
+        ),
+    )
+
+    message = findings[0].message
+    assert "src/gateway_client.py:1 exports Client" in message
+    assert "src/gateway_client.py:1 exports connect" in message
+    assert "1 declared name(s) omitted by max_public_api_names" in message
+    assert "package-level re-exports, external consumers, responsibility" in message
+
+
+@pytest.mark.parametrize(
+    "declaration",
+    (
+        "__all__ = make_exports()",
+        "__all__ = ['first']\n__all__ += ['second']",
+        "__all__ = ['first']\n__all__ = ['second']",
+    ),
+)
+def test_import_evidence_abstains_on_dynamic_or_reassigned_exports(
+    tmp_path: Path, declaration: str
+) -> None:
+    paths = [
+        _write(tmp_path, f"src/gateway_{name}.py")
+        for name in ("client", "server", "routes", "auth", "cache")
+    ]
+    (tmp_path / "src/gateway_client.py").write_text(
+        declaration + "\n", encoding="utf-8"
+    )
+
+    findings = source_family_findings(
+        tmp_path,
+        paths,
+        SourceFamilyPolicy(
+            min_family_files=5,
+            python_import_evidence=True,
+            python_module_roots=("src",),
+        ),
+    )
+
+    message = findings[0].message
+    assert "Literal export names could not be resolved" in message
+    assert "does not establish that names are private" not in message
 
 
 def test_python_import_evidence_shows_unresolved_edges_and_truncation(

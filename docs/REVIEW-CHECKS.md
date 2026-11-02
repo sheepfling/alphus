@@ -667,6 +667,7 @@ file_length_limits = [[".py", 500], [".cpp", 800]]
 python_import_evidence = true
 python_module_roots = ["src"]
 max_import_edges = 12
+max_public_api_names = 20
 max_import_analysis_bytes = 8388608
 ```
 
@@ -689,8 +690,13 @@ relative-import forms it cannot resolve, parse failures, and files outside the
 selected inventory are not treated as absent dependencies. It does not follow
 dynamic imports, aliases/re-exports, type-checker resolution, or imports in
 other languages. These edges are partial dependency evidence and do not prove
-shared responsibility, coupling strength, or a public contract. Public API and
-history evidence remain unassessed.
+shared responsibility, coupling strength, or a public contract. For parsed
+Python family members, the optional pass also reports bounded names from a
+single direct literal module-level `__all__` assignment. Dynamic, augmented,
+or reassigned declarations are reported as unresolved; package-level
+re-exports, external consumers, and names without a literal `__all__` are not
+inferred. This is syntax evidence, not a complete public API or responsibility
+assessment. Change history evidence remains unassessed.
 
 A typical finding starts: `src/service: Family gateway_*: 12 logical units
 across 12 physical files; 12 of 20 selected sibling source files (60%);

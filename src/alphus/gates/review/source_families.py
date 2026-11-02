@@ -140,6 +140,49 @@ def _selected_paths(
         yield Path(*posix.parts)
 
 
+def _stores_all(target: ast.expr) -> bool:
+    match target:
+        case ast.Name(id="__all__", ctx=ast.Store()):
+            return True
+        case _:
+            return False
+
+
+def _module_all_exports(tree: ast.Module) -> tuple[int, tuple[str, ...] | None] | None:
+    """Read only one direct, literal module-level __all__ declaration."""
+    declarations: list[tuple[int, ast.expr | None]] = []
+    for statement in tree.body:
+        match statement:
+            case ast.Assign(targets=targets, value=value) if any(
+                _stores_all(target) for target in targets
+            ):
+                declarations.append((statement.lineno, value))
+            case ast.AnnAssign(target=target, value=value) if _stores_all(target):
+                declarations.append((statement.lineno, value))
+            case ast.AugAssign(target=target):
+                if _stores_all(target):
+                    declarations.append((statement.lineno, None))
+            case _:
+                continue
+    if not declarations:
+        return None
+    line, value = declarations[0]
+    if len(declarations) != 1:
+        return line, None
+    match value:
+        case ast.List(elts=elements) | ast.Tuple(elts=elements):
+            names: list[str] = []
+            for element in elements:
+                match element:
+                    case ast.Constant(value=str() as name):
+                        names.append(name)
+                    case _:
+                        return line, None
+            return line, tuple(names)
+        case _:
+            return line, None
+
+
 def _python_import_evidence(
     checkout: Path,
     members: AbstractSet[Path],
@@ -170,6 +213,9 @@ def _python_import_evidence(
     resolved: list[str] = []
     unresolved = 0
     failures = 0
+    public_exports: list[str] = []
+    public_export_count = 0
+    unresolved_export_modules = 0
     for source in sorted((p for p in members if p.suffix == ".py"), key=str):
         source_path = (checkout / source).resolve(strict=False)
         if not source_path.is_relative_to(checkout) or bytes_left <= 0:
@@ -186,6 +232,18 @@ def _python_import_evidence(
         except (OSError, UnicodeError, SyntaxError, ValueError):
             failures += 1
             continue
+        export_declaration = _module_all_exports(tree)
+        if export_declaration is not None:
+            export_line, names = export_declaration
+            if names is None:
+                unresolved_export_modules += 1
+            else:
+                for name in names:
+                    public_export_count += 1
+                    if len(public_exports) < policy.max_public_api_names:
+                        public_exports.append(
+                            f"{source.as_posix()}:{export_line} exports {name}"
+                        )
         source_module = None
         for root in roots:
             try:
@@ -258,6 +316,30 @@ def _python_import_evidence(
         context += " Examples: " + ", ".join(shown) + "."
     if len(shown) < len(resolved):
         context += f" {len(resolved) - len(shown)} edge(s) omitted by max_import_edges."
+    if public_exports:
+        context += " Literal module-level __all__ evidence: "
+        context += "; ".join(public_exports) + "."
+        if public_export_count > len(public_exports):
+            context += (
+                f" {public_export_count - len(public_exports)} declared name(s) omitted "
+                "by max_public_api_names."
+            )
+    elif unresolved_export_modules:
+        context += (
+            f" Literal export names could not be resolved in "
+            f"{unresolved_export_modules} dynamic or reassigned module-level "
+            "__all__ declaration(s)."
+        )
+    else:
+        context += (
+            " No literal module-level __all__ was observed in parsed family modules; "
+            "this does not establish that names are private."
+        )
+    if unresolved_export_modules and public_exports:
+        context += (
+            f" Literal export names remain unresolved in {unresolved_export_modules} "
+            "dynamic or reassigned module-level __all__ declaration(s)."
+        )
     notes: list[str] = []
     if failures:
         notes.append(f"{failures} Python file(s) could not be analyzed")
@@ -266,7 +348,8 @@ def _python_import_evidence(
     if notes:
         context += " Analysis incomplete: " + "; ".join(notes) + "."
     context += (
-        " Direct imports are partial evidence only; public APIs and "
+        " Direct imports and literal __all__ declarations are partial syntax evidence; "
+        "package-level re-exports, external consumers, responsibility, and "
         "non-Python dependencies are not assessed."
     )
     return context, notes
@@ -489,6 +572,7 @@ def source_family_findings(
             f"min_prefix_characters={policy.min_prefix_characters}, "
             f"max_files={policy.max_files}, max_findings={policy.max_findings}, "
             f"max_reported_members={policy.max_reported_members}, "
+            f"max_public_api_names={policy.max_public_api_names}, "
             f"extensions={extension_text}, include={include_text}, "
             f"exclude={exclude_text}{override_text}. "
         )
