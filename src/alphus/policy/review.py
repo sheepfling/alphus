@@ -353,6 +353,42 @@ class UtcPersistenceContract(StrictModel):
         return value
 
 
+class FiniteStateContract(StrictModel):
+    """Consumer-declared closed string domain at one selected function input."""
+
+    path: str
+    function: str
+    parameter: str
+    values: Annotated[tuple[str, ...], Field(min_length=2)]
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, value: str) -> str:
+        return validate_single_path(value, "finite-state contract path")
+
+    @field_validator("function")
+    @classmethod
+    def validate_function(cls, value: str) -> str:
+        if any(not part.isidentifier() for part in value.split(".")):
+            raise ValueError("finite-state function must be a dotted identifier")
+        return value
+
+    @field_validator("parameter")
+    @classmethod
+    def validate_parameter(cls, value: str) -> str:
+        if not value.isidentifier():
+            raise ValueError("finite-state parameter must be an identifier")
+        return value
+
+    @field_validator("values")
+    @classmethod
+    def validate_values(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value for value in values):
+            raise ValueError("finite-state values must not be empty")
+        require_unique(values, "finite-state values must be unique")
+        return tuple(values)
+
+
 class PydanticPracticePolicy(PythonSourceScanPolicy):
     """Opt-in review of Pydantic model validation and declaration practices."""
 
@@ -371,6 +407,7 @@ class PydanticPracticePolicy(PythonSourceScanPolicy):
     public_model_paths: tuple[str, ...] = ()
     domain_return_contracts: tuple[PydanticDomainReturnContract, ...] = ()
     utc_persistence_contracts: tuple[UtcPersistenceContract, ...] = ()
+    finite_state_contracts: tuple[FiniteStateContract, ...] = ()
     domain_return_severity: Severity = "info"
 
     @field_validator("external_model_names")
@@ -408,6 +445,16 @@ class PydanticPracticePolicy(PythonSourceScanPolicy):
             (item.path, item.function, item.call, item.keyword) for item in values
         )
         require_unique(selectors, "UTC persistence selectors must be unique")
+        return values
+
+    @field_validator("finite_state_contracts")
+    @classmethod
+    def validate_finite_state_contracts(
+        cls, contracts: Sequence[FiniteStateContract]
+    ) -> tuple[FiniteStateContract, ...]:
+        values = tuple(contracts)
+        selectors = tuple((item.path, item.function, item.parameter) for item in values)
+        require_unique(selectors, "finite-state selectors must be unique")
         return values
 
     @model_validator(mode="after")

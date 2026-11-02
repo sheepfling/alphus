@@ -8,6 +8,7 @@ from collections.abc import Set as AbstractSet
 from pathlib import Path
 
 from alphus.config import (
+    FiniteStateContract,
     PydanticDomainReturnContract,
     PydanticPracticePolicy,
     UtcPersistenceContract,
@@ -1071,6 +1072,110 @@ def _declared_domain_return_dump_lines(
     return sorted(evidence)
 
 
+def _finite_state_selector_lines(
+    module: ast.Module, contract: FiniteStateContract, aliases: ImportAliases
+) -> list[int]:
+    """Find complete raw string decision chains under an explicit closed-set contract."""
+    selected: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
+
+    def find_functions(statements: Sequence[ast.stmt], scope: tuple[str, ...]) -> None:
+        for statement in statements:
+            match statement:
+                case ast.ClassDef(name=name, body=body):
+                    find_functions(body, (*scope, name))
+                case ast.FunctionDef(name=name) | ast.AsyncFunctionDef(name=name):
+                    if ".".join((*scope, name)) == contract.function:
+                        selected.append(statement)
+                case _:
+                    pass
+
+    find_functions(module.body, ())
+    expected = set(contract.values)
+    lines: set[int] = set()
+
+    def comparisons(test: ast.expr) -> set[str]:
+        values: set[str] = set()
+        for node in ast.walk(test):
+            match node:
+                case ast.Compare(
+                    left=ast.Name(id=name),
+                    ops=[ast.Eq()],
+                    comparators=[ast.Constant(value=str() as value)],
+                ) if name == contract.parameter:
+                    values.add(value)
+                case ast.Compare(
+                    left=ast.Constant(value=str() as value),
+                    ops=[ast.Eq()],
+                    comparators=[ast.Name(id=name)],
+                ) if name == contract.parameter:
+                    values.add(value)
+                case _:
+                    pass
+        return values
+
+    for function in selected:
+        parameters = [
+            *function.args.posonlyargs,
+            *function.args.args,
+            *function.args.kwonlyargs,
+        ]
+        parameter = next(
+            (item for item in parameters if item.arg == contract.parameter), None
+        )
+        if parameter is None or parameter.annotation is None:
+            continue
+        annotation_name = canonical_expression_name(parameter.annotation, aliases)
+        is_unshadowed_builtin_str = (
+            isinstance(parameter.annotation, ast.Name)
+            and parameter.annotation.id == "str"
+            and not any(
+                (
+                    isinstance(node, ast.Name)
+                    and node.id == "str"
+                    and isinstance(node.ctx, (ast.Store, ast.Del))
+                )
+                or isinstance(node, (ast.Import, ast.ImportFrom))
+                and any(
+                    (alias.asname or alias.name.split(".")[0]) == "str"
+                    for alias in node.names
+                )
+                for node in ast.walk(module)
+            )
+        )
+        if annotation_name != "builtins.str" and not is_unshadowed_builtin_str:
+            continue
+        if any(
+            isinstance(node, ast.Name)
+            and node.id == contract.parameter
+            and isinstance(node.ctx, (ast.Store, ast.Del))
+            for statement in function.body
+            for node in ast.walk(statement)
+        ):
+            continue
+
+        def visit_statements(statements: Sequence[ast.stmt]) -> None:
+            for statement in statements:
+                if not isinstance(statement, ast.If):
+                    continue
+                chain = [statement]
+                while len(chain[-1].orelse) == 1 and isinstance(
+                    chain[-1].orelse[0], ast.If
+                ):
+                    chain.append(chain[-1].orelse[0])
+                observed: set[str] = set()
+                for item in chain:
+                    observed.update(comparisons(item.test))
+                if observed == expected:
+                    lines.add(chain[-1].lineno)
+                for item in chain:
+                    visit_statements(item.body)
+                    if item is chain[-1]:
+                        visit_statements(item.orelse)
+
+        visit_statements(function.body)
+    return sorted(lines)
+
+
 def _known_non_utc_zone(expression: ast.expr, aliases: ImportAliases) -> bool:
     """Recognize only explicit ZoneInfo literals that are plainly non-UTC."""
     match expression:
@@ -1287,6 +1392,31 @@ def pydantic_practice_findings(
                         f"declared model parameter {parameter}. Review whether "
                         "serialization belongs at an I/O boundary; this advisory "
                         "does not prove the conversion is unsafe."
+                    ),
+                )
+            )
+    for contract in policy.finite_state_contracts:
+        if contract.path != path:
+            continue
+        for line in _finite_state_selector_lines(module, contract, aliases):
+            findings.append(
+                Finding(
+                    rule_id=rule_tag(
+                        Scope.PYTHON,
+                        Framework.PYDANTIC,
+                        Category.STYLE,
+                        "finite-state-string-selector",
+                    ),
+                    path=path,
+                    line=line,
+                    severity="info",
+                    message=(
+                        f"Selected finite-state contract for {contract.function}"
+                        f".{contract.parameter} declares {contract.values!r}, but a"
+                        " complete branch chain compares raw strings; consider a"
+                        " Literal, Enum/StrEnum, or validated finite type. This"
+                        " advisory uses only the declared values and does not infer"
+                        " a domain from repeated literals."
                     ),
                 )
             )

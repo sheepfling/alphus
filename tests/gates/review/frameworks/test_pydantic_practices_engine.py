@@ -122,6 +122,130 @@ def test_domain_return_contracts_reject_duplicate_selectors() -> None:
         )
 
 
+def test_declared_finite_state_contract_reports_complete_raw_string_chain() -> None:
+    source = (
+        "def dispatch(action: str):\n"
+        "    if action == 'approve':\n"
+        "        return accept()\n"
+        "    elif 'reject' == action:\n"
+        "        return deny()\n"
+    )
+    contract = {
+        "path": "src/actions.py",
+        "function": "dispatch",
+        "parameter": "action",
+        "values": ["approve", "reject"],
+    }
+    policy = _policy(finite_state_contracts=(contract,))
+
+    assert pydantic_practice_findings(source, _policy()) == []
+    findings = pydantic_practice_findings(source, policy, path="src/actions.py")
+
+    assert [(item.rule_id, item.line, item.severity) for item in findings] == [
+        (
+            "alphus/python/pydantic/style/finite-state-string-selector",
+            4,
+            "info",
+        )
+    ]
+    assert "does not infer a domain from repeated literals" in findings[0].message
+
+
+def test_finite_state_contract_skips_typed_partial_rebound_and_unselected_inputs() -> (
+    None
+):
+    source = (
+        "from typing import Literal\n"
+        "def typed(action: Literal['approve', 'reject']):\n"
+        "    if action == 'approve': return accept()\n"
+        "    elif action == 'reject': return deny()\n"
+        "def partial(action: str):\n"
+        "    if action == 'approve': return accept()\n"
+        "def rebound(action: str):\n"
+        "    action = normalize(action)\n"
+        "    if action == 'approve': return accept()\n"
+        "    elif action == 'reject': return deny()\n"
+        "str = ProtocolString\n"
+        "def shadowed(action: str):\n"
+        "    if action == 'approve': return accept()\n"
+        "    elif action == 'reject': return deny()\n"
+        "StateKey = str\n"
+        "def aliased(action: StateKey):\n"
+        "    if action == 'approve': return accept()\n"
+        "    elif action == 'reject': return deny()\n"
+        "def open_input(action: str):\n"
+        "    if action == 'approve': return accept()\n"
+        "    elif action == 'reject': return deny()\n"
+    )
+    policy = _policy(
+        finite_state_contracts=(
+            {
+                "path": "src/actions.py",
+                "function": "typed",
+                "parameter": "action",
+                "values": ["approve", "reject"],
+            },
+            {
+                "path": "src/actions.py",
+                "function": "partial",
+                "parameter": "action",
+                "values": ["approve", "reject"],
+            },
+            {
+                "path": "src/actions.py",
+                "function": "rebound",
+                "parameter": "action",
+                "values": ["approve", "reject"],
+            },
+            {
+                "path": "src/actions.py",
+                "function": "shadowed",
+                "parameter": "action",
+                "values": ["approve", "reject"],
+            },
+            {
+                "path": "src/actions.py",
+                "function": "aliased",
+                "parameter": "action",
+                "values": ["approve", "reject"],
+            },
+            {
+                "path": "src/other.py",
+                "function": "open_input",
+                "parameter": "action",
+                "values": ["approve", "reject"],
+            },
+        )
+    )
+
+    assert pydantic_practice_findings(source, policy, path="src/actions.py") == []
+
+
+def test_finite_state_contract_rejects_duplicate_values() -> None:
+    with pytest.raises(ValueError, match="finite-state values must be unique"):
+        _policy(
+            finite_state_contracts=(
+                {
+                    "path": "src/actions.py",
+                    "function": "dispatch",
+                    "parameter": "action",
+                    "values": ["approve", "approve"],
+                },
+            )
+        )
+
+
+def test_finite_state_contracts_reject_duplicate_selectors() -> None:
+    contract = {
+        "path": "src/actions.py",
+        "function": "dispatch",
+        "parameter": "action",
+        "values": ["approve", "reject"],
+    }
+    with pytest.raises(ValueError, match="finite-state selectors must be unique"):
+        _policy(finite_state_contracts=(contract, contract))
+
+
 def test_utc_persistence_contract_reports_only_known_non_utc_capture() -> None:
     source = (
         "from datetime import datetime, timezone\n"

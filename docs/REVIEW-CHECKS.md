@@ -526,6 +526,25 @@ are not inferred. Review whether serialization belongs at an I/O boundary; the
 finding does not establish that a conversion is unsafe and never recommends
 deleting validation or changing wire behavior automatically.
 
+For an explicitly closed action domain, a consumer can opt in to a bounded
+review of a selected string parameter:
+
+```toml
+[[checks.pydantic_practices.finite_state_contracts]]
+path = "src/actions.py"
+function = "dispatch"
+parameter = "action"
+values = ["approve", "reject"]
+```
+
+The advisory requires a direct `str` annotation and a complete `if`/`elif`
+chain comparing the parameter with exactly the declared values. It suggests a
+`Literal`, `Enum`/`StrEnum`, or validated finite type. Typed inputs, partial
+chains, parameter rebinding, unselected paths, and values outside the declared
+contract are left alone. This policy does not establish that an external
+protocol is closed; maintainers must only configure it when they own that
+closed-set contract.
+
 ## Project-convention coverage and ownership
 
 The checks below are review aids with independent owners. A repository should
@@ -550,7 +569,12 @@ unknown rather than proof of a defect.
   [pytest style profile](PYTEST-STYLE.md). `unittest`, mocks, and migration
   suites remain valid.
 - **Centralize business states:** human review with typed `Literal`/`Enum`
-  evidence. Repetition alone does not prove a finite domain.
+  evidence. An opt-in `finite_state_contracts` entry can declare a selected
+  function parameter's closed string values; a complete `if`/`elif` decision
+  chain over that exact set is an informational candidate when the parameter
+  remains a plain `str`. Typed `Literal`/`Enum` inputs, partial chains, rebound
+  parameters and unselected or unresolved values are skipped. Repetition alone
+  does not prove a finite domain.
 - **Keep timezone awareness and UTC distinct:** Ruff `DTZ` covers naive calls.
   Aware types and UTC normalization need boundary contracts.
 - **Separate generated output from inputs:** Git inventory covers configured
@@ -818,3 +842,4 @@ hygiene control: splitting files below a limit does not demonstrate improved
 cohesion. Dependency, responsibility, public-surface, and history analysis are
 not part of this first slice. Fewer files, renamed prefixes, or a new directory
 do not by themselves demonstrate better boundaries.
+
