@@ -57,6 +57,18 @@ fail; a page with no extractable text is returned as **unknown**, since it may
 contain images or vector artwork. Fit modes, page-label semantics, and visual
 heading confirmation still need review or a richer consumer contract.
 
+The available PDF stack in this checkout includes pypdf and qpdf, but not
+PyMuPDF. pypdf's `visitor_text` exposes text and transformation matrices, yet
+its documentation cautions that coordinates may be wrong for complicated
+documents ([pypdf extraction notes](https://pypdf.readthedocs.io/en/stable/user/extract-text.html)).
+qpdf checks PDF structure, not text bounds. PyMuPDF exposes word-level boxes
+that could be compared with link rectangles
+([PyMuPDF text recipes](https://pymupdf.readthedocs.io/en/latest/recipes-text.html)),
+but it is a new optional dependency here, and extracted text alone still does
+not prove visible rendered text. Keep label-to-annotation overlap as a
+review-only claim until a second text-geometry backend and rendered fixtures
+cover clipping, rotation, font transforms, and hidden text.
+
 For a target page with an independently known physical index, Poppler can
 provide separate text and render evidence:
 
