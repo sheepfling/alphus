@@ -315,6 +315,7 @@ class PydanticPracticePolicy(PythonSourceScanPolicy):
     report_unvalidated_copy_update: bool = False
     report_validator_fallthrough: bool = False
     report_field_positional_default: bool = False
+    prefer_static_mutable_defaults: bool = False
     report_external_model_docs: bool = False
     report_custom_init: bool = False
     report_unconstrained_any: bool = False

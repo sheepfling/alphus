@@ -527,6 +527,53 @@ def _field_positional_lines(
     return sorted(lines)
 
 
+def _static_mutable_default_factory_lines(
+    module: ast.Module, aliases: ImportAliases, models: AbstractSet[str]
+) -> list[int]:
+    """Find Pydantic fields whose factory is exactly built-in list or dict."""
+    lines: set[int] = set()
+    for statement in module.body:
+        match statement:
+            case ast.ClassDef(name=name, body=body) if name in models:
+                pass
+            case _:
+                continue
+        for field in body:
+            match field:
+                case ast.AnnAssign(annotation=annotation, value=value):
+                    expressions = [annotation]
+                    if value is not None:
+                        expressions.append(value)
+                case _:
+                    continue
+            for expression in expressions:
+                for node in ast.walk(expression):
+                    match node:
+                        case ast.Call(func=function, keywords=keywords) if (
+                            canonical_expression_name(function, aliases)
+                            in {"pydantic.Field", "pydantic.fields.Field"}
+                        ):
+                            pass
+                        case _:
+                            continue
+                    factory = next(
+                        (
+                            keyword.value
+                            for keyword in keywords
+                            if keyword.arg == "default_factory"
+                        ),
+                        None,
+                    )
+                    if isinstance(factory, (ast.Name, ast.Attribute)) and (
+                        canonical_expression_name(factory, aliases)
+                        in {"builtins.list", "builtins.dict"}
+                        or isinstance(factory, ast.Name)
+                        and factory.id in {"list", "dict"}
+                    ):
+                        lines.add(field.lineno)
+    return sorted(lines)
+
+
 def _validator_can_fallthrough(statements: Sequence[ast.stmt]) -> bool:
     """Return true only for simple suites with a reachable implicit exit."""
     for statement in statements:
@@ -1011,6 +1058,17 @@ def pydantic_practice_findings(
             "use Field(default=...) to make the field default explicit",
         ),
         (
+            policy.prefer_static_mutable_defaults,
+            Category.STYLE,
+            "static-mutable-default-factory",
+            _static_mutable_default_factory_lines(module, aliases, models),
+            (
+                "prefer a direct static list or dict default here; Pydantic copies "
+                "unhashable defaults per model instance, so a factory is not required "
+                "for isolation"
+            ),
+        ),
+        (
             policy.report_custom_init,
             Category.VALIDATION,
             "custom-init",
@@ -1029,7 +1087,12 @@ def pydantic_practice_findings(
                     path=path,
                     line=line,
                     severity="info"
-                    if name in {"field-positional-default", "custom-init"}
+                    if name
+                    in {
+                        "field-positional-default",
+                        "static-mutable-default-factory",
+                        "custom-init",
+                    }
                     else "warning",
                     message=message,
                 )

@@ -272,6 +272,58 @@ def test_field_positional_default_is_advisory_and_alias_aware() -> None:
     ]
 
 
+def test_static_mutable_default_factory_is_opt_in_and_narrow() -> None:
+    source = (
+        "from typing import Annotated\n"
+        "from pydantic import BaseModel as Model, Field as F\n"
+        "class Config(Model):\n"
+        "    tags: list[str] = F(default_factory=list)\n"
+        "    options: Annotated[dict[str, int], F(default_factory=dict)]\n"
+        "    computed: list[str] = F(default_factory=load_tags)\n"
+        "    contextual: list[str] = F(default_factory=lambda data: data['tags'])\n"
+        "    direct: list[str] = []\n"
+        "class Plain:\n"
+        "    tags: list[str] = F(default_factory=list)\n"
+    )
+
+    assert pydantic_practice_findings(source, _policy()) == []
+    findings = pydantic_practice_findings(
+        source, _policy(prefer_static_mutable_defaults=True)
+    )
+
+    assert [(item.rule_id, item.line, item.severity) for item in findings] == [
+        (
+            "alphus/python/pydantic/style/static-mutable-default-factory",
+            4,
+            "info",
+        ),
+        (
+            "alphus/python/pydantic/style/static-mutable-default-factory",
+            5,
+            "info",
+        ),
+    ]
+    assert all("not required for isolation" in item.message for item in findings)
+
+
+def test_pydantic_copies_static_unhashable_defaults_per_instance() -> None:
+    from pydantic import BaseModel
+
+    class Defaults(BaseModel):
+        tags: list[str] = []
+        options: dict[str, int] = {}
+
+    first = Defaults()
+    second = Defaults()
+    first.tags.append("local")
+    first.options["count"] = 1
+
+    assert second.tags == []
+    assert second.options == {}
+    assert first.tags is not second.tags
+    assert first.options is not second.options
+
+
 def test_unconstrained_any_is_limited_to_designated_public_model_paths() -> None:
     source = (
         "from typing import Any as Loose, ClassVar\n"

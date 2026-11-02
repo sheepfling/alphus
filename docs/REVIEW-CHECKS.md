@@ -350,7 +350,8 @@ Selector: `pydantic-practices`. IDs: `alphus/python/pydantic/validation/dump-rev
 `alphus/python/pydantic/style/field-positional-default`, and
 `alphus/python/pydantic/metadata/external-schema-documentation`,
 `alphus/python/pydantic/validation/custom-init`, and
-`alphus/python/pydantic/validation/public-unconstrained-any`.
+`alphus/python/pydantic/validation/public-unconstrained-any`, and
+`alphus/python/pydantic/style/static-mutable-default-factory`.
 
 ```toml
 [checks.pydantic_practices]
@@ -363,12 +364,21 @@ report_unvalidated_construct = false
 report_unvalidated_copy_update = false
 report_validator_fallthrough = false
 report_field_positional_default = false
+prefer_static_mutable_defaults = false
 report_external_model_docs = false
 external_model_names = []
 report_custom_init = false
 report_unconstrained_any = false
 public_model_paths = []
 ```
+
+`prefer_static_mutable_defaults` is an opt-in, informational style preference
+for Pydantic fields that use exactly `Field(default_factory=list)` or
+`Field(default_factory=dict)`. Pydantic copies unhashable literal defaults for
+each model instance, so those factories are not needed solely to prevent
+instances from sharing a list or dictionary. The check excludes dataclasses,
+dynamic factories, and factories that consume validated data. It does not
+rewrite code; retain factories when they express computed or contextual values.
 
 To include one model exposed by another interface, set
 `report_external_model_docs = true` and add its class name, for example:
