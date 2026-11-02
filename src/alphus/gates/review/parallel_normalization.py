@@ -44,6 +44,12 @@ class _FunctionObservation:
     signature: _NormalizationSignature | None
 
 
+@dataclass(frozen=True, slots=True)
+class _LocatedObservation:
+    path: str
+    observation: _FunctionObservation
+
+
 def _module_bindings(
     tree: ast.Module, names: frozenset[str]
 ) -> tuple[_FunctionObservation, ...]:
@@ -208,6 +214,7 @@ def check_parallel_normalization(
     """Report declared same-output direct normalizers with differing separators."""
     checkout = root.resolve(strict=True)
     findings: list[Finding] = []
+    observations_by_path: dict[str, tuple[_FunctionObservation, ...]] = {}
     for relative in sorted(paths):
         name = relative.as_posix()
         if (
@@ -220,6 +227,18 @@ def check_parallel_normalization(
         if not path.is_file():
             continue
         source = read_python_source(path)
+        try:
+            tree = ast.parse(source)
+        except SyntaxError:
+            continue
+        if len(list(ast.walk(tree))) > 10_000:
+            continue
+        selected_names = frozenset(
+            function_name
+            for pair in policy.pairs
+            for function_name in (pair.first_function, pair.second_function)
+        )
+        observations_by_path[name] = _module_bindings(tree, selected_names)
         for site in parallel_normalization_sites(source, policy):
             findings.append(
                 Finding(
@@ -236,4 +255,40 @@ def check_parallel_normalization(
                     policy.severity,
                 )
             )
+    located = tuple(
+        _LocatedObservation(name, observation)
+        for name, observations in observations_by_path.items()
+        for observation in observations
+    )
+    for pair in policy.pairs:
+        candidates = tuple(
+            tuple(
+                item
+                for item in located
+                if item.observation.name == function_name
+                and item.observation.binding_count == 1
+                and item.observation.signature is not None
+            )
+            for function_name in (pair.first_function, pair.second_function)
+        )
+        if any(len(items) != 1 for items in candidates):
+            continue
+        first, second = candidates[0][0], candidates[1][0]
+        if first.path == second.path:
+            continue
+        findings.append(
+            Finding(
+                _RULE_ID,
+                second.path,
+                f"NOT EVALUATED: configured normalizers {pair.first_function!r} and "
+                f"{pair.second_function!r} for {pair.concept!r} are defined in separate "
+                "files, while this check compares only same-file pairs. Their declared "
+                "same-output contract was not evaluated; this diagnostic makes no claim "
+                "that the implementations are equal or different.",
+                second.observation.signature.line
+                if second.observation.signature is not None
+                else None,
+                policy.severity,
+            )
+        )
     return findings

@@ -112,10 +112,13 @@ separators under an explicit same-output contract. Existing shared-utility
 fingerprinting groups identical AST bodies and therefore does not cover this
 separator-drift case. The rule does not infer that two helpers are equivalent;
 aliases, multi-step transformations, and unconfigured functions are outside
-its grammar. A pair must be defined in the same selected file; cross-file
-pairing is unsupported and currently produces no finding rather than a
-cross-file coverage diagnostic. This P2 advisory lacks positive production
-calibration.
+its grammar. A pair must be defined in the same selected file to compare
+separator signatures. When exactly one supported definition for each helper is
+present across separate selected files, the rule emits an informational
+`NOT EVALUATED` diagnostic on the second helper; that diagnostic makes no claim
+that their implementations are equal or different. Missing, unsupported, or
+ambiguous helper definitions do not produce that coverage diagnostic. This P2
+advisory lacks positive production calibration.
 
 The opt-in `patch-cascade` advisory requires the consumer to identify a
 top-level function as a `general-parser`, enumerate its repair selector and

@@ -73,7 +73,9 @@ def test_split_separator_drift_is_reported() -> None:
     assert sites[0].second_signature.split_separator == ";"
 
 
-def test_pair_split_across_selected_files_is_not_reported(tmp_path: Path) -> None:
+def test_pair_split_across_selected_files_is_explicitly_not_evaluated(
+    tmp_path: Path,
+) -> None:
     first = tmp_path / "src/text/first.py"
     second = tmp_path / "src/text/second.py"
     first.parent.mkdir(parents=True)
@@ -84,6 +86,47 @@ def test_pair_split_across_selected_files_is_not_reported(tmp_path: Path) -> Non
         "def normalize_for_key(text: str) -> str:\n    return '-'.join(text.split())\n",
         encoding="utf-8",
     )
+    findings = check_parallel_normalization(
+        tmp_path, (Path("src/text/first.py"), Path("src/text/second.py")), _policy()
+    )
+    assert len(findings) == 1
+    assert "NOT EVALUATED" in findings[0].message
+    assert "not evaluated" in findings[0].message
+
+
+def test_equal_pair_in_one_file_is_evaluated_without_diagnostic(tmp_path: Path) -> None:
+    selected = tmp_path / "src/text/normalizers.py"
+    selected.parent.mkdir(parents=True)
+    selected.write_text(_DRIFT.replace('"-".join', '" ".join'), encoding="utf-8")
+    assert not check_parallel_normalization(
+        tmp_path, (Path("src/text/normalizers.py"),), _policy()
+    )
+
+
+@pytest.mark.parametrize(
+    "first_source,second_source",
+    [
+        (
+            "def normalize_for_display(text: str) -> str:\n    return text\n",
+            "",
+        ),
+        (
+            (
+                "def normalize_for_display(text: str) -> str:\n    return text\n"
+                "def normalize_for_display(text: str) -> str:\n    return text\n"
+            ),
+            "def normalize_for_key(text: str) -> str:\n    return text\n",
+        ),
+    ],
+)
+def test_absent_or_ambiguous_helpers_do_not_claim_cross_file_coverage(
+    tmp_path: Path, first_source: str, second_source: str
+) -> None:
+    first = tmp_path / "src/text/first.py"
+    second = tmp_path / "src/text/second.py"
+    first.parent.mkdir(parents=True)
+    first.write_text(first_source, encoding="utf-8")
+    second.write_text(second_source, encoding="utf-8")
     assert not check_parallel_normalization(
         tmp_path, (Path("src/text/first.py"), Path("src/text/second.py")), _policy()
     )
