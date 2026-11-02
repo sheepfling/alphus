@@ -283,7 +283,15 @@ def test_consumer_copy_accepts_allowlist_inside_tests(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "failure", [None, "Runtime consumer smoke", "Installed dependency consistency"]
+    "failure",
+    [
+        None,
+        "Build wheel and sdist outside the checkout",
+        "Installed dependency consistency",
+        "Runtime-to-stub API audit",
+        "Stubtest runtime compatibility",
+        "Runtime consumer smoke",
+    ],
 )
 @pytest.mark.parametrize(
     "typing_checkers", [("mypy", "pyright"), ("mypy", "pyright", "ty")]
@@ -390,13 +398,20 @@ def test_every_stage_uses_its_declared_environment_and_target_failure_propagates
     assert result.target.version == (3, 10, 22)
     assert result.checker.version == (3, 12, 14)
     assert result.passed == (failure is None)
-    assert result.artifact is not None
-    assert result.artifact.distribution == "example"
-    assert result.artifact.version == "0.1.0"
-    assert len(result.artifact.sha256) == 64
-    assert result.artifact.size_bytes > 0
+    assert (result.artifact is not None) == (
+        failure != "Build wheel and sdist outside the checkout"
+    )
+    if result.artifact is not None:
+        assert result.artifact.distribution == "example"
+        assert result.artifact.version == "0.1.0"
+        assert len(result.artifact.sha256) == 64
+        assert result.artifact.size_bytes > 0
     lanes = {lane.name: lane for lane in result.lanes}
-    assert lanes["Build wheel and sdist outside the checkout"].status == "passed"
+    assert lanes["Build wheel and sdist outside the checkout"].status == (
+        "failed"
+        if failure == "Build wheel and sdist outside the checkout"
+        else "passed"
+    )
     if failure is not None:
         assert lanes[failure].status == "failed"
         assert any(lane.status == "not_run" for lane in result.lanes) == (

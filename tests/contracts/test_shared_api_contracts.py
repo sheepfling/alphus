@@ -164,6 +164,58 @@ def test_native_stubtest_accepts_concrete_runtime_default_for_stub_ellipsis(
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+@pytest.mark.skipif(
+    importlib.util.find_spec("mypy") is None, reason="optional Mypy extra"
+)
+@pytest.mark.parametrize(
+    ("runtime_source", "stub_source", "diagnostic"),
+    [
+        (
+            "def present(value: int) -> int: return value\n",
+            "",
+            "present is not present in stub",
+        ),
+        (
+            "def f(value, /): return value\n",
+            "def f(value): ...\n",
+            "should be positional-only",
+        ),
+        (
+            "def f(value: int = 1): return value\n",
+            "def f(value: str = ...): ...\n",
+            "incompatible with stub parameter type",
+        ),
+        (
+            "class C:\n @property\n def value(self): return 1\n",
+            "class C:\n value: int\n",
+            "read-only at runtime",
+        ),
+    ],
+)
+def test_native_stubtest_owns_runtime_api_boundary_failures(
+    tmp_path: Path,
+    runtime_source: str,
+    stub_source: str,
+    diagnostic: str,
+) -> None:
+    runtime_package = tmp_path / "probe"
+    stubs_package = tmp_path / "probe-stubs"
+    runtime_package.mkdir()
+    stubs_package.mkdir()
+    (runtime_package / "__init__.py").write_text(runtime_source, encoding="utf-8")
+    (stubs_package / "__init__.pyi").write_text(stub_source, encoding="utf-8")
+    (stubs_package / "py.typed").write_text("partial\n", encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, "-m", "mypy.stubtest", "probe"],
+        capture_output=True,
+        check=False,
+        env={**os.environ, "PYTHONPATH": str(tmp_path)},
+        text=True,
+    )
+    assert result.returncode != 0
+    assert diagnostic in result.stdout + result.stderr
+
+
 def test_fixture_probe_gate_rejects_calls_on_wrong_owner(tmp_path: Path) -> None:
     source = (
         "class First:\n def read(self) -> int: return 1\n"

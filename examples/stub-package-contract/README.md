@@ -8,7 +8,8 @@ The checker contract includes an annotated `list[str]` variable and a recursive
 list variable as positive inputs. Marked negative lines cover a tuple variable,
 a nested tuple literal, and a non-string value. The target runtime smoke checks
 accepted nested lists and rejects the same unsupported nested tuple and scalar
-shapes. Native `mypy.stubtest` separately checks the installed module's
+shapes, and asserts that its package import comes from the target interpreter
+prefix. Native `mypy.stubtest` separately checks the installed module's
 runtime/stub member and callable shape. Static fixtures and runtime assertions
 are separate evidence lanes.
 
