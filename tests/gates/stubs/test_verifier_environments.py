@@ -230,8 +230,10 @@ def test_probe_records_platform_and_explicit_runtime_distribution_versions() -> 
     assert runtime.missing_distributions == ("alphus-fixture-package-that-is-absent",)
 
 
-def test_three_checker_installed_example_selects_all_lanes() -> None:
-    example = Path(__file__).resolve().parents[3] / "examples/stub-package-contract"
+def test_three_checker_installed_example_selects_all_lanes(
+    pytestconfig: pytest.Config,
+) -> None:
+    example = pytestconfig.rootpath / "examples/stub-package-contract"
     settings = verify.read_config(example, Path("stub-quality.json"))
     positive = (example / settings.positive_fixture).read_text(encoding="utf-8")
     negative = (example / settings.negative_fixture).read_text(encoding="utf-8")

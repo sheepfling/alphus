@@ -28,13 +28,20 @@ Each consumer repository keeps the facts that define its own contract:
 The shared audit deliberately complements native tools instead of acting as a
 second type checker. Use the following ownership when interpreting a green run:
 
-| Claim | Evidence owner | What the shared source audit establishes |
-| --- | --- | --- |
-| Installed member presence and callable shape/default compatibility | `mypy.stubtest` in the target environment | It may report source-specific policy separately; a stub `...` default means a default exists, not that its value equals the runtime expression. |
-| Call acceptance, overload choice, generic inference, and result types | Positive and expected-negative Mypy/Pyright fixtures | The AST audit does not establish checker behavior. |
-| Wheel contents, PEP 561 resolution, and dependency consistency | Installed-artifact checks and `pip check` in the target | A source checkout alone is not package evidence. |
-| Declared public facade, module ownership, annotation completeness, and consumer-specific source fidelity | Package-owned inventory and bounded Alphus audit | These are explicit source policies, not generic runtime compatibility. Exact source default expressions remain checked by the inventory helper. |
-| Returned values, exceptions, mutation, serialization, and output | Consumer-owned runtime assertions against the installed artifact | Matching annotations or callable signatures do not establish behavior. |
+- **Runtime members and callable compatibility:** target-environment `mypy.stubtest`.
+  Stub `...` means a default exists; it does not compare the runtime value.
+- **Call acceptance, overload choice, inference and result types:** positive and
+  expected-negative Mypy/Pyright fixtures. The AST audit does not establish
+  checker behavior.
+- **Wheel contents, PEP 561 resolution and dependencies:** installed-artifact
+  checks and target-environment `pip check`. A source checkout alone is not
+  package evidence.
+- **Public facade, module ownership, annotations and source fidelity:** the
+  package inventory and bounded Alphus audit. These are explicit source
+  policies, not generic runtime compatibility.
+- **Returned values, exceptions, mutation, serialization and output:** consumer
+  runtime assertions against the installed artifact. Matching annotations and
+  signatures do not establish behavior.
 
 The API audit inspects signatures and declared annotations; it does not invoke
 functions or infer types from function bodies. A behavior guarantee therefore

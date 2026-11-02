@@ -14,7 +14,7 @@ import zipfile
 from collections.abc import Mapping, MutableSequence, Sequence
 from email import policy as email_policy
 from email.parser import BytesParser
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -25,6 +25,7 @@ from alphus.gates.stubs.environments import (
     child_environment,
     probe_python,
 )
+from alphus.support.git import git_value
 from alphus.support.python_runtime import current_python_executable
 from alphus.support.source_text import read_utf8_text
 
@@ -265,7 +266,11 @@ def artifact_identity(wheel: Path) -> ArtifactIdentity:
     """Record the built wheel identity instead of treating a filename as provenance."""
     with zipfile.ZipFile(wheel) as archive:
         metadata_paths = sorted(
-            name for name in archive.namelist() if name.endswith(".dist-info/METADATA")
+            name
+            for name in archive.namelist()
+            if len(PurePosixPath(name).parts) >= 2
+            and PurePosixPath(name).parts[-2].endswith(".dist-info")
+            and PurePosixPath(name).parts[-1] == "METADATA"
         )
         if len(metadata_paths) != 1:
             raise ValueError(
@@ -291,18 +296,8 @@ def artifact_identity(wheel: Path) -> ArtifactIdentity:
 
 def _source_revision(root: Path) -> str | None:
     """Return the checkout revision when Git metadata is available."""
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(root), "rev-parse", "--verify", "HEAD"],
-            capture_output=True,
-            check=False,
-            text=True,
-            timeout=10,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return None
-    revision = result.stdout.strip()
-    return revision if result.returncode == 0 and len(revision) == 40 else None
+    revision = git_value(root, "rev-parse", "--verify", "HEAD")
+    return revision if revision is not None and len(revision) == 40 else None
 
 
 def _verification_lanes(
