@@ -56,8 +56,8 @@ Consumers must add their own installed runtime and stub package constraints,
 public API inventory, allowlist, and actual platform matrix.
 
 The repository's hosted self-quality workflow also runs this example with a
-Python 3.11 checker environment and separate Python 3.10/Linux and
-Python 3.14/Windows target environments. Each matrix job uploads its JSON
+Python 3.11 checker environment and target environments on Linux for Python
+3.10–3.13, plus Windows for Python 3.14. Each matrix job uploads its JSON
 verification report. This is a bounded test of this synthetic bundled
 runtime/stub package; it is not another `mdutils-stubs` consumer calibration or
 a claim that every supported platform and checker combination passed.

@@ -150,6 +150,12 @@ jobs:
         include:
           - os: ubuntu-latest
             target-python: "3.10"
+          - os: ubuntu-latest
+            target-python: "3.11"
+          - os: ubuntu-latest
+            target-python: "3.12"
+          - os: ubuntu-latest
+            target-python: "3.13"
           - os: windows-latest
             target-python: "3.14"
     steps:
