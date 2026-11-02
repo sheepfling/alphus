@@ -629,7 +629,7 @@ def evaluate(packet: Mapping[str, JsonValue]):
 @pytest.mark.parametrize(
     "binding_expression",
     [
-        "def nested(callback=(_read_state := lambda value: value)):\\n        pass",
+        "def nested(callback=(_read_state := lambda value: value)):\n        pass",
         "callback = lambda value=(_read_state := (lambda item: item)): value",
     ],
 )
@@ -637,13 +637,13 @@ def test_nested_default_walrus_binding_shadows_module_helper(
     binding_expression: str,
 ) -> None:
     source = (
-        "from collections.abc import Mapping\\n"
-        "from app.json_types import JsonValue\\n"
-        "def _read_state(payload):\\n"
-        '    return payload["state"]\\n'
-        "def evaluate(packet: Mapping[str, JsonValue]):\\n"
-        f"    {binding_expression.replace(chr(10), chr(10) + '    ')}\\n"
-        "    return _read_state(packet)\\n"
+        "from collections.abc import Mapping\n"
+        "from app.json_types import JsonValue\n"
+        "def _read_state(payload):\n"
+        '    return payload["state"]\n'
+        "def evaluate(packet: Mapping[str, JsonValue]):\n"
+        f"    {binding_expression.replace(chr(10), chr(10) + '    ')}\n"
+        "    return _read_state(packet)\n"
     )
     findings = input_contract_findings(
         source,
