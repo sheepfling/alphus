@@ -518,22 +518,43 @@ def _python_import_evidence(
             or (path.name == "__init__.py" and path.parent in member_directories)
         )
     }
-    for source in sorted(analysis_sources, key=str):
+    external_sources = {
+        path
+        for path in selected_paths
+        if path.suffix == ".py" and path not in analysis_sources
+    }
+    external_parse_failures = 0
+    external_parsed = 0
+    # Preserve the existing family analysis budget first. External consumers are
+    # supplementary evidence and must not make the core family scan incomplete.
+    sources_to_parse = [
+        *sorted(analysis_sources, key=str),
+        *sorted(external_sources, key=str),
+    ]
+    for source in sources_to_parse:
         source_path = (checkout / source).resolve(strict=False)
         if not source_path.is_relative_to(checkout) or bytes_left <= 0:
             failures += 1
+            if source in external_sources:
+                external_parse_failures += 1
             continue
         try:
             with source_path.open("rb") as handle:
                 raw = handle.read(min(bytes_left, 1_048_576) + 1)
             if len(raw) > bytes_left or len(raw) > 1_048_576:
                 failures += 1
+                if source in external_sources:
+                    external_parse_failures += 1
                 continue
             bytes_left -= len(raw)
             tree = ast.parse(raw.decode("utf-8"), filename=source.as_posix())
         except (OSError, UnicodeError, SyntaxError, ValueError):
             failures += 1
+            if source in external_sources:
+                external_parse_failures += 1
             continue
+        if source in external_sources:
+            external_parsed += 1
         trees[source] = tree
         module_import_ids: set[int] = set()
         for statement in tree.body:
@@ -559,6 +580,8 @@ def _python_import_evidence(
                 source_module = ".".join(parts)
             break
         source_modules[source] = source_module
+        if source in external_sources:
+            continue
         export_declaration = _module_all_exports(tree)
         if export_declaration is not None:
             export_line, names = export_declaration
@@ -609,6 +632,7 @@ def _python_import_evidence(
     protocol_use_count = 0
     typed_dict_uses: list[str] = []
     typed_dict_use_count = 0
+    external_references: list[tuple[str, int, str]] = []
 
     def add_package_namespace_candidate(
         source: Path, node: ast.ImportFrom, alias: ast.alias, target: Path
@@ -641,10 +665,16 @@ def _python_import_evidence(
                         targets = modules.get(target_name, [])
                         if len(targets) == 1:
                             target = targets[0]
-                            resolved.append(
-                                f"{source.as_posix()}:{node.lineno} → {target.as_posix()}"
-                            )
-                        else:
+                            if source in analysis_sources:
+                                resolved.append(
+                                    f"{source.as_posix()}:{node.lineno} → "
+                                    f"{target.as_posix()}"
+                                )
+                            elif target in members:
+                                external_references.append(
+                                    (source.as_posix(), node.lineno, target.as_posix())
+                                )
+                        elif source in analysis_sources:
                             unresolved += 1
                 case ast.ImportFrom(module=module, level=level, names=aliases):
                     if module is None:
@@ -656,32 +686,46 @@ def _python_import_evidence(
                             )
                             pieces = package.split(".") if package else []
                             if level > len(pieces) + 1:
-                                unresolved += max(1, len(aliases))
+                                if source in analysis_sources:
+                                    unresolved += max(1, len(aliases))
                                 continue
                             base = pieces[: len(pieces) - level + 1]
                             for alias in aliases:
                                 if alias.name == "*":
-                                    unresolved += 1
+                                    if source in analysis_sources:
+                                        unresolved += 1
                                     continue
                                 target_name = ".".join([*base, *alias.name.split(".")])
                                 targets = modules.get(target_name, [])
                                 if len(targets) == 1:
                                     target_path = targets[0]
-                                    resolved.append(
-                                        f"{source.as_posix()}:{node.lineno} → "
-                                        f"{target_path.as_posix()}"
-                                    )
-                                    add_package_namespace_candidate(
-                                        source, node, alias, target_path
-                                    )
+                                    if source in analysis_sources:
+                                        resolved.append(
+                                            f"{source.as_posix()}:{node.lineno} → "
+                                            f"{target_path.as_posix()}"
+                                        )
+                                        add_package_namespace_candidate(
+                                            source, node, alias, target_path
+                                        )
+                                    elif target_path in members:
+                                        external_references.append(
+                                            (
+                                                source.as_posix(),
+                                                node.lineno,
+                                                target_path.as_posix(),
+                                            )
+                                        )
                                 else:
-                                    unresolved += 1
+                                    if source in analysis_sources:
+                                        unresolved += 1
                             continue
-                        unresolved += 1
+                        if source in analysis_sources:
+                            unresolved += 1
                         continue
                     if level:
                         if source_module is None:
-                            unresolved += 1
+                            if source in analysis_sources:
+                                unresolved += 1
                             continue
                         package = (
                             source_module
@@ -690,7 +734,8 @@ def _python_import_evidence(
                         )
                         pieces = package.split(".") if package else []
                         if level > len(pieces) + 1:
-                            unresolved += 1
+                            if source in analysis_sources:
+                                unresolved += 1
                             continue
                         base = pieces[: len(pieces) - level + 1]
                         if module:
@@ -701,12 +746,22 @@ def _python_import_evidence(
                     targets = modules.get(target_name, []) if target_name else []
                     if len(targets) == 1:
                         target_path = targets[0]
-                        resolved.append(
-                            f"{source.as_posix()}:{node.lineno} → {target_path.as_posix()}"
-                        )
-                        for alias in aliases:
-                            add_package_namespace_candidate(
-                                source, node, alias, target_path
+                        if source in analysis_sources:
+                            resolved.append(
+                                f"{source.as_posix()}:{node.lineno} → "
+                                f"{target_path.as_posix()}"
+                            )
+                            for alias in aliases:
+                                add_package_namespace_candidate(
+                                    source, node, alias, target_path
+                                )
+                        elif target_path in members:
+                            external_references.append(
+                                (
+                                    source.as_posix(),
+                                    node.lineno,
+                                    target_path.as_posix(),
+                                )
                             )
                         if target_path in members:
                             for alias in aliases:
@@ -748,7 +803,8 @@ def _python_import_evidence(
                                             f"{target_path.as_posix()}"
                                         )
                     else:
-                        unresolved += 1
+                        if source in analysis_sources:
+                            unresolved += 1
                 case _:
                     continue
     member_paths = {path.as_posix() for path in members}
@@ -763,6 +819,44 @@ def _python_import_evidence(
         context += " Examples: " + ", ".join(shown) + "."
     if len(shown) < len(resolved):
         context += f" {len(resolved) - len(shown)} edge(s) omitted by max_import_edges."
+    if external_sources:
+        context += (
+            " Selected external Python source references (outside this family, within "
+            f"the configured inventory): {len(external_references)} direct edge(s) "
+            f"target a family member; parsed {external_parsed} of "
+            f"{len(external_sources)} eligible file(s)."
+        )
+        shown_external = external_references[: policy.max_import_edges]
+        if shown_external:
+            context += (
+                " Examples: "
+                + ", ".join(
+                    f"{source}:{line} → {target}"
+                    for source, line, target in shown_external
+                )
+                + "."
+            )
+        elif not external_parse_failures:
+            context += (
+                " No direct external references were observed in the parsed selected "
+                "inventory; unselected consumers and dynamic references are not assessed."
+            )
+        if len(external_references) > len(shown_external):
+            context += (
+                f" {len(external_references) - len(shown_external)} external edge(s) "
+                "omitted by max_import_edges."
+            )
+        if external_parse_failures:
+            context += (
+                f" External reference scan incomplete: {external_parse_failures} "
+                "selected Python source file(s) could not be analyzed; missing "
+                "references are unknown."
+            )
+    else:
+        context += (
+            " No selected external Python files were available for an incoming-reference "
+            "pass; consumers outside the configured inventory are not assessed."
+        )
     if public_exports:
         context += " Literal module-level __all__ evidence: "
         context += "; ".join(public_exports) + "."
@@ -862,9 +956,9 @@ def _python_import_evidence(
     context += (
         " Direct imports, literal __all__ declarations, and qualified Protocol/TypedDict "
         "declarations are partial syntax evidence only. Package-level import candidates "
-        "are not verified re-exports. Package-level re-exports, external consumers, "
-        "responsibility, other shared-contract forms, and "
-        "non-Python dependencies are not assessed."
+        "are not verified re-exports. Package-level re-exports, consumers outside the "
+        "selected Python inventory, dynamic references, responsibility, other "
+        "shared-contract forms, and non-Python dependencies are not assessed."
     )
     return context, notes
 
