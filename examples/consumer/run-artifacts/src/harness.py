@@ -4,6 +4,14 @@ def build_report(rows, report_path):
     publish(read_table(report_path))
 
 
+def build_report_with_manifest(rows, report_path, current_run_manifest):
+    if rows:
+        write_table(report_path, rows)
+    if not is_current_artifact(report_path, current_run_manifest):
+        raise MissingCurrentArtifact()
+    publish(read_table(report_path))
+
+
 def process_input(input_path):
     parsed = parse_input(input_path)
     record_provenance(digest_input(input_path))

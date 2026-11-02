@@ -50,6 +50,83 @@ def test_conditional_output_rule_abstains_on_unconfigured_path_and_helper() -> N
     assert run_artifact_findings(source, "src/pipeline.py", configured) == []
 
 
+def test_current_run_manifest_guard_is_an_explicit_reuse_control() -> None:
+    configured = policy(
+        conditional_output_readback=True,
+        reused_output_path_names=("output_path",),
+        output_writers=(ProvenanceCallRole(function="write_output"),),
+        output_readers=(ProvenanceCallRole(function="read_output"),),
+        current_run_artifact_checks=(
+            ProvenanceCallRole(function="is_current_artifact", path_argument_index=0),
+        ),
+    )
+    guarded = (
+        "def build(rows, output_path, manifest):\n"
+        "    if rows:\n"
+        "        write_output(output_path, rows)\n"
+        "    if not is_current_artifact(output_path, manifest):\n"
+        "        raise MissingCurrentArtifact()\n"
+        "    publish(read_output(output_path))\n"
+    )
+    unguarded = guarded.replace(
+        "    if not is_current_artifact(output_path, manifest):\n"
+        "        raise MissingCurrentArtifact()\n",
+        "",
+    )
+    guard_before_writer = guarded.replace(
+        "    if rows:\n"
+        "        write_output(output_path, rows)\n"
+        "    if not is_current_artifact(output_path, manifest):\n"
+        "        raise MissingCurrentArtifact()\n",
+        "    if not is_current_artifact(output_path, manifest):\n"
+        "        raise MissingCurrentArtifact()\n"
+        "    if rows:\n"
+        "        write_output(output_path, rows)\n",
+    )
+    nonterminal_check = guarded.replace(
+        "        raise MissingCurrentArtifact()",
+        "        pass",
+    )
+    mismatched_path = guarded.replace(
+        "is_current_artifact(output_path, manifest)",
+        "is_current_artifact(other_path, manifest)",
+    )
+    shadowed = guarded.replace(
+        "def build(rows, output_path, manifest):",
+        "def build(rows, output_path, manifest, is_current_artifact):",
+    )
+
+    assert run_artifact_findings(guarded, "src/pipeline.py", configured) == []
+    assert len(run_artifact_findings(unguarded, "src/pipeline.py", configured)) == 1
+    assert (
+        len(run_artifact_findings(guard_before_writer, "src/pipeline.py", configured))
+        == 1
+    )
+    assert (
+        len(run_artifact_findings(nonterminal_check, "src/pipeline.py", configured))
+        == 1
+    )
+    assert (
+        len(run_artifact_findings(mismatched_path, "src/pipeline.py", configured)) == 1
+    )
+    assert len(run_artifact_findings(shadowed, "src/pipeline.py", configured)) == 1
+    assert (
+        len(
+            run_artifact_findings(
+                guarded,
+                "src/pipeline.py",
+                policy(
+                    conditional_output_readback=True,
+                    reused_output_path_names=("output_path",),
+                    output_writers=(ProvenanceCallRole(function="write_output"),),
+                    output_readers=(ProvenanceCallRole(function="read_output"),),
+                ),
+            )
+        )
+        == 1
+    )
+
+
 def test_conditional_output_rule_abstains_on_fresh_namespace_and_rebinding() -> None:
     configured = policy(
         conditional_output_readback=True,

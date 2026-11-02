@@ -19,6 +19,17 @@ provenance sink call. A fresh per-run path can be listed under
 `fresh_output_path_names`; immutable captured-byte names can be listed under
 `immutable_snapshot_names` and cannot also be configured as reused/input paths.
 
+An output family may also configure `current_run_artifact_checks` with a
+consumer predicate helper and the positional argument that names the output
+path. The checker suppresses a candidate when a direct
+`if not is_current_artifact(output_path, manifest): raise ...` or `return`
+guard after a configured write exits before later reads of that same declared
+path. A pre-write or nonterminal check, mismatched path, shadowed helper, or
+unguarded read does not count as a control.
+The consumer must ensure the helper checks an authoritative manifest for the
+current run; static scanning cannot verify that contract or the manifest's
+construction.
+
 Alphus does not infer helper semantics, resolve path expressions or aliases,
 follow values between functions, import consumer code, or detect a file changing
 between operations. Rebound paths and locally shadowed helper names abstain.

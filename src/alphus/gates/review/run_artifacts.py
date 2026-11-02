@@ -65,6 +65,50 @@ def _role_path(
     return None
 
 
+def _manifest_guarded_read_ids(
+    function: ast.FunctionDef | ast.AsyncFunctionDef,
+    path_names: frozenset[str],
+    writers: Sequence[ProvenanceCallRole],
+    readers: Sequence[ProvenanceCallRole],
+    checks: Sequence[ProvenanceCallRole],
+    shadowed: set[str],
+) -> frozenset[int]:
+    """Recognize reads after a configured missing-artifact guard exits."""
+    protected: set[int] = set()
+    for index, statement in enumerate(function.body):
+        if not isinstance(statement, ast.If):
+            continue
+        match statement.test:
+            case ast.UnaryOp(op=ast.Not(), operand=ast.Call() as check_call):
+                pass
+            case _:
+                continue
+        if _call_name(check_call.func) in shadowed:
+            continue
+        checked_path = _role_path(check_call, checks, path_names)
+        prior_write = any(
+            _call_name(call.func) not in shadowed
+            and _role_path(call, writers, path_names) == checked_path
+            for prior in function.body[:index]
+            for call, _ in _calls((prior,))
+        )
+        if (
+            checked_path is None
+            or not prior_write
+            or len(statement.body) != 1
+            or not isinstance(statement.body[0], (ast.Raise, ast.Return))
+        ):
+            continue
+        for later in function.body[index + 1 :]:
+            for read_call, _ in _calls((later,)):
+                if (
+                    _call_name(read_call.func) not in shadowed
+                    and _role_path(read_call, readers, path_names) == checked_path
+                ):
+                    protected.add(id(read_call))
+    return frozenset(protected)
+
+
 def _direct_call(statement: ast.stmt) -> ast.Call | None:
     match statement:
         case ast.Expr(value=ast.Call() as call):
@@ -533,6 +577,7 @@ def _function_findings(
             for role in (
                 *policy.output_writers,
                 *policy.output_readers,
+                *policy.current_run_artifact_checks,
                 *policy.parsers,
                 *policy.digesters,
             )
@@ -554,6 +599,14 @@ def _function_findings(
     findings: list[Finding] = []
 
     if policy.conditional_output_readback:
+        manifest_guarded_reads = _manifest_guarded_read_ids(
+            function,
+            output_paths,
+            policy.output_writers,
+            policy.output_readers,
+            policy.current_run_artifact_checks,
+            shadowed,
+        )
         writers = [
             (call, name)
             for call, is_conditional in calls
@@ -569,6 +622,7 @@ def _function_findings(
             and (name := _role_path(call, policy.output_readers, output_paths))
             is not None
             and _call_name(call.func) not in shadowed
+            and id(call) not in manifest_guarded_reads
         ]
         emitted_paths: set[str] = set()
         for writer, name in writers:

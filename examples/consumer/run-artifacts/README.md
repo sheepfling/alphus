@@ -1,6 +1,7 @@
 # Run artifact provenance example
 
-This opt-in, provisional example demonstrates four configured local patterns:
+This opt-in, provisional example demonstrates four configured local patterns
+and a consumer-declared output control:
 
 - a conditional writer followed by a read of the same consumer-declared reused
   output path; and
@@ -10,6 +11,8 @@ This opt-in, provisional example demonstrates four configured local patterns:
   and
 - distribution metadata in a provenance sink without a configured imported
   module-origin call in that sink.
+- an explicit current-run manifest guard in `build_report_with_manifest` as a
+  consumer-declared control for reused outputs.
 
 The findings describe review candidates. They do not establish stale data or a
 file change. Direct function spellings, a direct name argument, same-function

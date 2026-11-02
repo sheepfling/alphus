@@ -122,6 +122,7 @@ class RunArtifactPolicy(PythonSourceScanPolicy):
     immutable_snapshot_names: tuple[str, ...] = ()
     output_writers: tuple[ProvenanceCallRole, ...] = ()
     output_readers: tuple[ProvenanceCallRole, ...] = ()
+    current_run_artifact_checks: tuple[ProvenanceCallRole, ...] = ()
     parsers: tuple[ProvenanceCallRole, ...] = ()
     digesters: tuple[ProvenanceCallRole, ...] = ()
     provenance_sinks: tuple[str, ...] = ()
@@ -224,6 +225,7 @@ class RunArtifactPolicy(PythonSourceScanPolicy):
                 for role in (
                     *self.output_writers,
                     *self.output_readers,
+                    *self.current_run_artifact_checks,
                     *self.parsers,
                     *self.digesters,
                 )
