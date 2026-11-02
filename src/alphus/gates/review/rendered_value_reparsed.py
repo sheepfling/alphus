@@ -43,6 +43,19 @@ def _target_names(target: ast.expr) -> set[str]:
     return names
 
 
+def _named_expression_names(value: ast.expr | None) -> set[str]:
+    names: set[str] = set()
+    if value is None:
+        return names
+    for node in ast.walk(value):
+        match node:
+            case ast.NamedExpr(target=target):
+                names.update(_target_names(target))
+            case _:
+                continue
+    return names
+
+
 def _pattern_names(pattern: ast.pattern) -> set[str]:
     names: set[str] = set()
     match pattern:
@@ -146,6 +159,7 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[tuple[int, int, str]]:
                     names: set[str] = set()
                     for target in targets:
                         names.update(_target_names(target))
+                    names.update(_named_expression_names(statement.value))
                     for name in names:
                         current.pop(name, None)
                 case ast.AnnAssign(
@@ -154,12 +168,15 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[tuple[int, int, str]]:
                 ) if _qualified_name(func) in helpers and (args or keywords):
                     current.pop(name, None)
                     current[name] = statement.lineno
-                case ast.AnnAssign(target=target):
+                case ast.AnnAssign(target=target, value=value):
                     names = _target_names(target)
+                    names.update(_named_expression_names(value))
                     for name in names:
                         current.pop(name, None)
-                case ast.AugAssign(target=target):
-                    for name in _target_names(target):
+                case ast.AugAssign(target=target, value=value):
+                    names = _target_names(target)
+                    names.update(_named_expression_names(value))
+                    for name in names:
                         current.pop(name, None)
                 case ast.Expr(value=value):
                     # Walrus targets in evaluated expression statements can

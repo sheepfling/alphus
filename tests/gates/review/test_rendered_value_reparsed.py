@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from alphus.config import ProseAsControlPolicy
 from alphus.gates.review.rendered_value_reparsed import (
     _sites,
@@ -123,6 +125,27 @@ def f(text, original):
         return True
 """
     assert _sites(source, ("render",)) == [(2, 4, "rendered")]
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "other = (rendered := original)",
+        "other: object = (rendered := original)",
+        "other += (rendered := original)",
+    ],
+)
+def test_assignment_value_walrus_invalidates_rendered_binding(
+    statement: str,
+) -> None:
+    source = f"""\
+def f(text, original, other):
+    rendered = render(text)
+    {statement}
+    if rendered.rstrip().endswith('!'):
+        return True
+"""
+    assert _sites(source, ("render",)) == []
 
 
 def test_finally_predicate_requires_the_rendered_binding_on_all_entry_paths() -> None:
