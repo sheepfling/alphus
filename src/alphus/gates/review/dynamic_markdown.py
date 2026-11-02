@@ -570,6 +570,22 @@ class _MarkdownAnalyzer:
                         self._bind(target, value)
                 case ast.AnnAssign(target=target, value=value) if value is not None:
                     self._bind(target, value)
+                case ast.AugAssign(
+                    target=ast.Name(id=name), op=ast.Add(), value=value
+                ) if name in self.scope.aliases:
+                    current = self.scope.aliases[name]
+                    addition = self._resolve(value)
+                    if addition is None:
+                        addition = self._dynamic(
+                            value, node, "augmented string concatenation"
+                        )
+                    else:
+                        addition = self._reframe(
+                            addition, node, "augmented string concatenation"
+                        )
+                    combined = self._combine(current, addition)
+                    self.scope.aliases[name] = combined
+                    self._emit(combined)
                 case ast.Import(names=names):
                     for alias in names:
                         local_name = alias.asname or alias.name.split(".", 1)[0]
