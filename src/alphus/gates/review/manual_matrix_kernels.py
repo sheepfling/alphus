@@ -8,60 +8,96 @@ from pathlib import Path
 
 from alphus.config import ManualMatrixKernelPolicy
 from alphus.contracts.findings import Finding
+from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 
-_RULE_ID = "alphus/python/none/maintainability/manual-matrix-kernel"
+_RULE_ID = rule_tag(
+    Scope.PYTHON, Framework.NONE, Category.MAINTAINABILITY, "manual-matrix-kernel"
+)
 
 
 def _call_name(node: ast.expr, name: str) -> ast.Call | None:
-    if (
-        isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id == name
-        and len(node.args) == 1
-        and not node.keywords
-    ):
-        return node
-    return None
+    match node:
+        case ast.Call(func=ast.Name(id=call_name), args=[_], keywords=[]):
+            return node if call_name == name else None
+        case _:
+            return None
 
 
 def _indexed_pair(node: ast.expr, first: str, second: str) -> bool:
     """Match ``container[first][second]`` with a simple named container."""
-    return (
-        isinstance(node, ast.Subscript)
-        and isinstance(node.slice, ast.Name)
-        and node.slice.id == second
-        and isinstance(node.value, ast.Subscript)
-        and isinstance(node.value.slice, ast.Name)
-        and node.value.slice.id == first
-        and isinstance(node.value.value, ast.Name)
-    )
+    match node:
+        case ast.Subscript(
+            slice=ast.Name(id=second_index),
+            value=ast.Subscript(slice=ast.Name(id=first_index), value=ast.Name()),
+        ):
+            return second_index == second and first_index == first
+        case _:
+            return False
 
 
 def _target_name(node: ast.expr) -> str | None:
-    return node.id if isinstance(node, ast.Name) else None
+    match node:
+        case ast.Name(id=name):
+            return name
+        case _:
+            return None
+
+
+def _list_comp(node: ast.AST) -> ast.ListComp | None:
+    match node:
+        case ast.ListComp():
+            return node
+        case _:
+            return None
+
+
+def _generator_exp(node: ast.expr) -> ast.GeneratorExp | None:
+    match node:
+        case ast.GeneratorExp():
+            return node
+        case _:
+            return None
+
+
+def _binop(node: ast.expr) -> ast.BinOp | None:
+    match node:
+        case ast.BinOp():
+            return node
+        case _:
+            return None
+
+
+def _is_mult(operator: ast.operator) -> bool:
+    match operator:
+        case ast.Mult():
+            return True
+        case _:
+            return False
 
 
 def _has_builtin_shadow(tree: ast.AST) -> bool:
     """Avoid interpreting locally rebound sum/range calls as builtins."""
     for node in ast.walk(tree):
-        if (
-            isinstance(node, ast.Name)
-            and isinstance(node.ctx, ast.Store)
-            and node.id in {"sum", "range"}
-        ):
-            return True
-        if isinstance(node, ast.arg) and node.arg in {"sum", "range"}:
-            return True
-        if isinstance(
-            node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
-        ) and node.name in {"sum", "range"}:
-            return True
-        if isinstance(node, ast.alias) and (
-            node.name in {"sum", "range"} or node.asname in {"sum", "range"}
-        ):
-            return True
+        match node:
+            case ast.Name(id=name, ctx=ast.Store()) if name in {"sum", "range"}:
+                return True
+            case ast.arg(arg=name) if name in {"sum", "range"}:
+                return True
+            case (
+                ast.FunctionDef(name=name)
+                | ast.AsyncFunctionDef(name=name)
+                | ast.ClassDef(name=name)
+            ) if name in {"sum", "range"}:
+                return True
+            case ast.alias(name=name, asname=asname) if name in {
+                "sum",
+                "range",
+            } or asname in {"sum", "range"}:
+                return True
+            case _:
+                continue
     return False
 
 
@@ -72,9 +108,9 @@ def _is_matrix_product(node: ast.ListComp) -> bool:
     row = _target_name(outer.target)
     if row is None or _call_name(outer.iter, "range") is None:
         return False
-    if not isinstance(node.elt, ast.ListComp) or len(node.elt.generators) != 1:
+    inner = _list_comp(node.elt)
+    if inner is None or len(inner.generators) != 1:
         return False
-    inner = node.elt
     column_generator = inner.generators[0]
     column = _target_name(column_generator.target)
     if column is None or column == row or column_generator.ifs:
@@ -82,23 +118,24 @@ def _is_matrix_product(node: ast.ListComp) -> bool:
     if _call_name(column_generator.iter, "range") is None:
         return False
     summation = _call_name(inner.elt, "sum")
-    if summation is None or not isinstance(summation.args[0], ast.GeneratorExp):
+    products = _generator_exp(summation.args[0]) if summation is not None else None
+    if products is None:
         return False
-    products = summation.args[0]
     if len(products.generators) != 1 or products.generators[0].ifs:
         return False
     inner_generator = products.generators[0]
     inner_index = _target_name(inner_generator.target)
+    product = _binop(products.elt)
     if (
         inner_index is None
         or inner_index in {row, column}
         or _call_name(inner_generator.iter, "range") is None
-        or not isinstance(products.elt, ast.BinOp)
-        or not isinstance(products.elt.op, ast.Mult)
+        or product is None
+        or not _is_mult(product.op)
     ):
         return False
-    return _indexed_pair(products.elt.left, row, inner_index) and _indexed_pair(
-        products.elt.right, inner_index, column
+    return _indexed_pair(product.left, row, inner_index) and _indexed_pair(
+        product.right, inner_index, column
     )
 
 
@@ -113,19 +150,18 @@ def matrix_kernel_lines(source: str) -> list[tuple[int, int, int]]:
     findings: list[tuple[int, int, int]] = []
     for node in ast.walk(tree):
         if (
-            not isinstance(node, ast.ListComp)
-            or not _is_matrix_product(node)
-            or not isinstance(node.elt, ast.ListComp)
+            (outer := _list_comp(node)) is None
+            or not _is_matrix_product(outer)
+            or (inner := _list_comp(outer.elt)) is None
         ):
             continue
-        summation = node.elt.elt
-        if (
-            not isinstance(summation, ast.Call)
-            or not summation.args
-            or not isinstance(summation.args[0], ast.GeneratorExp)
-        ):
+        summation = _call_name(inner.elt, "sum")
+        if summation is None or not summation.args:
             continue
-        findings.append((node.lineno, node.elt.lineno, summation.args[0].elt.lineno))
+        product = _generator_exp(summation.args[0])
+        if product is None:
+            continue
+        findings.append((outer.lineno, inner.lineno, product.elt.lineno))
     return findings
 
 
