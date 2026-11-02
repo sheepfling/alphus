@@ -197,10 +197,14 @@ def test_utc_persistence_requires_explicit_utc_normalization() -> None:
         "from datetime import datetime, timezone\n"
         "from zoneinfo import ZoneInfo\n"
         "def save_created_at(writer):\n"
-        "    writer.save(created_at=datetime.now(ZoneInfo('Europe/Paris')).astimezone(timezone.utc))\n"
-        "    writer.save(created_at=datetime.now(ZoneInfo('Europe/Paris')).astimezone(ZoneInfo('America/Los_Angeles')))\n"
-        "    writer.save(created_at=datetime.now(ZoneInfo('Europe/Paris')).astimezone())\n"
-        "    writer.save(created_at=datetime.now(ZoneInfo('Europe/Paris')).replace(tzinfo=timezone.utc))\n"
+        "    writer.save(created_at=datetime.now(ZoneInfo('Europe/Paris'))"
+        ".astimezone(timezone.utc))\n"
+        "    writer.save(created_at=datetime.now(ZoneInfo('Europe/Paris'))"
+        ".astimezone(ZoneInfo('America/Los_Angeles')))\n"
+        "    writer.save(created_at=datetime.now(ZoneInfo('Europe/Paris'))"
+        ".astimezone())\n"
+        "    writer.save(created_at=datetime.now(ZoneInfo('Europe/Paris'))"
+        ".replace(tzinfo=timezone.utc))\n"
     )
     policy = _policy(
         utc_persistence_contracts=(
