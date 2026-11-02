@@ -131,6 +131,35 @@ def f(text):
     assert _sites(source, ("render",)) == [(2, 5, "rendered")]
 
 
+def test_try_handler_requires_rendered_binding_to_survive_possible_exception() -> None:
+    source = """\
+def f(text, original):
+    rendered = render(text)
+    try:
+        rendered = original
+        raise ValueError()
+    except ValueError:
+        if rendered.rstrip().endswith("!"):
+            return True
+    return False
+"""
+    assert _sites(source, ("render",)) == []
+
+
+def test_if_walrus_invalidates_rendered_binding_in_branches_and_afterward() -> None:
+    source = """\
+def f(text, original):
+    rendered = render(text)
+    if (rendered := original):
+        if rendered.rstrip().endswith("!"):
+            return True
+    if rendered.rstrip().endswith("?"):
+        return True
+    return False
+"""
+    assert _sites(source, ("render",)) == []
+
+
 def test_advisory_reports_configured_source_path(tmp_path: Path) -> None:
     source = tmp_path / "src/render/table.py"
     source.parent.mkdir(parents=True)

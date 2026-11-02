@@ -69,7 +69,8 @@ def _module_bindings(
                 record(name, function)
             case ast.AsyncFunctionDef(name=name):
                 record(name)
-            case ast.ClassDef():
+            case ast.ClassDef(name=name):
+                record(name)
                 return
             case ast.Name(id=name, ctx=ast.Store()):
                 record(name)

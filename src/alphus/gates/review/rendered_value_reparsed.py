@@ -120,8 +120,17 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[tuple[int, int, str]]:
                     name = _uses_rendered_suffix(test, tuple(current))
                     if name is not None:
                         found.add((current[name], conditional.lineno, name))
-                    then_state = scan(body, current)
-                    else_state = scan(orelse, current) if orelse else current.copy()
+                    branch_state = current.copy()
+                    for node in ast.walk(test):
+                        match node:
+                            case ast.NamedExpr(target=ast.Name(id=name)):
+                                branch_state.pop(name, None)
+                            case _:
+                                continue
+                    then_state = scan(body, branch_state)
+                    else_state = (
+                        scan(orelse, branch_state) if orelse else branch_state.copy()
+                    )
                     current = {
                         name: line
                         for name, line in then_state.items()
@@ -200,7 +209,10 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[tuple[int, int, str]]:
                     body_state = scan(body, current)
                     normal_state = scan(orelse, body_state) if orelse else body_state
                     paths = [normal_state]
-                    paths.extend(scan(handler.body, current) for handler in handlers)
+                    exception_state = _common_bindings([current, body_state])
+                    paths.extend(
+                        scan(handler.body, exception_state) for handler in handlers
+                    )
                     if finalbody:
                         # An exception can enter finally before the body completes,
                         # so only bindings common to normal and exceptional paths

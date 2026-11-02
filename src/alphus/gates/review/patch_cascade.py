@@ -49,6 +49,22 @@ def _stored_helper_name(node: ast.AST, names: frozenset[str]) -> bool:
     match node:
         case ast.Name(id=name, ctx=ast.Store()) if name in names:
             return True
+        case (
+            ast.FunctionDef(name=name)
+            | ast.AsyncFunctionDef(name=name)
+            | ast.ClassDef(name=name)
+        ) if name in names:
+            return True
+        case ast.Import(names=aliases):
+            return any(
+                (alias.asname or alias.name.split(".", maxsplit=1)[0]) in names
+                for alias in aliases
+            )
+        case ast.ImportFrom(names=aliases):
+            return any(
+                alias.name == "*" or (alias.asname or alias.name) in names
+                for alias in aliases
+            )
         case _:
             return False
 

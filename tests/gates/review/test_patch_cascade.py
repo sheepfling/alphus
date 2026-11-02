@@ -92,6 +92,28 @@ def parse_document(repair_id, text, normalize_text):
     assert patch_cascade_sites(source, _policy()) == []
 
 
+@pytest.mark.parametrize(
+    "shadowing",
+    [
+        "from unrelated import identity as normalize_text",
+        "def normalize_text(text, separator):\n        return text",
+    ],
+)
+def test_import_and_function_helper_shadowing_make_identity_unknown(
+    shadowing: str,
+) -> None:
+    source = f"""\
+def parse_document(repair_id, text):
+    if repair_id == "vendor-a":
+        text = normalize_text(text, " ")
+    if repair_id == "vendor-b":
+        text = normalize_text(text, "-")
+    {shadowing}
+    return text
+"""
+    assert patch_cascade_sites(source, _policy()) == []
+
+
 def test_redefinition_of_selected_parser_is_ambiguous() -> None:
     source = """\
 def parse_document(repair_id, text):
