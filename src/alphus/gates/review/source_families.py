@@ -7,6 +7,7 @@ import codecs
 import re
 from collections import Counter, defaultdict
 from collections.abc import Iterable
+from collections.abc import Set as AbstractSet
 from heapq import nsmallest
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
@@ -141,8 +142,8 @@ def _selected_paths(
 
 def _python_import_evidence(
     checkout: Path,
-    members: set[Path],
-    selected: list[Path],
+    members: AbstractSet[Path],
+    selected: Iterable[Path],
     policy: _SourceFamilyPolicy,
 ) -> tuple[str, list[str]]:
     """Summarize direct, statically resolved imports within the configured roots."""
@@ -201,47 +202,52 @@ def _python_import_evidence(
                 source_module = ".".join(parts)
             break
         for node in ast.walk(tree):
-            target_name = None
-            if isinstance(node, ast.Import):
-                for alias in node.names:
-                    target_name = alias.name
-                    targets = modules.get(target_name, [])
+            match node:
+                case ast.Import(names=names):
+                    for alias in names:
+                        target_name = alias.name
+                        targets = modules.get(target_name, [])
+                        if len(targets) == 1:
+                            target = targets[0]
+                            resolved.append(
+                                f"{source.as_posix()}:{node.lineno} → {target.as_posix()}"
+                            )
+                        else:
+                            unresolved += 1
+                case ast.ImportFrom(module=module, level=level):
+                    if module is None:
+                        unresolved += 1
+                        continue
+                    if level:
+                        if source_module is None:
+                            unresolved += 1
+                            continue
+                        package = (
+                            source_module
+                            if source.name == "__init__.py"
+                            else source_module.rpartition(".")[0]
+                        )
+                        pieces = package.split(".") if package else []
+                        if level > len(pieces) + 1:
+                            unresolved += 1
+                            continue
+                        base = pieces[: len(pieces) - level + 1]
+                        if module:
+                            base.extend(module.split("."))
+                        target_name = ".".join(base)
+                    else:
+                        target_name = module
+                    targets = modules.get(target_name, []) if target_name else []
                     if len(targets) == 1:
-                        target = targets[0]
                         resolved.append(
-                            f"{source.as_posix()}:{node.lineno} → {target.as_posix()}"
+                            f"{source.as_posix()}:{node.lineno} → {targets[0].as_posix()}"
                         )
                     else:
                         unresolved += 1
-            elif isinstance(node, ast.ImportFrom):
-                if node.module is None:
-                    unresolved += 1
+                case _:
                     continue
-                if node.level:
-                    if source_module is None:
-                        unresolved += 1
-                        continue
-                    package = source_module if source.name == "__init__.py" else source_module.rpartition(".")[0]
-                    pieces = package.split(".") if package else []
-                    if node.level > len(pieces) + 1:
-                        unresolved += 1
-                        continue
-                    base = pieces[: len(pieces) - node.level + 1]
-                    if node.module:
-                        base.extend(node.module.split("."))
-                    target_name = ".".join(base)
-                else:
-                    target_name = node.module
-                targets = modules.get(target_name, []) if target_name else []
-                if len(targets) == 1:
-                    resolved.append(
-                        f"{source.as_posix()}:{node.lineno} → {targets[0].as_posix()}"
-                    )
-                else:
-                    unresolved += 1
-    internal = sum(
-        1 for edge in resolved if edge.split(" → ", 1)[1] in {p.as_posix() for p in members}
-    )
+    member_paths = {path.as_posix() for path in members}
+    internal = sum(1 for edge in resolved if edge.split(" → ", 1)[1] in member_paths)
     shown = resolved[: policy.max_import_edges]
     context = (
         f"Direct Python import evidence: {internal} resolved edge(s) target another "
@@ -259,7 +265,10 @@ def _python_import_evidence(
         notes.append("the configured Python import byte budget was exhausted")
     if notes:
         context += " Analysis incomplete: " + "; ".join(notes) + "."
-    context += " Direct imports are partial evidence only; public APIs and non-Python dependencies are not assessed."
+    context += (
+        " Direct imports are partial evidence only; public APIs and "
+        "non-Python dependencies are not assessed."
+    )
     return context, notes
 
 
@@ -350,7 +359,9 @@ def source_family_findings(
     if policy.python_import_evidence:
         for _, _, members in retained:
             key = tuple(sorted(path.as_posix() for path in members))
-            context, notes = _python_import_evidence(checkout, members, selected, policy)
+            context, notes = _python_import_evidence(
+                checkout, members, selected, policy
+            )
             import_contexts[key] = context
             incomplete_notes.extend(notes)
     incomplete_finding = (
@@ -482,6 +493,11 @@ def source_family_findings(
             f"exclude={exclude_text}{override_text}. "
         )
         import_context = import_contexts.get(tuple(path.as_posix() for path in ordered))
+        evidence_mode = (
+            "bounded Python import evidence enabled"
+            if import_context
+            else "lexical-only"
+        )
         findings.append(
             Finding(
                 rule_id,
@@ -491,7 +507,7 @@ def source_family_findings(
                 f"{len(siblings)} {sibling_basis} "
                 f"({len(ordered) / max(1, len(siblings)):.0%}); language mix "
                 f"{language_text}; {line_context}{limit_context}. "
-                f"{'bounded Python import evidence enabled' if import_context else 'lexical-only'}, "
+                f"{evidence_mode}, "
                 "low-confidence advisory review candidate. "
                 f"{settings_text}{member_context}. "
                 f"{import_context + ' ' if import_context else ''}Coupling, responsibility, "

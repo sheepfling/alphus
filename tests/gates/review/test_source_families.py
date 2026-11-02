@@ -112,7 +112,9 @@ def test_import_parse_failure_is_reported_as_incomplete(tmp_path: Path) -> None:
     )
 
     assert any("could not be analyzed" in finding.message for finding in findings)
-    assert any("no clean result can be inferred" in finding.message for finding in findings)
+    assert any(
+        "no clean result can be inferred" in finding.message for finding in findings
+    )
 
 
 def test_scope_exclusions_extensions_and_language_override_precedence(
