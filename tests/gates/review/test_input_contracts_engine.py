@@ -715,9 +715,7 @@ def evaluate(options: Mapping[str, object]):
         ),
     )
 
-    findings = input_contract_findings(
-        source, policy, path="src/consumer/types.py"
-    )
+    findings = input_contract_findings(source, policy, path="src/consumer/types.py")
 
     assert len(findings) == 1
     assert "evaluate.options" in findings[0].message
