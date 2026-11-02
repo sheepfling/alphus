@@ -325,6 +325,34 @@ class PydanticDomainReturnContract(StrictModel):
         return value
 
 
+class UtcPersistenceContract(StrictModel):
+    """Exact persistence call whose selected argument must be normalized to UTC."""
+
+    path: str
+    function: str
+    call: str
+    keyword: str
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, value: str) -> str:
+        return validate_single_path(value, "UTC persistence path")
+
+    @field_validator("function", "call")
+    @classmethod
+    def validate_dotted_names(cls, value: str) -> str:
+        if any(not part.isidentifier() for part in value.split(".")):
+            raise ValueError("UTC persistence names must be dotted identifiers")
+        return value
+
+    @field_validator("keyword")
+    @classmethod
+    def validate_keyword(cls, value: str) -> str:
+        if not value.isidentifier():
+            raise ValueError("UTC persistence keyword must be an identifier")
+        return value
+
+
 class PydanticPracticePolicy(PythonSourceScanPolicy):
     """Opt-in review of Pydantic model validation and declaration practices."""
 
@@ -342,6 +370,7 @@ class PydanticPracticePolicy(PythonSourceScanPolicy):
     external_model_names: tuple[str, ...] = ()
     public_model_paths: tuple[str, ...] = ()
     domain_return_contracts: tuple[PydanticDomainReturnContract, ...] = ()
+    utc_persistence_contracts: tuple[UtcPersistenceContract, ...] = ()
     domain_return_severity: Severity = "info"
 
     @field_validator("external_model_names")
@@ -367,6 +396,18 @@ class PydanticPracticePolicy(PythonSourceScanPolicy):
         values = tuple(contracts)
         selectors = tuple((item.path, item.function, item.model) for item in values)
         require_unique(selectors, "Pydantic domain return selectors must be unique")
+        return values
+
+    @field_validator("utc_persistence_contracts")
+    @classmethod
+    def validate_utc_persistence_contracts(
+        cls, contracts: Sequence[UtcPersistenceContract]
+    ) -> tuple[UtcPersistenceContract, ...]:
+        values = tuple(contracts)
+        selectors = tuple(
+            (item.path, item.function, item.call, item.keyword) for item in values
+        )
+        require_unique(selectors, "UTC persistence selectors must be unique")
         return values
 
     @model_validator(mode="after")

@@ -82,6 +82,7 @@ from alphus.policy.review import (
     SqlAlchemyPracticePolicy,
     TestQualityExclusion,
     TestQualityPolicy,
+    UtcPersistenceContract,
 )
 from alphus.policy.sources import (
     CliPolicy,
@@ -177,6 +178,7 @@ __all__ = [
     "TestQualityPolicy",
     "TrackedPathRule",
     "TrackedSuffixRule",
+    "UtcPersistenceContract",
     "VersionSource",
     "VersionSyncPolicy",
     "load_config",

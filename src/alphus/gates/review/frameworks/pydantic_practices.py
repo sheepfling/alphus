@@ -7,7 +7,11 @@ from collections.abc import Iterable, Sequence
 from collections.abc import Set as AbstractSet
 from pathlib import Path
 
-from alphus.config import PydanticDomainReturnContract, PydanticPracticePolicy
+from alphus.config import (
+    PydanticDomainReturnContract,
+    PydanticPracticePolicy,
+    UtcPersistenceContract,
+)
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.support.inventory import matches_path
@@ -1067,6 +1071,68 @@ def _declared_domain_return_dump_lines(
     return sorted(evidence)
 
 
+def _known_non_utc_zone(expression: ast.expr, aliases: ImportAliases) -> bool:
+    """Recognize only explicit ZoneInfo literals that are plainly non-UTC."""
+    match expression:
+        case ast.Call(func=func, args=[ast.Constant(value=str() as zone)], keywords=[]):
+            name = canonical_expression_name(func, aliases)
+            return name in {
+                "zoneinfo.ZoneInfo",
+                "backports.zoneinfo.ZoneInfo",
+            } and zone.upper() not in {"UTC", "ETC/UTC", "GMT", "Z"}
+        case _:
+            return False
+
+
+def _utc_persistence_lines(
+    module: ast.Module, contract: UtcPersistenceContract, aliases: ImportAliases
+) -> list[int]:
+    selected: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
+
+    def visit(statements: Sequence[ast.stmt], scope: tuple[str, ...]) -> None:
+        for statement in statements:
+            match statement:
+                case ast.ClassDef(name=name, body=body):
+                    visit(body, (*scope, name))
+                case ast.FunctionDef(name=name) | ast.AsyncFunctionDef(name=name):
+                    if ".".join((*scope, name)) == contract.function:
+                        selected.append(statement)
+                case _:
+                    pass
+
+    visit(module.body, ())
+    lines: set[int] = set()
+    for function in selected:
+        for node in ast.walk(function):
+            if not isinstance(node, ast.Call) or (
+                canonical_expression_name(node.func, aliases) != contract.call
+                and ast.unparse(node.func) != contract.call
+            ):
+                continue
+            argument = next(
+                (item.value for item in node.keywords if item.arg == contract.keyword),
+                None,
+            )
+            if not isinstance(argument, ast.Call) or canonical_expression_name(
+                argument.func, aliases
+            ) not in {"datetime.datetime.now", "datetime.now"}:
+                continue
+            if any(
+                isinstance(child, ast.Call)
+                and canonical_expression_name(child.func, aliases)
+                in {"datetime.datetime.astimezone", "astimezone"}
+                for child in ast.walk(argument)
+            ):
+                continue
+            zone = next(
+                (item.value for item in argument.keywords if item.arg == "tz"),
+                argument.args[0] if argument.args else None,
+            )
+            if zone is not None and _known_non_utc_zone(zone, aliases):
+                lines.add(node.lineno)
+    return sorted(lines)
+
+
 def pydantic_practice_findings(
     source: str, policy: PydanticPracticePolicy, *, path: str = "<source>"
 ) -> list[Finding]:
@@ -1103,6 +1169,26 @@ def pydantic_practice_findings(
                         f"declared model parameter {parameter}. Review whether "
                         "serialization belongs at an I/O boundary; this advisory "
                         "does not prove the conversion is unsafe."
+                    ),
+                )
+            )
+    for contract in policy.utc_persistence_contracts:
+        if contract.path != path:
+            continue
+        for line in _utc_persistence_lines(module, contract, aliases):
+            findings.append(
+                Finding(
+                    rule_id=rule_tag(
+                        Scope.PYTHON,
+                        Framework.PYDANTIC,
+                        Category.CORRECTNESS,
+                        "non-utc-persistence",
+                    ),
+                    path=path,
+                    line=line,
+                    severity="warning",
+                    message=(
+                        f"Declared UTC persistence call {contract.call} receives a timestamp captured in a known non-UTC zone; normalize the aware value with astimezone(timezone.utc) or configure its validated boundary."
                     ),
                 )
             )

@@ -122,6 +122,33 @@ def test_domain_return_contracts_reject_duplicate_selectors() -> None:
         )
 
 
+def test_utc_persistence_contract_reports_only_known_non_utc_capture() -> None:
+    source = (
+        "from datetime import datetime, timezone\n"
+        "from zoneinfo import ZoneInfo\n"
+        "def save_local(writer):\n"
+        "    writer.save(created_at=datetime.now(ZoneInfo('Europe/Paris')))\n"
+        "def save_utc(writer):\n"
+        "    writer.save(created_at=datetime.now(timezone.utc))\n"
+        "def save_unknown(writer, zone):\n"
+        "    writer.save(created_at=datetime.now(zone))\n"
+    )
+    contract = {
+        "path": "src/storage.py",
+        "function": "save_local",
+        "call": "writer.save",
+        "keyword": "created_at",
+    }
+    policy = _policy(utc_persistence_contracts=(contract,))
+
+    findings = pydantic_practice_findings(source, policy, path="src/storage.py")
+
+    assert [(item.rule_id, item.line) for item in findings] == [
+        ("alphus/python/pydantic/correctness/non-utc-persistence", 4)
+    ]
+    assert pydantic_practice_findings(source, policy, path="src/other.py") == []
+
+
 def test_rebinding_and_nested_functions_do_not_carry_dump_state() -> None:
     source = (
         "def output(model, raw):\n"

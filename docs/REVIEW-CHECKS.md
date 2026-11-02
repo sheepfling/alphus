@@ -380,6 +380,23 @@ instances from sharing a list or dictionary. The check excludes dataclasses,
 dynamic factories, and factories that consume validated data. It does not
 rewrite code; retain factories when they express computed or contextual values.
 
+For a known UTC-only persistence boundary, `utc_persistence_contracts` can
+select an exact source function and call argument:
+
+```toml
+[[checks.pydantic_practices.utc_persistence_contracts]]
+path = "src/storage.py"
+function = "save_created_at"
+call = "writer.save"
+keyword = "created_at"
+```
+
+This opt-in advisory reports only a direct `datetime.now(ZoneInfo("..."))`
+capture with an explicit non-UTC zone literal passed to that exact keyword.
+Unknown zones, aliases through variables, validators and cross-function flow
+remain unreported. It does not establish consumer meaning from a field name,
+and it does not replace Ruff DTZ rules for naive clock captures.
+
 To include one model exposed by another interface, set
 `report_external_model_docs = true` and add its class name, for example:
 
