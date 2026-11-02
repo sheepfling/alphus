@@ -737,7 +737,7 @@ def evaluate(packet: NewOptions | Mapping[str, JsonValue]):
                 "path": "src/internal/evaluate.py",
                 "function": "evaluate",
                 "parameter": "packet",
-                "domain_type": "OldOptions",
+                "domain_type": "app.models.OldOptions",
                 "reason": "Legacy payload parser.",
             },
         ),
@@ -751,19 +751,18 @@ def evaluate(packet: NewOptions | Mapping[str, JsonValue]):
 
 def test_domain_mapping_exception_does_not_suppress_changed_contract_type() -> None:
     source = """from collections.abc import Mapping
-def evaluate(packet: Mapping[str, object]):
+def evaluate(packet: Mapping[str, JsonValue]):
     return packet["count"]
 """
     policy = InputContractPolicy(
         extensions=[".py"],
         exclude=[],
-        domain_mapping_value_types=("object",),
         domain_mapping_contracts=(
             {
                 "path": "src/internal/evaluate.py",
                 "function": "evaluate",
                 "parameter": "packet",
-                "domain_type": "NewOptions",
+                "domain_type": "app.models.NewOptions",
             },
         ),
         domain_mapping_exceptions=(
@@ -771,7 +770,7 @@ def evaluate(packet: Mapping[str, object]):
                 "path": "src/internal/evaluate.py",
                 "function": "evaluate",
                 "parameter": "packet",
-                "domain_type": "OldOptions",
+                "domain_type": "app.models.OldOptions",
                 "reason": "Legacy payload parser.",
             },
         ),
@@ -780,7 +779,7 @@ def evaluate(packet: Mapping[str, object]):
     findings = input_contract_findings(source, policy, path="src/internal/evaluate.py")
 
     assert len(findings) == 1
-    assert "expects NewOptions" in findings[0].message
+    assert "expects app.models.NewOptions" in findings[0].message
 
 
 def test_domain_mapping_exception_requires_a_reason_and_unique_selector() -> None:
