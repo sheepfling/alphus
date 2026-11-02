@@ -103,6 +103,26 @@ jobs:
         run: >-
           "$RUNNER_TEMP/alphus-checker/bin/python" -m pip install
           --disable-pip-version-check -e '.[fastapi-test]'
+      - name: Install the optional PDF contract test extra
+        run: >-
+          "$RUNNER_TEMP/alphus-checker/bin/python" -m pip install
+          --disable-pip-version-check -e '.[pdf]'
+      - name: Exercise generated PDF navigation and portability contracts
+        shell: bash
+        env:
+          ALPHUS_TEST_CHECKER_PYTHON: ${{ runner.temp }}/alphus-checker/bin/python
+        run: |
+          if ! output=$("$ALPHUS_TEST_CHECKER_PYTHON" -m pytest -q -rs \
+            tests/execution/test_pdf_navigation_contract.py \
+            tests/execution/test_pdf_portability_contract.py 2>&1); then
+            printf '%s\n' "$output"
+            exit 1
+          fi
+          printf '%s\n' "$output"
+          if [[ "$output" =~ [0-9]+[[:space:]]skipped ]]; then
+            echo "PDF contract coverage skipped a selected test" >&2
+            exit 1
+          fi
       - name: Exercise optional Ty fixture checker
         shell: bash
         run: |
