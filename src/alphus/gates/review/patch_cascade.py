@@ -132,7 +132,8 @@ def patch_cascade_sites(
                             bindings += 1
                     case ast.ImportFrom(names=aliases):
                         if any(
-                            (alias.asname or alias.name) == configured.function_name
+                            alias.name == "*"
+                            or (alias.asname or alias.name) == configured.function_name
                             for alias in aliases
                         ):
                             bindings += 1

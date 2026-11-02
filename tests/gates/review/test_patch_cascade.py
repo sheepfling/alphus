@@ -109,6 +109,7 @@ parse_document = replacement
     "rebind",
     [
         "from other_module import parse_document",
+        "from other_module import *",
         "import other_module as parse_document",
         "class parse_document:\n    pass",
         "del parse_document",
