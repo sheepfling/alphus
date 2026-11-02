@@ -8,11 +8,13 @@ import posixpath
 import re
 import subprocess
 from collections import Counter, defaultdict
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from collections.abc import Set as AbstractSet
 from heapq import nsmallest
+from importlib import import_module
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
+from typing import Protocol, cast
 
 from alphus.config import SourceFamilyPolicy as _SourceFamilyPolicy
 from alphus.contracts.findings import Finding
@@ -48,6 +50,47 @@ _LINE_ENDINGS = frozenset("\n\v\f\x1c\x1d\x1e\x85\u2028\u2029")
 _GIT_SHA = re.compile(rb"^[0-9a-f]{40,64}$")
 _CPP_INCLUDE = re.compile(r'^\s*#\s*include\s*"([^"\\\r\n]+)"\s*$')
 _CPP_EXTENSIONS = frozenset({".c", ".h", ".cc", ".hh", ".cpp", ".hpp", ".cxx", ".hxx"})
+_JAVASCRIPT_EXTENSIONS = frozenset({".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"})
+
+
+class _TreeSitterPoint(Protocol):
+    row: int
+
+
+class _TreeSitterNode(Protocol):
+    type: str
+    start_byte: int
+    end_byte: int
+    start_point: _TreeSitterPoint
+    children: Sequence[_TreeSitterNode]
+    named_children: Sequence[_TreeSitterNode]
+    has_error: bool
+
+    def child_by_field_name(self, name: str) -> _TreeSitterNode | None: ...
+
+
+class _TreeSitterTree(Protocol):
+    root_node: _TreeSitterNode
+
+
+class _TreeSitterParser(Protocol):
+    def parse(self, source: bytes) -> _TreeSitterTree: ...
+
+
+class _TreeSitterRuntime(Protocol):
+    def Language(self, capsule: object) -> object: ...
+
+    def Parser(self, language: object) -> _TreeSitterParser: ...
+
+
+class _JavaScriptGrammar(Protocol):
+    def language(self) -> object: ...
+
+
+class _TypeScriptGrammar(Protocol):
+    def language_typescript(self) -> object: ...
+
+    def language_tsx(self) -> object: ...
 
 
 def _git_cochange_evidence(
@@ -819,6 +862,174 @@ def _cpp_include_evidence(
     return context, notes
 
 
+def _javascript_import_evidence(
+    checkout: Path,
+    members: AbstractSet[Path],
+    selected: Iterable[Path],
+    policy: _SourceFamilyPolicy,
+) -> tuple[str, list[str]]:
+    """Report literal relative JS/TS module references resolved in the inventory."""
+    sources = sorted(
+        (path for path in members if path.suffix.lower() in _JAVASCRIPT_EXTENSIONS),
+        key=lambda path: path.as_posix(),
+    )
+    if not sources:
+        return "No JavaScript or TypeScript members were present for this pass.", []
+    try:
+        tree_sitter = cast(_TreeSitterRuntime, import_module("tree_sitter"))
+        javascript = cast(_JavaScriptGrammar, import_module("tree_sitter_javascript"))
+        typescript = cast(_TypeScriptGrammar, import_module("tree_sitter_typescript"))
+    except ImportError:
+        note = (
+            "the optional JavaScript parser is unavailable; install alphus[javascript]"
+        )
+        return "JavaScript/TypeScript import evidence unavailable.", [note]
+
+    parsers = {
+        ".js": tree_sitter.Parser(tree_sitter.Language(javascript.language())),
+        ".jsx": tree_sitter.Parser(tree_sitter.Language(javascript.language())),
+        ".mjs": tree_sitter.Parser(tree_sitter.Language(javascript.language())),
+        ".cjs": tree_sitter.Parser(tree_sitter.Language(javascript.language())),
+        ".ts": tree_sitter.Parser(
+            tree_sitter.Language(typescript.language_typescript())
+        ),
+        ".tsx": tree_sitter.Parser(tree_sitter.Language(typescript.language_tsx())),
+    }
+    selected_names = {path.as_posix() for path in selected}
+    bytes_left = policy.max_import_analysis_bytes
+    resolved: list[tuple[str, int, str]] = []
+    unresolved = 0
+    failures = 0
+
+    def literal_specifier(node: _TreeSitterNode, raw: bytes) -> str | None:
+        # Tree-sitter's typed Node API is intentionally kept local to this optional pass.
+        start = node.start_byte
+        end = node.end_byte
+        if node.type != "string" or end - start < 2:
+            return None
+        literal = raw[start:end]
+        if literal[:1] not in (b"'", b'"') or literal[-1:] != literal[:1]:
+            return None
+        body = literal[1:-1]
+        if b"\\" in body:
+            return None
+        try:
+            return body.decode("utf-8")
+        except UnicodeDecodeError:
+            return None
+
+    def module_reference_nodes(
+        root: _TreeSitterNode, raw: bytes
+    ) -> list[tuple[_TreeSitterNode | None, int]]:
+        references: list[tuple[_TreeSitterNode | None, int]] = []
+        stack = [root]
+        while stack:
+            node = stack.pop()
+            node_type = node.type
+            if node_type in {"import_statement", "export_statement"}:
+                source_node = node.child_by_field_name("source")
+                if source_node is not None:
+                    references.append((source_node, node.start_point.row + 1))
+            elif node_type == "call_expression":
+                function = node.child_by_field_name("function")
+                arguments = node.child_by_field_name("arguments")
+                function_text = (
+                    raw[function.start_byte : function.end_byte] if function else b""
+                )
+                if function_text in (b"require", b"import"):
+                    named = arguments.named_children if arguments is not None else ()
+                    if len(named) == 1:
+                        references.append((named[0], node.start_point.row + 1))
+                    else:
+                        references.append((None, node.start_point.row + 1))
+            stack.extend(reversed(node.children))
+        return references
+
+    for source in sources:
+        source_path = (checkout / source).resolve(strict=False)
+        if not source_path.is_relative_to(checkout) or bytes_left <= 0:
+            failures += 1
+            continue
+        try:
+            with source_path.open("rb") as handle:
+                raw = handle.read(min(bytes_left, 1_048_576) + 1)
+            if len(raw) > bytes_left or len(raw) > 1_048_576:
+                failures += 1
+                continue
+            bytes_left -= len(raw)
+            tree = parsers[source.suffix.lower()].parse(raw)
+        except (OSError, ValueError):
+            failures += 1
+            continue
+        if tree.root_node.has_error:
+            failures += 1
+            continue
+        for specifier_node, line_number in module_reference_nodes(tree.root_node, raw):
+            if specifier_node is None:
+                unresolved += 1
+                continue
+            specifier = literal_specifier(specifier_node, raw)
+            if (
+                specifier is None
+                or not specifier.startswith(".")
+                or "\\" in specifier
+                or "?" in specifier
+                or "#" in specifier
+            ):
+                unresolved += 1
+                continue
+            target = posixpath.normpath(
+                posixpath.join(posixpath.dirname(source.as_posix()), specifier)
+            )
+            candidates = [target]
+            if not PurePosixPath(target).suffix:
+                candidates.extend(
+                    target + suffix
+                    for suffix in (".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx")
+                )
+            matches = [
+                candidate for candidate in candidates if candidate in selected_names
+            ]
+            if len(matches) == 1:
+                resolved.append((source.as_posix(), line_number, matches[0]))
+            else:
+                unresolved += 1
+
+    member_names = {path.as_posix() for path in members}
+    internal = sum(1 for _, _, target in resolved if target in member_names)
+    shown = resolved[: policy.max_import_edges]
+    context = (
+        f"Direct lexical JavaScript/TypeScript module evidence: {internal} resolved "
+        f"edge(s) target another family member; {len(resolved) - internal} target "
+        f"other selected source files; {unresolved} reference(s) did not resolve "
+        "uniquely to the selected inventory."
+    )
+    if shown:
+        context += (
+            " Examples: "
+            + ", ".join(f"{source}:{line} → {target}" for source, line, target in shown)
+            + "."
+        )
+    if len(shown) < len(resolved):
+        context += f" {len(resolved) - len(shown)} edge(s) omitted by max_import_edges."
+    context += (
+        " Only literal relative import/export, dynamic import, and require references "
+        "are considered. Package resolution, TypeScript path aliases, extension/index "
+        "substitution, shadowed require, conditional activation, and compiler context "
+        "are not assessed; these edges are not proof of coupling or responsibility."
+    )
+    notes: list[str] = []
+    if failures:
+        notes.append(f"{failures} JavaScript/TypeScript file(s) could not be analyzed")
+    if bytes_left == 0:
+        notes.append(
+            "the configured JavaScript/TypeScript import byte budget was exhausted"
+        )
+    if notes:
+        context += " Analysis incomplete: " + "; ".join(notes) + "."
+    return context, notes
+
+
 def source_family_findings(
     root: Path, paths: Iterable[Path], policy: _SourceFamilyPolicy
 ) -> list[Finding]:
@@ -904,6 +1115,7 @@ def source_family_findings(
     retained.sort(key=lambda row: (row[0], row[1]))
     import_contexts: dict[tuple[str, ...], str] = {}
     cpp_contexts: dict[tuple[str, ...], str] = {}
+    javascript_contexts: dict[tuple[str, ...], str] = {}
     history_contexts: dict[tuple[str, ...], str] = {}
     if policy.python_import_evidence:
         for _, _, members in retained:
@@ -918,6 +1130,14 @@ def source_family_findings(
             key = tuple(sorted(path.as_posix() for path in members))
             context, notes = _cpp_include_evidence(checkout, members, selected, policy)
             cpp_contexts[key] = context
+            incomplete_notes.extend(notes)
+    if policy.javascript_import_evidence:
+        for _, _, members in retained:
+            key = tuple(sorted(path.as_posix() for path in members))
+            context, notes = _javascript_import_evidence(
+                checkout, members, selected, policy
+            )
+            javascript_contexts[key] = context
             incomplete_notes.extend(notes)
     if policy.git_cochange_evidence:
         for _, _, members in retained:
@@ -1057,6 +1277,9 @@ def source_family_findings(
         )
         import_context = import_contexts.get(tuple(path.as_posix() for path in ordered))
         cpp_context = cpp_contexts.get(tuple(path.as_posix() for path in ordered))
+        javascript_context = javascript_contexts.get(
+            tuple(path.as_posix() for path in ordered)
+        )
         history_context = history_contexts.get(
             tuple(path.as_posix() for path in ordered)
         )
@@ -1068,6 +1291,10 @@ def source_family_findings(
                     (
                         bool(cpp_context),
                         "bounded C/C++ quoted include evidence enabled",
+                    ),
+                    (
+                        bool(javascript_context),
+                        "bounded JavaScript/TypeScript import evidence enabled",
                     ),
                     (bool(history_context), "bounded Git history evidence enabled"),
                 )
@@ -1089,6 +1316,7 @@ def source_family_findings(
                 f"{settings_text}{member_context}. "
                 f"{import_context + ' ' if import_context else ''}"
                 f"{cpp_context + ' ' if cpp_context else ''}"
+                f"{javascript_context + ' ' if javascript_context else ''}"
                 f"{history_context + ' ' if history_context else ''}"
                 "Coupling, responsibility, "
                 "and public surface not assessed; filename similarity alone does not establish an "

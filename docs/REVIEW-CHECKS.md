@@ -668,6 +668,8 @@ python_import_evidence = true
 python_module_roots = ["src"]
 # Optional: literal quoted C/C++ includes resolving inside the selected inventory.
 cpp_include_evidence = true
+# Optional: parser-backed literal relative JS/TS module references.
+javascript_import_evidence = true
 max_import_edges = 12
 max_public_api_names = 20
 max_contract_declarations = 12
@@ -694,8 +696,17 @@ resolved direct `import` and `from ... import ...` module edges, and bounds
 file reads, bytes per family, and displayed edges. Unresolved, ambiguous,
 relative-import forms it cannot resolve, parse failures, and files outside the
 selected inventory are not treated as absent dependencies. It does not follow
-dynamic imports, aliases/re-exports, or type-checker resolution. Other language
-evidence requires its own explicitly enabled analysis. These edges are partial
+dynamic imports, aliases/re-exports, or type-checker resolution. JavaScript and
+TypeScript import evidence is also disabled by default and requires the optional
+`alphus[javascript]` extra. Its Tree-sitter parsers inspect selected `.js`,
+`.jsx`, `.mjs`, `.cjs`, `.ts`, and `.tsx` files and report only literal relative
+`import`, `export ... from`, dynamic `import()`, and `require()` references
+resolving uniquely to selected files (including extensionless exact-file
+candidates). Package resolution, TypeScript path aliases, index lookup,
+shadowed `require`, conditional activation, and compiler configuration are not
+resolved. Parse failures and exhausted byte budgets produce incomplete-scan
+warnings; unresolved references are not treated as absent dependencies. Other
+language evidence requires its own explicitly enabled analysis. These edges are partial
 dependency evidence and do not prove
 shared responsibility, coupling strength, or a public contract. For parsed
 Python family members, the optional pass also reports bounded names from a

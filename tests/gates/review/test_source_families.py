@@ -1,5 +1,6 @@
 import subprocess
 from collections.abc import Callable
+from importlib.util import find_spec
 from pathlib import Path
 
 import pytest
@@ -237,6 +238,111 @@ def test_cpp_include_budget_exhaustion_is_an_incomplete_scan(tmp_path: Path) -> 
     assert len(findings) == 2
     assert "C/C++ file(s) could not be analyzed" in findings[0].message
     assert "no clean result can be inferred" in findings[0].message
+
+
+@pytest.mark.skipif(
+    any(
+        find_spec(module) is None
+        for module in (
+            "tree_sitter",
+            "tree_sitter_javascript",
+            "tree_sitter_typescript",
+        )
+    ),
+    reason="install the optional alphus[javascript] parser extra",
+)
+def test_opt_in_javascript_import_evidence_is_parser_backed_and_conservative(
+    tmp_path: Path,
+) -> None:
+    paths = [
+        _write(tmp_path, f"src/gateway_{name}{suffix}")
+        for name, suffix in (
+            ("client", ".ts"),
+            ("server", ".ts"),
+            ("routes", ".tsx"),
+            ("auth", ".js"),
+            ("cache", ".js"),
+            ("common", ".js"),
+        )
+    ]
+    (tmp_path / "src/gateway_client.ts").write_text(
+        'import { serve } from "./gateway_server";\n'
+        'export { route } from "./gateway_routes";\n'
+        'const cache = require("./gateway_cache");\n'
+        'const dynamic = import("./missing");\n'
+        'import type { Shared } from "@types/shared";\n',
+        encoding="utf-8",
+    )
+
+    findings = source_family_findings(
+        tmp_path,
+        paths,
+        SourceFamilyPolicy(
+            min_family_files=5,
+            javascript_import_evidence=True,
+            max_import_edges=2,
+        ),
+    )
+
+    assert len(findings) == 1
+    message = findings[0].message
+    assert "bounded JavaScript/TypeScript import evidence enabled" in message
+    assert "3 resolved edge(s) target another family member" in message
+    assert "2 reference(s) did not resolve uniquely" in message
+    assert "src/gateway_client.ts:1 → src/gateway_server.ts" in message
+    assert "1 edge(s) omitted by max_import_edges" in message
+    assert "TypeScript path aliases" in message
+    assert "shadowed require" in message
+
+
+@pytest.mark.skipif(
+    any(
+        find_spec(module) is None
+        for module in (
+            "tree_sitter",
+            "tree_sitter_javascript",
+            "tree_sitter_typescript",
+        )
+    ),
+    reason="install the optional alphus[javascript] parser extra",
+)
+def test_javascript_import_parse_and_budget_failures_are_incomplete(
+    tmp_path: Path,
+) -> None:
+    paths = [
+        _write(tmp_path, f"src/gateway_{name}.js")
+        for name in ("client", "server", "routes", "auth", "cache")
+    ]
+    (tmp_path / "src/gateway_client.js").write_text(
+        'import "./gateway_server";\nconst broken = ;\n', encoding="utf-8"
+    )
+
+    parse_findings = source_family_findings(
+        tmp_path,
+        paths,
+        SourceFamilyPolicy(min_family_files=5, javascript_import_evidence=True),
+    )
+    assert len(parse_findings) == 2
+    assert (
+        "JavaScript/TypeScript file(s) could not be analyzed"
+        in parse_findings[0].message
+    )
+    assert "no clean result can be inferred" in parse_findings[0].message
+
+    budget_findings = source_family_findings(
+        tmp_path,
+        paths,
+        SourceFamilyPolicy(
+            min_family_files=5,
+            javascript_import_evidence=True,
+            max_import_analysis_bytes=1,
+        ),
+    )
+    assert len(budget_findings) == 2
+    assert (
+        "JavaScript/TypeScript file(s) could not be analyzed"
+        in budget_findings[0].message
+    )
 
 
 def test_import_evidence_reports_bounded_literal_module_exports(tmp_path: Path) -> None:

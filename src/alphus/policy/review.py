@@ -224,6 +224,7 @@ class SourceFamilyPolicy(StrictModel):
     file_length_limits: tuple[tuple[str, int], ...] = ()
     python_import_evidence: bool = False
     python_module_roots: tuple[str, ...] = ()
+    javascript_import_evidence: bool = False
     cpp_include_evidence: bool = False
     git_cochange_evidence: bool = False
     max_git_history_commits: int = 100
