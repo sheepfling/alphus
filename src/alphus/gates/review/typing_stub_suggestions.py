@@ -123,7 +123,7 @@ def _has_inline_typing_for_imports(
     root_import: str,
     imported_names: Iterable[str],
 ) -> bool:
-    """Return whether every observed module is covered by runtime typing files."""
+    """Require a package marker or exact stub coverage for every import."""
     file_parts = {item.parts for item in files}
     names = tuple(imported_names)
     if not names:

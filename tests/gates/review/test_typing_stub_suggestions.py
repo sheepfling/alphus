@@ -828,6 +828,108 @@ def test_builtin_pandas_suppresses_suggestion_for_matching_root_stub(
     )
 
 
+def test_builtin_pandas_counts_only_observed_leaf_runtime_stub(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    source = tmp_path / "app.py"
+    source.write_text("import pandas._libs.tslibs.timestamps\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\ndependencies = ["pandas==3.1.0"]\n'
+        "[project.optional-dependencies]\ndev = []\n",
+        encoding="utf-8",
+    )
+
+    def distributions(name: str) -> object:
+        if name == "pandas":
+            return _PandasDistribution()
+        if name == "pandas-stubs":
+            raise metadata.PackageNotFoundError(name)
+        return _distribution(name)
+
+    monkeypatch.setattr(gate.metadata, "distribution", distributions)
+
+    assert not gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), _default_policy()
+    )
+
+    source.write_text(
+        "import pandas\nimport pandas._libs.tslibs.timestamps\n",
+        encoding="utf-8",
+    )
+    findings = gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), _default_policy()
+    )
+    assert len(findings) == 1
+    assert "pandas-stubs" in findings[0].message
+
+
+def test_pyright_uses_matching_runtime_leaf_stub_without_package_marker(
+    tmp_path: Path,
+) -> None:
+    pyright = shutil.which("pyright")
+    if pyright is None:
+        pytest.skip("Pyright executable is not installed in this test environment")
+    version = f"python{sys.version_info.major}.{sys.version_info.minor}"
+    package = (
+        tmp_path
+        / "envs"
+        / "runtime"
+        / "lib"
+        / version
+        / "site-packages"
+        / "pandas"
+        / "_libs"
+        / "tslibs"
+    )
+    package.mkdir(parents=True)
+    for initializer in (
+        package.parents[1] / "__init__.py",
+        package.parents[0] / "__init__.py",
+        package / "__init__.py",
+    ):
+        initializer.parent.mkdir(parents=True, exist_ok=True)
+        initializer.write_text('"""Runtime fixture."""\n', encoding="utf-8")
+    implementation = package / "timestamps.py"
+    implementation.write_text("value = 1\n", encoding="utf-8")
+    stub = package / "timestamps.pyi"
+    stub.write_text("value: str\n", encoding="utf-8")
+    project = tmp_path / "consumer"
+    project.mkdir()
+    (project / "client.py").write_text(
+        "from pandas._libs.tslibs import timestamps\nvalue: int = timestamps.value\n",
+        encoding="utf-8",
+    )
+    config = {
+        "typeCheckingMode": "strict",
+        "reportMissingTypeStubs": "none",
+        "include": ["client.py"],
+        "venvPath": str(tmp_path / "envs"),
+        "venv": "runtime",
+    }
+    (project / "pyrightconfig.json").write_text(json.dumps(config), encoding="utf-8")
+
+    with_stub = subprocess.run(
+        [pyright, "--project", str(project / "pyrightconfig.json")],
+        cwd=project,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert 'Type "str" is not assignable to declared type "int"' in with_stub.stdout
+
+    stub.unlink()
+    without_stub = subprocess.run(
+        [pyright, "--project", str(project / "pyrightconfig.json")],
+        cwd=project,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert without_stub.returncode == 0, without_stub.stdout
+
+
 def test_builtin_pandas_does_not_recommend_outside_verified_runtime_line(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
