@@ -42,6 +42,7 @@ QualityRuleName: TypeAlias = Literal[
     "manual-quaternion-conjugation",
     "manual-quaternion-products",
     "manual-quaternion-normalization",
+    "manual-quaternion-inversion",
     "scipy-constants",
     "test-quality",
     "input-contracts",

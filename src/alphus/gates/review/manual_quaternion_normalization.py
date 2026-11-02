@@ -10,6 +10,10 @@ from pathlib import Path
 from alphus.config import QuaternionNormalizationPolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.gates.review.quaternion_ast import (
+    configured_function_observations,
+    is_sum_of_four_squares,
+)
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 
@@ -41,25 +45,6 @@ def _call_name(node: ast.expr) -> str | None:
                 return ".".join((name, *reversed(parts)))
             case _:
                 return None
-
-
-def _sum_of_squares(node: ast.expr) -> list[str] | None:
-    pending = [node]
-    squares: list[str] = []
-    while pending:
-        current = pending.pop()
-        match current:
-            case ast.BinOp(left=left, op=ast.Add(), right=right):
-                pending.extend((right, left))
-            case ast.BinOp(
-                left=ast.Name(id=left), op=ast.Mult(), right=ast.Name(id=right)
-            ) if left == right:
-                squares.append(left)
-                if len(squares) > 4:
-                    return None
-            case _:
-                return None
-    return squares
 
 
 def _is_division(node: ast.expr, component: str, norm: str) -> bool:
@@ -134,8 +119,7 @@ def _match_function(
     argument = norm_call.args
     if len(argument) != 1 or norm_call.keywords:
         return None
-    squares = _sum_of_squares(argument[0])
-    if squares is None or sorted(squares) != sorted(policy.components):
+    if not is_sum_of_four_squares(argument[0], policy.components):
         return None
     if not all(
         _is_division(value, component, norm)
@@ -152,36 +136,15 @@ def _match_function(
     )
 
 
-def _functions(statements: Iterable[ast.stmt]) -> Iterable[ast.FunctionDef]:
-    pending = list(reversed(tuple(statements)))
-    while pending:
-        statement = pending.pop()
-        match statement:
-            case ast.FunctionDef():
-                yield statement
-            case ast.ClassDef(body=body):
-                pending.extend(reversed(body))
-            case _:
-                continue
-
-
 def quaternion_normalization_sites(
     source: str, policy: QuaternionNormalizationPolicy
 ) -> list[_NormalizationSite]:
     """Return only configured local norm/divide/rotation-consumer sequences."""
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
-        return []
-    if sum(1 for _ in ast.walk(tree)) > 10_000:
-        return []
-    return sorted(
-        {
-            site
-            for function in _functions(tree.body)
-            if (site := _match_function(function, policy)) is not None
-        },
-        key=lambda site: (site.function, site.norm_line),
+    return configured_function_observations(
+        source,
+        policy.function_names,
+        lambda function: _match_function(function, policy),
+        lambda site: (site.function, site.norm_line),
     )
 
 

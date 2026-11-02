@@ -47,6 +47,7 @@ from alphus.policy.review import (
     PositionalInterfacePolicy,
     PydanticPracticePolicy,
     QuaternionConjugationPolicy,
+    QuaternionInversionPolicy,
     QuaternionNormalizationPolicy,
     QuaternionProductPolicy,
     ScipyConstantsPolicy,
@@ -86,6 +87,7 @@ class CheckPolicies(StrictModel):
     manual_quaternion_conjugation: QuaternionConjugationPolicy | None = None
     manual_quaternion_products: QuaternionProductPolicy | None = None
     manual_quaternion_normalization: QuaternionNormalizationPolicy | None = None
+    manual_quaternion_inversion: QuaternionInversionPolicy | None = None
     scipy_constants: ScipyConstantsPolicy | None = None
     test_quality: TestQualityPolicy | None = None
     input_contracts: InputContractPolicy | None = None

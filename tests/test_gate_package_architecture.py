@@ -78,6 +78,7 @@ def test_gate_themes_own_their_runner_mappings() -> None:
                 "manual-quaternion-conjugation",
                 "manual-quaternion-products",
                 "manual-quaternion-normalization",
+                "manual-quaternion-inversion",
                 "scipy-constants",
                 "test-quality",
                 "input-contracts",

@@ -93,10 +93,20 @@ unknown consumers. It does not prove that the operation is unnecessary or slow;
 preserve zero/near-zero and non-finite behavior, ordering, dtype, and the
 consumer's normalization contract.
 
+`manual-quaternion-inversion` recognizes one exact function body in a configured
+scope: a local sum of all four configured component squares followed by a tuple
+return that divides the scalar component by that sum and the three vector
+components negated over that same sum. This is the general conjugate-over-norm
+squared inverse shape; it is distinct from unit-quaternion conjugation. It skips
+branches, aliases, reassignment, attributes and alternate algebraic forms. It
+does not establish that a dependency is suitable or that the kernel is wrong or
+slow. Preserve zero and non-finite behavior, component convention, dtype,
+returned representation, and non-unit semantics.
+
 Handwritten elimination and frame-transform recognition remain unimplemented.
-So do quaternion inversion and vector rotation/sandwich or matrix conversion,
-and Cholesky covariance/domain checks. The current examples demonstrate only the
-explicitly documented syntax families above. This new normalization grammar has
+So do quaternion vector rotation/sandwich or matrix conversion, and Cholesky
+covariance/domain checks. The current examples demonstrate only the explicitly
+documented syntax families above. The normalization and inversion grammars have
 synthetic positive/negative coverage but no reviewed real-consumer calibration
 or production precision estimate yet.
 

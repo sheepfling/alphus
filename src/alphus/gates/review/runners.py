@@ -21,6 +21,9 @@ from alphus.gates.review.manual_matrix_kernels import check_manual_matrix_kernel
 from alphus.gates.review.manual_quaternion_conjugation import (
     check_manual_quaternion_conjugation,
 )
+from alphus.gates.review.manual_quaternion_inversion import (
+    check_manual_quaternion_inversion,
+)
 from alphus.gates.review.manual_quaternion_normalization import (
     check_manual_quaternion_normalization,
 )
@@ -96,6 +99,16 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
                 require_policy(
                     config.checks.manual_quaternion_normalization,
                     "manual_quaternion_normalization",
+                ),
+            )
+        ),
+        "manual-quaternion-inversion": lambda root, files, config: (
+            check_manual_quaternion_inversion(
+                root,
+                files,
+                require_policy(
+                    config.checks.manual_quaternion_inversion,
+                    "manual_quaternion_inversion",
                 ),
             )
         ),
