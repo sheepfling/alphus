@@ -55,6 +55,13 @@ that a separate runtime distribution and stub-only distribution interoperate.
 Consumers must add their own installed runtime and stub package constraints,
 public API inventory, allowlist, and actual platform matrix.
 
+The repository's hosted self-quality workflow also runs this example with a
+Python 3.11 checker environment and separate Python 3.10/Linux and
+Python 3.14/Windows target environments. Each matrix job uploads its JSON
+verification report. This is a bounded test of this synthetic bundled
+runtime/stub package; it is not another `mdutils-stubs` consumer calibration or
+a claim that every supported platform and checker combination passed.
+
 See [the installed consumer calibration](../../docs/STUB-PACKAGE-CONSUMER-MATRIX.md)
 for a revision-recorded `mdutils-stubs` run, including an observed ty 0.0.91
 class-object `assert_type` limitation and the distinct unmodified/adjusted

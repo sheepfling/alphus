@@ -140,3 +140,55 @@ jobs:
             echo "Optional gate coverage skipped a selected test" >&2
             exit 1
           fi
+
+  installed-stub-contract:
+    name: installed stub contract (${{ matrix.os }}, Python ${{ matrix.target-python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target-python: "3.10"
+          - os: windows-latest
+            target-python: "3.14"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        id: checker-python
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-python@v7
+        id: target-python
+        with:
+          python-version: ${{ matrix.target-python }}
+      - name: Build and verify the installed three-checker example
+        shell: bash
+        run: |
+          "${{ steps.checker-python.outputs.python-path }}" -m venv "$RUNNER_TEMP/alphus-checker"
+          "${{ steps.target-python.outputs.python-path }}" -m venv "$RUNNER_TEMP/alphus-target"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            checker_python="$RUNNER_TEMP/alphus-checker/Scripts/python.exe"
+            target_python="$RUNNER_TEMP/alphus-target/Scripts/python.exe"
+          else
+            checker_python="$RUNNER_TEMP/alphus-checker/bin/python"
+            target_python="$RUNNER_TEMP/alphus-target/bin/python"
+          fi
+          "$checker_python" -m pip install --disable-pip-version-check \
+            --index-url https://pypi.org/simple -e '.[python,mypy,ty]'
+          "$target_python" -m pip install --disable-pip-version-check \
+            --index-url https://pypi.org/simple \
+            'build>=1,<2' 'setuptools>=68' wheel 'mypy>=2.3,<3'
+          "$checker_python" -m alphus.gates.stubs.verify \
+            --root examples/stub-package-contract \
+            --config stub-quality.json \
+            --target-python "$target_python" \
+            --report "$RUNNER_TEMP/stub-package-verification.json"
+      - name: Retain installed-package verification report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: stub-contract-${{ matrix.os }}-py${{ matrix.target-python }}
+          path: ${{ runner.temp }}/stub-package-verification.json
+          if-no-files-found: ignore
+          retention-days: 30
