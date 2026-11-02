@@ -178,7 +178,8 @@ jobs:
             --index-url https://pypi.org/simple -e '.[python,mypy,ty]'
           "$target_python" -m pip install --disable-pip-version-check \
             --index-url https://pypi.org/simple \
-            'build>=1,<2' 'setuptools>=68' wheel 'mypy>=2.3,<3'
+            'build>=1,<2' 'setuptools>=68' wheel 'mypy>=2.3,<3' \
+            'typing_extensions>=4.12'
           "$checker_python" -m alphus.gates.stubs.verify \
             --root examples/stub-package-contract \
             --config stub-quality.json \

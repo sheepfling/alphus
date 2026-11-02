@@ -1,4 +1,4 @@
-from typing import assert_type
+from typing_extensions import assert_type
 
 from sample_contract import NameNode, flatten_names, format_value
 
