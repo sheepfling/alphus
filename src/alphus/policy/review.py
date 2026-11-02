@@ -99,16 +99,18 @@ class CiWorkflowPolicy(SourceScanPolicy):
     """Read-only, low-confidence review for repeated static Actions run blocks."""
 
     workflow_paths: tuple[str, ...] = (".github/workflows/**",)
+    azure_workflow_paths: tuple[str, ...] = ()
     ignore_run_blocks: tuple[str, ...] = ()
+    matrix_invariant_run_blocks: tuple[str, ...] = ()
     minimum_run_lines: Annotated[int, Field(ge=2)] = 2
     severity: Severity = "info"
 
-    @field_validator("workflow_paths")
+    @field_validator("workflow_paths", "azure_workflow_paths")
     @classmethod
     def validate_workflow_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
         return validate_patterns(values)
 
-    @field_validator("ignore_run_blocks")
+    @field_validator("ignore_run_blocks", "matrix_invariant_run_blocks")
     @classmethod
     def validate_ignored_blocks(cls, values: Sequence[str]) -> tuple[str, ...]:
         if any(not value.strip() for value in values):

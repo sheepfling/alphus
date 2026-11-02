@@ -66,7 +66,8 @@ def _fingerprint(node: Node | None) -> _Fingerprint | None:
 
 
 def _run_blocks(
-    source: str, path: str, minimum_run_lines: int
+    source: str, path: str, minimum_run_lines: int,
+    matrix_allowlist: tuple[str, ...] = (),
 ) -> list[tuple[str, str, str, int]]:
     """Return eligible (runner, job, script, line) records from one workflow."""
     yaml_api = cast(_YamlApi, yaml)
@@ -89,11 +90,20 @@ def _run_blocks(
     records: list[tuple[str, str, str, int]] = []
     for job_name, job_node in jobs.items():
         job = _mapping(job_node)
-        if job is None or not set(job) <= {"name", "runs-on", "steps"}:
+        if job is None or not set(job) <= {"name", "runs-on", "steps", "strategy"}:
             # This excludes matrices, job conditions, permissions, environments,
             # services, dependencies and other job-specific execution context.
             continue
         runner = _fingerprint(job.get("runs-on")) if "runs-on" in job else None
+        strategy = _mapping(job.get("strategy")) if "strategy" in job else None
+        matrix = _mapping(strategy.get("matrix")) if strategy is not None else None
+        matrix_safe = (
+            strategy is not None and set(strategy) == {"matrix"}
+            and matrix is not None and bool(matrix)
+            and all(isinstance(value, SequenceNode) and bool(value.value)
+                    and all(isinstance(item, ScalarNode) and "${{" not in item.value for item in value.value)
+                    for value in matrix.values())
+        )
         steps = job.get("steps")
         if runner is None:
             continue
@@ -114,6 +124,7 @@ def _run_blocks(
                     style in {"|", ">"}
                     and len(script.splitlines()) >= minimum_run_lines
                     and "${{" not in script
+                    and ("strategy" not in job or (matrix_safe and script in matrix_allowlist))
                 ):
                     records.append((repr(runner), job_name, script, mark.line + 1))
                 case _:
@@ -121,11 +132,51 @@ def _run_blocks(
     return records
 
 
+def _azure_blocks(source: str, path: str, minimum: int) -> list[tuple[str, str, str, int]]:
+    """Return exact static Azure job script candidates; contextual jobs abstain."""
+    yaml_api = cast(_YamlApi, yaml)
+    try:
+        events = tuple(yaml_api.parse(source, Loader=yaml.BaseLoader))
+        root = yaml_api.compose(source, Loader=yaml.BaseLoader)
+    except yaml.YAMLError as error:
+        raise ValueError(f"cannot parse Azure Pipelines workflow {path}: {error}") from error
+    if any(_is_alias_event(event) for event in events):
+        return []
+    pipeline = _mapping(root)
+    jobs_node = pipeline.get("jobs") if pipeline is not None else None
+    if not isinstance(jobs_node, SequenceNode):
+        return []
+    records: list[tuple[str, str, str, int]] = []
+    for entry in jobs_node.value:
+        job = _mapping(entry)
+        if job is None or not set(job) <= {"job", "displayName", "pool", "steps"}:
+            continue
+        name_node, pool_node = job.get("job"), job.get("pool")
+        name = name_node.value if isinstance(name_node, ScalarNode) else None
+        pool = _fingerprint(pool_node)
+        steps = job.get("steps")
+        if name is None or pool is None or not isinstance(steps, SequenceNode):
+            continue
+        for step_node in steps.value:
+            step = _mapping(step_node)
+            if step is None or not set(step) <= {"displayName", "script", "bash"}:
+                continue
+            command = step.get("script", step.get("bash"))
+            if isinstance(command, ScalarNode) and command.style in {"|", ">"} and len(command.value.splitlines()) >= minimum and "$ (" not in command.value and "$(" not in command.value and "${{" not in command.value:
+                records.append((repr(pool), name, command.value, command.start_mark.line + 1))
+    return records
+
+
 def workflow_run_findings(
     source: str, path: str, policy: CiWorkflowPolicy
 ) -> list[Finding]:
     """Group identical static multiline run blocks across context-matched jobs."""
-    blocks = _run_blocks(source, path, policy.minimum_run_lines)
+    azure = any(matches_path(path, pattern) for pattern in policy.azure_workflow_paths)
+    blocks = (
+        _azure_blocks(source, path, policy.minimum_run_lines)
+        if azure
+        else _run_blocks(source, path, policy.minimum_run_lines, policy.matrix_invariant_run_blocks)
+    )
     groups: dict[tuple[str, str], list[tuple[str, int]]] = defaultdict(list)
     for runner, job, script, line in blocks:
         if script in policy.ignore_run_blocks:
@@ -135,7 +186,8 @@ def workflow_run_findings(
     findings: list[Finding] = []
     for (_, script), occurrences in sorted(groups.items(), key=lambda item: item[0]):
         unique_jobs = sorted({job for job, _ in occurrences})
-        if len(unique_jobs) < 2:
+        matrix_only = len(unique_jobs) == 1 and script in policy.matrix_invariant_run_blocks
+        if len(unique_jobs) < 2 and not matrix_only:
             continue
         locations = sorted((line, job) for job, line in occurrences)
         examples = ", ".join(f"{job} (line {line})" for line, job in locations)
@@ -148,9 +200,10 @@ def workflow_run_findings(
                     "duplicate-workflow-run",
                 ),
                 path,
-                "identical static multiline workflow command appears in distinct jobs: "
+                ("allowlisted static repository check repeats in each matrix leg: " if matrix_only else "identical static multiline workflow command appears in distinct jobs: ")
+                +
                 f"{examples}; review whether a checked-in shared script would help. "
-                "This is a duplication candidate, not proof the jobs are redundant.",
+                "This is a duplication candidate, not proof the jobs are redundant. Matrix-dependent tests stay in their legs.",
                 locations[0][0],
                 policy.severity,
             )
@@ -169,7 +222,7 @@ def check_ci_workflows(
         if (
             relative.suffix.lower() not in policy.extensions
             or any(matches_path(name, pattern) for pattern in policy.exclude)
-            or not any(matches_path(name, pattern) for pattern in policy.workflow_paths)
+            or not any(matches_path(name, pattern) for pattern in (*policy.workflow_paths, *policy.azure_workflow_paths))
         ):
             continue
         path = checkout / relative

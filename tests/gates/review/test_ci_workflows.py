@@ -212,3 +212,46 @@ def test_inventory_scope_and_exclusions_are_respected(tmp_path: Path) -> None:
     configured = policy(exclude=(".github/workflows/ci.yml",))
     assert check_ci_workflows(tmp_path, [workflow], configured) == []
     assert check_ci_workflows(tmp_path, [workflow], policy())
+
+
+def test_explicit_matrix_invariant_allowlist_reports_only_static_repo_checks() -> None:
+    script = "ruff check src\nmypy src\n"
+    source = """jobs:
+  checks:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.11', '3.12']
+    steps:
+      - run: |
+          ruff check src
+          mypy src
+      - run: |
+          python -m pytest --python ${{ matrix.python }}
+          python -m pytest --python ${{ matrix.python }}
+"""
+    assert workflow_run_findings(source, ".github/workflows/ci.yml", policy()) == []
+    result = workflow_run_findings(source, ".github/workflows/ci.yml", policy(matrix_invariant_run_blocks=(script,)))
+    assert len(result) == 1
+    assert "each matrix leg" in result[0].message
+
+
+def test_azure_static_scripts_match_only_when_job_context_is_simple() -> None:
+    source = """jobs:
+- job: lint
+  pool: ubuntu-latest
+  steps:
+  - bash: |
+      ruff check src
+      mypy src
+- job: audit
+  pool: ubuntu-latest
+  steps:
+  - bash: |
+      ruff check src
+      mypy src
+"""
+    configured = policy(azure_workflow_paths=("azure-pipelines.yml",))
+    assert len(workflow_run_findings(source, "azure-pipelines.yml", configured)) == 1
+    conditional = source.replace("  pool: ubuntu-latest", "  condition: succeeded()\n  pool: ubuntu-latest", 1)
+    assert workflow_run_findings(conditional, "azure-pipelines.yml", configured) == []
