@@ -192,12 +192,22 @@ def _literal_matrix_values(node: Node) -> bool:
             return False
 
 
+def _block_scalar_nonblank_lines(node: ScalarNode, source: str, script: str) -> int:
+    """Count physical nonblank body lines, including folded YAML block scalars."""
+    source_lines = source.splitlines()
+    body = source_lines[node.start_mark.line + 1 : node.end_mark.line]
+    if node.style in {"|", ">"} and body:
+        return sum(bool(line.strip()) for line in body)
+    return sum(bool(line.strip()) for line in script.splitlines())
+
+
 def _run_blocks(
     source: str,
     path: str,
     minimum_run_lines: int,
+    maximum_inline_run_lines: int,
     matrix_allowlist: tuple[str, ...] = (),
-) -> list[tuple[str, str, str, int, bool]]:
+) -> list[tuple[str, str, str, int, bool, int]]:
     """Return eligible (runner, job, script, line) records from one workflow."""
     yaml_api = cast(_YamlApi, yaml)
     try:
@@ -216,7 +226,7 @@ def _run_blocks(
     if jobs is None:
         return []
 
-    records: list[tuple[str, str, str, int, bool]] = []
+    records: list[tuple[str, str, str, int, bool, int]] = []
     for job_name, job_node in jobs.items():
         job = _mapping(job_node)
         if job is None or not set(job) <= {"name", "runs-on", "steps", "strategy"}:
@@ -249,9 +259,15 @@ def _run_blocks(
                 continue
             run = step.get("run")
             match run:
-                case ScalarNode(value=script, style=style, start_mark=mark) if (
+                case (
+                    ScalarNode(value=script, style=style, start_mark=mark) as scalar
+                ) if (
                     style in {"|", ">"}
-                    and len(script.splitlines()) >= minimum_run_lines
+                    and (
+                        len(script.splitlines()) >= minimum_run_lines
+                        or _block_scalar_nonblank_lines(scalar, source, script)
+                        >= maximum_inline_run_lines
+                    )
                     and "${{" not in script
                     and (
                         "strategy" not in job
@@ -265,6 +281,7 @@ def _run_blocks(
                             script,
                             mark.line + 1,
                             matrix_safe,
+                            _block_scalar_nonblank_lines(scalar, source, script),
                         )
                     )
                 case _:
@@ -289,8 +306,9 @@ def _azure_blocks(
     source: str,
     path: str,
     minimum: int,
+    maximum_inline_run_lines: int,
     matrix_allowlist: tuple[str, ...] = (),
-) -> list[tuple[str, str, str, int, bool]]:
+) -> list[tuple[str, str, str, int, bool, int]]:
     """Return exact static Azure job script candidates; contextual jobs abstain."""
     yaml_api = cast(_YamlApi, yaml)
     try:
@@ -309,7 +327,7 @@ def _azure_blocks(
             pass
         case _:
             return []
-    records: list[tuple[str, str, str, int, bool]] = []
+    records: list[tuple[str, str, str, int, bool, int]] = []
     for entry in job_nodes:
         job = _mapping(entry)
         if job is None or not set(job) <= {
@@ -344,9 +362,15 @@ def _azure_blocks(
                 continue
             command = step.get("script", step.get("bash"))
             match command:
-                case ScalarNode(value=script, style=style, start_mark=mark) if (
+                case (
+                    ScalarNode(value=script, style=style, start_mark=mark) as scalar
+                ) if (
                     style in {"|", ">"}
-                    and len(script.splitlines()) >= minimum
+                    and (
+                        len(script.splitlines()) >= minimum
+                        or _block_scalar_nonblank_lines(scalar, source, script)
+                        >= maximum_inline_run_lines
+                    )
                     and "$ (" not in script
                     and "$(" not in script
                     and "${{" not in script
@@ -357,7 +381,14 @@ def _azure_blocks(
                     and (not matrix_scoped or script in matrix_allowlist)
                 ):
                     records.append(
-                        (repr(pool), name, script, mark.line + 1, matrix_scoped)
+                        (
+                            repr(pool),
+                            name,
+                            script,
+                            mark.line + 1,
+                            matrix_scoped,
+                            _block_scalar_nonblank_lines(scalar, source, script),
+                        )
                     )
                 case _:
                     continue
@@ -438,16 +469,20 @@ def workflow_run_findings(
             source,
             path,
             policy.minimum_run_lines,
+            policy.maximum_inline_run_lines,
             policy.matrix_invariant_run_blocks,
         )
         if azure
         else _run_blocks(
-            source, path, policy.minimum_run_lines, policy.matrix_invariant_run_blocks
+            source,
+            path,
+            policy.minimum_run_lines,
+            policy.maximum_inline_run_lines,
+            policy.matrix_invariant_run_blocks,
         )
     )
     findings: list[Finding] = []
-    for _runner, job, script, line, _matrix_scoped in blocks:
-        nonblank_lines = sum(bool(part.strip()) for part in script.splitlines())
+    for _runner, job, script, line, _matrix_scoped, nonblank_lines in blocks:
         if (
             script in policy.ignore_run_blocks
             or nonblank_lines < policy.maximum_inline_run_lines
@@ -473,8 +508,10 @@ def workflow_run_findings(
             )
         )
     groups: dict[tuple[str, str], list[tuple[str, int, bool]]] = defaultdict(list)
-    for runner, job, script, line, matrix_scoped in blocks:
+    for runner, job, script, line, matrix_scoped, _nonblank_lines in blocks:
         if script in policy.ignore_run_blocks:
+            continue
+        if len(script.splitlines()) < policy.minimum_run_lines:
             continue
         groups[(runner, script)].append((job, line, matrix_scoped))
 

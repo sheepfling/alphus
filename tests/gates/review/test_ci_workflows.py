@@ -295,6 +295,42 @@ python -m pytest -q
     )
 
 
+def test_inline_script_threshold_is_independent_of_duplicate_block_threshold() -> None:
+    commands = [f"echo step-{index}" for index in range(1, 26)]
+    source = (
+        "jobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n"
+    )
+    source += "".join(f"          {command}\n" for command in commands)
+
+    findings = workflow_run_findings(
+        source,
+        ".github/workflows/ci.yml",
+        policy(minimum_run_lines=50, maximum_inline_run_lines=20),
+    )
+
+    assert len(findings) == 1
+    assert findings[0].rule_id.endswith("/long-inline-workflow-script")
+    assert "25 nonblank lines" in findings[0].message
+
+
+def test_folded_yaml_script_counts_physical_nonblank_source_lines() -> None:
+    commands = [f"echo step-{index}" for index in range(1, 22)]
+    source = (
+        "jobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - run: >\n"
+    )
+    source += "".join(f"          {command}\n" for command in commands)
+
+    findings = workflow_run_findings(
+        source,
+        ".github/workflows/ci.yml",
+        policy(minimum_run_lines=50, maximum_inline_run_lines=20),
+    )
+
+    assert len(findings) == 1
+    assert findings[0].rule_id.endswith("/long-inline-workflow-script")
+    assert "21 nonblank lines" in findings[0].message
+
+
 def test_long_script_review_skips_contextual_and_unallowlisted_matrix_commands() -> (
     None
 ):
