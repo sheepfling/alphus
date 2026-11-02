@@ -498,7 +498,7 @@ def _ruff_config_suppression_findings(
         config_path = next(
             (
                 root / name
-                for name in ("ruff.toml", ".ruff.toml", "pyproject.toml")
+                for name in (".ruff.toml", "ruff.toml", "pyproject.toml")
                 if (root / name).is_file()
             ),
             None,
@@ -614,7 +614,7 @@ def _ruff_config_suppression_findings(
             if entries is not None:
                 normal_inline = not re.match(r"\s*extend-per-file-ignores\s*=", line)
                 local_normal_per_file = local_normal_per_file or normal_inline
-                if skip_inherited_normal_per_file and not normal_inline:
+                if skip_inherited_normal_per_file and normal_inline:
                     continue
                 for pattern, code_values in entries.items():
                     selected_codes = sorted(

@@ -395,6 +395,136 @@ def test_inherited_per_file_merge_matches_native_ruff(
     )
 
 
+def test_inherited_normal_inline_map_is_skipped_when_local_normal_table_replaces_it(
+    tmp_path: Path,
+) -> None:
+    ruff = shutil.which("ruff")
+    if ruff is None:
+        pytest.skip("Ruff executable is not installed in this test environment")
+    (tmp_path / "app.py").write_text("value = 1\nimport os\n", encoding="utf-8")
+    (tmp_path / "base.toml").write_text(
+        '[lint]\nper-file-ignores = { "app.py" = ["E402"] }\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "ruff.toml").write_text(
+        'extend = "base.toml"\n[lint.per-file-ignores]\n"app.py" = ["F401"]\n',
+        encoding="utf-8",
+    )
+
+    native = subprocess.run(
+        [
+            ruff,
+            "check",
+            "--config",
+            "ruff.toml",
+            "--select",
+            "E402",
+            "--output-format",
+            "json",
+            "app.py",
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert native.returncode == 1, native.stdout + native.stderr
+    assert [item["code"] for item in json.loads(native.stdout)] == ["E402"]
+
+    findings = check_suppression_reasons(
+        tmp_path,
+        [Path("app.py")],
+        SuppressionReasonPolicy(extensions=(".py",), rule_codes=("E402",)),
+    )
+
+    assert findings == []
+
+
+def test_inherited_extend_inline_map_is_retained_beside_local_normal_table(
+    tmp_path: Path,
+) -> None:
+    ruff = shutil.which("ruff")
+    if ruff is None:
+        pytest.skip("Ruff executable is not installed in this test environment")
+    (tmp_path / "app.py").write_text("value = 1\nimport os\n", encoding="utf-8")
+    (tmp_path / "base.toml").write_text(
+        '[lint]\nextend-per-file-ignores = { "app.py" = ["E402"] }\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "ruff.toml").write_text(
+        'extend = "base.toml"\n[lint.per-file-ignores]\n"app.py" = ["F401"]\n',
+        encoding="utf-8",
+    )
+
+    native = subprocess.run(
+        [
+            ruff,
+            "check",
+            "--config",
+            "ruff.toml",
+            "--select",
+            "E402",
+            "--output-format",
+            "json",
+            "app.py",
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert native.returncode == 0, native.stdout + native.stderr
+    assert json.loads(native.stdout) == []
+
+    findings = check_suppression_reasons(
+        tmp_path,
+        [Path("app.py")],
+        SuppressionReasonPolicy(extensions=(".py",), rule_codes=("E402",)),
+    )
+
+    assert len(findings) == 1
+    assert findings[0].path == "base.toml"
+    assert "no rationale" in findings[0].message
+
+
+def test_dot_ruff_toml_takes_discovery_precedence_over_ruff_toml(
+    tmp_path: Path,
+) -> None:
+    ruff = shutil.which("ruff")
+    if ruff is None:
+        pytest.skip("Ruff executable is not installed in this test environment")
+    (tmp_path / "app.py").write_text("value = 1\nimport os\n", encoding="utf-8")
+    (tmp_path / ".ruff.toml").write_text(
+        '[lint.per-file-ignores]\n"app.py" = ["E402"]\n', encoding="utf-8"
+    )
+    (tmp_path / "ruff.toml").write_text(
+        '[lint.per-file-ignores]\n"app.py" = ["F401"]\n', encoding="utf-8"
+    )
+
+    native = subprocess.run(
+        [ruff, "check", "--output-format", "json", "app.py"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert native.returncode == 1, native.stdout + native.stderr
+    assert [item["code"] for item in json.loads(native.stdout)] == ["F401"]
+
+    findings = check_suppression_reasons(
+        tmp_path,
+        [Path("app.py")],
+        SuppressionReasonPolicy(extensions=(".py",), rule_codes=("E402",)),
+    )
+
+    assert len(findings) == 1
+    assert findings[0].path == ".ruff.toml"
+    assert "E402" in findings[0].message
+
+
 def test_inherited_ruff_config_outside_root_is_not_evaluated(tmp_path: Path) -> None:
     (tmp_path / "ruff.toml").write_text(
         'extend = "../outside.toml"\n', encoding="utf-8"

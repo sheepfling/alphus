@@ -34,11 +34,18 @@ line = 2
 reason = "Plugin bootstrap imports must remain ordered before registration."
 ```
 
-The scanner follows `extend` chains up to eight files when each target remains
-under the selected repository root and the current file does not define a local
-per-file-ignore table. Cycles, missing/out-of-root targets, excessive depth, and
-local/inherited table combinations with uncertain Ruff merge behavior are
-reported as not evaluated; Ruff remains authoritative.
+When more than one supported Ruff configuration file is present at the
+repository root, discovery follows Ruff's precedence: `.ruff.toml`, then
+`ruff.toml`, then `pyproject.toml`. The scanner follows `extend` chains up to
+eight files when each target remains under the selected repository root. Native
+Ruff differential tests cover the four parent/child combinations of normal
+`per-file-ignores` and additive `extend-per-file-ignores` tables. A child normal
+table replaces inherited normal entries, while inherited extended entries
+remain additive; the reason audit skips replaced inherited entries but retains
+the additive ones. Regression cases also cover inherited inline maps under
+both behaviors. Cycles, missing/out-of-root targets, excessive depth, and
+unsupported TOML values are reported as not evaluated; Ruff remains authoritative
+for the effective lint configuration and whether a suppression is valid or used.
 
 Consumers select the codes, file scope, exclusion patterns, severity, and reason
 delimiter in `[checks.suppression_reasons]`; see
