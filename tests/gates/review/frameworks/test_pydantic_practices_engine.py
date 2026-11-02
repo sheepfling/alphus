@@ -126,6 +126,22 @@ def test_dump_revalidation_skips_unreachable_code_after_both_arms_terminate() ->
     assert pydantic_practice_findings(source, _policy()) == []
 
 
+def test_dump_revalidation_does_not_visit_unreachable_assignments_after_terminal_if() -> (
+    None
+):
+    source = (
+        "def parse(model_input):\n"
+        "    if isinstance(model_input, OuterModel):\n"
+        "        return None\n"
+        "    else:\n"
+        "        raise ValueError('wrong type')\n"
+        "    payload = model_input.model_dump(mode='json')\n"
+        "    return OuterModel.model_validate(payload)\n"
+    )
+
+    assert pydantic_practice_findings(source, _policy()) == []
+
+
 def test_explicit_mutability_is_opt_in_and_handles_pydantic_aliases() -> None:
     source = (
         "from pydantic import BaseModel as Model, ConfigDict as Config\n"

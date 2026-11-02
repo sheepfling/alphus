@@ -77,23 +77,20 @@ def _literal_bool(value: ast.expr) -> bool:
             return False
 
 
-def _suite_terminates(statements: Sequence[ast.stmt]) -> bool:
-    """Recognize a directly terminal last statement without guessing control flow."""
-    if not statements:
-        return False
-    match statements[-1]:
-        case ast.Return() | ast.Raise():
-            return True
-        case _:
-            return False
-
-
 class _DumpFlow(ast.NodeVisitor):
     """Follow visible local assignments in one function, without nested scopes."""
 
     def __init__(self, dumped: AbstractSet[str] = frozenset()) -> None:
         self.dumped: set[str] = set(dumped)
         self.lines: set[int] = set()
+        self.reachable = True
+
+    def visit_statements(self, statements: Sequence[ast.stmt]) -> None:
+        """Visit a suite only until its path terminates."""
+        for statement in statements:
+            if not self.reachable:
+                break
+            self.visit(statement)
 
     def visit_FunctionDef(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
         """Nested functions have their own local assignment state."""
@@ -123,32 +120,41 @@ class _DumpFlow(ast.NodeVisitor):
 
     def visit_If(self, node: ast.If) -> None:
         """Analyze exclusive arms independently, retaining only common state."""
+        if not self.reachable:
+            return
         self.visit(node.test)
         incoming = self.dumped.copy()
         body_flow = _DumpFlow(incoming.copy())
-        for statement in node.body:
-            body_flow.visit(statement)
+        body_flow.visit_statements(node.body)
         self.lines.update(body_flow.lines)
 
         if node.orelse:
             else_flow = _DumpFlow(incoming.copy())
-            for statement in node.orelse:
-                else_flow.visit(statement)
+            else_flow.visit_statements(node.orelse)
             self.lines.update(else_flow.lines)
-            body_terminates = _suite_terminates(node.body)
-            else_terminates = _suite_terminates(node.orelse)
-            if body_terminates and else_terminates:
-                # No path reaches statements after this conditional.
-                self.dumped = set()
-            elif else_terminates:
+            if body_flow.reachable and else_flow.reachable:
+                self.dumped = body_flow.dumped & else_flow.dumped
+            elif body_flow.reachable:
                 self.dumped = body_flow.dumped
-            elif body_terminates:
+            elif else_flow.reachable:
                 self.dumped = else_flow.dumped
             else:
-                self.dumped = body_flow.dumped & else_flow.dumped
+                # No path reaches statements after this conditional.
+                self.dumped = set()
+                self.reachable = False
         else:
             # The path where the condition is false preserves the incoming state.
-            self.dumped = body_flow.dumped & incoming
+            self.dumped = (
+                body_flow.dumped & incoming if body_flow.reachable else incoming
+            )
+
+    def visit_Return(self, node: ast.Return) -> None:
+        self.generic_visit(node)
+        self.reachable = False
+
+    def visit_Raise(self, node: ast.Raise) -> None:
+        self.generic_visit(node)
+        self.reachable = False
 
     def visit_Call(self, node: ast.Call) -> None:
         match node.func:
@@ -167,8 +173,7 @@ def _dump_revalidation_lines(module: ast.Module) -> list[int]:
         match node:
             case ast.FunctionDef() | ast.AsyncFunctionDef():
                 flow = _DumpFlow()
-                for statement in node.body:
-                    flow.visit(statement)
+                flow.visit_statements(node.body)
                 lines.update(flow.lines)
             case _:
                 pass
