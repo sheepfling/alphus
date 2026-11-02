@@ -990,6 +990,29 @@ def findings_for(
                 and node.module is not None
                 for alias in node.names
             )
+            # A statically declared __all__ is direct evidence that the module
+            # intends to expose these names, even when no in-repository import
+            # references them. Dynamic export expressions remain unknown.
+            for node in tree.body:
+                if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+                    continue
+                targets = (
+                    node.targets if isinstance(node, ast.Assign) else [node.target]
+                )
+                if not any(
+                    isinstance(target, ast.Name) and target.id == "__all__"
+                    for target in targets
+                ):
+                    continue
+                value = node.value
+                if not isinstance(value, (ast.List, ast.Tuple)):
+                    continue
+                module_name = ".".join(relative.with_suffix("").parts[1:])
+                imported_symbols.update(
+                    f"{module_name}.{item.value}"
+                    for item in value.elts
+                    if isinstance(item, ast.Constant) and isinstance(item.value, str)
+                )
     for relative in paths:
         if relative.suffix.lower() not in policy.extensions or any(
             matches_path(relative.as_posix(), pattern) for pattern in policy.exclude
