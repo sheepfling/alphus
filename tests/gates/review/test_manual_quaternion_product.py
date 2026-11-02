@@ -14,17 +14,21 @@ _RIGHT = ("rw", "rx", "ry", "rz")
 _RESULT = ("ow", "ox", "oy", "oz")
 
 
-def _policy(**updates: object) -> QuaternionProductPolicy:
-    data: dict[str, object] = {
-        "extensions": (".py",),
-        "source_paths": ("src/geometry/*.py",),
-        "function_names": ("multiply_quaternions",),
-        "left_components": _LEFT,
-        "right_components": _RIGHT,
-        "result_components": _RESULT,
-    }
-    data.update(updates)
-    return QuaternionProductPolicy.model_validate(data)
+def _policy(
+    *,
+    function_names: tuple[str, ...] = ("multiply_quaternions",),
+    result_components: tuple[str, str, str, str] = _RESULT,
+    exclude: tuple[str, ...] = (),
+) -> QuaternionProductPolicy:
+    return QuaternionProductPolicy(
+        extensions=(".py",),
+        source_paths=("src/geometry/*.py",),
+        function_names=function_names,
+        left_components=_LEFT,
+        right_components=_RIGHT,
+        result_components=result_components,
+        exclude=exclude,
+    )
 
 
 def _source(wrong_scalar: bool = False) -> str:
