@@ -20,7 +20,7 @@ _RULE_ID = rule_tag(
 _DIRECTIVE = re.compile(r"^#\s*noqa\s*:\s*(?P<body>.*)$", re.IGNORECASE)
 _FILE_DIRECTIVE = re.compile(r"^#\s*ruff\s*:\s*noqa\s*:\s*(?P<body>.*)$", re.IGNORECASE)
 _BLANKET_DIRECTIVE = re.compile(r"^#\s*(?:ruff\s*:\s*)?noqa\s*$", re.IGNORECASE)
-_CODE = re.compile(r"\b[A-Z]+[0-9]{3,4}\b", re.IGNORECASE)
+_CODE = re.compile(r"\b[A-Z]+[0-9]{3,4}\b")
 
 
 def suppression_reason_findings(

@@ -111,6 +111,26 @@ def test_selected_code_in_a_multi_code_directive_requires_a_reason() -> None:
     assert "F401" not in findings[0].message
 
 
+def test_code_case_matches_ruff_native_noqa_syntax() -> None:
+    policy = SuppressionReasonPolicy(extensions=(".py",), rule_codes=("E402",))
+
+    # Ruff accepts case-insensitive `noqa`, but rule codes remain uppercase.
+    uppercase_code = suppression_reason_findings(
+        "value = 1\nimport optional_runtime  # NOQA: E402\n",
+        policy,
+        path="src/package.py",
+    )
+    lowercase_code = suppression_reason_findings(
+        "value = 1\nimport optional_runtime  # noqa: e402\n",
+        policy,
+        path="src/package.py",
+    )
+
+    assert len(uppercase_code) == 1
+    assert uppercase_code[0].line == 2
+    assert lowercase_code == []
+
+
 def test_file_scope_and_exclusions_are_respected(tmp_path: Path) -> None:
     (tmp_path / "included.py").write_text(
         "import local  # noqa: E402\n", encoding="utf-8"
