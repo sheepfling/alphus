@@ -123,6 +123,37 @@ class ProseAsControlPolicy(PythonSourceScanPolicy):
         return self
 
 
+class PositionalSemanticOverridePolicy(PythonSourceScanPolicy):
+    """Consumer-declared row-position and semantic-field overrides."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    position_variables: Annotated[tuple[str, ...], Field(min_length=1)]
+    semantic_fields: Annotated[tuple[str, ...], Field(min_length=1)]
+    minimum_override_characters: Annotated[int, Field(ge=20)] = 40
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("position_variables")
+    @classmethod
+    def validate_position_variables(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("position variables must be identifiers")
+        require_unique(values, "position variables must be unique")
+        return tuple(values)
+
+    @field_validator("semantic_fields")
+    @classmethod
+    def validate_semantic_fields(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value for value in values):
+            raise ValueError("semantic fields must be non-empty")
+        require_unique(values, "semantic fields must be unique")
+        return tuple(values)
+
+
 class ScipyConstantsPolicy(PythonSourceScanPolicy):
     """Advisory SciPy physical and unit-factor catalog for Python source."""
 

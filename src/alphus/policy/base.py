@@ -37,6 +37,7 @@ QualityRuleName: TypeAlias = Literal[
     "git-history",
     "numeric-literals",
     "prose-as-control",
+    "positional-semantic-overrides",
     "scipy-constants",
     "test-quality",
     "input-contracts",

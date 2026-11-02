@@ -42,6 +42,7 @@ from alphus.policy.review import (
     InputContractPolicy,
     NumericLiteralPolicy,
     PositionalInterfacePolicy,
+    PositionalSemanticOverridePolicy,
     ProseAsControlPolicy,
     PydanticPracticePolicy,
     ScipyConstantsPolicy,
@@ -76,6 +77,7 @@ class CheckPolicies(StrictModel):
     path_discovery: PathDiscoveryPolicy | None = None
     numeric_literals: NumericLiteralPolicy | None = None
     prose_as_control: ProseAsControlPolicy | None = None
+    positional_semantic_overrides: PositionalSemanticOverridePolicy | None = None
     scipy_constants: ScipyConstantsPolicy | None = None
     test_quality: TestQualityPolicy | None = None
     input_contracts: InputContractPolicy | None = None

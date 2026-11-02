@@ -14,6 +14,14 @@ allowed_literals = ["The remote peer reports a state transition that this client
 lossy_text_rewrite = true
 regex_sub_helpers = ["re.sub"]
 
+[checks.positional_semantic_overrides]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/render/*.py"]
+position_variables = ["row_number", "page_number"]
+semantic_fields = ["Interpretation", "Content"]
+minimum_override_characters = 40
+
 [orchestration]
 default_profile = "semantic-review"
 
@@ -23,6 +31,12 @@ name = "Prose branch review"
 rule = "prose-as-control"
 rollout = "provisional"
 
+[[orchestration.steps]]
+kind = "rule"
+name = "Positional semantic override review"
+rule = "positional-semantic-overrides"
+rollout = "provisional"
+
 [[orchestration.profiles]]
 name = "semantic-review"
-steps = ["Prose branch review"]
+steps = ["Prose branch review", "Positional semantic override review"]

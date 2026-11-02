@@ -17,6 +17,9 @@ from alphus.gates.review.frameworks.sqlalchemy_practices import (
 from alphus.gates.review.input_contracts import check_input_contracts
 from alphus.gates.review.numeric_literals import check_numeric_literals
 from alphus.gates.review.positional_interfaces import check_positional_interfaces
+from alphus.gates.review.positional_semantic_overrides import (
+    check_positional_semantic_overrides,
+)
 from alphus.gates.review.prose_as_control import (
     check_lossy_text_rewrite,
     check_prose_as_control,
@@ -47,6 +50,16 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
                 root,
                 files,
                 require_policy(config.checks.prose_as_control, "prose_as_control"),
+            )
+        ),
+        "positional-semantic-overrides": lambda root, files, config: (
+            check_positional_semantic_overrides(
+                root,
+                files,
+                require_policy(
+                    config.checks.positional_semantic_overrides,
+                    "positional_semantic_overrides",
+                ),
             )
         ),
         "scipy-constants": lambda root, files, config: check_scipy_constants(
