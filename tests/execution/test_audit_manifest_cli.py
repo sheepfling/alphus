@@ -233,6 +233,182 @@ steps = ["Python annotations"]
     assert "--select=E" in missing_selector["checks"][0]["expanded_argv"]
 
 
+def test_manifest_profile_covers_tuple_result_advisory_with_named_negative(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A real consumer profile reports unnamed tuples and preserves named records."""
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    source = tmp_path / "src"
+    source.mkdir()
+    (source / "results.py").write_text(
+        "from typing import NamedTuple\n"
+        "class Pair(NamedTuple):\n    left: int\n    right: int\n"
+        "def coordinates() -> tuple[int, int]: return 1, 2\n"
+        "def named() -> Pair: return Pair(1, 2)\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "quality.toml").write_text(
+        """schema_version = 1
+[files]
+include = ["src/*.py"]
+[checks.python_style]
+extensions = [".py"]
+exclude = []
+opaque_boundary_paths = []
+opaque_boundary_marker_prefix = "# opaque-boundary: "
+opaque_boundary_min_reason_chars = 12
+forbidden_main_imports = []
+semantic_result_paths = ["src/**"]
+[orchestration]
+default_profile = "audit"
+failure_threshold = "error"
+[[orchestration.steps]]
+kind = "rule"
+name = "Python style"
+rule = "python-style"
+[[orchestration.profiles]]
+name = "audit"
+steps = ["Python style"]
+""",
+        encoding="utf-8",
+    )
+    _write_manifest(
+        tmp_path,
+        "audit",
+        [
+            AuditManifestCheck(
+                check_id="tuple-results",
+                step="Python style",
+                expected_files=("src/results.py",),
+            )
+        ],
+    )
+
+    exit_code = main(
+        [
+            "--root",
+            str(tmp_path),
+            "--config",
+            "quality.toml",
+            "--json",
+            "--audit-manifest",
+            "audit.json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assessment = payload["audit_completion"]["checks"][0]
+    assert assessment["status"] == "executed_with_findings"
+    assert assessment["findings_state"] == "with_findings"
+    assert assessment["selected_files"] == ["src/results.py"]
+    diagnostics = payload["steps"][0]["findings"]
+    assert any("unnamed-tuple-returns" in row["rule_id"] for row in diagnostics)
+    assert all(row["message"] == "unnamed tuple returns" for row in diagnostics)
+
+
+def test_manifest_profile_covers_planned_and_unplanned_compatibility_forwarders(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The consumer's forwarder gate passes planned shims and fails unplanned ones."""
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    package = tmp_path / "src" / "sample"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "current.py").write_text("class Thing: pass\n", encoding="utf-8")
+    (package / "old.py").write_text(
+        "from sample.current import Thing\n", encoding="utf-8"
+    )
+    (tmp_path / "compatibility.toml").write_text(
+        "schema_version = 1\n[[forwarders]]\n"
+        'module = "sample.old"\nreplacement = "sample.current:Thing"\n'
+        'owner = "package maintainers"\nremove_by = 2027-01-01\n',
+        encoding="utf-8",
+    )
+    command = [
+        "{python}",
+        "-m",
+        "alphus.gates.python.compatibility_cli",
+        "--source-root",
+        "src",
+        "--plan",
+        "compatibility.toml",
+    ]
+    config = f"""schema_version = 1
+[orchestration]
+default_profile = "audit"
+[[orchestration.steps]]
+kind = "command"
+name = "Compatibility forwarders"
+argv = {json.dumps(command)}
+[[orchestration.profiles]]
+name = "audit"
+steps = ["Compatibility forwarders"]
+"""
+    (tmp_path / "quality.toml").write_text(config, encoding="utf-8")
+    _write_manifest(
+        tmp_path,
+        "audit",
+        [
+            AuditManifestCheck(
+                check_id="compatibility-forwarders",
+                step="Compatibility forwarders",
+                expected_files=None,
+                required_argv=("--source-root", "src", "--plan"),
+            )
+        ],
+    )
+
+    planned_exit = main(
+        [
+            "--root",
+            str(tmp_path),
+            "--config",
+            "quality.toml",
+            "--json",
+            "--audit-manifest",
+            "audit.json",
+        ]
+    )
+    planned = json.loads(capsys.readouterr().out)
+    assert planned_exit == 0
+    assert planned["audit_completion"]["checks"][0]["status"] == "executed"
+    assert "sample.old -> sample.current:Thing" in planned["steps"][0]["stdout"]
+
+    (tmp_path / "quality.toml").write_text(
+        config.replace('"--plan", "compatibility.toml"', ""), encoding="utf-8"
+    )
+    _write_manifest(
+        tmp_path,
+        "audit",
+        [
+            AuditManifestCheck(
+                check_id="compatibility-forwarders",
+                step="Compatibility forwarders",
+                expected_files=None,
+                required_argv=("--source-root", "src"),
+            )
+        ],
+    )
+    unplanned_exit = main(
+        [
+            "--root",
+            str(tmp_path),
+            "--config",
+            "quality.toml",
+            "--json",
+            "--audit-manifest",
+            "audit.json",
+        ]
+    )
+    unplanned = json.loads(capsys.readouterr().out)
+    assessment = unplanned["audit_completion"]["checks"][0]
+    assert unplanned_exit == 2
+    assert assessment["status"] == "execution_failure"
+    assert assessment["complete"] is False
+    assert "has no removal plan" in unplanned["steps"][0]["stdout"]
+
+
 @pytest.mark.parametrize(
     "manifest_text",
     [
