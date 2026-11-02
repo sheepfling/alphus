@@ -1338,6 +1338,23 @@ def source_family_findings(
     history_contexts: dict[tuple[str, ...], str] = {}
     if policy.python_import_evidence:
         python_parse_cache = _PythonImportParseCache(policy.max_import_analysis_bytes)
+        # Reserve the shared byte budget for every retained family's core
+        # evidence before any family spends it scanning optional external
+        # consumers. Otherwise the first family can consume the remaining
+        # budget on alphabetically earlier external files and starve a later
+        # family's own members.
+        selected_python = {path for path in selected if path.suffix == ".py"}
+        core_sources: set[Path] = set()
+        for _, _, members in retained:
+            member_directories = {path.parent for path in members}
+            core_sources.update(
+                path
+                for path in selected_python
+                if path in members
+                or (path.name == "__init__.py" and path.parent in member_directories)
+            )
+        for source in sorted(core_sources, key=str):
+            python_parse_cache.parse(checkout, source)
         for _, _, members in retained:
             key = tuple(sorted(path.as_posix() for path in members))
             context, notes = _python_import_evidence(
