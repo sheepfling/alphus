@@ -114,6 +114,8 @@ class RunArtifactPolicy(PythonSourceScanPolicy):
 
     conditional_output_readback: bool = False
     parse_hash_reread: bool = False
+    failure_evidence_order: bool = False
+    runtime_attestation_gap: bool = False
     reused_output_path_names: tuple[str, ...] = ()
     fresh_output_path_names: tuple[str, ...] = ()
     provenance_input_path_names: tuple[str, ...] = ()
@@ -123,12 +125,23 @@ class RunArtifactPolicy(PythonSourceScanPolicy):
     parsers: tuple[ProvenanceCallRole, ...] = ()
     digesters: tuple[ProvenanceCallRole, ...] = ()
     provenance_sinks: tuple[str, ...] = ()
+    failure_child_runners: tuple[str, ...] = ()
+    failure_diagnostic_path_names: tuple[str, ...] = ()
+    failure_cleanups: tuple[ProvenanceCallRole, ...] = ()
+    failure_sinks: tuple[ProvenanceCallRole, ...] = ()
+    runtime_module_names: tuple[str, ...] = ()
+    runtime_import_helpers: tuple[str, ...] = ()
+    runtime_metadata_helpers: tuple[str, ...] = ()
+    runtime_origin_helpers: tuple[str, ...] = ()
+    runtime_attestation_sinks: tuple[str, ...] = ()
 
     @field_validator(
         "reused_output_path_names",
         "fresh_output_path_names",
         "provenance_input_path_names",
         "immutable_snapshot_names",
+        "failure_diagnostic_path_names",
+        "runtime_module_names",
     )
     @classmethod
     def validate_identifiers(cls, values: Sequence[str]) -> tuple[str, ...]:
@@ -145,6 +158,22 @@ class RunArtifactPolicy(PythonSourceScanPolicy):
         ):
             raise ValueError("provenance sink names must be dotted identifiers")
         require_unique(values, "provenance sink names must be unique")
+        return tuple(values)
+
+    @field_validator(
+        "failure_child_runners",
+        "runtime_import_helpers",
+        "runtime_metadata_helpers",
+        "runtime_origin_helpers",
+        "runtime_attestation_sinks",
+    )
+    @classmethod
+    def validate_review_helpers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not part.isidentifier() for value in values for part in value.split(".")
+        ):
+            raise ValueError("run artifact helper names must be dotted identifiers")
+        require_unique(values, "run artifact helper names must be unique")
         return tuple(values)
 
     @model_validator(mode="after")
@@ -168,6 +197,27 @@ class RunArtifactPolicy(PythonSourceScanPolicy):
                 "parse_hash_reread needs configured input paths, parsers, digesters, "
                 "and provenance sinks"
             )
+        if self.failure_evidence_order and not (
+            self.failure_child_runners
+            and self.failure_diagnostic_path_names
+            and self.failure_cleanups
+            and self.failure_sinks
+        ):
+            raise ValueError(
+                "failure_evidence_order needs child runners, diagnostic paths, "
+                "cleanup helpers, and failure sinks"
+            )
+        if self.runtime_attestation_gap and not (
+            self.runtime_module_names
+            and self.runtime_import_helpers
+            and self.runtime_metadata_helpers
+            and self.runtime_origin_helpers
+            and self.runtime_attestation_sinks
+        ):
+            raise ValueError(
+                "runtime_attestation_gap needs module names, import helpers, "
+                "metadata helpers, origin helpers, and attestation sinks"
+            )
         require_unique(
             tuple(
                 (role.function, role.path_argument_index)
@@ -181,6 +231,13 @@ class RunArtifactPolicy(PythonSourceScanPolicy):
             "provenance helper roles must be unique",
         )
         require_unique(self.provenance_sinks, "provenance sinks must be unique")
+        require_unique(
+            tuple(
+                (role.function, role.path_argument_index)
+                for role in (*self.failure_cleanups, *self.failure_sinks)
+            ),
+            "failure evidence helper roles must be unique",
+        )
         if set(self.reused_output_path_names) & set(self.fresh_output_path_names):
             raise ValueError("an output path cannot be both reused and fresh per run")
         if set(self.provenance_input_path_names) & set(self.immutable_snapshot_names):

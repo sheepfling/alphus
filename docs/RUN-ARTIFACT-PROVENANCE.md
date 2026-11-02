@@ -1,10 +1,13 @@
 # Run artifact provenance review
 
-`run-artifacts` is an opt-in, provisional Python review rule for two configured
+`run-artifacts` is an opt-in, provisional Python review rule for four configured
 local patterns: conditional writes followed by reads from a declared reused
-output path, and a parser followed by a provenance digest helper that rereads
-the same declared input path. It reports a possibility to review; it does not
-prove stale data or a time-of-check/time-of-use change.
+output path; a parser followed by a provenance digest helper that rereads the
+same declared input path; cleanup of a declared failure diagnostic before a
+configured failure sink reuses that path; and distribution metadata recorded
+without a configured origin check for a declared runtime module. It reports
+review candidates; it does not prove stale data, a time-of-check/time-of-use
+change, lost diagnostics, or a mismatched import.
 
 Consumers must configure the helper spellings and path argument positions in
 `[checks.run_artifacts]`. The rules operate only on the selected Python files,
@@ -22,7 +25,39 @@ between operations. Rebound paths and locally shadowed helper names abstain.
 Only direct `if` branches count as conditional writes in this initial slice.
 Unknown helpers, path expressions, output lifecycle, or external persistence
 remain unassessed. Failure-evidence ordering and runtime import attestation are
-not covered. The scanner never deletes, rewrites, or installs artifacts.
+bounded to the exact grammars below. The scanner never imports or executes
+consumer code, deletes, rewrites, or installs artifacts.
+
+## Failure evidence before cleanup
+
+Enable `failure_evidence_order` and configure `failure_child_runners`,
+`failure_diagnostic_path_names`, `failure_cleanups`, and `failure_sinks`.
+The first version recognizes only a direct assignment from a declared child
+runner followed by a top-level `if result.returncode != 0:` whose body contains
+direct cleanup and failure-sink calls in that order. Both calls must use the
+same declared diagnostic path variable at their configured argument positions.
+It asks whether status and redacted diagnostics are durably retained before
+cleanup. The scanner cannot establish what a cleanup helper removes, what a
+sink persists, or whether an external logger retains evidence. It does not
+inspect `finally`, exception handlers, presentation failures, or missing sinks.
+Those cases remain unknown.
+
+## Runtime metadata versus imported module origin
+
+Enable `runtime_attestation_gap` and configure the runtime module name,
+`runtime_import_helpers`, `runtime_metadata_helpers`, `runtime_origin_helpers`,
+and `runtime_attestation_sinks`. The first version recognizes a module assigned
+directly from a configured import helper and a configured metadata check nested
+in a configured sink. It suppresses that candidate only when the same sink
+contains a configured origin helper called with that module variable.
+
+This identifies a declared evidence gap. It does not determine which code was
+imported, validate metadata, or establish that an origin path is a cryptographic
+identity. Static scanning does not execute imports or a consumer-selected
+runtime provenance recipe. Editable installs, namespaces, zip imports, native
+modules, and alternate interpreters are not classified; consumers should keep
+unsupported packaging explicitly unknown and may use a separate trusted runtime
+recipe to collect interpreter and module-origin evidence.
 
 See the synthetic [consumer example](../examples/consumer/run-artifacts/README.md)
 for a complete policy and invocation.

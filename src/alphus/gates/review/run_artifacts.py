@@ -65,6 +65,217 @@ def _role_path(
     return None
 
 
+def _direct_call(statement: ast.stmt) -> ast.Call | None:
+    match statement:
+        case ast.Expr(value=ast.Call() as call):
+            return call
+        case ast.Assign(value=ast.Call() as call):
+            return call
+        case ast.AnnAssign(value=ast.Call() as call):
+            return call
+        case _:
+            return None
+
+
+def _assigned_call_names(
+    statements: Sequence[ast.stmt], helpers: frozenset[str]
+) -> dict[str, ast.Call]:
+    bindings: dict[str, ast.Call] = {}
+    for statement in statements:
+        match statement:
+            case ast.Assign(targets=[ast.Name(id=name)], value=ast.Call() as call):
+                if _call_name(call.func) in helpers and name not in bindings:
+                    bindings[name] = call
+            case ast.AnnAssign(target=ast.Name(id=name), value=ast.Call() as call):
+                if _call_name(call.func) in helpers and name not in bindings:
+                    bindings[name] = call
+            case _:
+                continue
+    return bindings
+
+
+def _single_assignment(
+    function: ast.FunctionDef | ast.AsyncFunctionDef, name: str
+) -> bool:
+    stores = 0
+    for node in ast.walk(function):
+        match node:
+            case ast.Name(id=bound, ctx=ast.Store()) if bound == name:
+                stores += 1
+            case _:
+                continue
+    return stores == 1
+
+
+def _failed_returncode_name(test: ast.expr, names: frozenset[str]) -> str | None:
+    match test:
+        case ast.Compare(
+            left=ast.Attribute(value=ast.Name(id=name), attr="returncode"),
+            ops=[ast.NotEq()],
+            comparators=[ast.Constant(value=0)],
+        ) if name in names:
+            return name
+        case _:
+            return None
+
+
+def _failure_evidence_findings(
+    function: ast.FunctionDef | ast.AsyncFunctionDef,
+    path: str,
+    policy: RunArtifactPolicy,
+) -> list[Finding]:
+    runners = frozenset(policy.failure_child_runners)
+    runner_bindings = _assigned_call_names(function.body, runners)
+    valid_results = frozenset(
+        name for name in runner_bindings if _single_assignment(function, name)
+    )
+    findings: list[Finding] = []
+    emitted: set[str] = set()
+    for statement in function.body:
+        match statement:
+            case ast.If(test=test, body=body):
+                result_name = _failed_returncode_name(test, valid_results)
+            case _:
+                continue
+        if result_name is None:
+            continue
+        direct_calls = [
+            call for item in body if (call := _direct_call(item)) is not None
+        ]
+        for cleanup_role in policy.failure_cleanups:
+            cleanup = next(
+                (
+                    call
+                    for call in direct_calls
+                    if _call_name(call.func) == cleanup_role.function
+                ),
+                None,
+            )
+            if cleanup is None:
+                continue
+            diagnostic_path = _role_path(
+                cleanup,
+                (cleanup_role,),
+                frozenset(policy.failure_diagnostic_path_names),
+            )
+            if diagnostic_path is None or diagnostic_path in emitted:
+                continue
+            for sink_role in policy.failure_sinks:
+                sink = next(
+                    (
+                        call
+                        for call in direct_calls
+                        if _call_name(call.func) == sink_role.function
+                        and call.lineno > cleanup.lineno
+                    ),
+                    None,
+                )
+                if (
+                    sink is None
+                    or _role_path(
+                        sink,
+                        (sink_role,),
+                        frozenset(policy.failure_diagnostic_path_names),
+                    )
+                    != diagnostic_path
+                ):
+                    continue
+                findings.append(
+                    Finding(
+                        rule_tag(
+                            Scope.PYTHON,
+                            Framework.NONE,
+                            Category.ORCHESTRATION,
+                            "failure-evidence-before-persistence",
+                        ),
+                        path,
+                        f"configured failed-child branch at line {statement.lineno} cleans "
+                        f"diagnostic path `{diagnostic_path}` at line {cleanup.lineno} "
+                        f"before the configured failure sink uses it at line {sink.lineno}; "
+                        "review whether failure status and redacted evidence are durably "
+                        "retained before cleanup (loss is possible, not proven)",
+                        cleanup.lineno,
+                        "warning",
+                    )
+                )
+                emitted.add(diagnostic_path)
+                break
+    return findings
+
+
+def _contains_configured_call(
+    node: ast.AST, helper: str, module: str | None = None
+) -> bool:
+    for child in ast.walk(node):
+        match child:
+            case ast.Call(func=function, args=args) if _call_name(function) == helper:
+                if module is None:
+                    return True
+                for argument in args:
+                    match argument:
+                        case ast.Name(id=name) if name == module:
+                            return True
+                        case _:
+                            continue
+            case _:
+                continue
+    return False
+
+
+def _runtime_attestation_findings(
+    function: ast.FunctionDef | ast.AsyncFunctionDef,
+    path: str,
+    policy: RunArtifactPolicy,
+) -> list[Finding]:
+    imports = _assigned_call_names(
+        function.body, frozenset(policy.runtime_import_helpers)
+    )
+    module_names = frozenset(
+        name
+        for name in imports
+        if name in policy.runtime_module_names and _single_assignment(function, name)
+    )
+    if not module_names:
+        return []
+    sinks = frozenset(policy.runtime_attestation_sinks)
+    metadata = frozenset(policy.runtime_metadata_helpers)
+    origins = frozenset(policy.runtime_origin_helpers)
+    findings: list[Finding] = []
+    for call, _ in _calls(function.body):
+        if _call_name(call.func) not in sinks:
+            continue
+        if not any(_contains_configured_call(call, helper) for helper in metadata):
+            continue
+        if any(
+            _contains_configured_call(call, helper, module)
+            for helper in origins
+            for module in module_names
+        ):
+            continue
+        module = min(module_names)
+        imported = imports[module]
+        findings.append(
+            Finding(
+                rule_tag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.ORCHESTRATION,
+                    "runtime-origin-not-bound-to-metadata",
+                ),
+                path,
+                f"configured execution module `{module}` is imported at line {imported.lineno}, "
+                f"while the provenance sink at line {call.lineno} records configured "
+                "distribution metadata without a configured origin check on that module; "
+                "metadata agreement does not establish the imported code's identity, and "
+                "the actual origin is not determined by this scan",
+                call.lineno,
+                "warning",
+            )
+        )
+        break
+    return findings
+
+
 def _assigned_names(function: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
     names: set[str] = set()
 
@@ -251,6 +462,10 @@ def _function_findings(
                 )
                 emitted_paths.add(name)
                 break
+    if policy.failure_evidence_order:
+        findings.extend(_failure_evidence_findings(function, path, policy))
+    if policy.runtime_attestation_gap:
+        findings.extend(_runtime_attestation_findings(function, path, policy))
     return findings
 
 

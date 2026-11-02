@@ -9,9 +9,20 @@ extensions = [".py"]
 exclude = []
 conditional_output_readback = true
 parse_hash_reread = true
+failure_evidence_order = true
+runtime_attestation_gap = true
 reused_output_path_names = ["report_path"]
 provenance_input_path_names = ["input_path"]
 provenance_sinks = ["record_provenance"]
+failure_child_runners = ["run_child"]
+failure_diagnostic_path_names = ["diagnostic_path"]
+failure_cleanups = [{ function = "remove_diagnostic", path_argument_index = 0 }]
+failure_sinks = [{ function = "persist_failure", path_argument_index = 1 }]
+runtime_module_names = ["engine"]
+runtime_import_helpers = ["load_runtime_module"]
+runtime_metadata_helpers = ["distribution_version"]
+runtime_origin_helpers = ["module_origin"]
+runtime_attestation_sinks = ["record_runtime"]
 
 [[checks.run_artifacts.output_writers]]
 function = "write_table"
