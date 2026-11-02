@@ -388,8 +388,8 @@ def _runtime_attestation_findings(
     )
     if not module_names:
         return []
-    module_aliases = {module: {module} for module in module_names}
     alias_owners = {module: module for module in module_names}
+    alias_lines = {module: imports[module].lineno for module in module_names}
     for statement in function.body:
         match statement:
             case ast.Assign(targets=[ast.Name(id=alias)], value=ast.Name(id=source)):
@@ -407,7 +407,7 @@ def _runtime_attestation_findings(
         ):
             continue
         alias_owners[alias] = owner
-        module_aliases[owner].add(alias)
+        alias_lines[alias] = statement.lineno
     sinks = unshadowed(policy.runtime_attestation_sinks)
     metadata = unshadowed(policy.runtime_metadata_helpers)
     origins = unshadowed(policy.runtime_origin_helpers)
@@ -417,14 +417,23 @@ def _runtime_attestation_findings(
             continue
         if not any(_contains_configured_call(call, helper) for helper in metadata):
             continue
+        usable_modules = frozenset(
+            module for module in module_names if imports[module].lineno < call.lineno
+        )
+        if not usable_modules:
+            continue
+        usable_aliases = frozenset(
+            alias
+            for alias, owner in alias_owners.items()
+            if owner in usable_modules and alias_lines[alias] < call.lineno
+        )
         if any(
             _contains_configured_call(call, helper, alias)
             for helper in origins
-            for aliases in module_aliases.values()
-            for alias in aliases
+            for alias in usable_aliases
         ):
             continue
-        module = min(module_names)
+        module = min(usable_modules)
         imported = imports[module]
         findings.append(
             Finding(

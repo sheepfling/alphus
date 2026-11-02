@@ -556,6 +556,29 @@ def test_runtime_origin_binding_and_unknown_import_styles_abstain() -> None:
     assert len(run_artifact_findings(nested_alias, "src/harness.py", configured)) == 1
 
 
+def test_runtime_origin_alias_must_be_bound_before_provenance_sink() -> None:
+    configured = policy(
+        runtime_attestation_gap=True,
+        runtime_module_names=("engine",),
+        runtime_import_helpers=("load_runtime_module",),
+        runtime_metadata_helpers=("distribution_version",),
+        runtime_origin_helpers=("module_origin",),
+        runtime_attestation_sinks=("record_runtime",),
+    )
+    source = (
+        "def run():\n"
+        "    engine = load_runtime_module('example-engine')\n"
+        "    record_runtime(\n"
+        "        distribution_version('example-engine'), module_origin(runtime)\n"
+        "    )\n"
+        "    runtime = engine\n"
+    )
+
+    findings = run_artifact_findings(source, "src/harness.py", configured)
+    assert len(findings) == 1
+    assert findings[0].line == 3
+
+
 def test_runtime_attestation_abstains_on_shadowed_import_helper() -> None:
     configured = policy(
         runtime_attestation_gap=True,
