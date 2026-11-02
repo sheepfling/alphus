@@ -147,3 +147,22 @@ def test_unescaped_dynamic_link_label_can_inject_a_second_link() -> None:
         ("https://evil.example/", "click"),
         ("https://good.example/", ""),
     ]
+
+
+def test_unescaped_dynamic_link_destination_can_inject_a_second_link() -> None:
+    label = "documentation"
+    target = "https://good.example/a) [click](https://evil.example"
+    source = 'def render(label, target):\n    return f"[{label}]({target})"\n'
+    findings = dynamic_markdown_findings(source, path="src/links.py")
+
+    rendered = MarkdownIt().render(f"[{label}]({target})")
+    parsed = _StructureParser()
+    parsed.feed(rendered)
+
+    assert len(findings) == 2
+    assert any("link destination" in finding.message for finding in findings)
+    assert all("does not prove invalid rendered output" in f.message for f in findings)
+    assert parsed.links == [
+        ("https://good.example/a", "documentation"),
+        ("https://evil.example", "click"),
+    ]
