@@ -1245,7 +1245,10 @@ def pydantic_practice_findings(
                     line=line,
                     severity="warning",
                     message=(
-                        f"Declared UTC persistence call {contract.call} receives a timestamp captured in a known non-UTC zone; normalize the aware value with astimezone(timezone.utc) or configure its validated boundary."
+                        f"Declared UTC persistence call {contract.call} receives a "
+                        "timestamp captured in a known non-UTC zone; normalize the "
+                        "aware value with astimezone(timezone.utc) or configure its "
+                        "validated boundary."
                     ),
                 )
             )
@@ -1418,3 +1421,4 @@ def check_pydantic_practices(
         source = read_python_source(checkout / relative)
         findings.extend(pydantic_practice_findings(source, policy, path=name))
     return findings
+
