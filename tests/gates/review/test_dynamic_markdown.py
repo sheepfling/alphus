@@ -199,6 +199,32 @@ def test_policy_limits_scanning_to_selected_paths_and_reasoned_exceptions(
     assert {finding.path for finding in findings} == {"src/render.py"}
 
 
+def test_declared_producer_scope_can_include_selected_python_scripts(
+    tmp_path: Path,
+) -> None:
+    script = tmp_path / "scripts" / "publish_release.py"
+    script.parent.mkdir()
+    script.write_text(
+        "def render(name):\n    return f'| {name} |\\n'\n", encoding="utf-8"
+    )
+    policy = DynamicMarkdownPolicy(
+        extensions=(".py",),
+        exclude=(),
+        producer_paths=("scripts/**",),
+    )
+
+    findings = check_dynamic_markdown(
+        tmp_path,
+        (Path("scripts/publish_release.py"), Path("src/unselected.py")),
+        policy,
+    )
+
+    assert len(findings) == 1
+    assert findings[0].path == "scripts/publish_release.py"
+    assert findings[0].line == 2
+    assert "table cell" in findings[0].message
+
+
 def test_dynamic_markdown_policy_requires_explicit_producer_paths() -> None:
     try:
         DynamicMarkdownPolicy(extensions=(".py",), exclude=(), producer_paths=())
