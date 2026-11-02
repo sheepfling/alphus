@@ -1,6 +1,7 @@
 import json
 import shutil
 import subprocess
+import sys
 from collections.abc import Iterable
 from importlib import metadata
 from pathlib import Path
@@ -117,6 +118,62 @@ def test_installed_pyright_observes_a_controlled_module_stub(
     )
     source_diagnostics = json.loads(without_stub.stdout)["generalDiagnostics"]
     assert not any('for class "int"' in item["message"] for item in source_diagnostics)
+
+
+def test_pyright_consumes_installed_pyyaml_and_scipy_stubs(
+    tmp_path: Path,
+) -> None:
+    pyright = shutil.which("pyright")
+    if pyright is None:
+        pytest.skip("Pyright executable is not installed in this test environment")
+    distributions = ("PyYAML", "types-PyYAML", "scipy", "scipy-stubs")
+    try:
+        for distribution in distributions:
+            metadata.version(distribution)
+    except metadata.PackageNotFoundError:
+        pytest.skip("PyYAML and SciPy runtime/stub packages are not all installed")
+
+    (tmp_path / "client.py").write_text(
+        "import scipy.linalg\n"
+        "import yaml\n"
+        "\n"
+        "yaml_output: str = yaml.safe_dump({'value': 1})\n"
+        "yaml_bad: int = yaml.safe_dump({'value': 1})\n"
+        "scipy_output = scipy.linalg.norm([3.0, 4.0])\n"
+        "reveal_type(scipy_output)\n"
+        "scipy_bad: str = scipy_output\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "pyrightconfig.json").write_text(
+        json.dumps(
+            {
+                "typeCheckingMode": "strict",
+                "include": ["client.py"],
+                "pythonVersion": f"{sys.version_info.major}.{sys.version_info.minor}",
+                "venvPath": str(Path(sys.prefix).parent),
+                "venv": Path(sys.prefix).name,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [pyright, "--outputjson"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    diagnostics = json.loads(result.stdout)["generalDiagnostics"]
+    errors = [item for item in diagnostics if item["severity"] == "error"]
+    assert any('"str" is not assignable to "int"' in item["message"] for item in errors)
+    assert any(
+        '"float" is not assignable to "str"' in item["message"] for item in errors
+    )
+    assert any(
+        'Type of "scipy_output" is "float"' in item["message"] for item in diagnostics
+    )
 
 
 class _Distribution:
