@@ -8,6 +8,7 @@ import re
 import tokenize
 import tomllib
 from collections.abc import Collection, Iterable, MutableSequence
+from collections.abc import Set as AbstractSet
 from pathlib import Path
 from typing import cast
 
@@ -169,7 +170,7 @@ def check_suppression_reasons(
 
 
 def _missing_exception_file_findings(
-    root: Path, selected_files: set[str], policy: SuppressionReasonPolicy
+    root: Path, selected_files: AbstractSet[str], policy: SuppressionReasonPolicy
 ) -> list[Finding]:
     """Report approved source/config sites whose file was deleted or moved."""
     findings: list[Finding] = []
