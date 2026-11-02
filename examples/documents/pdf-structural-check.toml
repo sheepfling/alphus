@@ -32,7 +32,7 @@ timeout_seconds = 60
 
 [[orchestration.steps]]
 kind = "command"
-name = "PDF outline destination contract"
+name = "PDF navigation contract"
 gate_id = "pdf-navigation-contract"
 argv = ["{python}", "scripts/check_pdf_navigation.py", "build/report.pdf", "examples/documents/pdf-navigation-contract.json"]
 working_directory = "."
@@ -41,4 +41,4 @@ timeout_seconds = 60
 
 [[orchestration.profiles]]
 name = "pdf-structure"
-steps = ["LaTeX report build", "LaTeX final log evidence", "PDF structural check", "PDF outline destination contract"]
+steps = ["LaTeX report build", "LaTeX final log evidence", "PDF structural check", "PDF navigation contract"]

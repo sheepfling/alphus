@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import math
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -20,11 +21,23 @@ class _SectionContract(BaseModel):
     expected_physical_page: Annotated[int, Field(ge=1)]
 
 
+class _ContentsLinkContract(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    contents_physical_page: Annotated[int, Field(ge=1)]
+    contents_label: Annotated[str, Field(min_length=1)]
+    target_outline_title: Annotated[str, Field(min_length=1)]
+    target_heading_text: Annotated[str, Field(min_length=1)]
+    expected_target_physical_page: Annotated[int, Field(ge=1)]
+    expected_annotation_rectangle: tuple[float, float, float, float]
+
+
 class _NavigationContract(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     source_evidence: Annotated[str, Field(min_length=1)]
     sections: Annotated[list[_SectionContract], Field(min_length=1)]
+    contents_links: tuple[_ContentsLinkContract, ...] = ()
 
     @field_validator("source_evidence")
     @classmethod
@@ -43,12 +56,28 @@ class _Destination(Protocol):
 class _Page(Protocol):
     def extract_text(self) -> str | None: ...
 
+    @property
+    def annotations(self) -> Sequence[object] | None: ...
+
+
+class _PdfDictionary(Protocol):
+    def get(self, key: str, default: object = None) -> object: ...
+
+
+class _IndirectObject(Protocol):
+    def get_object(self) -> _PdfDictionary: ...
+
 
 class _Reader(Protocol):
     outline: object
     pages: Sequence[_Page]
 
     def get_destination_page_number(self, destination: object) -> int | None: ...
+
+    def get_page_number(self, page: _Page) -> int | None: ...
+
+    @property
+    def named_destinations(self) -> dict[str, object]: ...
 
 
 class _ReaderFactory(Protocol):
@@ -83,6 +112,135 @@ def _flatten_outline(items: object) -> list[object]:
         case _:
             result.append(items)
     return result
+
+
+def _page_for_destination(reader: _Reader, destination: object) -> int | None:
+    named = reader.named_destinations.get(str(destination).lstrip("/"))
+    if named is not None:
+        try:
+            return reader.get_destination_page_number(named)
+        except (IndexError, KeyError, TypeError, ValueError):
+            return None
+    match destination:
+        case [page_reference, *_]:
+            try:
+                page = cast(_IndirectObject, page_reference).get_object()
+                return reader.get_page_number(cast(_Page, page))
+            except (IndexError, KeyError, TypeError, ValueError):
+                return None
+        case _:
+            pass
+    try:
+        return reader.get_destination_page_number(destination)
+    except (IndexError, KeyError, TypeError, ValueError):
+        return None
+
+
+def _link_rect(annotation: _PdfDictionary) -> tuple[float, ...] | None:
+    rectangle = annotation.get("/Rect")
+    if rectangle is None:
+        return None
+    try:
+        coordinates = tuple(float(value) for value in cast(Sequence[object], rectangle))
+        return (
+            coordinates if all(math.isfinite(value) for value in coordinates) else None
+        )
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def _link_target(annotation: _PdfDictionary) -> object | None:
+    destination = annotation.get("/Dest")
+    if destination is not None:
+        return destination
+    action = annotation.get("/A")
+    if action is None:
+        return None
+    action_dictionary = cast(_IndirectObject, action).get_object()
+    if str(action_dictionary.get("/S")) == "/GoTo":
+        return action_dictionary.get("/D")
+    return None
+
+
+def _verify_contents_link(
+    reader: _Reader,
+    outline: list[object],
+    link: _ContentsLinkContract,
+) -> tuple[list[str], list[str]]:
+    label = link.contents_label
+    source_page = link.contents_physical_page
+    try:
+        page = reader.pages[source_page - 1]
+        text = page.extract_text()
+    except (IndexError, KeyError, OSError, TypeError, ValueError) as error:
+        return [], [f"cannot inspect Contents page {source_page}: {error}"]
+    if not text or not text.strip():
+        return [], [f"Contents page {source_page} has no extractable text"]
+    if " ".join(label.split()).casefold() not in " ".join(text.split()).casefold():
+        return [
+            f"Contents label {label!r} is absent from physical page {source_page}"
+        ], []
+    annotations = page.annotations
+    if annotations is None:
+        return [f"Contents page {source_page} has no link annotations"], []
+    expected_rect = link.expected_annotation_rectangle
+    matching: list[_PdfDictionary] = []
+    for item in annotations:
+        annotation = cast(_IndirectObject, item).get_object()
+        if str(annotation.get("/Subtype")) != "/Link":
+            continue
+        actual_rect = _link_rect(annotation)
+        if (
+            actual_rect is not None
+            and len(actual_rect) == 4
+            and all(
+                math.isclose(actual, expected, rel_tol=0.0, abs_tol=0.1)
+                for actual, expected in zip(actual_rect, expected_rect, strict=True)
+            )
+        ):
+            matching.append(annotation)
+    if len(matching) != 1:
+        return [
+            f"Contents label {label!r} rectangle resolves to {len(matching)} link annotations; expected one"
+        ], []
+    target = _link_target(matching[0])
+    if target is None:
+        return [f"Contents link {label!r} has no supported GoTo destination"], []
+    page_index = _page_for_destination(reader, target)
+    expected_page = link.expected_target_physical_page
+    if page_index is None:
+        return [f"Contents link {label!r} has an unresolvable destination"], []
+    if page_index + 1 != expected_page:
+        return [
+            f"Contents link {label!r} targets physical page {page_index + 1}; expected {expected_page}"
+        ], []
+    title = link.target_outline_title
+    destinations = [item for item in outline if cast(_Destination, item).title == title]
+    if len(destinations) != 1:
+        return [
+            f"outline title {title!r} resolves to {len(destinations)} entries; expected one"
+        ], []
+    outline_page = _page_for_destination(reader, destinations[0])
+    if outline_page != page_index:
+        return [
+            f"Contents link {label!r} and outline title {title!r} resolve to different pages"
+        ], []
+    try:
+        target_text = reader.pages[page_index].extract_text()
+    except (IndexError, KeyError, OSError, TypeError, ValueError) as error:
+        return [], [f"cannot extract target page {page_index + 1} text: {error}"]
+    if not target_text or not target_text.strip():
+        return [], [f"target page {page_index + 1} has no extractable heading text"]
+    normalized_target_text = " ".join(target_text.split()).casefold()
+    normalized_heading = " ".join(link.target_heading_text.split()).casefold()
+    if normalized_heading not in normalized_target_text:
+        return [
+            (
+                f"Contents destination page {page_index + 1} does not contain configured heading "
+                f"{link.target_heading_text!r}"
+            )
+        ], []
+    return [], []
 
 
 def validate_navigation(
@@ -151,6 +309,10 @@ def validate_navigation(
                 f"physical page {actual_page} does not contain configured heading "
                 f"{section.heading_text!r}"
             )
+    for link in contract.contents_links:
+        link_mismatches, link_unknown = _verify_contents_link(reader, outline, link)
+        mismatches.extend(link_mismatches)
+        unknown.extend(link_unknown)
     return mismatches, unknown
 
 
@@ -172,9 +334,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
     if unknown:
         return 2
-    print(
-        "Configured outline destinations match source-declared page/heading contracts."
-    )
+    print("Configured outline and Contents destinations match page/heading contracts.")
     return 0
 
 

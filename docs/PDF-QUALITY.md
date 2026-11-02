@@ -45,13 +45,16 @@ destination fit mode, or unavailable text extraction as unknown/review-needed.
 The optional `check_pdf_navigation.py` helper resolves configured outline
 titles with pypdf, checks the one-based physical destination against the
 consumer's source-map contract, and requires the configured heading text on
-that target page. The contract must name its independent `source_evidence` and
-must be generated from source/build evidence rather than copied from the PDF
-outline. The helper cannot prove that provenance; the consumer remains
-responsible for it. Ambiguous titles and unresolved destinations fail; a page
-with no extractable text is returned as **unknown**, since it may contain
-images or vector artwork. This check currently covers outline destinations;
-Contents-link annotation identity, fit modes, page-label semantics, and visual
+that target page. A Contents-link contract can also verify the configured
+label appears on its source page, exactly one link annotation occupies the
+declared rectangle, and that its GoTo destination agrees with the outline and
+expected target page. The contract must name its independent `source_evidence`
+and must be generated from source/build evidence rather than copied from the
+PDF outline. The helper cannot prove that provenance; the consumer remains
+responsible for it. Nor does it geometrically prove that the visible label text
+occupies the annotation rectangle. Ambiguous titles and unresolved destinations
+fail; a page with no extractable text is returned as **unknown**, since it may
+contain images or vector artwork. Fit modes, page-label semantics, and visual
 heading confirmation still need review or a richer consumer contract.
 
 For a target page with an independently known physical index, Poppler can

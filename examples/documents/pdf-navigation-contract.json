@@ -1,5 +1,6 @@
 {
   "source_evidence": "build/section-map.json (replace with an independently generated source/build map)",
+  "contents_links": [],
   "sections": [
     {
       "outline_title": "Overview",

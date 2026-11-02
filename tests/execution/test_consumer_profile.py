@@ -34,7 +34,7 @@ def test_pdf_example_checks_one_explicit_artifact_provisionally() -> None:
         "LaTeX report build",
         "LaTeX final log evidence",
         "PDF structural check",
-        "PDF outline destination contract",
+        "PDF navigation contract",
     )
     build, final_log, structure, navigation = orchestration.steps
     assert isinstance(build, CommandRunStep)
