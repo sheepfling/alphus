@@ -44,8 +44,9 @@ Consumers select the codes, file scope, exclusion patterns, severity, and reason
 delimiter in `[checks.suppression_reasons]`; see
 [`examples/consumer/lint-suppressions.toml`](../examples/consumer/lint-suppressions.toml).
 Exceptions can approve one exact path, rule code, and line. Each exception
-requires a reason; moved or deleted exception sites are reported as stale when
-their path is selected:
+requires a reason. Moved line/code sites are stale when their file is selected;
+exceptions pointing to a missing Python or TOML file are stale even though that
+file cannot appear in the inventory:
 
 ```toml
 [[checks.suppression_reasons.exceptions]]

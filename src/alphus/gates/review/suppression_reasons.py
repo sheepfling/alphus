@@ -163,8 +163,58 @@ def check_suppression_reasons(
             )
             continue
         findings.extend(suppression_reason_findings(source, policy, path=name))
+    findings.extend(_missing_exception_file_findings(checkout, selected_files, policy))
     findings.extend(_ruff_config_suppression_findings(checkout, selected_files, policy))
     return sorted(findings, key=lambda item: (item.path, item.line or 0, item.message))
+
+
+def _missing_exception_file_findings(
+    root: Path, selected_files: set[str], policy: SuppressionReasonPolicy
+) -> list[Finding]:
+    """Report approved source/config sites whose file was deleted or moved."""
+    findings: list[Finding] = []
+    for exception in policy.exceptions:
+        extension = Path(exception.path).suffix
+        if (
+            exception.path in selected_files
+            or extension not in {*policy.extensions, ".toml"}
+            or extension != ".toml"
+            and any(matches_path(exception.path, pattern) for pattern in policy.exclude)
+        ):
+            continue
+        try:
+            source_path = (root / exception.path).resolve(strict=True)
+            source_path.relative_to(root)
+        except (OSError, ValueError):
+            findings.append(
+                Finding(
+                    rule_id=_RULE_ID,
+                    path=exception.path,
+                    line=exception.line,
+                    severity=policy.severity,
+                    message=(
+                        f"Approved Ruff exception for {exception.rule_code} "
+                        "points to a missing or out-of-root file; the exception "
+                        "site is stale after a move or deletion."
+                    ),
+                )
+            )
+            continue
+        if not source_path.is_file():
+            findings.append(
+                Finding(
+                    rule_id=_RULE_ID,
+                    path=exception.path,
+                    line=exception.line,
+                    severity=policy.severity,
+                    message=(
+                        f"Approved Ruff exception for {exception.rule_code} "
+                        "does not point to a regular file; the exception site "
+                        "is stale."
+                    ),
+                )
+            )
+    return findings
 
 
 _RUFF_PER_FILE_TABLES = frozenset(

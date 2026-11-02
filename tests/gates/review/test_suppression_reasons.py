@@ -104,6 +104,71 @@ def test_scoped_exception_satisfies_reason_and_stale_site_is_reported() -> None:
     assert "stale exception" in findings[1].message
 
 
+def test_deleted_source_exception_site_is_reported_stale(tmp_path: Path) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src/new_name.py").write_text("value = 1\n", encoding="utf-8")
+    exception = SuppressionReasonException(
+        path="src/old_name.py",
+        rule_code="E402",
+        line=4,
+        reason="Bootstrap import must precede plugin registration.",
+    )
+
+    findings = check_suppression_reasons(
+        tmp_path,
+        [Path("src/new_name.py")],
+        SuppressionReasonPolicy(extensions=(".py",), exceptions=(exception,)),
+    )
+
+    assert len(findings) == 1
+    assert findings[0].path == "src/old_name.py"
+    assert findings[0].line == 4
+    assert "stale after a move or deletion" in findings[0].message
+
+
+def test_existing_unselected_source_exception_is_not_called_stale(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src/other.py").write_text(
+        "import optional_runtime  # noqa: E402\n", encoding="utf-8"
+    )
+    exception = SuppressionReasonException(
+        path="src/other.py",
+        rule_code="E402",
+        line=1,
+        reason="Bootstrap import must precede plugin registration.",
+    )
+
+    findings = check_suppression_reasons(
+        tmp_path,
+        [],
+        SuppressionReasonPolicy(extensions=(".py",), exceptions=(exception,)),
+    )
+
+    assert findings == []
+
+
+def test_deleted_ruff_config_exception_site_is_reported_stale(tmp_path: Path) -> None:
+    exception = SuppressionReasonException(
+        path="ruff.toml",
+        rule_code="E402",
+        line=2,
+        reason="Bootstrap import must precede plugin registration.",
+    )
+
+    findings = check_suppression_reasons(
+        tmp_path,
+        [],
+        SuppressionReasonPolicy(extensions=(".py",), exceptions=(exception,)),
+    )
+
+    assert len(findings) == 1
+    assert findings[0].path == "ruff.toml"
+    assert findings[0].line == 2
+    assert "stale after a move or deletion" in findings[0].message
+
+
 def test_selected_code_in_a_multi_code_directive_requires_a_reason() -> None:
     findings = suppression_reason_findings(
         "import optional_runtime  # noqa: F401, E402\n",
