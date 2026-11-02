@@ -95,6 +95,101 @@ class ScipyConstantsPolicy(PythonSourceScanPolicy):
         return self
 
 
+class ProvenanceCallRole(StrictModel):
+    """A consumer-declared helper and the argument that names its source path."""
+
+    function: str
+    path_argument_index: Annotated[int, Field(ge=0)] = 0
+
+    @field_validator("function")
+    @classmethod
+    def validate_function(cls, value: str) -> str:
+        if any(not part.isidentifier() for part in value.split(".")):
+            raise ValueError("provenance helper names must be dotted identifiers")
+        return value
+
+
+class RunArtifactPolicy(PythonSourceScanPolicy):
+    """Opt-in local-flow advisories for explicitly configured run artifacts."""
+
+    conditional_output_readback: bool = False
+    parse_hash_reread: bool = False
+    reused_output_path_names: tuple[str, ...] = ()
+    fresh_output_path_names: tuple[str, ...] = ()
+    provenance_input_path_names: tuple[str, ...] = ()
+    immutable_snapshot_names: tuple[str, ...] = ()
+    output_writers: tuple[ProvenanceCallRole, ...] = ()
+    output_readers: tuple[ProvenanceCallRole, ...] = ()
+    parsers: tuple[ProvenanceCallRole, ...] = ()
+    digesters: tuple[ProvenanceCallRole, ...] = ()
+    provenance_sinks: tuple[str, ...] = ()
+
+    @field_validator(
+        "reused_output_path_names",
+        "fresh_output_path_names",
+        "provenance_input_path_names",
+        "immutable_snapshot_names",
+    )
+    @classmethod
+    def validate_identifiers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("provenance path and sink names must be identifiers")
+        require_unique(values, "provenance path and sink names must be unique")
+        return tuple(values)
+
+    @field_validator("provenance_sinks")
+    @classmethod
+    def validate_provenance_sinks(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not part.isidentifier() for value in values for part in value.split(".")
+        ):
+            raise ValueError("provenance sink names must be dotted identifiers")
+        require_unique(values, "provenance sink names must be unique")
+        return tuple(values)
+
+    @model_validator(mode="after")
+    def validate_enabled_families(self) -> Self:
+        if self.conditional_output_readback and not (
+            self.reused_output_path_names
+            and self.output_writers
+            and self.output_readers
+        ):
+            raise ValueError(
+                "conditional_output_readback needs configured reused paths, writers, "
+                "and readers"
+            )
+        if self.parse_hash_reread and not (
+            self.provenance_input_path_names
+            and self.parsers
+            and self.digesters
+            and self.provenance_sinks
+        ):
+            raise ValueError(
+                "parse_hash_reread needs configured input paths, parsers, digesters, "
+                "and provenance sinks"
+            )
+        require_unique(
+            tuple(
+                (role.function, role.path_argument_index)
+                for role in (
+                    *self.output_writers,
+                    *self.output_readers,
+                    *self.parsers,
+                    *self.digesters,
+                )
+            ),
+            "provenance helper roles must be unique",
+        )
+        require_unique(self.provenance_sinks, "provenance sinks must be unique")
+        if set(self.reused_output_path_names) & set(self.fresh_output_path_names):
+            raise ValueError("an output path cannot be both reused and fresh per run")
+        if set(self.provenance_input_path_names) & set(self.immutable_snapshot_names):
+            raise ValueError(
+                "an input name cannot be both a path and immutable snapshot"
+            )
+        return self
+
+
 class TestQualityExclusion(StrictModel):
     """One documented test excluded from shared-oracle review."""
 

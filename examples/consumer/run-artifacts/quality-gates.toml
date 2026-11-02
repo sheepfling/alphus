@@ -1,0 +1,44 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py"]
+exclude = []
+
+[checks.run_artifacts]
+extensions = [".py"]
+exclude = []
+conditional_output_readback = true
+parse_hash_reread = true
+reused_output_path_names = ["report_path"]
+provenance_input_path_names = ["input_path"]
+provenance_sinks = ["record_provenance"]
+
+[[checks.run_artifacts.output_writers]]
+function = "write_table"
+path_argument_index = 0
+
+[[checks.run_artifacts.output_readers]]
+function = "read_table"
+path_argument_index = 0
+
+[[checks.run_artifacts.parsers]]
+function = "parse_input"
+path_argument_index = 0
+
+[[checks.run_artifacts.digesters]]
+function = "digest_input"
+path_argument_index = 0
+
+[orchestration]
+default_profile = "run-artifact-review"
+failure_threshold = "warning"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Run artifact provenance review"
+rule = "run-artifacts"
+rollout = "provisional"
+
+[[orchestration.profiles]]
+name = "run-artifact-review"
+steps = ["Run artifact provenance review"]
