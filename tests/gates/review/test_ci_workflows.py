@@ -306,6 +306,27 @@ def test_explicit_matrix_invariant_allowlist_reports_only_static_repo_checks() -
     assert "each matrix leg" in result[0].message
 
 
+def test_matrix_invariant_allowlist_does_not_turn_single_job_into_a_matrix() -> None:
+    script = "ruff check src\nmypy src\n"
+    source = """jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          ruff check src
+          mypy src
+"""
+
+    assert (
+        workflow_run_findings(
+            source,
+            ".github/workflows/ci.yml",
+            policy(matrix_invariant_run_blocks=(script,)),
+        )
+        == []
+    )
+
+
 def test_azure_static_scripts_match_only_when_job_context_is_simple() -> None:
     source = """jobs:
 - job: lint

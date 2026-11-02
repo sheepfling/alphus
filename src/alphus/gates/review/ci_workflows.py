@@ -197,7 +197,7 @@ def _run_blocks(
     path: str,
     minimum_run_lines: int,
     matrix_allowlist: tuple[str, ...] = (),
-) -> list[tuple[str, str, str, int]]:
+) -> list[tuple[str, str, str, int, bool]]:
     """Return eligible (runner, job, script, line) records from one workflow."""
     yaml_api = cast(_YamlApi, yaml)
     try:
@@ -216,7 +216,7 @@ def _run_blocks(
     if jobs is None:
         return []
 
-    records: list[tuple[str, str, str, int]] = []
+    records: list[tuple[str, str, str, int, bool]] = []
     for job_name, job_node in jobs.items():
         job = _mapping(job_node)
         if job is None or not set(job) <= {"name", "runs-on", "steps", "strategy"}:
@@ -258,7 +258,15 @@ def _run_blocks(
                         or (matrix_safe and script in matrix_allowlist)
                     )
                 ):
-                    records.append((repr(runner), job_name, script, mark.line + 1))
+                    records.append(
+                        (
+                            repr(runner),
+                            job_name,
+                            script,
+                            mark.line + 1,
+                            matrix_safe,
+                        )
+                    )
                 case _:
                     continue
     return records
@@ -266,7 +274,7 @@ def _run_blocks(
 
 def _azure_blocks(
     source: str, path: str, minimum: int
-) -> list[tuple[str, str, str, int]]:
+) -> list[tuple[str, str, str, int, bool]]:
     """Return exact static Azure job script candidates; contextual jobs abstain."""
     yaml_api = cast(_YamlApi, yaml)
     try:
@@ -285,7 +293,7 @@ def _azure_blocks(
             pass
         case _:
             return []
-    records: list[tuple[str, str, str, int]] = []
+    records: list[tuple[str, str, str, int, bool]] = []
     for entry in job_nodes:
         job = _mapping(entry)
         if job is None or not set(job) <= {"job", "displayName", "pool", "steps"}:
@@ -318,7 +326,7 @@ def _azure_blocks(
                     and "$(" not in script
                     and "${{" not in script
                 ):
-                    records.append((repr(pool), name, script, mark.line + 1))
+                    records.append((repr(pool), name, script, mark.line + 1, False))
                 case _:
                     continue
     return records
@@ -400,21 +408,21 @@ def workflow_run_findings(
             source, path, policy.minimum_run_lines, policy.matrix_invariant_run_blocks
         )
     )
-    groups: dict[tuple[str, str], list[tuple[str, int]]] = defaultdict(list)
-    for runner, job, script, line in blocks:
+    groups: dict[tuple[str, str], list[tuple[str, int, bool]]] = defaultdict(list)
+    for runner, job, script, line, matrix_scoped in blocks:
         if script in policy.ignore_run_blocks:
             continue
-        groups[(runner, script)].append((job, line))
+        groups[(runner, script)].append((job, line, matrix_scoped))
 
     findings: list[Finding] = []
     for (_, script), occurrences in sorted(groups.items(), key=lambda item: item[0]):
-        unique_jobs = sorted({job for job, _ in occurrences})
-        matrix_only = (
-            len(unique_jobs) == 1 and script in policy.matrix_invariant_run_blocks
+        unique_jobs = sorted({job for job, _, _ in occurrences})
+        matrix_only = len(unique_jobs) == 1 and all(
+            matrix_scoped for _, _, matrix_scoped in occurrences
         )
         if len(unique_jobs) < 2 and not matrix_only:
             continue
-        locations = sorted((line, job) for job, line in occurrences)
+        locations = sorted((line, job) for job, line, _ in occurrences)
         examples = ", ".join(f"{job} (line {line})" for line, job in locations)
         findings.append(
             Finding(
