@@ -19,6 +19,7 @@ _RULE_ID = rule_tag(
     Category.MAINTAINABILITY,
     "parallel-normalization",
 )
+_MAX_AST_NODES = 10_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,7 +183,7 @@ def parallel_normalization_sites(
         tree = ast.parse(source)
     except SyntaxError:
         return []
-    if len(list(ast.walk(tree))) > 10_000:
+    if len(list(ast.walk(tree))) > _MAX_AST_NODES:
         return []
     selected_names = frozenset(
         name
@@ -232,7 +233,7 @@ def check_parallel_normalization(
             tree = ast.parse(source)
         except SyntaxError:
             continue
-        if len(list(ast.walk(tree))) > 10_000:
+        if len(list(ast.walk(tree))) > _MAX_AST_NODES:
             continue
         selected_names = frozenset(
             function_name
