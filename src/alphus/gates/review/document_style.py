@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import posixpath
 import re
 import xml.etree.ElementTree as ET
 import zipfile
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from html.parser import HTMLParser
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from alphus.config import DocumentStylePolicy
 from alphus.contracts.findings import Finding
@@ -165,19 +164,21 @@ def extract_pptx_sections(
             relation.get("Id"): relation.get("Target") for relation in relationships
         }
         sections: list[DocumentSection] = []
+        archive_paths = frozenset(archive.namelist())
         slide_ids = presentation.findall(f".//{{{_P_NS}}}sldId")
         for slide_number, slide_id in enumerate(slide_ids, start=1):
             target = targets.get(slide_id.get(f"{{{_R_NS}}}id"))
             if not target:
                 continue
-            slide_path = posixpath.normpath(
-                target.lstrip("/")
-                if target.startswith("/")
-                else posixpath.join("ppt", target)
+            target_path = PurePosixPath(target)
+            slide_path = (
+                PurePosixPath(*target_path.parts[1:])
+                if target_path.is_absolute()
+                else PurePosixPath("ppt", target_path)
             )
-            if slide_path.startswith("../") or slide_path not in archive.namelist():
+            if ".." in slide_path.parts or slide_path.as_posix() not in archive_paths:
                 continue
-            slide = _read_package_xml(archive, slide_path)
+            slide = _read_package_xml(archive, slide_path.as_posix())
             for shape in slide.findall(f".//{{{_P_NS}}}sp"):
                 placeholder = shape.find(
                     f"{{{_P_NS}}}nvSpPr/{{{_P_NS}}}nvPr/{{{_P_NS}}}ph"
@@ -230,13 +231,19 @@ class _HtmlOutlineParser(HTMLParser):
         self.heading_level = None
         self.heading_parts = []
 
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+    def finish(self) -> None:
+        """Finish any heading left open when parsing ends."""
+        self._finish_heading()
+
+    def handle_starttag(
+        self, tag: str, attrs: Sequence[tuple[str, str | None]]
+    ) -> None:
         if self.heading_level is not None and tag in {f"h{i}" for i in range(1, 7)}:
             self._finish_heading()
         attributes = dict(attrs)
-        hidden = (
-            "hidden" in attributes
-            or attributes.get("aria-hidden", "").lower() == "true"
+        aria_hidden = attributes.get("aria-hidden")
+        hidden = "hidden" in attributes or (
+            aria_hidden is not None and aria_hidden.lower() == "true"
         )
         ignored = (
             bool(self.stack and self.stack[-1][1])
@@ -248,7 +255,9 @@ class _HtmlOutlineParser(HTMLParser):
             self.heading_level = int(tag[1])
             self.heading_line = self.getpos()[0]
 
-    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+    def handle_startendtag(
+        self, tag: str, attrs: Sequence[tuple[str, str | None]]
+    ) -> None:
         self.handle_starttag(tag, attrs)
         self.handle_endtag(tag)
 
@@ -272,7 +281,7 @@ def extract_html_sections(
     parser = _HtmlOutlineParser(path)
     parser.feed(source)
     parser.close()
-    parser._finish_heading()
+    parser.finish()
     return tuple(parser.sections)
 
 
@@ -546,14 +555,18 @@ def check_document_style(
                 "custom structures without those markers are unknown."
                 if suffix == ".docx"
                 else "PPTX extraction uses title and centered-title placeholders only; "
-                "custom layouts without those placeholders and supporting-content context are unknown."
+                "custom layouts without those placeholders and supporting-content "
+                "context are unknown."
             )
             findings.append(
                 Finding(
                     rule_id=_RULE_ID,
                     path=name,
                     severity="info",
-                    message=f"{limitations} Titles are anchored by paragraph or slide number; no content is generated or rewritten.",
+                    message=(
+                        f"{limitations} Titles are anchored by paragraph or slide "
+                        "number; no content is generated or rewritten."
+                    ),
                 )
             )
             continue

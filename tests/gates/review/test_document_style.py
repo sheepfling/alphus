@@ -119,8 +119,14 @@ def test_docx_headings_use_structural_styles_and_paragraph_anchors(
     word = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
     paragraphs = [
         "<w:p><w:r><w:t>Preface</w:t></w:r></w:p>",
-        '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>From Inputs to Models</w:t></w:r></w:p>',
-        '<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>From Data to Results</w:t></w:r></w:p>',
+        (
+            '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr>'
+            "<w:r><w:t>From Inputs to Models</w:t></w:r></w:p>"
+        ),
+        (
+            '<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr>'
+            "<w:r><w:t>From Data to Results</w:t></w:r></w:p>"
+        ),
         '<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>Methods</w:t></w:r></w:p>',
         '<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>Limitations</w:t></w:r></w:p>',
     ]
