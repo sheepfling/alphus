@@ -105,13 +105,36 @@ def _match_function(
 def quaternion_inversion_sites(
     source: str, policy: QuaternionInversionPolicy
 ) -> list[_InversionSite]:
-    """Return configured functions with the exact local conjugate/norm² shape."""
+    """Return exact inverse shapes unless same-scope redefinition makes them dead."""
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return []
+    shadowed = _redefined_function_names(tree.body, policy.function_names)
     return configured_function_observations(
         source,
         policy.function_names,
-        lambda function: _match_function(function, policy),
+        lambda function: (
+            None if function.name in shadowed else _match_function(function, policy)
+        ),
         lambda site: (site.function, site.norm_line),
     )
+
+
+def _redefined_function_names(
+    statements: Sequence[ast.stmt], selected_names: Sequence[str]
+) -> tuple[str, ...]:
+    """Find configured function names repeated within one module/class scope."""
+    counts: dict[str, int] = {}
+    shadowed: list[str] = []
+    for statement in statements:
+        if isinstance(statement, ast.FunctionDef) and statement.name in selected_names:
+            counts[statement.name] = counts.get(statement.name, 0) + 1
+            if counts[statement.name] > 1 and statement.name not in shadowed:
+                shadowed.append(statement.name)
+        elif isinstance(statement, ast.ClassDef):
+            shadowed.extend(_redefined_function_names(statement.body, selected_names))
+    return tuple(shadowed)
 
 
 def check_manual_quaternion_inversion(

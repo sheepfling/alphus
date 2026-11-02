@@ -80,6 +80,15 @@ def wrapper():
     assert quaternion_inversion_sites(nested, _policy()) == []
 
 
+def test_same_scope_later_definition_shadows_candidate() -> None:
+    replacement = """\
+def inverse_quaternion(w, x, y, z):
+    return (w, x, y, z)
+"""
+
+    assert quaternion_inversion_sites(_SOURCE + "\n" + replacement, _policy()) == []
+
+
 def test_configuration_names_and_scope_bound_the_match(tmp_path: Path) -> None:
     target = tmp_path / "src/geometry/quaternion.py"
     target.parent.mkdir(parents=True)
