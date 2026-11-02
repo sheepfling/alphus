@@ -29,6 +29,9 @@ def test_prose_as_control_example_is_scoped_and_provisional() -> None:
     assert consumption is not None
     assert consumption.function_names == ("preserve_text",)
     assert consumption.output_contract == "preserve-unmatched-spans"
+    ownership = config.checks.provenance_ownership
+    assert ownership is not None
+    assert ownership.ownership_basis == "exact-source-span"
 
 
 def test_starter_policy_has_one_scoped_command_and_no_global_inventory() -> None:

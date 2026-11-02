@@ -94,11 +94,12 @@ before any precision or enforcement claim is meaningful.
 ## Labeled boundary corpus
 
 The focused test corpus in `tests/gates/review/test_semantic_patchwork_corpus.py`
-contains fourteen sanitized synthetic cases: one expected-positive and one
+contains sixteen sanitized synthetic cases: one expected-positive and one
 boundary-negative case for each implemented detector (`prose-as-control`,
 `lossy-text-rewrite`, `rendered-value-reparsed`,
 `positional-semantic-override`, `unexplained-empty-result`, and
-`embedded-semantic-override`, and `heuristic-total-consumption`). All fourteen
+`embedded-semantic-override`, `heuristic-total-consumption`, and
+`provenance-as-ownership`). All sixteen
 pass their expected labels. The
 positive labels represent the issue's deliberately constructed risk shapes;
 the negative labels cover protocol text, output-only rendering, whitespace

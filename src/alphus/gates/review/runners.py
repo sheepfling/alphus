@@ -30,6 +30,7 @@ from alphus.gates.review.prose_as_control import (
     check_lossy_text_rewrite,
     check_prose_as_control,
 )
+from alphus.gates.review.provenance_ownership import check_provenance_ownership
 from alphus.gates.review.rendered_value_reparsed import (
     check_rendered_value_reparsed,
 )
@@ -113,6 +114,15 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
                 require_policy(
                     config.checks.heuristic_total_consumption,
                     "heuristic_total_consumption",
+                ),
+            )
+        ),
+        "provenance-as-ownership": lambda root, files, config: (
+            check_provenance_ownership(
+                root,
+                files,
+                require_policy(
+                    config.checks.provenance_ownership, "provenance_ownership"
                 ),
             )
         ),

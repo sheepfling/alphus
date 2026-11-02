@@ -46,6 +46,16 @@ input_names = ["text"]
 token_match_helpers = ["re.findall"]
 output_contract = "preserve-unmatched-spans"
 
+[checks.provenance_ownership]
+extensions = [".py"]
+exclude = ["**/generated/**", "**/vendor/**"]
+source_paths = ["src/render/*.py"]
+function_names = ["remaining_paragraphs"]
+owner_collection_names = ["tables"]
+candidate_collection_names = ["paragraphs"]
+ownership_basis = "exact-source-span"
+source_path_suffix = "source.path"
+
 [orchestration]
 default_profile = "semantic-review"
 
@@ -85,6 +95,12 @@ name = "Heuristic text consumption review"
 rule = "heuristic-total-consumption"
 rollout = "provisional"
 
+[[orchestration.steps]]
+kind = "rule"
+name = "Provenance ownership review"
+rule = "provenance-as-ownership"
+rollout = "provisional"
+
 [[orchestration.profiles]]
 name = "semantic-review"
-steps = ["Prose branch review", "Rendered value feedback review", "Positional semantic override review", "Unknown inference empty-result review", "Embedded semantic replacement review", "Heuristic text consumption review"]
+steps = ["Prose branch review", "Rendered value feedback review", "Positional semantic override review", "Unknown inference empty-result review", "Embedded semantic replacement review", "Heuristic text consumption review", "Provenance ownership review"]

@@ -267,6 +267,42 @@ class HeuristicTotalConsumptionPolicy(PythonSourceScanPolicy):
         return tuple(values)
 
 
+class ProvenanceOwnershipPolicy(PythonSourceScanPolicy):
+    """Scope checks for path-only exclusion under an exact-span ownership contract."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    function_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    owner_collection_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    candidate_collection_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    ownership_basis: Literal["exact-source-span", "file-scope"]
+    source_path_suffix: str = "source.path"
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator(
+        "function_names", "owner_collection_names", "candidate_collection_names"
+    )
+    @classmethod
+    def validate_identifiers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError(
+                "configured function and collection names must be identifiers"
+            )
+        require_unique(values, "configured names must be unique")
+        return tuple(values)
+
+    @field_validator("source_path_suffix")
+    @classmethod
+    def validate_source_path_suffix(cls, value: str) -> str:
+        if not value or any(not part.isidentifier() for part in value.split(".")):
+            raise ValueError("source path suffix must be a dotted identifier")
+        return value
+
+
 class ScipyConstantsPolicy(PythonSourceScanPolicy):
     """Advisory SciPy physical and unit-factor catalog for Python source."""
 

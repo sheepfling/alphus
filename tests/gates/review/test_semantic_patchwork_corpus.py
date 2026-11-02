@@ -12,6 +12,7 @@ from alphus.config import (
     HeuristicTotalConsumptionPolicy,
     PositionalSemanticOverridePolicy,
     ProseAsControlPolicy,
+    ProvenanceOwnershipPolicy,
     UnexplainedEmptyResultPolicy,
 )
 from alphus.gates.review.embedded_semantic_overrides import embedded_override_sites
@@ -23,6 +24,7 @@ from alphus.gates.review.prose_as_control import (
     lossy_rewrite_lines,
     prose_control_literals,
 )
+from alphus.gates.review.provenance_ownership import provenance_ownership_sites
 from alphus.gates.review.rendered_value_reparsed import _sites as rendered_sites
 from alphus.gates.review.unexplained_empty_results import empty_result_branches
 
@@ -74,6 +76,15 @@ _TOTAL_CONSUMPTION = HeuristicTotalConsumptionPolicy(
     token_match_helpers=("re.findall",),
     output_contract="preserve-unmatched-spans",
 )
+_PROVENANCE_OWNERSHIP = ProvenanceOwnershipPolicy(
+    extensions=(".py",),
+    exclude=(),
+    source_paths=("src/render/*.py",),
+    function_names=("remaining_paragraphs",),
+    owner_collection_names=("tables",),
+    candidate_collection_names=("paragraphs",),
+    ownership_basis="exact-source-span",
+)
 
 
 def _matches(detector: Callable[[str], object], source: str) -> bool:
@@ -114,6 +125,10 @@ def _embedded(text: str) -> object:
 
 def _total_consumption(text: str) -> object:
     return heuristic_total_consumption_sites(text, _TOTAL_CONSUMPTION)
+
+
+def _provenance_ownership(text: str) -> object:
+    return provenance_ownership_sites(text, _PROVENANCE_OWNERSHIP)
 
 
 _CASES = (
@@ -205,6 +220,22 @@ _CASES = (
         "def extract_tokens(text):\n"
         "    return re.findall(r'[A-Za-z]+', text)\n",
         _total_consumption,
+    ),
+    _case(
+        "path equality excludes records under exact-span contract",
+        "def remaining_paragraphs(tables, paragraphs):\n"
+        "    table_paths = {table.source.path for table in tables}\n"
+        "    return [p for p in paragraphs if p.source.path not in table_paths]\n",
+        _provenance_ownership,
+    ),
+    _negative(
+        "span identity retained for same-file records",
+        "def remaining_paragraphs(tables, paragraphs):\n"
+        "    table_spans = {(t.source.path, t.source.start, t.source.end) "
+        "for t in tables}\n"
+        "    return [p for p in paragraphs if (p.source.path, p.source.start, "
+        "p.source.end) not in table_spans]\n",
+        _provenance_ownership,
     ),
 )
 

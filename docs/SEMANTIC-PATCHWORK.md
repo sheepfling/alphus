@@ -80,17 +80,24 @@ These checks do not infer AI authorship or prove a defect.
 
 The four P0 checks are implemented as opt-in advisories: prose-as-control,
 lossy-text-rewrite, rendered-value-reparsed, and positional-semantic-override.
-Three narrow P1 shapes are also implemented: unexplained-empty-result,
-embedded-semantic-override, and heuristic-total-consumption. These are
+Four narrow P1 shapes are also implemented: unexplained-empty-result,
+embedded-semantic-override, heuristic-total-consumption, and
+provenance-as-ownership. These are
 consumer-configured syntactic candidates, not proof that output is wrong. The
 embedded rule only recognizes the configured replacement-map/source-anchor
 shape; the total-consumption rule only recognizes the two direct-return forms
-described above.
+described above. Provenance-as-ownership requires an explicit exact-source-span
+contract and only recognizes a path set built from configured owner records
+that is used to exclude configured candidate records by `source.path`.
+Consumers that intentionally define file-level ownership can declare
+`ownership_basis = "file-scope"`; the rule then abstains. A finding asks whether
+same-file distinct spans should remain eligible. It does not establish record
+ownership, source overlap, or a defect.
 
-The remaining P1 proposals are explicitly deferred: provenance-as-ownership
-and consumer-scoped semantic-work-in-presentation boundaries. They need
-stronger ownership or independently declared module-role contracts before a
-useful detector can be calibrated. The P2 proposals are also deferred: evaluate
+The remaining P1 proposal is the consumer-scoped
+semantic-work-in-presentation boundary. It needs independently declared
+module-role and operation contracts before a useful composite can be calibrated.
+The P2 proposals are also deferred: evaluate
 parallel-normalization through the existing duplication capabilities and issue
 [#33](https://github.com/sheepfling/alphus/issues/33), and do not ship a
 patch-cascade heuristic without reviewed real clusters and actionable

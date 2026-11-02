@@ -42,6 +42,7 @@ QualityRuleName: TypeAlias = Literal[
     "unexplained-empty-results",
     "embedded-semantic-overrides",
     "heuristic-total-consumption",
+    "provenance-as-ownership",
     "scipy-constants",
     "test-quality",
     "input-contracts",

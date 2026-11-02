@@ -71,6 +71,9 @@ RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
         "heuristic-total-consumption": RuleSpec(
             "heuristic_total_consumption", RuleOutputShape.FINDINGS
         ),
+        "provenance-as-ownership": RuleSpec(
+            "provenance_ownership", RuleOutputShape.FINDINGS
+        ),
         "scipy-constants": RuleSpec("scipy_constants", RuleOutputShape.FINDINGS),
         "test-quality": RuleSpec("test_quality", RuleOutputShape.FINDINGS),
         "input-contracts": RuleSpec("input_contracts", RuleOutputShape.FINDINGS),
