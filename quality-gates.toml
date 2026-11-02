@@ -32,6 +32,10 @@ exclude = ["docs/cpp/**"]
 ".py" = 100
 ".md" = 120
 
+[checks.markdown_shell_fences]
+include = ["**/*.md"]
+exclude = []
+
 [checks.json_structure]
 extensions = [".py"]
 exclude = ["tests/**"]
@@ -314,6 +318,11 @@ rule = "line-length"
 
 [[orchestration.steps]]
 kind = "rule"
+name = "Markdown shell fences"
+rule = "markdown-shell-fences"
+
+[[orchestration.steps]]
+kind = "rule"
 name = "File size"
 rule = "file-size"
 
@@ -425,7 +434,7 @@ name = "python-policy"
 steps = [
   "Package boundaries", "Target audit isolation", "Python structure", "Shared utilities", "Runtime type usage",
   "CLI contracts", "JSON structure", "Output escaping", "Path handling", "Line length",
-  "File size", "Comment markers",
+  "Markdown shell fences", "File size", "Comment markers",
 ]
 
 [[orchestration.profiles]]

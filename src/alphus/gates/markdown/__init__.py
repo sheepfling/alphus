@@ -1,0 +1,1 @@
+"""Markdown-specific quality gates."""

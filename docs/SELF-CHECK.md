@@ -8,6 +8,7 @@ The `check` profile validates the package against its own repository policy. It
 runs Alphus portable rules, shared-utility analysis, the comment-marker and review rules, TOML syntax, installed-package
 import smoke and compatibility-import removal checks, native Ruff lint and
 format checks, strict Pyright, and the package tests.
+It also checks all Markdown shell fences and requires no shell-label findings.
 The repository's GitHub Actions quality workflow runs this profile on Python
 3.11 through 3.15 for pull requests and main-branch pushes. It checks editable
 installation, builds and installs a wheel, then invokes the installed package.
@@ -71,9 +72,9 @@ and file-backed module loading remains rejected.
 
 `quality-gates.toml` inventories `src/**/*.py`, `tests/**/*.py`, `README.md`,
 `docs/**/*.md`, and all repository TOML and JSON files. The profile retains
-the eight original portable rules, the target-audit isolation rule, and Python
-lint/package tests, then adds
-TOML syntax, Python formatting, strict Pyright, and five review checks.
+the eight original portable rules, the target-audit isolation rule, the opt-in
+Markdown shell-fence check, and Python lint/package tests, then adds TOML
+syntax, Python formatting, strict Pyright, and five review checks.
 The separate `json` profile is available when JSON documents are
 added to this repository. The global
 `[files].exclude` is empty.
