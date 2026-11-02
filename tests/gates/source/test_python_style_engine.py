@@ -550,3 +550,16 @@ def test_public_constant_import_index_only_flags_unconsumed_symbols(
     )
     result = findings_for(tmp_path, [source, consumer], policy)
     assert result[source.as_posix()]["unused_public_constants"] == [2]
+
+
+def test_public_constant_index_respects_static_all_exports(tmp_path: Path) -> None:
+    source = Path("src/alphus/gates/cpp/sample.py")
+    (tmp_path / source).parent.mkdir(parents=True)
+    (tmp_path / source).write_text(
+        "EXPORTED = 1\nINTERNAL = 2\n__all__ = ['EXPORTED']\n", encoding="utf-8"
+    )
+    policy = POLICY.model_copy(
+        update={"public_constant_paths": ("src/alphus/gates/cpp/**",)}
+    )
+    result = findings_for(tmp_path, [source], policy)
+    assert result[source.as_posix()]["unused_public_constants"] == [2]
