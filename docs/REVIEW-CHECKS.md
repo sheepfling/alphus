@@ -376,6 +376,50 @@ aliases are not tracked as caller-reachable values. It does not prove that an
 unreported parameter is immutable or free of side effects, and it makes no
 automatic source changes.
 
+### Manual schema validation review
+
+`manual_schema_validation_boundaries` independently opts exact admission
+functions/parameters into `manual-schema-validation` review. A finding requires
+locally visible fixed string-key checks plus repeated scalar type or numeric
+range guards that raise or return. It groups the boundary, guard locations,
+recognized constraints, and an optional consumer-declared authoritative schema
+into one informational finding:
+
+```toml
+[[checks.input_contracts.manual_schema_validation_boundaries]]
+path = "src/app/decode.py"
+function = "load_options"
+parameter = "payload"
+authoritative_schema = "app.models.Options"
+```
+
+The selector declares a review scope; it does not assert that manual checks are
+wrong. A result from a recognized `model_validate`, `validate_python`, or
+`parse_obj` call suppresses the candidate only when it is returned or its
+assigned result is used later. Consumers can name an equivalent validator or
+record a substantive one-line justification for a deliberate custom protocol
+contract. A single guard, generic key/value walker, open extension mapping, or
+unselected function is not a candidate.
+
+The check does not import consumer schemas or execute validators. Aliases,
+shadowing, arbitrary helpers, imported schema identity, and branch completeness
+remain unknown; helper locations and this uncertainty are included in the
+finding where visible. The rule does not decide required-versus-nullable fields,
+coercion, bool/int policy, finite numbers, duplicate keys, serialization, or
+wire compatibility. Keep it advisory and compare each result with an
+independent boundary contract before remediation.
+
+For remediation review, lower finding counts alone are not completion evidence.
+A cast, copied recursive `JsonValue` alias, pattern matching used only to evade
+the warning, widening a domain parameter to model-or-mapping, moving the same
+guards into an opaque helper, or adding a second handwritten validator without
+showing why the existing schema is inadequate does not establish safer
+validation. `JsonValue` describes generic JSON shape; a `TypedDict` annotation
+alone performs no runtime check. Any separately authorized boundary migration
+needs behavioral tests for required versus explicit-null fields, unknown keys,
+bool/int handling, finite values, coercion, nested shapes, discriminators,
+defaults, errors, and wire compatibility.
+
 ## Pydantic practices
 
 Selector: `pydantic-practices`. IDs: `alphus/python/pydantic/validation/dump-revalidation`,

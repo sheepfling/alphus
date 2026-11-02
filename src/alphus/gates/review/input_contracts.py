@@ -7,9 +7,9 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
-from typing import Literal
+from typing import AbstractSet, Literal
 
-from alphus.config import InputContractPolicy
+from alphus.config import InputContractPolicy, ManualSchemaBoundary
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.support.inventory import matches_path
@@ -764,6 +764,359 @@ def _function_findings(
     return findings
 
 
+def _local_function_nodes(
+    function: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> list[ast.AST]:
+    """Collect one lexical function body without entering nested scopes."""
+    nodes: list[ast.AST] = []
+
+    class LocalNodes(ast.NodeVisitor):
+        def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+            return
+
+        def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+            return
+
+        def visit_ClassDef(self, node: ast.ClassDef) -> None:
+            return
+
+        def generic_visit(self, node: ast.AST) -> None:
+            nodes.append(node)
+            super().generic_visit(node)
+
+    visitor = LocalNodes()
+    for statement in function.body:
+        visitor.visit(statement)
+    return nodes
+
+
+def _manual_key(node: ast.AST, parameter: str) -> str | None:
+    match node:
+        case ast.Subscript(
+            value=ast.Name(id=name), slice=ast.Constant(value=str() as key)
+        ) if name == parameter:
+            return key
+        case ast.Call(
+            func=ast.Attribute(value=ast.Name(id=name), attr="get"),
+            args=[ast.Constant(value=str() as key), *_],
+        ) if name == parameter:
+            return key
+        case _:
+            return None
+
+
+def _manual_key_refs(node: ast.AST, parameter: str) -> set[str]:
+    return {
+        key
+        for child in ast.walk(node)
+        if (key := _manual_key(child, parameter)) is not None
+    }
+
+
+def _manual_guard_returns(node: ast.If) -> bool:
+    for statement in node.body:
+        for child in ast.walk(statement):
+            match child:
+                case ast.Raise() | ast.Return():
+                    return True
+                case _:
+                    continue
+    return False
+
+
+def _is_load_name(node: object, node_names: AbstractSet[str]) -> bool:
+    match node:
+        case ast.Name(id=name, ctx=ast.Load()) if name in node_names:
+            return True
+        case _:
+            return False
+
+
+def _is_range_operator(node: object) -> bool:
+    match node:
+        case ast.Lt() | ast.LtE() | ast.Gt() | ast.GtE():
+            return True
+        case _:
+            return False
+
+
+def _is_membership_operator(node: object) -> bool:
+    match node:
+        case ast.In() | ast.NotIn():
+            return True
+        case _:
+            return False
+
+
+def _is_numeric_literal(value: object) -> bool:
+    match value:
+        case bool():
+            return False
+        case int() | float():
+            return True
+        case _:
+            return False
+
+
+def _manual_schema_finding(
+    function: ast.FunctionDef | ast.AsyncFunctionDef,
+    boundary: ManualSchemaBoundary,
+    policy: InputContractPolicy,
+    *,
+    path: str,
+    function_name: str,
+    aliases: ImportAliases,
+) -> Finding | None:
+    if boundary.justification is not None:
+        return None
+    nodes = _local_function_nodes(function)
+    parameter = boundary.parameter
+
+    def is_parameter_name(candidate: ast.AST, *, store: bool = False) -> bool:
+        match candidate:
+            case ast.Name(id=name, ctx=ast.Store()) if store and name == parameter:
+                return True
+            case ast.Name(id=name) if not store and name == parameter:
+                return True
+            case _:
+                return False
+
+    def rebinds_parameter(node: ast.AST) -> bool:
+        match node:
+            case ast.Assign(targets=targets):
+                pass
+            case ast.AnnAssign(target=target) | ast.NamedExpr(target=target):
+                targets = [target]
+            case _:
+                return False
+        return any(is_parameter_name(target, store=True) for target in targets)
+
+    if any(rebinds_parameter(node) for node in nodes):
+        return None
+
+    def validated_result_is_used(candidate: ast.AST) -> bool:
+        match candidate:
+            case ast.Call() as call:
+                pass
+            case _:
+                return False
+        function_name = canonical_expression_name(call.func, aliases) or ""
+        configured = (
+            boundary.validator is not None and function_name == boundary.validator
+        )
+        recognized = function_name.rsplit(".", maxsplit=1)[-1] in {
+            "model_validate",
+            "validate_python",
+            "parse_obj",
+        }
+        if not (configured or recognized) or not any(
+            is_parameter_name(argument) for argument in call.args
+        ):
+            return False
+        for statement in function.body:
+            match statement:
+                case ast.Return(value=value) if value is call:
+                    return True
+                case ast.Assign(value=value, targets=targets) if value is call:
+                    pass
+                case ast.AnnAssign(value=value, target=target) if value is call:
+                    targets = [target]
+                case _:
+                    continue
+            if targets:
+                names: set[str] = set()
+                for target in targets:
+                    for child in ast.walk(target):
+                        match child:
+                            case ast.Name(id=name):
+                                names.add(name)
+                            case _:
+                                pass
+                if any(
+                    _is_load_name(later, names)
+                    for statement_after in function.body[
+                        function.body.index(statement) + 1 :
+                    ]
+                    for later in ast.walk(statement_after)
+                ):
+                    return True
+        return False
+
+    if any(validated_result_is_used(node) for node in nodes):
+        return None
+
+    observed_keys = {
+        key for node in nodes if (key := _manual_key(node, parameter)) is not None
+    }
+    guarded_fields: set[str] = set()
+    structure_keys: set[str] = set()
+    evidence_lines: set[int] = set()
+    constraints: set[str] = set()
+    for node in nodes:
+        match node:
+            case ast.If(test=test, lineno=line_number):
+                pass
+            case _:
+                continue
+        if not _manual_guard_returns(node):
+            continue
+        test_nodes = ast.walk(test)
+        test_nodes = list(test_nodes)
+        has_scalar_check = False
+        for child in test_nodes:
+            match child:
+                case ast.Call(
+                    func=ast.Name(id="isinstance"), args=[argument, expected, *_]
+                ):
+                    keys = _manual_key_refs(argument, parameter)
+                    if keys:
+                        guarded_fields.update(keys)
+                        has_scalar_check = True
+                        constraints.update(
+                            f"{key} is {ast.unparse(expected)} at line {line_number}"
+                            for key in keys
+                        )
+                case ast.Call(func=ast.Name(id="type"), args=[argument, *_]):
+                    keys = _manual_key_refs(argument, parameter)
+                    if keys:
+                        guarded_fields.update(keys)
+                        has_scalar_check = True
+                case ast.Compare(left=left, ops=operators, comparators=comparators):
+                    keys = _manual_key_refs(child, parameter)
+                    literals: list[ast.Constant] = []
+                    for part in (left, *comparators):
+                        for value in ast.walk(part):
+                            match value:
+                                case ast.Constant():
+                                    literals.append(value)
+                                case _:
+                                    pass
+                    strings: list[str] = []
+                    for literal in literals:
+                        match literal.value:
+                            case str() as value:
+                                strings.append(value)
+                            case _:
+                                pass
+                    if strings and keys:
+                        structure_keys.update(keys)
+                    range_operator = any(
+                        _is_range_operator(operator) for operator in operators
+                    )
+                    range_value = any(
+                        _is_numeric_literal(literal.value) for literal in literals
+                    )
+                    if keys and range_operator and range_value:
+                        guarded_fields.update(keys)
+                        has_scalar_check = True
+                        constraints.add(f"numeric range at line {line_number}")
+                    membership = any(
+                        _is_membership_operator(operator) for operator in operators
+                    )
+                    match comparators[-1] if comparators else None:
+                        case ast.Name(id=right_name) if (
+                            membership and strings and right_name == parameter
+                        ):
+                            structure_keys.update(strings)
+                        case _:
+                            pass
+                case _:
+                    continue
+        if has_scalar_check:
+            evidence_lines.add(line_number)
+
+    if len(guarded_fields) < 2 or not structure_keys or len(observed_keys) < 2:
+        return None
+
+    unknown_helper_lines: set[int] = set()
+    for candidate in nodes:
+        match candidate:
+            case ast.Call(args=arguments, lineno=line_number):
+                pass
+            case _:
+                continue
+        has_parameter_argument = any(
+            is_parameter_name(argument) for argument in arguments
+        )
+        if has_parameter_argument and not validated_result_is_used(candidate):
+            unknown_helper_lines.add(line_number)
+    unknown_helpers = sorted(unknown_helper_lines)
+    authority = (
+        f"; declared authoritative schema {boundary.authoritative_schema}"
+        if boundary.authoritative_schema is not None
+        else "; no authoritative schema is declared"
+    )
+    unresolved = (
+        "; helper calls at line(s) "
+        + ", ".join(map(str, unknown_helpers))
+        + " are unresolved"
+        if unknown_helpers
+        else "; imported validators and branch completeness remain unresolved"
+    )
+    evidence = ", ".join(map(str, sorted(evidence_lines)))
+    constraint_evidence = ", ".join(sorted(constraints))
+    return Finding(
+        rule_id=rule_tag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.CORRECTNESS,
+            "manual-schema-validation",
+        ),
+        path=path,
+        line=function.lineno,
+        severity=policy.manual_schema_validation_severity,
+        message=(
+            f"Selected admission boundary {function_name}.{parameter} has fixed-key "
+            f"checks and repeated scalar/range guards at lines {evidence}; recognized "
+            f"constraints: {constraint_evidence}{authority}{unresolved}. "
+            "Review whether one declared schema/validator can express the intended contract; "
+            "this low-confidence advisory does not prove a validation defect or that custom "
+            "protocol checks should be removed."
+        ),
+    )
+
+
+def _manual_schema_contract_findings(
+    module: ast.Module,
+    policy: InputContractPolicy,
+    *,
+    path: str,
+    aliases: ImportAliases,
+) -> list[Finding]:
+    if not policy.manual_schema_validation_boundaries:
+        return []
+    selected: dict[str, list[ast.FunctionDef | ast.AsyncFunctionDef]] = {}
+
+    def visit(statements: Sequence[ast.stmt], scope: tuple[str, ...]) -> None:
+        for statement in statements:
+            match statement:
+                case ast.ClassDef(name=name, body=body):
+                    visit(body, (*scope, name))
+                case ast.FunctionDef(name=name) | ast.AsyncFunctionDef(name=name):
+                    qualified_name = ".".join((*scope, name))
+                    selected.setdefault(qualified_name, []).append(statement)
+                case _:
+                    pass
+
+    visit(module.body, ())
+    findings: list[Finding] = []
+    for boundary in policy.manual_schema_validation_boundaries:
+        if boundary.path != path:
+            continue
+        for function in selected.get(boundary.function, []):
+            finding = _manual_schema_finding(
+                function,
+                boundary,
+                policy,
+                path=path,
+                function_name=boundary.function,
+                aliases=aliases,
+            )
+            if finding is not None:
+                findings.append(finding)
+    return findings
+
+
 def input_contract_findings(
     source: str, policy: InputContractPolicy, *, path: str = "<source>"
 ) -> list[Finding]:
@@ -777,6 +1130,9 @@ def input_contract_findings(
                 findings.extend(_function_findings(node, aliases, policy, path))
             case _:
                 pass
+    findings.extend(
+        _manual_schema_contract_findings(module, policy, path=path, aliases=aliases)
+    )
     return sorted(
         findings,
         key=lambda finding: (finding.line or 0, finding.rule_id, finding.message),
