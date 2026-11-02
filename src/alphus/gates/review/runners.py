@@ -20,6 +20,7 @@ from alphus.gates.review.positional_interfaces import check_positional_interface
 from alphus.gates.review.scipy_constants import check_scipy_constants
 from alphus.gates.review.source_families import check_source_families
 from alphus.gates.review.test_quality import check_test_quality
+from alphus.gates.review.typing_stub_suggestions import check_typing_stub_suggestions
 from alphus.policy.base import require_policy
 
 ReviewRunner: TypeAlias = Callable[
@@ -32,6 +33,15 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
             root,
             files,
             require_policy(config.checks.numeric_literals, "numeric_literals"),
+        ),
+        "typing-stub-suggestions": lambda root, files, config: (
+            check_typing_stub_suggestions(
+                root,
+                files,
+                require_policy(
+                    config.checks.typing_stub_suggestions, "typing_stub_suggestions"
+                ),
+            )
         ),
         "scipy-constants": lambda root, files, config: check_scipy_constants(
             root,

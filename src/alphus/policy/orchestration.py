@@ -47,6 +47,7 @@ from alphus.policy.review import (
     SourceFamilyPolicy,
     SqlAlchemyPracticePolicy,
     TestQualityPolicy,
+    TypingStubSuggestionPolicy,
 )
 from alphus.policy.sources import (
     CliPolicy,
@@ -74,6 +75,7 @@ class CheckPolicies(StrictModel):
     output_escaping: SourceScanPolicy | None = None
     path_discovery: PathDiscoveryPolicy | None = None
     numeric_literals: NumericLiteralPolicy | None = None
+    typing_stub_suggestions: TypingStubSuggestionPolicy | None = None
     scipy_constants: ScipyConstantsPolicy | None = None
     test_quality: TestQualityPolicy | None = None
     input_contracts: InputContractPolicy | None = None

@@ -190,6 +190,76 @@ class InputContractPolicy(PythonSourceScanPolicy):
         return validate_patterns(patterns)
 
 
+class TypingStubCandidate(StrictModel):
+    """Explicit, locally verified mapping from an import to its stub package."""
+
+    import_name: str
+    runtime_distribution: str
+    stub_distribution: str
+    supported_runtime_versions: str
+    supported_python_versions: str
+    package_path: str | None = None
+
+    @field_validator("import_name")
+    @classmethod
+    def validate_import_name(cls, value: str) -> str:
+        if any(not part.isidentifier() for part in value.split(".")):
+            raise ValueError("import_name must be a dotted Python identifier")
+        return value
+
+    @field_validator("runtime_distribution", "stub_distribution")
+    @classmethod
+    def validate_distribution_name(cls, value: str) -> str:
+        if not value or any(char in value for char in "<>;@/\\\n"):
+            raise ValueError("distribution names must be literal package names")
+        return value
+
+    @field_validator("supported_runtime_versions", "supported_python_versions")
+    @classmethod
+    def validate_specifiers(cls, value: str) -> str:
+        try:
+            SpecifierSet(value)
+        except InvalidSpecifier as error:
+            raise ValueError("version requirements must be valid specifiers") from error
+        return value
+
+    @field_validator("package_path")
+    @classmethod
+    def validate_package_path(cls, value: str | None) -> str | None:
+        return None if value is None else validate_single_path(value, "package paths")
+
+
+class TypingStubSuggestionPolicy(PythonSourceScanPolicy):
+    """Opt-in suggestions based only on explicit package and checker metadata."""
+
+    dependency_file: str = "pyproject.toml"
+    typing_groups: Annotated[tuple[str, ...], Field(min_length=1)] = ("dev",)
+    checkers: Annotated[
+        tuple[Literal["mypy", "pyright", "ty"], ...], Field(min_length=1)
+    ] = ("mypy", "pyright")
+    candidates: Annotated[tuple[TypingStubCandidate, ...], Field(min_length=1)]
+    severity: Severity = "info"
+
+    @field_validator("dependency_file")
+    @classmethod
+    def validate_dependency_file(cls, value: str) -> str:
+        return validate_single_path(value, "dependency_file")
+
+    @field_validator("typing_groups", "checkers")
+    @classmethod
+    def validate_unique_values(cls, values: Sequence[str]) -> tuple[str, ...]:
+        require_unique(values, "typing groups and checkers must be unique")
+        return tuple(values)
+
+    @model_validator(mode="after")
+    def validate_candidates(self) -> Self:
+        require_unique(
+            tuple(item.import_name for item in self.candidates),
+            "candidate imports must be unique",
+        )
+        return self
+
+
 class SourceFamilyPolicy(StrictModel):
     """Bounded, lexical-only review of similarly named source siblings."""
 
