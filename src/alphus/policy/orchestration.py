@@ -40,6 +40,7 @@ from alphus.policy.repository import (
 from alphus.policy.review import (
     FastApiPracticePolicy,
     InputContractPolicy,
+    ManualMatrixKernelPolicy,
     NumericLiteralPolicy,
     PositionalInterfacePolicy,
     PydanticPracticePolicy,
@@ -74,6 +75,7 @@ class CheckPolicies(StrictModel):
     output_escaping: SourceScanPolicy | None = None
     path_discovery: PathDiscoveryPolicy | None = None
     numeric_literals: NumericLiteralPolicy | None = None
+    manual_matrix_kernels: ManualMatrixKernelPolicy | None = None
     scipy_constants: ScipyConstantsPolicy | None = None
     test_quality: TestQualityPolicy | None = None
     input_contracts: InputContractPolicy | None = None
