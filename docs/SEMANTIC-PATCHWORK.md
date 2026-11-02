@@ -52,4 +52,6 @@ These checks do not infer AI authorship or prove a defect. Other patterns in
 issue #50, including heuristic unmatched-span loss, provenance ownership,
 module boundaries, and patchwork clusters remain uncovered.
 
-A small non-fixture source sample and its limits are recorded in [the calibration note](SEMANTIC-PATCHWORK-CALIBRATION.md). It produced no candidates, so precision is not estimable.
+The [calibration note](SEMANTIC-PATCHWORK-CALIBRATION.md) records a small
+non-fixture source sample and its limits. It produced no candidates, so
+precision is not estimable.
