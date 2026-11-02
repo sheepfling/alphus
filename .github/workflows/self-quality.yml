@@ -164,6 +164,8 @@ jobs:
           python-version: ${{ matrix.target-python }}
       - name: Build and verify the installed three-checker example
         shell: bash
+        env:
+          PYTHONIOENCODING: utf-8
         run: |
           "${{ steps.checker-python.outputs.python-path }}" -m venv "$RUNNER_TEMP/alphus-checker"
           "${{ steps.target-python.outputs.python-path }}" -m venv "$RUNNER_TEMP/alphus-target"
