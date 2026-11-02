@@ -111,6 +111,27 @@ def test_date_formats_and_real_cmd_environment_syntax_stay_distinguishable(
     assert all("cmd syntax" in finding.message for finding in findings)
 
 
+def test_printf_format_directives_are_not_cmd_environment_evidence(
+    tmp_path: Path,
+) -> None:
+    findings = _check(
+        tmp_path,
+        '```bash\nprintf %s%s "$prefix" "$suffix"\n````\n',
+    )
+
+    assert findings == []
+
+
+def test_printf_arguments_preserve_real_cmd_environment_evidence(
+    tmp_path: Path,
+) -> None:
+    findings = _check(tmp_path, "```bash\nprintf %s %PATH%\n````\n")
+
+    assert len(findings) == 1
+    assert findings[0].line == 2
+    assert "cmd syntax" in findings[0].message
+
+
 def test_flags_bash_loop_in_indented_blockquote_pwsh_fence(tmp_path: Path) -> None:
     findings = _check(
         tmp_path,

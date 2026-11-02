@@ -57,6 +57,13 @@ _QUOTED_POWERSHELL_DELEGATION = re.compile(
     r"-Command[ \t]+(?P<quote>['\"])"
 )
 _CMD_ENV = re.compile(r"%[A-Za-z_][A-Za-z0-9_]*%")
+_PRINTF_FORMAT_COMMAND = re.compile(
+    r"^\s*printf[ \t]+(?:(?:-v[ \t]+\S+)[ \t]+)?(?P<format>(?:\\.|[^\s])+)"
+)
+_PRINTF_FORMAT_DIRECTIVE = re.compile(
+    r"%(?:%|[-+#0 ']*(?:\d+|\*)?(?:\.(?:\d+|\*))?"
+    r"(?:hh|h|ll|l|L|z|j|t)?[bcdeEfFgGiosuxXq])"
+)
 _DATE_COMMAND = re.compile(r"(?i)\bdate(?:\s|$)")
 _DATE_FORMAT_DIRECTIVE = r"%(?:[-_0^#]*\d{0,2})?(?:E|O)?[A-Za-z+]"
 _DATE_FORMAT_SEQUENCE = re.compile(
@@ -294,10 +301,10 @@ def _first_match(
 
 
 def _cmd_environment_evidence(lines: Sequence[_SourceLine]) -> _Evidence | None:
-    """Find cmd variable expansion without mistaking adjacent date directives."""
+    """Find cmd expansion without mistaking date and printf format directives."""
     in_date_continuation = False
     for source in lines:
-        candidate = source.text
+        candidate = _mask_printf_format_argument(source.text)
         if _DATE_COMMAND.search(candidate) or in_date_continuation:
             candidate = _DATE_FORMAT_SEQUENCE.sub(
                 lambda match: " " * len(match.group()), candidate
@@ -310,6 +317,21 @@ def _cmd_environment_evidence(lines: Sequence[_SourceLine]) -> _Evidence | None:
         if match is not None:
             return _Evidence("cmd", source.number, match.group(0))
     return None
+
+
+def _mask_printf_format_argument(line: str) -> str:
+    """Mask only recognized printf conversions in a leading format argument."""
+    match = _PRINTF_FORMAT_COMMAND.match(line)
+    if match is None:
+        return line
+    start, end = match.span("format")
+    format_argument = line[start:end]
+    masked = _PRINTF_FORMAT_DIRECTIVE.sub(
+        lambda conversion: " " * len(conversion.group()), format_argument
+    )
+    if masked == format_argument:
+        return line
+    return f"{line[:start]}{masked}{line[end:]}"
 
 
 def _bash_loop_evidence(lines: Sequence[_SourceLine]) -> _Evidence | None:
