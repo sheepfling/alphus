@@ -146,7 +146,12 @@ def validate_portability(
                     failures.append(
                         f"{prefix}: local filesystem URI/path violates delivery policy"
                     )
-                elif not scheme and not parsed.path and parsed.fragment:
+                elif (
+                    not scheme
+                    and not parsed.path
+                    and not parsed.query
+                    and parsed.fragment
+                ):
                     continue
                 elif not scheme:
                     if contract.mode == "self_contained":
