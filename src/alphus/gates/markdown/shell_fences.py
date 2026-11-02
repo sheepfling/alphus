@@ -113,6 +113,11 @@ class _LexState:
     here_string: str | None = None
 
 
+@dataclass(slots=True)
+class _ArithmeticState:
+    depth: int = 0
+
+
 @dataclass(frozen=True, slots=True)
 class _Evidence:
     shell: str
@@ -247,10 +252,12 @@ def _mask_shell_line(line: str, shell: str, state: _LexState) -> str:
     return "".join(visible)
 
 
-def _heredoc_delimiters(raw: str, visible: str) -> tuple[tuple[str, bool], ...]:
+def _heredoc_delimiters(
+    raw: str, visible: str, arithmetic: _ArithmeticState
+) -> tuple[tuple[str, bool], ...]:
     """Return real here-document delimiters, excluding quoted and commented text."""
     delimiters: list[tuple[str, bool]] = []
-    heredoc_visible = _mask_arithmetic_shifts(visible)
+    heredoc_visible = _mask_arithmetic_shifts(visible, arithmetic)
     for match in _HERE_DOCUMENT.finditer(raw):
         if heredoc_visible[match.start() : match.start() + 2] != "<<":
             continue
@@ -265,32 +272,33 @@ def _heredoc_delimiters(raw: str, visible: str) -> tuple[tuple[str, bool], ...]:
     return tuple(delimiters)
 
 
-def _mask_arithmetic_shifts(line: str) -> str:
-    """Hide `<<` arithmetic shifts from the here-document recognizer."""
+def _mask_arithmetic_shifts(line: str, state: _ArithmeticState) -> str:
+    """Hide `<<` arithmetic shifts, retaining arithmetic context across lines."""
     visible = list(line)
     index = 0
-    while index < len(line) - 1:
-        if line.startswith("$((", index):
-            start = index + 1
-        elif line.startswith("((", index):
-            start = index
-        else:
-            index += 1
+    while index < len(line):
+        if state.depth:
+            if line.startswith("<<", index):
+                visible[index : index + 2] = (" ", " ")
+                index += 2
+            elif line[index] == "(":
+                state.depth += 1
+                index += 1
+            elif line[index] == ")":
+                state.depth -= 1
+                index += 1
+            else:
+                index += 1
             continue
 
-        depth = 2
-        cursor = start + 2
-        while cursor < len(line) and depth:
-            if line[cursor] == "(":
-                depth += 1
-            elif line[cursor] == ")":
-                depth -= 1
-            cursor += 1
-        end = cursor if depth == 0 else len(line)
-        for shift in re.finditer(r"<<", line[start:end]):
-            position = start + shift.start()
-            visible[position : position + 2] = (" ", " ")
-        index = max(end, index + 1)
+        if line.startswith("$((", index):
+            state.depth = 2
+            index += 3
+        elif line.startswith("((", index):
+            state.depth = 2
+            index += 2
+        else:
+            index += 1
     return "".join(visible)
 
 
@@ -300,6 +308,7 @@ def _visible_shell_lines(fence: _Fence, shell: str) -> tuple[_SourceLine, ...]:
         return ()
 
     state = _LexState()
+    arithmetic = _ArithmeticState()
     pending_heredocs: deque[tuple[str, bool]] = deque()
     output: list[_SourceLine] = []
     for source in fence.body:
@@ -318,7 +327,9 @@ def _visible_shell_lines(fence: _Fence, shell: str) -> tuple[_SourceLine, ...]:
             continue
         visible = _mask_shell_line(source.text, shell, state)
         if shell == "bash":
-            pending_heredocs.extend(_heredoc_delimiters(source.text, visible))
+            pending_heredocs.extend(
+                _heredoc_delimiters(source.text, visible, arithmetic)
+            )
         if visible.strip():
             output.append(_SourceLine(source.number, visible, source.text))
     return tuple(output)

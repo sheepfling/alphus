@@ -290,6 +290,11 @@ def test_arithmetic_shifts_are_not_treated_as_heredocs(tmp_path: Path) -> None:
         "```bash\nmask=$((1 << bits))\n$env:APP_HOME = value\n````\n",
         name="expansion.md",
     )
+    continued_findings = _check(
+        tmp_path,
+        "```bash\n(( mask = 1 \\\n  << bits ))\n$env:APP_HOME = value\n````\n",
+        name="continued.md",
+    )
 
     assert len(findings) == 1
     assert findings[0].line == 3
@@ -297,6 +302,9 @@ def test_arithmetic_shifts_are_not_treated_as_heredocs(tmp_path: Path) -> None:
     assert len(expansion_findings) == 1
     assert expansion_findings[0].line == 3
     assert "PowerShell" in expansion_findings[0].message
+    assert len(continued_findings) == 1
+    assert continued_findings[0].line == 4
+    assert "PowerShell" in continued_findings[0].message
 
 
 def test_multiline_quoted_pwsh_command_is_not_scanned_as_bash(
