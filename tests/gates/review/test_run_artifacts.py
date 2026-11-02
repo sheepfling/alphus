@@ -444,6 +444,55 @@ def test_runtime_module_reassignment_in_same_scope_abstains() -> None:
     assert run_artifact_findings(source, "src/harness.py", configured) == []
 
 
+@pytest.mark.parametrize(
+    "rebinding",
+    [
+        "    import other_runtime as engine\n",
+        "    from other_runtime import runtime as engine\n",
+    ],
+)
+def test_runtime_import_alias_rebinding_in_same_scope_abstains(
+    rebinding: str,
+) -> None:
+    configured = policy(
+        runtime_attestation_gap=True,
+        runtime_module_names=("engine",),
+        runtime_import_helpers=("load_runtime_module",),
+        runtime_metadata_helpers=("distribution_version",),
+        runtime_origin_helpers=("module_origin",),
+        runtime_attestation_sinks=("record_runtime",),
+    )
+    source = (
+        "def run():\n"
+        "    engine = load_runtime_module('example-engine')\n"
+        + rebinding
+        + "    record_runtime(distribution_version('example-engine'))\n"
+    )
+
+    assert run_artifact_findings(source, "src/harness.py", configured) == []
+
+
+def test_nested_import_alias_does_not_rebind_outer_runtime_module() -> None:
+    configured = policy(
+        runtime_attestation_gap=True,
+        runtime_module_names=("engine",),
+        runtime_import_helpers=("load_runtime_module",),
+        runtime_metadata_helpers=("distribution_version",),
+        runtime_origin_helpers=("module_origin",),
+        runtime_attestation_sinks=("record_runtime",),
+    )
+    source = (
+        "def run():\n"
+        "    engine = load_runtime_module('example-engine')\n"
+        "    def nested():\n"
+        "        import other_runtime as engine\n"
+        "    record_runtime(distribution_version('example-engine'))\n"
+    )
+
+    findings = run_artifact_findings(source, "src/harness.py", configured)
+    assert len(findings) == 1
+
+
 def test_runtime_origin_binding_and_unknown_import_styles_abstain() -> None:
     configured = policy(
         runtime_attestation_gap=True,

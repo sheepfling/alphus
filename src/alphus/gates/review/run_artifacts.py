@@ -137,6 +137,15 @@ def _single_assignment(
                 stores.append(None)
             case ast.ExceptHandler(name=bound) if bound == name:
                 stores.append(None)
+            case ast.Import(names=aliases):
+                if any(
+                    (alias.asname or alias.name.split(".", maxsplit=1)[0]) == name
+                    for alias in aliases
+                ):
+                    stores.append(None)
+            case ast.ImportFrom(names=aliases):
+                if any((alias.asname or alias.name) == name for alias in aliases):
+                    stores.append(None)
             case ast.Global(names=declared) | ast.Nonlocal(names=declared):
                 if name in declared:
                     stores.extend((None, None))
