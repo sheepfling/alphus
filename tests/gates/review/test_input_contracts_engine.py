@@ -292,6 +292,52 @@ def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
     assert branch_dependent == []
 
 
+def test_typing_cast_alias_is_not_mistaken_for_runtime_normalization() -> None:
+    findings = input_contract_findings(
+        """from collections.abc import Mapping
+from typing import cast as cast_value
+from app.models import EvaluationOptions
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
+    payload = cast_value(EvaluationOptions, options)
+    return payload["count"]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].rule_id.endswith("generic-mapping-domain-escape")
+    assert "literal-key reads at line(s) 6" in findings[0].message
+
+
+def test_validator_result_is_distinct_from_cast_and_branch_alias_flow() -> None:
+    validated = input_contract_findings(
+        """from collections.abc import Mapping
+from app.models import EvaluationOptions
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
+    normalized = EvaluationOptions.model_validate(options)
+    return normalized["count"]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+    branch_alias = input_contract_findings(
+        """from collections.abc import Mapping
+from app.models import EvaluationOptions
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
+    payload = options
+    if condition:
+        return payload["count"]
+    return 0
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert validated == []
+    assert branch_alias == []
+
+
 def test_discarded_validator_inside_a_branch_is_not_normalization() -> None:
     findings = input_contract_findings(
         """from collections.abc import Mapping

@@ -1022,10 +1022,12 @@ def _linear_aliases_before(
 
 
 def _direct_mapping_reads_with_aliases(
-    function: ast.FunctionDef | ast.AsyncFunctionDef, parameter: str
+    function: ast.FunctionDef | ast.AsyncFunctionDef,
+    parameter: str,
+    imports: ImportAliases,
 ) -> list[int]:
-    """Recognize literal-key reads through direct straight-line local aliases."""
-    aliases = {parameter}
+    """Recognize reads through straight-line aliases and resolved typing casts."""
+    tracked_names = {parameter}
     lines: set[int] = set()
 
     def record_reads(expression: ast.AST, available: AbstractSet[str]) -> None:
@@ -1046,23 +1048,41 @@ def _direct_mapping_reads_with_aliases(
     for statement in function.body:
         match statement:
             case ast.Assign(targets=[ast.Name(id=target)], value=value):
-                record_reads(value, aliases)
+                record_reads(value, tracked_names)
                 match value:
-                    case ast.Name(id=source) if source in aliases:
-                        aliases.add(target)
+                    case ast.Name(id=source) if source in tracked_names:
+                        tracked_names.add(target)
+                    case ast.Call(
+                        func=func,
+                        args=[_, ast.Name(id=source)],
+                        keywords=[],
+                    ) if source in tracked_names and canonical_expression_name(
+                        func, imports
+                    ) in {"typing.cast", "typing_extensions.cast"}:
+                        # typing.cast returns its value unchanged; it is not
+                        # runtime validation or normalization evidence.
+                        tracked_names.add(target)
                     case _:
-                        aliases.discard(target)
+                        tracked_names.discard(target)
             case ast.AnnAssign(target=ast.Name(id=target), value=value):
                 if value is not None:
-                    record_reads(value, aliases)
+                    record_reads(value, tracked_names)
                 match value:
-                    case ast.Name(id=source) if source in aliases:
-                        aliases.add(target)
+                    case ast.Name(id=source) if source in tracked_names:
+                        tracked_names.add(target)
+                    case ast.Call(
+                        func=func,
+                        args=[_, ast.Name(id=source)],
+                        keywords=[],
+                    ) if source in tracked_names and canonical_expression_name(
+                        func, imports
+                    ) in {"typing.cast", "typing_extensions.cast"}:
+                        tracked_names.add(target)
                     case _:
-                        aliases.discard(target)
+                        tracked_names.discard(target)
             case ast.Return(value=value) | ast.Expr(value=value):
                 if value is not None:
-                    record_reads(value, aliases)
+                    record_reads(value, tracked_names)
             case (
                 ast.If()
                 | ast.For()
@@ -1081,11 +1101,12 @@ def _mapping_read_evidence(
     function: ast.FunctionDef | ast.AsyncFunctionDef,
     parameter: str,
     nodes: Sequence[ast.AST],
+    imports: ImportAliases,
 ) -> list[int]:
     """Combine direct reads with straight-line aliases, preserving branch evidence."""
     return sorted(
         set(_direct_mapping_reads(parameter, nodes))
-        | set(_direct_mapping_reads_with_aliases(function, parameter))
+        | set(_direct_mapping_reads_with_aliases(function, parameter, imports))
     )
 
 
@@ -1105,6 +1126,7 @@ def _direct_forwarded_mapping_reads(
     function: ast.FunctionDef | ast.AsyncFunctionDef,
     parameter: str,
     module: ast.Module,
+    aliases: ImportAliases,
 ) -> list[tuple[str, int, tuple[int, ...]]]:
     """Follow one exact parameter pass into a unique module-level helper."""
     helpers: dict[str, list[ast.FunctionDef | ast.AsyncFunctionDef]] = defaultdict(list)
@@ -1160,7 +1182,7 @@ def _direct_forwarded_mapping_reads(
                     break
         if helper_parameter is None:
             continue
-        reads = _direct_mapping_reads_with_aliases(helper, helper_parameter)
+        reads = _direct_mapping_reads_with_aliases(helper, helper_parameter, aliases)
         if reads:
             evidence.add((helper.name, node.lineno, tuple(reads)))
     return sorted(evidence)
@@ -1199,9 +1221,9 @@ def _domain_mapping_findings(
         alternative = _domain_mapping_alternative(argument.annotation, aliases, policy)
         if alternative is not None:
             model, mapping = alternative
-            reads = _mapping_read_evidence(function, argument.arg, local.nodes)
+            reads = _mapping_read_evidence(function, argument.arg, local.nodes, aliases)
             forwarded_reads = _direct_forwarded_mapping_reads(
-                function, argument.arg, module
+                function, argument.arg, module, aliases
             )
             if not reads and forwarded_reads:
                 reads = sorted(
@@ -1251,9 +1273,9 @@ def _domain_mapping_findings(
             argument.annotation, aliases, set(policy.domain_mapping_value_types)
         )
         if mapping is not None:
-            reads = _mapping_read_evidence(function, argument.arg, local.nodes)
+            reads = _mapping_read_evidence(function, argument.arg, local.nodes, aliases)
             forwarded_reads = _direct_forwarded_mapping_reads(
-                function, argument.arg, module
+                function, argument.arg, module, aliases
             )
             if not reads and forwarded_reads:
                 reads = sorted(
