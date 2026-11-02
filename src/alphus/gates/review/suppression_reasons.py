@@ -7,7 +7,7 @@ import json
 import re
 import tokenize
 import tomllib
-from collections.abc import Collection, Iterable, MutableSequence
+from collections.abc import Collection, Iterable, MutableSequence, MutableSet
 from collections.abc import Set as AbstractSet
 from pathlib import Path
 from typing import cast
@@ -490,7 +490,7 @@ def _ruff_config_suppression_findings(
     seen: frozenset[Path] = frozenset(),
     depth: int = 0,
     skip_inherited_normal_per_file: bool = False,
-    active_configs: set[str] | None = None,
+    active_configs: MutableSet[str] | None = None,
 ) -> list[Finding]:
     """Audit simple Ruff per-file-ignore table entries without executing Ruff."""
     findings: list[Finding] = []
