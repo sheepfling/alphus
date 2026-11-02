@@ -1,0 +1,26 @@
+schema_version = 1
+
+[files]
+include = ["src/render/*.py"]
+exclude = []
+
+[checks.prose_as_control]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/render/*.py"]
+minimum_characters = 60
+minimum_words = 8
+allowed_literals = ["The remote peer reports a state transition that this client does not handle."]
+
+[orchestration]
+default_profile = "semantic-review"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Prose branch review"
+rule = "prose-as-control"
+rollout = "provisional"
+
+[[orchestration.profiles]]
+name = "semantic-review"
+steps = ["Prose branch review"]

@@ -36,6 +36,7 @@ QualityRuleName: TypeAlias = Literal[
     "git-attributes",
     "git-history",
     "numeric-literals",
+    "prose-as-control",
     "scipy-constants",
     "test-quality",
     "input-contracts",
