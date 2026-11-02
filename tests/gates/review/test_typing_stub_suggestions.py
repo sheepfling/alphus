@@ -1,7 +1,11 @@
+import json
+import shutil
+import subprocess
 from collections.abc import Iterable
 from importlib import metadata
 from pathlib import Path
 
+import pytest
 from pytest import MonkeyPatch
 
 from alphus.config import TypingStubCandidate, TypingStubSuggestionPolicy
@@ -67,6 +71,52 @@ def test_checker_installation_reports_versions_and_absent_metadata(
     assert gate._checker_installation(("pyright", "mypy")) == (
         "pyright 1.1.414, mypy: not installed"
     )
+
+
+def test_installed_pyright_observes_a_controlled_module_stub(
+    tmp_path: Path,
+) -> None:
+    pyright = shutil.which("pyright")
+    if pyright is None:
+        pytest.skip("Pyright executable is not installed in this test environment")
+    package = tmp_path / "stub_probe"
+    package.mkdir()
+    (package / "__init__.py").write_text(
+        "def __getattr__(name: str) -> object:\n    return 1\n", encoding="utf-8"
+    )
+    stub = package / "__init__.pyi"
+    stub.write_text("def get_value() -> int: ...\n", encoding="utf-8")
+    (tmp_path / "client.py").write_text(
+        "from stub_probe import get_value\nget_value().upper()\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "pyrightconfig.json").write_text(
+        '{"typeCheckingMode":"strict","include":["client.py"]}\n',
+        encoding="utf-8",
+    )
+
+    with_stub = subprocess.run(
+        [pyright, "--outputjson"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    stub_diagnostics = json.loads(with_stub.stdout)["generalDiagnostics"]
+    assert any('for class "int"' in item["message"] for item in stub_diagnostics)
+
+    stub.unlink()
+    without_stub = subprocess.run(
+        [pyright, "--outputjson"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    source_diagnostics = json.loads(without_stub.stdout)["generalDiagnostics"]
+    assert not any('for class "int"' in item["message"] for item in source_diagnostics)
 
 
 class _Distribution:
