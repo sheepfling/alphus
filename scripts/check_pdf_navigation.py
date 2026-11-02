@@ -103,14 +103,11 @@ def _pdf_api() -> _PdfApi:
 
 def _flatten_outline(items: object) -> list[object]:
     result: list[object] = []
-    match items:
-        case [*_]:
-            for item in cast(list[object], items):
-                result.extend(_flatten_outline(item))
-        case None:
-            pass
-        case _:
-            result.append(items)
+    if isinstance(items, list):
+        for item in cast(list[object], items):
+            result.extend(_flatten_outline(item))
+    elif items is not None:
+        result.append(items)
     return result
 
 
@@ -121,17 +118,14 @@ def _page_for_destination(reader: _Reader, destination: object) -> int | None:
             return reader.get_destination_page_number(named)
         except (IndexError, KeyError, TypeError, ValueError):
             return None
-    match destination:
-        case [page_reference, *_]:
-            try:
-                page = cast(_IndirectObject, page_reference).get_object()
-                return reader.get_page_number(cast(_Page, page))
-            except (IndexError, KeyError, TypeError, ValueError):
-                return None
-        case _:
-            pass
+    if isinstance(destination, list) and destination:
+        try:
+            page = cast(_IndirectObject, destination[0]).get_object()
+            return reader.get_page_number(cast(_Page, page))
+        except (IndexError, KeyError, TypeError, ValueError):
+            return None
     try:
-        return reader.get_destination_page_number(destination)
+        return reader.get_destination_page_number(cast(object, destination))
     except (IndexError, KeyError, TypeError, ValueError):
         return None
 
@@ -141,7 +135,13 @@ def _link_rect(annotation: _PdfDictionary) -> tuple[float, ...] | None:
     if rectangle is None:
         return None
     try:
-        coordinates = tuple(float(value) for value in cast(Sequence[object], rectangle))
+        values = cast(Sequence[object], rectangle)
+        coordinates_list: list[float] = []
+        for value in values:
+            if not isinstance(value, (int, float)):
+                return None
+            coordinates_list.append(float(value))
+        coordinates = tuple(coordinates_list)
         return (
             coordinates if all(math.isfinite(value) for value in coordinates) else None
         )
