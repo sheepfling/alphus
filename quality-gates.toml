@@ -434,8 +434,12 @@ name = "python-policy"
 steps = [
   "Package boundaries", "Target audit isolation", "Python structure", "Shared utilities", "Runtime type usage",
   "CLI contracts", "JSON structure", "Output escaping", "Path handling", "Line length",
-  "Markdown shell fences", "File size", "Comment markers",
+  "File size", "Comment markers",
 ]
+
+[[orchestration.profiles]]
+name = "markdown-shell-review"
+steps = ["Markdown shell fences"]
 
 [[orchestration.profiles]]
 name = "python"

@@ -27,12 +27,15 @@ def test_self_check_enforces_review_and_repository_toml() -> None:
         "Python package imports",
         "Python compatibility imports",
         "Comment markers",
-        "Markdown shell fences",
         "CLI contracts",
         "Numeric review",
         "Test review",
         "Input contract review",
     }.issubset(check.steps)
+    assert "Markdown shell fences" not in check.steps
+    markdown_review = orchestration.resolve_profile("markdown-shell-review")
+    assert markdown_review is not None
+    assert markdown_review.steps == ("Markdown shell fences",)
     steps = {step.name: step for step in orchestration.steps}
     for name in ("Python lint", "Python format"):
         command = steps[name]
