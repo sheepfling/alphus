@@ -1,0 +1,17 @@
+schema_version = 1
+
+[orchestration]
+default_profile = "pdf-structure"
+
+[[orchestration.steps]]
+kind = "command"
+name = "PDF structural check"
+gate_id = "pdf-structure"
+argv = ["qpdf", "--check", "build/report.pdf"]
+working_directory = "."
+rollout = "provisional"
+timeout_seconds = 60
+
+[[orchestration.profiles]]
+name = "pdf-structure"
+steps = ["PDF structural check"]

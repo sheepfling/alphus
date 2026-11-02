@@ -14,6 +14,7 @@ path that matches the repository being checked.
 | Check Python stubs in an isolated target                  | [Stub package CI](STUB-PACKAGE-CI.md)       |
 | Reuse CI integrations across providers                    | [CI integrations](CI-INTEGRATIONS.md)       |
 | Check C++ source, builds, and artifacts                   | [C++ quality](CPP-QUALITY.md)               |
+| Check one generated PDF's structure                        | [PDF structural check](PDF-QUALITY.md)       |
 | Check Git ignores or historical repository artifacts      | [Repository hygiene](REPOSITORY-HYGIENE.md) |
 | Understand shared text and file-size measurements          | [Source hygiene](SOURCE-HYGIENE.md)         |
 | Review test, input, source-family, and framework checks   | [Review checks](REVIEW-CHECKS.md)           |

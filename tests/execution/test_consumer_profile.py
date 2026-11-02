@@ -24,6 +24,21 @@ def test_starter_policy_has_one_scoped_command_and_no_global_inventory() -> None
     assert step.fix_argv == ("rumdl", "fmt", "{files}")
 
 
+def test_pdf_example_checks_one_explicit_artifact_provisionally() -> None:
+    config = load_config(Path("examples/documents/pdf-structural-check.toml"))
+    orchestration = config.orchestration
+    assert orchestration is not None
+    plan = orchestration.resolve_profile("pdf-structure")
+    assert plan is not None
+    assert plan.steps == ("PDF structural check",)
+    step = orchestration.steps[0]
+    assert isinstance(step, CommandRunStep)
+    assert step.argv == ("qpdf", "--check", "build/report.pdf")
+    assert step.files is None
+    assert step.rollout == "provisional"
+    assert step.timeout_seconds == 60
+
+
 def test_markdown_example_pairs_two_fixers_without_duplicate_missing_links() -> None:
     config = load_config(Path("examples/markdown/quality-gates.toml"))
     assert config.files is None
