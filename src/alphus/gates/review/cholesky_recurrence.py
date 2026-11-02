@@ -46,11 +46,13 @@ def _index(node: ast.expr, base: str, first: str, second: str) -> bool:
 
 def _simple_range_loop(node: ast.AST) -> tuple[str, ast.For] | None:
     match node:
-        case ast.For(
-            target=ast.Name(id=target),
-            iter=ast.Call(func=ast.Name(id="range"), args=args, keywords=[]),
+        case (
+            ast.For(
+                target=ast.Name(id=target),
+                iter=ast.Call(func=ast.Name(id="range"), args=args, keywords=[]),
+            ) as loop
         ) if args:
-            return target, node
+            return target, loop
         case _:
             return None
 
@@ -176,14 +178,16 @@ def _sum_product_name(
 
 def _diagonal_if(node: ast.AST, row: str, column: str) -> ast.If | None:
     match node:
-        case ast.If(
-            test=ast.Compare(
-                left=ast.Name(id=left),
-                ops=[ast.Eq()],
-                comparators=[ast.Name(id=right)],
-            )
+        case (
+            ast.If(
+                test=ast.Compare(
+                    left=ast.Name(id=left),
+                    ops=[ast.Eq()],
+                    comparators=[ast.Name(id=right)],
+                )
+            ) as conditional
         ) if (left, right) == (row, column):
-            return node
+            return conditional
         case _:
             return None
 
@@ -239,16 +243,15 @@ def _match_function(
                     )
                     if target_factor is None:
                         continue
-                    value = _assignment_value(candidate)
-                    if value is None:
-                        continue
-                    match value:
-                        case ast.Call(func=func, args=[_], keywords=[]) if (
-                            _qualified_name(func) in sqrt_helpers
-                        ):
-                            sqrt_line = candidate.lineno
+                    match candidate:
+                        case (
+                            ast.Assign(
+                                value=ast.Call(func=func, args=[_], keywords=[])
+                            ) as assignment
+                        ) if _qualified_name(func) in sqrt_helpers:
+                            sqrt_line = assignment.lineno
                             factor = target_factor
-                            diagonal_assignment = candidate
+                            diagonal_assignment = assignment
                         case _:
                             continue
                 if sqrt_line is None:
@@ -261,28 +264,30 @@ def _match_function(
                     continue
                 # Check the declared summation result is the subtractand and the
                 # lower-triangle recurrence divides by the earlier diagonal.
-                if not _uses_sum_reduction(
-                    _assignment_value(diagonal_assignment), sum_name, row
+                diagonal_value = _assignment_value(diagonal_assignment)
+                if diagonal_value is None or not _uses_sum_reduction(
+                    diagonal_value, sum_name, row
                 ):
                     continue
                 for candidate in ast.walk(
                     ast.Module(body=diagonal.orelse, type_ignores=[])
                 ):
                     target = _assignment_target(candidate)
-                    value = _assignment_value(candidate)
-                    if (
-                        target is None
-                        or _target_factor(target, row, column) != factor
-                        or value is None
-                    ):
+                    if target is None or _target_factor(target, row, column) != factor:
                         continue
-                    match value:
-                        case ast.BinOp(
-                            left=ast.BinOp(
-                                left=source, op=ast.Sub(), right=ast.Name(id=name)
-                            ),
-                            op=ast.Div(),
-                            right=denominator,
+                    match candidate:
+                        case (
+                            ast.Assign(
+                                value=ast.BinOp(
+                                    left=ast.BinOp(
+                                        left=source,
+                                        op=ast.Sub(),
+                                        right=ast.Name(id=name),
+                                    ),
+                                    op=ast.Div(),
+                                    right=denominator,
+                                )
+                            ) as assignment
                         ) if (
                             name == sum_name
                             and _contains_source_index(source, row, column)
@@ -292,7 +297,7 @@ def _match_function(
                                 outer.lineno,
                                 inner.lineno,
                                 sum_line,
-                                candidate.lineno,
+                                assignment.lineno,
                             )
                         case _:
                             continue
