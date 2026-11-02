@@ -359,6 +359,30 @@ def test_failure_evidence_order_abstains_when_child_runner_is_shadowed() -> None
     assert run_artifact_findings(source, "src/harness.py", configured) == []
 
 
+def test_failure_evidence_order_ignores_comprehension_target_shadow() -> None:
+    configured = policy(
+        failure_evidence_order=True,
+        failure_child_runners=("run_child",),
+        failure_diagnostic_path_names=("diagnostic_path",),
+        failure_cleanups=(ProvenanceCallRole(function="remove_diagnostic"),),
+        failure_sinks=(
+            ProvenanceCallRole(function="persist_failure", path_argument_index=1),
+        ),
+    )
+    source = (
+        "def run(tasks, diagnostic_path):\n"
+        "    [run_child for run_child in tasks]\n"
+        "    child = run_child()\n"
+        "    if child.returncode != 0:\n"
+        "        remove_diagnostic(diagnostic_path)\n"
+        "        persist_failure(child.returncode, diagnostic_path)\n"
+    )
+
+    findings = run_artifact_findings(source, "src/harness.py", configured)
+    assert len(findings) == 1
+    assert findings[0].line == 5
+
+
 def test_runtime_metadata_without_bound_module_origin_is_reported() -> None:
     configured = policy(
         runtime_attestation_gap=True,
@@ -398,8 +422,59 @@ def test_runtime_origin_binding_and_unknown_import_styles_abstain() -> None:
         "    engine = import_namespace_package('example-engine')\n"
         "    record_runtime(distribution_version('example-engine'))\n"
     )
+    comprehension_target = (
+        "def run(tasks):\n"
+        "    [module_origin for module_origin in tasks]\n"
+        "    engine = load_runtime_module('example-engine')\n"
+        "    record_runtime(\n"
+        "        distribution_version('example-engine'), module_origin(engine)\n"
+        "    )\n"
+    )
     assert run_artifact_findings(bound, "src/harness.py", configured) == []
     assert run_artifact_findings(unsupported, "src/harness.py", configured) == []
+    assert (
+        run_artifact_findings(comprehension_target, "src/harness.py", configured) == []
+    )
+
+
+def test_runtime_attestation_abstains_on_shadowed_import_helper() -> None:
+    configured = policy(
+        runtime_attestation_gap=True,
+        runtime_module_names=("engine",),
+        runtime_import_helpers=("load_runtime_module",),
+        runtime_metadata_helpers=("distribution_version",),
+        runtime_origin_helpers=("module_origin",),
+        runtime_attestation_sinks=("record_runtime",),
+    )
+    source = (
+        "def run(load_runtime_module):\n"
+        "    engine = load_runtime_module('example-engine')\n"
+        "    record_runtime(distribution_version('example-engine'))\n"
+    )
+
+    assert run_artifact_findings(source, "src/harness.py", configured) == []
+
+
+def test_runtime_attestation_does_not_trust_shadowed_origin_helper() -> None:
+    configured = policy(
+        runtime_attestation_gap=True,
+        runtime_module_names=("engine",),
+        runtime_import_helpers=("load_runtime_module",),
+        runtime_metadata_helpers=("distribution_version",),
+        runtime_origin_helpers=("module_origin",),
+        runtime_attestation_sinks=("record_runtime",),
+    )
+    source = (
+        "def run(module_origin):\n"
+        "    engine = load_runtime_module('example-engine')\n"
+        "    record_runtime(\n"
+        "        distribution_version('example-engine'), module_origin(engine)\n"
+        "    )\n"
+    )
+
+    findings = run_artifact_findings(source, "src/harness.py", configured)
+    assert len(findings) == 1
+    assert findings[0].line == 3
 
 
 def test_policy_requires_complete_roles_for_each_enabled_family() -> None:

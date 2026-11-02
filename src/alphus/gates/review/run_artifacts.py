@@ -117,6 +117,22 @@ def _local_bindings(function: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str
     if function.args.kwarg is not None:
         names.add(function.args.kwarg.arg)
 
+    def collect_walrus(node: ast.AST) -> None:
+        """Comprehension walrus targets bind the containing function scope."""
+        if isinstance(
+            node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
+        ):
+            return
+        match node:
+            case ast.NamedExpr(target=ast.Name(id=name), value=value):
+                names.add(name)
+                collect_walrus(value)
+                return
+            case _:
+                pass
+        for child in ast.iter_child_nodes(node):
+            collect_walrus(child)
+
     def visit(node: ast.AST) -> None:
         if (
             isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
@@ -127,6 +143,10 @@ def _local_bindings(function: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str
         if isinstance(node, ast.Lambda):
             return
         match node:
+            case ast.ListComp() | ast.SetComp() | ast.DictComp() | ast.GeneratorExp():
+                for child in ast.iter_child_nodes(node):
+                    collect_walrus(child)
+                return
             case ast.Name(id=name, ctx=(ast.Store() | ast.Del())):
                 names.add(name)
             case ast.Import(names=imports):
@@ -289,8 +309,17 @@ def _runtime_attestation_findings(
     path: str,
     policy: RunArtifactPolicy,
 ) -> list[Finding]:
+    local_bindings = _local_bindings(function)
+
+    def unshadowed(helpers: Iterable[str]) -> frozenset[str]:
+        return frozenset(
+            helper
+            for helper in helpers
+            if helper.split(".", maxsplit=1)[0] not in local_bindings
+        )
+
     imports = _assigned_call_names(
-        function.body, frozenset(policy.runtime_import_helpers)
+        function.body, unshadowed(policy.runtime_import_helpers)
     )
     module_names = frozenset(
         name
@@ -299,9 +328,9 @@ def _runtime_attestation_findings(
     )
     if not module_names:
         return []
-    sinks = frozenset(policy.runtime_attestation_sinks)
-    metadata = frozenset(policy.runtime_metadata_helpers)
-    origins = frozenset(policy.runtime_origin_helpers)
+    sinks = unshadowed(policy.runtime_attestation_sinks)
+    metadata = unshadowed(policy.runtime_metadata_helpers)
+    origins = unshadowed(policy.runtime_origin_helpers)
     findings: list[Finding] = []
     for call, _ in _calls(function.body):
         if _call_name(call.func) not in sinks:
