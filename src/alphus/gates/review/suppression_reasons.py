@@ -234,6 +234,20 @@ def _ruff_config_suppression_findings(
         if section:
             table = section.group(1).strip()
             continue
+        if re.match(r"\s*extend\s*=", line):
+            findings.append(
+                Finding(
+                    rule_id=_RULE_ID,
+                    path=config_name,
+                    line=line_number,
+                    severity=policy.severity,
+                    message=(
+                        "Ruff inherited configuration is not resolved; per-file-ignore "
+                        "reasons may be incomplete."
+                    ),
+                )
+            )
+            continue
         if table in {"", "tool.ruff", "tool.ruff.lint", "lint"} and re.match(
             r"\s*per-file-ignores\s*=", line
         ):

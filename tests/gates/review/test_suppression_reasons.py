@@ -221,6 +221,19 @@ def test_ruff_per_file_ignore_comment_rationale_and_unselected_codes_are_accepte
     assert findings == []
 
 
+def test_ruff_inherited_config_is_explicitly_not_evaluated(tmp_path: Path) -> None:
+    (tmp_path / "ruff.toml").write_text('extend = "base.toml"\n', encoding="utf-8")
+
+    findings = check_suppression_reasons(
+        tmp_path,
+        [],
+        SuppressionReasonPolicy(extensions=(".py",), rule_codes=("E402",)),
+    )
+
+    assert len(findings) == 1
+    assert "inherited configuration is not resolved" in findings[0].message
+
+
 def test_unreadable_selected_file_is_not_reported_as_an_empty_audit(
     tmp_path: Path,
 ) -> None:
