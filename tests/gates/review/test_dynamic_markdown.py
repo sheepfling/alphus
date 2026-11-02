@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import json
+import subprocess
 from io import StringIO
 from pathlib import Path
 
 import pytest
 
+from alphus.cli import main
 from alphus.config import DynamicMarkdownPolicy, load_config_stream
 from alphus.execution.profile_manifest import gate_manifest_entry
 from alphus.gates.review.dynamic_markdown import (
@@ -430,3 +433,77 @@ def test_consumer_can_select_dynamic_markdown_in_a_profile() -> None:
     assert config.orchestration.profiles[0].name == "markdown-review"
     entry = gate_manifest_entry(config.orchestration.steps[0], config)
     assert entry.gate_id == "alphus/rule/dynamic-markdown"
+
+
+def test_consumer_cli_runs_selected_markdown_script_and_emits_json(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    subprocess.run(
+        ["git", "init", "--quiet", str(tmp_path)], check=True, capture_output=True
+    )
+    script = tmp_path / "scripts" / "generate_notes.py"
+    script.parent.mkdir(parents=True)
+    script.write_text(
+        'def render(value):\n    return f"| {value} |\\n"\n', encoding="utf-8"
+    )
+    excluded = tmp_path / "scripts" / "generated" / "render.py"
+    excluded.parent.mkdir(parents=True)
+    excluded.write_text(
+        'def render(value):\n    return f"| {value} |\\n"\n', encoding="utf-8"
+    )
+    config = tmp_path / "quality.toml"
+    config.write_text(
+        """
+schema_version = 1
+
+[files]
+include = ["scripts/**/*.py"]
+exclude = []
+
+[checks.dynamic_markdown]
+extensions = [".py"]
+producer_paths = ["scripts/**"]
+exclude = ["scripts/generated/**"]
+
+[orchestration]
+default_profile = "markdown-review"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Markdown source review"
+rule = "dynamic-markdown"
+
+[[orchestration.profiles]]
+name = "markdown-review"
+steps = ["Markdown source review"]
+""",
+        encoding="utf-8",
+    )
+
+    result = main(
+        [
+            "--root",
+            str(tmp_path),
+            "--config",
+            str(config),
+            "--run",
+            "--profile",
+            "markdown-review",
+            "--json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert result == 0
+    assert len(payload["steps"]) == 1
+    assert payload["steps"][0]["name"] == "Markdown source review"
+    assert payload["steps"][0]["status"] == "passed"
+    findings = payload["steps"][0]["findings"]
+    assert len(findings) == 1
+    assert (
+        findings[0]["rule_id"]
+        == "alphus/python/none/maintainability/dynamic-markdown-assembly"
+    )
+    assert findings[0]["path"] == "scripts/generate_notes.py"
+    assert findings[0]["line"] == 2
+    assert "table cell" in findings[0]["message"]
