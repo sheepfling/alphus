@@ -12,9 +12,12 @@ renderer path and opts into the provisional rule. Consider whether behavior
 could instead branch on a named mode/state while keeping full prose as data;
 review the protocol contract before changing code.
 
-The same opt-in rule can separately enable `lossy_text_rewrite` with explicit
-`regex_sub_helpers`, such as `re.sub`. That narrow check reports a configured
-regex call with a literal `\d` pattern and an empty or space replacement. It
+The same opt-in rule can separately enable `lossy_text_rewrite`. Regex calls
+must name an explicitly configured `regex_sub_helpers` entry, such as `re.sub`,
+and use a literal `\d` pattern with an empty or space replacement. Literal
+`str.replace` calls are also reported when they erase a token containing digits
+or semantic punctuation such as signs and delimiters. Ordinary word replacement,
+whitespace cleanup, and non-erasing replacements are outside this detector. It
 does not trace aliases, establish actual input values, or prove meaningful
 content is lost. Numeric text may be intentionally removed under a declared
 input contract; exclusions and helper names are consumer decisions.

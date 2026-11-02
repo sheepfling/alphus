@@ -126,14 +126,6 @@ class ProseAsControlPolicy(PythonSourceScanPolicy):
         require_unique(values, "rendered value helper names must be unique")
         return tuple(values)
 
-    @model_validator(mode="after")
-    def require_regex_helpers_when_enabled(self) -> Self:
-        if self.lossy_text_rewrite and not self.regex_sub_helpers:
-            raise ValueError(
-                "regex_sub_helpers is required when lossy_text_rewrite is enabled"
-            )
-        return self
-
 
 class PositionalSemanticOverridePolicy(PythonSourceScanPolicy):
     """Consumer-declared row-position and semantic-field overrides."""

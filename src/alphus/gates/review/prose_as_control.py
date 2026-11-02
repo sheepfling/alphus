@@ -20,6 +20,7 @@ _LOSSY_REWRITE_RULE_ID = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.CORRECTNESS, "lossy-text-rewrite"
 )
 _SENTENCE_WORD = re.compile(r"\b[A-Za-z]{2,}\b")
+_SEMANTIC_PUNCTUATION = frozenset("+-*/=<>.,:;()[]{}%")
 
 
 def _branch_comparisons(tree: ast.AST) -> Iterable[ast.Compare]:
@@ -131,7 +132,7 @@ def check_prose_as_control(
 def lossy_rewrite_lines(
     source: str, policy: ProseAsControlPolicy
 ) -> list[tuple[int, str]]:
-    """Return configured regex substitutions that erase digit-bearing spans."""
+    """Return configured regex or literal replacements of semantic tokens."""
     if not policy.lossy_text_rewrite:
         return []
     try:
@@ -156,6 +157,20 @@ def lossy_rewrite_lines(
                 and replacement in {"", " "}
             ):
                 observations.add((node.lineno, pattern))
+            case ast.Call(
+                func=ast.Attribute(attr="replace"),
+                args=[
+                    ast.Constant(value=str(token)),
+                    ast.Constant(value=str(replacement)),
+                ],
+                keywords=[],
+            ) if replacement in {"", " "} and any(
+                character.isdigit() or character in _SEMANTIC_PUNCTUATION
+                for character in token
+            ):
+                observations.add(
+                    (node.lineno, f"str.replace({token!r}, {replacement!r})")
+                )
             case _:
                 continue
     return sorted(observations)
@@ -175,7 +190,7 @@ def _qualified_name(node: ast.expr) -> str | None:
 def check_lossy_text_rewrite(
     root: Path, paths: Iterable[Path], policy: ProseAsControlPolicy
 ) -> list[Finding]:
-    """Report only configured regex calls that erase digit-bearing spans."""
+    """Report configured regex or literal replacements of semantic tokens."""
     if not policy.lossy_text_rewrite:
         return []
     checkout = root.resolve(strict=True)
@@ -196,10 +211,10 @@ def check_lossy_text_rewrite(
                 Finding(
                     _LOSSY_REWRITE_RULE_ID,
                     name,
-                    "configured regex substitution removes a digit-matching span "
-                    f"using an empty/space replacement (pattern {pattern!r}); review "
-                    "whether numeric information is semantic input. This syntax does "
-                    "not establish that content is actually lost for a given source.",
+                    "configured text rewrite removes a digit/sign/delimiter-bearing "
+                    f"token using an empty/space replacement ({pattern}); review "
+                    "whether that information is semantic input. This syntax does not "
+                    "establish that content is actually lost for a given source.",
                     line,
                     policy.severity,
                 )

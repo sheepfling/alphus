@@ -100,11 +100,43 @@ kept = re.sub(r"\\s+", " ", prose)
     )
 
 
-def test_lossy_text_rewrite_requires_explicit_helpers_and_reports_evidence(
+def test_lossy_text_rewrite_detects_literal_semantic_token_deletion() -> None:
+    source = """\
+cleaned = prose.replace("0.25", "")
+signless = prose.replace("-", " ")
+words = prose.replace("tolerance", "")
+spacing = prose.replace(" ", "")
+kept = prose.replace("0.25", "value")
+"""
+
+    assert lossy_rewrite_lines(source, _policy(lossy_text_rewrite=True)) == [
+        (1, "str.replace('0.25', '')"),
+        (2, "str.replace('-', ' ')"),
+    ]
+
+
+def test_lossy_text_rewrite_respects_declared_scope_and_exclusions(
     tmp_path: Path,
 ) -> None:
-    with pytest.raises(ValueError, match="regex_sub_helpers is required"):
-        _policy(lossy_text_rewrite=True)
+    target = tmp_path / "src/render/cleanup.py"
+    target.parent.mkdir(parents=True)
+    target.write_text('cleaned = prose.replace("0.25", "")\n', encoding="utf-8")
+    policy = _policy(lossy_text_rewrite=True, exclude=("src/render/generated/**",))
+
+    assert (
+        len(check_lossy_text_rewrite(tmp_path, [Path("src/render/cleanup.py")], policy))
+        == 1
+    )
+    assert not check_lossy_text_rewrite(
+        tmp_path, [Path("src/render/generated/cleanup.py")], policy
+    )
+    assert not check_lossy_text_rewrite(tmp_path, [Path("tests/cleanup.py")], policy)
+
+
+def test_lossy_text_rewrite_requires_explicit_regex_helpers_and_reports_evidence(
+    tmp_path: Path,
+) -> None:
+    _policy(lossy_text_rewrite=True)
     target = tmp_path / "src/render/cleanup.py"
     target.parent.mkdir(parents=True)
     target.write_text('import re\nre.sub(r"\\d+", "", prose)\n', encoding="utf-8")
