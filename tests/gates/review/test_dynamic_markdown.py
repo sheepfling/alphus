@@ -119,6 +119,29 @@ def test_declared_helper_contract_does_not_accept_package_import_alone() -> None
     assert len(findings) == 1
 
 
+def test_declared_context_helpers_suppress_wrapped_code_and_block_values() -> None:
+    source = (
+        "from docs.markdown import (\n"
+        "    code_span, code_fence, list_item, block_quote,\n"
+        ")\n"
+        "def render(value):\n"
+        '    return f"`{code_span(value)}`\\n```text\\n{code_fence(value)}'
+        '\\n```\\n- {list_item(value)}\\n> {block_quote(value)}\\n"\n'
+    )
+
+    findings = dynamic_markdown_findings(
+        source,
+        declared_safe_helpers=(
+            "docs.markdown.code_span",
+            "docs.markdown.code_fence",
+            "docs.markdown.list_item",
+            "docs.markdown.block_quote",
+        ),
+    )
+
+    assert findings == []
+
+
 def test_declared_helpers_require_qualified_names() -> None:
     with pytest.raises(ValueError, match="qualified dotted names"):
         DynamicMarkdownPolicy(

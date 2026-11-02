@@ -166,3 +166,72 @@ def test_unescaped_dynamic_link_destination_can_inject_a_second_link() -> None:
         ("https://good.example/a", "documentation"),
         ("https://evil.example", "click"),
     ]
+
+
+def test_dynamic_code_span_backtick_can_expose_markdown_link() -> None:
+    value = "prefix`[click](https://evil.example)"
+    source = 'def render(value):\n    return f"`{value}`"\n'
+    findings = dynamic_markdown_findings(source)
+
+    parsed = _StructureParser()
+    parsed.feed(MarkdownIt().render(f"`{value}`"))
+    assert any("code span" in finding.message for finding in findings)
+    assert parsed.links == [("https://evil.example", "click")]
+    assert parsed.code == ["prefix"]
+
+    safe = _StructureParser()
+    safe.feed(MarkdownIt().render(_code_span(value)))
+    assert safe.links == []
+    assert safe.code == [value]
+
+
+def test_dynamic_fence_can_close_early_and_expose_markdown_link() -> None:
+    value = "```\n[click](https://evil.example)"
+    source = 'def render(value):\n    return f"```python\\n{value}\\n```"\n'
+    findings = dynamic_markdown_findings(source)
+
+    parsed = _StructureParser()
+    parsed.feed(MarkdownIt().render(f"```python\n{value}\n```"))
+    assert any("code fence" in finding.message for finding in findings)
+    assert parsed.links == [("https://evil.example", "click")]
+
+    safe = _StructureParser()
+    safe.feed(MarkdownIt().render(_code_fence(value)))
+    assert safe.links == []
+    assert safe.code == [value + "\n"]
+
+
+def test_dynamic_list_value_can_create_a_second_item() -> None:
+    value = "safe\n- injected"
+    source = 'def render(value):\n    return f"- {value}\\n"\n'
+    findings = dynamic_markdown_findings(source)
+    markdown = f"- {value}\n"
+    tokens = MarkdownIt().parse(markdown)
+
+    assert any("list item" in finding.message for finding in findings)
+    assert sum(token.type == "list_item_open" for token in tokens) == 2
+
+    safe_markdown = f"- {' '.join(value.splitlines())}\n"
+    safe_tokens = MarkdownIt().parse(safe_markdown)
+    safe_inline = next(token for token in safe_tokens if token.type == "inline")
+    assert sum(token.type == "list_item_open" for token in safe_tokens) == 1
+    assert safe_inline.content == "safe - injected"
+
+
+def test_dynamic_blockquote_value_can_escape_into_a_heading() -> None:
+    value = "safe\n\n# injected"
+    source = 'def render(value):\n    return f"> {value}\\n"\n'
+    findings = dynamic_markdown_findings(source)
+    markdown = f"> {value}\n"
+    tokens = MarkdownIt().parse(markdown)
+
+    assert any("block quote" in finding.message for finding in findings)
+    assert any(token.type == "heading_open" and token.level == 0 for token in tokens)
+
+    safe_markdown = (
+        "\n".join("> " + line if line else ">" for line in value.splitlines()) + "\n"
+    )
+    safe_tokens = MarkdownIt().parse(safe_markdown)
+    safe_heading = next(token for token in safe_tokens if token.type == "heading_open")
+    assert sum(token.type == "blockquote_open" for token in safe_tokens) == 1
+    assert safe_heading.level == 1
