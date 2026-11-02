@@ -496,12 +496,14 @@ unknown rather than proof of a defect.
 - **Match collection inputs:** input-contracts follows direct uses and simple
   aliases; mutation and uncertain escapes are preserved.
 - **Review flush/fsync/replace:** human review needs output-role and
-  write-guarantee contracts. Atomic visibility differs from crash durability.
+  write-guarantee contracts. Atomic visibility differs from crash durability;
+  no consumer output contract was supplied to scope this rule.
 - **Prefer `Annotated` and static defaults:** native tools own declaration
   correctness. The static-default rule is an opt-in preference; assignment-form
   `Field` stays valid.
 - **Centralize package configuration:** native packaging tools and consumer
-  review. Cross-manifest authority is not inferred.
+  review. Included requirement files retain declaration locations for
+  conflicting exact pins. Cross-manifest authority is not inferred.
 - **Match pytest style:** Ruff `PT` rules in the scoped
   [pytest style profile](PYTEST-STYLE.md). `unittest`, mocks, and migration
   suites remain valid.
@@ -516,6 +518,39 @@ The runnable [pytest-style consumer profile](../examples/python/pytest-style.tom
 shows native rule selection. The Pydantic example above shows the separate
 domain/model profile. These recipes demonstrate configuration, not sampled
 production precision or universal enforcement.
+
+The dependency-lock check reports conflicting exact pins for a normalized
+package name when environment markers match, including declarations reached
+through included files. Compatible ranges, same-version extras, and distinct
+marker scopes remain accepted. It does not infer that independent manifests
+are authoritative; that requires an explicit consumer contract.
+
+## Inputs needed for other consumer-specific conventions
+
+The issue's additional triage cases need project contracts before they can be
+checked safely. No consumer repository or representative examples were supplied
+for these cases, so they remain review guidance and have no production
+precision claim:
+
+- Cross-manifest dependency review needs the package root, each maintained or
+  generated manifest, and an explicit authority order. Environment-marker
+  overlap and dynamic build metadata must remain unknown when unresolved.
+- Flush/fsync/replace review needs each selected writer's output role and its
+  atomic-visibility or crash-durability requirements.
+- Generated-output review needs declared output/generator paths and provenance
+  for versioned fixtures and operator-maintained inputs. A filesystem path
+  alone cannot distinguish a write from a value.
+- Finite-state review needs selected fields/types and their declared closed
+  variants. Repeated strings alone do not supply that contract.
+- Payload/schema review needs payload paths, the authoritative schema and
+  version mapping, and the consumer's validation command. Missing ownership is
+  not a successful validation result.
+- Action/result review needs selected domain actions, their result models, and
+  the renderer boundary. A `print` call alone does not identify a violation.
+- Shared-fixture review needs the exact test fixtures and evidence that setup,
+  parametrization, scope, and teardown behavior are equivalent.
+- Numerical review needs the consumer-declared dtype/shape contract or linear
+  system semantics. Without them, array and inverse expressions stay unknown.
 
 ## FastAPI and Starlette practices
 

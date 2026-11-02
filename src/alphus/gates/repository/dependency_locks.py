@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -19,10 +19,20 @@ from alphus.support.source_text import read_utf8_text
 
 
 @dataclass(frozen=True, slots=True)
+class RequirementDeclaration:
+    """One parsed requirement with its source location retained."""
+
+    source: str
+    line: int
+    requirement: Requirement
+
+
+@dataclass(frozen=True, slots=True)
 class RequirementLoad:
     """Requirements parsed from a lock input and any source findings."""
 
     requirements: Mapping[str, Requirement]
+    declarations: tuple[RequirementDeclaration, ...]
     findings: tuple[Finding, ...]
 
 
@@ -47,6 +57,7 @@ def _load_requirements(
     if relative in active:
         return RequirementLoad(
             MappingProxyType({}),
+            (),
             (
                 Finding(
                     rule_id=rule_tag(
@@ -64,6 +75,7 @@ def _load_requirements(
     if path is None:
         return RequirementLoad(
             MappingProxyType({}),
+            (),
             (
                 Finding(
                     rule_id=rule_tag(
@@ -78,6 +90,7 @@ def _load_requirements(
             ),
         )
     result: dict[str, Requirement] = {}
+    declarations: list[RequirementDeclaration] = []
     findings: list[Finding] = []
     current = active | {relative}
     for line_number, line in enumerate(read_utf8_text(path).splitlines(), 1):
@@ -108,6 +121,7 @@ def _load_requirements(
                 continue
             nested_load = _load_requirements(root, nested, current)
             result.update(nested_load.requirements)
+            declarations.extend(nested_load.declarations)
             findings.extend(nested_load.findings)
             continue
         try:
@@ -127,8 +141,61 @@ def _load_requirements(
                 )
             )
             continue
-        result[canonicalize_name(requirement.name)] = requirement
-    return RequirementLoad(MappingProxyType(result), tuple(findings))
+        name = canonicalize_name(requirement.name)
+        declarations.append(RequirementDeclaration(relative, line_number, requirement))
+        result[name] = requirement
+    findings.extend(_duplicate_exact_pin_findings(declarations))
+    return RequirementLoad(
+        MappingProxyType(result), tuple(declarations), tuple(findings)
+    )
+
+
+def _duplicate_exact_pin_findings(
+    declarations: Sequence[RequirementDeclaration],
+) -> list[Finding]:
+    """Report only conflicting exact pins with the same unresolved marker scope."""
+    seen: dict[tuple[str, str | None], RequirementDeclaration] = {}
+    findings: list[Finding] = []
+    for declaration in declarations:
+        requirement = declaration.requirement
+        specifiers = tuple(requirement.specifier)
+        if (
+            requirement.url is not None
+            or len(specifiers) != 1
+            or specifiers[0].operator != "=="
+            or "*" in specifiers[0].version
+        ):
+            continue
+        key = (
+            canonicalize_name(requirement.name),
+            str(requirement.marker) if requirement.marker is not None else None,
+        )
+        previous = seen.get(key)
+        if previous is None:
+            seen[key] = declaration
+            continue
+        previous_specifier = next(iter(previous.requirement.specifier))
+        if previous_specifier.version == specifiers[0].version:
+            continue
+        findings.append(
+            Finding(
+                rule_id=rule_tag(
+                    Scope.REPOSITORY,
+                    Framework.NONE,
+                    Category.DEPENDENCIES,
+                    "duplicate-requirement-conflict",
+                ),
+                path=declaration.source,
+                line=declaration.line,
+                message=(
+                    f"{requirement.name} exact pin {specifiers[0].version} at "
+                    f"{declaration.source}:{declaration.line} conflicts with "
+                    f"{previous_specifier.version} at "
+                    f"{previous.source}:{previous.line}; same environment marker"
+                ),
+            )
+        )
+    return findings
 
 
 def _exact_pin_findings(
