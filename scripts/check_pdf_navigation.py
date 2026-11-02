@@ -7,7 +7,7 @@ import importlib
 import sys
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Protocol, cast
+from typing import Annotated, Protocol, cast
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -15,22 +15,24 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 class _SectionContract(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    outline_title: str = Field(min_length=1)
-    heading_text: str = Field(min_length=1)
-    expected_physical_page: int = Field(ge=1)
+    outline_title: Annotated[str, Field(min_length=1)]
+    heading_text: Annotated[str, Field(min_length=1)]
+    expected_physical_page: Annotated[int, Field(ge=1)]
 
 
 class _NavigationContract(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    source_evidence: str = Field(min_length=1)
-    sections: list[_SectionContract] = Field(min_length=1)
+    source_evidence: Annotated[str, Field(min_length=1)]
+    sections: Annotated[list[_SectionContract], Field(min_length=1)]
 
     @field_validator("source_evidence")
     @classmethod
     def validate_source_evidence(cls, value: str) -> str:
         if not value.strip():
-            raise ValueError("source_evidence must identify an independent source/build map")
+            raise ValueError(
+                "source_evidence must identify an independent source/build map"
+            )
         return value
 
 
@@ -74,7 +76,8 @@ def _flatten_outline(items: object) -> list[object]:
     result: list[object] = []
     match items:
         case [*nested]:
-            for item in nested:
+            nested_items = cast(list[object], nested)
+            for item in nested_items:
                 result.extend(_flatten_outline(item))
         case None:
             pass
@@ -99,9 +102,7 @@ def validate_navigation(
     for section in contract.sections:
         title = section.outline_title
         candidates = [
-            item
-            for item in outline
-            if cast(_Destination, item).title == title
+            item for item in outline if cast(_Destination, item).title == title
         ]
         if len(candidates) != 1:
             mismatches.append(
@@ -113,7 +114,9 @@ def validate_navigation(
         except (IndexError, KeyError, TypeError, ValueError):
             actual_page_index = None
         if actual_page_index is None:
-            mismatches.append(f"outline title {title!r} has no resolvable page destination")
+            mismatches.append(
+                f"outline title {title!r} has no resolvable page destination"
+            )
             continue
         actual_page = actual_page_index + 1
         expected_page = section.expected_physical_page
@@ -125,8 +128,16 @@ def validate_navigation(
             continue
         try:
             text = reader.pages[actual_page_index].extract_text()
-        except (IndexError, KeyError, OSError, TypeError, ValueError) as error:
-            unknown.append(f"cannot extract text from physical page {actual_page}: {error}")
+        except (
+            IndexError,
+            KeyError,
+            OSError,
+            TypeError,
+            ValueError,
+        ) as error:
+            unknown.append(
+                f"cannot extract text from physical page {actual_page}: {error}"
+            )
             continue
         if not text or not text.strip():
             unknown.append(
@@ -161,7 +172,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
     if unknown:
         return 2
-    print("Configured outline destinations match source-declared page/heading contracts.")
+    print(
+        "Configured outline destinations match source-declared page/heading contracts."
+    )
     return 0
 
 
