@@ -7,7 +7,9 @@ This review-only sample is pinned to `sheepfling/styling` revision
 `codex/brian-typography-backlog`. It covers the six public Markdown files named
 in issue #57's pilot proposal. The extractor found 14 structural headings. This
 is a small convenience sample, not a repository-wide result or a validated
-precision estimate.
+precision estimate. For each heading, I also checked the following paragraph
+or list when present to judge whether terse titles such as "Required slots"
+and "Build and review" had clear local context.
 
 ## Manual labels
 
