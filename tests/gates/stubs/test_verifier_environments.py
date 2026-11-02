@@ -240,6 +240,7 @@ def test_three_checker_installed_example_selects_all_lanes(
     build_config = (example / "pyproject.toml").read_text(encoding="utf-8")
 
     assert settings.typing_checkers == ("mypy", "pyright", "ty")
+    assert settings.runtime_distributions == ()
     assert settings.mypy_diagnostics == ("[arg-type]",)
     assert settings.pyright_diagnostics == ("reportArgumentType",)
     assert settings.ty_diagnostics == ("invalid-argument-type",)

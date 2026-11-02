@@ -51,3 +51,46 @@ Python 3.10–3.14 range, other operating systems, or other runtime versions. Th
 original fixture's ty class-object assertion limitation remains an explicit
 compatibility deviation to review with the consumer; no consumer source, pin,
 workflow, or release was changed.
+
+## Synthetic installed-wheel isolation control
+
+The three-checker example also contains a source-tree-only
+`sample_contract.checkout_only` stub. `exclude-package-data` omits it from the
+wheel, and a marked negative import in the consumer fixture must fail if checkers
+resolve against that source file. This detects accidental checkout `MYPYPATH`
+leakage while keeping source inspection and installed-artifact checks separate.
+
+| Evidence | Identity |
+| --- | --- |
+| Alphus/example revision | `74cf8586b14076d11f19398ca2722ecf86e1449b` |
+| Checker interpreter | Python 3.11.16; MyPy 2.4.1, Pyright 1.1.414, ty 0.0.91 |
+| Fresh target interpreter | Python 3.11.16; build 1.6.1, setuptools 84.0.0, wheel 0.48.0, MyPy 2.4.1 |
+| Checker executable | `/private/tmp/alphus-issue56-work/.venv/bin/python` |
+| Target executable | `/private/tmp/alphus-sample-target/bin/python` |
+| Platform | macOS `darwin` arm64 |
+| Built artifact | `sample_contract_stubs-0.1.0-py3-none-any.whl` |
+| Artifact SHA-256 | `1d6e585321f7923a270891974d119f6093c70b98ce96916490709ae343dfc7e8` |
+| Result | Build/install, pip check, all checker fixtures, `mypy.stubtest`, and runtime smoke passed |
+
+The exact verifier command was:
+
+```shell
+/private/tmp/alphus-issue56-work/.venv/bin/python -m alphus.gates.stubs.verify \
+  --root examples/stub-package-contract \
+  --config stub-quality.json \
+  --target-python /private/tmp/alphus-sample-target/bin/python \
+  --report /tmp/alphus-sample-contract-report.json
+```
+
+Checker outcomes on the clean, installed consumer copy:
+
+| Checker | Positive fixture | Expected-negative lines | Missing-module diagnostic |
+| --- | --- | --- | --- |
+| MyPy 2.4.1 | pass | `[2, 7, 8, 9, 10]` | `[import-not-found]` |
+| Pyright 1.1.414 | pass | `[2, 7, 8, 9, 10]` | `reportMissingImports` |
+| ty 0.0.91 | pass | `[2, 7, 8, 9, 10]` | `unresolved-import` |
+
+The source-only stub is absent from the installed wheel. Twine metadata and a
+package-specific runtime API audit were not selected. This synthetic control
+validates isolation in one Python 3.11.16 macOS arm64 environment; it does not
+extend the mdutils consumer's platform or compatibility matrix.
