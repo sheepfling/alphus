@@ -673,6 +673,7 @@ javascript_import_evidence = true
 max_import_edges = 12
 max_public_api_names = 20
 max_contract_declarations = 12
+# One run-wide Python import-analysis byte budget, shared across all families.
 max_import_analysis_bytes = 8388608
 # Optional: bounded, read-only co-change evidence for selected family paths.
 git_cochange_evidence = true
@@ -692,11 +693,15 @@ per-finding evidence, and total-finding output are bounded; incomplete scans
 produce explicit warnings instead of implying a complete clean result. The
 optional Python import pass is disabled by default and requires explicit
 `python_module_roots`; it parses only selected `.py` files, reports uniquely
-resolved direct `import` and `from ... import ...` module edges, and bounds
-file reads, bytes per family, and displayed edges. Unresolved, ambiguous,
-relative-import forms it cannot resolve, parse failures, and files outside the
-selected inventory are not treated as absent dependencies. It does not follow
-dynamic imports, aliases/re-exports, or type-checker resolution. JavaScript and
+resolved direct `import` and `from ... import ...` module edges, including
+incoming references from selected Python files outside each family. Source
+reads and AST parses are cached across family reports, under one run-wide
+`max_import_analysis_bytes` budget; displayed edges are separately capped.
+The import walk remains family-specific, but selected files are not re-read or
+re-parsed for each family. Unresolved, ambiguous, above-package-root relative
+imports, parse failures, and files outside the selected inventory are not
+treated as absent dependencies. It does not follow dynamic imports,
+aliases/re-exports, or type-checker resolution. JavaScript and
 TypeScript import evidence is also disabled by default and requires the optional
 `alphus[javascript]` extra. Its Tree-sitter parsers inspect selected `.js`,
 `.jsx`, `.mjs`, `.cjs`, `.ts`, and `.tsx` files and report only literal relative
@@ -712,9 +717,10 @@ shared responsibility, coupling strength, or a public contract. For parsed
 Python family members, the optional pass also reports bounded names from a
 single direct literal module-level `__all__` assignment. Dynamic, augmented,
 or reassigned declarations are reported as unresolved; package-level
-re-exports, external consumers, and names without a literal `__all__` are not
-inferred. This is syntax evidence, not a complete public API or responsibility
-assessment. The pass also reports bounded, module-level classes with a
+re-exports, consumers outside the selected inventory, and names without a
+literal `__all__` are not inferred. This is syntax evidence, not a complete
+public API or responsibility assessment. The pass also reports bounded,
+module-level classes with a
 qualified `typing.Protocol` or `typing_extensions.Protocol` base and their
 direct method names. It also reports bounded fields for module-level classes
 with a qualified `typing.TypedDict` or `typing_extensions.TypedDict` base.
