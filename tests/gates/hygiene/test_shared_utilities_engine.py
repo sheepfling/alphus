@@ -180,6 +180,22 @@ def test_duplicate_helpers_exclude_only_conventional_cli_wrappers(
     ]
 
 
+def test_intentionally_mirrored_test_fixtures_remain_excluded(tmp_path: Path) -> None:
+    mirrored = (
+        "def assert_fixture_contract(value):\n"
+        "    parsed = parse(value)\n"
+        "    if parsed is None:\n"
+        "        raise AssertionError('fixture rejected')\n"
+        "    return parsed\n"
+    )
+    first = Path("tests/fixtures/positive_contract.py")
+    second = Path("tests/fixtures/negative_control.py")
+    _write(tmp_path, first.as_posix(), mirrored)
+    _write(tmp_path, second.as_posix(), mirrored)
+
+    assert duplicate_helpers(tmp_path, [first, second], POLICY) == {}
+
+
 def test_cli_wrapper_ast_shape_does_not_look_like_runtime_input_narrowing() -> None:
     source = """import ast
 def is_cli_wrapper(body):

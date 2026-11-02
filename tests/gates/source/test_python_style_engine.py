@@ -1,6 +1,9 @@
 """Protect the Python structure gate against false positives and bypasses."""
 
 import ast
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -172,12 +175,59 @@ def test_function_local_and_type_checking_imports_are_detected() -> None:
 def test_import_review_classifies_optional_loads_and_cycle_avoiding_imports() -> None:
     assert findings(
         "def render():\n"
-        "    import optional_plot_backend\n"
+        "    try:\n"
+        "        import optional_plot_backend\n"
+        "    except ImportError:\n"
+        "        return None\n"
         "    return optional_plot_backend.draw()\n"
         "def load_service():\n"
         "    from . import service\n"
         "    return service.load()\n"
     ) == {"local_imports"}
+
+
+def test_type_only_and_lazy_imports_break_a_real_module_cycle(tmp_path: Path) -> None:
+    package = tmp_path / "cycle_example"
+    package.mkdir()
+    (package / "__init__.py").write_text("\n", encoding="utf-8")
+    module_a = Path("cycle_example/a.py")
+    module_b = Path("cycle_example/b.py")
+    (tmp_path / module_a).write_text(
+        "from __future__ import annotations\n"
+        "from typing import TYPE_CHECKING\n"
+        "if TYPE_CHECKING:\n"
+        "    from .b import B\n"
+        "def create() -> B:\n"
+        "    from .b import B\n"
+        "    return B()\n",
+        encoding="utf-8",
+    )
+    (tmp_path / module_b).write_text(
+        "from __future__ import annotations\n"
+        "from .a import create\n"
+        "class B:\n"
+        "    def create_other(self) -> B:\n"
+        "        return create()\n",
+        encoding="utf-8",
+    )
+
+    observed = findings_for(tmp_path, [module_a], POLICY)
+    assert observed[module_a.as_posix()]
+    assert "type_checking_imports" in observed[module_a.as_posix()]
+    assert "local_imports" in observed[module_a.as_posix()]
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from cycle_example.a import create; assert type(create()).__name__ == 'B'",
+        ],
+        check=False,
+        env={**os.environ, "PYTHONPATH": str(tmp_path)},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_configured_application_entrypoint_imports_are_reported() -> None:
@@ -645,3 +695,19 @@ def test_public_constant_index_preserves_unknown_dynamic_exports(
     )
     result = findings_for(tmp_path, [source], policy)
     assert result == {}
+
+
+def test_public_constant_index_treats_external_star_imports_as_unknown(
+    tmp_path: Path,
+) -> None:
+    source = Path("src/alphus/gates/cpp/sample.py")
+    consumer = Path("src/alphus/gates/cpp/consumer.py")
+    (tmp_path / source).parent.mkdir(parents=True)
+    (tmp_path / source).write_text("EXPORTED = 1\nINTERNAL = 2\n", encoding="utf-8")
+    (tmp_path / consumer).write_text(
+        "from alphus.gates.cpp.sample import *\n", encoding="utf-8"
+    )
+    policy = POLICY.model_copy(
+        update={"public_constant_paths": ("src/alphus/gates/cpp/**",)}
+    )
+    assert findings_for(tmp_path, [source, consumer], policy) == {}
