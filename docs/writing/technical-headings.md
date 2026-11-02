@@ -9,7 +9,14 @@ Markdown/MDX ATX and setext headings, conventional LaTeX sectioning commands
 comments and common literal environments (`verbatim`, `Verbatim`, `lstlisting`,
 `minted`, and `comment`); and HTML navigation, scripts, styles, templates, code,
 preformatted, hidden, and `aria-hidden` regions. HTML templates and generated
-content are not resolved.
+content are not resolved. Explicitly selected DOCX files use paragraph heading
+styles and outline levels; PPTX files use title and centered-title placeholders.
+Those formats are read from bounded Office XML package parts without executing
+macros or installing optional parsers. Custom DOCX structures and custom PPTX
+layouts without title placeholders are not fully covered. Locations are reported
+as paragraph or slide numbers rather than source lines, and supporting slide
+content is not semantically evaluated. The routine Markdown profile does not
+include binary Office files by default.
 Custom sectioning commands, unresolved macros in titles, and unclosed title
 groups are unsupported and are skipped; no TeX engine is run.
 

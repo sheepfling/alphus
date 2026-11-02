@@ -1,11 +1,13 @@
 """Regression tests for opt-in document heading review."""
 
 from pathlib import Path
+from zipfile import ZipFile
 
 from alphus.config import load_config
 from alphus.gates.review.document_style import (
     DocumentSection,
     check_document_style,
+    extract_docx_sections,
     extract_html_sections,
     extract_latex_sections,
     extract_markdown_sections,
@@ -108,6 +110,127 @@ def test_html_review_skips_likely_generated_and_minified_inputs(tmp_path: Path) 
         "skipped a likely generated or minified file" in item.message
         for item in findings
     )
+
+
+def test_docx_headings_use_structural_styles_and_paragraph_anchors(
+    tmp_path: Path,
+) -> None:
+    document = tmp_path / "report.docx"
+    word = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+    paragraphs = [
+        "<w:p><w:r><w:t>Preface</w:t></w:r></w:p>",
+        '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>From Inputs to Models</w:t></w:r></w:p>',
+        '<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>From Data to Results</w:t></w:r></w:p>',
+        '<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>Methods</w:t></w:r></w:p>',
+        '<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>Limitations</w:t></w:r></w:p>',
+    ]
+    with ZipFile(document, "w") as archive:
+        archive.writestr(
+            "word/styles.xml",
+            f'<w:styles xmlns:w="{word}"><w:style w:type="paragraph" '
+            'w:styleId="CustomOutline"><w:pPr><w:outlineLvl w:val="2"/>'
+            "</w:pPr></w:style></w:styles>",
+        )
+        archive.writestr(
+            "word/document.xml",
+            f'<w:document xmlns:w="{word}"><w:body>{"".join(paragraphs)}'
+            '<w:p><w:pPr><w:pStyle w:val="CustomOutline"/></w:pPr>'
+            "<w:r><w:t>Custom styled content</w:t></w:r></w:p>"
+            "</w:body></w:document>",
+        )
+
+    sections = extract_docx_sections(document, display_path="report.docx")
+    assert (sections[-1].text, sections[-1].level) == ("Custom styled content", 3)
+
+    findings = check_document_style(
+        tmp_path,
+        [Path("report.docx")],
+        DocumentStylePolicy(extensions=(".docx",), minimum_headings=4),
+    )
+
+    density = next(
+        finding
+        for finding in findings
+        if finding.line is None and "rhetorical" in finding.message
+    )
+    assert "paragraph 2" in density.message
+    assert any(
+        "DOCX extraction uses paragraph heading styles" in finding.message
+        for finding in findings
+    )
+
+
+def test_pptx_title_placeholders_are_anchored_by_slide(tmp_path: Path) -> None:
+    document = tmp_path / "deck.pptx"
+    presentation = "http://schemas.openxmlformats.org/presentationml/2006/main"
+    drawing = "http://schemas.openxmlformats.org/drawingml/2006/main"
+    rel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+    slides = []
+    for index, title in enumerate(
+        ("From Inputs to Models", "From Data to Results", "Methods", "Limitations"),
+        start=1,
+    ):
+        slides.append(
+            (
+                f"ppt/slides/slide{index}.xml",
+                (
+                    f'<p:sld xmlns:p="{presentation}" xmlns:a="{drawing}"><p:spTree>'
+                    '<p:sp><p:nvSpPr><p:nvPr><p:ph type="title"/></p:nvPr></p:nvSpPr>'
+                    f"<p:txBody><a:p><a:r><a:t>{title}</a:t></a:r></a:p></p:txBody>"
+                    "</p:sp></p:spTree></p:sld>"
+                ),
+            )
+        )
+    with ZipFile(document, "w") as archive:
+        archive.writestr(
+            "ppt/presentation.xml",
+            f'<p:presentation xmlns:p="{presentation}" xmlns:r="{rel}"><p:sldIdLst>'
+            + "".join(f'<p:sldId id="{i}" r:id="rId{i}"/>' for i in range(1, 5))
+            + "</p:sldIdLst></p:presentation>",
+        )
+        archive.writestr(
+            "ppt/_rels/presentation.xml.rels",
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            + "".join(
+                f'<Relationship Id="rId{i}" Target="slides/slide{i}.xml" '
+                'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide"/>'
+                for i in range(1, 5)
+            )
+            + "</Relationships>",
+        )
+        for path, xml in slides:
+            archive.writestr(path, xml)
+
+    findings = check_document_style(
+        tmp_path,
+        [Path("deck.pptx")],
+        DocumentStylePolicy(extensions=(".pptx",), minimum_headings=4),
+    )
+
+    density = next(
+        finding
+        for finding in findings
+        if finding.line is None and "rhetorical" in finding.message
+    )
+    assert "slide 1" in density.message
+    assert any(
+        "title and centered-title placeholders only" in finding.message
+        for finding in findings
+    )
+
+
+def test_corrupt_office_artifact_is_reported_as_not_evaluated(tmp_path: Path) -> None:
+    artifact = tmp_path / "broken.docx"
+    artifact.write_bytes(b"not a zip package")
+
+    findings = check_document_style(
+        tmp_path,
+        [Path("broken.docx")],
+        DocumentStylePolicy(extensions=(".docx",)),
+    )
+
+    assert len(findings) == 1
+    assert "could not be read" in findings[0].message
 
 
 def test_repeated_template_advisory_requires_document_level_density() -> None:

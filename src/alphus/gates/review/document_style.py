@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import posixpath
 import re
+import xml.etree.ElementTree as ET
+import zipfile
 from collections.abc import Iterable
 from dataclasses import dataclass
 from html.parser import HTMLParser
@@ -52,6 +55,22 @@ _LATEX_IGNORED_ENVIRONMENT = re.compile(
 )
 _LATEX_FORMAT_COMMAND = re.compile(r"\\(?:emph|textbf|textit|textrm|textsf)\s*")
 _HTML_IGNORED_TAGS = frozenset({"nav", "script", "style", "template", "code", "pre"})
+_W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+_P_NS = "http://schemas.openxmlformats.org/presentationml/2006/main"
+_A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
+_R_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+_MAX_PACKAGE_XML_BYTES = 32 * 1024 * 1024
+
+
+def _read_package_xml(archive: zipfile.ZipFile, name: str) -> ET.Element:
+    """Read a bounded Office XML part without DTD or entity declarations."""
+    info = archive.getinfo(name)
+    if info.file_size > _MAX_PACKAGE_XML_BYTES:
+        raise ValueError(f"Office XML part exceeds {_MAX_PACKAGE_XML_BYTES} bytes")
+    content = archive.read(name)
+    if b"<!DOCTYPE" in content.upper() or b"<!ENTITY" in content.upper():
+        raise ValueError("Office XML DTD and entity declarations are unsupported")
+    return ET.fromstring(content)
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +81,129 @@ class DocumentSection:
     text: str
     level: int
     line: int
+    position: str | None = None
+
+
+def _section_location(section: DocumentSection) -> str:
+    return section.position or f"line {section.line}"
+
+
+def _word_style_levels(archive: zipfile.ZipFile) -> dict[str, int]:
+    """Read built-in and custom paragraph outline levels from DOCX styles."""
+    try:
+        styles = _read_package_xml(archive, "word/styles.xml")
+    except KeyError:
+        return {}
+    levels: dict[str, int] = {}
+    for style in styles.findall(f"{{{_W_NS}}}style"):
+        style_id = style.get(f"{{{_W_NS}}}styleId")
+        outline = style.find(f"{{{_W_NS}}}pPr/{{{_W_NS}}}outlineLvl")
+        if style_id and outline is not None:
+            try:
+                levels[style_id] = int(outline.get(f"{{{_W_NS}}}val", "-1")) + 1
+            except ValueError:
+                continue
+    return levels
+
+
+def extract_docx_sections(
+    path: Path, *, display_path: str
+) -> tuple[DocumentSection, ...]:
+    """Extract DOCX paragraphs styled as headings or assigned an outline level."""
+    with zipfile.ZipFile(path) as archive:
+        document = _read_package_xml(archive, "word/document.xml")
+        custom_levels = _word_style_levels(archive)
+        sections: list[DocumentSection] = []
+        paragraph_number = 0
+        for paragraph in document.iter(f"{{{_W_NS}}}p"):
+            paragraph_number += 1
+            properties = paragraph.find(f"{{{_W_NS}}}pPr")
+            style_id = None
+            level = None
+            if properties is not None:
+                style = properties.find(f"{{{_W_NS}}}pStyle")
+                if style is not None:
+                    style_id = style.get(f"{{{_W_NS}}}val")
+                outline = properties.find(f"{{{_W_NS}}}outlineLvl")
+                if outline is not None:
+                    try:
+                        level = int(outline.get(f"{{{_W_NS}}}val", "-1")) + 1
+                    except ValueError:
+                        pass
+            if level is None and style_id:
+                level = custom_levels.get(style_id)
+                if level is None and style_id.lower().startswith("heading"):
+                    try:
+                        level = int(style_id[7:])
+                    except ValueError:
+                        pass
+            if level is None or not 1 <= level <= 6:
+                continue
+            text = "".join(node.text or "" for node in paragraph.iter(f"{{{_W_NS}}}t"))
+            text = " ".join(text.split())
+            if text:
+                sections.append(
+                    DocumentSection(
+                        display_path,
+                        text,
+                        level,
+                        paragraph_number,
+                        position=f"paragraph {paragraph_number}",
+                    )
+                )
+    return tuple(sections)
+
+
+def extract_pptx_sections(
+    path: Path, *, display_path: str
+) -> tuple[DocumentSection, ...]:
+    """Extract text from slide title placeholders in presentation order."""
+    with zipfile.ZipFile(path) as archive:
+        presentation = _read_package_xml(archive, "ppt/presentation.xml")
+        relationships = _read_package_xml(archive, "ppt/_rels/presentation.xml.rels")
+        targets = {
+            relation.get("Id"): relation.get("Target") for relation in relationships
+        }
+        sections: list[DocumentSection] = []
+        slide_ids = presentation.findall(f".//{{{_P_NS}}}sldId")
+        for slide_number, slide_id in enumerate(slide_ids, start=1):
+            target = targets.get(slide_id.get(f"{{{_R_NS}}}id"))
+            if not target:
+                continue
+            slide_path = posixpath.normpath(
+                target.lstrip("/")
+                if target.startswith("/")
+                else posixpath.join("ppt", target)
+            )
+            if slide_path.startswith("../") or slide_path not in archive.namelist():
+                continue
+            slide = _read_package_xml(archive, slide_path)
+            for shape in slide.findall(f".//{{{_P_NS}}}sp"):
+                placeholder = shape.find(
+                    f"{{{_P_NS}}}nvSpPr/{{{_P_NS}}}nvPr/{{{_P_NS}}}ph"
+                )
+                if placeholder is None or placeholder.get("type", "") not in {
+                    "title",
+                    "ctrTitle",
+                }:
+                    continue
+                text = " ".join(
+                    "".join(
+                        node.text or "" for node in shape.findall(f".//{{{_A_NS}}}t")
+                    ).split()
+                )
+                if text:
+                    sections.append(
+                        DocumentSection(
+                            display_path,
+                            text,
+                            1,
+                            slide_number,
+                            position=f"slide {slide_number}",
+                        )
+                    )
+                    break
+    return tuple(sections)
 
 
 class _HtmlOutlineParser(HTMLParser):
@@ -318,13 +460,13 @@ def rhetorical_heading_findings(
         ):
             continue
         examples = "; ".join(
-            f'"{item.text}" (line {item.line})' for item in matches[:3]
+            f'"{item.text}" ({_section_location(item)})' for item in matches[:3]
         )
         findings.append(
             Finding(
                 rule_id=_RULE_ID,
                 path=matches[0].path,
-                line=matches[0].line,
+                line=None if matches[0].position else matches[0].line,
                 severity=policy.severity,
                 message=(
                     f"Repeated rhetorical heading pattern '{family}' appears "
@@ -371,18 +513,62 @@ def check_document_style(
                 )
             )
             continue
+        suffix = relative.suffix.lower()
+        if suffix in {".docx", ".pptx"}:
+            try:
+                sections = (
+                    extract_docx_sections(checkout / relative, display_path=name)
+                    if suffix == ".docx"
+                    else extract_pptx_sections(checkout / relative, display_path=name)
+                )
+            except (
+                OSError,
+                KeyError,
+                ValueError,
+                ET.ParseError,
+                zipfile.BadZipFile,
+            ) as error:
+                findings.append(
+                    Finding(
+                        rule_id=_RULE_ID,
+                        path=name,
+                        severity=policy.severity,
+                        message=(
+                            f"Document outline was not evaluated because the {suffix[1:].upper()} "
+                            f"package could not be read: {type(error).__name__}."
+                        ),
+                    )
+                )
+                continue
+            findings.extend(rhetorical_heading_findings(sections, policy))
+            limitations = (
+                "DOCX extraction uses paragraph heading styles and outline levels; "
+                "custom structures without those markers are unknown."
+                if suffix == ".docx"
+                else "PPTX extraction uses title and centered-title placeholders only; "
+                "custom layouts without those placeholders and supporting-content context are unknown."
+            )
+            findings.append(
+                Finding(
+                    rule_id=_RULE_ID,
+                    path=name,
+                    severity="info",
+                    message=f"{limitations} Titles are anchored by paragraph or slide number; no content is generated or rewritten.",
+                )
+            )
+            continue
         source = read_utf8_text(checkout / relative)
         extractor = (
             extract_latex_sections
-            if relative.suffix.lower() == ".tex"
+            if suffix == ".tex"
             else extract_html_sections
-            if relative.suffix.lower() == ".html"
+            if suffix == ".html"
             else extract_markdown_sections
         )
         findings.extend(
             rhetorical_heading_findings(extractor(source, path=name), policy)
         )
-        if relative.suffix.lower() == ".tex":
+        if suffix == ".tex":
             findings.append(
                 Finding(
                     rule_id=_RULE_ID,
@@ -396,7 +582,7 @@ def check_document_style(
                     ),
                 )
             )
-        elif relative.suffix.lower() == ".html":
+        elif suffix == ".html":
             findings.append(
                 Finding(
                     rule_id=_RULE_ID,

@@ -44,8 +44,13 @@ class DocumentStylePolicy(StrictModel):
             "document style extensions must be lowercase suffixes",
             require_one=True,
         )
-        if any(value not in {".md", ".mdx", ".tex", ".html"} for value in checked):
-            raise ValueError("document style supports .md, .mdx, .tex, and .html")
+        if any(
+            value not in {".md", ".mdx", ".tex", ".html", ".docx", ".pptx"}
+            for value in checked
+        ):
+            raise ValueError(
+                "document style supports .md, .mdx, .tex, .html, .docx, and .pptx"
+            )
         return checked
 
     @field_validator("exclude")
