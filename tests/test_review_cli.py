@@ -59,6 +59,13 @@ _CASES = (
         "alphus/python/none/testing/large-prose-assertion",
     ),
     (
+        "pyproj-constants",
+        "geo.py",
+        'from pyproj import Geod\ngeod = Geod(ellps="WGS84", a=6378137)\n',
+        '[checks.pyproj_constants]\nextensions = [".py"]\n',
+        "alphus/python/pyproj/style/inline-constant",
+    ),
+    (
         "test-quality",
         "tests/test_plan.py",
         (
@@ -172,6 +179,7 @@ def test_scipy_direct_rule_uses_its_own_label(
     "selector",
     [
         "numeric-literals",
+        "pyproj-constants",
         "test-quality",
         "input-contracts",
         "pydantic-practices",

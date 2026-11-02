@@ -60,10 +60,10 @@ language neutral.
 - `alphus.support` owns shared file inventory, contained-file/JSON access,
   AST name resolution, and platform probes. These utilities do not emit
   findings or register rules.
-- `alphus.gates.review` owns numeric-literal, test-quality, and input-contract
-  checkers. `review.frameworks` contains the Pydantic and FastAPI practice
-  modules so each framework can grow independently. The theme's `runners.py`
-  binds their selectors to validated policies.
+- `alphus.gates.review` owns numeric-literal, scientific-constant, test-quality,
+  and input-contract checkers. `review.frameworks` contains the Pydantic and
+  FastAPI practice modules so each framework can grow independently. The theme's
+  `runners.py` binds their selectors to validated policies.
 - `alphus.gates.source` owns shared source inventory, dispatch, and policy
   binding for portable source checks. `alphus.gates.languages.python` and
   `alphus.gates.languages.javascript` own language-specific analysis engines.
@@ -126,6 +126,15 @@ The internal import paths changed with this layout:
 
 The `alphus.config` model and loader imports and the `alphus.cli` command entry
 point remain at the package root.
+
+## Numeric catalog boundary
+
+`alphus.gates.review.numeric_catalog` owns the language-neutral `NumericUse`
+contract and exact catalog matcher. A language adapter turns parsed source
+into value, operation, source-line, and identifier-context records; domain
+catalogs such as SciPy and pyproj supply replacement guidance separately. The
+Python AST adapter is the first frontend. Other language frontends can target
+the same matcher without importing Python syntax or domain libraries.
 
 Node and npm are optional. A repository that configures no Node-based command
 does not need `package.json`, Node.js, or npm. Consumers may keep established

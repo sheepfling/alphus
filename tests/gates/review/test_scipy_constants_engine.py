@@ -133,6 +133,35 @@ def test_new_physical_constants_and_ambiguous_charge_are_reviewed() -> None:
     assert "scipy.constants.gas_constant" in findings[2].message
 
 
+def test_curated_chemistry_constants_recommend_scipy_database_values() -> None:
+    source = (
+        "charge = moles * 96485.33212331001\n"
+        "legacy_charge = moles * 96485.33212\n"
+        "mass = atoms * 1.66053906892e-27\n"
+        "legacy_mass = atoms * 1.6605390666e-27\n"
+        "molar_mass = amount * 0.00100000000105\n"
+        "legacy_molar_mass = amount * 0.00099999999965\n"
+        "carbon_mass = carbon_moles * 0.0120000000126\n"
+        "legacy_carbon_mass = carbon_moles * 0.0119999999958\n"
+        "rounded_carbon_mass = carbon_moles * 0.012\n"
+        "generic_mass = amount * 0.012\n"
+    )
+
+    findings = scipy_literal_findings(source, _policy())
+
+    assert [finding.line for finding in findings] == list(range(1, 10))
+    assert 'scipy.constants.value("Faraday constant")' in findings[0].message
+    assert 'scipy.constants.value("Faraday constant")' in findings[1].message
+    assert 'scipy.constants.value("atomic mass constant")' in findings[2].message
+    assert 'scipy.constants.value("atomic mass constant")' in findings[3].message
+    assert 'scipy.constants.value("molar mass constant")' in findings[4].message
+    assert 'scipy.constants.value("molar mass constant")' in findings[5].message
+    assert all(
+        'scipy.constants.value("molar mass of carbon-12")' in finding.message
+        for finding in findings[6:]
+    )
+
+
 def test_same_numeric_factor_uses_unit_context_without_double_reporting() -> None:
     source = (
         "weight = reading_grams * 0.001\n"

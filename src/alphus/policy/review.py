@@ -94,6 +94,21 @@ class ScipyConstantsPolicy(PythonSourceScanPolicy):
         return self
 
 
+class PyprojConstantsPolicy(PythonSourceScanPolicy):
+    """Advisory WGS 84 ellipsoid catalog for Python source using pyproj."""
+
+    wgs84_ellipsoid: bool = True
+    constants: tuple[NumericLiteralSpec, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_constant_names(self) -> Self:
+        require_unique(
+            tuple(spec.name for spec in self.constants),
+            "pyproj catalog names must be unique",
+        )
+        return self
+
+
 class TestQualityExclusion(StrictModel):
     """One documented test excluded from shared-oracle review."""
 

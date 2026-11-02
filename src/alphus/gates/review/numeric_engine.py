@@ -88,13 +88,21 @@ def _module_constant(statement: ast.stmt) -> bool:
 
 
 class _NumericVisitor(ast.NodeVisitor):
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        include_assignments: bool = False,
+        include_call_arguments: bool = False,
+    ) -> None:
         self.function_names: list[str] = []
         self.uses: list[NumericUse] = []
+        self.include_assignments = include_assignments
+        self.include_call_arguments = include_call_arguments
+        self.call_context: list[frozenset[str]] = []
 
     def visit_Module(self, node: ast.Module) -> None:
         for statement in node.body:
-            if not _module_constant(statement):
+            if self.include_assignments or not _module_constant(statement):
                 self.visit(statement)
 
     def visit_Assert(self, node: ast.Assert) -> None:
@@ -143,8 +151,83 @@ class _NumericVisitor(ast.NodeVisitor):
                 pass
         self.generic_visit(node)
 
+    def visit_Assign(self, node: ast.Assign) -> None:
+        """Optionally preserve identifier context for named numeric values."""
+        literal = _literal_number(node.value)
+        if self.include_assignments and literal is not None:
+            tokens: set[str] = set()
+            for target in node.targets:
+                tokens.update(_expression_tokens(target))
+            if self.function_names:
+                tokens.update(_identifier_tokens(self.function_names[-1]))
+            self.uses.append(
+                NumericUse(
+                    literal.value,
+                    literal.line,
+                    NumericOperation.ASSIGNMENT,
+                    frozenset(tokens),
+                )
+            )
+        self.generic_visit(node)
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
+        """Optionally preserve identifier context for annotated numeric values."""
+        literal = _literal_number(node.value) if node.value is not None else None
+        if self.include_assignments and literal is not None:
+            tokens = _expression_tokens(node.target)
+            if self.function_names:
+                tokens.update(_identifier_tokens(self.function_names[-1]))
+            self.uses.append(
+                NumericUse(
+                    literal.value,
+                    literal.line,
+                    NumericOperation.ASSIGNMENT,
+                    frozenset(tokens),
+                )
+            )
+        self.generic_visit(node)
+
+    def visit_Call(self, node: ast.Call) -> None:
+        """Carry call and keyword names into contained Python numeric uses."""
+        function_tokens = _expression_tokens(node.func)
+        literal_string_tokens = {
+            token
+            for argument in (*node.args, *(keyword.value for keyword in node.keywords))
+            if isinstance(argument, ast.Constant) and isinstance(argument.value, str)
+            for token in re.findall(r"[A-Za-z]+[A-Za-z0-9]*", argument.value.casefold())
+        }
+        shared_tokens = function_tokens | literal_string_tokens
+
+        self.visit(node.func)
+        for argument in node.args:
+            self._visit_call_argument(argument, shared_tokens)
+        for keyword in node.keywords:
+            tokens = set(shared_tokens)
+            if keyword.arg is not None:
+                tokens.update(_identifier_tokens(keyword.arg))
+            self._visit_call_argument(argument=keyword.value, tokens=tokens)
+
+    def _visit_call_argument(
+        self, argument: ast.expr, tokens: set[str] | frozenset[str]
+    ) -> None:
+        self.call_context.append(frozenset(tokens))
+        literal = _literal_number(argument)
+        if self.include_call_arguments and literal is not None:
+            self.uses.append(
+                NumericUse(
+                    literal.value,
+                    literal.line,
+                    NumericOperation.CALL_ARGUMENT,
+                    frozenset(tokens),
+                )
+            )
+        self.visit(argument)
+        self.call_context.pop()
+
     def _arithmetic(self, node: ast.BinOp | ast.AugAssign) -> None:
         tokens = _expression_tokens(node)
+        for context in self.call_context:
+            tokens.update(context)
         if self.function_names:
             tokens.update(_identifier_tokens(self.function_names[-1]))
         operations: dict[type[ast.operator], NumericOperation] = {
@@ -179,9 +262,14 @@ def scan_numeric_literals(
     specs: tuple[NumericLiteralSpec, ...],
     *,
     framework: Framework,
+    include_assignments: bool = False,
+    include_call_arguments: bool = False,
 ) -> list[NumericLiteralFinding]:
-    """Scan arithmetic for exact catalog values without evaluating expressions."""
-    visitor = _NumericVisitor()
+    """Scan selected Python values and arithmetic without evaluating source."""
+    visitor = _NumericVisitor(
+        include_assignments=include_assignments,
+        include_call_arguments=include_call_arguments,
+    )
     visitor.visit(ast.parse(source))
     return match_numeric_uses(
         visitor.uses, specs, scope=Scope.PYTHON, framework=framework

@@ -18,11 +18,13 @@ class NumericOperation(StrEnum):
     FLOOR_DIVIDE = "floor_divide"
     MODULO = "modulo"
     POWER = "power"
+    ASSIGNMENT = "assignment"
+    CALL_ARGUMENT = "call_argument"
 
 
 @dataclass(frozen=True, slots=True)
 class NumericUse:
-    """A parser-provided arithmetic literal, independent of source language."""
+    """A parser-provided numeric value, independent of source language."""
 
     value: int | float
     line: int

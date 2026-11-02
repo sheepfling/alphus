@@ -113,6 +113,11 @@ extensions = [".py"]
 exclude = []
 math_constants = true
 
+[checks.pyproj_constants]
+extensions = [".py"]
+exclude = []
+wgs84_ellipsoid = true
+
 [checks.scipy_constants]
 extensions = [".py"]
 exclude = []
@@ -450,6 +455,12 @@ rollout = "provisional"
 
 [[orchestration.steps]]
 kind = "rule"
+name = "pyproj geodesy constants review"
+rule = "pyproj-constants"
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "rule"
 name = "Test review"
 rule = "test-quality"
 
@@ -477,6 +488,7 @@ rollout = "provisional"
 [[orchestration.profiles]]
 name = "review"
 steps = [
-  "Numeric review", "SciPy constants review", "Test review", "Input contract review",
+  "Numeric review", "SciPy constants review", "pyproj geodesy constants review",
+  "Test review", "Input contract review",
   "Pydantic practice review", "FastAPI practice review", "SQLAlchemy practices review",
 ]

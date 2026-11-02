@@ -6,7 +6,7 @@ quality, or the absence of side effects. Existing policies remain valid without
 their optional sections. Ruff, Pyright, pytest, mdrepo, and rumdl retain their
 own checks.
 
-Alphus applies all six scanners to its real source/test inventory through the
+Alphus applies its review scanners to source and test inventory through the
 `review` profile and includes them in `check` with a warning failure threshold.
 Build/install the wheel using [the self-check guide](SELF-CHECK.md), then
 invoke the installed command from the temporary directory:
@@ -71,11 +71,12 @@ meaning. Evaluating formulas to infer units or derive factors, external constant
 authorities, and dimensional correctness remain outside this checker.
 
 The exact catalog matcher in `alphus.gates.review.numeric_catalog` accepts
-`NumericUse` records with a value, line, arithmetic operation, and identifier
-context. The Python AST adapter in `numeric_engine` produces those records today.
-A C, C++, or JavaScript adapter can supply the same records after parsing its
-own syntax and use `match_numeric_uses(..., scope=...)` without importing Python
-AST nodes. Language adapters must exclude comments, strings, declarations, and
+`NumericUse` records with a value, line, operation, and identifier context. The
+Python AST adapter in `numeric_engine` produces those records today, including
+direct call arguments for library-specific catalogs. A C, C++, or JavaScript
+adapter can supply the same records after parsing its own syntax and use
+`match_numeric_uses(..., scope=...)` without importing Python AST nodes.
+Language adapters must exclude comments, strings, declarations, and
 non-arithmetic values according to their own grammar; the shared matcher only
 compares normalized evidence against configured catalogs.
 
@@ -99,7 +100,13 @@ common SciPy unit factors in the length, time, mass, volume, pressure, area,
 and speed families. These include `inch`, `foot`, `yard`, `mile`,
 `nautical_mile`; `minute`, `hour`, `day`, `week`, `year`, `Julian_year`;
 `gram`, `pound`, `ounce`; `liter`; `atmosphere`, `bar`; `hectare`, `acre`;
-and `mph`, `kmh`, `knot`. Each factor and its reciprocal are checked.
+and `mph`, `kmh`, `knot`. Chemistry values include the Faraday constant,
+atomic mass constant, molar mass constant, and molar mass of carbon-12. Those
+recognize current SciPy CODATA values and selected recent previous values, then
+recommend `scipy.constants.value(...)` so code uses its installed constant
+database rather than copying a CODATA value. The rounded `0.012` carbon-12
+value is reported only with carbon context. Each unit factor and its reciprocal
+are checked.
 
 Unit factors require a related identifier or enclosing function name, such as
 `inches` or `meters`. Multiplication and division both match. The finding
@@ -112,13 +119,42 @@ the same fields as the numeric catalog. Disable groups with
 `inverse_conversions = false`.
 
 The built-in symbols and units follow the
-[SciPy constants reference](https://docs.scipy.org/doc/scipy/reference/constants.html).
+[current SciPy constants reference](https://docs.scipy.org/doc/scipy/reference/constants.html)
+and [SciPy 1.11.4 constants reference](https://docs.scipy.org/doc/scipy-1.11.4/reference/constants.html).
 Alphus does not import SciPy, compare floating-point values approximately, or
 infer physical dimensions. This rule does not detect composed conversion
 formulas, affine temperature conversions such as Celsius to Kelvin, or
 SciPy's `lambda2nu`/`nu2lambda` function equivalents. The gate is provisional
 in Alphus's own `review` profile, so its findings are visible without
 blocking the profile.
+
+## pyproj and WGS 84 ellipsoid values
+
+Selector: `pyproj-constants`. ID: `alphus/python/pyproj/style/inline-constant`.
+
+Enable the curated WGS 84 ellipsoid catalog with:
+
+```toml
+[checks.pyproj_constants]
+extensions = [".py"]
+```
+
+The catalog reviews the exact WGS 84 semi-major axis, inverse flattening, and
+semi-minor axis when a named assignment, arithmetic expression, or Python call
+context names a geodesic or ellipsoid value. Findings point to
+`pyproj.CRS.from_epsg(4326).ellipsoid.semi_major_metre`,
+`inverse_flattening`, or `semi_minor_metre`, as appropriate. Use
+`pyproj.Geod(ellps="WGS84")` when constructing a geodesic, so the library owns
+the ellipsoid parameters. The rule does not import pyproj and remains
+provisional in Alphus's `review` profile. Disable the built-in catalog with
+`wgs84_ellipsoid = false`, or add consumer-specific entries through
+`[[checks.pyproj_constants.constants]]`.
+
+Only exact values with geodesy/ellipsoid context are reported; numeric values
+without that context are left alone. The catalog is not a complete Earth model
+or a substitute for selecting the correct datum, CRS, or coordinate operation.
+The values and named parameters follow [PROJ's ellipsoid definitions](https://proj.org/en/stable/usage/ellipsoids.html)
+and the [pyproj CRS API](https://pyproj4.github.io/pyproj/stable/api/crs/crs.html).
 
 ## Test quality
 
@@ -197,8 +233,8 @@ not claim that the test is useless.
 `oracle_production_modules` contains dotted Python module prefixes. The helper
 allowlist contains exact dotted callable names. Exclusions match one test
 function in one exact configured test file and require a one-line reason of at
-least 20 characters. A missing production-module scope is a configuration error when
-the check is enabled.
+least 20 characters. A missing production-module scope is a configuration error
+when the check is enabled.
 
 Unknown wrappers, dynamic imports, branch-dependent bindings, and unresolved
 receivers are skipped. Fixture builders outside the configured production

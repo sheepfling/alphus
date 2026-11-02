@@ -53,6 +53,27 @@ _PHYSICAL_CONSTANTS = (
         values=(8.31446261815324,),
         replacement="scipy.constants.gas_constant (J/(mol K))",
     ),
+    NumericLiteralSpec(
+        name="Faraday constant",
+        values=(96485.33212331001, 96485.33212),
+        replacement='scipy.constants.value("Faraday constant") (C/mol)',
+    ),
+    NumericLiteralSpec(
+        name="atomic mass constant",
+        values=(1.66053906892e-27, 1.6605390666e-27),
+        replacement='scipy.constants.value("atomic mass constant") (kg)',
+    ),
+    NumericLiteralSpec(
+        name="molar mass constant",
+        values=(0.00100000000105, 0.00099999999965),
+        replacement='scipy.constants.value("molar mass constant") (kg/mol)',
+    ),
+    NumericLiteralSpec(
+        name="molar mass of carbon-12",
+        values=(0.0120000000126, 0.0119999999958, 0.012),
+        replacement='scipy.constants.value("molar mass of carbon-12") (kg/mol)',
+        name_tokens=("carbon", "carbon_12"),
+    ),
 )
 
 # Exact definitions or factors calculated from them; each is SI units per named
