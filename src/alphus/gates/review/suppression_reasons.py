@@ -200,6 +200,43 @@ def _split_toml_comment(value: str) -> tuple[str, str]:
     return value.rstrip(), ""
 
 
+def _toml_string_list(value: object) -> list[str] | None:
+    """Return a parsed TOML array only when each item is a string."""
+    match value:
+        case list():
+            values = cast(list[object], value)
+        case _:
+            return None
+    result: list[str] = []
+    for item in values:
+        match item:
+            case str() as text:
+                result.append(text)
+            case _:
+                return None
+    return result
+
+
+def _toml_per_file_map(value: object) -> dict[str, list[str]] | None:
+    """Return only a string-pattern to string-code mapping."""
+    match value:
+        case dict():
+            entries = cast(dict[object, object], value)
+        case _:
+            return None
+    result: dict[str, list[str]] = {}
+    for pattern, raw_codes in entries.items():
+        match pattern:
+            case str() as text:
+                codes = _toml_string_list(raw_codes)
+            case _:
+                return None
+        if codes is None:
+            return None
+        result[text] = codes
+    return result
+
+
 def _normalize_multiline_per_file_values(source: str) -> str:
     """Collapse valid multiline per-file-ignore arrays without losing line numbers."""
     lines = source.splitlines()
@@ -247,18 +284,13 @@ def _normalize_multiline_per_file_values(source: str) -> str:
                 if next_comment:
                     comments.append(next_comment)
         normalized_value: str | None = None
-        if table_entry and isinstance(parsed, list):
-            parsed_values = cast(list[object], parsed)
-            if all(isinstance(code, str) for code in parsed_values):
+        if table_entry:
+            parsed_values = _toml_string_list(parsed)
+            if parsed_values is not None:
                 normalized_value = json.dumps(parsed_values)
-        elif inline_map and isinstance(parsed, dict):
-            parsed_entries = cast(dict[object, object], parsed)
-            if all(
-                isinstance(pattern, str)
-                and isinstance(codes, list)
-                and all(isinstance(code, str) for code in cast(list[object], codes))
-                for pattern, codes in parsed_entries.items()
-            ):
+        elif inline_map:
+            parsed_entries = _toml_per_file_map(parsed)
+            if parsed_entries is not None:
                 normalized_value = json.dumps(parsed_entries)
         if end_index > index and normalized_value is not None:
             normalized = normalized_value
@@ -324,20 +356,25 @@ def _ruff_config_suppression_findings(
         ]
     seen = seen | {config_path}
     source = ""
+    config_error: str | None = None
+    unsupported_multiline_map = False
     try:
         source = read_utf8_text(config_path)
         tomllib.loads(source)
-    except (OSError, UnicodeError, tomllib.TOMLDecodeError) as error:
+    except tomllib.TOMLDecodeError:
         unsupported_multiline_map = bool(
-            isinstance(error, tomllib.TOMLDecodeError)
-            and re.search(r"(?m)^\s*per-file-ignores\s*=\s*\{\s*$", source)
+            re.search(r"(?m)^\s*(?:extend-)?per-file-ignores\s*=\s*\{\s*$", source)
         )
+        config_error = "TOMLDecodeError"
+    except (OSError, UnicodeError) as error:
+        config_error = type(error).__name__
+    if config_error is not None:
         detail = (
             "Ruff per-file-ignore settings use a multiline inline table that the "
             "Python TOML parser cannot read; suppression reasons were not evaluated."
             if unsupported_multiline_map
             else "Ruff per-file-ignore settings were not evaluated because the TOML "
-            f"configuration could not be read: {type(error).__name__}."
+            f"configuration could not be read: {config_error}."
         )
         findings.append(
             Finding(
@@ -393,22 +430,12 @@ def _ruff_config_suppression_findings(
                 parsed_entries = tomllib.loads(f"value = {inline_value}")["value"]
             except tomllib.TOMLDecodeError:
                 parsed_entries = None
-            valid_map = isinstance(parsed_entries, dict) and all(
-                isinstance(pattern, str)
-                and isinstance(codes, list)
-                and all(isinstance(code, str) for code in cast(list[object], codes))
-                for pattern, codes in cast(dict[object, object], parsed_entries).items()
-            )
-            if valid_map:
+            entries = _toml_per_file_map(parsed_entries)
+            if entries is not None:
                 local_per_file_table = True
-                entries = cast(dict[str, object], parsed_entries)
-                for pattern, raw_codes in entries.items():
+                for pattern, code_values in entries.items():
                     selected_codes = sorted(
-                        set(policy.rule_codes).intersection(
-                            code
-                            for code in cast(list[object], raw_codes)
-                            if isinstance(code, str)
-                        )
+                        set(policy.rule_codes).intersection(code_values)
                     )
                     applicable = [
                         path for path in selected_files if matches_path(path, pattern)
@@ -443,7 +470,7 @@ def _ruff_config_suppression_findings(
                                     f"apply to {', '.join(sorted(applicable)[:3])} via {pattern!r} "
                                     f"but have no rationale after {policy.reason_delimiter!r}; "
                                     "add a TOML comment with the configured reason delimiter. "
-                                    "Ruff retains ownership of whether the suppression is valid or used."
+                                    "Ruff retains ownership of suppression validity and usage."
                                 ),
                             )
                         )

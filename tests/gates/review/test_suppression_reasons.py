@@ -2,7 +2,6 @@
 
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -309,8 +308,8 @@ def test_ruff_extend_per_file_ignores_are_audited_and_accept_exact_exceptions(
 def test_multiline_ruff_per_file_ignore_matches_native_ruff(
     tmp_path: Path, with_reason: bool, form: str
 ) -> None:
-    ruff = shutil.which("ruff") or str(Path(sys.executable).with_name("ruff"))
-    if not Path(ruff).is_file():
+    ruff = shutil.which("ruff")
+    if ruff is None:
         pytest.skip("Ruff executable is not installed in this test environment")
     (tmp_path / "app.py").write_text("value = 1\nimport os\n", encoding="utf-8")
     rationale = " # -- bootstrap import order" if with_reason else ""
