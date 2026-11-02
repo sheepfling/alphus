@@ -565,6 +565,12 @@ f-string alone as evidence that a file produces Markdown. The optional
 also be present in the root `[files]` inventory; this rule does not expand the
 repository-wide file scope.
 
+The synthetic regression suite separately renders representative table, link,
+code-span, and code-fence builders with `markdown-it-py` and inspects their HTML
+structure. These fixtures validate the chosen table dialect and builder
+examples; they do not certify arbitrary consumer output or imply that a static
+finding proves rendered Markdown is malformed.
+
 ```toml
 [[orchestration.steps]]
 kind = "rule"
