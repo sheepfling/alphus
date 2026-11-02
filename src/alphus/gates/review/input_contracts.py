@@ -787,12 +787,19 @@ def _union_alternatives(node: ast.expr, aliases: ImportAliases) -> tuple[ast.exp
                 *_union_alternatives(right, aliases),
             )
         case ast.Subscript(value=value, slice=ast.Tuple(elts=members)) if (
-            canonical_expression_name(value, aliases) == "typing.Union"
+            canonical_expression_name(value, aliases)
+            in {
+                "typing.Union",
+                "typing_extensions.Union",
+            }
         ):
             return tuple(member for member in members if not _is_starred(member))
-        case ast.Subscript(value=value, slice=member) if (
-            canonical_expression_name(value, aliases) == "typing.Union"
-        ):
+        case ast.Subscript(value=value, slice=member) if canonical_expression_name(
+            value, aliases
+        ) in {
+            "typing.Union",
+            "typing_extensions.Union",
+        }:
             return _union_alternatives(member, aliases)
         case _:
             return (node,)
@@ -839,6 +846,8 @@ def _json_mapping_type(
         "builtins.dict",
         "typing.Dict",
         "typing.Mapping",
+        "typing_extensions.Dict",
+        "typing_extensions.Mapping",
         "collections.abc.Mapping",
     }:
         return None

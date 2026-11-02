@@ -230,6 +230,40 @@ def evaluate(options: Options | M[str, JV]):
     assert "does not prove validation is absent" in findings[0].message
 
 
+def test_typing_extensions_union_and_mapping_aliases_are_reviewed() -> None:
+    findings = input_contract_findings(
+        """from typing_extensions import Union as Either, Mapping as ReadOnlyMap
+from app.models import EvaluationOptions as Options
+from app.json_types import JsonValue as JV
+def evaluate(options: Either[Options, ReadOnlyMap[str, JV]]):
+    return options["count"]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert len(findings) == 1
+    assert "app.models.EvaluationOptions" in findings[0].message
+    assert "generic typing_extensions.Mapping" in findings[0].message
+    assert "literal-key reads at line(s) 5" in findings[0].message
+
+
+def test_shadowed_typing_extensions_aliases_stay_unresolved() -> None:
+    findings = input_contract_findings(
+        """from typing_extensions import Union as Either, Mapping as ReadOnlyMap
+from app.models import EvaluationOptions as Options
+from app.json_types import JsonValue as JV
+Either = object
+def evaluate(options: Either[Options, ReadOnlyMap[str, JV]]):
+    return options["count"]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert findings == []
+
+
 def test_typing_union_dict_and_ignored_validation_result_remain_review_candidates() -> (
     None
 ):
