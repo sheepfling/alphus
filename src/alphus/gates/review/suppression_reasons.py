@@ -6,14 +6,15 @@ import io
 import re
 import tokenize
 import tomllib
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 from pathlib import Path
+from typing import cast
 
 from alphus.config import SuppressionReasonPolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.support.inventory import matches_path
-from alphus.support.source_text import read_python_source
+from alphus.support.source_text import read_python_source, read_utf8_text
 
 _RULE_ID = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.STYLE, "missing-suppression-reason"
@@ -165,12 +166,14 @@ def check_suppression_reasons(
     return sorted(findings, key=lambda item: (item.path, item.line or 0, item.message))
 
 
-_RUFF_PER_FILE_TABLES = {
-    "tool.ruff.lint.per-file-ignores",
-    "tool.ruff.per-file-ignores",
-    "lint.per-file-ignores",
-    "per-file-ignores",
-}
+_RUFF_PER_FILE_TABLES = frozenset(
+    {
+        "tool.ruff.lint.per-file-ignores",
+        "tool.ruff.per-file-ignores",
+        "lint.per-file-ignores",
+        "per-file-ignores",
+    }
+)
 
 
 def _split_toml_comment(value: str) -> tuple[str, str]:
@@ -193,7 +196,7 @@ def _split_toml_comment(value: str) -> tuple[str, str]:
 
 
 def _ruff_config_suppression_findings(
-    root: Path, selected_files: set[str], policy: SuppressionReasonPolicy
+    root: Path, selected_files: Collection[str], policy: SuppressionReasonPolicy
 ) -> list[Finding]:
     """Audit simple Ruff per-file-ignore table entries without executing Ruff."""
     findings: list[Finding] = []
@@ -209,7 +212,7 @@ def _ruff_config_suppression_findings(
         return findings
     config_path = root / config_name
     try:
-        source = config_path.read_text(encoding="utf-8")
+        source = read_utf8_text(config_path)
         tomllib.loads(source)
     except (OSError, UnicodeError, tomllib.TOMLDecodeError) as error:
         findings.append(
@@ -258,8 +261,10 @@ def _ruff_config_suppression_findings(
             continue
         value_text, comment = _split_toml_comment(assignment.group("value"))
         try:
-            pattern = tomllib.loads(f"key = {assignment.group('key').strip()}")["key"]
-            codes = tomllib.loads(f"codes = {value_text}")["codes"]
+            parsed_key = tomllib.loads(f"key = {assignment.group('key').strip()}")[
+                "key"
+            ]
+            parsed_codes = tomllib.loads(f"codes = {value_text}")["codes"]
         except (tomllib.TOMLDecodeError, KeyError):
             findings.append(
                 Finding(
@@ -274,12 +279,26 @@ def _ruff_config_suppression_findings(
                 )
             )
             continue
-        if not isinstance(pattern, str) or not isinstance(codes, list):
-            continue
+        match parsed_key:
+            case str() as pattern:
+                pass
+            case _:
+                continue
+        match parsed_codes:
+            case list():
+                # opaque-boundary: TOML arrays are heterogeneous until policy filtering.
+                codes = cast(list[object], parsed_codes)
+            case _:
+                continue
+        selected_candidates: list[str] = []
+        for value in codes:
+            match value:
+                case str() as code:
+                    selected_candidates.append(code)
+                case _:
+                    continue
         selected_codes = sorted(
-            set(policy.rule_codes).intersection(
-                value for value in codes if isinstance(value, str)
-            )
+            set(policy.rule_codes).intersection(selected_candidates)
         )
         applicable = [path for path in selected_files if matches_path(path, pattern)]
         if not selected_codes or not applicable:
