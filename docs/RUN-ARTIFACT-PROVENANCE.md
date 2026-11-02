@@ -63,6 +63,15 @@ the bad path retains status but loses the diagnostics. This demonstrates local
 ordering behavior without asserting that static analysis proves other sinks'
 durability or that any production harness loses evidence.
 
+## Parse/hash snapshot fixture
+
+`tests/gates/review/test_run_artifacts_input_fixture.py` illustrates the
+parse/hash time-of-check/time-of-use risk with a temporary input file. One case
+mutates the file between parser and digest reads and observes different bytes;
+the control case parses and hashes a captured byte snapshot after the path
+changes. These are synthetic filesystem semantics, not evidence of a consumer
+race or an independent numerical oracle.
+
 ## Runtime metadata versus imported module origin
 
 Enable `runtime_attestation_gap` and configure the runtime module name,
