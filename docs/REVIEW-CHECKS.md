@@ -319,6 +319,22 @@ avoid broadening findings across unrelated code. Alphus scopes it to the
 positional-interface analyzer so its own quality profile checks that a
 single-pass AST input remains typed as `Iterable`.
 
+The opt-in `input-contracts` rule can also review selected internal interfaces
+for a configured domain type unioned with `Mapping[str, JsonValue]` or
+`dict[str, JsonValue]`. Set `domain_mapping_types` to consumer-known, fully
+qualified model names and select only relevant internal files in the top-level
+inventory. A finding requires a literal string-key read from the union
+parameter and reports the parameter and read locations. A direct assigned
+`model_validate` or `parse_obj` result used later in the function counts as
+local normalization evidence. See
+[`examples/consumer/domain-mapping-review.toml`](../examples/consumer/domain-mapping-review.toml).
+
+This is a review candidate, not proof that validation is absent or that the
+interface is wrong. The scanner does not resolve model-like names
+automatically, follow cross-function flow, or infer behavior through arbitrary
+aliases, casts, helpers, or branch-specific normalization. Unsupported flow
+should be reviewed manually; the advisory stays opt-in and informational.
+
 The existing `python-style.concrete_inputs` annotation convention stays at its
 configured severity, independently of these optional warnings. Its imported
 `typing.List as L` and `typing.Dict as D` aliases are now recognized. Prefer a

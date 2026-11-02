@@ -1,0 +1,24 @@
+schema_version = 1
+
+[files]
+include = ["src/internal/**/*.py"]
+exclude = []
+
+[checks.input_contracts]
+extensions = [".py"]
+exclude = ["src/internal/generated/**"]
+domain_mapping_types = ["app.models.EvaluationOptions"]
+domain_mapping_value_types = ["JsonValue"]
+domain_mapping_severity = "info"
+
+[orchestration]
+default_profile = "domain-review"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Domain mapping review"
+rule = "input-contracts"
+
+[[orchestration.profiles]]
+name = "domain-review"
+steps = ["Domain mapping review"]
