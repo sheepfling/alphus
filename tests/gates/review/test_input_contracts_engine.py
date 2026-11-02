@@ -673,6 +673,87 @@ def test_object_attribute_review_requires_declared_contract_and_direct_read() ->
     )
 
 
+def test_explicit_adapter_exception_suppresses_only_the_declared_boundary() -> None:
+    source = """from collections.abc import Mapping
+class ProviderCompactionWindow:
+    @classmethod
+    def from_raw(cls, raw: Mapping[str, object]):
+        provider = raw.get("provider")
+        endpoint = raw.get("endpoint")
+        if not isinstance(provider, str) or not isinstance(endpoint, str):
+            raise ValueError("route is invalid")
+        return cls(provider, endpoint)
+def evaluate(options: Mapping[str, object]):
+    return options["count"]
+"""
+    policy = InputContractPolicy(
+        extensions=[".py"],
+        exclude=[],
+        domain_mapping_value_types=("object",),
+        domain_mapping_contracts=(
+            {
+                "path": "src/consumer/types.py",
+                "function": "ProviderCompactionWindow.from_raw",
+                "parameter": "raw",
+                "domain_type": "ProviderCompactionWindow",
+            },
+            {
+                "path": "src/consumer/types.py",
+                "function": "evaluate",
+                "parameter": "options",
+                "domain_type": "EvaluationOptions",
+            },
+        ),
+        domain_mapping_exceptions=(
+            {
+                "path": "src/consumer/types.py",
+                "function": "ProviderCompactionWindow.from_raw",
+                "parameter": "raw",
+                "domain_type": "ProviderCompactionWindow",
+                "reason": "Public compatibility parser validates before model construction.",
+            },
+        ),
+    )
+
+    findings = input_contract_findings(
+        source, policy, path="src/consumer/types.py"
+    )
+
+    assert len(findings) == 1
+    assert "evaluate.options" in findings[0].message
+    assert "from_raw" not in findings[0].message
+
+
+def test_domain_mapping_exception_requires_a_reason_and_unique_selector() -> None:
+    with pytest.raises(ValueError, match="reason must not be empty"):
+        InputContractPolicy(
+            extensions=[".py"],
+            exclude=[],
+            domain_mapping_exceptions=(
+                {
+                    "path": "src/internal/evaluate.py",
+                    "function": "evaluate",
+                    "parameter": "packet",
+                    "domain_type": "app.models.EvaluationOptions",
+                    "reason": " ",
+                },
+            ),
+        )
+    exception = {
+        "path": "src/internal/evaluate.py",
+        "function": "evaluate",
+        "parameter": "packet",
+        "domain_type": "app.models.EvaluationOptions",
+        "reason": "Declared wire compatibility boundary.",
+    }
+    with pytest.raises(ValueError, match="exception selectors must be unique"):
+        InputContractPolicy(
+            extensions=[".py"],
+            exclude=[],
+            domain_mapping_exceptions=(exception, exception),
+        )
+
+
 def test_domain_mapping_contract_selectors_must_be_unique_and_relative() -> None:
     with pytest.raises(ValueError, match="selectors must be unique"):
         InputContractPolicy(

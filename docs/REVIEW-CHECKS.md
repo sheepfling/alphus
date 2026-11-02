@@ -348,6 +348,10 @@ declared that the input represents a particular domain model; it does not infer
 that contract from parameter names or access syntax. Generic mapping shapes
 with other key/value types, other broad annotations, dynamic keys, nested
 attributes, arbitrary helper calls, and unselected functions remain outside the scan.
+Use exact `domain_mapping_exceptions` selectors to document a reviewed adapter
+or compatibility boundary. Each exception requires the path, function,
+parameter, expected domain type, and a non-empty reason; it suppresses only
+that exact selected parameter.
 
 This is a review candidate, not proof that validation is absent or that the
 interface is wrong. The scanner does not resolve model-like names

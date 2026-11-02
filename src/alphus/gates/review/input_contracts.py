@@ -1225,6 +1225,13 @@ def _domain_mapping_findings(
         None,
     )
     for argument in arguments:
+        if any(
+            exception.path == path
+            and exception.function == function_name
+            and exception.parameter == argument.arg
+            for exception in policy.domain_mapping_exceptions
+        ):
+            continue
         if argument.annotation is None:
             continue
         alternative = _domain_mapping_alternative(argument.annotation, aliases, policy)

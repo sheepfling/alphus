@@ -212,6 +212,20 @@ class DomainMappingContract(StrictModel):
         return value
 
 
+class DomainMappingException(DomainMappingContract):
+    """Exact consumer-declared adapter/compatibility exception."""
+
+    reason: str
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, value: str) -> str:
+        reason = value.strip()
+        if not reason:
+            raise ValueError("domain mapping exception reason must not be empty")
+        return reason
+
+
 class InputContractPolicy(PythonSourceScanPolicy):
     """Advisory, local collection-use analysis without interprocedural inference."""
 
@@ -221,6 +235,7 @@ class InputContractPolicy(PythonSourceScanPolicy):
     domain_mapping_types: tuple[str, ...] = ()
     domain_mapping_value_types: tuple[str, ...] = ("JsonValue",)
     domain_mapping_contracts: tuple[DomainMappingContract, ...] = ()
+    domain_mapping_exceptions: tuple[DomainMappingException, ...] = ()
     domain_mapping_severity: Severity = "info"
 
     @field_validator("sequence_narrowing_paths")
@@ -248,6 +263,14 @@ class InputContractPolicy(PythonSourceScanPolicy):
             for contract in self.domain_mapping_contracts
         )
         require_unique(selectors, "domain mapping contract selectors must be unique")
+        exception_selectors = tuple(
+            (exception.path, exception.function, exception.parameter)
+            for exception in self.domain_mapping_exceptions
+        )
+        require_unique(
+            exception_selectors,
+            "domain mapping exception selectors must be unique",
+        )
         return self
 
 
