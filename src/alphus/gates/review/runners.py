@@ -17,6 +17,7 @@ from alphus.gates.review.frameworks.sqlalchemy_practices import (
 from alphus.gates.review.input_contracts import check_input_contracts
 from alphus.gates.review.numeric_literals import check_numeric_literals
 from alphus.gates.review.positional_interfaces import check_positional_interfaces
+from alphus.gates.review.run_artifacts import check_run_artifacts
 from alphus.gates.review.scipy_constants import check_scipy_constants
 from alphus.gates.review.source_families import check_source_families
 from alphus.gates.review.test_quality import check_test_quality
@@ -37,6 +38,11 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
             root,
             files,
             require_policy(config.checks.scipy_constants, "scipy_constants"),
+        ),
+        "run-artifacts": lambda root, files, config: check_run_artifacts(
+            root,
+            files,
+            require_policy(config.checks.run_artifacts, "run_artifacts"),
         ),
         "test-quality": lambda root, files, config: check_test_quality(
             root,
