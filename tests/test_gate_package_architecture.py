@@ -81,6 +81,7 @@ def test_gate_themes_own_their_runner_mappings() -> None:
                 "manual-quaternion-normalization",
                 "manual-quaternion-inversion",
                 "manual-quaternion-vector-rotation",
+                "manual-quaternion-matrix-conversion",
                 "scipy-constants",
                 "test-quality",
                 "input-contracts",

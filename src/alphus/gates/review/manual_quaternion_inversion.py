@@ -13,6 +13,7 @@ from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.gates.review.quaternion_ast import (
     configured_function_observations,
     is_sum_of_four_squares,
+    redefined_function_names,
 )
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
@@ -106,11 +107,7 @@ def quaternion_inversion_sites(
     source: str, policy: QuaternionInversionPolicy
 ) -> list[_InversionSite]:
     """Return exact inverse shapes unless same-scope redefinition makes them dead."""
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
-        return []
-    shadowed = _redefined_function_names(tree.body, policy.function_names)
+    shadowed = redefined_function_names(source, policy.function_names)
     return configured_function_observations(
         source,
         policy.function_names,
@@ -119,22 +116,6 @@ def quaternion_inversion_sites(
         ),
         lambda site: (site.function, site.norm_line),
     )
-
-
-def _redefined_function_names(
-    statements: Sequence[ast.stmt], selected_names: Sequence[str]
-) -> tuple[str, ...]:
-    """Find configured function names repeated within one module/class scope."""
-    counts: dict[str, int] = {}
-    shadowed: list[str] = []
-    for statement in statements:
-        if isinstance(statement, ast.FunctionDef) and statement.name in selected_names:
-            counts[statement.name] = counts.get(statement.name, 0) + 1
-            if counts[statement.name] > 1 and statement.name not in shadowed:
-                shadowed.append(statement.name)
-        elif isinstance(statement, ast.ClassDef):
-            shadowed.extend(_redefined_function_names(statement.body, selected_names))
-    return tuple(shadowed)
 
 
 def check_manual_quaternion_inversion(

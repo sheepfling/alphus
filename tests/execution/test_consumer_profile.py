@@ -51,6 +51,9 @@ def test_manual_matrix_kernel_example_is_scoped_and_provisional() -> None:
     assert vector_rotation_policy is not None
     assert vector_rotation_policy.vector_components == ("vx", "vy", "vz")
     assert vector_rotation_policy.multiplication_helpers == ("multiply",)
+    matrix_policy = config.checks.manual_quaternion_matrix_conversion
+    assert matrix_policy is not None
+    assert matrix_policy.convention == "active-column-scalar-first"
     orchestration = config.orchestration
     assert orchestration is not None
     plan = orchestration.resolve_profile("numerical-review")
@@ -63,6 +66,7 @@ def test_manual_matrix_kernel_example_is_scoped_and_provisional() -> None:
     assert "Quaternion normalization review" in plan.steps
     assert "Quaternion inversion review" in plan.steps
     assert "Quaternion vector rotation review" in plan.steps
+    assert "Quaternion matrix conversion review" in plan.steps
     assert "Manual elimination review" in plan.steps
 
 

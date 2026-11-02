@@ -78,3 +78,30 @@ def configured_function_observations(
         if observation is not None:
             observations.add(observation)
     return sorted(observations, key=sort_key)
+
+
+def redefined_function_names(
+    source: str, selected_names: Sequence[str]
+) -> tuple[str, ...]:
+    """Return configured names rebound by later definitions in one scope."""
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return ()
+
+    def shadowed_in(statements: Sequence[ast.stmt]) -> tuple[str, ...]:
+        counts: dict[str, int] = {}
+        shadowed: list[str] = []
+        for statement in statements:
+            match statement:
+                case ast.FunctionDef(name=name) if name in selected_names:
+                    counts[name] = counts.get(name, 0) + 1
+                    if counts[name] > 1 and name not in shadowed:
+                        shadowed.append(name)
+                case ast.ClassDef(body=body):
+                    shadowed.extend(shadowed_in(body))
+                case _:
+                    continue
+        return tuple(shadowed)
+
+    return shadowed_in(tree.body)

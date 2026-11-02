@@ -124,12 +124,20 @@ not a defect or speedup; conjugation is the inverse only for unit quaternions, s
 normalization, handedness, active/passive convention, dtype, failures, and output
 shape remain consumer contracts.
 
-Frame-transform recognition remains unimplemented. So does quaternion matrix
-conversion, and Cholesky
-covariance/domain checks. The current examples demonstrate only the explicitly
-documented syntax families above. The normalization and inversion grammars have
-synthetic positive/negative coverage but no reviewed real-consumer calibration
-or production precision estimate yet.
+`manual-quaternion-matrix-conversion` matches one configured scalar-first,
+active column-vector formula returned directly as a 3×3 nested list or tuple.
+It skips transposed/sign-alternate formulas, intermediate assignments, aliases,
+branches, and different layouts. The configured convention describes the
+recognized syntax; it does not establish that a consumer documents or intends
+that convention. Review handedness, active/passive semantics, vector orientation,
+normalization, dtype, failures, and output shape before considering reuse. The
+finding does not establish a defect or performance gain.
+
+Frame-transform recognition remains unimplemented, as do Cholesky covariance
+and domain checks. The numerical examples demonstrate only their explicitly
+configured syntax families. The quaternion normalization, inversion, sandwich,
+and matrix-conversion grammars have synthetic positive/negative coverage but no
+reviewed real-consumer calibration or production precision estimate yet.
 
 An elimination recognizer would need a consumer contract that identifies the
 matrix representation and then match, within one configured function, pivot
