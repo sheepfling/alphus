@@ -246,6 +246,22 @@ def evaluate(options: Union[EvaluationOptions, dict[str, JsonValue]]):
     assert "dict" in findings[0].message
 
 
+def test_discarded_validator_inside_a_branch_is_not_normalization() -> None:
+    findings = input_contract_findings(
+        """from collections.abc import Mapping
+from app.models import EvaluationOptions
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
+    if isinstance(options, Mapping):
+        EvaluationOptions.model_validate(options)
+    return options["count"]
+""",
+        DOMAIN_POLICY,
+    )
+
+    assert len(findings) == 1
+    assert "literal-key reads" in findings[0].message
+
+
 def test_assigned_local_model_normalization_stops_direct_mapping_advice() -> None:
     assert (
         input_contract_findings(
@@ -254,6 +270,23 @@ from app.models import EvaluationOptions
 def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
     normalized = EvaluationOptions.model_validate(options)
     return _evaluate(normalized)
+""",
+            DOMAIN_POLICY,
+        )
+        == []
+    )
+
+
+def test_branch_specific_assigned_model_normalization_is_used() -> None:
+    assert (
+        input_contract_findings(
+            """from collections.abc import Mapping
+from app.models import EvaluationOptions
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
+    if isinstance(options, Mapping):
+        normalized = EvaluationOptions.model_validate(options)
+        return _evaluate(normalized)
+    return _evaluate(options)
 """,
             DOMAIN_POLICY,
         )
@@ -324,6 +357,19 @@ def _read(other):
             )
             == []
         )
+
+
+def test_shadowed_domain_import_alias_remains_unresolved() -> None:
+    source = """from collections.abc import Mapping as M
+from typing import Union as Either
+from app.models import EvaluationOptions as Options
+from app.json_types import JsonValue as JV
+Options = object
+def evaluate(options: Either[Options, M[str, JV]]):
+    return options["state"]
+"""
+
+    assert input_contract_findings(source, DOMAIN_POLICY) == []
 
 
 @pytest.mark.parametrize(

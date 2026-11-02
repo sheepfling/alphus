@@ -894,6 +894,28 @@ def _name_expression(node: ast.AST, expected: str) -> bool:
             return False
 
 
+def _normalizer_call(
+    node: ast.AST, parameter: str, model: str, aliases: ImportAliases
+) -> bool:
+    match node:
+        case ast.Call(func=ast.Attribute(value=owner, attr=method), args=arguments) if (
+            method in {"model_validate", "parse_obj"}
+        ):
+            return canonical_expression_name(owner, aliases) == model and any(
+                _name_expression(argument, parameter) for argument in arguments
+            )
+        case _:
+            return False
+
+
+def _loaded_name_after(node: ast.AST, name: str, line: int) -> bool:
+    match node:
+        case ast.Name(id=used_name, ctx=ast.Load(), lineno=used_line):
+            return used_name == name and used_line > line
+        case _:
+            return False
+
+
 class _FunctionLocalNodes(ast.NodeVisitor):
     """Collect nodes for one function without treating nested scopes as local."""
 
@@ -1057,22 +1079,46 @@ def _has_normalization_flow(
 ) -> bool:
     """Recognize a direct assigned model validator result used in the function."""
     validator_calls: list[tuple[int, str]] = []
+    local_node_ids = {id(node) for node in nodes}
     for node in nodes:
-        if not isinstance(node, (ast.If, ast.Match, ast.Try, ast.TryStar)):
-            continue
-        for child in ast.walk(node):
-            if not isinstance(child, ast.Call) or not isinstance(
-                child.func, ast.Attribute
+        match node:
+            case ast.If() | ast.Match() | ast.Try() | ast.TryStar():
+                branch = node
+            case _:
+                continue
+        branch_nodes = list(ast.walk(branch))
+        parents = {
+            id(child): parent
+            for parent in branch_nodes
+            for child in ast.iter_child_nodes(parent)
+        }
+        for child in branch_nodes:
+            if id(child) not in local_node_ids or not _normalizer_call(
+                child, parameter, model, aliases
             ):
                 continue
-            if (
-                child.func.attr in {"model_validate", "parse_obj"}
-                and canonical_expression_name(child.func.value, aliases) == model
-                and any(
-                    _name_expression(argument, parameter) for argument in child.args
-                )
+            parent = parents.get(id(child))
+            match parent:
+                case ast.Return(value=returned) if returned is child:
+                    return True
+                case ast.Assign(
+                    targets=[ast.Name(id=assigned_name)],
+                    value=assigned_value,
+                    lineno=assignment_line,
+                ) if assigned_value is child:
+                    pass
+                case ast.AnnAssign(
+                    target=ast.Name(id=assigned_name),
+                    value=assigned_value,
+                    lineno=assignment_line,
+                ) if assigned_value is child:
+                    pass
+                case _:
+                    continue
+            if any(
+                _loaded_name_after(node, assigned_name, assignment_line)
+                for node in nodes
             ):
-                # Branch-specific normalization is outside this direct-flow slice.
                 return True
     for statement in function.body:
         target: ast.expr | None = None
@@ -1084,22 +1130,10 @@ def _has_normalization_flow(
                 target, value = name, call
             case _:
                 continue
-        match value.func:
-            case ast.Attribute(value=owner, attr=method) if method in {
-                "model_validate",
-                "parse_obj",
-            }:
-                if canonical_expression_name(owner, aliases) == model and any(
-                    _name_expression(argument, parameter) for argument in value.args
-                ):
-                    validator_calls.append((statement.lineno, target.id))
-            case _:
-                pass
+        if _normalizer_call(value, parameter, model, aliases):
+            validator_calls.append((statement.lineno, target.id))
     for line, name in validator_calls:
-        if any(
-            _name_expression(node, name) and getattr(node, "lineno", 0) > line
-            for node in nodes
-        ):
+        if any(_loaded_name_after(node, name, line) for node in nodes):
             return True
     return False
 
