@@ -70,18 +70,21 @@ def test_style_report_exposes_effective_custom_scope_patterns(
     (tmp_path / "src" / "main.cpp").write_text("int main() { return 0; }\n")
     output = tmp_path / "style.json"
 
-    assert advisory.main(
-        [
-            "style",
-            str(tmp_path),
-            "--include",
-            "src/**",
-            "--exclude",
-            "src/private/**",
-            "--output",
-            str(output),
-        ]
-    ) == 0
+    assert (
+        advisory.main(
+            [
+                "style",
+                str(tmp_path),
+                "--include",
+                "src/**",
+                "--exclude",
+                "src/private/**",
+                "--output",
+                str(output),
+            ]
+        )
+        == 0
+    )
 
     report = json.loads(output.read_text(encoding="utf-8"))
     assert report["scope"]["include_patterns"] == ["src/**"]
