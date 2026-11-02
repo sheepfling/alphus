@@ -188,7 +188,9 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[tuple[int, int, str]]:
                                 continue
                     body_state = scan(body, loop_state)
                     else_state = (
-                        scan(orelse, loop_state) if orelse else loop_state.copy()
+                        scan(orelse, _common_bindings([loop_state, body_state]))
+                        if orelse
+                        else loop_state.copy()
                     )
                     current = {
                         name: line

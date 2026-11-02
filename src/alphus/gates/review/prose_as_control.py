@@ -235,7 +235,7 @@ def _regex_consumes_digit(pattern: str) -> bool:
                 if in_character_class:
                     if not class_is_negated:
                         class_has_digit = True
-                elif not _zero_repetition_follows(pattern, index + 2):
+                elif not _zero_repetition_follows(pattern, index + 2, verbose=verbose):
                     if groups:
                         is_assertion, previous_verbose, _has_digit = groups[-1]
                         groups[-1] = (is_assertion, previous_verbose, True)
@@ -247,7 +247,9 @@ def _regex_consumes_digit(pattern: str) -> bool:
             if character == "]":
                 in_character_class = False
                 class_is_negated = False
-                if class_has_digit and not _zero_repetition_follows(pattern, index + 1):
+                if class_has_digit and not _zero_repetition_follows(
+                    pattern, index + 1, verbose=verbose
+                ):
                     if groups:
                         is_assertion, previous_verbose, _has_digit = groups[-1]
                         groups[-1] = (is_assertion, previous_verbose, True)
@@ -282,7 +284,7 @@ def _regex_consumes_digit(pattern: str) -> bool:
                 has_digit
                 and not is_assertion
                 and assertion_depth == 0
-                and not _zero_repetition_follows(pattern, index + 1)
+                and not _zero_repetition_follows(pattern, index + 1, verbose=verbose)
             ):
                 if groups:
                     parent_assertion, parent_verbose, _parent_has_digit = groups[-1]
@@ -293,8 +295,19 @@ def _regex_consumes_digit(pattern: str) -> bool:
     return False
 
 
-def _zero_repetition_follows(pattern: str, index: int) -> bool:
+def _zero_repetition_follows(pattern: str, index: int, *, verbose: bool) -> bool:
     """Recognize a zero-only brace quantifier immediately after an atom."""
+    if verbose:
+        while index < len(pattern):
+            if pattern[index].isspace():
+                index += 1
+            elif pattern[index] == "#":
+                newline = pattern.find("\n", index)
+                if newline < 0:
+                    return False
+                index = newline + 1
+            else:
+                break
     if index >= len(pattern) or pattern[index] != "{":
         return False
     closing = pattern.find("}", index + 1)

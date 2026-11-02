@@ -226,6 +226,36 @@ def f(text):
     assert _sites(source, ("render",)) == [(2, 6, "rendered")]
 
 
+def test_while_body_overwrite_is_applied_before_else_suite() -> None:
+    source = """\
+def f(text, original, enabled):
+    rendered = render(text)
+    while enabled:
+        rendered = original
+        enabled = False
+    else:
+        if rendered.rstrip().endswith("!"):
+            return True
+    return False
+"""
+    assert _sites(source, ("render",)) == []
+
+
+def test_while_else_preserves_unmodified_rendered_binding() -> None:
+    source = """\
+def f(text, enabled):
+    rendered = render(text)
+    while enabled:
+        consume()
+        enabled = False
+    else:
+        if rendered.rstrip().endswith("!"):
+            return True
+    return False
+"""
+    assert _sites(source, ("render",)) == [(2, 7, "rendered")]
+
+
 def test_advisory_reports_configured_source_path(tmp_path: Path) -> None:
     source = tmp_path / "src/render/table.py"
     source.parent.mkdir(parents=True)
