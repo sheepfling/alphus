@@ -10,6 +10,7 @@ from pathlib import Path
 from alphus.config import SemanticWorkPresentationPolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.gates.review._module_bindings import module_binding_counts
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 
@@ -113,28 +114,13 @@ def semantic_work_presentation_sites(
     if len(list(ast.walk(tree))) > 10_000:
         return []
     functions: list[ast.FunctionDef] = []
-    bindings: dict[str, int] = {}
     for statement in _module_nodes(tree):
         match statement:
             case ast.FunctionDef(name=name) if name in policy.function_names:
                 functions.append(statement)
-                bindings[name] = bindings.get(name, 0) + 1
-            case ast.AsyncFunctionDef(name=name) if name in policy.function_names:
-                bindings[name] = bindings.get(name, 0) + 1
-            case ast.Name(id=name, ctx=ast.Store()) if name in policy.function_names:
-                bindings[name] = bindings.get(name, 0) + 1
-            case ast.Import(names=aliases):
-                for alias in aliases:
-                    name = alias.asname or alias.name.split(".", maxsplit=1)[0]
-                    if name in policy.function_names:
-                        bindings[name] = bindings.get(name, 0) + 1
-            case ast.ImportFrom(names=aliases):
-                for alias in aliases:
-                    name = alias.asname or alias.name
-                    if name in policy.function_names:
-                        bindings[name] = bindings.get(name, 0) + 1
             case _:
                 continue
+    bindings = module_binding_counts(tree, policy.function_names)
     configured_roles = (
         policy.source_layout_helpers,
         policy.content_correction_helpers,

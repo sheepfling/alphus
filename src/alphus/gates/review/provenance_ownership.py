@@ -10,6 +10,7 @@ from pathlib import Path
 from alphus.config import ProvenanceOwnershipPolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.gates.review._module_bindings import module_binding_counts
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 
@@ -228,17 +229,13 @@ def provenance_ownership_sites(
         return []
     if len(list(ast.walk(tree))) > 10_000:
         return []
-    functions: list[ast.FunctionDef] = []
-    for statement in tree.body:
-        match statement:
-            case ast.FunctionDef(name=name) if name in policy.function_names:
-                functions.append(statement)
-            case _:
-                continue
-    binding_counts = {
-        name: sum(function.name == name for function in functions)
-        for name in policy.function_names
-    }
+    functions = [
+        statement
+        for statement in tree.body
+        if isinstance(statement, ast.FunctionDef)
+        and statement.name in policy.function_names
+    ]
+    binding_counts = module_binding_counts(tree, policy.function_names)
     sites: set[_OwnershipSite] = set()
     for function in functions:
         if binding_counts[function.name] != 1:

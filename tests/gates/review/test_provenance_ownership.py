@@ -57,6 +57,11 @@ def test_reports_filter_capture_returned_immediately() -> None:
         _PATH_ONLY.replace("remaining_paragraphs", "other_function"),
         _PATH_ONLY.replace("return [", "table_paths.clear()\n    return ["),
         _PATH_ONLY.replace("return [", "table_paths = set()\n    return ["),
+        _PATH_ONLY + "\nremaining_paragraphs = lambda tables, paragraphs: paragraphs\n",
+        _PATH_ONLY + "\nclass remaining_paragraphs:\n    pass\n",
+        _PATH_ONLY + "\ndel remaining_paragraphs\n",
+        _PATH_ONLY + "\nfrom other_module import remaining_paragraphs\n",
+        _PATH_ONLY + "\nfrom other_module import *\n",
         _PATH_ONLY.replace(
             "return [",
             "alias = table_paths\n    alias.clear()\n    return [",

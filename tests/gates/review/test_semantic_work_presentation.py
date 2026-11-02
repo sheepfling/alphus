@@ -60,6 +60,10 @@ def test_reports_all_consumer_declared_roles_in_selected_function() -> None:
             "    return serialize_output(source)\n"
         ),
         _COMPOSITE + "\nrender_document = lambda source: source\n",
+        _COMPOSITE + "\nclass render_document:\n    pass\n",
+        _COMPOSITE + "\ndel render_document\n",
+        _COMPOSITE + "\nfrom other_module import render_document\n",
+        _COMPOSITE + "\nfrom other_module import *\n",
         _COMPOSITE
         + "\nif condition:\n    def render_document(source):\n        return source\n",
     ],
