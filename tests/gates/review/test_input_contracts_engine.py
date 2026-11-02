@@ -509,6 +509,46 @@ def evaluate(packet: Mapping[str, JsonValue]):
     assert "literal-key reads at line(s) 4" in findings[0].message
 
 
+@pytest.mark.parametrize(
+    "rebind",
+    [
+        'replacement = (packet := {"state": "replacement"})',
+        'callback = lambda value=(packet := {"state": "replacement"}): value',
+    ],
+)
+def test_alias_evidence_stops_after_parameter_rebinding(rebind: str) -> None:
+    source = (
+        "from collections.abc import Mapping\n"
+        "from app.json_types import JsonValue\n"
+        "def evaluate(packet: Mapping[str, JsonValue]):\n"
+        f"    {rebind}\n"
+        '    return packet["state"]\n'
+    )
+
+    assert (
+        input_contract_findings(
+            source, DOMAIN_BOUNDARY_POLICY, path="src/internal/evaluate.py"
+        )
+        == []
+    )
+
+
+def test_alias_evidence_keeps_reads_before_parameter_rebinding() -> None:
+    findings = input_contract_findings(
+        "from collections.abc import Mapping\n"
+        "from app.json_types import JsonValue\n"
+        "def evaluate(packet: Mapping[str, JsonValue]):\n"
+        '    mode = packet["mode"]\n'
+        '    replacement = (packet := {"state": "replacement"})\n'
+        '    return packet["state"]\n',
+        DOMAIN_BOUNDARY_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert len(findings) == 1
+    assert "literal-key reads at line(s) 4" in findings[0].message
+
+
 def test_multiple_declared_mapping_parameters_are_all_reviewed() -> None:
     policy = InputContractPolicy(
         extensions=[".py"],

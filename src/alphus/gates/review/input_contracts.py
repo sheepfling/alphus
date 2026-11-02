@@ -1187,7 +1187,8 @@ def _direct_mapping_reads(
 ) -> list[int]:
     """Find literal string-key indexing and ``.get`` reads on the parameter."""
     lines: set[int] = set()
-    first_rebinding = min(bindings.rebindings.get(parameter, []), default=None)
+    rebinding_lines = bindings.rebindings.get(parameter, [])
+    first_rebinding = min(rebinding_lines, default=None)
     for node in nodes:
         match node:
             case ast.Subscript(
@@ -1249,6 +1250,7 @@ def _direct_mapping_reads_with_aliases(
     function: ast.FunctionDef | ast.AsyncFunctionDef,
     parameter: str,
     imports: ImportAliases,
+    bindings: _FunctionScopeBindings,
 ) -> list[int]:
     """Recognize reads through straight-line aliases and resolved typing casts."""
     tracked_names = {parameter}
@@ -1269,7 +1271,14 @@ def _direct_mapping_reads_with_aliases(
                 case _:
                     pass
 
+    first_rebinding = min(bindings.rebindings.get(parameter, []), default=None)
     for statement in function.body:
+        # The alias walk only models straight-line assignments. Once the
+        # parameter is rebound, later reads no longer refer to the caller's
+        # mapping; in particular, walrus expressions inside defaults can
+        # rebind it without appearing as a simple assignment target here.
+        if first_rebinding is not None and statement.lineno >= first_rebinding:
+            break
         match statement:
             case ast.Assign(targets=[ast.Name(id=target)], value=value):
                 record_reads(value, tracked_names)
@@ -1331,7 +1340,9 @@ def _mapping_read_evidence(
     """Combine direct reads with straight-line aliases, preserving branch evidence."""
     return sorted(
         set(_direct_mapping_reads(parameter, nodes, bindings))
-        | set(_direct_mapping_reads_with_aliases(function, parameter, imports))
+        | set(
+            _direct_mapping_reads_with_aliases(function, parameter, imports, bindings)
+        )
     )
 
 
@@ -1407,7 +1418,12 @@ def _direct_forwarded_mapping_reads(
                     break
         if helper_parameter is None:
             continue
-        reads = _direct_mapping_reads_with_aliases(helper, helper_parameter, aliases)
+        reads = _direct_mapping_reads_with_aliases(
+            helper,
+            helper_parameter,
+            aliases,
+            _FunctionScopeBindings(helper),
+        )
         if reads:
             evidence.add((helper.name, node.lineno, tuple(reads)))
     return sorted(evidence)
