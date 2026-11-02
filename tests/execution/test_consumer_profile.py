@@ -60,6 +60,12 @@ def test_manual_matrix_kernel_example_is_scoped_and_provisional() -> None:
     assert frame_policy.destination_frame == "ENU"
     assert frame_policy.operation == "displacement-vector"
     assert frame_policy.reference_ellipsoid == "WGS84"
+    ned_matrix_policy = config.checks.ecef_ned_matrix_transform
+    assert ned_matrix_policy is not None
+    assert ned_matrix_policy.destination_frame == "NED"
+    assert ned_matrix_policy.axis_order == "north-east-down"
+    assert ned_matrix_policy.vector_orientation == "column"
+    assert ned_matrix_policy.output_shape == "matrix3x3"
     orchestration = config.orchestration
     assert orchestration is not None
     plan = orchestration.resolve_profile("numerical-review")
@@ -74,6 +80,7 @@ def test_manual_matrix_kernel_example_is_scoped_and_provisional() -> None:
     assert "Quaternion vector rotation review" in plan.steps
     assert "Quaternion matrix conversion review" in plan.steps
     assert "ECEF to ENU transform review" in plan.steps
+    assert "ECEF to NED matrix review" in plan.steps
     assert "Manual elimination review" in plan.steps
 
 

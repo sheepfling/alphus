@@ -456,7 +456,7 @@ class EcefEnuTransformPolicy(PythonSourceScanPolicy):
     handedness: Literal["right-handed"]
     operation: Literal["displacement-vector"]
     output_shape: Literal["tuple3"]
-    math_module: str = "math"
+    math_module: Literal["math"] = "math"
     severity: Severity = "info"
 
     @field_validator("source_paths")
@@ -503,6 +503,108 @@ class EcefEnuTransformPolicy(PythonSourceScanPolicy):
         ):
             raise ValueError("preferred transform helpers must be dotted identifiers")
         require_unique(values, "preferred transform helpers must be unique")
+        return tuple(values)
+
+
+class EcefNedMatrixTransformPolicy(PythonSourceScanPolicy):
+    """Consumer-declared geodetic ECEF-to-NED matrix contract."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    function_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    latitude_name: str
+    longitude_name: str
+    sin_latitude_name: str
+    cos_latitude_name: str
+    sin_longitude_name: str
+    cos_longitude_name: str
+    preferred_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    array_constructor: str = "np.array"
+    math_module: Literal["math"] = "math"
+    source_frame: Literal["ECEF"]
+    destination_frame: Literal["NED"]
+    direction: Literal["ecef-to-ned"]
+    latitude_type: Literal["geodetic"]
+    origin: Literal["anchor-point"]
+    reference_ellipsoid: str
+    angle_units: Literal["radians"]
+    length_units: Literal["meters"]
+    axis_order: Literal["north-east-down"]
+    handedness: Literal["right-handed"]
+    operation: Literal["displacement-vector"]
+    vector_orientation: Literal["column"]
+    matrix_layout: Literal["row-major"]
+    output_shape: Literal["matrix3x3"]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("function_names")
+    @classmethod
+    def validate_function_names(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("NED matrix function names must be identifiers")
+        require_unique(values, "NED matrix function names must be unique")
+        return tuple(values)
+
+    @field_validator(
+        "latitude_name",
+        "longitude_name",
+        "sin_latitude_name",
+        "cos_latitude_name",
+        "sin_longitude_name",
+        "cos_longitude_name",
+        "math_module",
+    )
+    @classmethod
+    def validate_identifiers(cls, value: str) -> str:
+        if not value.isidentifier():
+            raise ValueError("NED matrix names must be identifiers")
+        return value
+
+    @field_validator("array_constructor")
+    @classmethod
+    def validate_array_constructor(cls, value: str) -> str:
+        parts = value.split(".")
+        if len(parts) != 2 or any(not part.isidentifier() for part in parts):
+            raise ValueError("array constructor must be a dotted call such as np.array")
+        if parts[-1] != "array":
+            raise ValueError("NED matrix constructor must end in 'array'")
+        return value
+
+    @model_validator(mode="after")
+    def validate_component_names(self) -> Self:
+        require_unique(
+            (
+                self.latitude_name,
+                self.longitude_name,
+                self.sin_latitude_name,
+                self.cos_latitude_name,
+                self.sin_longitude_name,
+                self.cos_longitude_name,
+            ),
+            "NED matrix input and trigonometric names must be distinct",
+        )
+        return self
+
+    @field_validator("reference_ellipsoid")
+    @classmethod
+    def validate_ellipsoid(cls, value: str) -> str:
+        if not value.strip() or "\n" in value or "\r" in value:
+            raise ValueError("reference ellipsoid must be a non-empty single line")
+        return value
+
+    @field_validator("preferred_helpers")
+    @classmethod
+    def validate_helpers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not value or any(not part.isidentifier() for part in value.split("."))
+            for value in values
+        ):
+            raise ValueError("preferred NED helpers must be dotted identifiers")
+        require_unique(values, "preferred NED helpers must be unique")
         return tuple(values)
 
 

@@ -149,6 +149,18 @@ quaternion composition. The finding is only a candidate to review against the
 declared origin/datum, vector semantics, shape, dtype, and failure behavior; it
 does not establish a defect or performance gain.
 
+`ecef-ned-matrix-transform` is a separate opt-in fingerprint for a geodetic
+ECEF-to-NED row-major 3×3 matrix applied to column displacement vectors at an
+anchor. Its policy declares the reference ellipsoid, geodetic latitude, radian
+inputs, length units, N/E/D order, right-handedness, matrix layout, and
+preferred helper. The supported grammar requires `math` trigonometric
+assignments and the exact signed matrix passed to a configured `numpy.array`
+import. It does not match ENU, geocentric latitude, a tuple of basis vectors,
+positions with translation, row-vector application, or another matrix layout.
+In particular, pytaos's geocentric basis is not interchangeable with its
+geodetic basis. A match identifies syntax under declarations; it cannot prove
+the declarations describe runtime behavior or that the preferred helper exists.
+
 ### Bounded source calibration (2026-11-02)
 
 I inspected committed source snapshots only. The local Odonata, pytaos, and
@@ -158,7 +170,9 @@ was executed. The frame rule was evaluated under the example's exact contract:
 ECEF displacement to ENU at an anchor, geodetic latitude in radians, meters,
 WGS84, right-handed east/north/up, direct tuple3; candidate selector names were
 adapted in memory to inspected function names. This adaptation does not assert
-that the example's preferred helper exists in those projects.
+that the ENU example's preferred helper exists in those projects. The separate
+NED matrix rule was evaluated against Titan's geodetic ECEF-to-NED row-major
+matrix contract with its configured selector names.
 
 #### `sheepfling/Titan`
 
@@ -168,10 +182,12 @@ that the example's preferred helper exists in those projects.
 - Candidate: `ecef_to_ned_matrix` returns an ECEF-to-NED matrix, used for
   velocity conversion and transposed for NED-to-ECEF. The file documents
   WGS-84 and the matrix formula's radian inputs.
-- Result: no match. NED matrix output differs from the configured ENU
-  displacement tuple. This is an adjacent pattern the rule does not cover, not
-  a false negative under its declared contract. The helper is already reused
-  at the inspected call sites.
+- ECEF-to-ENU result: no match because NED matrix output differs from its
+  configured ENU displacement tuple.
+- ECEF-to-NED result: one exact matrix site at return line 54 with policy names
+  adapted to `lat_rad`, `lon_rad`, `slat`, `clat`, `slon`, and `clon`. The helper
+  is already reused at the inspected call sites. This is a syntactic match,
+  not independent verification of matrix semantics.
 
 #### `sheepfling/pytaos`
 
@@ -182,9 +198,11 @@ that the example's preferred helper exists in those projects.
   three `CartesianVector3` values; velocity transforms compose/decompose
   through those helpers. Frame names distinguish ECFC from geocentric and
   geodetic horizon frames.
-- Result: no match. This explicitly represented NED basis and helper
-  composition is not the configured direct ECEF-to-ENU vector formula.
-  Treating it as an ENU duplicate would be a contract false positive.
+- Result: no match for either rule. This is a tuple of named N/E/D basis
+  vectors, not the configured direct ENU vector or row-major ECEF-to-NED
+  matrix. Geocentric and geodetic bases remain separate contracts; no
+  equivalence is inferred. The basis helpers are already composed by the
+  inspected velocity transforms.
 
 #### `sheepfling/odonata`
 
@@ -209,17 +227,16 @@ that the example's preferred helper exists in those projects.
   and expected negative control; its representation and robust numerical path
   differ from the configured scalar-parameter/tuple kernels.
 
-Observed sample result: zero findings across the four snapshots and no
-contract-matching positive example. The Titan NED matrix and pytaos NED basis
-are useful adjacent-pattern evidence, but neither is labeled a false negative
-for the shipped ECEF-to-ENU rule. This sample is too small and selected to
-estimate precision or recall. Real downstream reimplementation candidates,
-helper equivalence, and detector behavior across consumer conventions remain
-uncalibrated.
+Observed sample result: the ECEF-to-ENU rule returned zero sites across the
+three geodesy snapshots. The ECEF-to-NED matrix rule returned one site in Titan
+and no site in pytaos's distinct basis-vector functions. This selected sample
+is too small to estimate precision or recall; no downstream duplicate-helper
+case was present. Helper equivalence and detector behavior across consumer
+conventions remain uncalibrated.
 
-Other frame-transform conventions remain unimplemented, as do Cholesky
-covariance and domain checks. The numerical examples demonstrate only their
-explicitly configured syntax families. The quaternion normalization,
+Other frame-transform conventions and basis-vector return forms remain
+unimplemented, as do Cholesky covariance and domain checks. The numerical
+examples demonstrate only their explicitly configured syntax families. The quaternion normalization,
 inversion, sandwich, matrix-conversion, and ECEF-to-ENU grammars have synthetic
 positive/negative coverage but no reviewed downstream reimplementation
 calibration or production precision estimate yet.

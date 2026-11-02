@@ -106,6 +106,35 @@ handedness = "right-handed"
 operation = "displacement-vector"
 output_shape = "tuple3"
 
+[checks.ecef_ned_matrix_transform]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/geometry/*.py"]
+function_names = ["ecef_to_ned_matrix"]
+latitude_name = "lat_rad"
+longitude_name = "lon_rad"
+sin_latitude_name = "slat"
+cos_latitude_name = "clat"
+sin_longitude_name = "slon"
+cos_longitude_name = "clon"
+preferred_helpers = ["titan_simulation.coords.ecef_to_ned_matrix"]
+array_constructor = "np.array"
+math_module = "math"
+source_frame = "ECEF"
+destination_frame = "NED"
+direction = "ecef-to-ned"
+latitude_type = "geodetic"
+origin = "anchor-point"
+reference_ellipsoid = "WGS84"
+angle_units = "radians"
+length_units = "meters"
+axis_order = "north-east-down"
+handedness = "right-handed"
+operation = "displacement-vector"
+vector_orientation = "column"
+matrix_layout = "row-major"
+output_shape = "matrix3x3"
+
 [orchestration]
 default_profile = "numerical-review"
 
@@ -175,6 +204,12 @@ name = "ECEF to ENU transform review"
 rule = "ecef-enu-transform"
 rollout = "provisional"
 
+[[orchestration.steps]]
+kind = "rule"
+name = "ECEF to NED matrix review"
+rule = "ecef-ned-matrix-transform"
+rollout = "provisional"
+
 [[orchestration.profiles]]
 name = "numerical-review"
-steps = ["Manual matrix kernels", "Manual elimination review", "Array representation churn", "Cholesky recurrence review", "Quaternion product review", "Quaternion conjugation review", "Quaternion normalization review", "Quaternion inversion review", "Quaternion vector rotation review", "Quaternion matrix conversion review", "ECEF to ENU transform review"]
+steps = ["Manual matrix kernels", "Manual elimination review", "Array representation churn", "Cholesky recurrence review", "Quaternion product review", "Quaternion conjugation review", "Quaternion normalization review", "Quaternion inversion review", "Quaternion vector rotation review", "Quaternion matrix conversion review", "ECEF to ENU transform review", "ECEF to NED matrix review"]

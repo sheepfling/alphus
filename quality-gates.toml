@@ -109,6 +109,7 @@ exclude = [
   "src/alphus/gates/review/manual_quaternion_vector_rotation.py", # isinstance checks narrow AST grammar nodes; Pyright verifies the Python typing contracts
   "src/alphus/gates/review/manual_quaternion_matrix_conversion.py", # isinstance checks narrow AST grammar nodes; Pyright verifies the Python typing contracts
   "src/alphus/gates/review/ecef_enu_transform.py", # isinstance checks narrow AST grammar nodes; Pyright verifies the Python typing contracts
+  "src/alphus/gates/review/ecef_ned_matrix_transform.py", # isinstance checks narrow AST grammar nodes; Pyright verifies the Python typing contracts
   "src/alphus/gates/review/manual_quaternion_matrix_conversion.py", # isinstance checks narrow AST grammar nodes; Pyright verifies the Python typing contracts
   "src/alphus/gates/python/compatibility.py",
 ]

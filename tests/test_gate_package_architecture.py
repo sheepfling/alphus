@@ -83,6 +83,7 @@ def test_gate_themes_own_their_runner_mappings() -> None:
                 "manual-quaternion-vector-rotation",
                 "manual-quaternion-matrix-conversion",
                 "ecef-enu-transform",
+                "ecef-ned-matrix-transform",
                 "scipy-constants",
                 "test-quality",
                 "input-contracts",

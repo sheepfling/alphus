@@ -84,6 +84,9 @@ RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
             "manual_quaternion_matrix_conversion", RuleOutputShape.FINDINGS
         ),
         "ecef-enu-transform": RuleSpec("ecef_enu_transform", RuleOutputShape.FINDINGS),
+        "ecef-ned-matrix-transform": RuleSpec(
+            "ecef_ned_matrix_transform", RuleOutputShape.FINDINGS
+        ),
         "scipy-constants": RuleSpec("scipy_constants", RuleOutputShape.FINDINGS),
         "test-quality": RuleSpec("test_quality", RuleOutputShape.FINDINGS),
         "input-contracts": RuleSpec("input_contracts", RuleOutputShape.FINDINGS),

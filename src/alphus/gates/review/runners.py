@@ -12,6 +12,9 @@ from alphus.execution.results import RuleOutput
 from alphus.gates.review.array_representation import check_array_representation
 from alphus.gates.review.cholesky_recurrence import check_cholesky_recurrence
 from alphus.gates.review.ecef_enu_transform import check_ecef_enu_transform
+from alphus.gates.review.ecef_ned_matrix_transform import (
+    check_ecef_ned_matrix_transform,
+)
 from alphus.gates.review.frameworks.fastapi_practices import check_fastapi_practices
 from alphus.gates.review.frameworks.pydantic_practices import check_pydantic_practices
 from alphus.gates.review.frameworks.sqlalchemy_practices import (
@@ -149,6 +152,16 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
             root,
             files,
             require_policy(config.checks.ecef_enu_transform, "ecef_enu_transform"),
+        ),
+        "ecef-ned-matrix-transform": lambda root, files, config: (
+            check_ecef_ned_matrix_transform(
+                root,
+                files,
+                require_policy(
+                    config.checks.ecef_ned_matrix_transform,
+                    "ecef_ned_matrix_transform",
+                ),
+            )
         ),
         "scipy-constants": lambda root, files, config: check_scipy_constants(
             root,
