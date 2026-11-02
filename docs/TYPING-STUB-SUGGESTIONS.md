@@ -15,6 +15,10 @@ Requests 2.33 maps to `types-requests==2.33.0.*` on Python 3.10+; Requests
 Redis 4.6.0 maps to `types-redis==4.6.0.*` on Python 3.8+; Redis 5.0+
 ships `py.typed` and is skipped. The Redis stub package is marked partial, so
 this legacy mapping should be reviewed before upgrading either dependency.
+Pandas 3.1.0 maps to `pandas-stubs==3.1.0.*` on Python 3.11+; no other
+pandas runtime version is currently covered. Pandas-stubs documents its version
+line as the pandas version it was tested against and recommends matching the
+major/minor version when pandas is pinned.
 The PyYAML mapping records its tested stub checker set (`mypy`, `pyright`, and
 `ty`) and compatible stub-version range; the SciPy mapping is scoped to the
 same three checkers. The dateutil mapping is scoped to those three checkers,
@@ -39,6 +43,16 @@ obsolete at runtime version 2.34.0; the PyPI description confirms Requests
 [types-redis project on PyPI](https://pypi.org/project/types-redis/) identifies
 Redis 4.6.0 as its target, marks the stub partial, and notes that Redis 5.0+
 includes `py.typed`; its listed tested checkers include mypy and pyright.
+The [pandas-stubs project on PyPI](https://pypi.org/project/pandas-stubs/)
+identifies itself as the separate PEP 561 stub package, documents that its
+version prefix is the pandas version tested, and recommends matching pinned
+pandas major/minor versions; its current 3.1.0.261029 release is for pandas
+3.1.0 and supports Python 3.11+. The pandas project itself describes pandas as
+not yet a `py.typed` library in its
+[official source](https://github.com/pandas-dev/pandas/blob/main/pandas/__init__.py).
+[types-Pillow on PyPI](https://pypi.org/project/types-Pillow/) is deliberately
+not mapped: its only release targets Pillow 10.2 and directs users to uninstall
+it with Pillow 10.3+, which includes annotations or stubs.
 Pyright 1.1.414 was also run against installed PyYAML, SciPy, dateutil, and toml
 runtime/stub packages; deliberate incompatible assignments were rejected and
 valid return types were inferred. The catalog's dateutil and toml checker

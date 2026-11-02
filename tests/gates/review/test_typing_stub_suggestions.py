@@ -274,6 +274,21 @@ class _UnverifiedRedisDistribution:
     files = ()
 
 
+class _PandasDistribution:
+    version = "3.1.0"
+    files = ()
+
+
+class _PandasStubDistribution:
+    version = "3.1.0.261029"
+    files = ()
+
+
+class _UnverifiedPandasDistribution:
+    version = "3.0.3"
+    files = ()
+
+
 def _distribution(name: str) -> object:
     if name == "types-PyYAML":
         return _PyYAMLStubDistribution()
@@ -625,6 +640,85 @@ def test_builtin_redis_skips_stub_already_declared_in_selected_dev_group(
     assert not gate.check_typing_stub_suggestions(
         tmp_path, _python_sources(tmp_path), _default_policy()
     )
+
+
+def test_builtin_pandas_mapping_recommends_matching_stubs_for_dev_group(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    (tmp_path / "app.py").write_text("import pandas\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\ndependencies = ["pandas==3.1.0"]\n'
+        "[project.optional-dependencies]\ndev = []\n",
+        encoding="utf-8",
+    )
+
+    def distributions(name: str) -> object:
+        if name == "pandas":
+            return _PandasDistribution()
+        if name == "pandas-stubs":
+            raise metadata.PackageNotFoundError(name)
+        return _distribution(name)
+
+    monkeypatch.setattr(gate.metadata, "distribution", distributions)
+
+    findings = gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), _default_policy()
+    )
+
+    assert len(findings) == 1
+    assert "pandas-stubs" in findings[0].message
+    assert "pandas 3.1.0" in findings[0].message
+    assert "typing group(s) dev" in findings[0].message
+
+
+def test_builtin_pandas_reports_matching_stub_as_installed(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    (tmp_path / "app.py").write_text("import pandas\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\ndependencies = ["pandas==3.1.0"]\n'
+        '[project.optional-dependencies]\ndev = ["pandas-stubs==3.1.0.261029"]\n',
+        encoding="utf-8",
+    )
+
+    def distributions(name: str) -> object:
+        if name == "pandas":
+            return _PandasDistribution()
+        if name == "pandas-stubs":
+            return _PandasStubDistribution()
+        return _distribution(name)
+
+    monkeypatch.setattr(gate.metadata, "distribution", distributions)
+
+    assert not gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), _default_policy()
+    )
+
+
+def test_builtin_pandas_does_not_recommend_outside_verified_runtime_line(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    (tmp_path / "app.py").write_text("import pandas\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\ndependencies = ["pandas==3.0.3"]\n'
+        "[project.optional-dependencies]\ndev = []\n",
+        encoding="utf-8",
+    )
+
+    def distributions(name: str) -> object:
+        if name == "pandas":
+            return _UnverifiedPandasDistribution()
+        return _distribution(name)
+
+    monkeypatch.setattr(gate.metadata, "distribution", distributions)
+
+    findings = gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), _default_policy()
+    )
+
+    assert len(findings) == 1
+    assert "outside that verified range" in findings[0].message
+    assert "no stub recommendation was made" in findings[0].message
 
 
 def test_builtin_redis_does_not_recommend_for_unverified_runtime_versions(

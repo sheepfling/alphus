@@ -87,6 +87,16 @@ _BUILTIN_CANDIDATES = (
         package_path="redis",
         stub_version_specifier="==4.6.0.*",
     ),
+    TypingStubCandidate(
+        import_name="pandas",
+        runtime_distribution="pandas",
+        stub_distribution="pandas-stubs",
+        supported_runtime_versions="==3.1.0",
+        supported_python_versions=">=3.11,<4",
+        checkers=("mypy", "pyright"),
+        package_path="pandas",
+        stub_version_specifier="==3.1.0.*",
+    ),
 )
 
 
