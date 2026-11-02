@@ -468,9 +468,11 @@ the other declaration rules stay with Flake8-Pydantic and native type/runtime
 diagnostics instead of being duplicated here. `PYD010` for
 `__pydantic_config__` likewise belongs with TypedDict/type-checker validation.
 
-There is no blanket mutable-default rule: Pydantic deep-copies unhashable model
-defaults per instance, and a consumer can still choose `default_factory` as a
-style convention. A static gate cannot prove a validator's side effects or that
+There is no blanket mutable-default correctness rule: Pydantic deep-copies
+unhashable model defaults per instance. The opt-in `prefer_static_mutable_defaults`
+flag below is a low-severity style preference for exact built-in list/dict
+factories only; it does not require a factory or rewrite fields. A static gate
+cannot prove a validator's side effects or that
 a `TypeAdapter` is on a hot path, so profile those paths and test side effects
 at runtime. Pydantic also intentionally inherits and merges model config;
 static checks do not warn on inheritance without a consumer-specific expected
@@ -481,6 +483,29 @@ and [performance](https://pydantic.dev/docs/validation/latest/concepts/performan
 
 See the [runnable Pydantic consumer example](../examples/consumer/pydantic-practices/README.md)
 for a complete opt-in policy, plan command, and JSON findings run.
+
+## Project-convention coverage and ownership
+
+The checks below are review aids with independent owners. A repository should
+select only the paths and contracts it maintains; lack of static evidence is
+unknown rather than proof of a defect.
+
+| Intent | Current owner or disposition | Limit |
+| --- | --- | --- |
+| Preserve validated domain models across internal boundaries | `pydantic-practices` owns dump/revalidation observations; `input-contracts` owns configured direct mapping/object escape evidence | Domain return identity, serializers, and cross-module flow need a declared consumer contract and review. |
+| Match collection inputs to use | `input-contracts` follows direct local uses and simple aliases | It preserves mutation, output collections, list-specific behavior, and uncertain escapes. |
+| Review flush/fsync/replace on routine outputs | Human review pending an output-role and write-guarantee contract | No removal advice from a source pattern alone; atomic visibility and crash durability differ. |
+| Prefer `Annotated` where useful and static Pydantic defaults | Pydantic/Flake8-Pydantic owns declaration correctness; `prefer_static_mutable_defaults` is a low-severity opt-in preference | Assignment-form `Field` remains valid; no autofix or dataclass application. |
+| Centralize package/tool configuration | Native build backend and packaging tools; consumer-specific review recipe | Generated lock exports, dependency groups, deployment files, and dynamic metadata are accepted; no cross-manifest authority inference yet. |
+| Match pytest-native style | Ruff `PT` rules in the scoped [pytest style profile](PYTEST-STYLE.md) | `unittest` support, mocks, migration suites, and explicit exclusions remain valid. |
+| Centralize finite business states | Human review; reuse typed `Literal`/`Enum` and repeated-literal evidence | Repetition alone does not prove a finite domain; no generic magic-string rule. |
+| Keep timezone awareness and UTC persistence distinct | Ruff `DTZ` rules for naive calls; use declared Pydantic aware types and explicit UTC normalization at persistence boundaries | Awareness alone does not establish UTC; unresolved converters and local civil time are accepted. |
+| Separate generated output from maintained inputs | Git inventory rules identify configured caches/build artifacts; path conventions remain consumer-declared review | Extensions and path strings do not prove generatedness or a filesystem write. |
+
+The runnable [pytest-style consumer profile](../examples/python/pytest-style.toml)
+shows native rule selection. The Pydantic example above shows the separate
+domain/model profile. These recipes demonstrate configuration, not sampled
+production precision or universal enforcement.
 
 ## FastAPI and Starlette practices
 
