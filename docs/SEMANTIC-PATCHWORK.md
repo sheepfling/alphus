@@ -19,6 +19,13 @@ does not trace aliases, establish actual input values, or prove meaningful
 content is lost. Numeric text may be intentionally removed under a declared
 input contract; exclusions and helper names are consumer decisions.
 
+`rendered-value-reparsed` uses a separately configured list of rendering helper
+names. It detects a local result assigned from one of those calls when the same
+value is used in the narrow `rstrip().endswith(<non-empty literal>)` condition
+shape. This captures one form of rendered feedback into later branching. It
+does not follow aliases, method wrappers, interprocedural data flow, or other
+predicates; output-only rendering is intentionally outside the rule.
+
 The separate `positional-semantic-overrides` rule can be scoped with explicit
 position-variable names and semantic output fields. It recognizes only literal
 integer comparisons or membership tests followed immediately in the branch by
@@ -28,6 +35,6 @@ on indirect assignments and other control flow. A match is a review prompt;
 some source formats legitimately require documented position-specific fixes.
 
 These checks do not infer AI authorship or prove a defect. Other patterns in
-issue #50, including rendered feedback, source
+issue #50, including source
 replacement/provenance, heuristic unmatched-span loss, empty-result handling,
 ownership, module boundaries, and patchwork clusters remain uncovered.

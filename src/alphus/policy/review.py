@@ -88,6 +88,7 @@ class ProseAsControlPolicy(PythonSourceScanPolicy):
     severity: Severity = "info"
     lossy_text_rewrite: bool = False
     regex_sub_helpers: tuple[str, ...] = ()
+    rendered_value_helpers: tuple[str, ...] = ()
 
     @field_validator("source_paths")
     @classmethod
@@ -112,6 +113,17 @@ class ProseAsControlPolicy(PythonSourceScanPolicy):
         ):
             raise ValueError("regex helper names must be dotted identifiers")
         require_unique(values, "regex helper names must be unique")
+        return tuple(values)
+
+    @field_validator("rendered_value_helpers")
+    @classmethod
+    def validate_rendered_value_helpers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not value or any(not part.isidentifier() for part in value.split("."))
+            for value in values
+        ):
+            raise ValueError("rendered value helper names must be dotted identifiers")
+        require_unique(values, "rendered value helper names must be unique")
         return tuple(values)
 
     @model_validator(mode="after")

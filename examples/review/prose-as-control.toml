@@ -13,6 +13,7 @@ minimum_words = 8
 allowed_literals = ["The remote peer reports a state transition that this client does not handle."]
 lossy_text_rewrite = true
 regex_sub_helpers = ["re.sub"]
+rendered_value_helpers = ["render_latex"]
 
 [checks.positional_semantic_overrides]
 extensions = [".py"]
@@ -33,10 +34,16 @@ rollout = "provisional"
 
 [[orchestration.steps]]
 kind = "rule"
+name = "Rendered value feedback review"
+rule = "rendered-value-reparsed"
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "rule"
 name = "Positional semantic override review"
 rule = "positional-semantic-overrides"
 rollout = "provisional"
 
 [[orchestration.profiles]]
 name = "semantic-review"
-steps = ["Prose branch review", "Positional semantic override review"]
+steps = ["Prose branch review", "Rendered value feedback review", "Positional semantic override review"]
