@@ -108,3 +108,16 @@ def test_synthetic_context_builders_preserve_rendered_markdown_structure() -> No
         ("https://example.test/a_(b)", "API [v2]")
     ]
     assert parsed.code == ["literal ` marker", "print('ok')\n``` user text\n"]
+
+
+def test_unescaped_dynamic_table_value_changes_rendered_row_structure() -> None:
+    value = "A|B\n| injected | row |"
+    markdown = f"| Name | Value |\n| --- | --- |\n| API | {value} |\n"
+    rendered = MarkdownIt("default").enable("table").render(markdown)
+    parsed = _StructureParser()
+    parsed.feed(rendered)
+
+    # This deliberately unsafe synthetic value demonstrates the behavior the
+    # source-only advisory warns about: a dynamic pipe and newline create a
+    # second table row and truncate the original cell's intended content.
+    assert parsed.cells == ["Name", "Value", "API", "A", "injected", "row"]
