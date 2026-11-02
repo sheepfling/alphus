@@ -17,6 +17,16 @@ Cache writes use an atomic replace. The command reports hits, misses, pruned
 paths, invalidation, and save status on stderr so `--json` stdout remains the
 existing findings array.
 
+## Trust boundary
+
+Treat this as a local performance cache, not as authenticated evidence. The
+source SHA-256 digest detects source-byte changes, and the schema checks reject
+malformed or inconsistent cache records. The digest and policy hashes are
+unkeyed: a writer who can alter the cache can also forge a well-formed finding
+record and matching metadata. Keep the cache in a user-controlled location;
+do not share it across trust boundaries or rely on it when another actor can
+write it. `--force-fresh` bypasses cached findings for that run.
+
 Use `--force-fresh` with `--local-cache` to bypass every hit and replace the
 cache with fresh scan results:
 
