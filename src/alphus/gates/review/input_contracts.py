@@ -916,14 +916,6 @@ def _normalizer_call(
             return False
 
 
-def _loaded_name_after(node: ast.AST, name: str, line: int) -> bool:
-    match node:
-        case ast.Name(id=used_name, ctx=ast.Load(), lineno=used_line):
-            return used_name == name and used_line > line
-        case _:
-            return False
-
-
 def _loaded_name_after_without_rebinding(
     nodes: Sequence[ast.AST], name: str, line: int
 ) -> bool:
