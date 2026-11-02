@@ -53,6 +53,8 @@ def test_built_wheel_cli_uses_git_inventory_and_respects_scope(
     tmp_path: Path, pytestconfig: pytest.Config
 ) -> None:
     project = pytestconfig.rootpath
+    isolated_env = isolated_env.copy()
+    isolated_env.pop("PYTHONPATH", None)
     wheelhouse = tmp_path / "wheelhouse"
     wheelhouse.mkdir()
     build_command = [sys.executable, "-m", "pip", "wheel", "--no-deps"]
@@ -67,7 +69,7 @@ def test_built_wheel_cli_uses_git_inventory_and_respects_scope(
     built = _run(
         build_command,
         cwd=project,
-        env=os.environ.copy(),
+        env=isolated_env,
     )
     assert built.returncode == 0, built.stderr
     wheels = tuple(wheelhouse.glob("alphus-*.whl"))
@@ -81,7 +83,7 @@ def test_built_wheel_cli_uses_git_inventory_and_respects_scope(
     install = _run(
         [str(python), "-m", "pip", "install", "--no-deps", str(wheel)],
         cwd=project,
-        env=os.environ.copy(),
+        env=isolated_env,
     )
     assert install.returncode == 0, install.stderr
 

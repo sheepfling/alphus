@@ -110,6 +110,34 @@ def test_declared_helper_contract_is_qualified_and_respects_shadowing() -> None:
     assert all("table cell" in finding.message for finding in findings)
 
 
+def test_declared_helpers_are_not_trusted_after_control_flow_rebinding() -> None:
+    source = (
+        "def loop_shadow(value, helpers):\n"
+        "    from safe_md import escape_cell\n"
+        "    for escape_cell in helpers:\n"
+        '        return f"| {escape_cell(value)} |"\n'
+        "def with_shadow(value, manager):\n"
+        "    from safe_md import escape_cell\n"
+        "    with manager as escape_cell:\n"
+        '        return f"| {escape_cell(value)} |"\n'
+        "def match_shadow(value, subject):\n"
+        "    from safe_md import escape_cell\n"
+        "    match subject:\n"
+        '        case {"escape_cell": escape_cell}:\n'
+        '            return f"| {escape_cell(value)} |"\n'
+        "from safe_md import escape_cell\n"
+        "def safe_import(value):\n"
+        '    return f"| {escape_cell(value)} |"\n'
+    )
+
+    findings = dynamic_markdown_findings(
+        source, declared_safe_helpers=("safe_md.escape_cell",)
+    )
+
+    assert [finding.line for finding in findings] == [4, 8, 13]
+    assert all("table cell" in finding.message for finding in findings)
+
+
 def test_declared_helper_contract_does_not_accept_package_import_alone() -> None:
     findings = dynamic_markdown_findings(
         "import docs.markdown_cells\n"

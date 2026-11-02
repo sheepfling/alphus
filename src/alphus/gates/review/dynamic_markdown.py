@@ -89,8 +89,29 @@ def _local_bindings(nodes: Sequence[ast.stmt]) -> set[str]:
                 )
             case ast.ImportFrom(names=aliases):
                 result.update(alias.asname or alias.name for alias in aliases)
+            case ast.MatchAs(name=name) | ast.MatchStar(name=name) if name is not None:
+                result.add(name)
+            case ast.MatchMapping(rest=rest) if rest is not None:
+                result.add(rest)
             case ast.Name(id=name, ctx=ast.Store() | ast.Del()):
                 result.add(name)
+            case _:
+                pass
+        pending.extend(ast.iter_child_nodes(node))
+    return result
+
+
+def _pattern_bindings(pattern: ast.pattern) -> set[str]:
+    """Return names captured by one structural-match pattern."""
+    result: set[str] = set()
+    pending: list[ast.AST] = [pattern]
+    while pending:
+        node = pending.pop()
+        match node:
+            case ast.MatchAs(name=name) | ast.MatchStar(name=name) if name is not None:
+                result.add(name)
+            case ast.MatchMapping(rest=rest) if rest is not None:
+                result.add(rest)
             case _:
                 pass
         pending.extend(ast.iter_child_nodes(node))
@@ -479,23 +500,26 @@ class _MarkdownAnalyzer:
         branches: Sequence[Sequence[ast.stmt]],
         starting: _Scope | None = None,
         preserve_loop_list_appends: bool = False,
+        branch_shadowed_names: Sequence[Iterable[str]] | None = None,
     ) -> None:
         starting = starting or _Scope(
             self.scope.aliases.copy(),
             {key: list(value) for key, value in self.scope.lists.items()},
             self.scope.helper_imports.copy(),
         )
-        outcomes = [
-            self._child_scope(
-                branch,
-                _Scope(
-                    starting.aliases.copy(),
-                    {key: list(value) for key, value in starting.lists.items()},
-                    starting.helper_imports.copy(),
-                ),
+        outcomes: list[_Scope] = []
+        for index, branch in enumerate(branches):
+            branch_scope = _Scope(
+                starting.aliases.copy(),
+                {key: list(value) for key, value in starting.lists.items()},
+                starting.helper_imports.copy(),
             )
-            for branch in branches
-        ]
+            if branch_shadowed_names is not None:
+                for name in branch_shadowed_names[index]:
+                    branch_scope.aliases.pop(name, None)
+                    branch_scope.lists.pop(name, None)
+                    branch_scope.helper_imports.pop(name, None)
+            outcomes.append(self._child_scope(branch, branch_scope))
         if not outcomes:
             return
         self.scope.aliases = {
@@ -625,6 +649,7 @@ class _MarkdownAnalyzer:
                     for name in self._target_names(target):
                         loop_scope.aliases.pop(name, None)
                         loop_scope.lists.pop(name, None)
+                        loop_scope.helper_imports.pop(name, None)
                     self._branch(
                         (body, otherwise, ()),
                         starting=loop_scope,
@@ -632,8 +657,22 @@ class _MarkdownAnalyzer:
                     )
                 case ast.While(body=body, orelse=otherwise):
                     self._branch((body, otherwise, ()))
-                case ast.With(body=body) | ast.AsyncWith(body=body):
-                    self._branch((body, ()))
+                case (
+                    ast.With(items=items, body=body)
+                    | ast.AsyncWith(items=items, body=body)
+                ):
+                    with_scope = _Scope(
+                        self.scope.aliases.copy(),
+                        {key: list(value) for key, value in self.scope.lists.items()},
+                        self.scope.helper_imports.copy(),
+                    )
+                    for item in items:
+                        if item.optional_vars is not None:
+                            for name in self._target_names(item.optional_vars):
+                                with_scope.aliases.pop(name, None)
+                                with_scope.lists.pop(name, None)
+                                with_scope.helper_imports.pop(name, None)
+                    self._branch((body, ()), starting=with_scope)
                 case ast.Try(
                     body=body, handlers=handlers, orelse=otherwise, finalbody=final
                 ):
@@ -646,7 +685,11 @@ class _MarkdownAnalyzer:
                     if final:
                         self._scan(final)
                 case ast.Match(cases=cases):
-                    self._branch(tuple(case.body for case in cases) + ((),))
+                    branches = tuple(case.body for case in cases) + ((),)
+                    shadowed_names = tuple(
+                        _pattern_bindings(case.pattern) for case in cases
+                    ) + (frozenset(),)
+                    self._branch(branches, branch_shadowed_names=shadowed_names)
                 case _:
                     pass
 
