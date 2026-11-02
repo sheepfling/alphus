@@ -19,7 +19,9 @@ def _policy() -> TypingStubSuggestionPolicy:
                 stub_distribution="types-PyYAML",
                 supported_runtime_versions=">=6,<7",
                 supported_python_versions=">=3.11,<4",
+                checkers=("mypy",),
                 package_path="yaml",
+                stub_version_specifier=">=6,<7",
             ),
         ),
     )
@@ -48,7 +50,7 @@ def _checkout(tmp_path: Path, dependencies: Iterable[str] | None = None) -> None
 
 
 def _python_sources(tmp_path: Path) -> tuple[Path, ...]:
-    return tuple(tmp_path.glob("*.py"))
+    return tuple(path.relative_to(tmp_path) for path in tmp_path.glob("*.py"))
 
 
 class _Distribution:
@@ -56,11 +58,36 @@ class _Distribution:
     files = ()
 
 
+class _PyYAMLStubDistribution:
+    version = "6.0.12.20261030"
+    files = ()
+
+
+class _ScipyStubDistribution:
+    version = "1.18.1.0"
+    files = ()
+
+
+class _OldStubDistribution:
+    version = "5.9.0"
+    files = ()
+
+
+def _distribution(name: str) -> object:
+    if name == "types-PyYAML":
+        return _PyYAMLStubDistribution()
+    if name == "scipy-stubs":
+        return _ScipyStubDistribution()
+    if name == "scipy":
+        return _ScipyDistribution()
+    return _Distribution()
+
+
 def test_suggests_only_explicit_stub_candidate_for_observed_import(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     _checkout(tmp_path)
-    monkeypatch.setattr(gate.metadata, "distribution", lambda _: _Distribution())
+    monkeypatch.setattr(gate.metadata, "distribution", _distribution)
 
     findings = gate.check_typing_stub_suggestions(
         tmp_path, _python_sources(tmp_path), _policy()
@@ -69,24 +96,107 @@ def test_suggests_only_explicit_stub_candidate_for_observed_import(
     assert len(findings) == 1
     assert "types-PyYAML" in findings[0].message
     assert "yaml" in findings[0].message
+    assert "already installed at compatible version" in findings[0].message
+    assert findings[0].path == "app.py"
+    assert findings[0].line == 1
+
+
+def test_unparseable_source_is_not_reported_as_executed_zero(
+    tmp_path: Path,
+) -> None:
+    _checkout(tmp_path)
+    (tmp_path / "app.py").write_text("import yaml\nif\n", encoding="utf-8")
+    findings = gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), _policy()
+    )
+    assert len(findings) == 1
+    assert findings[0].path == "app.py"
+    assert "syntax could not be parsed" in findings[0].message
+
+
+def test_runtime_distribution_must_be_declared_before_stub_need_is_evaluated(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    _checkout(tmp_path)
+    (tmp_path / "pyproject.toml").write_text(
+        "[project]\ndependencies = []\n[project.optional-dependencies]\ntyping = []\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(gate.metadata, "distribution", _distribution)
+    findings = gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), _policy()
+    )
+    assert len(findings) == 1
+    assert "not declared in PEP 621 project.dependencies" in findings[0].message
+    assert "not evaluated" in findings[0].message
 
 
 def test_does_not_suggest_when_stub_is_declared(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     _checkout(tmp_path, ['"types-PyYAML>=6"'])
-    monkeypatch.setattr(gate.metadata, "distribution", lambda _: _Distribution())
+    monkeypatch.setattr(gate.metadata, "distribution", _distribution)
 
     assert not gate.check_typing_stub_suggestions(
         tmp_path, _python_sources(tmp_path), _policy()
     )
 
 
+def test_reports_a_declared_stub_missing_from_the_selected_interpreter(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    _checkout(tmp_path, ['"types-PyYAML>=6"'])
+
+    def runtime_only(name: str) -> object:
+        if name == "PyYAML":
+            return _Distribution()
+        raise gate.metadata.PackageNotFoundError(name)
+
+    monkeypatch.setattr(gate.metadata, "distribution", runtime_only)
+    findings = gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), _policy()
+    )
+    assert len(findings) == 1
+    assert "declared in typing group(s) typing" in findings[0].message
+    assert "not installed" in findings[0].message
+
+
+def test_rejects_an_installed_stub_outside_its_configured_compatibility_range(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    _checkout(tmp_path)
+
+    def incompatible_stub(name: str) -> object:
+        return _OldStubDistribution() if name == "types-PyYAML" else _Distribution()
+
+    monkeypatch.setattr(gate.metadata, "distribution", incompatible_stub)
+    findings = gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), _policy()
+    )
+    assert len(findings) == 1
+    assert "outside configured compatible range" in findings[0].message
+    assert "no compatible stub was established" in findings[0].message
+
+
+def test_skips_a_mapping_when_selected_checker_has_no_compatibility_evidence(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    _checkout(tmp_path)
+    policy = _policy().model_copy(update={"checkers": ("pyright",)})
+    monkeypatch.setattr(gate.metadata, "distribution", _distribution)
+    findings = gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), policy
+    )
+    assert len(findings) == 1
+    assert "none of the selected checkers" in findings[0].message
+    assert "recommendation was not evaluated" in findings[0].message
+
+
 def test_skips_candidate_outside_configured_runtime_version(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     _checkout(tmp_path)
-    monkeypatch.setattr(gate.metadata, "distribution", lambda _: _Distribution())
+    monkeypatch.setattr(gate.metadata, "distribution", _distribution)
     policy = _policy()
     candidate = policy.candidates[0].model_copy(
         update={"supported_runtime_versions": ">=7"}
@@ -130,6 +240,22 @@ class _DistributionWithFiles(_Distribution):
     files = (Path("yaml/py.typed"),)
 
 
+class _ModuleStubDistribution(_Distribution):
+    files = (Path("yaml.pyi"),)
+
+
+def test_suppresses_a_bundled_single_module_stub(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    _checkout(tmp_path)
+    monkeypatch.setattr(
+        gate.metadata, "distribution", lambda _: _ModuleStubDistribution()
+    )
+    assert not gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), _policy()
+    )
+
+
 def test_builtin_yaml_mapping_works_with_dev_group(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
@@ -139,7 +265,7 @@ def test_builtin_yaml_mapping_works_with_dev_group(
         "[project.optional-dependencies]\ndev = []\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr(gate.metadata, "distribution", lambda _: _Distribution())
+    monkeypatch.setattr(gate.metadata, "distribution", _distribution)
 
     findings = gate.check_typing_stub_suggestions(
         tmp_path, _python_sources(tmp_path), _default_policy()
@@ -158,7 +284,7 @@ def test_builtin_yaml_mapping_skips_duplicate_dev_stubs(
         '[project.optional-dependencies]\ndev = ["types-PyYAML>=6", "types-pyyaml>=6"]\n',
         encoding="utf-8",
     )
-    monkeypatch.setattr(gate.metadata, "distribution", lambda _: _Distribution())
+    monkeypatch.setattr(gate.metadata, "distribution", _distribution)
 
     assert not gate.check_typing_stub_suggestions(
         tmp_path, _python_sources(tmp_path), _default_policy()
@@ -175,7 +301,7 @@ def test_builtin_scipy_mapping_recommends_matching_release(
         "[project.optional-dependencies]\ndev = []\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr(gate.metadata, "distribution", lambda _: _ScipyDistribution())
+    monkeypatch.setattr(gate.metadata, "distribution", _distribution)
     monkeypatch.setattr(gate.sys, "version_info", (3, 12, 0, "final", 0))
 
     findings = gate.check_typing_stub_suggestions(
@@ -196,7 +322,7 @@ def test_builtin_scipy_mapping_reports_unverified_runtime_version(
         encoding="utf-8",
     )
     monkeypatch.setattr(
-        gate.metadata, "distribution", lambda _: _OldScipyDistribution()
+        gate.metadata, "distribution", lambda name: _OldScipyDistribution()
     )
     monkeypatch.setattr(gate.sys, "version_info", (3, 12, 0, "final", 0))
 
@@ -218,7 +344,7 @@ def test_builtin_scipy_mapping_reports_unsupported_python(
         "[project.optional-dependencies]\ndev = []\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr(gate.metadata, "distribution", lambda _: _ScipyDistribution())
+    monkeypatch.setattr(gate.metadata, "distribution", _distribution)
     monkeypatch.setattr(gate.sys, "version_info", (3, 11, 0, "final", 0))
 
     findings = gate.check_typing_stub_suggestions(
@@ -238,7 +364,7 @@ def test_builtin_catalog_can_be_disabled_per_import(
         "[project.optional-dependencies]\ndev = []\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr(gate.metadata, "distribution", lambda _: _Distribution())
+    monkeypatch.setattr(gate.metadata, "distribution", _distribution)
 
     assert not gate.check_typing_stub_suggestions(
         tmp_path, _python_sources(tmp_path), _default_policy(disabled_imports=("yaml",))

@@ -198,6 +198,9 @@ class TypingStubCandidate(StrictModel):
     stub_distribution: str
     supported_runtime_versions: str
     supported_python_versions: str
+    checkers: Annotated[
+        tuple[Literal["mypy", "pyright", "ty"], ...], Field(min_length=1)
+    ]
     package_path: str | None = None
     stub_version_specifier: str | None = None
 
@@ -223,6 +226,14 @@ class TypingStubCandidate(StrictModel):
         except InvalidSpecifier as error:
             raise ValueError("version requirements must be valid specifiers") from error
         return value
+
+    @field_validator("checkers")
+    @classmethod
+    def validate_checkers(
+        cls, values: Sequence[Literal["mypy", "pyright", "ty"]]
+    ) -> tuple[Literal["mypy", "pyright", "ty"], ...]:
+        require_unique(values, "candidate checker scopes must be unique")
+        return tuple(values)
 
     @field_validator("stub_version_specifier")
     @classmethod
