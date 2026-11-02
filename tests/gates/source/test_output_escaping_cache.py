@@ -264,10 +264,13 @@ def test_cli_restricts_cache_and_force_fresh_to_direct_output_rule(
     tmp_path: Path,
 ) -> None:
     runner = CliRunner()
-    missing_cache = runner.invoke(app, ["--force-fresh"])
+    missing_cache = runner.invoke(app, ["--force-fresh"], color=False)
     assert missing_cache.exit_code == 2
     assert "Invalid value" in missing_cache.output
-    assert "--force-fresh requires --local-cache" in missing_cache.output
+    missing_message = " ".join(
+        missing_cache.output.translate(str.maketrans("│╭╮╰╯─", "      ")).split()
+    )
+    assert "--force-fresh requires --local-cache" in missing_message
 
     unsupported_rule = runner.invoke(
         app,
@@ -277,14 +280,17 @@ def test_cli_restricts_cache_and_force_fresh_to_direct_output_rule(
             "--local-cache",
             str(tmp_path / "cache.json"),
         ],
+        color=False,
         terminal_width=160,
     )
     assert unsupported_rule.exit_code == 2
     assert "Invalid value" in unsupported_rule.output
-    assert "limited" in unsupported_rule.output
-    assert "output-escaping" in unsupported_rule.output
+    unsupported_message = " ".join(
+        unsupported_rule.output.translate(str.maketrans("│╭╮╰╯─", "      ")).split()
+    )
+    assert "limited to a direct --rule output-escaping run" in unsupported_message
 
-    help_result = runner.invoke(app, ["--help"])
+    help_result = runner.invoke(app, ["--help"], color=False)
     assert help_result.exit_code == 0
     assert "--local-cache" in help_result.output
     assert "--force-fresh" in help_result.output
