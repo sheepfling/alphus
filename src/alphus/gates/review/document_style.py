@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
+from html.parser import HTMLParser
 from pathlib import Path
 
 from alphus.config import DocumentStylePolicy
@@ -50,6 +51,7 @@ _LATEX_IGNORED_ENVIRONMENT = re.compile(
     r"\\begin\{(?P<name>verbatim\*?|Verbatim|lstlisting|minted|comment)\}"
 )
 _LATEX_FORMAT_COMMAND = re.compile(r"\\(?:emph|textbf|textit|textrm|textsf)\s*")
+_HTML_IGNORED_TAGS = frozenset({"nav", "script", "style", "template", "code", "pre"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +62,76 @@ class DocumentSection:
     text: str
     level: int
     line: int
+
+
+class _HtmlOutlineParser(HTMLParser):
+    """Collect visible text from structural headings, retaining source lines."""
+
+    def __init__(self, path: str) -> None:
+        super().__init__(convert_charrefs=True)
+        self.path = path
+        self.stack: list[tuple[str, bool]] = []
+        self.heading_level: int | None = None
+        self.heading_line = 0
+        self.heading_parts: list[str] = []
+        self.sections: list[DocumentSection] = []
+
+    def _finish_heading(self) -> None:
+        if self.heading_level is not None:
+            text = " ".join("".join(self.heading_parts).split())
+            if text:
+                self.sections.append(
+                    DocumentSection(
+                        self.path, text, self.heading_level, self.heading_line
+                    )
+                )
+        self.heading_level = None
+        self.heading_parts = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if self.heading_level is not None and tag in {f"h{i}" for i in range(1, 7)}:
+            self._finish_heading()
+        attributes = dict(attrs)
+        hidden = (
+            "hidden" in attributes
+            or attributes.get("aria-hidden", "").lower() == "true"
+        )
+        ignored = (
+            bool(self.stack and self.stack[-1][1])
+            or tag in _HTML_IGNORED_TAGS
+            or hidden
+        )
+        self.stack.append((tag, ignored))
+        if not ignored and len(tag) == 2 and tag[0] == "h" and tag[1] in "123456":
+            self.heading_level = int(tag[1])
+            self.heading_line = self.getpos()[0]
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+        self.handle_endtag(tag)
+
+    def handle_endtag(self, tag: str) -> None:
+        if self.heading_level is not None and tag == f"h{self.heading_level}":
+            self._finish_heading()
+        for index in range(len(self.stack) - 1, -1, -1):
+            if self.stack[index][0] == tag:
+                del self.stack[index:]
+                break
+
+    def handle_data(self, data: str) -> None:
+        if self.heading_level is not None and self.stack and not self.stack[-1][1]:
+            self.heading_parts.append(data)
+
+
+def extract_html_sections(
+    source: str, *, path: str = "<source>"
+) -> tuple[DocumentSection, ...]:
+    """Extract visible structural headings, omitting navigation and code regions."""
+    parser = _HtmlOutlineParser(path)
+    parser.feed(source)
+    parser.close()
+    parser._finish_heading()
+    return tuple(parser.sections)
 
 
 def extract_markdown_sections(
@@ -279,10 +351,32 @@ def check_document_style(
             matches_path(name, pattern) for pattern in policy.exclude
         ):
             continue
+        if relative.suffix.lower() == ".html" and (
+            name.lower().endswith(".min.html")
+            or bool(
+                {part.lower() for part in relative.parts}
+                & {"dist", "build", "generated"}
+            )
+        ):
+            findings.append(
+                Finding(
+                    rule_id=_RULE_ID,
+                    path=name,
+                    severity="info",
+                    message=(
+                        "HTML heading analysis skipped a likely generated or "
+                        "minified file; explicitly exclude or rename it if it is "
+                        "source intended for review."
+                    ),
+                )
+            )
+            continue
         source = read_utf8_text(checkout / relative)
         extractor = (
             extract_latex_sections
             if relative.suffix.lower() == ".tex"
+            else extract_html_sections
+            if relative.suffix.lower() == ".html"
             else extract_markdown_sections
         )
         findings.extend(
@@ -299,6 +393,19 @@ def check_document_style(
                         "commands only. Custom sectioning macros, unresolved title "
                         "macros, and unsupported environments are unknown; this is "
                         "not a complete outline pass."
+                    ),
+                )
+            )
+        elif relative.suffix.lower() == ".html":
+            findings.append(
+                Finding(
+                    rule_id=_RULE_ID,
+                    path=name,
+                    severity="info",
+                    message=(
+                        "HTML heading analysis uses source h1–h6 text and omits nav, "
+                        "script, style, template, code, pre, hidden, and aria-hidden "
+                        "regions. It does not resolve templates or generated content."
                     ),
                 )
             )

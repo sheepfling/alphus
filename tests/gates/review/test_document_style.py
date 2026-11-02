@@ -6,6 +6,7 @@ from alphus.config import load_config
 from alphus.gates.review.document_style import (
     DocumentSection,
     check_document_style,
+    extract_html_sections,
     extract_latex_sections,
     extract_markdown_sections,
     rhetorical_heading_findings,
@@ -41,6 +42,72 @@ Setext title
 def test_markdown_heading_attributes_and_unicode_keep_visible_title() -> None:
     sections = extract_markdown_sections("# Δ Geometry {#geometry .index}\n")
     assert [(section.text, section.line) for section in sections] == [("Δ Geometry", 1)]
+
+
+def test_html_extraction_keeps_structural_visible_headings_and_skips_chrome() -> None:
+    source = """<nav><h2>From Nav to Noise</h2></nav>
+<main>
+<h1>From Inputs to Models</h1>
+<h2>From Data to Results</h2>
+<h3>Methods <code>From Code to Noise</code></h3>
+<h2 aria-hidden="true">From Hidden to Noise</h2>
+<script><h2>From Script to Noise</h2></script>
+</main>
+"""
+
+    assert [
+        (section.text, section.level, section.line)
+        for section in extract_html_sections(source, path="report.html")
+    ] == [
+        ("From Inputs to Models", 1, 3),
+        ("From Data to Results", 2, 4),
+        ("Methods", 3, 5),
+    ]
+
+
+def test_html_document_review_reports_density_and_declares_limits(
+    tmp_path: Path,
+) -> None:
+    document = tmp_path / "report.html"
+    document.write_text(
+        "<main><h1>From Inputs to Models</h1>\n"
+        "<h2>From Data to Results</h2>\n"
+        "<h2>Methods</h2>\n<h2>Limitations</h2></main>",
+        encoding="utf-8",
+    )
+
+    findings = check_document_style(
+        tmp_path,
+        [Path("report.html")],
+        DocumentStylePolicy(extensions=(".html",), minimum_headings=4),
+    )
+
+    assert len(findings) == 2
+    density = next(finding for finding in findings if finding.line is not None)
+    coverage = next(finding for finding in findings if finding.line is None)
+    assert density.line == 1
+    assert "2 times among 4 headings" in density.message
+    assert "does not resolve templates" in coverage.message
+
+
+def test_html_review_skips_likely_generated_and_minified_inputs(tmp_path: Path) -> None:
+    generated = tmp_path / "dist" / "bundle.html"
+    minified = tmp_path / "app.min.html"
+    generated.parent.mkdir()
+    generated.write_text("<h1>From A to B</h1>", encoding="utf-8")
+    minified.write_text("<h1>From C to D</h1>", encoding="utf-8")
+
+    findings = check_document_style(
+        tmp_path,
+        [Path("dist/bundle.html"), Path("app.min.html")],
+        DocumentStylePolicy(extensions=(".html",)),
+    )
+
+    assert len(findings) == 2
+    assert all(
+        "skipped a likely generated or minified file" in item.message
+        for item in findings
+    )
 
 
 def test_repeated_template_advisory_requires_document_level_density() -> None:

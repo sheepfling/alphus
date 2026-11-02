@@ -3,10 +3,13 @@
 Rule `alphus/any/none/style/rhetorical-heading-density` reports repeated
 rhetorical templates in a document outline. It is a prompt for human review,
 not a claim that a heading is wrong. The opt-in review currently extracts
-Markdown/MDX ATX and setext headings and conventional LaTeX sectioning commands
-(`chapter`, `section`, `subsection`, and related levels). It skips Markdown
-front matter, fences and TOC lists, and LaTeX comments plus common literal
-environments (`verbatim`, `Verbatim`, `lstlisting`, `minted`, and `comment`).
+Markdown/MDX ATX and setext headings, conventional LaTeX sectioning commands
+(`chapter`, `section`, `subsection`, and related levels), and visible source HTML
+`h1`–`h6` elements. It skips Markdown front matter, fences and TOC lists; LaTeX
+comments and common literal environments (`verbatim`, `Verbatim`, `lstlisting`,
+`minted`, and `comment`); and HTML navigation, scripts, styles, templates, code,
+preformatted, hidden, and `aria-hidden` regions. HTML templates and generated
+content are not resolved.
 Custom sectioning commands, unresolved macros in titles, and unclosed title
 groups are unsupported and are skipped; no TeX engine is run.
 

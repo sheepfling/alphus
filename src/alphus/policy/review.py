@@ -27,7 +27,7 @@ from alphus.policy.sources import PythonSourceScanPolicy
 
 
 class DocumentStylePolicy(StrictModel):
-    """Opt-in Markdown/MDX and conventional LaTeX heading pattern review."""
+    """Opt-in Markdown, LaTeX, and source HTML heading pattern review."""
 
     extensions: tuple[str, ...] = (".md", ".mdx")
     exclude: tuple[str, ...] = ()
@@ -44,8 +44,8 @@ class DocumentStylePolicy(StrictModel):
             "document style extensions must be lowercase suffixes",
             require_one=True,
         )
-        if any(value not in {".md", ".mdx", ".tex"} for value in checked):
-            raise ValueError("document style supports .md, .mdx, and .tex")
+        if any(value not in {".md", ".mdx", ".tex", ".html"} for value in checked):
+            raise ValueError("document style supports .md, .mdx, .tex, and .html")
         return checked
 
     @field_validator("exclude")
