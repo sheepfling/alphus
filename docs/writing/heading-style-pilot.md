@@ -59,12 +59,6 @@ Use synthetic data to cover the absent cases without copying brand material:
 
 ## Limits and follow-up
 
-A separate mixed-context review packet is available in
-[heading-style-review-packet.md](heading-style-review-packet.md). It contains
-source excerpts and blank human-label fields for technical documentation, a
-presentation example, and marketing copy. Its labels remain pending; it is not
-an extension of the manual labels above.
-
 This sample supports only the narrow statement that the selected technical
 headings are descriptive and the current scanner leaves them alone. It does
 not establish document clarity, authorship, recall, or suitability for
