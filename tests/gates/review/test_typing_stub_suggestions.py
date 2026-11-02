@@ -9,7 +9,11 @@ from pathlib import Path
 import pytest
 from pytest import MonkeyPatch
 
-from alphus.config import TypingStubCandidate, TypingStubSuggestionPolicy
+from alphus.config import (
+    TypingStubCandidate,
+    TypingStubSuggestionPolicy,
+    load_config,
+)
 from alphus.gates.review import typing_stub_suggestions as gate
 
 
@@ -72,6 +76,20 @@ def test_checker_installation_reports_versions_and_absent_metadata(
     assert gate._checker_installation(("pyright", "mypy")) == (
         "pyright 1.1.414, mypy: not installed"
     )
+
+
+def test_alphus_check_profile_executes_typing_stub_suggestions() -> None:
+    repository_root = Path(__file__).resolve().parents[3]
+    config = load_config(repository_root / "quality-gates.toml")
+    assert config.orchestration is not None
+    plan = config.orchestration.resolve_profile("check")
+
+    assert plan is not None
+    assert "Typing stub suggestions" in plan.steps
+    assert config.checks.typing_stub_suggestions is not None
+    assert config.checks.typing_stub_suggestions.typing_groups == ("python",)
+    assert config.checks.typing_stub_suggestions.checkers == ("pyright",)
+    assert config.checks.typing_stub_suggestions.disabled_imports == ()
 
 
 def test_installed_pyright_observes_a_controlled_module_stub(
