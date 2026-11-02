@@ -63,6 +63,78 @@ def test_style_scope_excludes_root_and_nested_cache_directories_by_default(
     assert "**/.cache/**" in report["scope"]["exclude_patterns"]
 
 
+def test_style_groups_overlapping_duplicate_windows_as_one_advisory_family(
+    tmp_path: Path,
+) -> None:
+    source = """int calculate(int value) {
+  int adjusted = value + 3;
+  int scaled = adjusted * 7;
+  int shifted = scaled - 2;
+  int result = shifted / 4;
+  return result;
+}
+"""
+    (tmp_path / "a.cpp").write_text(source, encoding="utf-8")
+    (tmp_path / "b.cpp").write_text(source, encoding="utf-8")
+    output = tmp_path / "style.json"
+
+    assert (
+        advisory.main(
+            [
+                "style",
+                str(tmp_path),
+                "--window-lines",
+                "3",
+                "--min-text-chars",
+                "10",
+                "--output",
+                str(output),
+            ]
+        )
+        == 0
+    )
+
+    report = json.loads(output.read_text(encoding="utf-8"))
+    metrics = report["metrics"]
+    duplicate_findings = [
+        finding
+        for finding in report["findings"]
+        if finding["code"] == "possible-duplicate-code"
+    ]
+    assert metrics["duplicate_code_group_count"] > 1
+    assert metrics["duplicate_code_families_total"] == 1
+    assert metrics["duplicate_code_families_reported"] == 1
+    assert len(duplicate_findings) == 1
+    evidence = duplicate_findings[0]["evidence"]
+    assert evidence["window_group_count"] == metrics["duplicate_code_group_count"]
+    assert evidence["raw_window_occurrence_count"] >= evidence["window_group_count"]
+    assert evidence["unique_site_count"] == len(evidence["locations"])
+    assert all("end_line" in location for location in evidence["locations"])
+
+
+def test_overlapping_duplicate_families_keep_disjoint_regions_separate() -> None:
+    left = {
+        "digest": "left",
+        "window_lines": 3,
+        "file_count": 2,
+        "hit_count": 2,
+        "sample": "left",
+        "locations": [{"path": "a.cpp", "line": 1}, {"path": "b.cpp", "line": 1}],
+    }
+    right = {
+        "digest": "right",
+        "window_lines": 3,
+        "file_count": 2,
+        "hit_count": 2,
+        "sample": "right",
+        "locations": [{"path": "a.cpp", "line": 20}, {"path": "b.cpp", "line": 20}],
+    }
+
+    families = advisory._overlapping_duplicate_families([left, right], window_lines=3)
+
+    assert [family["window_group_count"] for family in families] == [1, 1]
+
+
 def test_style_report_exposes_effective_custom_scope_patterns(
     tmp_path: Path,
 ) -> None:
