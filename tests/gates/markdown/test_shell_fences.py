@@ -159,6 +159,28 @@ def test_printf_options_and_backslash_continuation_keep_format_context(
     assert findings == []
 
 
+def test_printf_command_prefixes_preserve_formats_and_real_cmd_arguments(
+    tmp_path: Path,
+) -> None:
+    findings = _check(
+        tmp_path,
+        "```bash\n"
+        'command printf %s%s "$prefix" "$suffix"\n'
+        'builtin printf %s%s "$prefix" "$suffix"\n'
+        'true; printf %s%s "$prefix" "$suffix"\n'
+        "````\n"
+        "```bash\n"
+        "command printf '%s' %PATH%\n"
+        "````\n"
+        "```bash\n"
+        "true; builtin printf '%s' %userprofile%\n"
+        "````\n",
+    )
+
+    assert [finding.line for finding in findings] == [7, 10]
+    assert all("cmd syntax" in finding.message for finding in findings)
+
+
 def test_flags_bash_loop_in_indented_blockquote_pwsh_fence(tmp_path: Path) -> None:
     findings = _check(
         tmp_path,

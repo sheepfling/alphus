@@ -57,7 +57,10 @@ _QUOTED_POWERSHELL_DELEGATION = re.compile(
     r"-Command[ \t]+(?P<quote>['\"])"
 )
 _CMD_ENV = re.compile(r"%[A-Za-z_][A-Za-z0-9_]*%")
-_PRINTF_FORMAT_COMMAND = re.compile(r"^\s*printf\b")
+_PRINTF_FORMAT_COMMAND = re.compile(
+    r"(?:^|(?:&&|\|\||[;&|()])[ \t]*)"
+    r"(?:(?:command|builtin)[ \t]+)?(?P<command>printf)\b"
+)
 _SHELL_WORD = re.compile(r"(?:'[^']*'|\"(?:\\.|[^\"])*\"|\\.|[^\s])+")
 _PRINTF_FORMAT_DIRECTIVE = re.compile(
     r"%(?:%|[-+#0 ']*(?:\d+|\*)?(?:\.(?:\d+|\*))?"
@@ -314,7 +317,7 @@ def _cmd_environment_evidence(lines: Sequence[_SourceLine]) -> _Evidence | None:
             not printf_format_found
             and trailing_backslashes % 2 == 1
             and (
-                _PRINTF_FORMAT_COMMAND.match(raw_line) is not None
+                _PRINTF_FORMAT_COMMAND.search(source.text) is not None
                 or in_printf_continuation
             )
         )
@@ -340,13 +343,19 @@ def _mask_printf_format_argument(
     if continued:
         indentation = len(raw_line) - len(raw_line.lstrip())
         raw_command = f"printf {raw_line.lstrip()}"
+        visible_command = f"printf {line.lstrip()}"
         offset = len("printf ") - indentation
-    elif _PRINTF_FORMAT_COMMAND.match(raw_line):
-        raw_command = raw_line
     else:
-        return line, False
+        visible_command = line
+        raw_command = raw_line
 
-    words = list(_SHELL_WORD.finditer(raw_command))
+    command_match = _PRINTF_FORMAT_COMMAND.search(visible_command)
+    if command_match is None:
+        return line, False
+    if command_match.start("command") + offset > len(raw_command):
+        return line, False
+    command_text = raw_command[command_match.start("command") :]
+    words = list(_SHELL_WORD.finditer(command_text))
     if not words:
         return line, False
     index = 1  # printf command name
@@ -381,8 +390,8 @@ def _mask_printf_format_argument(
     ):
         return line, True
     start, end = match.span()
-    start -= offset
-    end -= offset
+    start += command_match.start("command") - offset
+    end += command_match.start("command") - offset
     if start < 0 or end > len(line):
         return line, True
     masked = _PRINTF_FORMAT_DIRECTIVE.sub(
