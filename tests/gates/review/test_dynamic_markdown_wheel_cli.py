@@ -10,10 +10,14 @@ import subprocess
 import sys
 import sysconfig
 import venv
+from collections.abc import Mapping, Sequence
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
+import pytest
 from packaging.version import Version
+
+from alphus.support.platform_utils import is_windows
 
 
 def _dependency_overlay(source: Path, target: Path) -> None:
@@ -33,7 +37,7 @@ def _dependency_overlay(source: Path, target: Path) -> None:
 
 
 def _run(
-    command: list[str], *, cwd: Path, env: dict[str, str]
+    command: Sequence[str], *, cwd: Path, env: Mapping[str, str]
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         command,
@@ -46,9 +50,9 @@ def _run(
 
 
 def test_built_wheel_cli_uses_git_inventory_and_respects_scope(
-    tmp_path: Path,
+    tmp_path: Path, pytestconfig: pytest.Config
 ) -> None:
-    project = Path(__file__).resolve().parents[3]
+    project = pytestconfig.rootpath
     wheelhouse = tmp_path / "wheelhouse"
     wheelhouse.mkdir()
     build_command = [sys.executable, "-m", "pip", "wheel", "--no-deps"]
@@ -72,8 +76,8 @@ def test_built_wheel_cli_uses_git_inventory_and_respects_scope(
 
     environment = tmp_path / "installed"
     venv.EnvBuilder(with_pip=True).create(environment)
-    python = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-    cli = environment / ("Scripts/alphus.exe" if os.name == "nt" else "bin/alphus")
+    python = environment / ("Scripts/python.exe" if is_windows() else "bin/python")
+    cli = environment / ("Scripts/alphus.exe" if is_windows() else "bin/alphus")
     install = _run(
         [str(python), "-m", "pip", "install", "--no-deps", str(wheel)],
         cwd=project,
@@ -104,7 +108,7 @@ def test_built_wheel_cli_uses_git_inventory_and_respects_scope(
     identity = json.loads(identity_process.stdout)
     site_packages = environment / (
         Path("Lib/site-packages")
-        if os.name == "nt"
+        if is_windows()
         else Path(
             f"lib/python{sys.version_info.major}.{sys.version_info.minor}/site-packages"
         )
