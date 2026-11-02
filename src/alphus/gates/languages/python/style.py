@@ -754,8 +754,14 @@ class StyleVisitor(ast.NodeVisitor):
                 self.findings["bare_containers"].append(node.lineno)
             self.check_opaque(node.returns, declaration_line)
         self.function_depth += 1
+        outer_type_checking_names = self.type_checking_names
+        outer_typing_names = self.typing_names
+        self.type_checking_names = set(outer_type_checking_names)
+        self.typing_names = set(outer_typing_names)
         for statement in node.body:
             self.visit(statement)
+        self.type_checking_names = outer_type_checking_names
+        self.typing_names = outer_typing_names
         tuple_result_line, _, has_tuple_result = self.tuple_result_functions.pop()
         if has_tuple_result:
             self.findings["unnamed_tuple_returns"].append(tuple_result_line)

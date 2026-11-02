@@ -172,6 +172,42 @@ def test_function_local_and_type_checking_imports_are_detected() -> None:
     }
 
 
+def test_function_local_type_checking_alias_does_not_leak_to_other_functions() -> None:
+    source = (
+        "def typing_only():\n"
+        "    from typing import TYPE_CHECKING as TC\n"
+        "    if TC:\n"
+        "        import typing_only_dependency\n"
+        "def runtime_flag(TC):\n"
+        "    if TC:\n"
+        "        import runtime_dependency\n"
+    )
+
+    visitor = StyleVisitor(POLICY, source=source)
+    visitor.visit(ast.parse(source))
+
+    assert visitor.findings["type_checking_imports"] == [4]
+    assert visitor.findings["local_imports"] == [2, 7]
+
+
+def test_function_local_typing_module_alias_does_not_leak_to_other_functions() -> None:
+    source = (
+        "def typing_only():\n"
+        "    import typing as t\n"
+        "    if t.TYPE_CHECKING:\n"
+        "        import typing_only_dependency\n"
+        "def runtime_flag(t):\n"
+        "    if t.TYPE_CHECKING:\n"
+        "        import runtime_dependency\n"
+    )
+
+    visitor = StyleVisitor(POLICY, source=source)
+    visitor.visit(ast.parse(source))
+
+    assert visitor.findings["type_checking_imports"] == [4]
+    assert visitor.findings["local_imports"] == [2, 7]
+
+
 def test_import_review_classifies_optional_loads_and_cycle_avoiding_imports() -> None:
     assert findings(
         "def render():\n"
