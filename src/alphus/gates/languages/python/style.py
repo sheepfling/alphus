@@ -278,6 +278,38 @@ def literal_string_values(items: Sequence[ast.expr]) -> frozenset[str] | None:
     return frozenset(values)
 
 
+def _module_path(relative: Path) -> str:
+    """Map an inventory path to its import-style name, stripping a src root."""
+    parts = relative.with_suffix("").parts
+    if parts and parts[0] in {"src", "lib"}:
+        parts = parts[1:]
+    if parts and parts[-1] == "__init__":
+        parts = parts[:-1]
+    return ".".join(parts)
+
+
+def _relative_import_module(
+    current_module: str, relative: Path, node: ast.ImportFrom
+) -> str:
+    """Resolve only syntactically local relative imports."""
+    package = current_module.split(".")
+    if relative.stem != "__init__":
+        package = package[:-1]
+    keep = max(0, len(package) - node.level + 1)
+    parts = [*package[:keep], *(node.module.split(".") if node.module else [])]
+    return ".".join(parts)
+
+
+def _dotted_name(node: ast.expr) -> str | None:
+    """Read a simple dotted name without evaluating source expressions."""
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        parent = _dotted_name(node.value)
+        return f"{parent}.{node.attr}" if parent else None
+    return None
+
+
 class StyleFindings(TypedDict):
     """Named Python-style finding categories with their source line numbers."""
 
@@ -584,6 +616,7 @@ class StyleVisitor(ast.NodeVisitor):
                     and target.id.isupper()
                     and not target.id.startswith("_")
                     and f"{self.module_name}.{target.id}" not in self.imported_symbols
+                    and f"{self.module_name}.*" not in self.imported_symbols
                 )
             if (
                 self.pattern_kinds
@@ -1032,14 +1065,34 @@ def findings_for(
             if relative.suffix != ".py" or not path.is_file():
                 continue
             tree = ast.parse(read_python_source(path), filename=str(relative))
-            imported_symbols.update(
-                f"{node.module}.{alias.name}"
-                for node in ast.walk(tree)
-                if isinstance(node, ast.ImportFrom)
-                and node.level == 0
-                and node.module is not None
-                for alias in node.names
-            )
+            current_module = _module_path(relative)
+            import_aliases: dict[str, str] = {}
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom):
+                    target_module = (
+                        node.module
+                        if node.level == 0 and node.module is not None
+                        else _relative_import_module(current_module, relative, node)
+                    )
+                    for alias in node.names:
+                        if alias.name == "*":
+                            imported_symbols.add(f"{target_module}.*")
+                        else:
+                            imported_symbols.add(f"{target_module}.{alias.name}")
+                elif isinstance(node, ast.Import):
+                    for alias in node.names:
+                        if alias.asname is not None:
+                            import_aliases[alias.asname] = alias.name
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Attribute):
+                    continue
+                dotted = _dotted_name(node)
+                if not dotted:
+                    continue
+                head, separator, tail = dotted.partition(".")
+                target = import_aliases.get(head, head)
+                qualified = f"{target}.{tail}" if separator else target
+                imported_symbols.add(qualified)
             # A statically declared __all__ is direct evidence that the module
             # intends to expose these names, even when no in-repository import
             # references them. Dynamic export expressions remain unknown.
@@ -1056,13 +1109,19 @@ def findings_for(
                     continue
                 value = node.value
                 if not isinstance(value, (ast.List, ast.Tuple)):
+                    imported_symbols.add(f"{current_module}.*")
                     continue
-                module_name = ".".join(relative.with_suffix("").parts[1:])
                 imported_symbols.update(
-                    f"{module_name}.{item.value}"
+                    f"{current_module}.{item.value}"
                     for item in value.elts
                     if isinstance(item, ast.Constant) and isinstance(item.value, str)
                 )
+            if any(
+                isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and statement.name == "__getattr__"
+                for statement in tree.body
+            ):
+                imported_symbols.add(f"{current_module}.*")
     for relative in paths:
         if relative.suffix.lower() not in policy.extensions or any(
             matches_path(relative.as_posix(), pattern) for pattern in policy.exclude

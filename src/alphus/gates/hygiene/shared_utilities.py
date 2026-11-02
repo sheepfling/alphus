@@ -90,6 +90,24 @@ def _without_docstring(
             return list(body)
 
 
+def _is_conventional_cli_wrapper(body: Sequence[ast.stmt]) -> bool:
+    """Exclude only the conventional one-call SystemExit command wrapper."""
+    normalized = _without_docstring(body)
+    if len(normalized) != 1:
+        return False
+    statement = normalized[0]
+    return (
+        isinstance(statement, ast.Raise)
+        and isinstance(statement.exc, ast.Call)
+        and isinstance(statement.exc.func, ast.Name)
+        and statement.exc.func.id == "SystemExit"
+        and len(statement.exc.args) == 1
+        and isinstance(statement.exc.args[0], ast.Call)
+        and not statement.exc.keywords
+        and not statement.exc.args[0].keywords
+    )
+
+
 def duplicate_helpers(
     root: Path, paths: Iterable[Path], policy: SharedUtilitiesPolicy
 ) -> dict[str, list[str]]:
@@ -104,7 +122,9 @@ def duplicate_helpers(
         for qualified_name, node in _function_definitions(module):
             body = _without_docstring(node.body)
             if (
-                len(body) < policy.minimum_body_statements
+                node.name == "main"
+                and _is_conventional_cli_wrapper(node.body)
+                or len(body) < policy.minimum_body_statements
                 or sum(1 for part in body for _ in ast.walk(part))
                 < policy.minimum_ast_nodes
             ):

@@ -20,6 +20,21 @@ Other consumers retain the default error threshold unless they explicitly set
 `orchestration.failure_threshold = "warning"` or a rule step's `severity`.
 Native command failures still fail.
 
+The opt-in public-constant inventory follows selected in-repository absolute
+and relative imports, simple module-qualified references, and literal
+module-level `__all__` exports. Dynamic `__all__`, module `__getattr__`, and
+star imports make the module's exported surface unknown, so the inventory
+suppresses unused-constant advice for that module. References from consumers
+outside the selected inventory cannot be proven; treat any remaining result as
+review guidance, not authorization to rename or remove an API.
+
+The local-import review recognizes direct and aliased `TYPE_CHECKING` guards.
+It also reports imports inside functions, including optional-dependency loads
+and imports used to avoid a dependency cycle. This is source classification
+only: it does not establish that a cycle exists, that an optional dependency is
+packaged incorrectly, or that moving an import is safe. Preserve and review
+lazy boundaries in their application context.
+
 The opt-in `python-style.semantic_result_paths` check reviews visibly public
 functions and methods in the selected files for fixed-position tuple results.
 Private names, methods on private classes, homogeneous variadic tuples, named

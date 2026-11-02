@@ -155,6 +155,30 @@ def test_duplicate_helpers_find_class_methods_with_qualified_names(
     ]
 
 
+def test_duplicate_helpers_exclude_only_conventional_cli_wrappers(
+    tmp_path: Path,
+) -> None:
+    first = (
+        "def main():\n    raise SystemExit(cli())\n"
+        "def normalize(value):\n"
+        "    cleaned = value.strip()\n"
+        "    if not cleaned:\n        raise ValueError('empty')\n"
+        "    return cleaned\n"
+    )
+    second = first.replace("normalize", "clean_name")
+    _write(tmp_path, "src/first.py", first)
+    _write(tmp_path, "src/second.py", second)
+    policy = POLICY.model_copy(
+        update={"minimum_body_statements": 1, "minimum_ast_nodes": 1}
+    )
+    groups = duplicate_helpers(
+        tmp_path, [Path("src/first.py"), Path("src/second.py")], policy
+    )
+    assert list(groups.values()) == [
+        ["src/first.py:normalize", "src/second.py:clean_name"]
+    ]
+
+
 def test_file_hash_scan_skips_configured_canonical_and_non_file_hashes(
     tmp_path: Path,
 ) -> None:

@@ -3,6 +3,8 @@
 import ast
 from pathlib import Path
 
+import pytest
+
 from alphus.config import PythonStylePolicy
 from alphus.gates.languages.python.style import (
     StyleVisitor,
@@ -154,12 +156,28 @@ def test_pathlib_is_preferred_over_os_path() -> None:
 
 def test_function_local_and_type_checking_imports_are_detected() -> None:
     assert findings("def f():\n import os") == {"local_imports"}
+    assert findings(
+        "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n import os"
+    ) == {
+        "type_checking_imports",
+    }
     assert findings("from typing import TYPE_CHECKING as TC\nif TC:\n import os") == {
         "type_checking_imports",
     }
     assert findings("import typing as t\nif t.TYPE_CHECKING:\n import os") == {
         "type_checking_imports",
     }
+
+
+def test_import_review_classifies_optional_loads_and_cycle_avoiding_imports() -> None:
+    assert findings(
+        "def render():\n"
+        "    import optional_plot_backend\n"
+        "    return optional_plot_backend.draw()\n"
+        "def load_service():\n"
+        "    from . import service\n"
+        "    return service.load()\n"
+    ) == {"local_imports"}
 
 
 def test_configured_application_entrypoint_imports_are_reported() -> None:
@@ -582,3 +600,48 @@ def test_public_constant_index_respects_static_all_exports(tmp_path: Path) -> No
     )
     result = findings_for(tmp_path, [source], policy)
     assert result[source.as_posix()]["unused_public_constants"] == [2]
+
+
+def test_public_constant_index_follows_relative_and_module_qualified_imports(
+    tmp_path: Path,
+) -> None:
+    source = Path("src/alphus/gates/cpp/sample.py")
+    consumer = Path("src/alphus/gates/cpp/consumer.py")
+    (tmp_path / source).parent.mkdir(parents=True)
+    (tmp_path / source).write_text(
+        "EXPORTED = 1\nMODULE_USED = 2\nRELATIVE_USED = 3\nINTERNAL = 4\n",
+        encoding="utf-8",
+    )
+    (tmp_path / consumer).write_text(
+        "from .sample import EXPORTED\n"
+        "import alphus.gates.cpp.sample as public_sample\n"
+        "print(public_sample.MODULE_USED)\n"
+        "import alphus.gates.cpp.sample\n"
+        "print(alphus.gates.cpp.sample.RELATIVE_USED)\n",
+        encoding="utf-8",
+    )
+    policy = POLICY.model_copy(
+        update={"public_constant_paths": ("src/alphus/gates/cpp/**",)}
+    )
+    result = findings_for(tmp_path, [source, consumer], policy)
+    assert result[source.as_posix()]["unused_public_constants"] == [4]
+
+
+@pytest.mark.parametrize(
+    "source_text",
+    [
+        "DYNAMIC = 1\n__all__ = make_exports()\n",
+        "DYNAMIC = 1\ndef __getattr__(name): return lookup(name)\n",
+    ],
+)
+def test_public_constant_index_preserves_unknown_dynamic_exports(
+    tmp_path: Path, source_text: str
+) -> None:
+    source = Path("src/alphus/gates/cpp/dynamic_api.py")
+    (tmp_path / source).parent.mkdir(parents=True)
+    (tmp_path / source).write_text(source_text, encoding="utf-8")
+    policy = POLICY.model_copy(
+        update={"public_constant_paths": ("src/alphus/gates/cpp/**",)}
+    )
+    result = findings_for(tmp_path, [source], policy)
+    assert result == {}
