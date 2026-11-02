@@ -24,6 +24,31 @@ def test_starter_policy_has_one_scoped_command_and_no_global_inventory() -> None
     assert step.fix_argv == ("rumdl", "fmt", "{files}")
 
 
+def test_pytest_style_example_uses_native_ruff_on_test_inventory() -> None:
+    config = load_config(Path("examples/python/pytest-style.toml"))
+    orchestration = config.orchestration
+    assert orchestration is not None
+    plan = orchestration.resolve_profile("pytest-style")
+    assert plan is not None
+    step = orchestration.steps[0]
+    assert isinstance(step, CommandRunStep)
+    assert step.argv == (
+        "{python}",
+        "-m",
+        "ruff",
+        "check",
+        "--select",
+        "PT",
+        "--target-version",
+        "py311",
+        "{files}",
+    )
+    assert step.files is not None
+    assert step.files.include == ("tests/**/*.py",)
+    assert step.files.exclude == ("tests/fixtures/**",)
+    assert step.rollout == "provisional"
+
+
 def test_markdown_example_pairs_two_fixers_without_duplicate_missing_links() -> None:
     config = load_config(Path("examples/markdown/quality-gates.toml"))
     assert config.files is None
