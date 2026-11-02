@@ -107,6 +107,59 @@ def _single_assignment(
     return stores == 1
 
 
+def _local_bindings(function: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
+    """Collect names bound in this function scope without entering nested scopes."""
+    names = {argument.arg for argument in function.args.posonlyargs}
+    names.update(argument.arg for argument in function.args.args)
+    names.update(argument.arg for argument in function.args.kwonlyargs)
+    if function.args.vararg is not None:
+        names.add(function.args.vararg.arg)
+    if function.args.kwarg is not None:
+        names.add(function.args.kwarg.arg)
+
+    def visit(node: ast.AST) -> None:
+        if (
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+            and node is not function
+        ):
+            names.add(node.name)
+            return
+        if isinstance(node, ast.Lambda):
+            return
+        match node:
+            case ast.Name(id=name, ctx=(ast.Store() | ast.Del())):
+                names.add(name)
+            case ast.Import(names=imports):
+                names.update(
+                    alias.asname or alias.name.split(".", maxsplit=1)[0]
+                    for alias in imports
+                )
+            case ast.ImportFrom(names=imports):
+                names.update(alias.asname or alias.name for alias in imports)
+            case ast.Global(names=declared) | ast.Nonlocal(names=declared):
+                names.update(declared)
+            case _:
+                pass
+        for child in ast.iter_child_nodes(node):
+            visit(child)
+
+    for statement in function.body:
+        visit(statement)
+    return names
+
+
+def _path_is_not_rebound(
+    function: ast.FunctionDef | ast.AsyncFunctionDef, name: str
+) -> bool:
+    stores = sum(
+        isinstance(node, ast.Name)
+        and isinstance(node.ctx, ast.Store)
+        and node.id == name
+        for node in ast.walk(function)
+    )
+    return stores == 0
+
+
 def _failed_returncode_name(test: ast.expr, names: frozenset[str]) -> str | None:
     match test:
         case ast.Compare(
@@ -129,6 +182,7 @@ def _failure_evidence_findings(
     valid_results = frozenset(
         name for name in runner_bindings if _single_assignment(function, name)
     )
+    local_bindings = _local_bindings(function)
     findings: list[Finding] = []
     emitted: set[str] = set()
     for statement in function.body:
@@ -139,10 +193,17 @@ def _failure_evidence_findings(
                 continue
         if result_name is None:
             continue
+        if any(
+            not _path_is_not_rebound(function, name)
+            for name in policy.failure_diagnostic_path_names
+        ):
+            continue
         direct_calls = [
             call for item in body if (call := _direct_call(item)) is not None
         ]
         for cleanup_role in policy.failure_cleanups:
+            if cleanup_role.function.split(".", maxsplit=1)[0] in local_bindings:
+                continue
             cleanup = next(
                 (
                     call
@@ -161,6 +222,8 @@ def _failure_evidence_findings(
             if diagnostic_path is None or diagnostic_path in emitted:
                 continue
             for sink_role in policy.failure_sinks:
+                if sink_role.function.split(".", maxsplit=1)[0] in local_bindings:
+                    continue
                 sink = next(
                     (
                         call

@@ -282,6 +282,45 @@ def test_failure_evidence_order_abstains_without_exact_failure_chain() -> None:
         assert run_artifact_findings(source, "src/harness.py", configured) == []
 
 
+def test_failure_evidence_order_abstains_when_path_or_helper_is_rebound() -> None:
+    configured = policy(
+        failure_evidence_order=True,
+        failure_child_runners=("run_child",),
+        failure_diagnostic_path_names=("diagnostic_path",),
+        failure_cleanups=(ProvenanceCallRole(function="remove_diagnostic"),),
+        failure_sinks=(
+            ProvenanceCallRole(function="persist_failure", path_argument_index=1),
+        ),
+    )
+    controls = (
+        (
+            "def run(diagnostic_path):\n"
+            "    child = run_child()\n"
+            "    if child.returncode != 0:\n"
+            "        remove_diagnostic(diagnostic_path)\n"
+            "        persist_failure(child.returncode, diagnostic_path)\n"
+        ),
+        (
+            "def run(diagnostic_path, remove_diagnostic):\n"
+            "    child = run_child()\n"
+            "    if child.returncode != 0:\n"
+            "        remove_diagnostic(diagnostic_path)\n"
+            "        persist_failure(child.returncode, diagnostic_path)\n"
+        ),
+        (
+            "def run(diagnostic_path):\n"
+            "    child = run_child()\n"
+            "    if child.returncode != 0:\n"
+            "        diagnostic_path = make_temporary_path()\n"
+            "        remove_diagnostic(diagnostic_path)\n"
+            "        persist_failure(child.returncode, diagnostic_path)\n"
+        ),
+    )
+    assert len(run_artifact_findings(controls[0], "src/harness.py", configured)) == 1
+    for source in controls[1:]:
+        assert run_artifact_findings(source, "src/harness.py", configured) == []
+
+
 def test_runtime_metadata_without_bound_module_origin_is_reported() -> None:
     configured = policy(
         runtime_attestation_gap=True,
