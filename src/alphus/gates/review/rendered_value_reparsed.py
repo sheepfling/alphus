@@ -43,6 +43,33 @@ def _target_names(target: ast.expr) -> set[str]:
     return names
 
 
+def _pattern_names(pattern: ast.pattern) -> set[str]:
+    names: set[str] = set()
+    match pattern:
+        case ast.MatchAs(pattern=inner, name=name):
+            if name is not None:
+                names.add(name)
+            if inner is not None:
+                names.update(_pattern_names(inner))
+        case ast.MatchStar(name=name):
+            if name is not None:
+                names.add(name)
+        case ast.MatchMapping(patterns=patterns, rest=rest):
+            if rest is not None:
+                names.add(rest)
+            for item in patterns:
+                names.update(_pattern_names(item))
+        case ast.MatchClass(patterns=patterns, kwd_patterns=keyword_patterns):
+            for item in (*patterns, *keyword_patterns):
+                names.update(_pattern_names(item))
+        case ast.MatchSequence(patterns=patterns) | ast.MatchOr(patterns=patterns):
+            for item in patterns:
+                names.update(_pattern_names(item))
+        case _:
+            pass
+    return names
+
+
 def _uses_rendered_suffix(test: ast.expr, names: Sequence[str]) -> str | None:
     match test:
         case ast.Call(
@@ -184,7 +211,12 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[tuple[int, int, str]]:
                         current = scan(finalbody, current)
                 case ast.Match(cases=cases):
                     before = current.copy()
-                    paths = [scan(case.body, current) for case in cases]
+                    paths: list[dict[str, int]] = []
+                    for case in cases:
+                        case_state = current.copy()
+                        for name in _pattern_names(case.pattern):
+                            case_state.pop(name, None)
+                        paths.append(scan(case.body, case_state))
                     current = {
                         name: line
                         for name, line in before.items()

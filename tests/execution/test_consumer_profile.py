@@ -6,6 +6,7 @@ import tomllib
 from pathlib import Path
 
 from alphus.config import CommandRunStep, RuleRunStep, load_config
+from alphus.gates.review import runners as review_runners
 
 _POLICY = Path("examples/consumer/quality-gates.toml")
 
@@ -38,6 +39,33 @@ def test_prose_as_control_example_is_scoped_and_provisional() -> None:
     normalization = config.checks.parallel_normalization
     assert normalization is not None
     assert normalization.pairs[0].output_contract == "same-output-for-same-input"
+
+
+def test_rendered_feedback_is_dispatched_only_by_its_dedicated_rule(
+    monkeypatch,
+) -> None:
+    config = load_config(Path("examples/review/prose-as-control.toml"))
+    calls: list[str] = []
+
+    def rendered_result(root, files, policy):
+        calls.append("rendered")
+        return ["rendered finding"]
+
+    monkeypatch.setattr(
+        review_runners, "check_rendered_value_reparsed", rendered_result
+    )
+
+    prose_findings = review_runners.REVIEW_RULE_RUNNERS["prose-as-control"](
+        Path("."), (), config
+    )
+    assert prose_findings == []
+    assert calls == []
+
+    rendered_findings = review_runners.REVIEW_RULE_RUNNERS["rendered-value-reparsed"](
+        Path("."), (), config
+    )
+    assert rendered_findings == ["rendered finding"]
+    assert calls == ["rendered"]
 
 
 def test_starter_policy_has_one_scoped_command_and_no_global_inventory() -> None:

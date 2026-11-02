@@ -105,6 +105,32 @@ def f(text):
     assert _sites(source, ("render",)) == [(2, 6, "rendered")]
 
 
+def test_match_capture_invalidates_prior_rendered_binding_within_case() -> None:
+    source = """\
+def f(text):
+    rendered = render(text)
+    match text:
+        case {"text": rendered}:
+            if rendered.rstrip().endswith("!"):
+                return True
+    return False
+"""
+    assert _sites(source, ("render",)) == []
+
+
+def test_unrelated_match_capture_preserves_rendered_binding() -> None:
+    source = """\
+def f(text):
+    rendered = render(text)
+    match text:
+        case {"text": other}:
+            if rendered.rstrip().endswith("!"):
+                return True
+    return False
+"""
+    assert _sites(source, ("render",)) == [(2, 5, "rendered")]
+
+
 def test_advisory_reports_configured_source_path(tmp_path: Path) -> None:
     source = tmp_path / "src/render/table.py"
     source.parent.mkdir(parents=True)

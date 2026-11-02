@@ -69,11 +69,6 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
                 files,
                 require_policy(config.checks.prose_as_control, "prose_as_control"),
             )
-            + check_rendered_value_reparsed(
-                root,
-                files,
-                require_policy(config.checks.prose_as_control, "prose_as_control"),
-            )
         ),
         "rendered-value-reparsed": lambda root, files, config: (
             check_rendered_value_reparsed(
