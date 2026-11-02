@@ -9,6 +9,7 @@ from typing import TypeAlias
 
 from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.execution.results import RuleOutput
+from alphus.gates.review.ci_workflows import check_ci_workflows
 from alphus.gates.review.frameworks.fastapi_practices import check_fastapi_practices
 from alphus.gates.review.frameworks.pydantic_practices import check_pydantic_practices
 from alphus.gates.review.frameworks.sqlalchemy_practices import (
@@ -37,6 +38,11 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
             root,
             files,
             require_policy(config.checks.scipy_constants, "scipy_constants"),
+        ),
+        "ci-workflows": lambda root, files, config: check_ci_workflows(
+            root,
+            files,
+            require_policy(config.checks.ci_workflows, "ci_workflows"),
         ),
         "test-quality": lambda root, files, config: check_test_quality(
             root,

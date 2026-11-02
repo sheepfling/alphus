@@ -23,7 +23,7 @@ from alphus.policy.base import (
     validate_patterns,
     validate_single_path,
 )
-from alphus.policy.sources import PythonSourceScanPolicy
+from alphus.policy.sources import PythonSourceScanPolicy, SourceScanPolicy
 
 
 class NumericLiteralSpec(StrictModel):
@@ -93,6 +93,28 @@ class ScipyConstantsPolicy(PythonSourceScanPolicy):
             "SciPy catalog names must be unique",
         )
         return self
+
+
+class CiWorkflowPolicy(SourceScanPolicy):
+    """Read-only, low-confidence review for repeated static Actions run blocks."""
+
+    workflow_paths: tuple[str, ...] = (".github/workflows/**",)
+    ignore_run_blocks: tuple[str, ...] = ()
+    minimum_run_lines: Annotated[int, Field(ge=2)] = 2
+    severity: Severity = "info"
+
+    @field_validator("workflow_paths")
+    @classmethod
+    def validate_workflow_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("ignore_run_blocks")
+    @classmethod
+    def validate_ignored_blocks(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.strip() for value in values):
+            raise ValueError("ignored run blocks must be non-empty")
+        require_unique(values, "ignored run blocks must be unique")
+        return tuple(values)
 
 
 class TestQualityExclusion(StrictModel):

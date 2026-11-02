@@ -68,6 +68,7 @@ from alphus.policy.repository import (
     VersionSyncPolicy,
 )
 from alphus.policy.review import (
+    CiWorkflowPolicy,
     ErrorCodeCallSpec,
     FastApiFindingOverride,
     FastApiPracticePolicy,
@@ -109,6 +110,7 @@ __all__ = [
     "ArchitectureGraphPolicy",
     "CallableRegistryPolicy",
     "CheckPolicies",
+    "CiWorkflowPolicy",
     "CliPolicy",
     "CommandRunStep",
     "CommentMarkerPolicy",
