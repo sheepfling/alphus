@@ -75,9 +75,8 @@ def _pdf_api() -> _PdfApi:
 def _flatten_outline(items: object) -> list[object]:
     result: list[object] = []
     match items:
-        case [*nested]:
-            nested_items = cast(list[object], nested)
-            for item in nested_items:
+        case [*_]:
+            for item in cast(list[object], items):
                 result.extend(_flatten_outline(item))
         case None:
             pass
@@ -141,7 +140,8 @@ def validate_navigation(
             continue
         if not text or not text.strip():
             unknown.append(
-                f"physical page {actual_page} has no extractable text; visual/image/vector content is unknown"
+                f"physical page {actual_page} has no extractable text; "
+                "visual/image/vector content is unknown"
             )
             continue
         normalized_text = " ".join(text.split()).casefold()
