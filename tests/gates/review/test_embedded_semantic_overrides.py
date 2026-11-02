@@ -7,15 +7,14 @@ from alphus.gates.review.embedded_semantic_overrides import (
 )
 
 
-def _policy(**updates: object) -> EmbeddedSemanticOverridePolicy:
-    data: dict[str, object] = {
-        "extensions": (".py",),
-        "source_paths": ("src/render/*.py",),
-        "replacement_maps": ("fixed_paragraphs",),
-        "source_anchor_helpers": ("source_anchor",),
-    }
-    data.update(updates)
-    return EmbeddedSemanticOverridePolicy.model_validate(data)
+def _policy(*, exclude: tuple[str, ...] = ()) -> EmbeddedSemanticOverridePolicy:
+    return EmbeddedSemanticOverridePolicy(
+        extensions=(".py",),
+        source_paths=("src/render/*.py",),
+        replacement_maps=("fixed_paragraphs",),
+        source_anchor_helpers=("source_anchor",),
+        exclude=exclude,
+    )
 
 
 def test_detects_configured_replacement_returned_with_original_source_anchor() -> None:

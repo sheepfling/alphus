@@ -10,15 +10,18 @@ from alphus.gates.review.unexplained_empty_results import (
 )
 
 
-def _policy(**updates: object) -> UnexplainedEmptyResultPolicy:
-    data: dict[str, object] = {
-        "extensions": (".py",),
-        "source_paths": ("src/parser/*.py",),
-        "nonempty_inputs": ("records",),
-        "unavailable_flags": ("inferred_schema",),
-    }
-    data.update(updates)
-    return UnexplainedEmptyResultPolicy.model_validate(data)
+def _policy(
+    *,
+    nonempty_inputs: tuple[str, ...] = ("records",),
+    exclude: tuple[str, ...] = (),
+) -> UnexplainedEmptyResultPolicy:
+    return UnexplainedEmptyResultPolicy(
+        extensions=(".py",),
+        source_paths=("src/parser/*.py",),
+        nonempty_inputs=nonempty_inputs,
+        unavailable_flags=("inferred_schema",),
+        exclude=exclude,
+    )
 
 
 def test_detects_nonempty_input_with_unknown_inference_returning_empty() -> None:

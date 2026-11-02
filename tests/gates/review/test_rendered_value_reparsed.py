@@ -7,14 +7,12 @@ from alphus.gates.review.rendered_value_reparsed import (
 )
 
 
-def _policy(**updates: object) -> ProseAsControlPolicy:
-    data: dict[str, object] = {
-        "extensions": (".py",),
-        "source_paths": ("src/render/*.py",),
-        "rendered_value_helpers": ("render_latex",),
-    }
-    data.update(updates)
-    return ProseAsControlPolicy.model_validate(data)
+def _policy() -> ProseAsControlPolicy:
+    return ProseAsControlPolicy(
+        extensions=(".py",),
+        source_paths=("src/render/*.py",),
+        rendered_value_helpers=("render_latex",),
+    )
 
 
 def test_detects_rendered_output_reparsed_for_suffix() -> None:
