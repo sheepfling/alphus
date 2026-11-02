@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Self, TypeAlias
+from typing import Self, TypeAlias, cast
 
 from pydantic import BaseModel, ConfigDict, TypeAdapter
 
@@ -20,11 +20,12 @@ from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
 from alphus.gates.languages.python.style import StyleFindings
 from alphus.gates.source.cyclomatic_complexity import CyclomaticReport
-from alphus.policy.base import QualityRuleName
+from alphus.policy.base import QualityRuleName, RuleSelector
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
 
 RuleOutput: TypeAlias = (
     list[Finding]
+    | list[Diagnostic]
     | list[str]
     | CliPolicyReport
     | dict[str, StyleFindings]
@@ -54,6 +55,7 @@ class _CyclomaticWire(BaseModel):
 
 
 _FINDINGS: TypeAdapter[list[Finding]] = TypeAdapter(list[Finding])
+_DIAGNOSTICS: TypeAdapter[list[Diagnostic]] = TypeAdapter(list[Diagnostic])
 _MESSAGES: TypeAdapter[list[str]] = TypeAdapter(list[str])
 _PYTHON_STYLE: TypeAdapter[PythonStyleOutput] = TypeAdapter(PythonStyleOutput)
 _SHARED_UTILITIES: TypeAdapter[_SharedUtilitiesWire] = TypeAdapter(_SharedUtilitiesWire)
@@ -228,17 +230,20 @@ def _shared_diagnostics(
     return diagnostics
 
 
-def diagnostics_from_output(
-    rule: QualityRuleName, output: RuleOutput
-) -> list[Diagnostic]:
+def diagnostics_from_output(rule: RuleSelector, output: RuleOutput) -> list[Diagnostic]:
     """Normalize a checker result without serializing it through the CLI."""
-    shape = RULE_SPECS[rule].output_shape
+    spec = RULE_SPECS.get(rule)  # plugin diagnostics already use the shared contract
+    if spec is None:
+        return _DIAGNOSTICS.validate_python(output)
+    shape = spec.output_shape
     if shape is RuleOutputShape.FINDINGS:
         return [item.as_diagnostic() for item in _FINDINGS.validate_python(output)]
     if shape is RuleOutputShape.MESSAGES:
         if rule == "cli" and isinstance(output, CliPolicyReport):
             return _cli_policy_diagnostics(output)
-        return _message_diagnostics(rule, _MESSAGES.validate_python(output))
+        return _message_diagnostics(
+            cast(QualityRuleName, rule), _MESSAGES.validate_python(output)
+        )
     if shape is RuleOutputShape.PYTHON_STYLE:
         payload = _PYTHON_STYLE.validate_python(output)
         return _style_diagnostics(payload)
@@ -255,13 +260,18 @@ def diagnostics_from_output(
     )
 
 
-def diagnostics_from_json(rule: QualityRuleName, encoded: str) -> list[Diagnostic]:
+def diagnostics_from_json(rule: RuleSelector, encoded: str) -> list[Diagnostic]:
     """Validate the older direct-rule JSON shapes before normalization."""
-    shape = RULE_SPECS[rule].output_shape
+    spec = RULE_SPECS.get(rule)
+    if spec is None:
+        return _DIAGNOSTICS.validate_json(encoded)
+    shape = spec.output_shape
     if shape is RuleOutputShape.FINDINGS:
         return [item.as_diagnostic() for item in _FINDINGS.validate_json(encoded)]
     if shape is RuleOutputShape.MESSAGES:
-        return _message_diagnostics(rule, _MESSAGES.validate_json(encoded))
+        return _message_diagnostics(
+            cast(QualityRuleName, rule), _MESSAGES.validate_json(encoded)
+        )
     if shape is RuleOutputShape.PYTHON_STYLE:
         return _style_diagnostics(_PYTHON_STYLE.validate_json(encoded))
     if shape is RuleOutputShape.CYCLOMATIC_REPORT:
@@ -292,14 +302,14 @@ def is_nonfatal_cli_presentation_diagnostic(diagnostic: Diagnostic) -> bool:
 class RuleEvaluation:
     """One rule's raw output, normalized diagnostics, and threshold decision."""
 
-    rule: QualityRuleName
+    rule: RuleSelector
     output: RuleOutput
     diagnostics: list[Diagnostic]
     failed: bool
 
     @classmethod
     def from_output(
-        cls, rule: QualityRuleName, output: RuleOutput, threshold: Severity
+        cls, rule: RuleSelector, output: RuleOutput, threshold: Severity
     ) -> Self:
         diagnostics = diagnostics_from_output(rule, output)
         nonfatal_cli_messages: set[str] = set()

@@ -9,6 +9,7 @@ from typing import TypeAlias
 
 from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.execution.results import RuleOutput
+from alphus.gates.review.dynamic_markdown import check_dynamic_markdown
 from alphus.gates.review.frameworks.fastapi_practices import check_fastapi_practices
 from alphus.gates.review.frameworks.pydantic_practices import check_pydantic_practices
 from alphus.gates.review.frameworks.sqlalchemy_practices import (
@@ -76,6 +77,11 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
             root,
             files,
             require_policy(config.checks.sqlalchemy_practices, "sqlalchemy_practices"),
+        ),
+        "dynamic-markdown": lambda root, files, config: check_dynamic_markdown(
+            root,
+            files,
+            require_policy(config.checks.dynamic_markdown, "dynamic_markdown"),
         ),
     }
 )

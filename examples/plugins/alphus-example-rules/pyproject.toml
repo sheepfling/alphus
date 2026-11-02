@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "alphus-example-rules"
+version = "0.1.0"
+description = "Example separately packaged Alphus rule plugin"
+requires-python = ">=3.11,<3.16"
+dependencies = ["alphus>=0.0.1,<1"]
+
+[project.entry-points."alphus.rules.v1"]
+example = "alphus_example_rules:register"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

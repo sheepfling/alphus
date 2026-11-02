@@ -535,6 +535,69 @@ does not infer that any call is wrong. Native parameter-count and call-order
 diagnostics remain separate. See the [positional interface guide](POSITIONAL-INTERFACES.md)
 for the Python boundaries, native capability matrix, and runnable consumer example.
 
+## Dynamic Markdown assembly
+
+Selector: `dynamic-markdown`. ID:
+`alphus/python/none/maintainability/dynamic-markdown-assembly`.
+
+This opt-in Python advisory looks for dynamic values placed into Markdown
+structure in consumer-selected producer files. Configure narrow paths so
+ordinary application strings and unrelated templates are not treated as
+Markdown output:
+
+```toml
+[checks.dynamic_markdown]
+extensions = [".py"]
+producer_paths = ["src/my_app/markdown/**"]
+exclude = []
+severity = "warning"
+
+[[checks.dynamic_markdown.exceptions]]
+paths = ["src/my_app/markdown/legacy_serializer.py"]
+reason = "Reviewed low-level serializer preserves the declared Markdown dialect."
+```
+
+Add `dynamic-markdown` as a rule step in a consumer-owned profile to run it.
+`producer_paths` is required; the checker never treats punctuation or an
+f-string alone as evidence that a file produces Markdown. The optional
+`exceptions` entries suppress matching paths and require a review reason.
+`exclude` remains available for ordinary path exclusions. A producer path must
+also be present in the root `[files]` inventory; this rule does not expand the
+repository-wide file scope.
+
+```toml
+[[orchestration.steps]]
+kind = "rule"
+name = "Dynamic Markdown review"
+rule = "dynamic-markdown"
+
+[[orchestration.profiles]]
+name = "markdown-review"
+steps = ["Dynamic Markdown review"]
+```
+
+Run that consumer-owned profile with `alphus --run --profile markdown-review`.
+
+The first supported patterns are f-strings, string concatenation, literal
+`.format()` templates, direct local aliases, and straight-line list
+`append`/`join` assembly. It reports values in pipe-delimited table rows,
+simple Markdown link labels or destinations, and matched backtick spans or
+fences. Findings include the dynamic expression and observed source
+construction. They ask for context-specific review, such as table-cell
+escaping and row boundaries or link destination encoding; they do not claim
+that rendered output is malformed or prescribe one universal escaping call.
+
+The analyzer does not execute or import consumer modules. It follows local
+bindings only when their value remains unambiguous; assignments that differ
+across branches are left unresolved. Unknown helpers, interprocedural flow,
+computed templates, raw-fragment provenance, and library APIs are not
+recognized as safe. Importing a Markdown package does not suppress a separate
+manual construction. This first pass does not analyze block composition or
+certify renderer output. Calibrate it against sanitized real generator
+examples and independently check representative rendered structure before
+considering broader rollout. Prefer a dialect-aware library or tested shared
+builder for document production.
+
 ## SQLAlchemy 2.x practices
 
 Selector: `sqlalchemy-practices`. IDs:

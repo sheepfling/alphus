@@ -15,8 +15,8 @@ from alphus.config import (
     CommandRunStep,
     OrchestrationPolicy,
     QualityGateConfig,
-    QualityRuleName,
     RuleRunStep,
+    RuleSelector,
     load_config,
 )
 from alphus.contracts.findings import (
@@ -144,7 +144,7 @@ def run_orchestration(
     config_path: Path,
     policy: OrchestrationPolicy,
     profile_name: str,
-    run_rule: Callable[[QualityRuleName], int | RuleRunResult],
+    run_rule: Callable[[RuleSelector], int | RuleRunResult],
     *,
     json_output: bool = False,
     stdout: TextIO | None = None,

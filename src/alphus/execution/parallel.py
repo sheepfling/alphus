@@ -12,7 +12,7 @@ from io import StringIO
 from pathlib import Path
 from typing import cast
 
-from alphus.config import QualityGateConfig, QualityRuleName
+from alphus.config import QualityGateConfig, RuleSelector
 from alphus.execution.commands import (
     command_arguments,
     step_directory,
@@ -69,8 +69,8 @@ class _LocalRuleRun:
 
 
 def _invoke_local_rule(
-    run_rule: Callable[[QualityRuleName], int | RuleRunResult],
-    rule: QualityRuleName,
+    run_rule: Callable[[RuleSelector], int | RuleRunResult],
+    rule: RuleSelector,
 ) -> _LocalRuleRun:
     output = StringIO()
     errors = StringIO()
@@ -189,7 +189,7 @@ def run_profile_steps(
     steps: Sequence[RuleRunStep | CommandRunStep],
     max_jobs: int,
     *,
-    run_rule: Callable[[QualityRuleName], int | RuleRunResult] | None = None,
+    run_rule: Callable[[RuleSelector], int | RuleRunResult] | None = None,
     verbose: bool = False,
     previously_failed: frozenset[str] = frozenset(),
 ) -> dict[str, StepExecution]:
