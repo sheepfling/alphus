@@ -490,17 +490,27 @@ The checks below are review aids with independent owners. A repository should
 select only the paths and contracts it maintains; lack of static evidence is
 unknown rather than proof of a defect.
 
-| Intent | Current owner or disposition | Limit |
-| --- | --- | --- |
-| Preserve validated domain models across internal boundaries | `pydantic-practices` owns dump/revalidation observations; `input-contracts` owns configured direct mapping/object escape evidence | Domain return identity, serializers, and cross-module flow need a declared consumer contract and review. |
-| Match collection inputs to use | `input-contracts` follows direct local uses and simple aliases | It preserves mutation, output collections, list-specific behavior, and uncertain escapes. |
-| Review flush/fsync/replace on routine outputs | Human review pending an output-role and write-guarantee contract | No removal advice from a source pattern alone; atomic visibility and crash durability differ. |
-| Prefer `Annotated` where useful and static Pydantic defaults | Pydantic/Flake8-Pydantic owns declaration correctness; `prefer_static_mutable_defaults` is a low-severity opt-in preference | Assignment-form `Field` remains valid; no autofix or dataclass application. |
-| Centralize package/tool configuration | Native build backend and packaging tools; consumer-specific review recipe | Generated lock exports, dependency groups, deployment files, and dynamic metadata are accepted; no cross-manifest authority inference yet. |
-| Match pytest-native style | Ruff `PT` rules in the scoped [pytest style profile](PYTEST-STYLE.md) | `unittest` support, mocks, migration suites, and explicit exclusions remain valid. |
-| Centralize finite business states | Human review; reuse typed `Literal`/`Enum` and repeated-literal evidence | Repetition alone does not prove a finite domain; no generic magic-string rule. |
-| Keep timezone awareness and UTC persistence distinct | Ruff `DTZ` rules for naive calls; use declared Pydantic aware types and explicit UTC normalization at persistence boundaries | Awareness alone does not establish UTC; unresolved converters and local civil time are accepted. |
-| Separate generated output from maintained inputs | Git inventory rules identify configured caches/build artifacts; path conventions remain consumer-declared review | Extensions and path strings do not prove generatedness or a filesystem write. |
+- **Preserve domain models:** Pydantic reports dump/revalidation; input-contracts
+  reports configured direct escapes. Identity and cross-module flow need a
+  consumer contract.
+- **Match collection inputs:** input-contracts follows direct uses and simple
+  aliases; mutation and uncertain escapes are preserved.
+- **Review flush/fsync/replace:** human review needs output-role and
+  write-guarantee contracts. Atomic visibility differs from crash durability.
+- **Prefer `Annotated` and static defaults:** native tools own declaration
+  correctness. The static-default rule is an opt-in preference; assignment-form
+  `Field` stays valid.
+- **Centralize package configuration:** native packaging tools and consumer
+  review. Cross-manifest authority is not inferred.
+- **Match pytest style:** Ruff `PT` rules in the scoped
+  [pytest style profile](PYTEST-STYLE.md). `unittest`, mocks, and migration
+  suites remain valid.
+- **Centralize business states:** human review with typed `Literal`/`Enum`
+  evidence. Repetition alone does not prove a finite domain.
+- **Keep timezone awareness and UTC distinct:** Ruff `DTZ` covers naive calls.
+  Aware types and UTC normalization need boundary contracts.
+- **Separate generated output from inputs:** Git inventory covers configured
+  build artifacts. Path names alone do not prove generatedness or writes.
 
 The runnable [pytest-style consumer profile](../examples/python/pytest-style.toml)
 shows native rule selection. The Pydantic example above shows the separate

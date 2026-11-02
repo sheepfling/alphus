@@ -564,13 +564,15 @@ def _static_mutable_default_factory_lines(
                         ),
                         None,
                     )
-                    if isinstance(factory, (ast.Name, ast.Attribute)) and (
-                        canonical_expression_name(factory, aliases)
-                        in {"builtins.list", "builtins.dict"}
-                        or isinstance(factory, ast.Name)
-                        and factory.id in {"list", "dict"}
-                    ):
-                        lines.add(field.lineno)
+                    match factory:
+                        case ast.Name(id=name) if name in {"list", "dict"}:
+                            lines.add(field.lineno)
+                        case ast.Name() | ast.Attribute() if canonical_expression_name(
+                            factory, aliases
+                        ) in {"builtins.list", "builtins.dict"}:
+                            lines.add(field.lineno)
+                        case _:
+                            pass
     return sorted(lines)
 
 
