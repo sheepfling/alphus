@@ -8,6 +8,7 @@ from typing import Literal, NotRequired, Required, Self
 from pydantic import model_validator
 from typing_extensions import TypedDict
 
+from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.policy.base import StrictModel, require_unique
 
 
@@ -101,6 +102,13 @@ class AuditPlanIntent(TypedDict):
     rule_id: str
     language: str
     native_rule: str
+    step: str | None
+
+
+class AuditResultFinding(TypedDict):
+    """Stable finding identity used to distinguish tool failures from findings."""
+
+    rule_id: str
 
 
 class ProfileAuditPlan(TypedDict):
@@ -116,7 +124,7 @@ class AuditResultStep(TypedDict, total=False):
 
     name: Required[str]
     status: Required[str]
-    findings: list[object]
+    findings: list[AuditResultFinding]
 
 
 class AuditResultIntent(TypedDict, total=False):
@@ -127,6 +135,7 @@ class AuditResultIntent(TypedDict, total=False):
     native_rule: Required[str]
     status: Required[str]
     failure_kind: str | None
+    step: Required[str | None]
 
 
 class ProfileAuditResult(TypedDict):
@@ -181,6 +190,16 @@ class AuditCompletion(TypedDict):
 
 
 _COMPLETE_STATES = frozenset({"executed", "executed_zero", "executed_with_findings"})
+_OPERATIONAL_FAILURE_RULES = frozenset(
+    rule_tag(Scope.ANY, Framework.NONE, Category.ORCHESTRATION, complaint)
+    for complaint in (
+        "command-exited-nonzero",
+        "command-launch-failed",
+        "command-timed-out",
+        "command-output-invalid",
+        "rule-execution-failed",
+    )
+)
 
 
 def _incomplete_assessment(manifest: AuditManifest, reason: str) -> AuditCompletion:
@@ -291,27 +310,34 @@ def assess_profile_audit(
 
         executed_intent: AuditResultIntent | None = None
         if check.rule_id is not None:
+            matching_planned_intents = [
+                row
+                for row in planned_intents
+                if row.get("rule_id") == check.rule_id
+                and row.get("language") == check.language
+                and row.get("native_rule") == check.native_rule
+            ]
             planned_intent = next(
                 (
                     row
-                    for row in planned_intents
-                    if row.get("rule_id") == check.rule_id
-                    and row.get("language") == check.language
-                    and row.get("native_rule") == check.native_rule
+                    for row in matching_planned_intents
+                    if row.get("step") == check.step
                 ),
                 None,
             )
             if planned_intent is None:
+                status: AuditCheckStatus = (
+                    "scope_mismatch" if matching_planned_intents else "not_selected"
+                )
                 checks.append(
                     {
                         "check_id": check.check_id,
                         "step": check.step,
-                        "status": "not_selected",
+                        "status": status,
                         "complete": False,
-                        "reason": (
-                            "declared semantic/native intent is absent "
-                            "from the resolved plan"
-                        ),
+                        "reason": "declared semantic/native intent is bound to a different step"
+                        if matching_planned_intents
+                        else "declared semantic/native intent is absent from the resolved plan",
                     }
                 )
                 continue
@@ -322,16 +348,30 @@ def assess_profile_audit(
                     if row.get("rule_id") == check.rule_id
                     and row.get("language") == check.language
                     and row.get("native_rule") == check.native_rule
+                    and row.get("step") == check.step
                 ),
                 None,
             )
             if executed_intent is None:
+                mismatched_result_binding = any(
+                    row.get("rule_id") == check.rule_id
+                    and row.get("language") == check.language
+                    and row.get("native_rule") == check.native_rule
+                    for row in executed_intents
+                )
                 checks.append(
                     {
                         "check_id": check.check_id,
                         "step": check.step,
-                        "status": "not_executed",
+                        "status": (
+                            "scope_mismatch"
+                            if mismatched_result_binding
+                            else "not_executed"
+                        ),
                         "complete": False,
+                        "reason": "executed intent evidence is bound to a different step"
+                        if mismatched_result_binding
+                        else "no execution evidence for the declared intent step",
                     }
                 )
                 continue
@@ -397,6 +437,25 @@ def assess_profile_audit(
             executed_intent is not None
             and executed_intent.get("failure_kind") == "violation"
         )
+        operational_evidence = any(
+            finding["rule_id"] in _OPERATIONAL_FAILURE_RULES for finding in findings
+        ) or (
+            executed_intent is not None
+            and executed_intent.get("failure_kind")
+            in {"operational_error", "configuration_error"}
+        )
+        if operational_evidence:
+            checks.append(
+                {
+                    "check_id": check.check_id,
+                    "step": check.step,
+                    "status": "execution_failure",
+                    "complete": False,
+                    "findings_state": "unknown",
+                    "structured_finding_count": len(findings),
+                }
+            )
+            continue
         if findings or violation_evidence:
             state: AuditCheckStatus = "executed_with_findings"
             findings_state: Literal["with_findings", "zero_findings", "unknown"] = (

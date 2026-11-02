@@ -14,6 +14,7 @@ from alphus.execution.audit_manifest import (
     AuditManifestCheck,
     AuditPlanIntent,
     AuditPlanStep,
+    AuditResultFinding,
     ProfileAuditPlan,
     ProfileAuditResult,
     assess_profile_audit,
@@ -67,7 +68,7 @@ def _plan(
 
 
 def _result(
-    *, status: str = "passed", findings: Sequence[object] = ()
+    *, status: str = "passed", findings: Sequence[AuditResultFinding] = ()
 ) -> ProfileAuditResult:
     return {
         "profile": "audit",
@@ -96,7 +97,7 @@ def test_manifest_distinguishes_executed_zero_and_executed_findings() -> None:
     findings = assess_profile_audit(
         manifest,
         _plan(),
-        _result(findings=({"rule_id": "sample/rule", "severity": "warning"},)),
+        _result(findings=(AuditResultFinding(rule_id="sample/rule"),)),
     )
 
     assert zero["status"] == "complete"
@@ -140,6 +141,28 @@ def test_unstructured_command_result_does_not_claim_zero_findings() -> None:
     assert assessment["status"] == "complete"
     assert _checks(assessment)[0]["status"] == "executed"
     assert _checks(assessment)[0].get("findings_state") == "unknown"
+
+
+@pytest.mark.parametrize(
+    "rule_id",
+    [
+        "alphus/any/none/orchestration/command-exited-nonzero",
+        "alphus/any/none/orchestration/rule-execution-failed",
+    ],
+)
+def test_operational_failure_findings_remain_incomplete(rule_id: str) -> None:
+    assessment = assess_profile_audit(
+        _manifest(),
+        _plan(kind="command"),
+        _result(
+            status="failed",
+            findings=(AuditResultFinding(rule_id=rule_id),),
+        ),
+    )
+
+    assert assessment["status"] == "incomplete"
+    assert _checks(assessment)[0]["status"] == "execution_failure"
+    assert _checks(assessment)[0]["complete"] is False
 
 
 def test_manifest_checks_required_native_selector_tokens() -> None:
@@ -197,6 +220,7 @@ def test_manifest_uses_explicit_intent_completion_states(
         rule_id="alphus/python/none/testing/example",
         language="python",
         native_rule="ANN",
+        step="Source review",
     )
     manifest = _manifest(
         rule_id=selectors["rule_id"],
@@ -213,6 +237,7 @@ def test_manifest_uses_explicit_intent_completion_states(
             "native_rule": selectors["native_rule"],
             "status": intent_status,
             "failure_kind": failure_kind,
+            "step": "Source review",
         }
     ]
 
@@ -224,3 +249,42 @@ def test_manifest_uses_explicit_intent_completion_states(
         if expected in {"executed_zero", "executed_with_findings"}
         else "incomplete"
     )
+
+
+@pytest.mark.parametrize("mismatch_source", ["plan", "result"])
+def test_intent_bound_to_another_step_cannot_satisfy_manifest(
+    mismatch_source: str,
+) -> None:
+    selectors = AuditPlanIntent(
+        rule_id="alphus/python/none/testing/example",
+        language="python",
+        native_rule="ANN",
+        step="Other review",
+    )
+    manifest = _manifest(
+        rule_id=selectors["rule_id"],
+        language=selectors["language"],
+        native_rule=selectors["native_rule"],
+    )
+    plan = _plan()
+    result = _result()
+    if mismatch_source == "plan":
+        plan["intents"] = [selectors]
+    else:
+        selectors["step"] = "Source review"
+        plan["intents"] = [selectors]
+        result["intent_bindings"] = [
+            {
+                "rule_id": selectors["rule_id"],
+                "language": selectors["language"],
+                "native_rule": selectors["native_rule"],
+                "status": "passed",
+                "failure_kind": None,
+                "step": "Other review",
+            }
+        ]
+
+    assessment = assess_profile_audit(manifest, plan, result)
+
+    assert assessment["status"] == "incomplete"
+    assert _checks(assessment)[0]["status"] == "scope_mismatch"

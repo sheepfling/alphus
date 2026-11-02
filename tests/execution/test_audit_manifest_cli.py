@@ -134,3 +134,40 @@ steps = ["Numeric"]
     assert payload["evidence_complete"] is False
     assert payload["audit_completion"]["status"] == "incomplete"
     assert payload["audit_completion"]["checks"][0]["status"] == "incomplete"
+
+
+@pytest.mark.parametrize(
+    "manifest_text",
+    [
+        (
+            '{"format":"alphus.audit-manifest","schema_version":1,"profile":"audit",'
+            '"profile":"other","checks":[{"check_id":"required","step":"Review",'
+            '"expected_files":null}]}'
+        ),
+        (
+            '{"format":"alphus.audit-manifest","schema_version":1,"profile":"audit",'
+            '"checks":[{"check_id":"required","step":"Review","step":"Other",'
+            '"expected_files":null}]}'
+        ),
+    ],
+)
+def test_audit_manifest_rejects_duplicate_top_level_and_nested_keys(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    manifest_text: str,
+) -> None:
+    manifest_path = tmp_path / "audit.json"
+    manifest_path.write_text(manifest_text, encoding="utf-8")
+
+    exit_code = main(
+        [
+            "--root",
+            str(tmp_path),
+            "--json",
+            "--audit-manifest",
+            manifest_path.name,
+        ]
+    )
+
+    assert exit_code == 2
+    assert "audit manifest is invalid" in capsys.readouterr().err

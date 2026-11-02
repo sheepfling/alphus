@@ -13,6 +13,7 @@ from contextvars import ContextVar
 from functools import partial
 from io import StringIO
 from pathlib import Path
+from types import MappingProxyType
 from typing import (
     Annotated,
     Literal,
@@ -117,6 +118,18 @@ def _decode_json_object(source: str) -> dict[str, JsonValue]:
     """Decode a JSON object with the shared finite-number validation policy."""
     value = validate_json_value(source)
     return dict(require_json_object(value, "expected a JSON object"))
+
+
+def _reject_duplicate_json_object_keys(
+    pairs: Sequence[tuple[str, JsonValue]],
+) -> Mapping[str, JsonValue]:
+    """Reject duplicate names at every depth in an audit manifest."""
+    values: dict[str, JsonValue] = {}
+    for key, value in pairs:
+        if key in values:
+            raise ValueError(f"duplicate JSON object member: {key}")
+        values[key] = value
+    return MappingProxyType(values)
 
 
 _SOURCE_SCAN_RULES: frozenset[QualityRuleName] = frozenset(
@@ -371,6 +384,9 @@ def _load_audit_manifest(root: Path, path: Path) -> AuditManifest:
             "audit manifest exceeds the 1 MB limit", param_hint="--audit-manifest"
         )
     try:
+        json.JSONDecoder(object_pairs_hook=_reject_duplicate_json_object_keys).decode(
+            raw.decode("utf-8")
+        )
         return AuditManifest.model_validate_json(raw)
     except (ValidationError, ValueError) as error:
         raise typer.BadParameter(
@@ -1042,6 +1058,7 @@ def _execute_profile(
                 "rule_id": row.rule_id,
                 "language": row.language,
                 "native_rule": row.native_rule,
+                "step": row.step,
             }
             for row in intent_rows
         ]
