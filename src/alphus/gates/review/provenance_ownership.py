@@ -93,7 +93,7 @@ def _path_set_assignments(
                     elt=element,
                     generators=[
                         ast.comprehension(
-                            target=ast.Name(),
+                            target=ast.Name(id=owner_target),
                             iter=ast.Name(id=owner_name),
                             ifs=[],
                         )
@@ -101,7 +101,11 @@ def _path_set_assignments(
                 ),
             ) if owner_name in policy.owner_collection_names:
                 parts = _attribute_parts(element)
-                if parts is not None and parts[1] == policy.source_path_suffix:
+                if (
+                    parts is not None
+                    and parts[0] == owner_target
+                    and parts[1] == policy.source_path_suffix
+                ):
                     assignments.setdefault(target_name, []).append(
                         _OwnerPathSet(owner_name, node.lineno)
                     )

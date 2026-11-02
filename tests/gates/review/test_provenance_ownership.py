@@ -83,6 +83,10 @@ def test_reports_filter_capture_returned_immediately() -> None:
             "{table.source.path for table in tables}",
             "{(table.source.path, table.source.start, table.source.end) for table in tables}",
         ),
+        _PATH_ONLY.replace(
+            "{table.source.path for table in tables}",
+            "{excluded.source.path for table in tables}",
+        ),
     ],
 )
 def test_different_relation_collection_or_scope_abstains(source: str) -> None:

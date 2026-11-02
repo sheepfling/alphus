@@ -52,6 +52,31 @@ class _ModuleBindings(ast.NodeVisitor):
             if default is not None:
                 self.visit(default)
 
+    def _visit_comprehension(
+        self, generators: Iterable[ast.comprehension], values: Iterable[ast.expr]
+    ) -> None:
+        # Iteration targets are local to the implicit comprehension scope.
+        # Visit evaluated expressions so assignment-expression targets, which
+        # bind in the containing scope, are still counted.
+        for generator in generators:
+            self.visit(generator.iter)
+            for condition in generator.ifs:
+                self.visit(condition)
+        for value in values:
+            self.visit(value)
+
+    def visit_ListComp(self, node: ast.ListComp) -> None:
+        self._visit_comprehension(node.generators, (node.elt,))
+
+    def visit_SetComp(self, node: ast.SetComp) -> None:
+        self._visit_comprehension(node.generators, (node.elt,))
+
+    def visit_GeneratorExp(self, node: ast.GeneratorExp) -> None:
+        self._visit_comprehension(node.generators, (node.elt,))
+
+    def visit_DictComp(self, node: ast.DictComp) -> None:
+        self._visit_comprehension(node.generators, (node.key, node.value))
+
 
 def module_binding_counts(tree: ast.Module, names: Iterable[str]) -> dict[str, int]:
     """Count visible module bindings, including control-flow definitions.

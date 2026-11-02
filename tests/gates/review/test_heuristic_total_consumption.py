@@ -83,6 +83,18 @@ def test_rebinding_one_selected_function_does_not_suppress_other_functions() -> 
     assert [site.function for site in sites] == ["preserve_a"]
 
 
+def test_module_comprehension_target_does_not_shadow_selected_function() -> None:
+    source = _DIRECT + "\npreviews = [preserve_text for preserve_text in callbacks]\n"
+
+    assert len(heuristic_total_consumption_sites(source, _policy())) == 1
+
+
+def test_module_comprehension_walrus_still_counts_as_rebinding() -> None:
+    source = _DIRECT + "\npreviews = [(preserve_text := item) for item in callbacks]\n"
+
+    assert heuristic_total_consumption_sites(source, _policy()) == []
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [
