@@ -13,6 +13,7 @@ from alphus.config import (
     PositionalSemanticOverridePolicy,
     ProseAsControlPolicy,
     ProvenanceOwnershipPolicy,
+    SemanticWorkPresentationPolicy,
     UnexplainedEmptyResultPolicy,
 )
 from alphus.gates.review.embedded_semantic_overrides import embedded_override_sites
@@ -26,6 +27,9 @@ from alphus.gates.review.prose_as_control import (
 )
 from alphus.gates.review.provenance_ownership import provenance_ownership_sites
 from alphus.gates.review.rendered_value_reparsed import _sites as rendered_sites
+from alphus.gates.review.semantic_work_presentation import (
+    semantic_work_presentation_sites,
+)
 from alphus.gates.review.unexplained_empty_results import empty_result_branches
 
 
@@ -85,6 +89,17 @@ _PROVENANCE_OWNERSHIP = ProvenanceOwnershipPolicy(
     candidate_collection_names=("paragraphs",),
     ownership_basis="exact-source-span",
 )
+_PRESENTATION_BOUNDARY = SemanticWorkPresentationPolicy(
+    extensions=(".py",),
+    exclude=(),
+    source_paths=("src/render/*.py",),
+    function_names=("render_document",),
+    source_layout_helpers=("reconstruct_layout",),
+    content_correction_helpers=("apply_content_correction",),
+    semantic_ownership_helpers=("decide_semantic_ownership",),
+    serialization_helpers=("serialize_output",),
+    module_role="presentation",
+)
 
 
 def _matches(detector: Callable[[str], object], source: str) -> bool:
@@ -129,6 +144,10 @@ def _total_consumption(text: str) -> object:
 
 def _provenance_ownership(text: str) -> object:
     return provenance_ownership_sites(text, _PROVENANCE_OWNERSHIP)
+
+
+def _presentation_boundary(text: str) -> object:
+    return semantic_work_presentation_sites(text, _PRESENTATION_BOUNDARY)
 
 
 _CASES = (
@@ -236,6 +255,36 @@ _CASES = (
         "    return [p for p in paragraphs if (p.source.path, p.source.start, "
         "p.source.end) not in table_spans]\n",
         _provenance_ownership,
+    ),
+    _case(
+        "path-filter result returned directly",
+        "def remaining_paragraphs(tables, paragraphs):\n"
+        "    table_paths = {table.source.path for table in tables}\n"
+        "    remaining = [p for p in paragraphs if p.source.path not in table_paths]\n"
+        "    return remaining\n",
+        _provenance_ownership,
+    ),
+    _negative(
+        "unused path-filter result does not establish exclusion",
+        "def remaining_paragraphs(tables, paragraphs):\n"
+        "    table_paths = {table.source.path for table in tables}\n"
+        "    discarded = [p for p in paragraphs if p.source.path not in table_paths]\n"
+        "    return paragraphs\n",
+        _provenance_ownership,
+    ),
+    _case(
+        "all declared semantic roles co-located in presentation function",
+        "def render_document(source):\n"
+        "    layout = reconstruct_layout(source)\n"
+        "    corrected = apply_content_correction(layout)\n"
+        "    owned = decide_semantic_ownership(corrected)\n"
+        "    return serialize_output(owned)\n",
+        _presentation_boundary,
+    ),
+    _negative(
+        "presentation-only serialization has no semantic boundary signal",
+        "def render_document(source):\n    return serialize_output(source)\n",
+        _presentation_boundary,
     ),
 )
 

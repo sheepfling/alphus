@@ -35,6 +35,9 @@ from alphus.gates.review.rendered_value_reparsed import (
     check_rendered_value_reparsed,
 )
 from alphus.gates.review.scipy_constants import check_scipy_constants
+from alphus.gates.review.semantic_work_presentation import (
+    check_semantic_work_presentation,
+)
 from alphus.gates.review.source_families import check_source_families
 from alphus.gates.review.test_quality import check_test_quality
 from alphus.gates.review.unexplained_empty_results import (
@@ -123,6 +126,16 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
                 files,
                 require_policy(
                     config.checks.provenance_ownership, "provenance_ownership"
+                ),
+            )
+        ),
+        "semantic-work-in-presentation": lambda root, files, config: (
+            check_semantic_work_presentation(
+                root,
+                files,
+                require_policy(
+                    config.checks.semantic_work_presentation,
+                    "semantic_work_presentation",
                 ),
             )
         ),

@@ -303,6 +303,61 @@ class ProvenanceOwnershipPolicy(PythonSourceScanPolicy):
         return value
 
 
+class SemanticWorkPresentationPolicy(PythonSourceScanPolicy):
+    """Consumer-declared presentation boundary roles to review when co-located."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    function_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    source_layout_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    content_correction_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    semantic_ownership_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    serialization_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    module_role: Literal["presentation"]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("function_names")
+    @classmethod
+    def validate_function_names(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("configured function names must be identifiers")
+        require_unique(values, "configured function names must be unique")
+        return tuple(values)
+
+    @field_validator(
+        "source_layout_helpers",
+        "content_correction_helpers",
+        "semantic_ownership_helpers",
+        "serialization_helpers",
+    )
+    @classmethod
+    def validate_role_helpers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not value or any(not part.isidentifier() for part in value.split("."))
+            for value in values
+        ):
+            raise ValueError("configured role helpers must be dotted identifiers")
+        require_unique(values, "configured role helpers must be unique")
+        return tuple(values)
+
+    @model_validator(mode="after")
+    def validate_disjoint_roles(self) -> Self:
+        groups = (
+            set(self.source_layout_helpers),
+            set(self.content_correction_helpers),
+            set(self.semantic_ownership_helpers),
+            set(self.serialization_helpers),
+        )
+        for index, group in enumerate(groups):
+            if any(group & other for other in groups[index + 1 :]):
+                raise ValueError("a helper cannot stand for multiple boundary roles")
+        return self
+
+
 class ScipyConstantsPolicy(PythonSourceScanPolicy):
     """Advisory SciPy physical and unit-factor catalog for Python source."""
 

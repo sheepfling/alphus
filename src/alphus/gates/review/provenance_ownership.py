@@ -165,6 +165,33 @@ def _candidate_filter(
     return None
 
 
+def _returned_filter_line(
+    function: ast.FunctionDef, candidate_filter: ast.ListComp
+) -> int | None:
+    """Require the filtered comprehension to reach a direct returned value."""
+    body = function.body[1:] if ast.get_docstring(function) else function.body
+    for index, statement in enumerate(body):
+        match statement:
+            case ast.Return(value=ast.ListComp() as returned) as return_statement if (
+                returned is candidate_filter
+            ):
+                return return_statement.lineno
+            case ast.Assign(
+                targets=[ast.Name(id=result_name)],
+                value=ast.ListComp() as assigned,
+            ) if assigned is candidate_filter and index + 1 < len(body):
+                match body[index + 1]:
+                    case ast.Return(value=ast.Name(id=name)) as return_statement if (
+                        name == result_name
+                    ):
+                        return return_statement.lineno
+                    case _:
+                        continue
+            case _:
+                continue
+    return None
+
+
 def provenance_ownership_sites(
     source: str, policy: ProvenanceOwnershipPolicy
 ) -> list[_OwnershipSite]:
@@ -198,7 +225,10 @@ def provenance_ownership_sites(
                     evidence = _candidate_filter(candidate_filter, path_sets, policy)
                     if evidence is None:
                         continue
-                    owner_collection, line = evidence
+                    return_line = _returned_filter_line(function, candidate_filter)
+                    if return_line is None:
+                        continue
+                    owner_collection, _condition_line = evidence
                     match candidate_filter.generators:
                         case [
                             ast.comprehension(iter=ast.Name(id=candidate_collection))
@@ -208,7 +238,7 @@ def provenance_ownership_sites(
                                     function.name,
                                     owner_collection,
                                     candidate_collection,
-                                    line,
+                                    return_line,
                                 )
                             )
                         case _:
@@ -243,8 +273,8 @@ def check_provenance_ownership(
                     _RULE_ID,
                     name,
                     f"Configured exact-source-span ownership function {site.function!r} "
-                    f"excludes {site.candidate_collection} using paths from "
-                    f"{site.owner_collection}; path-only equality may discard distinct "
+                    f"returns {site.candidate_collection} filtered using paths from "
+                    f"{site.owner_collection}; path-only equality may omit distinct "
                     "same-file spans. Review whether span containment is required. "
                     "This candidate does not establish record ownership or a defect.",
                     site.line,

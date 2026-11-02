@@ -80,30 +80,36 @@ These checks do not infer AI authorship or prove a defect.
 
 The four P0 checks are implemented as opt-in advisories: prose-as-control,
 lossy-text-rewrite, rendered-value-reparsed, and positional-semantic-override.
-Four narrow P1 shapes are also implemented: unexplained-empty-result,
-embedded-semantic-override, heuristic-total-consumption, and
-provenance-as-ownership. These are
+Five P1 shapes are also implemented: unexplained-empty-result,
+embedded-semantic-override, heuristic-total-consumption,
+provenance-as-ownership, and semantic-work-in-presentation. These are
 consumer-configured syntactic candidates, not proof that output is wrong. The
 embedded rule only recognizes the configured replacement-map/source-anchor
 shape; the total-consumption rule only recognizes the two direct-return forms
 described above. Provenance-as-ownership requires an explicit exact-source-span
 contract and only recognizes a path set built from configured owner records
-that is used to exclude configured candidate records by `source.path`.
+that filters configured candidate records by `source.path` when that filtered
+list is returned directly or assigned and immediately returned. An unused
+filter result is ignored.
 Consumers that intentionally define file-level ownership can declare
 `ownership_basis = "file-scope"`; the rule then abstains. A finding asks whether
 same-file distinct spans should remain eligible. It does not establish record
 ownership, source overlap, or a defect.
 
-The remaining P1 proposal is the consumer-scoped
-semantic-work-in-presentation boundary. It needs independently declared
-module-role and operation contracts before a useful composite can be calibrated.
+The presentation-boundary rule requires a consumer to declare the selected
+paths as `presentation`, list exact functions, and configure distinct helpers
+for source-layout reconstruction, content correction, semantic ownership, and
+serialization. It reports only when all four configured call-name groups occur
+within one selected function. It does not resolve aliases, prove data flow or
+coupling between operations, or claim that any presentation transformation is
+wrong. Co-location is a prompt to review the declared responsibility boundary.
 The P2 proposals are also deferred: evaluate
 parallel-normalization through the existing duplication capabilities and issue
 [#33](https://github.com/sheepfling/alphus/issues/33), and do not ship a
 patch-cascade heuristic without reviewed real clusters and actionable
-remediation. None of these deferred patterns is implied to be covered. The new
-P1 rule has synthetic boundary tests but no positive production calibration;
-its precision is not estimable.
+remediation. None of these deferred patterns is implied to be covered. The P1
+rules have synthetic boundary tests but no positive production calibration;
+their precision is not estimable.
 
 The [calibration note](SEMANTIC-PATCHWORK-CALIBRATION.md) records both the
 reviewed synthetic boundary corpus and a small non-fixture source sample. The

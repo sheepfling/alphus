@@ -32,6 +32,9 @@ def test_prose_as_control_example_is_scoped_and_provisional() -> None:
     ownership = config.checks.provenance_ownership
     assert ownership is not None
     assert ownership.ownership_basis == "exact-source-span"
+    presentation = config.checks.semantic_work_presentation
+    assert presentation is not None
+    assert presentation.module_role == "presentation"
 
 
 def test_starter_policy_has_one_scoped_command_and_no_global_inventory() -> None:

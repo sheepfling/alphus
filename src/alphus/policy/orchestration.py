@@ -49,6 +49,7 @@ from alphus.policy.review import (
     ProvenanceOwnershipPolicy,
     PydanticPracticePolicy,
     ScipyConstantsPolicy,
+    SemanticWorkPresentationPolicy,
     SourceFamilyPolicy,
     SqlAlchemyPracticePolicy,
     TestQualityPolicy,
@@ -86,6 +87,7 @@ class CheckPolicies(StrictModel):
     embedded_semantic_overrides: EmbeddedSemanticOverridePolicy | None = None
     heuristic_total_consumption: HeuristicTotalConsumptionPolicy | None = None
     provenance_ownership: ProvenanceOwnershipPolicy | None = None
+    semantic_work_presentation: SemanticWorkPresentationPolicy | None = None
     scipy_constants: ScipyConstantsPolicy | None = None
     test_quality: TestQualityPolicy | None = None
     input_contracts: InputContractPolicy | None = None

@@ -43,6 +43,7 @@ QualityRuleName: TypeAlias = Literal[
     "embedded-semantic-overrides",
     "heuristic-total-consumption",
     "provenance-as-ownership",
+    "semantic-work-in-presentation",
     "scipy-constants",
     "test-quality",
     "input-contracts",

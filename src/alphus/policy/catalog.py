@@ -74,6 +74,9 @@ RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
         "provenance-as-ownership": RuleSpec(
             "provenance_ownership", RuleOutputShape.FINDINGS
         ),
+        "semantic-work-in-presentation": RuleSpec(
+            "semantic_work_presentation", RuleOutputShape.FINDINGS
+        ),
         "scipy-constants": RuleSpec("scipy_constants", RuleOutputShape.FINDINGS),
         "test-quality": RuleSpec("test_quality", RuleOutputShape.FINDINGS),
         "input-contracts": RuleSpec("input_contracts", RuleOutputShape.FINDINGS),

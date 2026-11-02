@@ -39,6 +39,15 @@ def test_reports_configured_path_only_exclusion_under_span_contract() -> None:
     ] == [("remaining_paragraphs", "tables", "paragraphs")]
 
 
+def test_reports_filter_capture_returned_immediately() -> None:
+    source = _PATH_ONLY.replace(
+        "return [p for p in paragraphs if p.source.path not in table_paths]",
+        "remaining = [p for p in paragraphs if p.source.path not in table_paths]\n"
+        "    return remaining",
+    )
+    assert len(provenance_ownership_sites(source, _policy())) == 1
+
+
 @pytest.mark.parametrize(
     "source",
     [
@@ -48,6 +57,11 @@ def test_reports_configured_path_only_exclusion_under_span_contract() -> None:
         _PATH_ONLY.replace("remaining_paragraphs", "other_function"),
         _PATH_ONLY.replace("return [", "table_paths.clear()\n    return ["),
         _PATH_ONLY.replace("return [", "table_paths = set()\n    return ["),
+        _PATH_ONLY.replace(
+            "return [p for p in paragraphs if p.source.path not in table_paths]",
+            "discarded = [p for p in paragraphs if p.source.path not in table_paths]\n"
+            "    return paragraphs",
+        ),
         _PATH_ONLY.replace(
             "{table.source.path for table in tables}",
             "{(table.source.path, table.source.start, table.source.end) for table in tables}",

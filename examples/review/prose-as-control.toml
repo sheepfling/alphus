@@ -56,6 +56,17 @@ candidate_collection_names = ["paragraphs"]
 ownership_basis = "exact-source-span"
 source_path_suffix = "source.path"
 
+[checks.semantic_work_presentation]
+extensions = [".py"]
+exclude = ["**/generated/**", "**/vendor/**"]
+source_paths = ["src/render/*.py"]
+function_names = ["render_document"]
+source_layout_helpers = ["reconstruct_layout"]
+content_correction_helpers = ["apply_content_correction"]
+semantic_ownership_helpers = ["decide_semantic_ownership"]
+serialization_helpers = ["serialize_output"]
+module_role = "presentation"
+
 [orchestration]
 default_profile = "semantic-review"
 
@@ -101,6 +112,12 @@ name = "Provenance ownership review"
 rule = "provenance-as-ownership"
 rollout = "provisional"
 
+[[orchestration.steps]]
+kind = "rule"
+name = "Presentation responsibility boundary review"
+rule = "semantic-work-in-presentation"
+rollout = "provisional"
+
 [[orchestration.profiles]]
 name = "semantic-review"
-steps = ["Prose branch review", "Rendered value feedback review", "Positional semantic override review", "Unknown inference empty-result review", "Embedded semantic replacement review", "Heuristic text consumption review", "Provenance ownership review"]
+steps = ["Prose branch review", "Rendered value feedback review", "Positional semantic override review", "Unknown inference empty-result review", "Embedded semantic replacement review", "Heuristic text consumption review", "Provenance ownership review", "Presentation responsibility boundary review"]
