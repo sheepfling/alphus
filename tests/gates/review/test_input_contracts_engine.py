@@ -261,6 +261,7 @@ def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
 def test_declared_mapping_only_boundary_requires_literal_mapping_reads() -> None:
     findings = input_contract_findings(
         """from collections.abc import Mapping
+from app.json_types import JsonValue
 def evaluate(packet: Mapping[str, JsonValue]):
     return packet["state"]
 """,
@@ -273,7 +274,53 @@ def evaluate(packet: Mapping[str, JsonValue]):
         "alphus/python/none/correctness/generic-mapping-domain-escape"
     )
     assert "expects app.models.EvaluationOptions" in findings[0].message
-    assert "literal-key reads at line(s) 3" in findings[0].message
+    assert "literal-key reads at line(s) 4" in findings[0].message
+
+
+def test_mapping_escape_evidence_follows_one_direct_local_helper_pass() -> None:
+    findings = input_contract_findings(
+        """from collections.abc import Mapping
+from app.json_types import JsonValue
+def evaluate(packet: Mapping[str, JsonValue]):
+    return _read_state(packet)
+def _read_state(payload):
+    return payload["state"]
+""",
+        DOMAIN_BOUNDARY_POLICY,
+        path="src/internal/evaluate.py",
+    )
+    assert len(findings) == 1
+    assert "direct helper pass-through at line 4 to _read_state" in findings[0].message
+    assert "reads 6" in findings[0].message
+
+
+def test_mapping_escape_cross_function_following_skips_aliases_and_ambiguous_helpers() -> (
+    None
+):
+    alias_case = """from collections.abc import Mapping
+from app.json_types import JsonValue
+def evaluate(packet: Mapping[str, JsonValue]):
+    return _read(packet)
+def _read(value):
+    local = value
+    return local["state"]
+"""
+    ambiguous_case = """from collections.abc import Mapping
+from app.json_types import JsonValue
+def evaluate(packet: Mapping[str, JsonValue]):
+    return _read(packet)
+def _read(value):
+    return value["state"]
+def _read(other):
+    return other["state"]
+"""
+    for source in (alias_case, ambiguous_case):
+        assert (
+            input_contract_findings(
+                source, DOMAIN_BOUNDARY_POLICY, path="src/internal/evaluate.py"
+            )
+            == []
+        )
 
 
 @pytest.mark.parametrize(

@@ -334,18 +334,23 @@ consumer may add exact `domain_mapping_contracts` selectors. Each selector
 names one repository-relative Python path, lexical function name (including
 enclosing classes), parameter, and expected fully qualified domain type. A
 selected `Mapping[str, JsonValue]`/`dict[str, JsonValue]` parameter is reviewed
-only when its function directly reads a literal string key. A selected
+when its function directly reads a literal string key or passes that exact
+parameter to a unique module-level helper whose corresponding parameter has a
+direct literal-key read. The finding names the pass-through call and helper
+read. This is one-hop evidence only: aliases, imported/class helpers, duplicate
+helper names, and deeper flows remain unresolved. A selected
 `object` parameter is reviewed only when the function directly reads one of its
 attributes. This narrow setting is useful when the consumer has independently
 declared that the input represents a particular domain model; it does not infer
 that contract from parameter names or access syntax. Generic mapping shapes
 with other key/value types, other broad annotations, dynamic keys, nested
-attributes, helper calls, and unselected functions remain outside the scan.
+attributes, arbitrary helper calls, and unselected functions remain outside the scan.
 
 This is a review candidate, not proof that validation is absent or that the
 interface is wrong. The scanner does not resolve model-like names
-automatically, follow cross-function flow, or infer behavior through arbitrary
-aliases, casts, helpers, or branch-specific normalization. Unsupported flow
+automatically or infer behavior through arbitrary aliases, casts, helpers, or
+branch-specific normalization. The single direct-helper slice is not recursive
+and does not establish whether helper-local validation is sufficient. Unsupported flow
 should be reviewed manually; the advisory stays opt-in and informational.
 Direct attribute access on `object` can be intentional duck typing or a
 compatibility boundary, so a finding asks for review rather than asserting that

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -645,6 +646,7 @@ def _function_findings(
     policy: InputContractPolicy,
     path: str,
     function_name: str,
+    module: ast.Module,
 ) -> list[Finding]:
     arguments = [
         *function.args.posonlyargs,
@@ -764,7 +766,12 @@ def _function_findings(
             )
     findings.extend(
         _domain_mapping_findings(
-            function, aliases, policy, path, function_name=function_name
+            function,
+            aliases,
+            policy,
+            path,
+            function_name=function_name,
+            module=module,
         )
     )
     return findings
@@ -945,6 +952,68 @@ def _direct_attribute_reads(
     return sorted(reads, key=lambda read: (read[1], read[0]))
 
 
+def _direct_forwarded_mapping_reads(
+    function: ast.FunctionDef | ast.AsyncFunctionDef,
+    parameter: str,
+    module: ast.Module,
+) -> list[tuple[str, int, tuple[int, ...]]]:
+    """Follow one exact parameter pass into a unique module-level helper."""
+    helpers: dict[str, list[ast.FunctionDef | ast.AsyncFunctionDef]] = defaultdict(list)
+    for statement in module.body:
+        if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            helpers[statement.name].append(statement)
+    local = _FunctionLocalNodes(function)
+    local.visit(function)
+    rebinding = min(
+        (
+            node.lineno
+            for node in local.nodes
+            if isinstance(node, ast.Name)
+            and node.id == parameter
+            and isinstance(node.ctx, (ast.Store, ast.Del))
+        ),
+        default=None,
+    )
+    evidence: set[tuple[str, int, tuple[int, ...]]] = set()
+    for node in local.nodes:
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+            continue
+        if rebinding is not None and node.lineno >= rebinding:
+            continue
+        candidates = helpers.get(node.func.id, [])
+        if len(candidates) != 1 or candidates[0] is function:
+            continue
+        helper = candidates[0]
+        helper_args = [*helper.args.posonlyargs, *helper.args.args]
+        helper_all_args = [*helper_args, *helper.args.kwonlyargs]
+        helper_parameter: str | None = None
+        for index, argument in enumerate(node.args):
+            if (
+                index < len(helper_args)
+                and isinstance(argument, ast.Name)
+                and argument.id == parameter
+            ):
+                helper_parameter = helper_args[index].arg
+                break
+        if helper_parameter is None:
+            for keyword in node.keywords:
+                if keyword.arg is None or not isinstance(keyword.value, ast.Name):
+                    continue
+                if keyword.value.id == parameter and any(
+                    argument.arg == keyword.arg for argument in helper_all_args
+                ):
+                    helper_parameter = keyword.arg
+                    break
+        if helper_parameter is None:
+            continue
+        helper_nodes = _FunctionLocalNodes(helper)
+        helper_nodes.visit(helper)
+        reads = _direct_mapping_reads(helper_parameter, helper_nodes.nodes)
+        if reads:
+            evidence.add((helper.name, node.lineno, tuple(reads)))
+    return sorted(evidence)
+
+
 def _has_normalization_flow(
     function: ast.FunctionDef | ast.AsyncFunctionDef,
     parameter: str,
@@ -1017,6 +1086,7 @@ def _domain_mapping_findings(
     path: str,
     *,
     function_name: str,
+    module: ast.Module,
 ) -> list[Finding]:
     if not policy.domain_mapping_types and not policy.domain_mapping_contracts:
         return []
@@ -1043,10 +1113,23 @@ def _domain_mapping_findings(
         if alternative is not None:
             model, mapping = alternative
             reads = _direct_mapping_reads(argument.arg, local.nodes)
+            forwarded_reads = _direct_forwarded_mapping_reads(
+                function, argument.arg, module
+            )
+            if not reads and forwarded_reads:
+                reads = sorted(
+                    {line for _, _, lines in forwarded_reads for line in lines}
+                )
             if not reads or _has_normalization_flow(
                 function, argument.arg, model, aliases, local.nodes
             ):
                 continue
+            evidence = f"literal-key reads at line(s) {', '.join(map(str, reads))}"
+            if forwarded_reads:
+                evidence += "; direct helper pass-through at " + ", ".join(
+                    f"line {call_line} to {helper} (reads {', '.join(map(str, lines))})"
+                    for helper, call_line, lines in forwarded_reads
+                )
             findings.append(
                 Finding(
                     rule_id=rule_tag(
@@ -1060,8 +1143,7 @@ def _domain_mapping_findings(
                     severity=policy.domain_mapping_severity,
                     message=(
                         f"Parameter {argument.arg!r} at line {argument.lineno} accepts "
-                        f"configured domain type {model} or generic {mapping}, with literal-key "
-                        f"reads at line(s) {', '.join(map(str, reads))}. Review whether "
+                        f"configured domain type {model} or generic {mapping}, with {evidence}. Review whether "
                         "normalization belongs at the boundary before internal computation. "
                         "This is a review candidate; it does not prove validation is absent "
                         "or that the wider interface is incorrect."
@@ -1079,6 +1161,13 @@ def _domain_mapping_findings(
         )
         if mapping is not None:
             reads = _direct_mapping_reads(argument.arg, local.nodes)
+            forwarded_reads = _direct_forwarded_mapping_reads(
+                function, argument.arg, module
+            )
+            if not reads and forwarded_reads:
+                reads = sorted(
+                    {line for _, _, lines in forwarded_reads for line in lines}
+                )
             if not reads:
                 continue
             if _has_normalization_flow(
@@ -1087,6 +1176,11 @@ def _domain_mapping_findings(
                 continue
             kind = "mapping"
             evidence = f"literal-key reads at line(s) {', '.join(map(str, reads))}"
+            if forwarded_reads:
+                evidence += "; direct helper pass-through at " + ", ".join(
+                    f"line {call_line} to {helper} (reads {', '.join(map(str, lines))})"
+                    for helper, call_line, lines in forwarded_reads
+                )
             rule_id = "generic-mapping-domain-escape"
         elif annotation_name in {"object", "builtins.object"}:
             attributes = _direct_attribute_reads(argument.arg, local.nodes)
@@ -1142,6 +1236,7 @@ def input_contract_findings(
                         policy,
                         path,
                         function_names.names.get(id(node), node.name),
+                        module,
                     )
                 )
             case _:
