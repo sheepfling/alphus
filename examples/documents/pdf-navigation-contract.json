@@ -1,0 +1,10 @@
+{
+  "source_evidence": "build/section-map.json (replace with an independently generated source/build map)",
+  "sections": [
+    {
+      "outline_title": "Overview",
+      "heading_text": "Overview",
+      "expected_physical_page": 1
+    }
+  ]
+}

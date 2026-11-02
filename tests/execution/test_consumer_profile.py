@@ -30,13 +30,46 @@ def test_pdf_example_checks_one_explicit_artifact_provisionally() -> None:
     assert orchestration is not None
     plan = orchestration.resolve_profile("pdf-structure")
     assert plan is not None
-    assert plan.steps == ("PDF structural check",)
-    step = orchestration.steps[0]
+    assert plan.steps == (
+        "LaTeX report build",
+        "LaTeX final log evidence",
+        "PDF structural check",
+        "PDF outline destination contract",
+    )
+    build, final_log, structure, navigation = orchestration.steps
+    assert isinstance(build, CommandRunStep)
+    assert build.argv == (
+        "latexmk",
+        "-pdf",
+        "-g",
+        "-interaction=nonstopmode",
+        "-halt-on-error",
+        "-file-line-error",
+        "build/report.tex",
+    )
+    assert build.timeout_seconds == 600
+    assert isinstance(final_log, CommandRunStep)
+    assert final_log.argv == (
+        "{python}",
+        "scripts/check_latex_final_log.py",
+        "build/report.log",
+        "build/report.pdf",
+    )
+    assert isinstance(structure, CommandRunStep)
+    step = structure
     assert isinstance(step, CommandRunStep)
     assert step.argv == ("qpdf", "--check", "build/report.pdf")
     assert step.files is None
     assert step.rollout == "provisional"
     assert step.timeout_seconds == 60
+    assert isinstance(navigation, CommandRunStep)
+    assert navigation.argv == (
+        "{python}",
+        "scripts/check_pdf_navigation.py",
+        "build/report.pdf",
+        "examples/documents/pdf-navigation-contract.json",
+    )
+    assert navigation.rollout == "provisional"
 
 
 def test_markdown_example_pairs_two_fixers_without_duplicate_missing_links() -> None:

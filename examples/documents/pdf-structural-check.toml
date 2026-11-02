@@ -5,6 +5,24 @@ default_profile = "pdf-structure"
 
 [[orchestration.steps]]
 kind = "command"
+name = "LaTeX report build"
+gate_id = "latex-report-build"
+argv = ["latexmk", "-pdf", "-g", "-interaction=nonstopmode", "-halt-on-error", "-file-line-error", "build/report.tex"]
+working_directory = "."
+rollout = "provisional"
+timeout_seconds = 600
+
+[[orchestration.steps]]
+kind = "command"
+name = "LaTeX final log evidence"
+gate_id = "latex-final-log"
+argv = ["{python}", "scripts/check_latex_final_log.py", "build/report.log", "build/report.pdf"]
+working_directory = "."
+rollout = "provisional"
+timeout_seconds = 30
+
+[[orchestration.steps]]
+kind = "command"
 name = "PDF structural check"
 gate_id = "pdf-structure"
 argv = ["qpdf", "--check", "build/report.pdf"]
@@ -12,6 +30,15 @@ working_directory = "."
 rollout = "provisional"
 timeout_seconds = 60
 
+[[orchestration.steps]]
+kind = "command"
+name = "PDF outline destination contract"
+gate_id = "pdf-navigation-contract"
+argv = ["{python}", "scripts/check_pdf_navigation.py", "build/report.pdf", "examples/documents/pdf-navigation-contract.json"]
+working_directory = "."
+rollout = "provisional"
+timeout_seconds = 60
+
 [[orchestration.profiles]]
 name = "pdf-structure"
-steps = ["PDF structural check"]
+steps = ["LaTeX report build", "LaTeX final log evidence", "PDF structural check", "PDF outline destination contract"]
