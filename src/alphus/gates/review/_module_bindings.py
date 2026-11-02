@@ -26,8 +26,11 @@ class _ModuleBindings(ast.NodeVisitor):
         self._count(node.name)
 
     def visit_Name(self, node: ast.Name) -> None:
-        if isinstance(node.ctx, (ast.Store, ast.Del)):
-            self._count(node.id)
+        match node.ctx:
+            case ast.Store() | ast.Del():
+                self._count(node.id)
+            case _:
+                return
 
     def visit_Import(self, node: ast.Import) -> None:
         for alias in node.names:

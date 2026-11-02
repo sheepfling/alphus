@@ -229,12 +229,13 @@ def provenance_ownership_sites(
         return []
     if len(list(ast.walk(tree))) > 10_000:
         return []
-    functions = [
-        statement
-        for statement in tree.body
-        if isinstance(statement, ast.FunctionDef)
-        and statement.name in policy.function_names
-    ]
+    functions: list[ast.FunctionDef] = []
+    for statement in tree.body:
+        match statement:
+            case ast.FunctionDef(name=name) if name in policy.function_names:
+                functions.append(statement)
+            case _:
+                continue
     binding_counts = module_binding_counts(tree, policy.function_names)
     sites: set[_OwnershipSite] = set()
     for function in functions:
