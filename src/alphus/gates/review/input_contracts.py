@@ -894,6 +894,14 @@ def _name_expression(node: ast.AST, expected: str) -> bool:
             return False
 
 
+def _is_name_in(node: ast.AST, names: AbstractSet[str]) -> bool:
+    match node:
+        case ast.Name(id=name) if name in names:
+            return True
+        case _:
+            return False
+
+
 def _normalizer_call(
     node: ast.AST, parameter: str, model: str, aliases: ImportAliases
 ) -> bool:
@@ -996,6 +1004,101 @@ def _direct_mapping_reads(parameter: str, nodes: Sequence[ast.AST]) -> list[int]
     )
 
 
+def _linear_aliases_before(
+    function: ast.FunctionDef | ast.AsyncFunctionDef,
+    parameter: str,
+    line: int,
+) -> frozenset[str]:
+    """Follow straight-line simple-name aliases up to one source location."""
+    aliases = {parameter}
+    for statement in function.body:
+        if statement.lineno >= line:
+            break
+        match statement:
+            case ast.Assign(targets=[ast.Name(id=target)], value=ast.Name(id=source)):
+                aliases.discard(target)
+                if source in aliases:
+                    aliases.add(target)
+            case ast.AnnAssign(target=ast.Name(id=target), value=ast.Name(id=source)):
+                aliases.discard(target)
+                if source in aliases:
+                    aliases.add(target)
+            case (
+                ast.Assign(targets=[ast.Name(id=target)])
+                | ast.AnnAssign(target=ast.Name(id=target))
+            ):
+                aliases.discard(target)
+            case (
+                ast.If()
+                | ast.For()
+                | ast.AsyncFor()
+                | ast.While()
+                | ast.Try()
+                | ast.Match()
+            ):
+                # Branch-dependent assignments make local alias state uncertain.
+                return frozenset({parameter})
+            case _:
+                pass
+    return frozenset(aliases)
+
+
+def _direct_mapping_reads_with_aliases(
+    function: ast.FunctionDef | ast.AsyncFunctionDef, parameter: str
+) -> list[int]:
+    """Recognize literal-key reads through direct straight-line local aliases."""
+    aliases = {parameter}
+    lines: set[int] = set()
+
+    def record_reads(expression: ast.AST, available: AbstractSet[str]) -> None:
+        for child in ast.walk(expression):
+            match child:
+                case ast.Subscript(
+                    value=ast.Name(id=name), slice=ast.Constant(value=str())
+                ) if name in available:
+                    lines.add(child.lineno)
+                case ast.Call(
+                    func=ast.Attribute(value=ast.Name(id=name), attr="get"),
+                    args=[ast.Constant(value=str()), *_],
+                ) if name in available:
+                    lines.add(child.lineno)
+                case _:
+                    pass
+
+    for statement in function.body:
+        match statement:
+            case ast.Assign(targets=[ast.Name(id=target)], value=value):
+                record_reads(value, aliases)
+                match value:
+                    case ast.Name(id=source) if source in aliases:
+                        aliases.add(target)
+                    case _:
+                        aliases.discard(target)
+            case ast.AnnAssign(target=ast.Name(id=target), value=value):
+                if value is not None:
+                    record_reads(value, aliases)
+                match value:
+                    case ast.Name(id=source) if source in aliases:
+                        aliases.add(target)
+                    case _:
+                        aliases.discard(target)
+            case ast.Return(value=value) | ast.Expr(value=value):
+                if value is not None:
+                    record_reads(value, aliases)
+            case (
+                ast.If()
+                | ast.For()
+                | ast.AsyncFor()
+                | ast.While()
+                | ast.Try()
+                | ast.Match()
+            ):
+                break
+            case _:
+                break
+    return sorted(lines)
+
+
 def _direct_attribute_reads(
     parameter: str, nodes: Sequence[ast.AST]
 ) -> list[tuple[str, int]]:
@@ -1043,18 +1146,23 @@ def _direct_forwarded_mapping_reads(
         candidates = helpers.get(call_name, [])
         if len(candidates) != 1 or candidates[0] is function:
             continue
+        passed_names = _linear_aliases_before(function, parameter, node.lineno)
         helper = candidates[0]
         helper_args = [*helper.args.posonlyargs, *helper.args.args]
         helper_all_args = [*helper_args, *helper.args.kwonlyargs]
         helper_parameter: str | None = None
         for index, argument in enumerate(args):
-            if index < len(helper_args) and _name_expression(argument, parameter):
+            if index < len(helper_args) and (
+                _name_expression(argument, parameter)
+                or _is_name_in(argument, passed_names)
+            ):
                 helper_parameter = helper_args[index].arg
                 break
         if helper_parameter is None:
             for keyword in keywords:
-                if keyword.arg is None or not _name_expression(
-                    keyword.value, parameter
+                if keyword.arg is None or not (
+                    _name_expression(keyword.value, parameter)
+                    or _is_name_in(keyword.value, passed_names)
                 ):
                     continue
                 if any(argument.arg == keyword.arg for argument in helper_all_args):
@@ -1062,9 +1170,7 @@ def _direct_forwarded_mapping_reads(
                     break
         if helper_parameter is None:
             continue
-        helper_nodes = _FunctionLocalNodes(helper)
-        helper_nodes.visit(helper)
-        reads = _direct_mapping_reads(helper_parameter, helper_nodes.nodes)
+        reads = _direct_mapping_reads_with_aliases(helper, helper_parameter)
         if reads:
             evidence.add((helper.name, node.lineno, tuple(reads)))
     return sorted(evidence)

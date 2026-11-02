@@ -336,8 +336,10 @@ enclosing classes), parameter, and expected fully qualified domain type. A
 selected `Mapping[str, JsonValue]`/`dict[str, JsonValue]` parameter is reviewed
 when its function directly reads a literal string key or passes that exact
 parameter to a unique module-level helper whose corresponding parameter has a
-direct literal-key read. The finding names the pass-through call and helper
-read. This is one-hop evidence only: aliases, imported/class helpers, duplicate
+direct literal-key read. One straight-line assignment alias in the selected
+function or helper is followed when it is a simple name-to-name assignment;
+the finding names the pass-through call and helper read. This is one-hop
+evidence only: branch-dependent aliases, imported/class helpers, duplicate
 helper names, and deeper flows remain unresolved. A selected
 `object` parameter is reviewed only when the function directly reads one of its
 attributes. This narrow setting is useful when the consumer has independently

@@ -330,13 +330,14 @@ def _read_state(payload):
     assert "reads 6" in findings[0].message
 
 
-def test_mapping_escape_cross_function_following_skips_aliases_and_ambiguous_helpers() -> (
+def test_mapping_escape_cross_function_following_accepts_linear_aliases_but_not_ambiguity() -> (
     None
 ):
     alias_case = """from collections.abc import Mapping
 from app.json_types import JsonValue
 def evaluate(packet: Mapping[str, JsonValue]):
-    return _read(packet)
+    local = packet
+    return _read(local)
 def _read(value):
     local = value
     return local["state"]
@@ -350,13 +351,18 @@ def _read(value):
 def _read(other):
     return other["state"]
 """
-    for source in (alias_case, ambiguous_case):
-        assert (
-            input_contract_findings(
-                source, DOMAIN_BOUNDARY_POLICY, path="src/internal/evaluate.py"
-            )
-            == []
+    findings = input_contract_findings(
+        alias_case, DOMAIN_BOUNDARY_POLICY, path="src/internal/evaluate.py"
+    )
+    assert len(findings) == 1
+    assert "direct helper pass-through at line 5 to _read" in findings[0].message
+    assert "reads 8" in findings[0].message
+    assert (
+        input_contract_findings(
+            ambiguous_case, DOMAIN_BOUNDARY_POLICY, path="src/internal/evaluate.py"
         )
+        == []
+    )
 
 
 def test_shadowed_domain_import_alias_remains_unresolved() -> None:
