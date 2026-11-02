@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from pathlib import Path
 from typing import Never
@@ -263,13 +264,16 @@ def test_cli_reports_cache_status_on_stderr_without_changing_json(
 def test_cli_restricts_cache_and_force_fresh_to_direct_output_rule(
     tmp_path: Path,
 ) -> None:
+    def plain(output: str) -> str:
+        without_ansi = re.sub(r"\x1b\[[0-9;]*m", "", output)
+        without_boxes = without_ansi.translate(str.maketrans("│╭╮╰╯─", "      "))
+        return " ".join(without_boxes.split())
+
     runner = CliRunner()
     missing_cache = runner.invoke(app, ["--force-fresh"], color=False)
     assert missing_cache.exit_code == 2
     assert "Invalid value" in missing_cache.output
-    missing_message = " ".join(
-        missing_cache.output.translate(str.maketrans("│╭╮╰╯─", "      ")).split()
-    )
+    missing_message = plain(missing_cache.output)
     assert "--force-fresh requires --local-cache" in missing_message
 
     unsupported_rule = runner.invoke(
@@ -285,9 +289,7 @@ def test_cli_restricts_cache_and_force_fresh_to_direct_output_rule(
     )
     assert unsupported_rule.exit_code == 2
     assert "Invalid value" in unsupported_rule.output
-    unsupported_message = " ".join(
-        unsupported_rule.output.translate(str.maketrans("│╭╮╰╯─", "      ")).split()
-    )
+    unsupported_message = plain(unsupported_rule.output)
     assert "limited to a direct --rule output-escaping run" in unsupported_message
 
     help_result = runner.invoke(app, ["--help"], color=False)
