@@ -147,15 +147,82 @@ detector does not cover NED, geocentric latitude, degree inputs, other datums or
 ellipsoids without explicit policy support, batches, covariance, positions, or
 quaternion composition. The finding is only a candidate to review against the
 declared origin/datum, vector semantics, shape, dtype, and failure behavior; it
-does not establish a defect or performance gain. No real-consumer calibration
-has been performed.
+does not establish a defect or performance gain.
+
+### Bounded source calibration (2026-11-02)
+
+I inspected committed source snapshots only. The local Odonata, pytaos, and
+QuatOps worktrees had unrelated uncommitted changes; those changes were not
+read for this sample. No consumer repository was modified and no consumer code
+was executed. The frame rule was evaluated under the example's exact contract:
+ECEF displacement to ENU at an anchor, geodetic latitude in radians, meters,
+WGS84, right-handed east/north/up, direct tuple3; candidate selector names were
+adapted in memory to inspected function names. This adaptation does not assert
+that the example's preferred helper exists in those projects.
+
+#### `sheepfling/Titan`
+
+- Revision: `76c9a8d7fd542296c28ec9da58355f58e34176af`.
+- Paths: `packages/titan-simulation/src/titan_simulation/coords.py`, lines
+  50–58, 61–78, and 130–139.
+- Candidate: `ecef_to_ned_matrix` returns an ECEF-to-NED matrix, used for
+  velocity conversion and transposed for NED-to-ECEF. The file documents
+  WGS-84 and the matrix formula's radian inputs.
+- Result: no match. NED matrix output differs from the configured ENU
+  displacement tuple. This is an adjacent pattern the rule does not cover, not
+  a false negative under its declared contract. The helper is already reused
+  at the inspected call sites.
+
+#### `sheepfling/pytaos`
+
+- Revision: `331c0848032bfc01ab87fd5f27b73776fbac88c9`.
+- Paths: `src/taoryx/equations/geodesy.py`, lines 143–174, 336–367, and
+  395–411; `src/taoryx/contracts/frames.py`, lines 12–22.
+- Candidate: geocentric and geodetic north/east/down basis builders return
+  three `CartesianVector3` values; velocity transforms compose/decompose
+  through those helpers. Frame names distinguish ECFC from geocentric and
+  geodetic horizon frames.
+- Result: no match. This explicitly represented NED basis and helper
+  composition is not the configured direct ECEF-to-ENU vector formula.
+  Treating it as an ENU duplicate would be a contract false positive.
+
+#### `sheepfling/odonata`
+
+- Revision: `b04351e3c8f6f589fceeb781d1ad142f1ff4d7ac`.
+- Path: `src/odonata/frames/astropy_transform.py`, lines 17–54.
+- Candidate: the transformer delegates TEME-to-ITRS-to-GCRS position and
+  velocity conversion to Astropy with epoch/EOP and unit handling.
+- Result: no match. This is a library-backed position-and-differential
+  transformation with different frames, shape, and contracts.
+
+#### `sheepfling/quatops`
+
+- Revision: `541edb9362b14469e98501894cc85757b062de48`.
+- Paths: `src/quatops/scalar.py`, lines 135–162, and
+  `src/quatops/numpy/hamilton/wxyz.py`, lines 98–129.
+- Candidate: scalar and NumPy quaternion rotations use a non-unit-safe active
+  rotation, scaled arithmetic, and return vectors; the NumPy form supports
+  batches.
+- Result: no frame match. The six configured quaternion matchers also returned
+  no sites on these modules with selectors adapted to `multiply`, `conjugate`,
+  `inverse`, `normalize`, and `rotate`. This is an existing quaternion library
+  and expected negative control; its representation and robust numerical path
+  differ from the configured scalar-parameter/tuple kernels.
+
+Observed sample result: zero findings across the four snapshots and no
+contract-matching positive example. The Titan NED matrix and pytaos NED basis
+are useful adjacent-pattern evidence, but neither is labeled a false negative
+for the shipped ECEF-to-ENU rule. This sample is too small and selected to
+estimate precision or recall. Real downstream reimplementation candidates,
+helper equivalence, and detector behavior across consumer conventions remain
+uncalibrated.
 
 Other frame-transform conventions remain unimplemented, as do Cholesky
 covariance and domain checks. The numerical examples demonstrate only their
 explicitly configured syntax families. The quaternion normalization,
 inversion, sandwich, matrix-conversion, and ECEF-to-ENU grammars have synthetic
-positive/negative coverage but no reviewed real-consumer calibration or
-production precision estimate yet.
+positive/negative coverage but no reviewed downstream reimplementation
+calibration or production precision estimate yet.
 
 An elimination recognizer would need a consumer contract that identifies the
 matrix representation and then match, within one configured function, pivot
