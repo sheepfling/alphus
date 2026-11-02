@@ -142,8 +142,30 @@ The only supported grammar uses `math.sin`/`math.cos` with the configured
 products. It rejects imported aliases, local aliases, shadowed `math`, matrix
 outputs, positions with translation, intermediates, branches, alternate
 formulas, and other axis orders. The configured helper is a maintainer-provided
-review target; its existence or semantic equivalence is not verified. This
-detector does not cover NED, geocentric latitude, degree inputs, other datums or
+review target; its existence or semantic equivalence is not verified. The
+numerical example recommends `pyproj.Transformer.from_pipeline` with PROJ's
+`topocentric` conversion for WGS84 local-frame coordinate work. That conversion
+maps ECEF positions to ENU positions; it is not a drop-in for an API that accepts
+a displacement vector. For a displacement, transform the anchor and the anchor
+plus the displacement, then subtract the ENU results. This preserves vector
+semantics while delegating the geodetic/frame conversion to PROJ. See the
+official [pyproj Transformer API](https://pyproj4.github.io/pyproj/stable/api/transformer.html)
+and [PROJ topocentric conversion](https://proj.org/en/stable/operations/conversions/topocentric.html).
+For ECEF XYZ inputs, a pipeline can be constructed as follows:
+
+```python
+from pyproj import Transformer
+
+ecef_to_enu = Transformer.from_pipeline(
+    "+proj=topocentric +ellps=WGS84 "
+    "+lat_0=37.0 +lon_0=-122.0 +h_0=0"
+)
+east, north, up = ecef_to_enu.transform(x_ecef, y_ecef, z_ecef)
+```
+
+For NED consumers, explicitly map the returned components to
+`(north, east, -up)`.
+This detector does not cover NED, geocentric latitude, degree inputs, other datums or
 ellipsoids without explicit policy support, batches, covariance, positions, or
 quaternion composition. The finding is only a candidate to review against the
 declared origin/datum, vector semantics, shape, dtype, and failure behavior; it
@@ -153,18 +175,31 @@ does not establish a defect or performance gain.
 ECEF-to-NED row-major 3×3 matrix applied to column displacement vectors at an
 anchor. Its policy declares the reference ellipsoid, geodetic latitude, radian
 inputs, length units, N/E/D order, right-handedness, matrix layout, and
-preferred helper. The supported grammar requires `math` trigonometric
+preferred helper. The numerical example recommends pyproj/PROJ's topocentric
+conversion instead of a project-local rotation helper. PROJ returns ENU, so a
+consumer that needs NED must explicitly reorder it as north, east, negative-up.
+For velocity or displacement vectors, preserve vector semantics by transforming
+two positions relative to the same anchor and subtracting; do not pass a bare
+vector as if it were an ECEF position. The supported grammar requires `math` trigonometric
 assignments and the exact signed matrix passed to a configured `numpy.array`
 import. It does not match ENU, geocentric latitude, a tuple of basis vectors,
 positions with translation, row-vector application, or another matrix layout.
 In particular, pytaos's geocentric basis is not interchangeable with its
 geodetic basis. A match identifies syntax under declarations; it cannot prove
 the declarations describe runtime behavior or that the preferred helper exists.
+The pyproj/PROJ recommendation is a migration target, not proof that a consumer
+uses it or that its result matches the consumer's origin, height, axis order,
+and numerical tolerances. Validate a configured pipeline against known geodetic
+control points before adoption.
 
 `ned-basis-vectors` is a distinct opt-in fingerprint for two source forms:
 geocentric latitude returning an ordered N/E/D vector tuple, and geodetic
 latitude returning a typed geodetic-horizon `Basis3`. The policy rejects mixed
-latitude/frame/representation declarations. The formulas may be algebraically
+latitude/frame/representation declarations. The numerical example recommends
+the same pyproj/PROJ topocentric pipeline for consumers whose goal is coordinate
+conversion, with explicit ENU-to-NED reordering where needed. A `Basis3` API may
+still need a thin adapter around the library; the detector does not claim that
+such an adapter is a drop-in replacement. The formulas may be algebraically
 similar, so latitude semantics are supplied by the consumer's policy and are
 not inferred from trigonometry or a function name. The rule does not follow
 delegated wrappers, construct matrices, or support alternate basis/container
