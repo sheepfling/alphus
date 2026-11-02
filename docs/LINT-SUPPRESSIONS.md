@@ -9,7 +9,8 @@ requirement:
 from optional_runtime import plugin  # noqa: E402 -- initialize the plugin registry first
 ```
 
-It also checks Ruff's TOML `per-file-ignores` tables in `pyproject.toml`,
+It also checks Ruff's TOML `per-file-ignores` and
+`extend-per-file-ignores` tables in `pyproject.toml`,
 `ruff.toml`, and `.ruff.toml` against the selected Python paths. A matching
 selected code needs a comment containing the configured delimiter and a reason:
 
@@ -20,7 +21,22 @@ selected code needs a comment containing the configured delimiter and a reason:
 
 The table form is evaluated one assignment per line. Other per-file-ignore
 forms, including inline maps and multiline values, are reported as not evaluated
-when encountered; inherited Ruff configuration is not resolved.
+when encountered. A matching exact path/code/line exception can approve a
+configuration entry:
+
+```toml
+[[checks.suppression_reasons.exceptions]]
+path = "ruff.toml"
+rule_code = "E402"
+line = 2
+reason = "Plugin bootstrap imports must remain ordered before registration."
+```
+
+The scanner follows `extend` chains up to eight files when each target remains
+under the selected repository root and the current file does not define a local
+per-file-ignore table. Cycles, missing/out-of-root targets, excessive depth, and
+local/inherited table combinations with uncertain Ruff merge behavior are
+reported as not evaluated; Ruff remains authoritative.
 
 Consumers select the codes, file scope, exclusion patterns, severity, and reason
 delimiter in `[checks.suppression_reasons]`; see

@@ -221,8 +221,31 @@ def test_ruff_per_file_ignore_comment_rationale_and_unselected_codes_are_accepte
     assert findings == []
 
 
-def test_ruff_inherited_config_is_explicitly_not_evaluated(tmp_path: Path) -> None:
+def test_inherited_ruff_config_is_scanned_within_the_repository_root(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src/app.py").write_text("value = 1\n", encoding="utf-8")
+    (tmp_path / "base.toml").write_text(
+        '[lint.per-file-ignores]\n"src/**" = ["E402"]\n', encoding="utf-8"
+    )
     (tmp_path / "ruff.toml").write_text('extend = "base.toml"\n', encoding="utf-8")
+
+    findings = check_suppression_reasons(
+        tmp_path,
+        [Path("src/app.py")],
+        SuppressionReasonPolicy(extensions=(".py",), rule_codes=("E402",)),
+    )
+
+    assert len(findings) == 1
+    assert findings[0].path == "base.toml"
+    assert "no rationale" in findings[0].message
+
+
+def test_inherited_ruff_config_outside_root_is_not_evaluated(tmp_path: Path) -> None:
+    (tmp_path / "ruff.toml").write_text(
+        'extend = "../outside.toml"\n', encoding="utf-8"
+    )
 
     findings = check_suppression_reasons(
         tmp_path,
@@ -231,7 +254,75 @@ def test_ruff_inherited_config_is_explicitly_not_evaluated(tmp_path: Path) -> No
     )
 
     assert len(findings) == 1
-    assert "inherited configuration is not resolved" in findings[0].message
+    assert "missing or outside the repository root" in findings[0].message
+
+
+def test_inherited_ruff_config_cycle_is_bounded(tmp_path: Path) -> None:
+    (tmp_path / "ruff.toml").write_text('extend = "base.toml"\n', encoding="utf-8")
+    (tmp_path / "base.toml").write_text('extend = "ruff.toml"\n', encoding="utf-8")
+
+    findings = check_suppression_reasons(
+        tmp_path,
+        [],
+        SuppressionReasonPolicy(extensions=(".py",), rule_codes=("E402",)),
+    )
+
+    assert len(findings) == 1
+    assert "cyclic or exceeds the depth limit" in findings[0].message
+
+
+def test_ruff_extend_per_file_ignores_are_audited_and_accept_exact_exceptions(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src/app.py").write_text("value = 1\n", encoding="utf-8")
+    (tmp_path / "ruff.toml").write_text(
+        '[lint.extend-per-file-ignores]\n"src/**" = ["E402"]\n',
+        encoding="utf-8",
+    )
+    exception = SuppressionReasonException(
+        path="ruff.toml",
+        rule_code="E402",
+        line=2,
+        reason="Bootstrap module imports before plugin registration.",
+    )
+
+    findings = check_suppression_reasons(
+        tmp_path,
+        [Path("src/app.py")],
+        SuppressionReasonPolicy(
+            extensions=(".py",), rule_codes=("E402",), exceptions=(exception,)
+        ),
+    )
+
+    assert findings == []
+
+
+def test_moved_config_exception_is_reported_stale(tmp_path: Path) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src/app.py").write_text("value = 1\n", encoding="utf-8")
+    (tmp_path / "ruff.toml").write_text(
+        '[lint.per-file-ignores]\n"src/**" = ["E402"]\n',
+        encoding="utf-8",
+    )
+    exception = SuppressionReasonException(
+        path="ruff.toml",
+        rule_code="E402",
+        line=3,
+        reason="Bootstrap module imports before plugin registration.",
+    )
+
+    findings = check_suppression_reasons(
+        tmp_path,
+        [Path("src/app.py")],
+        SuppressionReasonPolicy(
+            extensions=(".py",), rule_codes=("E402",), exceptions=(exception,)
+        ),
+    )
+
+    assert len(findings) == 2
+    assert any("no rationale" in finding.message for finding in findings)
+    assert any("stale exception" in finding.message for finding in findings)
 
 
 def test_unreadable_selected_file_is_not_reported_as_an_empty_audit(

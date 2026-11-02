@@ -169,9 +169,13 @@ def check_suppression_reasons(
 _RUFF_PER_FILE_TABLES = frozenset(
     {
         "tool.ruff.lint.per-file-ignores",
+        "tool.ruff.lint.extend-per-file-ignores",
         "tool.ruff.per-file-ignores",
+        "tool.ruff.extend-per-file-ignores",
         "lint.per-file-ignores",
+        "lint.extend-per-file-ignores",
         "per-file-ignores",
+        "extend-per-file-ignores",
     }
 )
 
@@ -196,21 +200,55 @@ def _split_toml_comment(value: str) -> tuple[str, str]:
 
 
 def _ruff_config_suppression_findings(
-    root: Path, selected_files: Collection[str], policy: SuppressionReasonPolicy
+    root: Path,
+    selected_files: Collection[str],
+    policy: SuppressionReasonPolicy,
+    *,
+    config_path: Path | None = None,
+    seen: frozenset[Path] = frozenset(),
+    depth: int = 0,
 ) -> list[Finding]:
     """Audit simple Ruff per-file-ignore table entries without executing Ruff."""
     findings: list[Finding] = []
-    config_name = next(
-        (
-            name
-            for name in ("ruff.toml", ".ruff.toml", "pyproject.toml")
-            if (root / name).is_file()
-        ),
-        None,
-    )
-    if config_name is None:
+    if config_path is None:
+        config_path = next(
+            (
+                root / name
+                for name in ("ruff.toml", ".ruff.toml", "pyproject.toml")
+                if (root / name).is_file()
+            ),
+            None,
+        )
+    if config_path is None:
         return findings
-    config_path = root / config_name
+    try:
+        config_path = config_path.resolve(strict=True)
+        config_name = config_path.relative_to(root).as_posix()
+    except (OSError, ValueError):
+        return [
+            Finding(
+                rule_id=_RULE_ID,
+                path="ruff configuration",
+                severity=policy.severity,
+                message=(
+                    "Ruff inherited configuration was not evaluated because its "
+                    "path is missing or outside the selected repository root."
+                ),
+            )
+        ]
+    if depth >= 8 or config_path in seen:
+        return [
+            Finding(
+                rule_id=_RULE_ID,
+                path=config_name,
+                severity=policy.severity,
+                message=(
+                    "Ruff inherited configuration was not evaluated because the "
+                    "extension chain is cyclic or exceeds the depth limit."
+                ),
+            )
+        ]
+    seen = seen | {config_path}
     try:
         source = read_utf8_text(config_path)
         tomllib.loads(source)
@@ -228,25 +266,40 @@ def _ruff_config_suppression_findings(
         )
         return findings
     table = ""
+    used_exceptions: set[tuple[str, int]] = set()
+    inherited_config: str | None = None
+    local_per_file_table = False
     for line_number, line in enumerate(source.splitlines(), start=1):
         stripped = line.strip()
         section = re.fullmatch(r"\[([^]]+)\]", stripped)
         if section:
             table = section.group(1).strip()
+            if table in _RUFF_PER_FILE_TABLES:
+                local_per_file_table = True
             continue
-        if re.match(r"\s*extend\s*=", line):
-            findings.append(
-                Finding(
-                    rule_id=_RULE_ID,
-                    path=config_name,
-                    line=line_number,
-                    severity=policy.severity,
-                    message=(
-                        "Ruff inherited configuration is not resolved; per-file-ignore "
-                        "reasons may be incomplete."
-                    ),
-                )
-            )
+        if table in {"", "tool.ruff"} and re.match(r"\s*extend\s*=", line):
+            extension_value, _comment = _split_toml_comment(line.split("=", 1)[1])
+            try:
+                parsed_extension = tomllib.loads(f"extend = {extension_value}")
+                raw_extension = parsed_extension["extend"]
+            except (tomllib.TOMLDecodeError, KeyError):
+                raw_extension = None
+            match raw_extension:
+                case str() as extension:
+                    inherited_config = extension
+                case _:
+                    findings.append(
+                        Finding(
+                            rule_id=_RULE_ID,
+                            path=config_name,
+                            line=line_number,
+                            severity=policy.severity,
+                            message=(
+                                "Ruff inherited configuration uses an unsupported "
+                                "extension value; inherited per-file ignores were not evaluated."
+                            ),
+                        )
+                    )
             continue
         if table in {"", "tool.ruff", "tool.ruff.lint", "lint"} and re.match(
             r"\s*per-file-ignores\s*=", line
@@ -320,6 +373,21 @@ def _ruff_config_suppression_findings(
         _, _, reason = comment.partition(policy.reason_delimiter)
         if reason.strip():
             continue
+        exception_keys = {
+            (exception.rule_code, exception.line)
+            for exception in policy.exceptions
+            if exception.path == config_name
+        }
+        used_exceptions.update(
+            (code, line_number)
+            for code in selected_codes
+            if (code, line_number) in exception_keys
+        )
+        unaudited = [
+            code for code in selected_codes if (code, line_number) not in exception_keys
+        ]
+        if not unaudited:
+            continue
         findings.append(
             Finding(
                 rule_id=_RULE_ID,
@@ -327,7 +395,7 @@ def _ruff_config_suppression_findings(
                 line=line_number,
                 severity=policy.severity,
                 message=(
-                    f"Selected Ruff per-file-ignore code(s) {', '.join(selected_codes)} "
+                    f"Selected Ruff per-file-ignore code(s) {', '.join(unaudited)} "
                     f"apply to {', '.join(sorted(applicable)[:3])} via {pattern!r} "
                     f"but have no rationale after {policy.reason_delimiter!r}; "
                     "add a TOML comment with the configured reason delimiter. "
@@ -335,4 +403,65 @@ def _ruff_config_suppression_findings(
                 ),
             )
         )
+    for exception in policy.exceptions:
+        if exception.path != config_name:
+            continue
+        key = (exception.rule_code, exception.line)
+        if key in used_exceptions:
+            continue
+        findings.append(
+            Finding(
+                rule_id=_RULE_ID,
+                path=config_name,
+                line=exception.line,
+                severity=policy.severity,
+                message=(
+                    f"Approved Ruff config exception for {exception.rule_code} "
+                    "does not match a selected per-file-ignore entry at this line; "
+                    "review or remove the stale exception."
+                ),
+            )
+        )
+    if inherited_config is not None:
+        if local_per_file_table:
+            findings.append(
+                Finding(
+                    rule_id=_RULE_ID,
+                    path=config_name,
+                    severity=policy.severity,
+                    message=(
+                        "Ruff inherited configuration was not traversed because this "
+                        "file also defines per-file-ignore tables; the effective merge "
+                        "semantics are left to Ruff."
+                    ),
+                )
+            )
+        else:
+            parent_path = config_path.parent / inherited_config
+            try:
+                resolved_parent = parent_path.resolve(strict=True)
+                resolved_parent.relative_to(root)
+            except (OSError, ValueError):
+                findings.append(
+                    Finding(
+                        rule_id=_RULE_ID,
+                        path=config_name,
+                        severity=policy.severity,
+                        message=(
+                            "Ruff inherited configuration was not evaluated because "
+                            "its target is missing or outside the repository root."
+                        ),
+                    )
+                )
+            else:
+                findings.extend(
+                    _ruff_config_suppression_findings(
+                        root,
+                        selected_files,
+                        policy,
+                        config_path=resolved_parent,
+                        seen=seen,
+                        depth=depth + 1,
+                    )
+                )
     return findings
