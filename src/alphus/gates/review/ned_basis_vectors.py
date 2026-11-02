@@ -116,11 +116,19 @@ def _scope_nodes(root: ast.AST) -> Iterable[ast.AST]:
 
 
 def _configured_functions(statements: Iterable[ast.stmt]) -> Iterable[ast.FunctionDef]:
+    """Find configured-scope defs, including defs nested in control-flow suites."""
     for statement in statements:
         if isinstance(statement, ast.FunctionDef):
             yield statement
         elif isinstance(statement, ast.ClassDef):
             yield from _configured_functions(statement.body)
+        else:
+            # Control-flow suites bind names in their containing scope. Descend
+            # through statement containers, while treating defs/classes as
+            # separate scopes above.
+            for child in ast.iter_child_nodes(statement):
+                if isinstance(child, ast.stmt):
+                    yield from _configured_functions((child,))
 
 
 def _is_rebound(
@@ -157,6 +165,14 @@ def _is_rebound(
                     id(node) not in module_bindings or bound_name == math_module
                 ):
                     return True
+        if (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.ctx, ast.Store)
+            and isinstance(node.value, ast.Name)
+            and node.value.id == math_module
+            and node.attr in {"sin", "cos"}
+        ):
+            return True
     return False
 
 
@@ -223,6 +239,11 @@ def ned_basis_vector_sites(
         for function in _configured_functions(tree.body)
         if function.name in policy.function_names
     ]
+    if any(
+        sum(function.name == name for function in selected_functions) > 1
+        for name in policy.function_names
+    ):
+        return []
     if _is_rebound(tree, selected_functions, required, policy.math_module):
         return []
     if set(policy.function_names) & set(

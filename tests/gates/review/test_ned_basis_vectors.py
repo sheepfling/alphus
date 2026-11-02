@@ -150,6 +150,22 @@ def test_matches_distinct_pinned_style_ned_basis_forms(
         (_GEOCENTRIC + "\ngeocentric_unit_vectors = lambda *args: ()\n", "geocentric"),
         (_GEODETIC + "\ngeodetic_unit_vectors = lambda *args: None\n", "geodetic"),
         (
+            _GEOCENTRIC
+            + "\nif True:\n    def geocentric_unit_vectors("
+            + "longitude_radians, latitude_radians):\n        return ()\n",
+            "geocentric",
+        ),
+        (
+            _GEODETIC
+            + "\nif True:\n    def geodetic_unit_vectors(longitude, "
+            + "latitude):\n        return None\n",
+            "geodetic",
+        ),
+        (_GEOCENTRIC + "\nmath.sin = lambda _x: 99\n", "geocentric"),
+        (_GEODETIC + "\nmath.sin = lambda _x: 99\n", "geodetic"),
+        (_GEOCENTRIC + "\nmath.cos = lambda _x: 99\n", "geocentric"),
+        (_GEODETIC + "\nmath.cos = lambda _x: 99\n", "geodetic"),
+        (
             _GEOCENTRIC.replace("import math", "import math\nmath = custom_math"),
             "geocentric",
         ),
