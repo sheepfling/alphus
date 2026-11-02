@@ -308,6 +308,13 @@ def test_failure_evidence_order_abstains_when_path_or_helper_is_rebound() -> Non
             "        persist_failure(child.returncode, diagnostic_path)\n"
         ),
         (
+            "def run(diagnostic_path, persist_failure):\n"
+            "    child = run_child()\n"
+            "    if child.returncode != 0:\n"
+            "        remove_diagnostic(diagnostic_path)\n"
+            "        persist_failure(child.returncode, diagnostic_path)\n"
+        ),
+        (
             "def run(diagnostic_path):\n"
             "    child = run_child()\n"
             "    if child.returncode != 0:\n"
