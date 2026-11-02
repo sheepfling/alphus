@@ -23,6 +23,20 @@ position_variables = ["row_number", "page_number"]
 semantic_fields = ["Interpretation", "Content"]
 minimum_override_characters = 40
 
+[checks.unexplained_empty_results]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/render/*.py"]
+nonempty_inputs = ["records"]
+unavailable_flags = ["inferred_schema"]
+
+[checks.embedded_semantic_overrides]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/render/*.py"]
+replacement_maps = ["fixed_paragraphs"]
+source_anchor_helpers = ["source_anchor"]
+
 [orchestration]
 default_profile = "semantic-review"
 
@@ -44,6 +58,18 @@ name = "Positional semantic override review"
 rule = "positional-semantic-overrides"
 rollout = "provisional"
 
+[[orchestration.steps]]
+kind = "rule"
+name = "Unknown inference empty-result review"
+rule = "unexplained-empty-results"
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Embedded semantic replacement review"
+rule = "embedded-semantic-overrides"
+rollout = "provisional"
+
 [[orchestration.profiles]]
 name = "semantic-review"
-steps = ["Prose branch review", "Rendered value feedback review", "Positional semantic override review"]
+steps = ["Prose branch review", "Rendered value feedback review", "Positional semantic override review", "Unknown inference empty-result review", "Embedded semantic replacement review"]

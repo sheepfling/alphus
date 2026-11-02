@@ -62,6 +62,12 @@ RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
         "positional-semantic-overrides": RuleSpec(
             "positional_semantic_overrides", RuleOutputShape.FINDINGS
         ),
+        "unexplained-empty-results": RuleSpec(
+            "unexplained_empty_results", RuleOutputShape.FINDINGS
+        ),
+        "embedded-semantic-overrides": RuleSpec(
+            "embedded_semantic_overrides", RuleOutputShape.FINDINGS
+        ),
         "scipy-constants": RuleSpec("scipy_constants", RuleOutputShape.FINDINGS),
         "test-quality": RuleSpec("test_quality", RuleOutputShape.FINDINGS),
         "input-contracts": RuleSpec("input_contracts", RuleOutputShape.FINDINGS),

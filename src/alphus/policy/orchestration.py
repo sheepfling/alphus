@@ -38,6 +38,7 @@ from alphus.policy.repository import (
     VersionSyncPolicy,
 )
 from alphus.policy.review import (
+    EmbeddedSemanticOverridePolicy,
     FastApiPracticePolicy,
     InputContractPolicy,
     NumericLiteralPolicy,
@@ -49,6 +50,7 @@ from alphus.policy.review import (
     SourceFamilyPolicy,
     SqlAlchemyPracticePolicy,
     TestQualityPolicy,
+    UnexplainedEmptyResultPolicy,
 )
 from alphus.policy.sources import (
     CliPolicy,
@@ -78,6 +80,8 @@ class CheckPolicies(StrictModel):
     numeric_literals: NumericLiteralPolicy | None = None
     prose_as_control: ProseAsControlPolicy | None = None
     positional_semantic_overrides: PositionalSemanticOverridePolicy | None = None
+    unexplained_empty_results: UnexplainedEmptyResultPolicy | None = None
+    embedded_semantic_overrides: EmbeddedSemanticOverridePolicy | None = None
     scipy_constants: ScipyConstantsPolicy | None = None
     test_quality: TestQualityPolicy | None = None
     input_contracts: InputContractPolicy | None = None

@@ -166,6 +166,53 @@ class PositionalSemanticOverridePolicy(PythonSourceScanPolicy):
         return tuple(values)
 
 
+class UnexplainedEmptyResultPolicy(PythonSourceScanPolicy):
+    """Configured collection and inference names for one empty-result shape."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    nonempty_inputs: Annotated[tuple[str, ...], Field(min_length=1)]
+    unavailable_flags: Annotated[tuple[str, ...], Field(min_length=1)]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("nonempty_inputs", "unavailable_flags")
+    @classmethod
+    def validate_names(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("input and inference names must be identifiers")
+        require_unique(values, "input and inference names must be unique")
+        return tuple(values)
+
+
+class EmbeddedSemanticOverridePolicy(PythonSourceScanPolicy):
+    """Names of consumer replacement maps and source-anchor helpers."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    replacement_maps: Annotated[tuple[str, ...], Field(min_length=1)]
+    source_anchor_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("replacement_maps", "source_anchor_helpers")
+    @classmethod
+    def validate_helpers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not value or any(not part.isidentifier() for part in value.split("."))
+            for value in values
+        ):
+            raise ValueError("replacement maps and anchor helpers must be dotted names")
+        require_unique(values, "configured map/helper names must be unique")
+        return tuple(values)
+
+
 class ScipyConstantsPolicy(PythonSourceScanPolicy):
     """Advisory SciPy physical and unit-factor catalog for Python source."""
 

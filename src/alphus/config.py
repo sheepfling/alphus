@@ -68,6 +68,7 @@ from alphus.policy.repository import (
     VersionSyncPolicy,
 )
 from alphus.policy.review import (
+    EmbeddedSemanticOverridePolicy,
     ErrorCodeCallSpec,
     FastApiFindingOverride,
     FastApiPracticePolicy,
@@ -83,6 +84,7 @@ from alphus.policy.review import (
     SqlAlchemyPracticePolicy,
     TestQualityExclusion,
     TestQualityPolicy,
+    UnexplainedEmptyResultPolicy,
 )
 from alphus.policy.sources import (
     CliPolicy,
@@ -119,6 +121,7 @@ __all__ = [
     "DependencyLockPolicy",
     "DocumentationConfigPolicy",
     "DocumentationConfigSuppression",
+    "EmbeddedSemanticOverridePolicy",
     "ErrorCodeCallSpec",
     "EslintCyclomaticBinding",
     "FastApiFindingOverride",
@@ -179,6 +182,7 @@ __all__ = [
     "TestQualityPolicy",
     "TrackedPathRule",
     "TrackedSuffixRule",
+    "UnexplainedEmptyResultPolicy",
     "VersionSource",
     "VersionSyncPolicy",
     "load_config",

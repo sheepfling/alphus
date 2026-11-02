@@ -9,6 +9,9 @@ from typing import TypeAlias
 
 from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.execution.results import RuleOutput
+from alphus.gates.review.embedded_semantic_overrides import (
+    check_embedded_semantic_overrides,
+)
 from alphus.gates.review.frameworks.fastapi_practices import check_fastapi_practices
 from alphus.gates.review.frameworks.pydantic_practices import check_pydantic_practices
 from alphus.gates.review.frameworks.sqlalchemy_practices import (
@@ -30,6 +33,9 @@ from alphus.gates.review.rendered_value_reparsed import (
 from alphus.gates.review.scipy_constants import check_scipy_constants
 from alphus.gates.review.source_families import check_source_families
 from alphus.gates.review.test_quality import check_test_quality
+from alphus.gates.review.unexplained_empty_results import (
+    check_unexplained_empty_results,
+)
 from alphus.policy.base import require_policy
 
 ReviewRunner: TypeAlias = Callable[
@@ -74,6 +80,26 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
                 require_policy(
                     config.checks.positional_semantic_overrides,
                     "positional_semantic_overrides",
+                ),
+            )
+        ),
+        "unexplained-empty-results": lambda root, files, config: (
+            check_unexplained_empty_results(
+                root,
+                files,
+                require_policy(
+                    config.checks.unexplained_empty_results,
+                    "unexplained_empty_results",
+                ),
+            )
+        ),
+        "embedded-semantic-overrides": lambda root, files, config: (
+            check_embedded_semantic_overrides(
+                root,
+                files,
+                require_policy(
+                    config.checks.embedded_semantic_overrides,
+                    "embedded_semantic_overrides",
                 ),
             )
         ),

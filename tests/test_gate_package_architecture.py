@@ -75,6 +75,8 @@ def test_gate_themes_own_their_runner_mappings() -> None:
                 "prose-as-control",
                 "rendered-value-reparsed",
                 "positional-semantic-overrides",
+                "unexplained-empty-results",
+                "embedded-semantic-overrides",
                 "scipy-constants",
                 "test-quality",
                 "input-contracts",
