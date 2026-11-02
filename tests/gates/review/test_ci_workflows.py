@@ -231,7 +231,11 @@ def test_explicit_matrix_invariant_allowlist_reports_only_static_repo_checks() -
           python -m pytest --python ${{ matrix.python }}
 """
     assert workflow_run_findings(source, ".github/workflows/ci.yml", policy()) == []
-    result = workflow_run_findings(source, ".github/workflows/ci.yml", policy(matrix_invariant_run_blocks=(script,)))
+    result = workflow_run_findings(
+        source,
+        ".github/workflows/ci.yml",
+        policy(matrix_invariant_run_blocks=(script,)),
+    )
     assert len(result) == 1
     assert "each matrix leg" in result[0].message
 
@@ -253,5 +257,7 @@ def test_azure_static_scripts_match_only_when_job_context_is_simple() -> None:
 """
     configured = policy(azure_workflow_paths=("azure-pipelines.yml",))
     assert len(workflow_run_findings(source, "azure-pipelines.yml", configured)) == 1
-    conditional = source.replace("  pool: ubuntu-latest", "  condition: succeeded()\n  pool: ubuntu-latest", 1)
+    conditional = source.replace(
+        "  pool: ubuntu-latest", "  condition: succeeded()\n  pool: ubuntu-latest", 1
+    )
     assert workflow_run_findings(conditional, "azure-pipelines.yml", configured) == []
