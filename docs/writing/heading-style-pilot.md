@@ -47,11 +47,12 @@ A separate mixed-context review packet is available in
 [heading-style-review-packet.md](heading-style-review-packet.md). It contains
 source excerpts and blank human-label fields for technical documentation, a
 presentation example, and marketing copy. Its labels remain pending; it is not
-an extension of the manual labels above.
+an extension of the unverified preliminary annotations described above.
 
-This sample supports only the narrow statement that the selected technical
-headings are descriptive and the current scanner leaves them alone. It does
-not establish document clarity, authorship, recall, or suitability for
-enforcement. A fuller pilot needs separately approved marketing and
-presentation examples with human labels. The synthetic positives are fixture
-candidates, not human-labeled examples from the inspected corpus.
+This sample supports only the narrow statement that the current scanner leaves
+these selected technical headings unflagged at the configured threshold. It
+does not establish that they are descriptive, document clarity, authorship,
+recall, or suitability for enforcement. A fuller pilot needs independently
+reviewed technical, marketing, and presentation examples with human labels. The
+synthetic positives are fixture candidates, not human-labeled examples from the
+inspected corpus.
