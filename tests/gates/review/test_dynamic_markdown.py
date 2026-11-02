@@ -182,6 +182,35 @@ def test_loop_appends_retain_one_reviewable_row_for_later_join() -> None:
     assert "local append/join assembly" in findings[0].message
 
 
+def test_mdutils_181_table_builder_pattern_reports_dynamic_table_cell() -> None:
+    # Minimal excerpt of the nested ``table +=`` loop in mdutils 1.8.1's
+    # ``mdutils/tools/Table.py::Table.create_table``. The upstream implementation
+    # stringifies a cell and escapes pipes before appending its closing pipe.
+    source = (
+        "def create_table(text, rows, columns):\n"
+        '    table = "\\n"\n'
+        "    index = 0\n"
+        "    if columns * rows == len(text):\n"
+        "        for row in range(rows + 1):\n"
+        "            if row == 1:\n"
+        '                table += "| --- |\\n"\n'
+        "            else:\n"
+        '                table += "|"\n'
+        "                for _ in range(columns):\n"
+        '                    table += str(text[index]).replace("|", r"\\|") + "|"\n'
+        "                    index += 1\n"
+        '                table += "\\n"\n'
+        "    return table\n"
+    )
+
+    findings = dynamic_markdown_findings(source, path="mdutils/tools/Table.py")
+
+    assert len(findings) == 1
+    assert findings[0].line == 11
+    assert "table cell" in findings[0].message
+    assert "does not prove invalid rendered output" in findings[0].message
+
+
 def test_nested_list_and_blockquote_composition_report_their_contexts() -> None:
     findings = dynamic_markdown_findings(
         "def render(item, quote):\n"
