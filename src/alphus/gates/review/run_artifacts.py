@@ -172,11 +172,16 @@ def _failure_evidence_findings(
     policy: RunArtifactPolicy,
 ) -> list[Finding]:
     runners = frozenset(policy.failure_child_runners)
-    runner_bindings = _assigned_call_names(function.body, runners)
+    local_bindings = _local_bindings(function)
+    configured_runners = frozenset(
+        runner
+        for runner in runners
+        if runner.split(".", maxsplit=1)[0] not in local_bindings
+    )
+    runner_bindings = _assigned_call_names(function.body, configured_runners)
     valid_results = frozenset(
         name for name in runner_bindings if _single_assignment(function, name)
     )
-    local_bindings = _local_bindings(function)
     findings: list[Finding] = []
     emitted: set[str] = set()
     for statement in function.body:
