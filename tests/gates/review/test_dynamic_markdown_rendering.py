@@ -9,6 +9,8 @@ from urllib.parse import quote, unquote
 
 from markdown_it import MarkdownIt
 
+from alphus.gates.review.dynamic_markdown import dynamic_markdown_findings
+
 
 class _StructureParser(HTMLParser):
     def __init__(self) -> None:
@@ -121,3 +123,27 @@ def test_unescaped_dynamic_table_value_changes_rendered_row_structure() -> None:
     # source-only advisory warns about: a dynamic pipe and newline create a
     # second table row and truncate the original cell's intended content.
     assert parsed.cells == ["Name", "Value", "API", "A", "injected", "row"]
+
+
+def test_unescaped_dynamic_link_label_can_inject_a_second_link() -> None:
+    label = "click](https://evil.example/)! ["
+    target = "https://good.example/"
+    source = 'def render(label, target):\n    return f"[{label}]({target})"\n'
+    findings = dynamic_markdown_findings(source, path="src/links.py")
+
+    rendered = MarkdownIt().render(f"[{label}]({target})")
+    parsed = _StructureParser()
+    parsed.feed(rendered)
+
+    assert {"link label", "link destination"} == {
+        context
+        for finding in findings
+        for context in ("link label", "link destination")
+        if context in finding.message
+    }
+    assert all(finding.path == "src/links.py" for finding in findings)
+    assert all("does not prove invalid rendered output" in f.message for f in findings)
+    assert parsed.links == [
+        ("https://evil.example/", "click"),
+        ("https://good.example/", ""),
+    ]

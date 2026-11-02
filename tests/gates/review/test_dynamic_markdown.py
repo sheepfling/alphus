@@ -254,6 +254,17 @@ def test_static_prose_non_markdown_and_reassigned_aliases_are_ignored() -> None:
     assert dynamic_markdown_findings(source) == []
 
 
+def test_static_link_and_non_markdown_link_prose_are_ignored() -> None:
+    source = (
+        "def render(label, target):\n"
+        '    static = "[documentation](https://example.test/guide)"\n'
+        '    prose = f"See {label} at {target}"\n'
+        "    return static + prose\n"
+    )
+
+    assert dynamic_markdown_findings(source) == []
+
+
 def test_unknown_branch_join_does_not_resolve_ambiguous_alias() -> None:
     findings = dynamic_markdown_findings(
         "def render(enabled, value):\n"
