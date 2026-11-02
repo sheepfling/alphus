@@ -38,6 +38,7 @@ from alphus.policy.repository import (
     VersionSyncPolicy,
 )
 from alphus.policy.review import (
+    ArrayRepresentationPolicy,
     FastApiPracticePolicy,
     InputContractPolicy,
     ManualMatrixKernelPolicy,
@@ -76,6 +77,7 @@ class CheckPolicies(StrictModel):
     path_discovery: PathDiscoveryPolicy | None = None
     numeric_literals: NumericLiteralPolicy | None = None
     manual_matrix_kernels: ManualMatrixKernelPolicy | None = None
+    array_representation_churn: ArrayRepresentationPolicy | None = None
     scipy_constants: ScipyConstantsPolicy | None = None
     test_quality: TestQualityPolicy | None = None
     input_contracts: InputContractPolicy | None = None

@@ -90,6 +90,39 @@ class ManualMatrixKernelPolicy(PythonSourceScanPolicy):
         return validate_patterns(values)
 
 
+class ArrayRepresentationPolicy(PythonSourceScanPolicy):
+    """Opt-in exact allowlist for array-to-list-to-array round trips."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    array_constructors: Annotated[tuple[str, ...], Field(min_length=1)]
+    list_conversion_methods: tuple[str, ...] = ("tolist",)
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("array_constructors")
+    @classmethod
+    def validate_constructor_names(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not value or any(not part.isidentifier() for part in value.split("."))
+            for value in values
+        ):
+            raise ValueError("array constructor names must be dotted identifiers")
+        require_unique(values, "array constructor names must be unique")
+        return tuple(values)
+
+    @field_validator("list_conversion_methods")
+    @classmethod
+    def validate_list_methods(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("list conversion methods must be identifiers")
+        require_unique(values, "list conversion methods must be unique")
+        return tuple(values)
+
+
 class ScipyConstantsPolicy(PythonSourceScanPolicy):
     """Advisory SciPy physical and unit-factor catalog for Python source."""
 

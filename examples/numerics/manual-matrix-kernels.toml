@@ -9,6 +9,13 @@ extensions = [".py"]
 exclude = []
 source_paths = ["src/numerics/*.py"]
 
+[checks.array_representation_churn]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/numerics/*.py"]
+array_constructors = ["numpy.asarray", "np.asarray"]
+list_conversion_methods = ["tolist"]
+
 [orchestration]
 default_profile = "numerical-review"
 
@@ -18,6 +25,12 @@ name = "Manual matrix kernels"
 rule = "manual-matrix-kernels"
 rollout = "provisional"
 
+[[orchestration.steps]]
+kind = "rule"
+name = "Array representation churn"
+rule = "array-representation-churn"
+rollout = "provisional"
+
 [[orchestration.profiles]]
 name = "numerical-review"
-steps = ["Manual matrix kernels"]
+steps = ["Manual matrix kernels", "Array representation churn"]

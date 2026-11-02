@@ -9,6 +9,7 @@ from typing import TypeAlias
 
 from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.execution.results import RuleOutput
+from alphus.gates.review.array_representation import check_array_representation
 from alphus.gates.review.frameworks.fastapi_practices import check_fastapi_practices
 from alphus.gates.review.frameworks.pydantic_practices import check_pydantic_practices
 from alphus.gates.review.frameworks.sqlalchemy_practices import (
@@ -40,6 +41,16 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
                 files,
                 require_policy(
                     config.checks.manual_matrix_kernels, "manual_matrix_kernels"
+                ),
+            )
+        ),
+        "array-representation-churn": lambda root, files, config: (
+            check_array_representation(
+                root,
+                files,
+                require_policy(
+                    config.checks.array_representation_churn,
+                    "array_representation_churn",
                 ),
             )
         ),

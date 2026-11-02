@@ -68,6 +68,7 @@ from alphus.policy.repository import (
     VersionSyncPolicy,
 )
 from alphus.policy.review import (
+    ArrayRepresentationPolicy,
     ErrorCodeCallSpec,
     FastApiFindingOverride,
     FastApiPracticePolicy,
@@ -108,6 +109,7 @@ from alphus.support.source_text import read_utf8_text
 __all__ = [
     "ArchitectureGraphCheckPolicy",
     "ArchitectureGraphPolicy",
+    "ArrayRepresentationPolicy",
     "CallableRegistryPolicy",
     "CheckPolicies",
     "CliPolicy",
