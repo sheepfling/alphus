@@ -379,6 +379,26 @@ def _runtime_attestation_findings(
     )
     if not module_names:
         return []
+    module_aliases = {module: {module} for module in module_names}
+    alias_owners = {module: module for module in module_names}
+    for statement in function.body:
+        match statement:
+            case ast.Assign(targets=[ast.Name(id=alias)], value=ast.Name(id=source)):
+                pass
+            case ast.AnnAssign(target=ast.Name(id=alias), value=ast.Name(id=source)):
+                pass
+            case _:
+                continue
+        owner = alias_owners.get(source)
+        if (
+            owner is None
+            or alias in alias_owners
+            or imports[owner].lineno >= statement.lineno
+            or not _single_assignment(function, alias)
+        ):
+            continue
+        alias_owners[alias] = owner
+        module_aliases[owner].add(alias)
     sinks = unshadowed(policy.runtime_attestation_sinks)
     metadata = unshadowed(policy.runtime_metadata_helpers)
     origins = unshadowed(policy.runtime_origin_helpers)
@@ -389,9 +409,10 @@ def _runtime_attestation_findings(
         if not any(_contains_configured_call(call, helper) for helper in metadata):
             continue
         if any(
-            _contains_configured_call(call, helper, module)
+            _contains_configured_call(call, helper, alias)
             for helper in origins
-            for module in module_names
+            for aliases in module_aliases.values()
+            for alias in aliases
         ):
             continue
         module = min(module_names)

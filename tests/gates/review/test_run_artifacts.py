@@ -471,11 +471,40 @@ def test_runtime_origin_binding_and_unknown_import_styles_abstain() -> None:
         "        distribution_version('example-engine'), module_origin(engine)\n"
         "    )\n"
     )
+    aliased_origin = (
+        "def run():\n"
+        "    engine = load_runtime_module('example-engine')\n"
+        "    runtime = engine\n"
+        "    record_runtime(\n"
+        "        distribution_version('example-engine'), module_origin(runtime)\n"
+        "    )\n"
+    )
+    rebound_alias = (
+        "def run():\n"
+        "    engine = load_runtime_module('example-engine')\n"
+        "    runtime = engine\n"
+        "    runtime = replacement\n"
+        "    record_runtime(\n"
+        "        distribution_version('example-engine'), module_origin(runtime)\n"
+        "    )\n"
+    )
+    nested_alias = (
+        "def run():\n"
+        "    engine = load_runtime_module('example-engine')\n"
+        "    def nested():\n"
+        "        runtime = engine\n"
+        "    record_runtime(\n"
+        "        distribution_version('example-engine'), module_origin(runtime)\n"
+        "    )\n"
+    )
     assert run_artifact_findings(bound, "src/harness.py", configured) == []
     assert run_artifact_findings(unsupported, "src/harness.py", configured) == []
     assert (
         run_artifact_findings(comprehension_target, "src/harness.py", configured) == []
     )
+    assert run_artifact_findings(aliased_origin, "src/harness.py", configured) == []
+    assert len(run_artifact_findings(rebound_alias, "src/harness.py", configured)) == 1
+    assert len(run_artifact_findings(nested_alias, "src/harness.py", configured)) == 1
 
 
 def test_runtime_attestation_abstains_on_shadowed_import_helper() -> None:

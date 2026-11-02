@@ -46,10 +46,13 @@ Those cases remain unknown.
 
 Enable `runtime_attestation_gap` and configure the runtime module name,
 `runtime_import_helpers`, `runtime_metadata_helpers`, `runtime_origin_helpers`,
-and `runtime_attestation_sinks`. The first version recognizes a module assigned
-directly from a configured import helper and a configured metadata check nested
-in a configured sink. It suppresses that candidate only when the same sink
-contains a configured origin helper called with that module variable.
+and `runtime_attestation_sinks`. The rule recognizes a module assigned directly
+from a configured import helper and a configured metadata check nested in a
+configured sink. A simple single-assignment local alias copied after the import
+is also followed within the same function. Branch-local and nested-scope aliases
+are not followed, and rebinding makes an alias inconclusive. The candidate is
+suppressed only when the same sink contains a configured origin helper called
+with the imported module or one of those tracked aliases.
 
 This identifies a declared evidence gap. It does not determine which code was
 imported, validate metadata, or establish that an origin path is a cryptographic
