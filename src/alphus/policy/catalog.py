@@ -58,6 +58,7 @@ RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
         "manual-matrix-kernels": RuleSpec(
             "manual_matrix_kernels", RuleOutputShape.FINDINGS
         ),
+        "manual-elimination": RuleSpec("manual_elimination", RuleOutputShape.FINDINGS),
         "array-representation-churn": RuleSpec(
             "array_representation_churn", RuleOutputShape.FINDINGS
         ),

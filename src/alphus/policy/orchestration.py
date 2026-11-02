@@ -42,6 +42,7 @@ from alphus.policy.review import (
     CholeskyRecurrencePolicy,
     FastApiPracticePolicy,
     InputContractPolicy,
+    ManualEliminationPolicy,
     ManualMatrixKernelPolicy,
     NumericLiteralPolicy,
     PositionalInterfacePolicy,
@@ -82,6 +83,7 @@ class CheckPolicies(StrictModel):
     path_discovery: PathDiscoveryPolicy | None = None
     numeric_literals: NumericLiteralPolicy | None = None
     manual_matrix_kernels: ManualMatrixKernelPolicy | None = None
+    manual_elimination: ManualEliminationPolicy | None = None
     array_representation_churn: ArrayRepresentationPolicy | None = None
     cholesky_recurrence: CholeskyRecurrencePolicy | None = None
     manual_quaternion_conjugation: QuaternionConjugationPolicy | None = None

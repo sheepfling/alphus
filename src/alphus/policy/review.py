@@ -90,6 +90,35 @@ class ManualMatrixKernelPolicy(PythonSourceScanPolicy):
         return validate_patterns(values)
 
 
+class ManualEliminationPolicy(PythonSourceScanPolicy):
+    """Consumer-declared scope for a direct-list elimination kernel shape."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    function_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    matrix_name: str
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("function_names")
+    @classmethod
+    def validate_function_names(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("elimination function names must be identifiers")
+        require_unique(values, "elimination function names must be unique")
+        return tuple(values)
+
+    @field_validator("matrix_name")
+    @classmethod
+    def validate_matrix_name(cls, value: str) -> str:
+        if not value.isidentifier():
+            raise ValueError("elimination matrix name must be an identifier")
+        return value
+
+
 class ArrayRepresentationContract(StrictModel):
     """One consumer-declared array variable inside a selected numerical function."""
 

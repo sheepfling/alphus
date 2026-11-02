@@ -17,6 +17,7 @@ from alphus.gates.review.frameworks.sqlalchemy_practices import (
     check_sqlalchemy_practices,
 )
 from alphus.gates.review.input_contracts import check_input_contracts
+from alphus.gates.review.manual_elimination import check_manual_elimination
 from alphus.gates.review.manual_matrix_kernels import check_manual_matrix_kernels
 from alphus.gates.review.manual_quaternion_conjugation import (
     check_manual_quaternion_conjugation,
@@ -56,6 +57,11 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
                     config.checks.manual_matrix_kernels, "manual_matrix_kernels"
                 ),
             )
+        ),
+        "manual-elimination": lambda root, files, config: check_manual_elimination(
+            root,
+            files,
+            require_policy(config.checks.manual_elimination, "manual_elimination"),
         ),
         "array-representation-churn": lambda root, files, config: (
             check_array_representation(

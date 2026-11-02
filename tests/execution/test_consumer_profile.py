@@ -31,6 +31,10 @@ def test_manual_matrix_kernel_example_is_scoped_and_provisional() -> None:
     policy = config.checks.manual_matrix_kernels
     assert policy is not None
     assert policy.source_paths == ("src/numerics/*.py",)
+    elimination_policy = config.checks.manual_elimination
+    assert elimination_policy is not None
+    assert elimination_policy.function_names == ("invert_matrix",)
+    assert elimination_policy.matrix_name == "matrix"
     churn_policy = config.checks.array_representation_churn
     assert churn_policy is not None
     assert churn_policy.loop_contracts[0].path == "src/numerics/kernels.py"
@@ -54,6 +58,7 @@ def test_manual_matrix_kernel_example_is_scoped_and_provisional() -> None:
     assert "Quaternion product review" in plan.steps
     assert "Quaternion normalization review" in plan.steps
     assert "Quaternion inversion review" in plan.steps
+    assert "Manual elimination review" in plan.steps
 
 
 def test_markdown_example_pairs_two_fixers_without_duplicate_missing_links() -> None:

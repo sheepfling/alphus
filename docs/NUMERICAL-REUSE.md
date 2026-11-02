@@ -103,8 +103,19 @@ does not establish that a dependency is suitable or that the kernel is wrong or
 slow. Preserve zero and non-finite behavior, component convention, dtype,
 returned representation, and non-unit semantics.
 
-Handwritten elimination and frame-transform recognition remain unimplemented.
-So do quaternion vector rotation/sandwich or matrix conversion, and Cholesky
+`manual-elimination` recognizes one configured direct-list Gauss-Jordan shape:
+maximum-absolute pivot selection over the current column, an in-place row swap,
+pivot-row normalization by its diagonal, then elimination of every other row
+using the same pivot column. It requires those operations in one top-level or
+class method with direct matrix indexing and no intervening statements. Aliases,
+other matrix representations, separate RHS vectors, alternate pivot APIs,
+branches and factorization variants are out of scope. The finding identifies a
+handwritten elimination candidate; it does not imply that a matrix inverse is
+needed or that a library routine preserves representation, pivoting, stability,
+dtype or failure behavior.
+
+Frame-transform recognition remains unimplemented. So do quaternion vector
+rotation/sandwich or matrix conversion, and Cholesky
 covariance/domain checks. The current examples demonstrate only the explicitly
 documented syntax families above. The normalization and inversion grammars have
 synthetic positive/negative coverage but no reviewed real-consumer calibration

@@ -37,6 +37,7 @@ QualityRuleName: TypeAlias = Literal[
     "git-history",
     "numeric-literals",
     "manual-matrix-kernels",
+    "manual-elimination",
     "array-representation-churn",
     "cholesky-recurrence",
     "manual-quaternion-conjugation",

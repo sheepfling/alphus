@@ -73,6 +73,7 @@ def test_gate_themes_own_their_runner_mappings() -> None:
             {
                 "numeric-literals",
                 "manual-matrix-kernels",
+                "manual-elimination",
                 "array-representation-churn",
                 "cholesky-recurrence",
                 "manual-quaternion-conjugation",

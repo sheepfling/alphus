@@ -9,6 +9,13 @@ extensions = [".py"]
 exclude = []
 source_paths = ["src/numerics/*.py"]
 
+[checks.manual_elimination]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/numerics/*.py"]
+function_names = ["invert_matrix"]
+matrix_name = "matrix"
+
 [checks.array_representation_churn]
 extensions = [".py"]
 exclude = []
@@ -70,6 +77,12 @@ rollout = "provisional"
 
 [[orchestration.steps]]
 kind = "rule"
+name = "Manual elimination review"
+rule = "manual-elimination"
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "rule"
 name = "Array representation churn"
 rule = "array-representation-churn"
 rollout = "provisional"
@@ -106,4 +119,4 @@ rollout = "provisional"
 
 [[orchestration.profiles]]
 name = "numerical-review"
-steps = ["Manual matrix kernels", "Array representation churn", "Cholesky recurrence review", "Quaternion product review", "Quaternion conjugation review", "Quaternion normalization review", "Quaternion inversion review"]
+steps = ["Manual matrix kernels", "Manual elimination review", "Array representation churn", "Cholesky recurrence review", "Quaternion product review", "Quaternion conjugation review", "Quaternion normalization review", "Quaternion inversion review"]
