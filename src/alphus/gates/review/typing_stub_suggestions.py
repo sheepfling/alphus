@@ -122,12 +122,17 @@ def _has_inline_typing_for_imports(
     package_parts: tuple[str, ...],
     root_import: str,
     imported_names: Iterable[str],
+    checkers: tuple[str, ...],
 ) -> bool:
-    """Require a package marker or exact stub coverage for every import."""
+    """Require checker-supported markers or exact stubs for every import."""
     file_parts = {item.parts for item in files}
     names = tuple(imported_names)
     if not names:
         return False
+    # Pyright was verified to consume an exact bundled module stub without a
+    # package marker. MyPy requires py.typed for mixed runtime/stub packages;
+    # do not generalize the Pyright result across checker scopes.
+    unmarked_stub_supported = checkers == ("pyright",)
     for name in names:
         relative = name.removeprefix(root_import).lstrip(".")
         suffix = tuple(part for part in relative.split(".") if part)
@@ -140,9 +145,13 @@ def _has_inline_typing_for_imports(
             (*module_parts, "__init__.pyi"),
             (*module_parts[:-1], f"{module_parts[-1]}.pyi"),
         )
-        if not any(parts in file_parts for parts in typed_markers) and not any(
+        if any(parts in file_parts for parts in typed_markers):
+            continue
+        if unmarked_stub_supported and any(
             parts in file_parts for parts in module_stubs
         ):
+            continue
+        else:
             return False
     return True
 
@@ -396,6 +405,7 @@ def check_typing_stub_suggestions(
                 package_parts,
                 candidate.import_name,
                 imported_names,
+                relevant_checkers,
             ):
                 continue
         runtime_supported = SpecifierSet(candidate.supported_runtime_versions).contains(

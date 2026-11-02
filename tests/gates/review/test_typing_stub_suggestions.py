@@ -5,6 +5,7 @@ import sys
 from collections.abc import Iterable
 from importlib import metadata
 from pathlib import Path
+from typing import Literal
 
 import pytest
 from pytest import MonkeyPatch
@@ -17,11 +18,13 @@ from alphus.config import (
 from alphus.gates.review import typing_stub_suggestions as gate
 
 
-def _policy() -> TypingStubSuggestionPolicy:
+def _policy(
+    checkers: tuple[Literal["mypy", "pyright", "ty"], ...] = ("mypy",),
+) -> TypingStubSuggestionPolicy:
     return TypingStubSuggestionPolicy(
         extensions=(".py",),
         typing_groups=("typing",),
-        checkers=("mypy",),
+        checkers=checkers,
         candidates=(
             TypingStubCandidate(
                 import_name="yaml",
@@ -29,7 +32,7 @@ def _policy() -> TypingStubSuggestionPolicy:
                 stub_distribution="types-PyYAML",
                 supported_runtime_versions=">=6,<7",
                 supported_python_versions=">=3.11,<4",
-                checkers=("mypy",),
+                checkers=checkers,
                 package_path="yaml",
                 stub_version_specifier=">=6,<7",
             ),
@@ -38,11 +41,14 @@ def _policy() -> TypingStubSuggestionPolicy:
 
 
 def _default_policy(
-    *, disabled_imports: tuple[str, ...] = ()
+    *,
+    disabled_imports: tuple[str, ...] = (),
+    checkers: tuple[Literal["mypy", "pyright", "ty"], ...] = ("mypy", "pyright"),
 ) -> TypingStubSuggestionPolicy:
     return TypingStubSuggestionPolicy(
         extensions=(".py",),
         typing_groups=("dev",),
+        checkers=checkers,
         disabled_imports=disabled_imports,
     )
 
@@ -568,16 +574,30 @@ class _ModuleStubDistribution(_Distribution):
     files = (Path("yaml.pyi"),)
 
 
-def test_suppresses_a_bundled_single_module_stub(
-    tmp_path: Path, monkeypatch: MonkeyPatch
+@pytest.mark.parametrize(
+    ("checkers", "expected_findings"),
+    [
+        (("pyright",), 0),
+        (("mypy",), 1),
+        (("mypy", "pyright"), 1),
+    ],
+)
+def test_bundled_single_module_stub_is_checker_scoped(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    checkers: tuple[Literal["mypy", "pyright"], ...],
+    expected_findings: int,
 ) -> None:
     _checkout(tmp_path)
     monkeypatch.setattr(
         gate.metadata, "distribution", lambda _: _ModuleStubDistribution()
     )
-    assert not gate.check_typing_stub_suggestions(
-        tmp_path, _python_sources(tmp_path), _policy()
+    findings = gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), _policy(checkers)
     )
+    assert len(findings) == expected_findings
+    if expected_findings:
+        assert "types-PyYAML" in findings[0].message
 
 
 def test_builtin_yaml_mapping_works_with_dev_group(
@@ -824,12 +844,23 @@ def test_builtin_pandas_suppresses_suggestion_for_matching_root_stub(
     )
 
     assert not gate.check_typing_stub_suggestions(
-        tmp_path, _python_sources(tmp_path), _default_policy()
+        tmp_path, _python_sources(tmp_path), _default_policy(checkers=("pyright",))
     )
 
 
-def test_builtin_pandas_counts_only_observed_leaf_runtime_stub(
-    tmp_path: Path, monkeypatch: MonkeyPatch
+@pytest.mark.parametrize(
+    ("checkers", "leaf_findings"),
+    [
+        (("pyright",), 0),
+        (("mypy",), 1),
+        (("mypy", "pyright"), 1),
+    ],
+)
+def test_builtin_pandas_leaf_stub_is_checker_scoped_and_module_local(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    checkers: tuple[Literal["mypy", "pyright"], ...],
+    leaf_findings: int,
 ) -> None:
     source = tmp_path / "app.py"
     source.write_text("import pandas._libs.tslibs.timestamps\n", encoding="utf-8")
@@ -848,16 +879,17 @@ def test_builtin_pandas_counts_only_observed_leaf_runtime_stub(
 
     monkeypatch.setattr(gate.metadata, "distribution", distributions)
 
-    assert not gate.check_typing_stub_suggestions(
-        tmp_path, _python_sources(tmp_path), _default_policy()
+    findings = gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), _default_policy(checkers=checkers)
     )
+    assert len(findings) == leaf_findings
 
     source.write_text(
         "import pandas\nimport pandas._libs.tslibs.timestamps\n",
         encoding="utf-8",
     )
     findings = gate.check_typing_stub_suggestions(
-        tmp_path, _python_sources(tmp_path), _default_policy()
+        tmp_path, _python_sources(tmp_path), _default_policy(checkers=checkers)
     )
     assert len(findings) == 1
     assert "pandas-stubs" in findings[0].message

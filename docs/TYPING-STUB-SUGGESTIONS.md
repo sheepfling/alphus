@@ -54,19 +54,24 @@ not yet a `py.typed` library in its
 [3.1.0 source](https://github.com/pandas-dev/pandas/blob/v3.1.0/pandas/__init__.py).
 That release also bundles leaf extension stubs such as
 [`timestamps.pyi`][pandas-timestamps]. The scanner checks for a package marker
-or a stub matching every observed module. PEP 561 requires `py.typed` to mark
-a package as supporting inline typing, but an exact module `.pyi` can still
-provide module-local typing without asserting that the rest of the package is
-typed. A focused installed-layout Pyright regression confirms that the tested
-checker uses the matching pandas leaf stub without `pandas/py.typed`; removing
-that `.pyi` makes the implementation's inferred type apply instead. The rule
-credits such a file only for that exact observed import: a root `import pandas`
-or any other observed module still needs its own matching stub or a package
-marker before the recommendation is suppressed. See the
-[PEP 561 packaging and resolution rules][pep561].
+or matching stub coverage for every observed module. PEP 561 requires
+`py.typed` for package-wide inline typing. MyPy also documents that packages
+mixing runtime and stub files require that marker. The checker scope therefore
+matters when a runtime distribution contains a matching `.pyi` without the
+marker: only a Pyright-only scope treats that file as module-local typing. A
+focused installed-layout Pyright regression confirms that the tested checker
+uses the matching pandas leaf stub without `pandas/py.typed`; removing that
+`.pyi` makes the implementation's inferred type apply instead. If MyPy or
+another checker is in scope, the advisory remains unless a marker is present.
+Even for Pyright, the rule credits a `.pyi` only for that exact observed
+import: a root `import pandas` or any other observed module still needs its own
+matching stub or a package marker before the recommendation is suppressed. See
+the [PEP 561 packaging and resolution rules][pep561] and [MyPy's mixed-package
+guidance][mypy-installed].
 
 [pandas-timestamps]: https://github.com/pandas-dev/pandas/blob/v3.1.0/pandas/_libs/tslibs/timestamps.pyi
 [pep561]: https://typing.python.org/en/latest/spec/distributing.html#packaging-type-information
+[mypy-installed]: https://mypy.readthedocs.io/en/stable/installed_packages.html#creating-pep-561-compatible-packages
 [types-Pillow on PyPI](https://pypi.org/project/types-Pillow/) is deliberately
 not mapped: its only release targets Pillow 10.2 and directs users to uninstall
 it with Pillow 10.3+, which includes annotations or stubs.
