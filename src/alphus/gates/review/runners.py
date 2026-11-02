@@ -55,6 +55,8 @@ ReviewRunner: TypeAlias = Callable[
     [Path, Sequence[Path], QualityGateConfig], RuleOutput
 ]
 
+__all__ = ["REVIEW_RULE_RUNNERS"]
+
 REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
     {
         "numeric-literals": lambda root, files, config: check_numeric_literals(

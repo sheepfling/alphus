@@ -9,6 +9,7 @@ from typing import get_args
 from alphus.execution.dispatch import RULE_RUNNERS
 from alphus.gates.hygiene.runners import HYGIENE_RULE_RUNNERS
 from alphus.gates.repository.runners import REPOSITORY_RULE_RUNNERS
+from alphus.gates.review import runners as review_runners
 from alphus.gates.review.runners import REVIEW_RULE_RUNNERS
 from alphus.gates.source.runners import SOURCE_RULE_RUNNERS
 from alphus.gates.vcs.runners import VCS_RULE_RUNNERS
@@ -129,6 +130,10 @@ def test_gate_themes_own_their_runner_mappings() -> None:
     for runners, expected in themes:
         assert set(runners) == expected
         assert all(RULE_RUNNERS[name] is runner for name, runner in runners.items())
+
+
+def test_review_runner_registry_is_an_explicit_module_export() -> None:
+    assert review_runners.__all__ == ["REVIEW_RULE_RUNNERS"]
 
 
 def test_explicit_runner_adapters_cover_the_public_rule_catalog() -> None:
