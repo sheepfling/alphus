@@ -686,9 +686,10 @@ class _MarkdownAnalyzer:
                         self._scan(final)
                 case ast.Match(cases=cases):
                     branches = tuple(case.body for case in cases) + ((),)
-                    shadowed_names = tuple(
+                    shadowed_names: list[Iterable[str]] = [
                         _pattern_bindings(case.pattern) for case in cases
-                    ) + (frozenset(),)
+                    ]
+                    shadowed_names.append(set())
                     self._branch(branches, branch_shadowed_names=shadowed_names)
                 case _:
                     pass
