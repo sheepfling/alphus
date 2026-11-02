@@ -77,6 +77,16 @@ _BUILTIN_CANDIDATES = (
         package_path="requests",
         stub_version_specifier="==2.33.0.*",
     ),
+    TypingStubCandidate(
+        import_name="redis",
+        runtime_distribution="redis",
+        stub_distribution="types-redis",
+        supported_runtime_versions="==4.6.0",
+        supported_python_versions=">=3.8,<4",
+        checkers=("mypy", "pyright"),
+        package_path="redis",
+        stub_version_specifier="==4.6.0.*",
+    ),
 )
 
 

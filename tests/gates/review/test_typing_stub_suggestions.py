@@ -254,6 +254,26 @@ class _OldRequestsDistribution:
     files = ()
 
 
+class _RedisDistribution:
+    version = "4.6.0"
+    files = ()
+
+
+class _RedisStubDistribution:
+    version = "4.6.0.20241004"
+    files = ()
+
+
+class _TypedRedisDistribution:
+    version = "5.0.0"
+    files = (Path("redis/py.typed"),)
+
+
+class _UnverifiedRedisDistribution:
+    version = "4.7.0"
+    files = ()
+
+
 def _distribution(name: str) -> object:
     if name == "types-PyYAML":
         return _PyYAMLStubDistribution()
@@ -525,6 +545,99 @@ def test_builtin_requests_does_not_recommend_outside_verified_runtime_range(
     )
     monkeypatch.setattr(
         gate.metadata, "distribution", lambda _: _OldRequestsDistribution()
+    )
+
+    findings = gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), _default_policy()
+    )
+
+    assert len(findings) == 1
+    assert "outside that verified range" in findings[0].message
+    assert "no stub recommendation was made" in findings[0].message
+
+
+def test_builtin_redis_mapping_recommends_matching_stubs_for_dev_group(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    (tmp_path / "app.py").write_text("import redis\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\ndependencies = ["redis==4.6.0"]\n'
+        "[project.optional-dependencies]\ndev = []\n",
+        encoding="utf-8",
+    )
+
+    def distributions(name: str) -> object:
+        if name == "redis":
+            return _RedisDistribution()
+        if name == "types-redis":
+            raise metadata.PackageNotFoundError(name)
+        return _distribution(name)
+
+    monkeypatch.setattr(gate.metadata, "distribution", distributions)
+
+    findings = gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), _default_policy()
+    )
+
+    assert len(findings) == 1
+    assert "types-redis" in findings[0].message
+    assert "redis 4.6.0" in findings[0].message
+    assert "typing group(s) dev" in findings[0].message
+
+
+def test_builtin_redis_suppresses_external_stubs_when_runtime_is_inline_typed(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    (tmp_path / "app.py").write_text("import redis\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\ndependencies = ["redis>=5,<6"]\n'
+        "[project.optional-dependencies]\ndev = []\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        gate.metadata, "distribution", lambda _: _TypedRedisDistribution()
+    )
+
+    assert not gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), _default_policy()
+    )
+
+
+def test_builtin_redis_skips_stub_already_declared_in_selected_dev_group(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    (tmp_path / "app.py").write_text("import redis\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\ndependencies = ["redis==4.6.0"]\n'
+        '[project.optional-dependencies]\ndev = ["types-redis==4.6.0.20241004"]\n',
+        encoding="utf-8",
+    )
+
+    def distributions(name: str) -> object:
+        if name == "redis":
+            return _RedisDistribution()
+        if name == "types-redis":
+            return _RedisStubDistribution()
+        return _distribution(name)
+
+    monkeypatch.setattr(gate.metadata, "distribution", distributions)
+
+    assert not gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), _default_policy()
+    )
+
+
+def test_builtin_redis_does_not_recommend_for_unverified_runtime_versions(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    (tmp_path / "app.py").write_text("import redis\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\ndependencies = ["redis==4.7.0"]\n'
+        "[project.optional-dependencies]\ndev = []\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        gate.metadata, "distribution", lambda _: _UnverifiedRedisDistribution()
     )
 
     findings = gate.check_typing_stub_suggestions(
