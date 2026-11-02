@@ -778,7 +778,7 @@ def _cpp_include_evidence(
             if match is None:
                 continue
             include = match.group(1)
-            if "\\" in include or include.startswith("/"):
+            if "\\" in include or PurePosixPath(include).is_absolute():
                 unresolved += 1
                 continue
             target = posixpath.normpath(
