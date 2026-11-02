@@ -81,6 +81,8 @@ from alphus.policy.review import (
     SqlAlchemyPracticePolicy,
     TestQualityExclusion,
     TestQualityPolicy,
+    TypingStubCandidate,
+    TypingStubSuggestionPolicy,
 )
 from alphus.policy.sources import (
     CliPolicy,
@@ -175,6 +177,8 @@ __all__ = [
     "TestQualityPolicy",
     "TrackedPathRule",
     "TrackedSuffixRule",
+    "TypingStubCandidate",
+    "TypingStubSuggestionPolicy",
     "VersionSource",
     "VersionSyncPolicy",
     "load_config",

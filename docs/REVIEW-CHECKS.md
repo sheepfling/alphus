@@ -20,6 +20,15 @@ Other consumers retain the default error threshold unless they explicitly set
 `orchestration.failure_threshold = "warning"` or a rule step's `severity`.
 Native command failures still fail.
 
+## Third-party typing stubs
+
+Selector: `typing-stub-suggestions`. This opt-in informational rule reads
+explicit import/distribution mappings and PEP 621 dependency groups. It checks
+the installed runtime version against configured bounds and skips packages
+whose installed distribution includes `py.typed` or `.pyi` files. See the
+[typing stub suggestions guide](TYPING-STUB-SUGGESTIONS.md) for configuration,
+examples, and the limits of its static import analysis.
+
 ## Numeric literals
 
 Selector: `numeric-literals`. IDs: `alphus/python/none/style/inline-constant` and
