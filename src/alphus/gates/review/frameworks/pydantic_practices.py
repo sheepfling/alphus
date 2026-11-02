@@ -1104,14 +1104,65 @@ def _known_non_utc_zone(expression: ast.expr, aliases: ImportAliases) -> bool:
             return False
 
 
-def _contains_astimezone(expression: ast.expr, aliases: ImportAliases) -> bool:
+def _is_known_utc_zone(expression: ast.expr, aliases: ImportAliases) -> bool:
+    match expression:
+        case ast.Attribute() if canonical_expression_name(expression, aliases) in {
+            "datetime.timezone.utc",
+            "datetime.UTC",
+        }:
+            return True
+        case ast.Call(func=function, args=[ast.Constant(value=str() as zone)]) if (
+            canonical_expression_name(function, aliases)
+            in {"zoneinfo.ZoneInfo", "backports.zoneinfo.ZoneInfo"}
+        ):
+            return zone.upper() in {
+                "UTC",
+                "ETC/UTC",
+                "GMT",
+                "ETC/GMT",
+                "ETC/GMT0",
+                "ETC/GMT-0",
+                "ETC/GMT+0",
+                "ETC/UCT",
+                "ETC/GREENWICH",
+                "GMT0",
+                "GMT+0",
+                "GMT-0",
+                "GREENWICH",
+                "UCT",
+                "UNIVERSAL",
+                "ETC/UNIVERSAL",
+                "ZULU",
+                "ETC/ZULU",
+                "Z",
+            }
+        case _:
+            return False
+
+
+def _contains_utc_astimezone(
+    expression: ast.expr, aliases: ImportAliases, target: ast.Call
+) -> bool:
+    """Recognize explicit UTC conversion, not any call to ``astimezone``."""
     for child in ast.walk(expression):
         match child:
-            case ast.Call(func=func) if canonical_expression_name(func, aliases) in {
-                "datetime.datetime.astimezone",
-                "astimezone",
-            }:
-                return True
+            case ast.Call(
+                func=ast.Attribute(value=receiver, attr="astimezone"), args=[zone]
+            ):
+                if _is_known_utc_zone(zone, aliases) and any(
+                    item is target for item in ast.walk(receiver)
+                ):
+                    return True
+            case (
+                ast.Call(
+                    func=ast.Attribute(attr="astimezone"),
+                    keywords=[ast.keyword(arg="tz", value=zone)],
+                ) as conversion
+            ):
+                if _is_known_utc_zone(zone, aliases) and any(
+                    item is target for item in ast.walk(conversion.func.value)
+                ):
+                    return True
             case _:
                 pass
     return False
@@ -1176,21 +1227,22 @@ def _utc_persistence_lines(
                 (item.value for item in call.keywords if item.arg == contract.keyword),
                 None,
             )
-            match argument:
-                case ast.Call() as capture if canonical_expression_name(
-                    capture.func, aliases
-                ) in {"datetime.datetime.now", "datetime.now"}:
-                    pass
-                case _:
+            for capture in ast.walk(argument):
+                if not isinstance(capture, ast.Call) or (
+                    canonical_expression_name(capture.func, aliases)
+                    not in {"datetime.datetime.now", "datetime.now"}
+                ):
                     continue
-            if _contains_astimezone(capture, aliases):
-                continue
-            zone = next(
-                (item.value for item in capture.keywords if item.arg == "tz"),
-                capture.args[0] if capture.args else None,
-            )
-            if zone is not None and _known_non_utc_zone(zone, aliases):
-                lines.add(call.lineno)
+                zone = next(
+                    (item.value for item in capture.keywords if item.arg == "tz"),
+                    capture.args[0] if capture.args else None,
+                )
+                if (
+                    zone is not None
+                    and _known_non_utc_zone(zone, aliases)
+                    and not _contains_utc_astimezone(argument, aliases, capture)
+                ):
+                    lines.add(call.lineno)
     return sorted(lines)
 
 

@@ -391,11 +391,15 @@ call = "writer.save"
 keyword = "created_at"
 ```
 
-This opt-in advisory reports only a direct `datetime.now(ZoneInfo("..."))`
-capture with an explicit non-UTC zone literal passed to that exact keyword.
-Unknown zones, aliases through variables, validators and cross-function flow
-remain unreported. It does not establish consumer meaning from a field name,
-and it does not replace Ruff DTZ rules for naive clock captures.
+This opt-in advisory reports a known non-UTC `datetime.now(ZoneInfo("..."))`
+capture passed to that exact keyword unless the same captured value is
+explicitly normalized with `astimezone(timezone.utc)` or a recognized zero-
+offset `ZoneInfo` alias. Calling `astimezone()` without an explicit target,
+converting to another named zone, or using `replace(tzinfo=...)` does not prove
+UTC normalization. Unknown zones, aliases through variables, validators and
+cross-function flow remain unreported. It does not establish consumer meaning
+from a field name, and it does not replace Ruff DTZ rules for naive clock
+captures.
 
 To include one model exposed by another interface, set
 `report_external_model_docs = true` and add its class name, for example:

@@ -192,6 +192,36 @@ def test_utc_persistence_accepts_additional_zero_offset_zone_aliases(zone: str) 
     assert pydantic_practice_findings(source, policy, path="src/storage.py") == []
 
 
+def test_utc_persistence_requires_explicit_utc_normalization() -> None:
+    source = (
+        "from datetime import datetime, timezone\n"
+        "from zoneinfo import ZoneInfo\n"
+        "def save_created_at(writer):\n"
+        "    writer.save(created_at=datetime.now(ZoneInfo('Europe/Paris')).astimezone(timezone.utc))\n"
+        "    writer.save(created_at=datetime.now(ZoneInfo('Europe/Paris')).astimezone(ZoneInfo('America/Los_Angeles')))\n"
+        "    writer.save(created_at=datetime.now(ZoneInfo('Europe/Paris')).astimezone())\n"
+        "    writer.save(created_at=datetime.now(ZoneInfo('Europe/Paris')).replace(tzinfo=timezone.utc))\n"
+    )
+    policy = _policy(
+        utc_persistence_contracts=(
+            {
+                "path": "src/storage.py",
+                "function": "save_created_at",
+                "call": "writer.save",
+                "keyword": "created_at",
+            },
+        )
+    )
+
+    findings = pydantic_practice_findings(source, policy, path="src/storage.py")
+
+    assert [(item.line, item.rule_id) for item in findings] == [
+        (5, "alphus/python/pydantic/correctness/non-utc-persistence"),
+        (6, "alphus/python/pydantic/correctness/non-utc-persistence"),
+        (7, "alphus/python/pydantic/correctness/non-utc-persistence"),
+    ]
+
+
 def test_utc_persistence_ignores_nested_function_outside_selected_boundary() -> None:
     source = (
         "from datetime import datetime\n"
