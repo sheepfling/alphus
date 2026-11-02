@@ -45,6 +45,7 @@ QualityRuleName: TypeAlias = Literal[
     "provenance-as-ownership",
     "semantic-work-in-presentation",
     "parallel-normalization",
+    "patch-cascade",
     "scipy-constants",
     "test-quality",
     "input-contracts",

@@ -62,6 +62,10 @@ def test_reports_filter_capture_returned_immediately() -> None:
             "alias = table_paths\n    alias.clear()\n    return [",
         ),
         _PATH_ONLY.replace(
+            "return [",
+            "def clear_paths():\n        table_paths.clear()\n    clear_paths()\n    return [",
+        ),
+        _PATH_ONLY.replace(
             "return [p for p in paragraphs if p.source.path not in table_paths]",
             "discarded = [p for p in paragraphs if p.source.path not in table_paths]\n"
             "    return paragraphs",

@@ -417,6 +417,72 @@ class ParallelNormalizationPolicy(PythonSourceScanPolicy):
         return self
 
 
+class PatchCascadeFunctionPolicy(StrictModel):
+    """Declared repair sites inside one consumer-identified general parser."""
+
+    function_name: str
+    selector_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    repair_ids: Annotated[tuple[str, ...], Field(min_length=2)]
+    normalization_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    function_contract: Literal["general-parser"]
+
+    @field_validator("function_name")
+    @classmethod
+    def validate_function_name(cls, value: str) -> str:
+        if not value.isidentifier():
+            raise ValueError("patch-cascade function names must be identifiers")
+        return value
+
+    @field_validator("selector_names")
+    @classmethod
+    def validate_selectors(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("patch-cascade selectors must be identifiers")
+        require_unique(values, "patch-cascade selectors must be unique")
+        return tuple(values)
+
+    @field_validator("repair_ids")
+    @classmethod
+    def validate_repair_ids(cls, values: Sequence[str]) -> tuple[str, ...]:
+        result = tuple(validate_one_line_message(value) for value in values)
+        if any(not value for value in result):
+            raise ValueError("patch-cascade repair IDs must be non-empty")
+        require_unique(result, "patch-cascade repair IDs must be unique")
+        return result
+
+    @field_validator("normalization_helpers")
+    @classmethod
+    def validate_helpers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not value or any(not part.isidentifier() for part in value.split("."))
+            for value in values
+        ):
+            raise ValueError("normalization helpers must be dotted identifiers")
+        require_unique(values, "normalization helpers must be unique")
+        return tuple(values)
+
+
+class PatchCascadePolicy(PythonSourceScanPolicy):
+    """Opt-in advisory for multiple declared source-specific repair branches."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    functions: Annotated[tuple[PatchCascadeFunctionPolicy, ...], Field(min_length=1)]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @model_validator(mode="after")
+    def validate_function_names(self) -> Self:
+        require_unique(
+            tuple(function.function_name for function in self.functions),
+            "patch-cascade function names must be unique",
+        )
+        return self
+
+
 class ScipyConstantsPolicy(PythonSourceScanPolicy):
     """Advisory SciPy physical and unit-factor catalog for Python source."""
 

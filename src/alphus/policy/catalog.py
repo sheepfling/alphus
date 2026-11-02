@@ -80,6 +80,7 @@ RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
         "parallel-normalization": RuleSpec(
             "parallel_normalization", RuleOutputShape.FINDINGS
         ),
+        "patch-cascade": RuleSpec("patch_cascade", RuleOutputShape.FINDINGS),
         "scipy-constants": RuleSpec("scipy_constants", RuleOutputShape.FINDINGS),
         "test-quality": RuleSpec("test_quality", RuleOutputShape.FINDINGS),
         "input-contracts": RuleSpec("input_contracts", RuleOutputShape.FINDINGS),

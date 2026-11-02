@@ -68,6 +68,19 @@ def _path_set_assignments(
     function: ast.FunctionDef, policy: ProvenanceOwnershipPolicy
 ) -> dict[str, _OwnerPathSet]:
     nodes = tuple(_local_nodes(function))
+    # A nested closure may mutate a captured set and be called before the
+    # comprehension. Without call-order and escape analysis, its effect is
+    # unknown; abstain rather than treating the original set as intact.
+    has_nested_scope = False
+    for statement in function.body:
+        for node in ast.walk(statement):
+            match node:
+                case ast.FunctionDef() | ast.AsyncFunctionDef() if node is not function:
+                    has_nested_scope = True
+                case _:
+                    continue
+    if has_nested_scope:
+        return {}
     assignments: dict[str, list[_OwnerPathSet]] = {}
     for node in nodes:
         match node:

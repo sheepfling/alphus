@@ -81,6 +81,7 @@ def test_gate_themes_own_their_runner_mappings() -> None:
                 "provenance-as-ownership",
                 "semantic-work-in-presentation",
                 "parallel-normalization",
+                "patch-cascade",
                 "scipy-constants",
                 "test-quality",
                 "input-contracts",

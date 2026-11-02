@@ -105,19 +105,49 @@ coupling between operations, or claim that any presentation transformation is
 wrong. Calls in defaults, annotations, decorators, or nested function/class
 bodies are ignored. Co-location is a prompt to review the declared
 responsibility boundary.
-The P2 proposals are also deferred: evaluate
-parallel-normalization through the existing duplication capabilities and issue
-[#33](https://github.com/sheepfling/alphus/issues/33), and do not ship a
-patch-cascade heuristic without reviewed real clusters and actionable
-remediation. The narrow parallel-normalization rule is implemented only for a
+The narrow parallel-normalization rule is implemented only for a
 consumer-declared pair of equivalent `str` functions, each returning a direct
 `join(split(input))` expression. It reports differing literal split or join
 separators under an explicit same-output contract. Existing shared-utility
 fingerprinting groups identical AST bodies and therefore does not cover this
 separator-drift case. The rule does not infer that two helpers are equivalent;
 aliases, multi-step transformations, and unconfigured functions are outside
-its grammar. This P2 advisory also lacks positive production calibration. No
-patch-cascade pattern is implemented. The P1
+its grammar. A pair must be defined in the same selected file; cross-file
+pairing is unsupported and currently produces no finding rather than a
+cross-file coverage diagnostic. This P2 advisory lacks positive production
+calibration.
+
+The opt-in `patch-cascade` advisory requires the consumer to identify a
+top-level function as a `general-parser`, enumerate its repair selector and
+source-specific repair IDs, and list normalization helper names. It recognizes
+only at least two separate equality branches comparing that selector with
+configured string IDs, where each branch calls a configured helper. It
+abstains if the selected parser is rebound or a configured helper root is
+locally rebound. Nested functions do not contribute. The finding asks whether
+the declared repair cluster belongs in shared parsing policy; it does not
+prove the repairs are unrelated, unnecessary, or incorrect. A legitimate
+parser may require exactly these exceptions. The detector does not prove call
+effects, trace helper aliases or data flow, recognize compound guards, or
+calibrate production precision. No positive production calibration has been
+performed; this advisory currently has synthetic boundary tests only.
+
+Example opt-in configuration:
+
+```toml
+[checks.patch_cascade]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/parser.py"]
+
+[[checks.patch_cascade.functions]]
+function_name = "parse_document"
+selector_names = ["repair_id"]
+repair_ids = ["vendor-a", "vendor-b"]
+normalization_helpers = ["normalize_text"]
+function_contract = "general-parser"
+```
+
+The P1
 rules have synthetic boundary tests but no positive production calibration;
 their precision is not estimable.
 

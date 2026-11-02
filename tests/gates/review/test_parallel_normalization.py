@@ -73,6 +73,22 @@ def test_split_separator_drift_is_reported() -> None:
     assert sites[0].second_signature.split_separator == ";"
 
 
+def test_pair_split_across_selected_files_is_not_reported(tmp_path: Path) -> None:
+    first = tmp_path / "src/text/first.py"
+    second = tmp_path / "src/text/second.py"
+    first.parent.mkdir(parents=True)
+    first.write_text(
+        _DRIFT.split("\ndef normalize_for_key", maxsplit=1)[0], encoding="utf-8"
+    )
+    second.write_text(
+        "def normalize_for_key(text: str) -> str:\n    return '-'.join(text.split())\n",
+        encoding="utf-8",
+    )
+    assert not check_parallel_normalization(
+        tmp_path, (Path("src/text/first.py"), Path("src/text/second.py")), _policy()
+    )
+
+
 @pytest.mark.parametrize(
     "pair",
     [
