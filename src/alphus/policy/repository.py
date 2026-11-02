@@ -16,6 +16,7 @@ from alphus.policy.base import (
     validate_single_path,
     validate_template,
 )
+from alphus.policy.languages import SourceLanguage
 
 
 class GitAttributeRequirement(StrictModel):
@@ -48,15 +49,15 @@ class GitAttributeRequirement(StrictModel):
 class GitRepositoryPolicy(StrictModel):
     """Shared settings for fast Git ignores and infrequent history audits."""
 
-    languages: tuple[Literal["python", "javascript", "cpp"], ...] = ()
+    languages: tuple[SourceLanguage, ...] = ()
     max_blob_mib: Annotated[float, Field(gt=0)] = 5.0
     attributes: tuple[GitAttributeRequirement, ...] = ()
 
     @field_validator("languages")
     @classmethod
     def validate_languages(
-        cls, languages: tuple[Literal["python", "javascript", "cpp"], ...]
-    ) -> tuple[Literal["python", "javascript", "cpp"], ...]:
+        cls, languages: tuple[SourceLanguage, ...]
+    ) -> tuple[SourceLanguage, ...]:
         require_unique(languages, "Git languages must be unique")
         return languages
 

@@ -142,6 +142,7 @@ class CyclomaticPlan:
     maximum: int
     severity: Severity
     timeout_seconds: int
+    lizard_manifest_max_bytes: int
     backends: tuple[CyclomaticBackendPlan, ...]
 
 
@@ -323,6 +324,7 @@ def build_cyclomatic_plan(
         maximum=policy.maximum,
         severity=policy.severity,
         timeout_seconds=policy.timeout_seconds,
+        lizard_manifest_max_bytes=policy.lizard_manifest_max_bytes,
         backends=tuple(plans),
     )
 
@@ -761,14 +763,20 @@ def _run_lizard(
         "alphus.gates.source._lizard_worker",
         str(root),
         binding.variant,
-        *plan.files,
+        "--manifest-max-bytes",
+        str(policy.lizard_manifest_max_bytes),
     ]
+    manifest = json.dumps(
+        {"files": plan.files}, ensure_ascii=False, separators=(",", ":")
+    )
     try:
         result = subprocess.run(
             command,
             cwd=root,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            input=manifest,
             check=False,
             timeout=policy.timeout_seconds,
         )
@@ -779,7 +787,10 @@ def _run_lizard(
             plan, policy, f"Lizard API adapter could not be launched: {error}"
         )
     try:
-        payload = _LizardPayload.model_validate_json(result.stdout)
+        try:
+            payload = _LizardPayload.model_validate_json(result.stdout)
+        except ValidationError as error:
+            raise ValueError("Lizard API adapter returned malformed JSON") from error
         if payload.error is not None:
             return _failure(plan, policy, payload.error)
         version_value = payload.version
@@ -800,8 +811,7 @@ def _run_lizard(
         return _failure(
             plan,
             policy,
-            f"Lizard API adapter exited with status {result.returncode}: "
-            f"{result.stderr.strip() or 'no stderr'}",
+            f"Lizard API adapter exited with status {result.returncode}",
             actual_version=version,
         )
     if analyzed != len(plan.files):

@@ -18,7 +18,7 @@ the consumer repository.
 Resolve the file inventory and native invocations without starting any native
 tool:
 
-```sh
+```shell
 alphus --root /path/to/consumer \
   --config /path/to/consumer/quality-gates.toml \
   --rule cyclomatic-complexity --plan
@@ -26,7 +26,7 @@ alphus --root /path/to/consumer \
 
 Run the selected backends and inspect their structured report:
 
-```sh
+```shell
 alphus --root /path/to/consumer \
   --config /path/to/consumer/quality-gates.toml \
   --rule cyclomatic-complexity --json
@@ -101,6 +101,13 @@ diagnostic shapes; unknown rule codes, message formats, or parse diagnostics
 fail closed. Lizard is called through its Python API rather than its human
 reporting CLI. Missing executables, API failures, malformed output, timeout,
 and incomplete file coverage produce operational failures, never a zero score.
+The Lizard worker receives the deterministic selected-path list as a UTF-8 JSON
+manifest on stdin, so the operating-system command line stays fixed as the
+inventory grows. Its limit defaults to 64 MiB and can be set in
+`[checks.cyclomatic_complexity]` with `lizard_manifest_max_bytes` (from 1 byte
+through 256 MiB). The worker receives this value through `--manifest-max-bytes`;
+an oversized or malformed request is an operational failure. The manifest
+contains paths only, not source text.
 
 ## Fixture and upgrade policy
 
