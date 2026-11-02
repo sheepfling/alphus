@@ -135,9 +135,14 @@ class _DumpFlow(ast.NodeVisitor):
             for statement in node.orelse:
                 else_flow.visit(statement)
             self.lines.update(else_flow.lines)
-            if _suite_terminates(node.orelse):
+            body_terminates = _suite_terminates(node.body)
+            else_terminates = _suite_terminates(node.orelse)
+            if body_terminates and else_terminates:
+                # No path reaches statements after this conditional.
+                self.dumped = set()
+            elif else_terminates:
                 self.dumped = body_flow.dumped
-            elif _suite_terminates(node.body):
+            elif body_terminates:
                 self.dumped = else_flow.dumped
             else:
                 self.dumped = body_flow.dumped & else_flow.dumped

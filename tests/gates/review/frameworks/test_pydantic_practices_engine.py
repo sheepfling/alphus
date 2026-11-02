@@ -112,6 +112,20 @@ def test_dump_revalidation_keeps_intersection_when_both_if_arms_continue() -> No
     assert pydantic_practice_findings(source, _policy()) == []
 
 
+def test_dump_revalidation_skips_unreachable_code_after_both_arms_terminate() -> None:
+    source = (
+        "def parse(model_input):\n"
+        "    if isinstance(model_input, OuterModel):\n"
+        "        model_input = model_input.model_dump(mode='json')\n"
+        "        return None\n"
+        "    else:\n"
+        "        raise ValueError('wrong type')\n"
+        "    return OuterModel.model_validate(model_input)\n"
+    )
+
+    assert pydantic_practice_findings(source, _policy()) == []
+
+
 def test_explicit_mutability_is_opt_in_and_handles_pydantic_aliases() -> None:
     source = (
         "from pydantic import BaseModel as Model, ConfigDict as Config\n"
