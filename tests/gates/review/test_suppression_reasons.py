@@ -345,11 +345,7 @@ def test_multiline_ruff_per_file_ignore_matches_native_ruff(
         [Path("app.py")],
         SuppressionReasonPolicy(extensions=(".py",), rule_codes=("E402",)),
     )
-    if form == "multiline-map":
-        assert len(findings) == 1
-        assert "multiline inline table" in findings[0].message
-        assert "not evaluated" in findings[0].message
-    elif with_reason:
+    if with_reason:
         assert findings == []
     else:
         assert len(findings) == 1

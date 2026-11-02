@@ -7,7 +7,7 @@ import json
 import re
 import tokenize
 import tomllib
-from collections.abc import Collection, Iterable
+from collections.abc import Collection, Iterable, MutableSequence
 from pathlib import Path
 from typing import cast
 
@@ -237,6 +237,70 @@ def _toml_per_file_map(value: object) -> dict[str, list[str]] | None:
     return result
 
 
+def _normalize_multiline_inline_map(
+    lines: MutableSequence[str], start: int
+) -> tuple[str, int, list[str]] | None:
+    """Normalize Ruff's multiline inline map using its string/list subset."""
+    entries: dict[str, list[str]] = {}
+    comments: list[str] = []
+    index = start + 1
+    while index < len(lines):
+        value_text, comment = _split_toml_comment(lines[index])
+        if comment:
+            comments.append(comment)
+        stripped = value_text.strip()
+        if stripped in {"", ","}:
+            index += 1
+            continue
+        if stripped == "}":
+            rendered = (
+                "{ "
+                + ", ".join(
+                    f"{json.dumps(pattern)} = {json.dumps(codes)}"
+                    for pattern, codes in entries.items()
+                )
+                + " }"
+            )
+            return rendered, index, comments
+        assignment = re.match(r"(?P<key>[^=]+?)\s*=\s*(?P<value>.*)$", stripped)
+        if assignment is None:
+            return None
+        try:
+            pattern = tomllib.loads(f"key = {assignment.group('key')}")["key"]
+        except tomllib.TOMLDecodeError:
+            return None
+        match pattern:
+            case str() as pattern_text:
+                pass
+            case _:
+                return None
+        fragments: list[str] = []
+        code_end = index
+        while True:
+            code_text = assignment.group("value") if not fragments else lines[code_end]
+            code_value, code_comment = _split_toml_comment(code_text)
+            if code_comment:
+                comments.append(code_comment)
+            fragments.append(code_value.strip())
+            expression = "\n".join(fragments).rstrip()
+            if expression.endswith(","):
+                expression = expression[:-1].rstrip()
+            try:
+                parsed = tomllib.loads(f"codes = {expression}")["codes"]
+            except tomllib.TOMLDecodeError:
+                code_end += 1
+                if code_end >= len(lines):
+                    return None
+                continue
+            codes = _toml_string_list(parsed)
+            if codes is None:
+                return None
+            entries[pattern_text] = codes
+            index = code_end + 1
+            break
+    return None
+
+
 def _normalize_multiline_per_file_values(source: str) -> str:
     """Collapse valid multiline per-file-ignore arrays without losing line numbers."""
     lines = source.splitlines()
@@ -266,6 +330,19 @@ def _normalize_multiline_per_file_values(source: str) -> str:
             index += 1
             continue
         value_text, comment = _split_toml_comment(assignment.group("value"))
+        if inline_map and value_text.strip() == "{":
+            normalized = _normalize_multiline_inline_map(lines, index)
+            if normalized is not None:
+                normalized_value, end_index, map_comments = normalized
+                if comment:
+                    map_comments.insert(0, comment)
+                if map_comments:
+                    normalized_value += " # " + " ".join(map_comments)
+                lines[index] = f"{assignment.group('key')} = {normalized_value}"
+                for skipped in range(index + 1, end_index + 1):
+                    lines[skipped] = ""
+                index = end_index + 1
+                continue
         fragments = [value_text]
         comments = [comment] if comment else []
         end_index = index
@@ -274,15 +351,20 @@ def _normalize_multiline_per_file_values(source: str) -> str:
             try:
                 expression = "\n".join(fragments)
                 parsed = tomllib.loads(f"value = {expression}")["value"]
-                break
             except tomllib.TOMLDecodeError:
-                end_index += 1
-                if end_index >= len(lines):
-                    break
-                next_value, next_comment = _split_toml_comment(lines[end_index])
-                fragments.append(next_value)
-                if next_comment:
-                    comments.append(next_comment)
+                parsed = None
+            opening_inline_map = (
+                inline_map and end_index == index and value_text.strip() == "{"
+            )
+            if parsed is not None and not opening_inline_map:
+                break
+            end_index += 1
+            if end_index >= len(lines):
+                break
+            next_value, next_comment = _split_toml_comment(lines[end_index])
+            fragments.append(next_value)
+            if next_comment:
+                comments.append(next_comment)
         normalized_value: str | None = None
         if table_entry:
             parsed_values = _toml_string_list(parsed)
@@ -291,7 +373,14 @@ def _normalize_multiline_per_file_values(source: str) -> str:
         elif inline_map:
             parsed_entries = _toml_per_file_map(parsed)
             if parsed_entries is not None:
-                normalized_value = json.dumps(parsed_entries)
+                normalized_value = (
+                    "{ "
+                    + ", ".join(
+                        f"{json.dumps(pattern)} = {json.dumps(codes)}"
+                        for pattern, codes in parsed_entries.items()
+                    )
+                    + " }"
+                )
         if end_index > index and normalized_value is not None:
             normalized = normalized_value
             if comments:
@@ -360,6 +449,7 @@ def _ruff_config_suppression_findings(
     unsupported_multiline_map = False
     try:
         source = read_utf8_text(config_path)
+        source = _normalize_multiline_per_file_values(source)
         tomllib.loads(source)
     except tomllib.TOMLDecodeError:
         unsupported_multiline_map = bool(
@@ -385,7 +475,6 @@ def _ruff_config_suppression_findings(
             )
         )
         return findings
-    source = _normalize_multiline_per_file_values(source)
     table = ""
     used_exceptions: set[tuple[str, int]] = set()
     inherited_config: str | None = None

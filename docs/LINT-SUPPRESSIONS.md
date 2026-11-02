@@ -19,10 +19,11 @@ selected code needs a comment containing the configured delimiter and a reason:
 "src/bootstrap/**" = ["E402"] # -- plugin initialization order
 ```
 
-The rule evaluates table entries, single-line `per-file-ignores` inline maps,
-and multiline arrays inside per-file-ignore tables. A multiline inline table is
-accepted by Ruff but not by Python's standard TOML parser, so it is explicitly
-reported as not evaluated. A matching exact path/code/line exception can
+The rule evaluates table entries, inline maps, and multiline arrays in per-file
+ignore settings. It normalizes Ruff's string-to-code-list multiline inline map
+form before validating TOML, including on Python versions whose standard
+library parser does not accept multiline inline tables. Unsupported map values
+are reported as not evaluated. A matching exact path/code/line exception can
 approve a configuration entry:
 
 ```toml
