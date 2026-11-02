@@ -54,6 +54,21 @@ def test_self_check_enforces_review_and_repository_toml() -> None:
     ]
 
 
+def test_self_check_scopes_semantic_result_rules_to_review_detectors() -> None:
+    config = load_config(Path("quality-gates.toml"))
+    policy = config.checks.python_style
+    assert policy is not None
+    assert {
+        "src/alphus/gates/review/provenance_ownership.py",
+        "src/alphus/gates/review/rendered_value_reparsed.py",
+        "src/alphus/gates/review/unexplained_empty_results.py",
+    }.issubset(policy.semantic_result_paths)
+    assert (
+        "src/alphus/gates/review/parallel_normalization.py"
+        in policy.repeated_literal_paths
+    )
+
+
 def test_declared_script_entry_points_resolve_to_callables() -> None:
     metadata = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
     project = metadata["project"]

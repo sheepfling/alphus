@@ -82,9 +82,13 @@ repeated_literal_paths = [
   "src/alphus/execution/orchestration.py",
   "src/alphus/gates/python/compatibility.py",
   "src/alphus/contracts/findings.py",
+  "src/alphus/gates/review/parallel_normalization.py",
 ]
 semantic_result_paths = [
   "src/alphus/gates/review/positional_interfaces.py",
+  "src/alphus/gates/review/provenance_ownership.py",
+  "src/alphus/gates/review/rendered_value_reparsed.py",
+  "src/alphus/gates/review/unexplained_empty_results.py",
   "src/alphus/gates/repository/**",
   "src/alphus/gates/hygiene/comment_markers.py",
   "src/alphus/gates/hygiene/rules.py",
