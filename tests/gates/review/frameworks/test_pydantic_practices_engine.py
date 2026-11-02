@@ -84,6 +84,34 @@ def test_dump_revalidation_in_same_branch_is_still_reported() -> None:
     ]
 
 
+def test_dump_revalidation_survives_opposite_raise_or_return_arm() -> None:
+    for terminal in ("raise ValueError('wrong type')", "return None"):
+        source = (
+            "def parse(model_input):\n"
+            "    if isinstance(model_input, OuterModel):\n"
+            "        model_input = model_input.model_dump(mode='json')\n"
+            f"    else:\n        {terminal}\n"
+            "    return OuterModel.model_validate(model_input)\n"
+        )
+        findings = pydantic_practice_findings(source, _policy())
+        assert [(item.line, item.rule_id) for item in findings] == [
+            (6, "alphus/python/pydantic/validation/dump-revalidation")
+        ]
+
+
+def test_dump_revalidation_keeps_intersection_when_both_if_arms_continue() -> None:
+    source = (
+        "def parse(model_input, raw_input):\n"
+        "    if isinstance(model_input, OuterModel):\n"
+        "        model_input = model_input.model_dump(mode='json')\n"
+        "    else:\n"
+        "        model_input = raw_input\n"
+        "    return OuterModel.model_validate(model_input)\n"
+    )
+
+    assert pydantic_practice_findings(source, _policy()) == []
+
+
 def test_explicit_mutability_is_opt_in_and_handles_pydantic_aliases() -> None:
     source = (
         "from pydantic import BaseModel as Model, ConfigDict as Config\n"

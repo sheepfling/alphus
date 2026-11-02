@@ -77,6 +77,17 @@ def _literal_bool(value: ast.expr) -> bool:
             return False
 
 
+def _suite_terminates(statements: Sequence[ast.stmt]) -> bool:
+    """Recognize a directly terminal last statement without guessing control flow."""
+    if not statements:
+        return False
+    match statements[-1]:
+        case ast.Return() | ast.Raise():
+            return True
+        case _:
+            return False
+
+
 class _DumpFlow(ast.NodeVisitor):
     """Follow visible local assignments in one function, without nested scopes."""
 
@@ -124,7 +135,12 @@ class _DumpFlow(ast.NodeVisitor):
             for statement in node.orelse:
                 else_flow.visit(statement)
             self.lines.update(else_flow.lines)
-            self.dumped = body_flow.dumped & else_flow.dumped
+            if _suite_terminates(node.orelse):
+                self.dumped = body_flow.dumped
+            elif _suite_terminates(node.body):
+                self.dumped = else_flow.dumped
+            else:
+                self.dumped = body_flow.dumped & else_flow.dumped
         else:
             # The path where the condition is false preserves the incoming state.
             self.dumped = body_flow.dumped & incoming
