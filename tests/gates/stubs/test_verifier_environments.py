@@ -243,7 +243,7 @@ def test_three_checker_installed_example_selects_all_lanes(
     assert settings.pyright_diagnostics == ("reportArgumentType",)
     assert settings.ty_diagnostics == ("invalid-argument-type",)
     assert settings.runtime_smoke_module == "tests.runtime_smoke"
-    assert len(typing_fixtures.expected_error_lines(negative)) == 3
+    assert len(typing_fixtures.expected_error_lines(negative)) == 4
     assert "flat_names: list[str]" in positive
     assert "recursive_names: list[NameNode]" in positive
 
@@ -369,10 +369,19 @@ def test_every_stage_uses_its_declared_environment_and_target_failure_propagates
                 )
             (dist / "example.tar.gz").touch()
         code = 7 if name == failure else 0
+        output = (
+            "No module named mypy"
+            if name == failure == "Stubtest runtime compatibility"
+            else ""
+        )
         assert stages is not None
         stages.append(
             verify.VerificationStage(
-                name=name, argv=tuple(arguments), exit_code=code, elapsed=0
+                name=name,
+                argv=tuple(arguments),
+                exit_code=code,
+                elapsed=0,
+                output=output,
             )
         )
         if code:
@@ -419,6 +428,10 @@ def test_every_stage_uses_its_declared_environment_and_target_failure_propagates
         assert any(lane.status == "not_run" for lane in result.lanes) == (
             failure != "Runtime consumer smoke"
         )
+        if failure == "Stubtest runtime compatibility":
+            stage = next(item for item in result.stages if item.name == failure)
+            assert stage.argv[:3] == (target.executable, "-m", "mypy.stubtest")
+            assert stage.output == "No module named mypy"
     type_stage = (
         "Positive and expected-negative mypy and Pyright fixtures"
         if typing_checkers == ("mypy", "pyright")

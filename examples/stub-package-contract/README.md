@@ -4,14 +4,23 @@ This small, deliberately artificial package exercises the shared verifier
 against a built and installed wheel. It is a development/CI example; it does
 not add Alphus to an end user's runtime dependencies.
 
-The checker contract includes an annotated `list[str]` variable and a recursive
-list variable as positive inputs. Marked negative lines cover a tuple variable,
-a nested tuple literal, and a non-string value. The target runtime smoke checks
+The checker contract includes an annotated `list[str]` variable, a recursive
+list variable, and overloaded calls with distinct inferred results as positive
+inputs. Marked negative lines cover a tuple variable, a nested tuple literal, a
+non-string value, and a value rejected by every overload. The target runtime smoke checks
 accepted nested lists and rejects the same unsupported nested tuple and scalar
-shapes, and asserts that its package import comes from the target interpreter
-prefix. Native `mypy.stubtest` separately checks the installed module's
+shapes, checks actual overloaded return values, and asserts that its package
+import comes from the target interpreter prefix. Native `mypy.stubtest`
+separately checks the installed module's
 runtime/stub member and callable shape. Static fixtures and runtime assertions
 are separate evidence lanes.
+
+The positive checker fixture also contains an uncalled function with an
+`assert_type` probe. Type checkers inspect the function body, but the verifier
+does not import or invoke that fixture. This is static evidence only. A separate
+counterexample test shows that native stubtest accepts matching return
+annotations even when the runtime function returns the wrong value; an explicit
+runtime assertion catches that behavior defect.
 
 Provision separate checker and target environments from this directory:
 

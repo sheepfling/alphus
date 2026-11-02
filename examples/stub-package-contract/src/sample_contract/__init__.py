@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import TypeAlias
 
-__all__ = ["NameNode", "flatten_names"]
+__all__ = ["NameNode", "flatten_names", "format_value"]
 NameNode: TypeAlias = str | list["NameNode"]
 
 
@@ -25,3 +25,10 @@ def flatten_names(values: Sequence[NameNode]) -> list[str]:
     for value in values:
         append(value)
     return result
+
+
+def format_value(value: int | str) -> str | int:
+    """Provide distinct runtime results for the overloaded static contract."""
+    if isinstance(value, int):
+        return str(value)
+    return len(value)
