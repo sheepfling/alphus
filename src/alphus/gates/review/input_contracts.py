@@ -1230,7 +1230,13 @@ def _domain_mapping_findings(
         alternative = _domain_mapping_alternative(argument.annotation, aliases, policy)
         if alternative is not None:
             model, mapping = alternative
-            if any(
+            domain_models = {
+                name
+                for member in _union_alternatives(argument.annotation, aliases)
+                if (name := canonical_expression_name(member, aliases))
+                in policy.domain_mapping_types
+            }
+            if len(domain_models) == 1 and any(
                 exception.path == path
                 and exception.function == function_name
                 and exception.parameter == argument.arg

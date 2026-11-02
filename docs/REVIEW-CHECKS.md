@@ -351,9 +351,10 @@ attributes, arbitrary helper calls, and unselected functions remain outside the 
 Use exact `domain_mapping_exceptions` selectors to document a reviewed adapter
 or compatibility boundary. Each exception requires the path, function,
 parameter, expected domain type, and a non-empty reason; it suppresses only
-that exact selected parameter when the detected or configured domain type also
-matches. A stale exception for a different domain type leaves the review finding
-visible.
+that exact selected parameter when its domain type is unambiguous and matches.
+For union annotations, an exception does not suppress a finding if the input
+also accepts another configured domain type. A stale or ambiguous exception
+leaves the review finding visible.
 
 This is a review candidate, not proof that validation is absent or that the
 interface is wrong. The scanner does not resolve model-like names

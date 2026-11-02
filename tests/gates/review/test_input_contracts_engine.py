@@ -749,6 +749,33 @@ def evaluate(packet: NewOptions | Mapping[str, JsonValue]):
     assert "configured domain type app.models.NewOptions" in findings[0].message
 
 
+def test_domain_mapping_exception_does_not_hide_another_union_domain_type() -> None:
+    source = """from collections.abc import Mapping
+from app.models import OldOptions, NewOptions
+def evaluate(packet: OldOptions | NewOptions | Mapping[str, JsonValue]):
+    return packet["count"]
+"""
+    policy = InputContractPolicy(
+        extensions=[".py"],
+        exclude=[],
+        domain_mapping_types=("app.models.OldOptions", "app.models.NewOptions"),
+        domain_mapping_exceptions=(
+            {
+                "path": "src/internal/evaluate.py",
+                "function": "evaluate",
+                "parameter": "packet",
+                "domain_type": "app.models.OldOptions",
+                "reason": "Legacy payload parser.",
+            },
+        ),
+    )
+
+    findings = input_contract_findings(source, policy, path="src/internal/evaluate.py")
+
+    assert len(findings) == 1
+    assert findings[0].rule_id.endswith("generic-mapping-domain-escape")
+
+
 def test_domain_mapping_exception_does_not_suppress_changed_contract_type() -> None:
     source = """from collections.abc import Mapping
 def evaluate(packet: Mapping[str, JsonValue]):
