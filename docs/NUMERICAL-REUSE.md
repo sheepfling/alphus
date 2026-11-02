@@ -5,9 +5,12 @@ The implementation groups related source-pattern checks under
 each have their own subpackage, with shared AST traversal in `common`. New
 quaternion formula checks belong in `quaternions`; new geodesy and coordinate
 frame checks belong in `frames`. Framework-specific checks stay under
-`review.frameworks`; Pydantic patterns are grouped in `frameworks.pydantic` so
-future checks for hand-written model validation can live beside the existing
-Pydantic practices without mixing them into the numerical detectors.
+`review.frameworks`; Pydantic practices live in `frameworks.pydantic`, with
+custom model-initializer review isolated in `manual_validation.py`. That rule
+flags a custom initializer on a locally recognized Pydantic model as an
+informational prompt to consider field/model validators or `model_post_init`;
+it does not assume the initializer is wrong. Future Pydantic checks can live
+alongside it without mixing framework conventions into numerical detectors.
 
 `manual-matrix-kernels` is an opt-in advisory for one narrow syntax: an outer
 list comprehension over `range`, containing an inner list comprehension over
