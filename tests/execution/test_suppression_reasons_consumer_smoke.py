@@ -6,7 +6,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TypedDict, cast
 
 _RULE_ID = "alphus/python/none/style/missing-suppression-reason"
 _POLICY = """
@@ -16,6 +16,32 @@ rule_codes = ["E402"]
 reason_delimiter = "--"
 severity = "warning"
 """
+
+
+class _Finding(TypedDict):
+    rule_id: str
+    message: str
+
+
+class _Step(TypedDict):
+    name: str
+    status: str
+    findings: list[_Finding]
+
+
+class _Profile(TypedDict):
+    steps: list[_Step]
+
+
+class _ExecutionFailure(TypedDict):
+    kind: str
+    message: str
+
+
+class _FailureProfile(TypedDict):
+    status: str
+    execution_failure: _ExecutionFailure
+    evidence_complete: bool
 
 
 def _consumer(
@@ -61,8 +87,12 @@ def _run(root: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def _profile(result: subprocess.CompletedProcess[str]) -> dict[str, Any]:
-    return json.loads(result.stdout)
+def _profile(result: subprocess.CompletedProcess[str]) -> _Profile:
+    return cast(_Profile, json.loads(result.stdout))
+
+
+def _failure(result: subprocess.CompletedProcess[str]) -> _FailureProfile:
+    return cast(_FailureProfile, json.loads(result.stdout))
 
 
 def test_unselected_suppression_rule_stays_off_in_installed_consumer(
@@ -91,7 +121,7 @@ def test_selected_rule_without_policy_is_a_configuration_failure(
     result = _run(tmp_path, "--run", "--json")
 
     assert result.returncode == 2
-    payload = _profile(result)
+    payload = _failure(result)
     assert payload["status"] == "execution_failure"
     assert payload["execution_failure"]["kind"] == "configuration_error"
     assert "suppression_reasons" in payload["execution_failure"]["message"]
