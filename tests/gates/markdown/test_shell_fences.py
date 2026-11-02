@@ -280,6 +280,25 @@ def test_escaped_bash_heredoc_delimiter_hides_its_document_body(
     assert "cmd syntax" in findings[0].message
 
 
+def test_arithmetic_shifts_are_not_treated_as_heredocs(tmp_path: Path) -> None:
+    findings = _check(
+        tmp_path,
+        "```bash\n(( mask = 1 << bits ))\n$env:APP_HOME = value\n````\n",
+    )
+    expansion_findings = _check(
+        tmp_path,
+        "```bash\nmask=$((1 << bits))\n$env:APP_HOME = value\n````\n",
+        name="expansion.md",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 3
+    assert "PowerShell" in findings[0].message
+    assert len(expansion_findings) == 1
+    assert expansion_findings[0].line == 3
+    assert "PowerShell" in expansion_findings[0].message
+
+
 def test_multiline_quoted_pwsh_command_is_not_scanned_as_bash(
     tmp_path: Path,
 ) -> None:

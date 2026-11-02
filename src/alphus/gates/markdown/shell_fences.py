@@ -250,8 +250,9 @@ def _mask_shell_line(line: str, shell: str, state: _LexState) -> str:
 def _heredoc_delimiters(raw: str, visible: str) -> tuple[tuple[str, bool], ...]:
     """Return real here-document delimiters, excluding quoted and commented text."""
     delimiters: list[tuple[str, bool]] = []
+    heredoc_visible = _mask_arithmetic_shifts(visible)
     for match in _HERE_DOCUMENT.finditer(raw):
-        if visible[match.start() : match.start() + 2] != "<<":
+        if heredoc_visible[match.start() : match.start() + 2] != "<<":
             continue
         delimiter = (
             match.group("single")
@@ -262,6 +263,35 @@ def _heredoc_delimiters(raw: str, visible: str) -> tuple[tuple[str, bool], ...]:
         if delimiter is not None:
             delimiters.append((delimiter, match.group("tabs") is not None))
     return tuple(delimiters)
+
+
+def _mask_arithmetic_shifts(line: str) -> str:
+    """Hide `<<` arithmetic shifts from the here-document recognizer."""
+    visible = list(line)
+    index = 0
+    while index < len(line) - 1:
+        if line.startswith("$((", index):
+            start = index + 1
+        elif line.startswith("((", index):
+            start = index
+        else:
+            index += 1
+            continue
+
+        depth = 2
+        cursor = start + 2
+        while cursor < len(line) and depth:
+            if line[cursor] == "(":
+                depth += 1
+            elif line[cursor] == ")":
+                depth -= 1
+            cursor += 1
+        end = cursor if depth == 0 else len(line)
+        for shift in re.finditer(r"<<", line[start:end]):
+            position = start + shift.start()
+            visible[position : position + 2] = (" ", " ")
+        index = max(end, index + 1)
+    return "".join(visible)
 
 
 def _visible_shell_lines(fence: _Fence, shell: str) -> tuple[_SourceLine, ...]:
