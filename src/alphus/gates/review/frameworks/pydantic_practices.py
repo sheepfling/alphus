@@ -80,8 +80,8 @@ def _literal_bool(value: ast.expr) -> bool:
 class _DumpFlow(ast.NodeVisitor):
     """Follow visible local assignments in one function, without nested scopes."""
 
-    def __init__(self) -> None:
-        self.dumped: set[str] = set()
+    def __init__(self, dumped: AbstractSet[str] = frozenset()) -> None:
+        self.dumped: set[str] = set(dumped)
         self.lines: set[int] = set()
 
     def visit_FunctionDef(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
@@ -109,6 +109,25 @@ class _DumpFlow(ast.NodeVisitor):
             self.dumped.update(targets)
         else:
             self.dumped.difference_update(targets)
+
+    def visit_If(self, node: ast.If) -> None:
+        """Analyze exclusive arms independently, retaining only common state."""
+        self.visit(node.test)
+        incoming = self.dumped.copy()
+        body_flow = _DumpFlow(incoming.copy())
+        for statement in node.body:
+            body_flow.visit(statement)
+        self.lines.update(body_flow.lines)
+
+        if node.orelse:
+            else_flow = _DumpFlow(incoming.copy())
+            for statement in node.orelse:
+                else_flow.visit(statement)
+            self.lines.update(else_flow.lines)
+            self.dumped = body_flow.dumped & else_flow.dumped
+        else:
+            # The path where the condition is false preserves the incoming state.
+            self.dumped = body_flow.dumped & incoming
 
     def visit_Call(self, node: ast.Call) -> None:
         match node.func:
