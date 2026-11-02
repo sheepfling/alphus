@@ -53,7 +53,11 @@ pandas major/minor versions; its current 3.1.0.261029 release is for pandas
 not yet a `py.typed` library in its
 [3.1.0 source](https://github.com/pandas-dev/pandas/blob/v3.1.0/pandas/__init__.py).
 That release also bundles leaf extension stubs such as
-[`pandas/_libs/tslibs/timestamps.pyi`](https://github.com/pandas-dev/pandas/blob/v3.1.0/pandas/_libs/tslibs/timestamps.pyi).
+[`timestamps.pyi`][pandas-timestamps]. The scanner checks for a package marker
+or a stub matching every observed module; an unrelated internal `.pyi` file
+does not suppress a package-level suggestion.
+
+[pandas-timestamps]: https://github.com/pandas-dev/pandas/blob/v3.1.0/pandas/_libs/tslibs/timestamps.pyi
 The scanner checks for a package marker or a stub matching every observed module;
 an unrelated internal `.pyi` file does not suppress a package-level suggestion.
 [types-Pillow on PyPI](https://pypi.org/project/types-Pillow/) is deliberately
