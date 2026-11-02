@@ -111,7 +111,7 @@ def _load_entries(
         payload = _read_payload(cache_path)
     except FileNotFoundError:
         return {}, None
-    except (OSError, UnicodeError, ValueError, json.JSONDecodeError):
+    except (OSError, UnicodeError, ValueError, RecursionError, json.JSONDecodeError):
         return {}, "cache is unreadable or invalid"
 
     return _validate_payload(payload, expected_header)

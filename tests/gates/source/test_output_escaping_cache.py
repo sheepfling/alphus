@@ -155,6 +155,18 @@ def test_duplicate_cache_keys_are_rejected_and_recomputed(
     assert summary.invalidation == "cache is unreadable or invalid"
 
 
+def test_excessively_nested_cache_is_a_miss_and_recomputed(tmp_path: Path) -> None:
+    source = _source(tmp_path, "src/render.py", 'value = value.replace("<", "&lt;")\n')
+    cache = tmp_path / "cache.json"
+    cache.write_text("[" * 10_000 + "0" + "]" * 10_000, encoding="utf-8")
+
+    actual, summary = check_output_escaping_cached(tmp_path, [source], _policy(), cache)
+
+    assert actual == check_output_escaping(tmp_path, [source], _policy())
+    assert (summary.hits, summary.misses, summary.saved) == (0, 1, True)
+    assert summary.invalidation == "cache is unreadable or invalid"
+
+
 @pytest.mark.parametrize("malformation", ["digest", "finding", "extra-field"])
 def test_malformed_cache_entries_are_discarded_and_recomputed(
     tmp_path: Path, malformation: str
