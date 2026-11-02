@@ -747,8 +747,10 @@ directives only when the normalized path is another selected source file. It
 does not use a compile database or resolve angle-bracket/macro includes,
 conditional activation, include search paths, or unselected targets. This is
 lexical path evidence, not compiler-resolved dependency data. JavaScript and
-TypeScript module imports remain unassessed; no parser-backed resolver is
-integrated. Unsupported or unresolved relationships are not evidence of zero
+TypeScript use the optional parser-backed literal relative-reference pass
+described above; package resolution, TypeScript aliases, index lookup,
+shadowed `require`, conditional activation, and compiler configuration remain
+unassessed. Unsupported or unresolved relationships are not evidence of zero
 coupling.
 
 A typical finding starts: `src/service: Family gateway_*: 12 logical units
@@ -769,7 +771,47 @@ export paths before changing a layout. File-length limits remain an independent
 hygiene control: splitting files below a limit does not demonstrate improved
 cohesion. Optional Python and C/C++ evidence supplements the lexical candidate
 with bounded source relationships, and optional Git history records correlation
-only. Responsibility and public-surface assessment remain incomplete;
-JavaScript/TypeScript dependencies are not assessed. Fewer files, renamed
-prefixes, or a new directory do not by themselves demonstrate better
-boundaries.
+only. Responsibility and public-surface assessment remain incomplete.
+JavaScript/TypeScript evidence is optional and limited to the literal relative
+references described above; package resolution and other cases remain
+unassessed. Fewer files, renamed prefixes, or a new directory do not by
+themselves demonstrate better boundaries.
+
+### Exploratory real-project calibration
+
+Read-only GitHub snapshots collected on 2026-11-02 provide a small exploratory
+check, not a precision or recall estimate. A path-name screen used the default
+family thresholds (`min_family_files=5`, `min_prefix_characters=4`), Python
+source paths under each package root, and excluded test-directory segments.
+It found no candidate groups in Requests (`src/requests`, 19 files, revision
+[`3c7baaa`](https://github.com/psf/requests/commit/3c7baaa05ab4aa49cc819ce3a819d260de19c157)),
+Flask (`src/flask`, 24 files, revision
+[`49943b5`](https://github.com/pallets/flask/commit/49943b5a94413a530761350f04e896f76e8d620e)),
+HTTPX (`httpx`, 23 files, revision
+[`b5addb6`](https://github.com/encode/httpx/commit/b5addb64f0161ff6bfe94c124ef76f6a1fba5254)),
+or Pydantic (`pydantic`, 54 files, revision
+[`b09325b`](https://github.com/pydantic/pydantic/commit/b09325b0a41d9a957df9a530e5c6a7836799df1e)).
+These four results are inventory-name screens only: source contents and
+semantic evidence were not inspected, so no candidate is not evidence of
+cohesion or a missed defect.
+
+The PR-head analyzer was also run on the 35 direct `*.py` files in Matplotlib's
+`lib/matplotlib/backends` directory at
+[`5a84a6f`](https://github.com/matplotlib/matplotlib/commit/5a84a6f84361b9c94458a85b20c40e8a1ffe55d7),
+with the same family thresholds. It emitted one advisory: `backend_*`, 32 of
+35 selected siblings (91%), 32 logical units, and 11–2,850 physical lines.
+[The guide](https://github.com/matplotlib/matplotlib/blob/5a84a6f/galleries/users_explain/figure/backends.rst)
+describes these as intentional output implementations for GUI and file
+formats. This is a known legitimate platform/backend family and a false
+positive if the lexical candidate is treated as evidence of poor boundaries.
+It demonstrates why the result must remain advisory and be reviewed against
+the project's purpose.
+
+Enabling Python import evidence on that same 35-file snapshot resolved 50
+direct intra-family edges, while 297 imports were unresolved or outside the
+selected inventory. The snapshot omitted the rest of Matplotlib's `lib/`
+source tree and nested backend directories, so those unresolved imports and
+the absence of selected outside consumers cannot establish the full dependency
+graph or zero external use. This one curated candidate plus four path-only
+no-candidate screens is too small and biased to support an accuracy claim or
+stronger enforcement.
