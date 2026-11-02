@@ -70,6 +70,9 @@ RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
         "manual-quaternion-conjugation": RuleSpec(
             "manual_quaternion_conjugation", RuleOutputShape.FINDINGS
         ),
+        "manual-quaternion-normalization": RuleSpec(
+            "manual_quaternion_normalization", RuleOutputShape.FINDINGS
+        ),
         "scipy-constants": RuleSpec("scipy_constants", RuleOutputShape.FINDINGS),
         "test-quality": RuleSpec("test_quality", RuleOutputShape.FINDINGS),
         "input-contracts": RuleSpec("input_contracts", RuleOutputShape.FINDINGS),

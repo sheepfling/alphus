@@ -41,6 +41,7 @@ QualityRuleName: TypeAlias = Literal[
     "cholesky-recurrence",
     "manual-quaternion-conjugation",
     "manual-quaternion-products",
+    "manual-quaternion-normalization",
     "scipy-constants",
     "test-quality",
     "input-contracts",

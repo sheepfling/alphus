@@ -36,6 +36,10 @@ def test_manual_matrix_kernel_example_is_scoped_and_provisional() -> None:
     assert churn_policy.loop_contracts[0].path == "src/numerics/kernels.py"
     assert churn_policy.loop_contracts[0].function == "process_batches"
     assert churn_policy.loop_contracts[0].array_variable == "batch"
+    normalization_policy = config.checks.manual_quaternion_normalization
+    assert normalization_policy is not None
+    assert normalization_policy.components == ("w", "x", "y", "z")
+    assert normalization_policy.rotation_consumer_helpers == ("Rotation.from_quat",)
     orchestration = config.orchestration
     assert orchestration is not None
     plan = orchestration.resolve_profile("numerical-review")
@@ -45,6 +49,7 @@ def test_manual_matrix_kernel_example_is_scoped_and_provisional() -> None:
     assert step.rule == "manual-matrix-kernels"
     assert step.rollout == "provisional"
     assert "Quaternion product review" in plan.steps
+    assert "Quaternion normalization review" in plan.steps
 
 
 def test_markdown_example_pairs_two_fixers_without_duplicate_missing_links() -> None:

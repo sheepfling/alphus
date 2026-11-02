@@ -74,10 +74,31 @@ attribute-based components, and aliases are skipped. The rule does not
 recognize general inversion, normalization, sandwich rotation, or matrix
 conversion.
 
+`manual-quaternion-normalization` recognizes one strict direct-return sequence
+in a consumer-configured function:
+
+```python
+norm = math.sqrt(w * w + x * x + y * y + z * z)
+unit = (w / norm, x / norm, y / norm, z / norm)
+return Rotation.from_quat(unit)
+```
+
+The configured four scalar parameters must form the sum of four squares under
+the configured square-root helper; each parameter must be divided by that same
+local norm in one tuple assignment; and that tuple must be passed immediately
+to a configured rotation consumer. The rule does not infer
+quaternion identity or import aliases. It skips separate statements, branches,
+intervening work, generic vector normalization, nonmatching square forms, and
+unknown consumers. It does not prove that the operation is unnecessary or slow;
+preserve zero/near-zero and non-finite behavior, ordering, dtype, and the
+consumer's normalization contract.
+
 Handwritten elimination and frame-transform recognition remain unimplemented.
-So do the other quaternion fingerprints and Cholesky covariance/domain checks.
-The current examples demonstrate only the explicitly documented syntax
-families above.
+So do quaternion inversion and vector rotation/sandwich or matrix conversion,
+and Cholesky covariance/domain checks. The current examples demonstrate only the
+explicitly documented syntax families above. This new normalization grammar has
+synthetic positive/negative coverage but no reviewed real-consumer calibration
+or production precision estimate yet.
 
 An elimination recognizer would need a consumer contract that identifies the
 matrix representation and then match, within one configured function, pivot

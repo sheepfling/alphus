@@ -43,6 +43,15 @@ source_paths = ["src/geometry/*.py"]
 function_names = ["conjugate_quaternion"]
 components = ["w", "x", "y", "z"]
 
+[checks.manual_quaternion_normalization]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/geometry/*.py"]
+function_names = ["normalize_attitude"]
+components = ["w", "x", "y", "z"]
+square_root_helpers = ["math.sqrt"]
+rotation_consumer_helpers = ["Rotation.from_quat"]
+
 [orchestration]
 default_profile = "numerical-review"
 
@@ -76,6 +85,12 @@ name = "Quaternion conjugation review"
 rule = "manual-quaternion-conjugation"
 rollout = "provisional"
 
+[[orchestration.steps]]
+kind = "rule"
+name = "Quaternion normalization review"
+rule = "manual-quaternion-normalization"
+rollout = "provisional"
+
 [[orchestration.profiles]]
 name = "numerical-review"
-steps = ["Manual matrix kernels", "Array representation churn", "Cholesky recurrence review", "Quaternion product review", "Quaternion conjugation review"]
+steps = ["Manual matrix kernels", "Array representation churn", "Cholesky recurrence review", "Quaternion product review", "Quaternion conjugation review", "Quaternion normalization review"]

@@ -250,6 +250,49 @@ class QuaternionConjugationPolicy(PythonSourceScanPolicy):
         return tuple(values)
 
 
+class QuaternionNormalizationPolicy(PythonSourceScanPolicy):
+    """Consumer-declared names for one local quaternion normalization shape."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    function_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    components: Annotated[tuple[str, str, str, str], Field(min_length=4)]
+    square_root_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    rotation_consumer_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("function_names")
+    @classmethod
+    def validate_function_names(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("quaternion function names must be identifiers")
+        require_unique(values, "quaternion function names must be unique")
+        return tuple(values)
+
+    @field_validator("components")
+    @classmethod
+    def validate_components(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if len(values) != 4 or any(not value.isidentifier() for value in values):
+            raise ValueError("quaternion components must be four identifiers")
+        require_unique(values, "quaternion components must be unique")
+        return tuple(values)
+
+    @field_validator("square_root_helpers", "rotation_consumer_helpers")
+    @classmethod
+    def validate_helper_names(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not value or any(not part.isidentifier() for part in value.split("."))
+            for value in values
+        ):
+            raise ValueError("quaternion helper names must be dotted identifiers")
+        require_unique(values, "quaternion helper names must be unique")
+        return tuple(values)
+
+
 class ScipyConstantsPolicy(PythonSourceScanPolicy):
     """Advisory SciPy physical and unit-factor catalog for Python source."""
 
