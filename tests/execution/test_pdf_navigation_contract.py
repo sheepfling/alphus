@@ -42,6 +42,7 @@ def _pdf(
     outline_page: int,
     *,
     include_heading: bool = True,
+    other_target_text: str | None = None,
     contents_link_page: int = 12,
     contents_rect: tuple[int, int, int, int] = (15, 75, 80, 95),
 ) -> None:
@@ -50,6 +51,8 @@ def _pdf(
         writer.add_blank_page(width=100, height=100)
     if include_heading:
         _add_text(writer, 12, "Overview", 50)
+    if other_target_text is not None:
+        _add_text(writer, 1, other_target_text, 50)
     _add_text(writer, 0, "Overview", 85)
     writer.add_outline_item("Overview", outline_page)
     writer.add_annotation(
@@ -125,6 +128,7 @@ def _pdf_with_unconfigured_links(
     link_count: int = 1,
     action_kind: str = "/GoTo",
     direct_destination: bool = False,
+    direct_page_destination: bool = False,
 ) -> None:
     writer = PdfWriter()
     writer.add_blank_page(width=100, height=100)
@@ -134,7 +138,19 @@ def _pdf_with_unconfigured_links(
     if include_named_destination:
         writer.add_named_destination(destination_name, 1)
     for _ in range(link_count):
-        if direct_destination:
+        if direct_page_destination:
+            writer.add_annotation(
+                0,
+                {
+                    "/Type": "/Annot",
+                    "/Subtype": "/Link",
+                    "/Rect": [10, 10, 20, 20],
+                    "/Dest": ArrayObject(
+                        [writer.pages[1].indirect_reference, NameObject("/Fit")]
+                    ),
+                },
+            )
+        elif direct_destination:
             writer.add_annotation(
                 0,
                 {
@@ -198,6 +214,23 @@ def test_wrong_outline_page_fails_even_when_expected_manifest_is_consistent(
     assert "expects 13" in failures[0]
 
 
+def test_stale_outline_and_manifest_agreement_does_not_prove_section_target(
+    tmp_path: Path,
+) -> None:
+    pdf = tmp_path / "report.pdf"
+    contract = tmp_path / "stale-targets.json"
+    _pdf(pdf, 1, contents_link_page=1, other_target_text="Preface")
+    _contract(contract, page=2, target_page=2)
+
+    failures, unknown = validate_navigation(pdf, contract)
+
+    assert failures
+    assert any(
+        "does not contain configured heading 'Overview'" in item for item in failures
+    )
+    assert unknown == []
+
+
 def test_non_text_destination_is_unknown_not_called_blank(tmp_path: Path) -> None:
     pdf = tmp_path / "report.pdf"
     contract = tmp_path / "targets.json"
@@ -244,6 +277,19 @@ def test_unconfigured_named_goto_links_resolve_direct_and_action_forms(
         include_named_destination=True,
         link_count=2,
         direct_destination=direct_destination,
+    )
+    _destination_contract(contract)
+
+    assert validate_navigation(pdf, contract) == ([], [])
+
+
+def test_unconfigured_direct_page_goto_array_resolves(tmp_path: Path) -> None:
+    pdf = tmp_path / "report.pdf"
+    contract = tmp_path / "targets.json"
+    _pdf_with_unconfigured_links(
+        pdf,
+        "unused",
+        direct_page_destination=True,
     )
     _destination_contract(contract)
 
