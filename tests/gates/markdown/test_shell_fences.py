@@ -225,6 +225,38 @@ def test_tab_indented_list_fence_keeps_heredoc_and_closes_correctly(
     assert findings[0].line == 5
 
 
+def test_greater_than_in_top_level_heredoc_is_literal(tmp_path: Path) -> None:
+    findings = _check(
+        tmp_path,
+        "```bash\n"
+        "cat <<'END'\n"
+        "$env:APP_HOME = heredoc-data\n"
+        ">END\n"
+        "$env:APP_HOME = still-heredoc-data\n"
+        "END\n"
+        "```\n",
+    )
+
+    assert findings == []
+
+
+def test_tab_after_blockquote_keeps_mixed_list_fence_indent(
+    tmp_path: Path,
+) -> None:
+    findings = _check(
+        tmp_path,
+        "> - ```bash\n"
+        ">\tcat <<'END'\n"
+        ">\t$env:APP_HOME = heredoc-data\n"
+        ">\tEND\n"
+        ">\t$env:APP_HOME = visible-command\n"
+        ">   ```\n",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 5
+
+
 def test_powershell_backtick_escape_does_not_hide_later_bash_loop(
     tmp_path: Path,
 ) -> None:

@@ -50,11 +50,11 @@ Bash `for`/`select`/`while` loop syntax in PowerShell fences. A small set of
 unquoted Windows drive paths and `.venv\Scripts\python` executables in Bash
 fences are review candidates rather than proof of a shell mismatch.
 
-Fence parsing handles backtick and tilde fences, longer closing markers,
-blockquotes, list indentation, and nested Markdown examples. The shell scan
-ignores Markdown HTML comments, shell comments, Bash here-documents, quoted
-string data, and fences whose first command line looks like an interactive
-prompt. Unknown or missing labels are left to Markdown style tools.
+Fence boundaries and container indentation come from the CommonMark parser,
+including backtick and tilde fences, blockquotes, lists, and tab stops. The
+shell scan ignores shell comments, Bash here-documents, quoted string data, and
+fences whose first command line looks like an interactive prompt. Unknown or
+missing labels are left to Markdown style tools.
 
 This is a syntax-evidence review, not a shell parser. Git Bash, MSYS, and WSL
 can accept some Windows-looking paths; project-specific aliases and embedded

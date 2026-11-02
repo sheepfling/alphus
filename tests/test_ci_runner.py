@@ -10,6 +10,7 @@ from scripts.ci import dependency_floors
 
 def test_ci_dependency_floors_follow_package_metadata() -> None:
     assert dependency_floors(Path("pyproject.toml")) == (
+        "markdown-it-py==4",
         "packaging==23",
         "pydantic==2.7",
         "rich==15.0.0",

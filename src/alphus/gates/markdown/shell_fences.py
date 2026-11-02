@@ -5,9 +5,11 @@ from __future__ import annotations
 import re
 from collections import deque
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
+
+from markdown_it import MarkdownIt
 
 from alphus.config import MarkdownShellFencesPolicy
 from alphus.contracts.findings import Finding
@@ -35,9 +37,6 @@ _LABELS: Mapping[str, str] = MappingProxyType(
         "batch": "cmd",
     }
 )
-_OPEN_FENCE = re.compile(r"^( {0,3})(`{3,}|~{3,})(.*)$")
-_CLOSE_FENCE = re.compile(r"^( {0,3})(`+|~+)[ \t]*$")
-_LIST_MARKER = re.compile(r"^( {0,3})([-+*]|[0-9]{1,9}[.)])([ \t]+)")
 _HERE_DOCUMENT = re.compile(
     r"(?<!<)<<(?P<tabs>-)?[ \t]*(?:"
     r"'(?P<single>[^']+)'|\"(?P<double>[^\"]+)\"|"
@@ -80,39 +79,11 @@ class _SourceLine:
     text: str
 
 
-def _new_source_lines() -> list[_SourceLine]:
-    return []
-
-
-def _new_indents() -> list[int]:
-    return []
-
-
 @dataclass(frozen=True, slots=True)
 class _Fence:
     label: str
-    marker: str
-    marker_length: int
     opening_line: int
-    container_indent: int
     body: tuple[_SourceLine, ...]
-
-
-@dataclass(slots=True)
-class _OpenFence:
-    label: str
-    marker: str
-    marker_length: int
-    opening_line: int
-    container_indent: int
-    blockquote_depth: int
-    opening_indent: int
-    body: list[_SourceLine] = field(default_factory=_new_source_lines)
-
-
-@dataclass(slots=True)
-class _MarkdownContainers:
-    list_indents: list[int] = field(default_factory=_new_indents)
 
 
 @dataclass(slots=True)
@@ -129,57 +100,6 @@ class _Evidence:
     candidate: bool = False
 
 
-def _strip_blockquotes(line: str) -> str:
-    """Remove source-level blockquote markers before fence parsing."""
-    remaining = line
-    while True:
-        match = re.match(r"^ {0,3}>[ \t]?", remaining)
-        if match is None:
-            return remaining
-        remaining = remaining[match.end() :]
-
-
-def _blockquote_depth(line: str) -> int:
-    """Count source-level blockquote containers on a Markdown line."""
-    remaining = line
-    depth = 0
-    while True:
-        match = re.match(r"^ {0,3}>[ \t]?", remaining)
-        if match is None:
-            return depth
-        depth += 1
-        remaining = remaining[match.end() :]
-
-
-def _normalise_markdown_line(
-    line: str, containers: _MarkdownContainers
-) -> tuple[str, int]:
-    """Remove list indentation and markers while retaining their continuation width."""
-    remaining = _strip_blockquotes(line).expandtabs(4)
-    if not remaining.strip():
-        return remaining, containers.list_indents[-1] if containers.list_indents else 0
-
-    indent = len(remaining) - len(remaining.lstrip(" "))
-    while containers.list_indents and indent < containers.list_indents[-1]:
-        containers.list_indents.pop()
-
-    consumed = containers.list_indents[-1] if containers.list_indents else 0
-    if consumed:
-        remaining = remaining[consumed:]
-
-    marker = _LIST_MARKER.match(remaining)
-    if marker is not None:
-        padding = min(len(marker.group(3)), 4)
-        item_indent = consumed + marker.start(1) + len(marker.group(2)) + padding
-        containers.list_indents.append(item_indent)
-        remaining = remaining[
-            marker.start(1) + len(marker.group(1)) + len(marker.group(2)) + padding :
-        ]
-        consumed = item_indent
-
-    return remaining, consumed
-
-
 def _fence_label(info: str) -> str:
     match = re.match(r"\s*(?:\{\.?([A-Za-z0-9_+.-]+)[^}]*\}|([A-Za-z0-9_+.-]+))", info)
     if match is None:
@@ -187,170 +107,22 @@ def _fence_label(info: str) -> str:
     return (match.group(1) or match.group(2)).lower()
 
 
-def _leading_indent_columns(line: str) -> int:
-    """Measure leading spaces and tabs using CommonMark's four-column stops."""
-    column = 0
-    for character in line:
-        if character == " ":
-            column += 1
-        elif character == "\t":
-            column += 4 - column % 4
-        else:
-            break
-    return column
-
-
-def _strip_indent_columns(line: str, columns: int) -> str:
-    """Strip structural indentation while preserving any remainder of a tab."""
-    if columns <= 0:
-        return line
-    column = 0
-    index = 0
-    while index < len(line) and column < columns:
-        character = line[index]
-        if character == " ":
-            next_column = column + 1
-        elif character == "\t":
-            next_column = column + 4 - column % 4
-        else:
-            break
-        index += 1
-        if next_column > columns:
-            return " " * (next_column - columns) + line[index:]
-        column = next_column
-    return line[index:]
-
-
-def _fence_container_line(line: str, container_indent: int) -> str:
-    """Remove blockquote and list prefixes, preserving code-line indentation."""
-    remaining = _strip_blockquotes(line)
-    if _leading_indent_columns(remaining) >= container_indent:
-        return _strip_indent_columns(remaining, container_indent)
-    return remaining
-
-
-def _fence_body_line(line: str, container_indent: int, opening_indent: int) -> str:
-    remaining = _fence_container_line(line, container_indent)
-    opening_prefix = min(_leading_indent_columns(remaining), opening_indent)
-    return _strip_indent_columns(remaining, opening_prefix)
-
-
-def _list_container_ended(line: str, container_indent: int) -> bool:
-    """Detect a nonblank line that has outdented a list-contained fence."""
-    if not container_indent:
-        return False
-    remaining = _strip_blockquotes(line)
-    if not remaining.strip():
-        return False
-    indent = _leading_indent_columns(remaining)
-    return indent < container_indent
-
-
-def _mask_markdown_comments(line: str, in_comment: bool) -> tuple[str, bool]:
-    """Hide HTML comments so fenced examples inside them are not parsed."""
-    visible = list(line)
-    index = 0
-    while index < len(line):
-        if in_comment:
-            end = line.find("-->", index)
-            stop = len(line) if end < 0 else end + 3
-            for offset in range(index, stop):
-                visible[offset] = " "
-            if end < 0:
-                return "".join(visible), True
-            in_comment = False
-            index = stop
-            continue
-
-        start = line.find("<!--", index)
-        if start < 0:
-            break
-        end = line.find("-->", start + 4)
-        stop = len(line) if end < 0 else end + 3
-        for offset in range(start, stop):
-            visible[offset] = " "
-        if end < 0:
-            return "".join(visible), True
-        index = stop
-    return "".join(visible), in_comment
-
-
 def _markdown_fences(text: str) -> tuple[_Fence, ...]:
-    """Read fenced blocks, including fences in blockquotes and list items."""
-    containers = _MarkdownContainers()
+    """Read CommonMark fenced-code tokens with source-line locations."""
     fences: list[_Fence] = []
-    opened: _OpenFence | None = None
-    in_html_comment = False
-    for number, original in enumerate(text.splitlines(), start=1):
-        if opened is not None and (
-            _blockquote_depth(original) < opened.blockquote_depth
-            or _list_container_ended(original, opened.container_indent)
-        ):
-            fences.append(
-                _Fence(
-                    opened.label,
-                    opened.marker,
-                    opened.marker_length,
-                    opened.opening_line,
-                    opened.container_indent,
-                    tuple(opened.body),
-                )
-            )
-            opened = None
-
-        if opened is not None:
-            container_line = _fence_container_line(original, opened.container_indent)
-            closing = _CLOSE_FENCE.fullmatch(container_line)
-            if (
-                closing is not None
-                and closing.group(2)[0] == opened.marker
-                and len(closing.group(2)) >= opened.marker_length
-            ):
-                fences.append(
-                    _Fence(
-                        opened.label,
-                        opened.marker,
-                        opened.marker_length,
-                        opened.opening_line,
-                        opened.container_indent,
-                        tuple(opened.body),
-                    )
-                )
-                opened = None
-            else:
-                content = _fence_body_line(
-                    original, opened.container_indent, opened.opening_indent
-                )
-                opened.body.append(_SourceLine(number, content))
+    for token in MarkdownIt("commonmark").parse(text):
+        if token.type != "fence" or token.map is None:
             continue
-
-        visible, in_html_comment = _mask_markdown_comments(original, in_html_comment)
-        content, container_indent = _normalise_markdown_line(visible, containers)
-        opening = _OPEN_FENCE.fullmatch(content)
-        if opening is None:
-            continue
-        marker, info = opening.group(2), opening.group(3)
-        if marker.startswith("`") and "`" in info:
-            continue
-        opened = _OpenFence(
-            _fence_label(info),
-            marker[0],
-            len(marker),
-            number,
-            container_indent,
-            _blockquote_depth(original),
-            len(opening.group(1)),
+        opening_index = token.map[0]
+        body = tuple(
+            _SourceLine(opening_index + index + 2, line)
+            for index, line in enumerate(token.content.splitlines())
         )
-
-    if opened is not None:
         fences.append(
             _Fence(
-                opened.label,
-                opened.marker,
-                opened.marker_length,
-                opened.opening_line,
-                opened.container_indent,
-                tuple(opened.body),
+                _fence_label(token.info),
+                opening_index + 1,
+                body,
             )
         )
     return tuple(fences)
