@@ -9,7 +9,9 @@ from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 
 from packaging.requirements import InvalidRequirement, Requirement
+from packaging.specifiers import Specifier
 from packaging.utils import canonicalize_name
+from packaging.version import Version
 
 from alphus.config import DependencyLockPolicy
 from alphus.contracts.findings import Finding
@@ -175,7 +177,7 @@ def _duplicate_exact_pin_findings(
         prior_declarations = seen.setdefault(name, [])
         for previous in prior_declarations:
             previous_specifier = next(iter(previous.requirement.specifier))
-            if previous_specifier.version == specifiers[0].version:
+            if _exact_pins_overlap(previous_specifier, specifiers[0]):
                 continue
             if _marker_text(previous.requirement) == _marker_text(requirement):
                 findings.append(
@@ -218,6 +220,15 @@ def _duplicate_exact_pin_findings(
                 )
         prior_declarations.append(declaration)
     return findings
+
+
+def _exact_pins_overlap(left: Specifier, right: Specifier) -> bool:
+    """Check whether two exact PEP 440 pins admit either pinned candidate."""
+    left_version = Version(left.version)
+    right_version = Version(right.version)
+    return left.contains(right_version, prereleases=True) or right.contains(
+        left_version, prereleases=True
+    )
 
 
 def _marker_text(requirement: Requirement) -> str | None:

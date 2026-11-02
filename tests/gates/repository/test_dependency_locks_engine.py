@@ -105,6 +105,8 @@ def test_conflicting_normalized_exact_pins_keep_locations_across_includes(
     "requirements",
     [
         "sample-lib>=1\nsample_lib<3\n",
+        "sample-lib==1.0\nsample_lib==1.0.0\n",
+        "sample-lib==1.0\nsample_lib==1.0+vendor\n",
         (
             'sample-lib[a]==1; python_version < "3.12"\n'
             'sample-lib[b]==2; python_version >= "3.12"\n'
