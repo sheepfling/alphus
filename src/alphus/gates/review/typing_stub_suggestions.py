@@ -24,8 +24,8 @@ _RULE_ID = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.DEPENDENCIES, "typing-stub-suggestion"
 )
 
-# Verified from typeshed's PyYAML metadata and current PyPI package metadata on
-# 2026-11-02, plus scipy-stubs' official project metadata.
+# Verified from typeshed/PyPI package metadata on 2026-11-02 and scipy-stubs'
+# official project metadata.
 _BUILTIN_CANDIDATES = (
     TypingStubCandidate(
         import_name="yaml",
@@ -66,6 +66,16 @@ _BUILTIN_CANDIDATES = (
         checkers=("mypy", "pyright"),
         package_path="toml",
         stub_version_specifier="==0.10.8.*",
+    ),
+    TypingStubCandidate(
+        import_name="requests",
+        runtime_distribution="requests",
+        stub_distribution="types-requests",
+        supported_runtime_versions="==2.33.*",
+        supported_python_versions=">=3.10,<4",
+        checkers=("mypy", "pyright", "ty"),
+        package_path="requests",
+        stub_version_specifier="==2.33.0.*",
     ),
 )
 
@@ -321,6 +331,23 @@ def check_typing_stub_suggestions(
                 )
             )
             continue
+        package_path = PurePosixPath(
+            candidate.package_path or candidate.import_name.split(".")[0]
+        )
+        package_parts = package_path.parts
+        runtime_files = runtime.files
+        if runtime_files is not None:
+            package_files = [
+                item
+                for item in runtime_files
+                if item.parts[: len(package_parts)] == package_parts
+            ]
+            module_stub_parts = (*package_parts[:-1], f"{package_parts[-1]}.pyi")
+            if any(
+                item.name == "py.typed" or item.suffix == ".pyi"
+                for item in package_files
+            ) or any(item.parts == module_stub_parts for item in runtime_files):
+                continue
         runtime_supported = SpecifierSet(candidate.supported_runtime_versions).contains(
             runtime_version, prereleases=True
         )
@@ -346,11 +373,6 @@ def check_typing_stub_suggestions(
                     )
                 )
             continue
-        package_path = PurePosixPath(
-            candidate.package_path or candidate.import_name.split(".")[0]
-        )
-        package_parts = package_path.parts
-        runtime_files = runtime.files
         if runtime_files is None:
             findings.append(
                 Finding(
@@ -365,16 +387,6 @@ def check_typing_stub_suggestions(
                     severity=policy.severity,
                 )
             )
-            continue
-        package_files = [
-            item
-            for item in runtime_files
-            if item.parts[: len(package_parts)] == package_parts
-        ]
-        module_stub_parts = (*package_parts[:-1], f"{package_parts[-1]}.pyi")
-        if any(
-            item.name == "py.typed" or item.suffix == ".pyi" for item in package_files
-        ) or any(item.parts == module_stub_parts for item in runtime_files):
             continue
         declared = next(
             (req for req in selected if canonicalize_name(req.name) == stub_key), None

@@ -239,6 +239,21 @@ class _TomlStubDistribution:
     files = ()
 
 
+class _RequestsDistribution:
+    version = "2.33.1"
+    files = ()
+
+
+class _TypedRequestsDistribution:
+    version = "2.34.2"
+    files = (Path("requests/py.typed"),)
+
+
+class _OldRequestsDistribution:
+    version = "2.32.5"
+    files = ()
+
+
 def _distribution(name: str) -> object:
     if name == "types-PyYAML":
         return _PyYAMLStubDistribution()
@@ -450,6 +465,75 @@ def test_builtin_yaml_mapping_works_with_dev_group(
     assert len(findings) == 1
     assert "types-PyYAML" in findings[0].message
     assert "dev" in findings[0].message
+
+
+def test_builtin_requests_mapping_recommends_current_stub_for_dev_group(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    (tmp_path / "app.py").write_text("import requests\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\ndependencies = ["requests>=2.33,<2.34"]\n'
+        "[project.optional-dependencies]\ndev = []\n",
+        encoding="utf-8",
+    )
+
+    def distributions(name: str) -> object:
+        if name == "requests":
+            return _RequestsDistribution()
+        if name == "types-requests":
+            raise metadata.PackageNotFoundError(name)
+        return _distribution(name)
+
+    monkeypatch.setattr(gate.metadata, "distribution", distributions)
+
+    findings = gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), _default_policy()
+    )
+
+    assert len(findings) == 1
+    assert "types-requests" in findings[0].message
+    assert "requests 2.33.1" in findings[0].message
+    assert "typing group(s) dev" in findings[0].message
+
+
+def test_builtin_requests_skips_versions_with_inline_typing(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    (tmp_path / "app.py").write_text("import requests\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\ndependencies = ["requests>=2.34,<3"]\n'
+        "[project.optional-dependencies]\ndev = []\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        gate.metadata, "distribution", lambda _: _TypedRequestsDistribution()
+    )
+
+    assert not gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), _default_policy()
+    )
+
+
+def test_builtin_requests_does_not_recommend_outside_verified_runtime_range(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    (tmp_path / "app.py").write_text("import requests\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\ndependencies = ["requests>=2.32,<2.33"]\n'
+        "[project.optional-dependencies]\ndev = []\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        gate.metadata, "distribution", lambda _: _OldRequestsDistribution()
+    )
+
+    findings = gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), _default_policy()
+    )
+
+    assert len(findings) == 1
+    assert "outside that verified range" in findings[0].message
+    assert "no stub recommendation was made" in findings[0].message
 
 
 def test_builtin_yaml_mapping_skips_duplicate_dev_stubs(

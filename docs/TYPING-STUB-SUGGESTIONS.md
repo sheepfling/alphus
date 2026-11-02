@@ -10,10 +10,13 @@ PyYAML 6.0 on Python 3.10+, `scipy` → `scipy` → `scipy-stubs==1.18.1.*`
 for SciPy 1.18.1 on Python 3.12+, `dateutil` → `python-dateutil` →
 `types-python-dateutil==2.9.0.*` for python-dateutil 2.9 on Python 3.10+, and
 `toml` → `toml` → `types-toml==0.10.8.*` for toml 0.10 on Python 3.10+.
+Requests 2.33 maps to `types-requests==2.33.0.*` on Python 3.10+; Requests
+2.34+ ships inline typing, so an installed typed runtime is skipped.
 The PyYAML mapping records its tested stub checker set (`mypy`, `pyright`, and
 `ty`) and compatible stub-version range; the SciPy mapping is scoped to the
 same three checkers. The dateutil mapping is scoped to those three checkers,
-and the toml mapping to `mypy` and `pyright`. Findings point to the
+and the toml mapping to `mypy` and `pyright`; the requests mapping is scoped to
+the rule's supported `mypy`, `pyright`, and `ty` options. Findings point to the
 importing source line and include the selected checker scope. When a candidate
 is suggested, the rule also reports checker distribution versions visible in
 the selected interpreter, or that a selected checker is not installed. This is
@@ -22,9 +25,13 @@ behavior from its version. These bounds were checked against
 [typeshed's PyYAML metadata](https://github.com/python/typeshed/blob/main/stubs/PyYAML/METADATA.toml),
 [types-PyYAML on PyPI](https://pypi.org/project/types-PyYAML/), and the
 [official scipy-stubs project metadata](https://github.com/scipy/scipy-stubs/blob/master/pyproject.toml)
-[official scipy-stubs project metadata](https://github.com/scipy/scipy-stubs/blob/master/pyproject.toml),
 [types-python-dateutil on PyPI](https://pypi.org/project/types-python-dateutil/),
-and [types-toml on PyPI](https://pypi.org/project/types-toml/) on 2026-11-02.
+and [types-toml on PyPI](https://pypi.org/project/types-toml/), plus
+[typeshed's Requests metadata](https://github.com/python/typeshed/blob/main/stubs/requests/METADATA.toml)
+and [types-requests on PyPI](https://pypi.org/project/types-requests/) on
+2026-11-02. Typeshed currently targets Requests `~=2.33.0` and marks that stub
+obsolete at runtime version 2.34.0; the PyPI description confirms Requests
+2.34.0+ includes type annotations.
 Pyright 1.1.414 was also run against installed PyYAML, SciPy, dateutil, and toml
 runtime/stub packages; deliberate incompatible assignments were rejected and
 valid return types were inferred. The catalog's dateutil and toml checker
