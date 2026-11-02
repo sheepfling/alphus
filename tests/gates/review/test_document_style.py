@@ -398,6 +398,24 @@ def test_isolated_creative_heading_and_marketing_exclusion_do_not_report(
     )
 
 
+def test_evidence_backed_presentation_titles_are_not_rhetorical_templates() -> None:
+    titles = (
+        "Adding observer geometry reduced median error by 32%",
+        "The selected solver converged in all ten trials",
+        "Residuals stayed within the stated tolerance",
+        "Caching reduced parse time from 4.2 seconds to 0.8 seconds",
+    )
+    sections = tuple(
+        DocumentSection("deck.md", title, 1, index)
+        for index, title in enumerate(titles, start=1)
+    )
+
+    assert (
+        rhetorical_heading_findings(sections, DocumentStylePolicy(minimum_headings=4))
+        == []
+    )
+
+
 def test_sample_profile_selects_opt_in_document_style_rule() -> None:
     config = load_config(Path("examples/markdown/document-review.toml"))
     plan = config.orchestration.resolve_profile("document-review")

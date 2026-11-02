@@ -39,7 +39,10 @@ Use synthetic data to cover the absent cases without copying brand material:
   it outside the technical profile or select a separate policy with a higher
   density threshold.
 - Negative: a presentation with evidence-backed assertion titles; expect no
-  finding solely because a title makes a claim.
+  finding solely because a title makes a claim. A synthetic regression for
+  four quantitative/validation claims now lives in
+  `tests/gates/review/test_document_style.py`;
+  it checks only template non-matches, not human judgments about quality.
 
 ## Limits and follow-up
 
