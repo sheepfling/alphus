@@ -1153,14 +1153,12 @@ def _contains_utc_astimezone(
                     item is target for item in ast.walk(receiver)
                 ):
                     return True
-            case (
-                ast.Call(
-                    func=ast.Attribute(attr="astimezone"),
-                    keywords=[ast.keyword(arg="tz", value=zone)],
-                ) as conversion
+            case ast.Call(
+                func=ast.Attribute(value=receiver, attr="astimezone"),
+                keywords=[ast.keyword(arg="tz", value=zone)],
             ):
                 if _is_known_utc_zone(zone, aliases) and any(
-                    item is target for item in ast.walk(conversion.func.value)
+                    item is target for item in ast.walk(receiver)
                 ):
                     return True
             case _:
@@ -1227,11 +1225,18 @@ def _utc_persistence_lines(
                 (item.value for item in call.keywords if item.arg == contract.keyword),
                 None,
             )
+            if argument is None:
+                continue
             for capture in ast.walk(argument):
-                if not isinstance(capture, ast.Call) or (
-                    canonical_expression_name(capture.func, aliases)
-                    not in {"datetime.datetime.now", "datetime.now"}
-                ):
+                match capture:
+                    case ast.Call(func=function):
+                        pass
+                    case _:
+                        continue
+                if canonical_expression_name(function, aliases) not in {
+                    "datetime.datetime.now",
+                    "datetime.now",
+                }:
                     continue
                 zone = next(
                     (item.value for item in capture.keywords if item.arg == "tz"),
