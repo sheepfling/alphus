@@ -45,25 +45,22 @@ def _is_conjugation(function: ast.FunctionDef, components: tuple[str, ...]) -> b
         return False
     if function.args.vararg is not None or function.args.kwarg is not None:
         return False
-    statements = function.body
-    if (
-        statements
-        and isinstance(statements[0], ast.Expr)
-        and isinstance(statements[0].value, ast.Constant)
-        and isinstance(statements[0].value.value, str)
-    ):
-        statements = statements[1:]
-    if len(statements) != 1 or not isinstance(statements[0], ast.Return):
-        return False
-    returned = statements[0].value
-    if not isinstance(returned, ast.Tuple) or len(returned.elts) != 4:
-        return False
+    statements = (
+        function.body[1:]
+        if ast.get_docstring(function, clean=False) is not None
+        else function.body
+    )
+    match statements:
+        case [ast.Return(value=ast.Tuple(elts=elements))] if len(elements) == 4:
+            returned = elements
+        case _:
+            return False
     scalar, x, y, z = components
     return (
-        _is_component(returned.elts[0], scalar)
-        and _is_component(returned.elts[1], x, negate=True)
-        and _is_component(returned.elts[2], y, negate=True)
-        and _is_component(returned.elts[3], z, negate=True)
+        _is_component(returned[0], scalar)
+        and _is_component(returned[1], x, negate=True)
+        and _is_component(returned[2], y, negate=True)
+        and _is_component(returned[3], z, negate=True)
     )
 
 
@@ -77,12 +74,12 @@ def quaternion_conjugation_lines(
         return []
     results: list[tuple[str, int]] = []
     for node in ast.walk(tree):
-        if (
-            isinstance(node, ast.FunctionDef)
-            and node.name in policy.function_names
-            and _is_conjugation(node, policy.components)
-        ):
-            results.append((node.name, node.lineno))
+        match node:
+            case ast.FunctionDef(name=name) if name in policy.function_names:
+                if _is_conjugation(node, policy.components):
+                    results.append((name, node.lineno))
+            case _:
+                continue
     return sorted(set(results))
 
 
