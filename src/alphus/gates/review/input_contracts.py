@@ -902,42 +902,6 @@ def _is_name_in(node: ast.AST, names: AbstractSet[str]) -> bool:
             return False
 
 
-def _normalizer_call(
-    node: ast.AST, parameter: str, model: str, aliases: ImportAliases
-) -> bool:
-    match node:
-        case ast.Call(func=ast.Attribute(value=owner, attr=method), args=arguments) if (
-            method in {"model_validate", "parse_obj"}
-        ):
-            return canonical_expression_name(owner, aliases) == model and any(
-                _name_expression(argument, parameter) for argument in arguments
-            )
-        case _:
-            return False
-
-
-def _loaded_name_after_without_rebinding(
-    nodes: Sequence[ast.AST], name: str, line: int
-) -> bool:
-    """Find a later read while the assigned value is still live."""
-    stores = sorted(
-        store_line
-        for node in nodes
-        if (store_line := _rebound_name_line(node, name)) is not None
-        and store_line > line
-    )
-    for node in nodes:
-        match node:
-            case ast.Name(id=used_name, ctx=ast.Load(), lineno=used_line) if (
-                used_name == name and used_line > line
-            ):
-                if not any(line < store_line < used_line for store_line in stores):
-                    return True
-            case _:
-                continue
-    return False
-
-
 class _FunctionLocalNodes(ast.NodeVisitor):
     """Collect nodes for one function without treating nested scopes as local."""
 
@@ -1190,73 +1154,6 @@ def _direct_forwarded_mapping_reads(
     return sorted(evidence)
 
 
-def _has_normalization_flow(
-    function: ast.FunctionDef | ast.AsyncFunctionDef,
-    parameter: str,
-    model: str,
-    aliases: ImportAliases,
-    nodes: Sequence[ast.AST],
-) -> bool:
-    """Recognize a direct assigned model validator result used in the function."""
-    validator_calls: list[tuple[int, str]] = []
-    local_node_ids = {id(node) for node in nodes}
-    for node in nodes:
-        match node:
-            case ast.If() | ast.Match() | ast.Try() | ast.TryStar():
-                branch = node
-            case _:
-                continue
-        branch_nodes = list(ast.walk(branch))
-        parents = {
-            id(child): parent
-            for parent in branch_nodes
-            for child in ast.iter_child_nodes(parent)
-        }
-        for child in branch_nodes:
-            if id(child) not in local_node_ids or not _normalizer_call(
-                child, parameter, model, aliases
-            ):
-                continue
-            parent = parents.get(id(child))
-            match parent:
-                case ast.Return(value=returned) if returned is child:
-                    return True
-                case ast.Assign(
-                    targets=[ast.Name(id=assigned_name)],
-                    value=assigned_value,
-                    lineno=assignment_line,
-                ) if assigned_value is child:
-                    pass
-                case ast.AnnAssign(
-                    target=ast.Name(id=assigned_name),
-                    value=assigned_value,
-                    lineno=assignment_line,
-                ) if assigned_value is child:
-                    pass
-                case _:
-                    continue
-            if _loaded_name_after_without_rebinding(
-                nodes, assigned_name, assignment_line
-            ):
-                return True
-    for statement in function.body:
-        target: ast.expr | None = None
-        value: ast.expr | None = None
-        match statement:
-            case ast.Assign(targets=[ast.Name() as name], value=ast.Call() as call):
-                target, value = name, call
-            case ast.AnnAssign(target=ast.Name() as name, value=ast.Call() as call):
-                target, value = name, call
-            case _:
-                continue
-        if _normalizer_call(value, parameter, model, aliases):
-            validator_calls.append((statement.lineno, target.id))
-    for line, name in validator_calls:
-        if _loaded_name_after_without_rebinding(nodes, name, line):
-            return True
-    return False
-
-
 def _domain_mapping_findings(
     function: ast.FunctionDef | ast.AsyncFunctionDef,
     aliases: ImportAliases,
@@ -1298,9 +1195,12 @@ def _domain_mapping_findings(
                 reads = sorted(
                     {line for _, _, lines in forwarded_reads for line in lines}
                 )
-            if not reads or _has_normalization_flow(
-                function, argument.arg, model, aliases, local.nodes
-            ):
+            # A validator elsewhere in the function does not establish that
+            # the mapping branch converges on the model. Literal-key reads
+            # are direct evidence that the original input remains in use, so
+            # retain the review candidate even when a normalized value is
+            # also assigned, returned, or passed to a helper.
+            if not reads:
                 continue
             evidence = f"literal-key reads at line(s) {', '.join(map(str, reads))}"
             if forwarded_reads:
@@ -1349,10 +1249,6 @@ def _domain_mapping_findings(
                 )
             if not reads:
                 continue
-            if _has_normalization_flow(
-                function, argument.arg, contract.domain_type, aliases, local.nodes
-            ):
-                continue
             kind = "mapping"
             evidence = f"literal-key reads at line(s) {', '.join(map(str, reads))}"
             if forwarded_reads:
@@ -1363,9 +1259,7 @@ def _domain_mapping_findings(
             rule_id = "generic-mapping-domain-escape"
         elif annotation_name in {"object", "builtins.object"}:
             attributes = _direct_attribute_reads(argument.arg, local.nodes)
-            if not attributes or _has_normalization_flow(
-                function, argument.arg, contract.domain_type, aliases, local.nodes
-            ):
+            if not attributes:
                 continue
             kind = "object"
             evidence = ", ".join(f".{name} at line {line}" for name, line in attributes)

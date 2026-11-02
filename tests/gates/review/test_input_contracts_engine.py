@@ -277,6 +277,45 @@ def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
     )
 
 
+def test_used_validation_result_does_not_hide_continued_mapping_computation() -> None:
+    findings = input_contract_findings(
+        """from collections.abc import Mapping
+from app.models import EvaluationOptions
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
+    normalized = EvaluationOptions.model_validate(options)
+    _evaluate(normalized)
+    return options["count"]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].rule_id.endswith("generic-mapping-domain-escape")
+    assert "literal-key reads at line(s) 6" in findings[0].message
+
+
+def test_branch_validation_does_not_hide_mapping_use_after_the_branch() -> None:
+    findings = input_contract_findings(
+        """from collections.abc import Mapping
+from app.models import EvaluationOptions
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
+    if isinstance(options, Mapping):
+        normalized = EvaluationOptions.model_validate(options)
+    else:
+        normalized = options
+    _evaluate(normalized)
+    return options["count"]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].rule_id.endswith("generic-mapping-domain-escape")
+    assert "literal-key reads at line(s) 9" in findings[0].message
+
+
 def test_branch_specific_assigned_model_normalization_is_used() -> None:
     assert (
         input_contract_findings(
