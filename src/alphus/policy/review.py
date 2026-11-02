@@ -90,12 +90,40 @@ class ManualMatrixKernelPolicy(PythonSourceScanPolicy):
         return validate_patterns(values)
 
 
+class ArrayRepresentationContract(StrictModel):
+    """One consumer-declared array variable inside a selected numerical function."""
+
+    path: str
+    function: str
+    array_variable: str
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, value: str) -> str:
+        return validate_single_path(value, "array representation contract path")
+
+    @field_validator("function")
+    @classmethod
+    def validate_function(cls, value: str) -> str:
+        if any(not part.isidentifier() for part in value.split(".")):
+            raise ValueError("array representation function must be dotted identifiers")
+        return value
+
+    @field_validator("array_variable")
+    @classmethod
+    def validate_array_variable(cls, value: str) -> str:
+        if not value.isidentifier():
+            raise ValueError("array representation variable must be an identifier")
+        return value
+
+
 class ArrayRepresentationPolicy(PythonSourceScanPolicy):
-    """Opt-in exact allowlist for array-to-list-to-array round trips."""
+    """Opt-in review of exact array/list round trips and selected loop churn."""
 
     source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
     array_constructors: Annotated[tuple[str, ...], Field(min_length=1)]
     list_conversion_methods: tuple[str, ...] = ("tolist",)
+    loop_contracts: tuple[ArrayRepresentationContract, ...] = ()
     severity: Severity = "info"
 
     @field_validator("source_paths")
@@ -121,6 +149,19 @@ class ArrayRepresentationPolicy(PythonSourceScanPolicy):
             raise ValueError("list conversion methods must be identifiers")
         require_unique(values, "list conversion methods must be unique")
         return tuple(values)
+
+    @field_validator("loop_contracts")
+    @classmethod
+    def validate_loop_contracts(
+        cls, contracts: Sequence[ArrayRepresentationContract]
+    ) -> tuple[ArrayRepresentationContract, ...]:
+        values = tuple(contracts)
+        selectors = tuple(
+            (contract.path, contract.function, contract.array_variable)
+            for contract in values
+        )
+        require_unique(selectors, "array representation loop selectors must be unique")
+        return values
 
 
 class CholeskyRecurrencePolicy(PythonSourceScanPolicy):

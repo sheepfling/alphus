@@ -14,12 +14,34 @@ examples, reference oracles, custom arithmetic and small fixed-size formulas
 may be intentional; exclude them or keep the advisory disabled.
 
 The consumer example also offers an independent `array-representation-churn`
-advisory. It recognizes only a direct, same-expression call such as
+advisory. Outside the contracted loop mode below, it recognizes only a direct,
+same-expression call such as
 `np.asarray(values.tolist())`, and only when the outer constructor is explicitly
 configured. It excludes control-flow-contained expressions, unknown helpers,
 keywords, and intermediate assignments by requiring the direct nested-call
 form. This is a review prompt, not a measured performance claim; the list may
 be an intentional serialization or API boundary.
+
+For a possible per-iteration repetition, `loop_contracts` can select one exact
+path, function, and array variable. The detector requires a direct assignment
+such as `rebuilt = np.asarray(batch.tolist())` in a simple `for` body, a
+constructor resolved through a module import, and a later straight-line use of
+`rebuilt` in that same iteration. The contract supplies the array identity; a
+name or `.tolist()` call alone is insufficient. Nested branches, local aliases,
+reassignment, shadowed or unresolved constructors, and unused reconstructed
+values stay unknown. This reports a representation change written inside a
+loop, not that the loop is hot or that the code is slower. Check representative
+workloads and preserve dtype, shape, output type, ownership and serialization
+behavior before considering a change.
+
+Example selector:
+
+```toml
+[[checks.array_representation_churn.loop_contracts]]
+path = "src/numerics/kernels.py"
+function = "process_batches"
+array_variable = "batch"
+```
 
 The profile selects `src/numerics/*.py` only for numeric kernels; adapt those
 paths to consumer-owned modules.

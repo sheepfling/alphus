@@ -31,6 +31,11 @@ def test_manual_matrix_kernel_example_is_scoped_and_provisional() -> None:
     policy = config.checks.manual_matrix_kernels
     assert policy is not None
     assert policy.source_paths == ("src/numerics/*.py",)
+    churn_policy = config.checks.array_representation_churn
+    assert churn_policy is not None
+    assert churn_policy.loop_contracts[0].path == "src/numerics/kernels.py"
+    assert churn_policy.loop_contracts[0].function == "process_batches"
+    assert churn_policy.loop_contracts[0].array_variable == "batch"
     orchestration = config.orchestration
     assert orchestration is not None
     plan = orchestration.resolve_profile("numerical-review")

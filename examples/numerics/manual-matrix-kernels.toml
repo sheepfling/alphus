@@ -16,6 +16,11 @@ source_paths = ["src/numerics/*.py"]
 array_constructors = ["numpy.asarray", "np.asarray"]
 list_conversion_methods = ["tolist"]
 
+[[checks.array_representation_churn.loop_contracts]]
+path = "src/numerics/kernels.py"
+function = "process_batches"
+array_variable = "batch"
+
 [checks.cholesky_recurrence]
 extensions = [".py"]
 exclude = []

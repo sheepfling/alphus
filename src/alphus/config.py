@@ -68,6 +68,7 @@ from alphus.policy.repository import (
     VersionSyncPolicy,
 )
 from alphus.policy.review import (
+    ArrayRepresentationContract,
     ArrayRepresentationPolicy,
     CholeskyRecurrencePolicy,
     ErrorCodeCallSpec,
@@ -112,6 +113,7 @@ from alphus.support.source_text import read_utf8_text
 __all__ = [
     "ArchitectureGraphCheckPolicy",
     "ArchitectureGraphPolicy",
+    "ArrayRepresentationContract",
     "ArrayRepresentationPolicy",
     "CallableRegistryPolicy",
     "CheckPolicies",
