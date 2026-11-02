@@ -100,6 +100,20 @@ kept = re.sub(r"\\s+", " ", prose)
     )
 
 
+def test_lossy_regex_rewrite_ignores_zero_width_digit_assertions() -> None:
+    source = r"""\
+zero_width = re.sub(r"(?=\d)", "", text)
+lookbehind = re.sub(r"(?<=\d)", " ", text)
+escaped = re.sub(r"\\d", "", text)
+negated = re.sub(r"[^\d]+", "", text)
+consuming = re.sub(r"(?=\d)\d+", "", text)
+"""
+
+    assert lossy_rewrite_lines(
+        source, _policy(lossy_text_rewrite=True, regex_sub_helpers=("re.sub",))
+    ) == [(6, r"(?=\d)\d+")]
+
+
 def test_lossy_text_rewrite_detects_literal_semantic_token_deletion() -> None:
     source = """\
 cleaned = prose.replace("0.25", "")
@@ -225,4 +239,4 @@ def test_lossy_text_rewrite_requires_explicit_regex_helpers_and_reports_evidence
     )
     assert len(findings) == 1
     assert findings[0].rule_id == "alphus/python/none/correctness/lossy-text-rewrite"
-    assert "does not establish" in findings[0].message
+    assert "does not prove" in findings[0].message

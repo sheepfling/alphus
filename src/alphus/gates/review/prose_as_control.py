@@ -194,6 +194,54 @@ def _literal_replace_expression(node: ast.Call) -> str | None:
     return f"replace({token!r}, {replacement!r}{suffix})"
 
 
+def _regex_consumes_digit(pattern: str) -> bool:
+    """Find a literal digit class outside regex assertions and negated classes."""
+    groups: list[bool] = []
+    assertion_depth = 0
+    in_character_class = False
+    class_is_negated = False
+    index = 0
+    while index < len(pattern):
+        character = pattern[index]
+        if character == "\\" and index + 1 < len(pattern):
+            escaped = pattern[index + 1]
+            if (
+                escaped == "d"
+                and assertion_depth == 0
+                and not (in_character_class and class_is_negated)
+            ):
+                return True
+            index += 2
+            continue
+        if in_character_class:
+            if character == "]":
+                in_character_class = False
+                class_is_negated = False
+            index += 1
+            continue
+        if pattern.startswith("(?#", index):
+            closing = pattern.find(")", index + 3)
+            if closing < 0:
+                return False
+            index = closing + 1
+            continue
+        if character == "[":
+            in_character_class = True
+            class_is_negated = pattern.startswith("[^", index)
+            index += 1
+            continue
+        if character == "(":
+            is_assertion = pattern.startswith(("(?=", "(?!", "(?<=", "(?<!"), index)
+            groups.append(is_assertion)
+            if is_assertion:
+                assertion_depth += 1
+        elif character == ")" and groups:
+            if groups.pop():
+                assertion_depth -= 1
+        index += 1
+    return False
+
+
 def lossy_rewrite_lines(
     source: str, policy: ProseAsControlPolicy
 ) -> list[tuple[int, str]]:
@@ -218,7 +266,7 @@ def lossy_rewrite_lines(
                 keywords=[],
             ) if (
                 _qualified_name(func) in helpers
-                and "\\d" in pattern
+                and _regex_consumes_digit(pattern)
                 and replacement in {"", " "}
             ):
                 observations.add((node.lineno, pattern))
@@ -261,7 +309,7 @@ def check_lossy_text_rewrite(
         if not path.is_file():
             continue
         for line, pattern in lossy_rewrite_lines(read_python_source(path), policy):
-            if pattern.startswith("replace(") and any(
+            if not _regex_consumes_digit(pattern) and any(
                 pattern == allowance.expression and matches_path(name, allowance.path)
                 for allowance in policy.allowed_literal_rewrites
             ):
@@ -270,12 +318,19 @@ def check_lossy_text_rewrite(
                 Finding(
                     _LOSSY_REWRITE_RULE_ID,
                     name,
-                    "configured text rewrite removes a digit/sign/delimiter-bearing "
-                    f"token using an empty/space replacement ({pattern}); review "
-                    "whether that information is semantic input. This syntax does not "
-                    "establish that content is actually lost for a given source. The "
-                    "receiver type is not inferred; custom .replace APIs may have "
-                    "different semantics.",
+                    (
+                        "configured regex has a consuming digit class and an "
+                        "empty/space replacement "
+                        f"(pattern {pattern!r}); review whether it could remove "
+                        "semantic numeric content. A syntax match does not prove "
+                        "that the pattern matches this input or changes its text."
+                        if _regex_consumes_digit(pattern)
+                        else "configured .replace call removes a literal "
+                        "digit/sign/delimiter-bearing token with an empty/space "
+                        f"replacement ({pattern}); review whether that information "
+                        "is semantic input. This syntax does not establish actual "
+                        "content loss, and the receiver type is not inferred."
+                    ),
                     line,
                     policy.severity,
                 )
