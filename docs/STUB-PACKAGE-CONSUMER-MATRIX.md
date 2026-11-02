@@ -20,7 +20,7 @@ matrix.
 | --- | --- |
 | Consumer source | `sheepfling/mdutils-stubs` commit `777b4b600e128721493999ed48867fa664f1a573` |
 | Runtime contract | `mdutils==1.8.1`; upstream source commit `170f7d040ea598672c53015a5db4fab868dacba0` |
-| Alphus implementation | Local run: PR #68 head `78822f071c0680b68852a2fc6cc9ba2944e14ea2`; hosted reports record their exact head |
+| Alphus implementation | Local `78822f0`; hosted report records its exact SHA |
 | Checker interpreter | Python 3.11.16, macOS `darwin` arm64; MyPy 2.4.1, Pyright 1.1.414, ty 0.0.91 |
 | Target interpreter | Python 3.11.16, macOS `darwin` arm64; `mdutils==1.8.1`, `mypy==2.4.1` |
 | Built stub artifact | `mdutils_stubs-1.8.1.0-py3-none-any.whl` |

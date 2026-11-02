@@ -2,21 +2,11 @@
 
 from __future__ import annotations
 
-import importlib.util
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 
-SCRIPT = (
-    Path(__file__).resolve().parents[3] / "scripts" / "prepare_mdutils_stub_trial.py"
-)
-SPEC = importlib.util.spec_from_file_location("prepare_mdutils_stub_trial", SCRIPT)
-assert SPEC is not None and SPEC.loader is not None
-prepare_mdutils_stub_trial = importlib.util.module_from_spec(SPEC)
-sys.modules[SPEC.name] = prepare_mdutils_stub_trial
-SPEC.loader.exec_module(prepare_mdutils_stub_trial)
+from alphus.gates.stubs import mdutils_trial as prepare_mdutils_stub_trial
 
 
 def _consumer(root: Path) -> tuple[bytes, bytes]:
@@ -54,11 +44,9 @@ def test_preparation_keeps_original_fixtures_and_stub_tree_unchanged(
     positive, negative = _consumer(tmp_path)
     package_before = prepare_mdutils_stub_trial._package_digest(tmp_path)
     monkeypatch.setattr(
-        prepare_mdutils_stub_trial.subprocess,
-        "run",
-        lambda *_args, **_kwargs: subprocess.CompletedProcess(
-            ["git"], 0, prepare_mdutils_stub_trial.CONSUMER_REVISION + "\n", ""
-        ),
+        prepare_mdutils_stub_trial,
+        "git_value",
+        lambda *_args, **_kwargs: prepare_mdutils_stub_trial.CONSUMER_REVISION,
     )
 
     prepare_mdutils_stub_trial.prepare(tmp_path)
@@ -89,11 +77,9 @@ def test_preparation_rejects_an_unreviewed_negative_fixture_shape(
         "from mdutils import MdUtils\n\nMdUtils()\n", encoding="utf-8"
     )
     monkeypatch.setattr(
-        prepare_mdutils_stub_trial.subprocess,
-        "run",
-        lambda *_args, **_kwargs: subprocess.CompletedProcess(
-            ["git"], 0, prepare_mdutils_stub_trial.CONSUMER_REVISION + "\n", ""
-        ),
+        prepare_mdutils_stub_trial,
+        "git_value",
+        lambda *_args, **_kwargs: prepare_mdutils_stub_trial.CONSUMER_REVISION,
     )
 
     with pytest.raises(ValueError, match="negative fixture differs"):
