@@ -79,8 +79,7 @@ def test_checker_installation_reports_versions_and_absent_metadata(
 
 
 def test_alphus_check_profile_executes_typing_stub_suggestions() -> None:
-    repository_root = Path(__file__).resolve().parents[3]
-    config = load_config(repository_root / "quality-gates.toml")
+    config = load_config(Path("quality-gates.toml"))
     assert config.orchestration is not None
     plan = config.orchestration.resolve_profile("check")
 
