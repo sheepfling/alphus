@@ -56,6 +56,65 @@ def test_groups_flat_python_family_as_lexical_only(tmp_path: Path) -> None:
     assert "exclude=**/vendor/**" in findings[0].message
 
 
+def test_opt_in_python_import_evidence_reports_resolved_edges(tmp_path: Path) -> None:
+    paths = []
+    for name in ("client", "server", "routes", "auth", "cache"):
+        paths.append(
+            _write(
+                tmp_path,
+                f"src/gateway_{name}.py",
+                1,
+            )
+        )
+    (tmp_path / "src/gateway_client.py").write_text(
+        "from gateway_server import serve\n", encoding="utf-8"
+    )
+    (tmp_path / "src/gateway_server.py").write_text(
+        "from gateway_client import connect\n", encoding="utf-8"
+    )
+
+    findings = source_family_findings(
+        tmp_path,
+        paths,
+        SourceFamilyPolicy(
+            min_family_files=5,
+            python_import_evidence=True,
+            python_module_roots=("src",),
+        ),
+    )
+
+    assert len(findings) == 1
+    assert "2 resolved edge(s) target another family member" in findings[0].message
+    assert "src/gateway_client.py:1 → src/gateway_server.py" in findings[0].message
+    assert "Direct imports are partial evidence only" in findings[0].message
+
+
+def test_import_evidence_requires_explicit_module_root() -> None:
+    with pytest.raises(ValueError, match="requires explicit python_module_roots"):
+        SourceFamilyPolicy(python_import_evidence=True)
+
+
+def test_import_parse_failure_is_reported_as_incomplete(tmp_path: Path) -> None:
+    paths = [
+        _write(tmp_path, f"src/gateway_{name}.py")
+        for name in ("client", "server", "routes", "auth", "cache")
+    ]
+    (tmp_path / "src/gateway_client.py").write_text("def broken(:\n", encoding="utf-8")
+
+    findings = source_family_findings(
+        tmp_path,
+        paths,
+        SourceFamilyPolicy(
+            min_family_files=5,
+            python_import_evidence=True,
+            python_module_roots=("src",),
+        ),
+    )
+
+    assert any("could not be analyzed" in finding.message for finding in findings)
+    assert any("no clean result can be inferred" in finding.message for finding in findings)
+
+
 def test_scope_exclusions_extensions_and_language_override_precedence(
     tmp_path: Path,
 ) -> None:

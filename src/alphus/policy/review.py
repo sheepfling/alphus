@@ -191,7 +191,7 @@ class InputContractPolicy(PythonSourceScanPolicy):
 
 
 class SourceFamilyPolicy(StrictModel):
-    """Bounded, lexical-only review of similarly named source siblings."""
+    """Bounded review of similarly named source siblings."""
 
     extensions: tuple[str, ...] = (
         ".py",
@@ -222,6 +222,10 @@ class SourceFamilyPolicy(StrictModel):
     max_reported_members: int = 40
     max_scope_patterns: int = 64
     file_length_limits: tuple[tuple[str, int], ...] = ()
+    python_import_evidence: bool = False
+    python_module_roots: tuple[str, ...] = ()
+    max_import_edges: int = 12
+    max_import_analysis_bytes: int = 8 * 1024 * 1024
 
     @model_validator(mode="after")
     def validate_limits(self) -> Self:
@@ -233,15 +237,24 @@ class SourceFamilyPolicy(StrictModel):
                 self.max_findings,
                 self.max_reported_members,
                 self.max_scope_patterns,
+                self.max_import_edges,
+                self.max_import_analysis_bytes,
             )
             < 1
         ):
             raise ValueError("source-family thresholds and bounds must be positive")
         if (
-            len(self.include) + len(self.exclude) + len(self.path_language_overrides)
+            len(self.include)
+            + len(self.exclude)
+            + len(self.path_language_overrides)
+            + len(self.python_module_roots)
             > self.max_scope_patterns
         ):
             raise ValueError("source-family scope exceeds max_scope_patterns")
+        if self.python_import_evidence and not self.python_module_roots:
+            raise ValueError(
+                "Python import evidence requires explicit python_module_roots"
+            )
         return self
 
     @field_validator("extensions")
@@ -255,6 +268,16 @@ class SourceFamilyPolicy(StrictModel):
     @classmethod
     def validate_source_patterns(cls, values: Sequence[str]) -> tuple[str, ...]:
         return validate_patterns(values)
+
+    @field_validator("python_module_roots")
+    @classmethod
+    def validate_python_module_roots(cls, values: Sequence[str]) -> tuple[str, ...]:
+        roots = tuple(
+            validate_single_path(value, "source-family Python module roots")
+            for value in values
+        )
+        require_unique(roots, "source-family Python module roots must be unique")
+        return roots
 
     @field_validator("language_overrides")
     @classmethod
