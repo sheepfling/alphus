@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
@@ -13,7 +14,7 @@ from pypdf.generic import DictionaryObject, NameObject, TextStringObject
 from scripts.check_pdf_portability import validate_portability
 
 
-def _pdf(path: Path, actions: list[tuple[str, str | None]]) -> None:
+def _pdf(path: Path, actions: Sequence[tuple[str, str | None]]) -> None:
     writer = PdfWriter()
     writer.add_blank_page(width=100, height=100)
     for kind, target in actions:

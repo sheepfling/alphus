@@ -6,7 +6,7 @@ import argparse
 import importlib
 import sys
 from collections.abc import Sequence
-from pathlib import Path, PureWindowsPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Literal, Protocol, cast
 from urllib.parse import unquote, urlsplit
 
@@ -48,13 +48,16 @@ def _dictionary(value: object) -> _Dictionary:
     return cast(_Dictionary, resolved)
 
 
+def _text_value(value: str | None) -> str | None:
+    return value if isinstance(value, str) else None
+
+
 def _local_path(value: str) -> bool:
     path = unquote(value)
     parsed = urlsplit(path)
     return (
         PureWindowsPath(path).is_absolute()
-        or path.startswith(("//", "\\\\"))
-        or Path(path).is_absolute()
+        or PurePosixPath(path).is_absolute()
         or parsed.scheme.casefold() == "file"
     )
 
@@ -132,8 +135,8 @@ def validate_portability(
             if kind == "/GoTo":
                 continue
             if kind == "/URI":
-                uri_value = action.get("/URI")
-                if not isinstance(uri_value, str):
+                uri_value = _text_value(cast(str | None, action.get("/URI")))
+                if uri_value is None:
                     unknown.append(f"{prefix}: malformed URI action")
                     continue
                 uri = str(uri_value)
@@ -160,9 +163,9 @@ def validate_portability(
                     )
                 continue
             if kind == "/GoToR":
-                file_spec = action.get("/F")
-                if isinstance(file_spec, str):
-                    target = str(file_spec)
+                file_spec = _text_value(cast(str | None, action.get("/F")))
+                if file_spec is not None:
+                    target = file_spec
                 else:
                     try:
                         file_dictionary = _dictionary(file_spec)
