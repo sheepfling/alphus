@@ -58,7 +58,7 @@ _QUOTED_POWERSHELL_DELEGATION = re.compile(
 )
 _CMD_ENV = re.compile(r"%[A-Za-z_][A-Za-z0-9_]*%")
 _PRINTF_FORMAT_COMMAND = re.compile(
-    r"(?:^|(?:&&|\|\||[;&|()])[ \t]*)"
+    r"(?:^[ \t]*|(?:&&|\|\||[;&|()])[ \t]*)"
     r"(?:(?:command|builtin)[ \t]+)?(?P<command>printf)\b"
 )
 _SHELL_WORD = re.compile(r"(?:'[^']*'|\"(?:\\.|[^\"])*\"|\\.|[^\s])+")
@@ -349,55 +349,62 @@ def _mask_printf_format_argument(
         visible_command = line
         raw_command = raw_line
 
-    command_match = _PRINTF_FORMAT_COMMAND.search(visible_command)
-    if command_match is None:
-        return line, False
-    if command_match.start("command") + offset > len(raw_command):
-        return line, False
-    command_text = raw_command[command_match.start("command") :]
-    words = list(_SHELL_WORD.finditer(command_text))
-    if not words:
-        return line, False
-    index = 1  # printf command name
-    while index < len(words):
-        word = words[index].group()
-        if word == "--":
-            index += 1
+    spans: list[tuple[int, int]] = []
+    format_found = False
+    for command_match in _PRINTF_FORMAT_COMMAND.finditer(visible_command):
+        command_start = command_match.start("command")
+        if command_start + offset > len(raw_command):
+            continue
+        command_text = raw_command[command_start:]
+        words = list(_SHELL_WORD.finditer(command_text))
+        if not words:
+            continue
+        index = 1  # printf command name
+        while index < len(words):
+            word = words[index].group()
+            if word == "--":
+                index += 1
+                break
+            if word == "-v":
+                index += 2
+                continue
+            if word.startswith("-") and word != "-":
+                index += 1
+                continue
             break
-        if word == "-v":
-            index += 2
+        if index >= len(words):
             continue
-        if word.startswith("-") and word != "-":
-            index += 1
-            continue
-        break
-    if index >= len(words):
-        return line, False
 
-    match = words[index]
-    format_word = match.group()
-    if format_word == "\\":
-        return line, False
-    if format_word.startswith(("'", '"')):
-        return line, True
-    directives = list(_PRINTF_FORMAT_DIRECTIVE.finditer(format_word))
-    percent_positions = [i for i, char in enumerate(format_word) if char == "%"]
-    covered = {
-        position for directive in directives for position in range(*directive.span())
-    }
-    if not percent_positions or not all(
-        position in covered for position in percent_positions
-    ):
-        return line, True
-    start, end = match.span()
-    start += command_match.start("command") - offset
-    end += command_match.start("command") - offset
-    if start < 0 or end > len(line):
-        return line, True
-    masked = _PRINTF_FORMAT_DIRECTIVE.sub(
-        lambda conversion: " " * len(conversion.group()), line[start:end]
-    )
-    return f"{line[:start]}{masked}{line[end:]}", True
+        match = words[index]
+        format_word = match.group()
+        if format_word == "\\":
+            continue
+        format_found = True
+        if format_word.startswith(("'", '"')):
+            continue
+        directives = list(_PRINTF_FORMAT_DIRECTIVE.finditer(format_word))
+        percent_positions = [i for i, char in enumerate(format_word) if char == "%"]
+        covered = {
+            position
+            for directive in directives
+            for position in range(*directive.span())
+        }
+        if not percent_positions or not all(
+            position in covered for position in percent_positions
+        ):
+            continue
+        start, end = match.span()
+        start += command_start - offset
+        end += command_start - offset
+        if 0 <= start <= end <= len(line):
+            spans.append((start, end))
+
+    if not spans:
+        return line, format_found
+    masked_line = list(line)
+    for start, end in spans:
+        masked_line[start:end] = " " * (end - start)
+    return "".join(masked_line), format_found
 
 
 def _bash_loop_evidence(lines: Sequence[_SourceLine]) -> _Evidence | None:

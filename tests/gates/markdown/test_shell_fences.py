@@ -181,6 +181,27 @@ def test_printf_command_prefixes_preserve_formats_and_real_cmd_arguments(
     assert all("cmd syntax" in finding.message for finding in findings)
 
 
+def test_indented_and_sequential_printf_formats_are_not_cmd_evidence(
+    tmp_path: Path,
+) -> None:
+    findings = _check(
+        tmp_path,
+        "```bash\n"
+        "  printf %s%s a b\n"
+        "\tprintf %s%s c d\n"
+        "printf %s%s a b; printf %s%s c d\n"
+        "````\n"
+        "```bash\n"
+        "printf %s%s a b; printf '%s' %PATH%\n"
+        "````\n",
+    )
+
+    assert [finding.line for finding in findings] == [7]
+    assert findings[0].message.endswith(
+        'cmd syntax "%PATH%"; verify the intended shell with the author'
+    )
+
+
 def test_flags_bash_loop_in_indented_blockquote_pwsh_fence(tmp_path: Path) -> None:
     findings = _check(
         tmp_path,
