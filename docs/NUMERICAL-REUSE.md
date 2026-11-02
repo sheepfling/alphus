@@ -48,3 +48,20 @@ Handwritten elimination and frame-transform recognition remain unimplemented.
 So do the other quaternion fingerprints and Cholesky covariance/domain checks.
 The current examples demonstrate only the explicitly documented syntax
 families above.
+
+An elimination recognizer would need a consumer contract that identifies the
+matrix representation and then match, within one configured function, pivot
+selection, a row swap, diagonal normalization, and elimination updates that use
+the same row and pivot indices. A row update or call to `max` alone is not
+enough. The result should be described as a review of a handwritten elimination
+kernel; it must not infer that a true inverse is needed or that a solve routine
+is equivalent.
+
+A frame-transform recognizer would additionally need the consumer's configured
+preferred helper and an explicit equivalence contract for frame, origin,
+latitude type, angle and length units, axis order, handedness, rotation
+composition, vector-versus-position semantics, and output shape. Trigonometric
+calls or a 3x3-looking assignment do not establish equivalence. Until a
+candidate grammar can bind those details to a tested consumer contract, it
+should remain unknown rather than produce a confident duplicate-transform
+finding.
