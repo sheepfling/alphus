@@ -69,7 +69,9 @@ class _IndirectObject(Protocol):
 
 
 _OutlineItem: TypeAlias = _Destination | Sequence["_OutlineItem"]
-_PdfDestination: TypeAlias = _Destination | _IndirectObject | list["_PdfDestination"]
+_PdfDestination: TypeAlias = (
+    str | _Destination | _IndirectObject | list["_PdfDestination"]
+)
 
 
 class _Reader(Protocol):
@@ -98,6 +100,10 @@ def _contracts(path: Path) -> _NavigationContract:
     return _NavigationContract.model_validate_json(path.read_text(encoding="utf-8"))
 
 
+def _text_value(value: str | None) -> str | None:
+    return value if isinstance(value, str) else None
+
+
 def _pdf_api() -> _PdfApi:
     try:
         return cast(_PdfApi, importlib.import_module("pypdf"))
@@ -122,18 +128,48 @@ def _page_for_destination(reader: _Reader, destination: _PdfDestination) -> int 
     if named is not None:
         try:
             return reader.get_destination_page_number(named)
-        except (IndexError, KeyError, TypeError, ValueError):
+        except (AttributeError, IndexError, KeyError, TypeError, ValueError):
             return None
     if isinstance(destination, list) and destination:
         try:
             page = cast(_IndirectObject, destination[0]).get_object()
             return reader.get_page_number(cast(_Page, page))
-        except (IndexError, KeyError, TypeError, ValueError):
+        except (AttributeError, IndexError, KeyError, TypeError, ValueError):
             return None
     try:
         return reader.get_destination_page_number(destination)
-    except (IndexError, KeyError, TypeError, ValueError):
+    except (AttributeError, IndexError, KeyError, TypeError, ValueError):
         return None
+
+
+def _link_action_target(
+    annotation: _PdfDictionary,
+) -> tuple[str, _PdfDestination | None]:
+    destination = annotation.get("/Dest")
+    action_value = annotation.get("/A")
+    if destination is not None:
+        if action_value is not None:
+            return "malformed conflicting destination and action", None
+        return "goto", cast(_PdfDestination, destination)
+    if action_value is None:
+        return "missing", None
+    try:
+        getter = getattr(action_value, "get_object", None)
+        action = cast(
+            _PdfDictionary,
+            getter() if callable(getter) else action_value,
+        )
+        kind = str(action.get("/S"))
+    except Exception as error:  # noqa: BLE001 - malformed action is unknown evidence
+        return f"malformed ({error})", None
+    if kind == "/GoTo":
+        return "goto", cast(_PdfDestination, action.get("/D"))
+    if kind == "/URI":
+        uri = _text_value(cast(str | None, action.get("/URI")))
+        if uri is None or not uri:
+            return "malformed /URI", None
+        return "external URI", None
+    return f"unsupported {kind}", None
 
 
 def _link_rect(annotation: _PdfDictionary) -> tuple[float, ...] | None:
@@ -154,16 +190,110 @@ def _link_rect(annotation: _PdfDictionary) -> tuple[float, ...] | None:
 
 
 def _link_target(annotation: _PdfDictionary) -> _PdfDestination | None:
-    destination = annotation.get("/Dest")
-    if destination is not None:
-        return cast(_PdfDestination, destination)
-    action = annotation.get("/A")
-    if action is None:
-        return None
-    action_dictionary = cast(_IndirectObject, action).get_object()
-    if str(action_dictionary.get("/S")) == "/GoTo":
-        return cast(_PdfDestination, action_dictionary.get("/D"))
-    return None
+    kind, target = _link_action_target(annotation)
+    return target if kind == "goto" else None
+
+
+def _destination_key(destination: _PdfDestination | None) -> str:
+    if destination is None:
+        return "missing"
+    if isinstance(destination, str):
+        return f"named:{str(destination).lstrip('/')}"
+    return str(destination)
+
+
+def _verify_all_destinations(
+    reader: _Reader, outline: Sequence[_Destination]
+) -> tuple[list[str], list[str]]:
+    """Resolve every supported outline/internal-link destination without semantics."""
+    unresolved: dict[str, tuple[str, list[str]]] = {}
+    unknown: list[str] = []
+
+    def record(key: str, description: str, reference: str) -> None:
+        if key not in unresolved:
+            unresolved[key] = (description, [])
+        unresolved[key][1].append(reference)
+
+    page_count = len(reader.pages)
+    for item in outline:
+        reference = f"outline {item.title!r}"
+        try:
+            page_index = _page_for_destination(reader, item)
+        except Exception as error:  # noqa: BLE001 - parser failures remain visible
+            unknown.append(f"cannot resolve {reference}: {error}")
+            continue
+        if page_index is None or not 0 <= page_index < page_count:
+            record(
+                f"outline:{item.title}",
+                f"outline destination {item.title!r}",
+                reference,
+            )
+
+    try:
+        named_destinations = reader.named_destinations
+    except Exception as error:  # noqa: BLE001 - parser failures remain visible
+        named_destinations = {}
+        unknown.append(f"cannot enumerate named destinations: {error}")
+    for name, destination in named_destinations.items():
+        reference = f"named destination {name!r}"
+        try:
+            page_index = _page_for_destination(reader, destination)
+        except Exception as error:  # noqa: BLE001 - parser failures remain visible
+            unknown.append(f"cannot resolve {reference}: {error}")
+            continue
+        if page_index is None or not 0 <= page_index < page_count:
+            record(_destination_key(name), f"named destination {name!r}", reference)
+
+    for page_number, page in enumerate(reader.pages, start=1):
+        try:
+            annotations = page.annotations
+        except Exception as error:  # noqa: BLE001 - malformed page remains unknown
+            unknown.append(
+                f"cannot inspect annotations on physical page {page_number}: {error}"
+            )
+            continue
+        if annotations is None:
+            continue
+        for link_number, item in enumerate(annotations, start=1):
+            try:
+                annotation = cast(_IndirectObject, item).get_object()
+                if str(annotation.get("/Subtype")) != "/Link":
+                    continue
+                kind, destination = _link_action_target(annotation)
+            except Exception as error:  # noqa: BLE001 - malformed annotation is unknown
+                unknown.append(
+                    f"cannot inspect physical page {page_number} link {link_number}: {error}"
+                )
+                continue
+            reference = f"physical page {page_number} link {link_number}"
+            if kind == "external URI":
+                continue
+            if kind != "goto":
+                unknown.append(
+                    f"{reference} has {kind} action; destination was not executed"
+                )
+                continue
+            if destination is None:
+                record("link:missing", "internal GoTo without a destination", reference)
+                continue
+            key = _destination_key(destination)
+            try:
+                page_index = _page_for_destination(reader, destination)
+            except Exception as error:  # noqa: BLE001 - parser failures remain visible
+                unknown.append(f"cannot resolve {reference} destination: {error}")
+                continue
+            if page_index is None or not 0 <= page_index < page_count:
+                record(
+                    key,
+                    f"internal GoTo destination {_destination_key(destination)!r}",
+                    reference,
+                )
+
+    mismatches = [
+        f"{description} is unresolvable or out of range (referenced by {', '.join(references)})"
+        for description, references in unresolved.values()
+    ]
+    return mismatches, unknown
 
 
 def _verify_contents_link(
@@ -267,6 +397,11 @@ def validate_navigation(
         raise RuntimeError(f"cannot parse PDF outline/pages: {error}") from error
     mismatches: list[str] = []
     unknown: list[str] = []
+    destination_mismatches, destination_unknown = _verify_all_destinations(
+        reader, outline
+    )
+    mismatches.extend(destination_mismatches)
+    unknown.extend(destination_unknown)
     for section in contract.sections:
         title = section.outline_title
         candidates = [item for item in outline if item.title == title]
@@ -343,7 +478,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
     if unknown:
         return 2
-    print("Configured outline and Contents destinations match page/heading contracts.")
+    print(
+        "Supported internal destinations resolve; configured outline and Contents "
+        "targets match their page/heading contracts."
+    )
     return 0
 
 

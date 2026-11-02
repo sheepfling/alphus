@@ -68,6 +68,16 @@ fail; a page with no extractable text is returned as **unknown**, since it may
 contain images or vector artwork. Fit modes, page-label semantics, and visual
 heading confirmation still need review or a richer consumer contract.
 
+Before applying the declared semantic contract, the helper also resolves every
+outline destination, named destination, and internal GoTo link annotation in
+the selected PDF, including direct `/Dest` and `/A` GoTo forms. Repeated broken
+links to the same destination are grouped while retaining their page/link
+references. External URI actions are left to the separate portability policy;
+remote-document and other unsupported actions remain unknown and are never
+executed. This structural pass proves only that supported internal targets
+resolve to pages in the artifact; it does not prove that a target is the
+intended section.
+
 The available PDF stack in this checkout includes pypdf and qpdf. PyMuPDF was
 installed locally to evaluate word-box geometry, but it is not an Alphus
 dependency. A generated two-page fixture with a Contents label and GoTo link
