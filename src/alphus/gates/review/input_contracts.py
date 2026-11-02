@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import ast
 from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
-from typing import AbstractSet, Literal
+from typing import Literal
 
 from alphus.config import InputContractPolicy, ManualSchemaBoundary
 from alphus.contracts.findings import Finding
@@ -871,6 +872,31 @@ def _manual_schema_finding(
         return None
     nodes = _local_function_nodes(function)
     parameter = boundary.parameter
+    declared_parameters = {
+        argument.arg
+        for argument in (
+            *function.args.posonlyargs,
+            *function.args.args,
+            *function.args.kwonlyargs,
+        )
+    }
+    if parameter not in declared_parameters:
+        return Finding(
+            rule_id=rule_tag(
+                Scope.PYTHON,
+                Framework.NONE,
+                Category.CORRECTNESS,
+                "manual-schema-validation",
+            ),
+            path=path,
+            line=function.lineno,
+            severity=policy.manual_schema_validation_severity,
+            message=(
+                f"Selected admission boundary {function_name}.{parameter} was not "
+                f"evaluated because {function_name} does not declare {parameter!r} "
+                "as an input parameter."
+            ),
+        )
 
     def is_parameter_name(candidate: ast.AST, *, store: bool = False) -> bool:
         match candidate:

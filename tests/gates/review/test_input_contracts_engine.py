@@ -402,6 +402,26 @@ def test_manual_schema_advisory_groups_repeated_selected_boundary_checks() -> No
     assert "does not prove a validation defect" in findings[0].message
 
 
+def test_manual_schema_selector_does_not_treat_a_global_as_an_input_parameter() -> None:
+    findings = manual_schema_findings("""
+        def parse_options():
+            if "kind" not in payload:
+                raise ValueError("missing kind")
+            if not isinstance(payload.get("kind"), str):
+                raise ValueError("invalid kind")
+            if not isinstance(payload.get("limit"), int):
+                raise ValueError("invalid limit")
+            if payload.get("limit") < 0:
+                raise ValueError("negative limit")
+            return payload
+    """)
+
+    assert len(findings) == 1
+    assert "not evaluated" in findings[0].message
+    assert "does not declare 'payload' as an input parameter" in findings[0].message
+    assert "fixed-key checks" not in findings[0].message
+
+
 @pytest.mark.parametrize(
     "source",
     [
