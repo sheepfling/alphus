@@ -1,3 +1,4 @@
+import ast
 import subprocess
 from collections.abc import Callable
 from importlib.util import find_spec
@@ -764,6 +765,140 @@ def test_python_import_evidence_reports_selected_external_consumers(
     assert "src/app.py:1 → src/gateway_client.py" in message
     assert "src/app.py:2 → src/gateway_server.py" in message
     assert "unselected consumers and dynamic references are not assessed" not in message
+
+
+@pytest.mark.parametrize(
+    ("consumer_path", "import_line"),
+    (
+        ("src/app.py", "from .gateway_client import Client\n"),
+        ("src/pkg/app.py", "from ..gateway_client import Client\n"),
+    ),
+)
+def test_python_external_reference_rejects_relative_import_above_package_root(
+    tmp_path: Path, consumer_path: str, import_line: str
+) -> None:
+    paths = [
+        _write(tmp_path, f"src/gateway_{name}.py")
+        for name in ("client", "server", "routes", "auth", "cache")
+    ]
+    consumer = tmp_path / consumer_path
+    consumer.parent.mkdir(parents=True, exist_ok=True)
+    consumer.write_text(import_line, encoding="utf-8")
+
+    findings = source_family_findings(
+        tmp_path,
+        [*paths, consumer.relative_to(tmp_path)],
+        SourceFamilyPolicy(
+            min_family_files=5,
+            python_import_evidence=True,
+            python_module_roots=("src",),
+        ),
+    )
+
+    message = next(
+        item.message for item in findings if "Family gateway_*" in item.message
+    )
+    assert "0 direct edge(s) target a family member" in message
+    assert f"{consumer_path}:1 → src/gateway_client.py" not in message
+
+
+def test_python_import_sources_are_parsed_once_across_families(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = [
+        _write(tmp_path, f"src/{family}_{name}.py")
+        for family in ("gateway", "storage")
+        for name in ("client", "server", "routes", "auth", "cache")
+    ]
+    consumer = tmp_path / "src/app.py"
+    consumer.write_text(
+        "import gateway_client\nimport storage_client\n", encoding="utf-8"
+    )
+    paths.append(consumer.relative_to(tmp_path))
+    parsed: list[str] = []
+    original_parse = source_families.ast.parse
+
+    def count_parse(
+        source: str | bytes, filename: str = "<unknown>", mode: str = "exec"
+    ) -> ast.Module:
+        parsed.append(filename)
+        return original_parse(source, filename=filename, mode=mode)
+
+    monkeypatch.setattr(source_families.ast, "parse", count_parse)
+    findings = source_family_findings(
+        tmp_path,
+        paths,
+        SourceFamilyPolicy(
+            min_family_files=5,
+            python_import_evidence=True,
+            python_module_roots=("src",),
+        ),
+    )
+
+    assert len(parsed) == len(paths)
+    assert len(set(parsed)) == len(paths)
+    for family in ("gateway", "storage"):
+        message = next(
+            item.message for item in findings if f"Family {family}_*" in item.message
+        )
+        assert "1 direct edge(s) target a family member" in message
+        assert "parsed ASTs are reused across family reports" in message
+
+
+def test_python_import_byte_budget_is_shared_and_reports_missing_coverage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = [
+        _write(tmp_path, f"src/{family}_{name}.py")
+        for family in ("gateway", "storage")
+        for name in ("client", "server", "routes", "auth", "cache")
+    ]
+    consumer = tmp_path / "src/app.py"
+    consumer.write_text("import gateway_client\n", encoding="utf-8")
+    paths.append(consumer.relative_to(tmp_path))
+    # The first family and consumer fit; parsing all selected files once for a
+    # second family would exceed this run-wide cap.
+    budget = sum(
+        (tmp_path / path).stat().st_size
+        for path in paths
+        if path.name.startswith("gateway_") or path.name == "app.py"
+    )
+    parsed: list[str] = []
+    original_parse = source_families.ast.parse
+
+    def count_parse(
+        source: str | bytes, filename: str = "<unknown>", mode: str = "exec"
+    ) -> ast.Module:
+        parsed.append(filename)
+        return original_parse(source, filename=filename, mode=mode)
+
+    monkeypatch.setattr(source_families.ast, "parse", count_parse)
+    findings = source_family_findings(
+        tmp_path,
+        paths,
+        SourceFamilyPolicy(
+            min_family_files=5,
+            python_import_evidence=True,
+            python_module_roots=("src",),
+            max_import_analysis_bytes=budget,
+        ),
+    )
+
+    assert len(parsed) == 6
+    assert (
+        sum(
+            (tmp_path / path).stat().st_size
+            for path in paths
+            if path.as_posix() in parsed
+        )
+        <= budget
+    )
+    assert any(
+        "Python import byte budget was exhausted across the source-family run"
+        in item.message
+        for item in findings
+    )
+    assert any("no clean result can be inferred" in item.message for item in findings)
 
 
 def test_python_external_consumer_scan_reports_budget_exhaustion(
