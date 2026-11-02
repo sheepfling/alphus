@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from textwrap import dedent
+from types import MappingProxyType
 
 import pytest
 
@@ -18,12 +19,14 @@ DOMAIN_POLICY = InputContractPolicy(
     exclude=[],
     domain_mapping_types=("app.models.EvaluationOptions",),
 )
-DECLARED_DOMAIN_BOUNDARY = {
-    "path": "src/internal/evaluate.py",
-    "function": "evaluate",
-    "parameter": "packet",
-    "domain_type": "app.models.EvaluationOptions",
-}
+DECLARED_DOMAIN_BOUNDARY = MappingProxyType(
+    {
+        "path": "src/internal/evaluate.py",
+        "function": "evaluate",
+        "parameter": "packet",
+        "domain_type": "app.models.EvaluationOptions",
+    }
+)
 DOMAIN_BOUNDARY_POLICY = InputContractPolicy(
     extensions=[".py"],
     exclude=[],
@@ -438,7 +441,12 @@ def test_domain_mapping_contract_selectors_must_be_unique_and_relative() -> None
     [
         "options = {}\n return options['count']",
         "def nested():\n  return options['count']\n return None",
-        "if isinstance(options, dict):\n  normalized = EvaluationOptions.model_validate(options)\n  return _evaluate(normalized)\n return _evaluate(options)",
+        (
+            "if isinstance(options, dict):\n"
+            "  normalized = EvaluationOptions.model_validate(options)\n"
+            "  return _evaluate(normalized)\n"
+            " return _evaluate(options)"
+        ),
     ],
 )
 def test_rebinding_nested_and_branch_validation_stay_uncertain(body: str) -> None:

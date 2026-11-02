@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
@@ -788,9 +789,7 @@ def _union_alternatives(node: ast.expr, aliases: ImportAliases) -> tuple[ast.exp
         case ast.Subscript(value=value, slice=ast.Tuple(elts=members)) if (
             canonical_expression_name(value, aliases) == "typing.Union"
         ):
-            return tuple(
-                member for member in members if not isinstance(member, ast.Starred)
-            )
+            return tuple(member for member in members if not _is_starred(member))
         case ast.Subscript(value=value, slice=member) if (
             canonical_expression_name(value, aliases) == "typing.Union"
         ):
@@ -804,8 +803,8 @@ def _domain_mapping_alternative(
 ) -> tuple[str, str] | None:
     """Return configured model and JSON mapping names in one union annotation."""
     members = _union_alternatives(annotation, aliases)
-    domain_types = set(policy.domain_mapping_types)
-    value_types = set(policy.domain_mapping_value_types)
+    domain_types = policy.domain_mapping_types
+    value_types = frozenset(policy.domain_mapping_value_types)
     model = next(
         (
             name
@@ -824,12 +823,17 @@ def _domain_mapping_alternative(
 
 
 def _json_mapping_type(
-    annotation: ast.expr, aliases: ImportAliases, value_types: set[str]
+    annotation: ast.expr, aliases: ImportAliases, value_types: AbstractSet[str]
 ) -> str | None:
     """Recognize only explicitly supported string-keyed generic JSON mappings."""
-    if not isinstance(annotation, ast.Subscript):
-        return None
-    name = canonical_expression_name(annotation.value, aliases)
+    match annotation:
+        case ast.Subscript(value=container, slice=ast.Tuple(elts=arguments)):
+            pass
+        case ast.Subscript(value=container, slice=argument):
+            arguments = [argument]
+        case _:
+            return None
+    name = canonical_expression_name(container, aliases)
     if name not in {
         "dict",
         "builtins.dict",
@@ -838,7 +842,6 @@ def _json_mapping_type(
         "collections.abc.Mapping",
     }:
         return None
-    arguments = annotation.slice.elts if isinstance(annotation.slice, ast.Tuple) else ()
     if len(arguments) != 2:
         return None
     key_type = canonical_expression_name(arguments[0], aliases)
@@ -853,6 +856,42 @@ def _json_mapping_type(
     ):
         return None
     return name
+
+
+def _is_starred(node: ast.expr) -> bool:
+    match node:
+        case ast.Starred():
+            return True
+        case _:
+            return False
+
+
+def _rebound_name_line(node: ast.AST, parameter: str) -> int | None:
+    match node:
+        case ast.Name(id=name, ctx=ast.Store() | ast.Del(), lineno=line) if (
+            name == parameter
+        ):
+            return line
+        case _:
+            return None
+
+
+def _loaded_attribute_name(node: ast.AST, parameter: str) -> tuple[str, int] | None:
+    match node:
+        case ast.Attribute(attr=attribute, ctx=ast.Load(), value=ast.Name(id=name)) if (
+            name == parameter
+        ):
+            return attribute, node.lineno
+        case _:
+            return None
+
+
+def _name_expression(node: ast.AST, expected: str) -> bool:
+    match node:
+        case ast.Name(id=name) if name == expected:
+            return True
+        case _:
+            return False
 
 
 class _FunctionLocalNodes(ast.NodeVisitor):
@@ -912,11 +951,9 @@ def _direct_mapping_reads(parameter: str, nodes: Sequence[ast.AST]) -> list[int]
     """Find literal string-key indexing and ``.get`` reads on the parameter."""
     lines: set[int] = set()
     rebinding_lines = [
-        node.lineno
+        line
         for node in nodes
-        if isinstance(node, ast.Name)
-        and node.id == parameter
-        and isinstance(node.ctx, (ast.Store, ast.Del))
+        if (line := _rebound_name_line(node, parameter)) is not None
     ]
     first_rebinding = min(rebinding_lines, default=None)
     for node in nodes:
@@ -942,12 +979,9 @@ def _direct_attribute_reads(
 ) -> list[tuple[str, int]]:
     """Find direct attribute reads without inferring values through helpers."""
     reads = {
-        (node.attr, node.lineno)
+        read
         for node in nodes
-        if isinstance(node, ast.Attribute)
-        and isinstance(node.ctx, ast.Load)
-        and isinstance(node.value, ast.Name)
-        and node.value.id == parameter
+        if (read := _loaded_attribute_name(node, parameter)) is not None
     }
     return sorted(reads, key=lambda read: (read[1], read[0]))
 
@@ -960,48 +994,48 @@ def _direct_forwarded_mapping_reads(
     """Follow one exact parameter pass into a unique module-level helper."""
     helpers: dict[str, list[ast.FunctionDef | ast.AsyncFunctionDef]] = defaultdict(list)
     for statement in module.body:
-        if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            helpers[statement.name].append(statement)
+        match statement:
+            case ast.FunctionDef(name=name) | ast.AsyncFunctionDef(name=name):
+                helpers[name].append(statement)
+            case _:
+                pass
     local = _FunctionLocalNodes(function)
     local.visit(function)
     rebinding = min(
         (
-            node.lineno
+            line
             for node in local.nodes
-            if isinstance(node, ast.Name)
-            and node.id == parameter
-            and isinstance(node.ctx, (ast.Store, ast.Del))
+            if (line := _rebound_name_line(node, parameter)) is not None
         ),
         default=None,
     )
     evidence: set[tuple[str, int, tuple[int, ...]]] = set()
     for node in local.nodes:
-        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
-            continue
+        match node:
+            case ast.Call(func=ast.Name(id=call_name), args=args, keywords=keywords):
+                pass
+            case _:
+                continue
         if rebinding is not None and node.lineno >= rebinding:
             continue
-        candidates = helpers.get(node.func.id, [])
+        candidates = helpers.get(call_name, [])
         if len(candidates) != 1 or candidates[0] is function:
             continue
         helper = candidates[0]
         helper_args = [*helper.args.posonlyargs, *helper.args.args]
         helper_all_args = [*helper_args, *helper.args.kwonlyargs]
         helper_parameter: str | None = None
-        for index, argument in enumerate(node.args):
-            if (
-                index < len(helper_args)
-                and isinstance(argument, ast.Name)
-                and argument.id == parameter
-            ):
+        for index, argument in enumerate(args):
+            if index < len(helper_args) and _name_expression(argument, parameter):
                 helper_parameter = helper_args[index].arg
                 break
         if helper_parameter is None:
-            for keyword in node.keywords:
-                if keyword.arg is None or not isinstance(keyword.value, ast.Name):
-                    continue
-                if keyword.value.id == parameter and any(
-                    argument.arg == keyword.arg for argument in helper_all_args
+            for keyword in keywords:
+                if keyword.arg is None or not _name_expression(
+                    keyword.value, parameter
                 ):
+                    continue
+                if any(argument.arg == keyword.arg for argument in helper_all_args):
                     helper_parameter = keyword.arg
                     break
         if helper_parameter is None:
@@ -1035,8 +1069,7 @@ def _has_normalization_flow(
                 child.func.attr in {"model_validate", "parse_obj"}
                 and canonical_expression_name(child.func.value, aliases) == model
                 and any(
-                    isinstance(argument, ast.Name) and argument.id == parameter
-                    for argument in child.args
+                    _name_expression(argument, parameter) for argument in child.args
                 )
             ):
                 # Branch-specific normalization is outside this direct-flow slice.
@@ -1045,34 +1078,26 @@ def _has_normalization_flow(
         target: ast.expr | None = None
         value: ast.expr | None = None
         match statement:
-            case ast.Assign(targets=[ast.Name() as name], value=call):
+            case ast.Assign(targets=[ast.Name() as name], value=ast.Call() as call):
                 target, value = name, call
-            case ast.AnnAssign(target=ast.Name() as name, value=call) if (
-                call is not None
-            ):
+            case ast.AnnAssign(target=ast.Name() as name, value=ast.Call() as call):
                 target, value = name, call
             case _:
-                pass
-        if not isinstance(target, ast.Name) or not isinstance(value, ast.Call):
-            continue
+                continue
         match value.func:
             case ast.Attribute(value=owner, attr=method) if method in {
                 "model_validate",
                 "parse_obj",
             }:
                 if canonical_expression_name(owner, aliases) == model and any(
-                    isinstance(argument, ast.Name) and argument.id == parameter
-                    for argument in value.args
+                    _name_expression(argument, parameter) for argument in value.args
                 ):
                     validator_calls.append((statement.lineno, target.id))
             case _:
                 pass
     for line, name in validator_calls:
         if any(
-            isinstance(node, ast.Name)
-            and isinstance(node.ctx, ast.Load)
-            and node.id == name
-            and node.lineno > line
+            _name_expression(node, name) and getattr(node, "lineno", 0) > line
             for node in nodes
         ):
             return True
@@ -1143,7 +1168,8 @@ def _domain_mapping_findings(
                     severity=policy.domain_mapping_severity,
                     message=(
                         f"Parameter {argument.arg!r} at line {argument.lineno} accepts "
-                        f"configured domain type {model} or generic {mapping}, with {evidence}. Review whether "
+                        f"configured domain type {model} or generic {mapping}, "
+                        f"with {evidence}. Review whether "
                         "normalization belongs at the boundary before internal computation. "
                         "This is a review candidate; it does not prove validation is absent "
                         "or that the wider interface is incorrect."
