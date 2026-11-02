@@ -89,6 +89,50 @@ def test_opt_in_python_import_evidence_reports_resolved_edges(tmp_path: Path) ->
     assert "Direct imports are partial evidence only" in findings[0].message
 
 
+def test_python_import_evidence_shows_unresolved_edges_and_truncation(
+    tmp_path: Path,
+) -> None:
+    paths = [
+        _write(tmp_path, f"src/{family}_{name}.py")
+        for family in ("gateway", "storage")
+        for name in ("client", "server", "routes", "auth", "cache")
+    ]
+    (tmp_path / "src/gateway_client.py").write_text(
+        "import gateway_server\nimport external_client\n", encoding="utf-8"
+    )
+    (tmp_path / "src/gateway_server.py").write_text(
+        "from gateway_client import connect\nimport external_server\n",
+        encoding="utf-8",
+    )
+    for name in ("routes", "auth", "cache"):
+        (tmp_path / f"src/gateway_{name}.py").write_text(
+            f"import external_{name}\n", encoding="utf-8"
+        )
+    for name in ("client", "server", "routes", "auth", "cache"):
+        (tmp_path / f"src/storage_{name}.py").write_text(
+            f"import external_storage_{name}\n", encoding="utf-8"
+        )
+
+    findings = source_family_findings(
+        tmp_path,
+        paths,
+        SourceFamilyPolicy(
+            min_family_files=5,
+            python_import_evidence=True,
+            python_module_roots=("src",),
+            max_import_edges=1,
+        ),
+    )
+
+    gateway = next(item for item in findings if "Family gateway_*" in item.message)
+    storage = next(item for item in findings if "Family storage_*" in item.message)
+    assert "2 resolved edge(s) target another family member" in gateway.message
+    assert "5 import(s) unresolved/outside the configured inventory" in gateway.message
+    assert "1 edge(s) omitted by max_import_edges" in gateway.message
+    assert "0 resolved edge(s) target another family member" in storage.message
+    assert "5 import(s) unresolved/outside the configured inventory" in storage.message
+
+
 def test_import_evidence_requires_explicit_module_root() -> None:
     with pytest.raises(ValueError, match="requires explicit python_module_roots"):
         SourceFamilyPolicy(python_import_evidence=True)
