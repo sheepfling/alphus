@@ -28,23 +28,19 @@ def _qualified_name(node: ast.expr) -> str | None:
             return None
 
 
-def _rendered_locals(
-    function: ast.FunctionDef | ast.AsyncFunctionDef, helpers: tuple[str, ...]
-) -> dict[str, int]:
-    rendered: dict[str, int] = {}
-    for node in ast.walk(function):
-        match node:
-            case ast.Assign(
-                targets=[ast.Name(id=name)], value=ast.Call(func=func, args=[_, *_])
-            ) if _qualified_name(func) in helpers:
-                rendered[name] = node.lineno
-            case ast.AnnAssign(
-                target=ast.Name(id=name), value=ast.Call(func=func, args=[_, *_])
-            ) if _qualified_name(func) in helpers:
-                rendered[name] = node.lineno
-            case _:
-                continue
-    return rendered
+def _target_names(target: ast.expr) -> set[str]:
+    names: set[str] = set()
+    match target:
+        case ast.Name(id=name):
+            names.add(name)
+        case ast.Tuple(elts=items) | ast.List(elts=items):
+            for item in items:
+                names.update(_target_names(item))
+        case ast.Starred(value=value):
+            names.update(_target_names(value))
+        case _:
+            pass
+    return names
 
 
 def _uses_rendered_suffix(test: ast.expr, names: Sequence[str]) -> str | None:
@@ -74,18 +70,128 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[tuple[int, int, str]]:
     except SyntaxError:
         return []
     found: set[tuple[int, int, str]] = set()
+
+    def scan(
+        statements: Sequence[ast.stmt], rendered: dict[str, int]
+    ) -> dict[str, int]:
+        """Walk statements in source order, keeping only proven local bindings."""
+        current = rendered.copy()
+        for statement in statements:
+            match statement:
+                case ast.If(test=test, body=body, orelse=orelse) as conditional:
+                    name = _uses_rendered_suffix(test, tuple(current))
+                    if name is not None:
+                        found.add((current[name], conditional.lineno, name))
+                    then_state = scan(body, current)
+                    else_state = scan(orelse, current) if orelse else current.copy()
+                    current = {
+                        name: line
+                        for name, line in then_state.items()
+                        if else_state.get(name) == line
+                    }
+                case ast.Assign(targets=targets, value=value):
+                    names: set[str] = set()
+                    for target in targets:
+                        names.update(_target_names(target))
+                    for name in names:
+                        current.pop(name, None)
+                    if (
+                        len(targets) == 1
+                        and isinstance(targets[0], ast.Name)
+                        and isinstance(value, ast.Call)
+                        and value.args
+                        and _qualified_name(value.func) in helpers
+                    ):
+                        current[targets[0].id] = statement.lineno
+                case ast.AnnAssign(target=target, value=value):
+                    names = _target_names(target)
+                    for name in names:
+                        current.pop(name, None)
+                    if (
+                        isinstance(target, ast.Name)
+                        and isinstance(value, ast.Call)
+                        and value.args
+                        and _qualified_name(value.func) in helpers
+                    ):
+                        current[target.id] = statement.lineno
+                case ast.AugAssign(target=target):
+                    for name in _target_names(target):
+                        current.pop(name, None)
+                case (
+                    ast.For(target=target, body=body, orelse=orelse)
+                    | ast.AsyncFor(target=target, body=body, orelse=orelse)
+                ):
+                    before = current.copy()
+                    loop_state = current.copy()
+                    for name in _target_names(target):
+                        loop_state.pop(name, None)
+                    loop_state = scan(body, loop_state)
+                    else_state = scan(orelse, current) if orelse else current.copy()
+                    current = {
+                        name: line
+                        for name, line in before.items()
+                        if loop_state.get(name) == line and else_state.get(name) == line
+                    }
+                case ast.While(body=body, orelse=orelse):
+                    before = current.copy()
+                    body_state = scan(body, current)
+                    else_state = scan(orelse, current) if orelse else current.copy()
+                    current = {
+                        name: line
+                        for name, line in before.items()
+                        if body_state.get(name) == line and else_state.get(name) == line
+                    }
+                case (
+                    ast.With(items=items, body=body)
+                    | ast.AsyncWith(items=items, body=body)
+                ):
+                    before = current.copy()
+                    body_state = current.copy()
+                    for item in items:
+                        if item.optional_vars is not None:
+                            for name in _target_names(item.optional_vars):
+                                body_state.pop(name, None)
+                    body_state = scan(body, body_state)
+                    current = {
+                        name: line
+                        for name, line in before.items()
+                        if body_state.get(name) == line
+                    }
+                case ast.Try(
+                    body=body, handlers=handlers, orelse=orelse, finalbody=finalbody
+                ):
+                    before = current.copy()
+                    paths = [scan(body, current)]
+                    paths.extend(scan(handler.body, current) for handler in handlers)
+                    if orelse:
+                        paths.append(scan(orelse, current))
+                    if finalbody:
+                        paths.append(scan(finalbody, current))
+                    current = {
+                        name: line
+                        for name, line in before.items()
+                        if all(path.get(name) == line for path in paths)
+                    }
+                case ast.Match(cases=cases):
+                    before = current.copy()
+                    paths = [scan(case.body, current) for case in cases]
+                    current = {
+                        name: line
+                        for name, line in before.items()
+                        if all(path.get(name) == line for path in paths)
+                    }
+                case ast.FunctionDef() | ast.AsyncFunctionDef() | ast.ClassDef():
+                    # Nested definitions have separate scopes and are visited
+                    # independently by the outer function walk below.
+                    continue
+                case _:
+                    continue
+        return current
+
     for node in ast.walk(tree):
         match node:
             case ast.FunctionDef() | ast.AsyncFunctionDef() as function:
-                rendered = _rendered_locals(function, helpers)
-                for branch in ast.walk(function):
-                    match branch:
-                        case ast.If(test=test) as conditional:
-                            name = _uses_rendered_suffix(test, tuple(rendered))
-                            if name is not None:
-                                found.add((rendered[name], conditional.lineno, name))
-                        case _:
-                            continue
+                scan(function.body, {})
             case _:
                 continue
     return sorted(found)

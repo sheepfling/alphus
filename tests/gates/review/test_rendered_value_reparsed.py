@@ -41,6 +41,44 @@ def merge(cell):
     assert not _sites(other_renderer, ("render_latex",))
 
 
+def test_rendered_binding_must_precede_predicate_in_same_scope() -> None:
+    predicate_first = """\
+def f(text):
+    if text.rstrip().endswith('!'):
+        return True
+    text = render(text)
+"""
+    rebound_before_predicate = """\
+def f(text):
+    rendered = render(text)
+    rendered = normalize(rendered)
+    if rendered.rstrip().endswith('!'):
+        return True
+"""
+    rendered_only_in_one_branch = """\
+def f(text, enabled):
+    if enabled:
+        rendered = render(text)
+    if rendered.rstrip().endswith('!'):
+        return True
+"""
+    assert _sites(predicate_first, ("render",)) == []
+    assert _sites(rebound_before_predicate, ("render",)) == []
+    assert _sites(rendered_only_in_one_branch, ("render",)) == []
+
+
+def test_nested_scope_assignment_does_not_reorder_outer_binding() -> None:
+    source = """\
+def f(text):
+    rendered = render(text)
+    def nested():
+        rendered = text
+    if rendered.rstrip().endswith('!'):
+        return True
+"""
+    assert _sites(source, ("render",)) == [(2, 5, "rendered")]
+
+
 def test_advisory_reports_configured_source_path(tmp_path: Path) -> None:
     source = tmp_path / "src/render/table.py"
     source.parent.mkdir(parents=True)
