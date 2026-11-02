@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Set as AbstractSet
 from pathlib import Path
 
 from alphus.config import ProvenanceCallRole, RunArtifactPolicy
@@ -71,15 +72,16 @@ def _manifest_guarded_read_ids(
     writers: Sequence[ProvenanceCallRole],
     readers: Sequence[ProvenanceCallRole],
     checks: Sequence[ProvenanceCallRole],
-    shadowed: set[str],
+    shadowed: AbstractSet[str],
 ) -> frozenset[int]:
     """Recognize reads after a configured missing-artifact guard exits."""
     protected: set[int] = set()
     for index, statement in enumerate(function.body):
-        if not isinstance(statement, ast.If):
-            continue
-        match statement.test:
-            case ast.UnaryOp(op=ast.Not(), operand=ast.Call() as check_call):
+        match statement:
+            case ast.If(
+                test=ast.UnaryOp(op=ast.Not(), operand=ast.Call() as check_call),
+                body=body,
+            ):
                 pass
             case _:
                 continue
@@ -92,13 +94,13 @@ def _manifest_guarded_read_ids(
             for prior in function.body[:index]
             for call, _ in _calls((prior,))
         )
-        if (
-            checked_path is None
-            or not prior_write
-            or len(statement.body) != 1
-            or not isinstance(statement.body[0], (ast.Raise, ast.Return))
-        ):
+        if checked_path is None or not prior_write or len(body) != 1:
             continue
+        match body[0]:
+            case ast.Raise() | ast.Return():
+                pass
+            case _:
+                continue
         for later in function.body[index + 1 :]:
             for read_call, _ in _calls((later,)):
                 if (
