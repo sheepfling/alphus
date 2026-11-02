@@ -115,7 +115,7 @@ def _git_cochange_evidence(
     ]
     if examples:
         detail = "; ".join(
-            f"{sha[:12]} ({', '.join(names[:4])}{', …' if len(names) > 4 else ''})"
+            f"{sha} ({', '.join(names[:4])}{', …' if len(names) > 4 else ''})"
             for sha, names in examples
         )
         summary = f"Observed {len(examples)} bounded commit(s) co-changing family paths: {detail}."

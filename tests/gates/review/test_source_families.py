@@ -37,6 +37,7 @@ def test_opt_in_git_history_reports_correlated_paths_without_claiming_cause(
     ]
     _git(tmp_path, "add", "src")
     _git(tmp_path, "commit", "-qm", "add gateway family")
+    commit = _git(tmp_path, "rev-parse", "HEAD")
 
     findings = source_family_findings(
         tmp_path,
@@ -47,9 +48,44 @@ def test_opt_in_git_history_reports_correlated_paths_without_claiming_cause(
     message = findings[0].message
     assert "bounded Git history evidence enabled" in message
     assert "Observed 1 bounded commit(s) co-changing family paths" in message
+    assert commit in message
     assert "correlation only" in message
     assert "does not establish causation, ownership, or responsibility" in message
     assert "filename similarity alone does not establish" in message
+
+
+def test_git_history_window_without_cochanges_is_explicitly_incomplete(
+    tmp_path: Path,
+) -> None:
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.name", "Test")
+    _git(tmp_path, "config", "user.email", "test@example.invalid")
+    paths = [
+        _write(tmp_path, f"src/gateway_{name}.py")
+        for name in ("client", "server", "routes", "auth", "cache")
+    ]
+    _git(tmp_path, "add", "src")
+    _git(tmp_path, "commit", "-qm", "add gateway family")
+    (tmp_path / "src/gateway_client.py").write_text(
+        "changed independently\n", encoding="utf-8"
+    )
+    _git(tmp_path, "add", "src/gateway_client.py")
+    _git(tmp_path, "commit", "-qm", "change one family member")
+
+    findings = source_family_findings(
+        tmp_path,
+        paths,
+        SourceFamilyPolicy(
+            min_family_files=5,
+            git_cochange_evidence=True,
+            max_git_history_commits=1,
+        ),
+    )
+
+    message = findings[0].message
+    assert "No multi-member co-change observed in the 1-commit" in message
+    assert "not evidence of independence" in message
+    assert "history window may be truncated" in message
 
 
 def test_git_history_failure_is_explicit_and_not_a_clean_zero(tmp_path: Path) -> None:
