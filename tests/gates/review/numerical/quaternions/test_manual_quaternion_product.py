@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from alphus.config import QuaternionProductPolicy
-from alphus.gates.review.manual_quaternion_product import (
+from alphus.gates.review.numerical.quaternions.manual_quaternion_product import (
     check_manual_quaternion_products,
     quaternion_product_lines,
 )

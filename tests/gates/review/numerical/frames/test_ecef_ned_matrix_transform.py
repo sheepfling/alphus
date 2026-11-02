@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from alphus.config import EcefNedMatrixTransformPolicy
-from alphus.gates.review.ecef_ned_matrix_transform import (
+from alphus.gates.review.numerical.frames.ecef_ned_matrix_transform import (
     check_ecef_ned_matrix_transform,
     ecef_ned_matrix_transform_sites,
 )

@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from alphus.config import EcefEnuTransformPolicy
-from alphus.gates.review.ecef_enu_transform import (
+from alphus.gates.review.numerical.frames.ecef_enu_transform import (
     check_ecef_enu_transform,
     ecef_enu_transform_sites,
 )

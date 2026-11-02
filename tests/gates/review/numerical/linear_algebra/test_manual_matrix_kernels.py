@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from alphus.config import ManualMatrixKernelPolicy
-from alphus.gates.review.manual_matrix_kernels import (
+from alphus.gates.review.numerical.linear_algebra.manual_matrix_kernels import (
     check_manual_matrix_kernels,
     matrix_kernel_lines,
 )

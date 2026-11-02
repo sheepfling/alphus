@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from alphus.config import QuaternionConjugationPolicy
-from alphus.gates.review.manual_quaternion_conjugation import (
+from alphus.gates.review.numerical.quaternions.manual_quaternion_conjugation import (
     check_manual_quaternion_conjugation,
     quaternion_conjugation_lines,
 )

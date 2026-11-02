@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from alphus.config import QuaternionVectorRotationPolicy
-from alphus.gates.review.manual_quaternion_vector_rotation import (
+from alphus.gates.review.numerical.quaternions.manual_quaternion_vector_rotation import (
     check_manual_quaternion_vector_rotation,
     quaternion_vector_rotation_sites,
 )

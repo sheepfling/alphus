@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from alphus.config import QuaternionMatrixConversionPolicy
-from alphus.gates.review.manual_quaternion_matrix_conversion import (
+from alphus.gates.review.numerical.quaternions.manual_quaternion_matrix_conversion import (
     check_manual_quaternion_matrix_conversion,
     quaternion_matrix_conversion_sites,
 )

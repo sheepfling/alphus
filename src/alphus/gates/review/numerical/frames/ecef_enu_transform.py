@@ -10,7 +10,7 @@ from pathlib import Path
 from alphus.config import EcefEnuTransformPolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
-from alphus.gates.review.quaternion_ast import (
+from alphus.gates.review.numerical.common.ast_helpers import (
     configured_function_observations,
     redefined_function_names,
 )

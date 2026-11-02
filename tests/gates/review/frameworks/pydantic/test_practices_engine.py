@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from alphus.config import PydanticPracticePolicy
-from alphus.gates.review.frameworks.pydantic_practices import pydantic_practice_findings
+from alphus.gates.review.frameworks.pydantic.practices import pydantic_practice_findings
 
 
 def _policy(**options: bool | tuple[str, ...]) -> PydanticPracticePolicy:

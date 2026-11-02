@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from alphus.config import QuaternionNormalizationPolicy
-from alphus.gates.review.manual_quaternion_normalization import (
+from alphus.gates.review.numerical.quaternions.manual_quaternion_normalization import (
     check_manual_quaternion_normalization,
     quaternion_normalization_sites,
 )

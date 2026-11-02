@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from alphus.config import CholeskyRecurrencePolicy
-from alphus.gates.review.cholesky_recurrence import (
+from alphus.gates.review.numerical.linear_algebra.cholesky_recurrence import (
     check_cholesky_recurrence,
     cholesky_recurrence_lines,
 )

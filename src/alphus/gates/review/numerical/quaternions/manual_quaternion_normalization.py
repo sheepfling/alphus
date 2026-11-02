@@ -10,10 +10,12 @@ from pathlib import Path
 from alphus.config import QuaternionNormalizationPolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
-from alphus.gates.review.quaternion_ast import (
+from alphus.gates.review.numerical.common.ast_helpers import (
     configured_function_observations,
-    is_sum_of_four_squares,
     qualified_call_name,
+)
+from alphus.gates.review.numerical.quaternions.ast_patterns import (
+    is_sum_of_four_squares,
 )
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source

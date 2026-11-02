@@ -10,7 +10,9 @@ from pathlib import Path
 from alphus.config import ManualEliminationPolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
-from alphus.gates.review.quaternion_ast import configured_function_observations
+from alphus.gates.review.numerical.common.ast_helpers import (
+    configured_function_observations,
+)
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 

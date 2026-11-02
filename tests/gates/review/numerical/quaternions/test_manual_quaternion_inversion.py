@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from alphus.config import QuaternionInversionPolicy
-from alphus.gates.review.manual_quaternion_inversion import (
+from alphus.gates.review.numerical.quaternions.manual_quaternion_inversion import (
     check_manual_quaternion_inversion,
     quaternion_inversion_sites,
 )

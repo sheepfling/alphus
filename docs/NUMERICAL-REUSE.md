@@ -1,5 +1,14 @@
 # Numerical reuse review
 
+The implementation groups related source-pattern checks under
+`alphus.gates.review.numerical`: `linear_algebra`, `quaternions`, and `frames`
+each have their own subpackage, with shared AST traversal in `common`. New
+quaternion formula checks belong in `quaternions`; new geodesy and coordinate
+frame checks belong in `frames`. Framework-specific checks stay under
+`review.frameworks`; Pydantic patterns are grouped in `frameworks.pydantic` so
+future checks for hand-written model validation can live beside the existing
+Pydantic practices without mixing them into the numerical detectors.
+
 `manual-matrix-kernels` is an opt-in advisory for one narrow syntax: an outer
 list comprehension over `range`, containing an inner list comprehension over
 `range`, whose elements sum `left[i][k] * right[k][j]` over one more `range`.
@@ -9,9 +18,10 @@ names suppress the file because their semantics are unknown.
 A match is a review prompt. It does not establish that the code is incorrect,
 slow, or equivalent to a library implementation. Dtype, precision, shapes,
 output layout, summation order, exceptions, and mutation behavior can all
-matter. There is no automatic rewrite or dependency suggestion. Educational
-examples, reference oracles, custom arithmetic and small fixed-size formulas
-may be intentional; exclude them or keep the advisory disabled.
+matter. There is no automatic rewrite or dependency installation. The WGS84
+frame examples recommend pyproj/PROJ where a supported transformation is a fit.
+Educational examples, reference oracles, custom arithmetic and small fixed-size
+formulas may be intentional; exclude them or keep the advisory disabled.
 
 The consumer example also offers an independent `array-representation-churn`
 advisory. Outside the contracted loop mode below, it recognizes only a direct,

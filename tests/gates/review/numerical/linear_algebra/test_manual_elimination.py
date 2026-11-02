@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from alphus.config import ManualEliminationPolicy
-from alphus.gates.review.manual_elimination import (
+from alphus.gates.review.numerical.linear_algebra.manual_elimination import (
     check_manual_elimination,
     manual_elimination_sites,
 )

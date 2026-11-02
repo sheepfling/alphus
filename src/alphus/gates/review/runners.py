@@ -9,40 +9,52 @@ from typing import TypeAlias
 
 from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.execution.results import RuleOutput
-from alphus.gates.review.array_representation import check_array_representation
-from alphus.gates.review.cholesky_recurrence import check_cholesky_recurrence
-from alphus.gates.review.ecef_enu_transform import check_ecef_enu_transform
-from alphus.gates.review.ecef_ned_matrix_transform import (
-    check_ecef_ned_matrix_transform,
-)
 from alphus.gates.review.frameworks.fastapi_practices import check_fastapi_practices
-from alphus.gates.review.frameworks.pydantic_practices import check_pydantic_practices
+from alphus.gates.review.frameworks.pydantic.practices import check_pydantic_practices
 from alphus.gates.review.frameworks.sqlalchemy_practices import (
     check_sqlalchemy_practices,
 )
 from alphus.gates.review.input_contracts import check_input_contracts
-from alphus.gates.review.manual_elimination import check_manual_elimination
-from alphus.gates.review.manual_matrix_kernels import check_manual_matrix_kernels
-from alphus.gates.review.manual_quaternion_conjugation import (
+from alphus.gates.review.numeric_literals import check_numeric_literals
+from alphus.gates.review.numerical.frames.ecef_enu_transform import (
+    check_ecef_enu_transform,
+)
+from alphus.gates.review.numerical.frames.ecef_ned_matrix_transform import (
+    check_ecef_ned_matrix_transform,
+)
+from alphus.gates.review.numerical.frames.ned_basis_vectors import (
+    check_ned_basis_vectors,
+)
+from alphus.gates.review.numerical.linear_algebra.array_representation import (
+    check_array_representation,
+)
+from alphus.gates.review.numerical.linear_algebra.cholesky_recurrence import (
+    check_cholesky_recurrence,
+)
+from alphus.gates.review.numerical.linear_algebra.manual_elimination import (
+    check_manual_elimination,
+)
+from alphus.gates.review.numerical.linear_algebra.manual_matrix_kernels import (
+    check_manual_matrix_kernels,
+)
+from alphus.gates.review.numerical.quaternions.manual_quaternion_conjugation import (
     check_manual_quaternion_conjugation,
 )
-from alphus.gates.review.manual_quaternion_inversion import (
+from alphus.gates.review.numerical.quaternions.manual_quaternion_inversion import (
     check_manual_quaternion_inversion,
 )
-from alphus.gates.review.manual_quaternion_matrix_conversion import (
+from alphus.gates.review.numerical.quaternions.manual_quaternion_matrix_conversion import (
     check_manual_quaternion_matrix_conversion,
 )
-from alphus.gates.review.manual_quaternion_normalization import (
+from alphus.gates.review.numerical.quaternions.manual_quaternion_normalization import (
     check_manual_quaternion_normalization,
 )
-from alphus.gates.review.manual_quaternion_product import (
+from alphus.gates.review.numerical.quaternions.manual_quaternion_product import (
     check_manual_quaternion_products,
 )
-from alphus.gates.review.manual_quaternion_vector_rotation import (
+from alphus.gates.review.numerical.quaternions.manual_quaternion_vector_rotation import (
     check_manual_quaternion_vector_rotation,
 )
-from alphus.gates.review.ned_basis_vectors import check_ned_basis_vectors
-from alphus.gates.review.numeric_literals import check_numeric_literals
 from alphus.gates.review.positional_interfaces import check_positional_interfaces
 from alphus.gates.review.scipy_constants import check_scipy_constants
 from alphus.gates.review.source_families import check_source_families

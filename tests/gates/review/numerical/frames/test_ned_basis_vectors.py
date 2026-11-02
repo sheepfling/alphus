@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from alphus.config import NedBasisVectorsPolicy
-from alphus.gates.review.ned_basis_vectors import (
+from alphus.gates.review.numerical.frames.ned_basis_vectors import (
     check_ned_basis_vectors,
     ned_basis_vector_sites,
 )

@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from alphus.config import ArrayRepresentationPolicy
-from alphus.gates.review.array_representation import (
+from alphus.gates.review.numerical.linear_algebra.array_representation import (
     check_array_representation,
     loop_representation_churn_lines,
     representation_churn_lines,
