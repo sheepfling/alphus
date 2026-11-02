@@ -17,6 +17,9 @@ from alphus.gates.review.frameworks.pydantic_practices import check_pydantic_pra
 from alphus.gates.review.frameworks.sqlalchemy_practices import (
     check_sqlalchemy_practices,
 )
+from alphus.gates.review.heuristic_total_consumption import (
+    check_heuristic_total_consumption,
+)
 from alphus.gates.review.input_contracts import check_input_contracts
 from alphus.gates.review.numeric_literals import check_numeric_literals
 from alphus.gates.review.positional_interfaces import check_positional_interfaces
@@ -100,6 +103,16 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
                 require_policy(
                     config.checks.embedded_semantic_overrides,
                     "embedded_semantic_overrides",
+                ),
+            )
+        ),
+        "heuristic-total-consumption": lambda root, files, config: (
+            check_heuristic_total_consumption(
+                root,
+                files,
+                require_policy(
+                    config.checks.heuristic_total_consumption,
+                    "heuristic_total_consumption",
                 ),
             )
         ),

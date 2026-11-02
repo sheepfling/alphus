@@ -25,6 +25,10 @@ def test_prose_as_control_example_is_scoped_and_provisional() -> None:
     assert isinstance(step, RuleRunStep)
     assert step.rule == "prose-as-control"
     assert step.rollout == "provisional"
+    consumption = config.checks.heuristic_total_consumption
+    assert consumption is not None
+    assert consumption.function_names == ("preserve_text",)
+    assert consumption.output_contract == "preserve-unmatched-spans"
 
 
 def test_starter_policy_has_one_scoped_command_and_no_global_inventory() -> None:

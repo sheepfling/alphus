@@ -62,6 +62,22 @@ The later `embedded-semantic-overrides` rule is not included in these runs. Its
 detector requires a consumer-specific mapping and source-anchor contract; this
 sample did not configure one, so it has no calibration result here.
 
+The `heuristic-total-consumption` rule was separately probed against two
+pinned public sources. At Sphinx
+`035a07c32c3241fd3356f4d827800c1f88525272`,
+`sphinx/domains/std/__init__.py::token_xrefs` (lines 558–589) uses
+`token_re.finditer` under a preserving-unmatched-spans policy; the rule returned no candidate because the function
+reconstructs unmatched prefixes and suffixes as text nodes. At Flask
+`49943b5a94413a530761350f04e896f76e8d620e`,
+`src/flask/templating.py::render_template` and
+`render_template_string` (lines 136–159) were checked as an app-scope probe;
+they delegate source rendering to Jinja and contain no configured token
+matcher. The Sphinx parser/renderer is a manually reviewed negative because
+it retains unmatched prefixes and suffixes. The Flask probe is not evidence
+that the rule's preserving-output contract applies to template rendering.
+There is no positive consumer example; these negative observations do not
+estimate precision or recall. Neither checkout was modified.
+
 Tests, generated files, and vendored files were excluded. The three configured
 profiles produced no findings after the exact Sphinx exceptions; the unfiltered
 lossy-rule scan surfaced two reviewed Sphinx candidates, both intentional
@@ -78,11 +94,12 @@ before any precision or enforcement claim is meaningful.
 ## Labeled boundary corpus
 
 The focused test corpus in `tests/gates/review/test_semantic_patchwork_corpus.py`
-contains twelve sanitized synthetic cases: one expected-positive and one
+contains fourteen sanitized synthetic cases: one expected-positive and one
 boundary-negative case for each implemented detector (`prose-as-control`,
 `lossy-text-rewrite`, `rendered-value-reparsed`,
 `positional-semantic-override`, `unexplained-empty-result`, and
-`embedded-semantic-override`). All twelve pass their expected labels. The
+`embedded-semantic-override`, and `heuristic-total-consumption`). All fourteen
+pass their expected labels. The
 positive labels represent the issue's deliberately constructed risk shapes;
 the negative labels cover protocol text, output-only rendering, whitespace
 normalization, layout offsets, valid empty input, and preservation of source

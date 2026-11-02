@@ -37,6 +37,15 @@ source_paths = ["src/render/*.py"]
 replacement_maps = ["fixed_paragraphs"]
 source_anchor_helpers = ["source_anchor"]
 
+[checks.heuristic_total_consumption]
+extensions = [".py"]
+exclude = ["**/generated/**", "**/vendor/**"]
+source_paths = ["src/render/*.py"]
+function_names = ["preserve_text"]
+input_names = ["text"]
+token_match_helpers = ["re.findall"]
+output_contract = "preserve-unmatched-spans"
+
 [orchestration]
 default_profile = "semantic-review"
 
@@ -70,6 +79,12 @@ name = "Embedded semantic replacement review"
 rule = "embedded-semantic-overrides"
 rollout = "provisional"
 
+[[orchestration.steps]]
+kind = "rule"
+name = "Heuristic text consumption review"
+rule = "heuristic-total-consumption"
+rollout = "provisional"
+
 [[orchestration.profiles]]
 name = "semantic-review"
-steps = ["Prose branch review", "Rendered value feedback review", "Positional semantic override review", "Unknown inference empty-result review", "Embedded semantic replacement review"]
+steps = ["Prose branch review", "Rendered value feedback review", "Positional semantic override review", "Unknown inference empty-result review", "Embedded semantic replacement review", "Heuristic text consumption review"]

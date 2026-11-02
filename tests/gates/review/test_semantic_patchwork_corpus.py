@@ -9,11 +9,15 @@ import pytest
 
 from alphus.config import (
     EmbeddedSemanticOverridePolicy,
+    HeuristicTotalConsumptionPolicy,
     PositionalSemanticOverridePolicy,
     ProseAsControlPolicy,
     UnexplainedEmptyResultPolicy,
 )
 from alphus.gates.review.embedded_semantic_overrides import embedded_override_sites
+from alphus.gates.review.heuristic_total_consumption import (
+    heuristic_total_consumption_sites,
+)
 from alphus.gates.review.positional_semantic_overrides import positional_override_sites
 from alphus.gates.review.prose_as_control import (
     lossy_rewrite_lines,
@@ -61,6 +65,15 @@ _EMBEDDED = EmbeddedSemanticOverridePolicy(
     replacement_maps=("fixed_paragraphs",),
     source_anchor_helpers=("source_anchor",),
 )
+_TOTAL_CONSUMPTION = HeuristicTotalConsumptionPolicy(
+    extensions=(".py",),
+    exclude=(),
+    source_paths=("src/render/*.py",),
+    function_names=("preserve_text",),
+    input_names=("text",),
+    token_match_helpers=("re.findall",),
+    output_contract="preserve-unmatched-spans",
+)
 
 
 def _matches(detector: Callable[[str], object], source: str) -> bool:
@@ -97,6 +110,10 @@ def _empty(text: str) -> object:
 
 def _embedded(text: str) -> object:
     return embedded_override_sites(text, _EMBEDDED)
+
+
+def _total_consumption(text: str) -> object:
+    return heuristic_total_consumption_sites(text, _TOTAL_CONSUMPTION)
 
 
 _CASES = (
@@ -173,6 +190,21 @@ _CASES = (
         "    if replacement is not None:\n"
         "        return source_anchor(cell.id) + cell.text\n",
         _embedded,
+    ),
+    _case(
+        "configured content-preserving function returns matches only",
+        "import re\n"
+        "def preserve_text(text):\n"
+        "    tokens = re.findall(r'[A-Za-z]+', text)\n"
+        "    return tokens\n",
+        _total_consumption,
+    ),
+    _negative(
+        "explicit token extractor outside configured preserving boundary",
+        "import re\n"
+        "def extract_tokens(text):\n"
+        "    return re.findall(r'[A-Za-z]+', text)\n",
+        _total_consumption,
     ),
 )
 

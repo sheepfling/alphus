@@ -68,6 +68,9 @@ RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
         "embedded-semantic-overrides": RuleSpec(
             "embedded_semantic_overrides", RuleOutputShape.FINDINGS
         ),
+        "heuristic-total-consumption": RuleSpec(
+            "heuristic_total_consumption", RuleOutputShape.FINDINGS
+        ),
         "scipy-constants": RuleSpec("scipy_constants", RuleOutputShape.FINDINGS),
         "test-quality": RuleSpec("test_quality", RuleOutputShape.FINDINGS),
         "input-contracts": RuleSpec("input_contracts", RuleOutputShape.FINDINGS),

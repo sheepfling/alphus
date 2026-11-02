@@ -232,6 +232,41 @@ class EmbeddedSemanticOverridePolicy(PythonSourceScanPolicy):
         return tuple(values)
 
 
+class HeuristicTotalConsumptionPolicy(PythonSourceScanPolicy):
+    """Consumer contract for text-preserving functions that call token matchers."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    function_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    input_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    token_match_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    output_contract: Literal["preserve-unmatched-spans"]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("function_names", "input_names")
+    @classmethod
+    def validate_identifiers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("configured function and input names must be identifiers")
+        require_unique(values, "configured function and input names must be unique")
+        return tuple(values)
+
+    @field_validator("token_match_helpers")
+    @classmethod
+    def validate_helpers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not value or any(not part.isidentifier() for part in value.split("."))
+            for value in values
+        ):
+            raise ValueError("token-match helpers must be dotted identifiers")
+        require_unique(values, "token-match helpers must be unique")
+        return tuple(values)
+
+
 class ScipyConstantsPolicy(PythonSourceScanPolicy):
     """Advisory SciPy physical and unit-factor catalog for Python source."""
 

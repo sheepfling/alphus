@@ -77,6 +77,7 @@ def test_gate_themes_own_their_runner_mappings() -> None:
                 "positional-semantic-overrides",
                 "unexplained-empty-results",
                 "embedded-semantic-overrides",
+                "heuristic-total-consumption",
                 "scipy-constants",
                 "test-quality",
                 "input-contracts",

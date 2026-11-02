@@ -40,6 +40,7 @@ from alphus.policy.repository import (
 from alphus.policy.review import (
     EmbeddedSemanticOverridePolicy,
     FastApiPracticePolicy,
+    HeuristicTotalConsumptionPolicy,
     InputContractPolicy,
     NumericLiteralPolicy,
     PositionalInterfacePolicy,
@@ -82,6 +83,7 @@ class CheckPolicies(StrictModel):
     positional_semantic_overrides: PositionalSemanticOverridePolicy | None = None
     unexplained_empty_results: UnexplainedEmptyResultPolicy | None = None
     embedded_semantic_overrides: EmbeddedSemanticOverridePolicy | None = None
+    heuristic_total_consumption: HeuristicTotalConsumptionPolicy | None = None
     scipy_constants: ScipyConstantsPolicy | None = None
     test_quality: TestQualityPolicy | None = None
     input_contracts: InputContractPolicy | None = None

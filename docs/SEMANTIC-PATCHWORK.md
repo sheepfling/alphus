@@ -65,26 +65,38 @@ source wording was discarded or whether the anchor is stale; it flags this
 specific combination for provenance review. Aliases, other control flow, and
 other ways to generate replacement content are outside the detector.
 
+`heuristic-total-consumption` requires an explicit contract that configured
+top-level functions preserve unmatched input spans, plus configured token-matcher names.
+It reports only a direct return of the matcher's results, or a single local
+capture followed by its direct return. This does not resolve helper aliases,
+infer the consumer's real output contract, or prove that omitted spans matter.
+Legitimate lossy extractors should not be configured under the preserving
+contract; unmatched-span and multi-step reconstruction patterns are outside
+the supported grammar.
+
 These checks do not infer AI authorship or prove a defect.
 
 ## Issue #50 delivery boundary
 
 The four P0 checks are implemented as opt-in advisories: prose-as-control,
 lossy-text-rewrite, rendered-value-reparsed, and positional-semantic-override.
-Two narrow P1 shapes are also implemented: unexplained-empty-result and
-embedded-semantic-override. The embedded rule only recognizes the configured
-replacement-map/source-anchor shape described above; it does not establish that
-anchors are stale or wording is actually lost.
+Three narrow P1 shapes are also implemented: unexplained-empty-result,
+embedded-semantic-override, and heuristic-total-consumption. These are
+consumer-configured syntactic candidates, not proof that output is wrong. The
+embedded rule only recognizes the configured replacement-map/source-anchor
+shape; the total-consumption rule only recognizes the two direct-return forms
+described above.
 
-The remaining P1 proposals are explicitly deferred: heuristic total-consumption
-of unmatched input spans, provenance-as-ownership, and consumer-scoped
-semantic-work-in-presentation boundaries. They need stronger input/ownership
-or independently declared module-role contracts before a useful detector can
-be calibrated. The P2 proposals are also deferred: evaluate
+The remaining P1 proposals are explicitly deferred: provenance-as-ownership
+and consumer-scoped semantic-work-in-presentation boundaries. They need
+stronger ownership or independently declared module-role contracts before a
+useful detector can be calibrated. The P2 proposals are also deferred: evaluate
 parallel-normalization through the existing duplication capabilities and issue
 [#33](https://github.com/sheepfling/alphus/issues/33), and do not ship a
 patch-cascade heuristic without reviewed real clusters and actionable
-remediation. None of these deferred patterns is implied to be covered.
+remediation. None of these deferred patterns is implied to be covered. The new
+P1 rule has synthetic boundary tests but no positive production calibration;
+its precision is not estimable.
 
 The [calibration note](SEMANTIC-PATCHWORK-CALIBRATION.md) records both the
 reviewed synthetic boundary corpus and a small non-fixture source sample. The
