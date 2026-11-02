@@ -5,7 +5,7 @@ Alphus provides a narrowly scoped persistent cache for direct
 
 ```sh
 alphus --root . --config quality-gates.toml --rule output-escaping \
-  --local-cache /tmp/alphus-output-escaping-cache.json
+  --local-cache ~/.cache/alphus/output-escaping.json
 ```
 
 The cache stores only per-file finding records and SHA-256 content digests; it
@@ -32,7 +32,7 @@ cache with fresh scan results:
 
 ```sh
 alphus --root . --config quality-gates.toml --rule output-escaping \
-  --local-cache /tmp/alphus-output-escaping-cache.json --force-fresh
+  --local-cache ~/.cache/alphus/output-escaping.json --force-fresh
 ```
 
 This pilot is limited to a direct `--rule output-escaping` invocation. It does

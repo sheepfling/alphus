@@ -245,13 +245,17 @@ def check_output_escaping_cached(
             except (ValidationError, TypeError):
                 cached_entry = None
             if cached_entry is not None and cached_entry.content_sha256 == digest:
-                current_findings = _finding_rows(
-                    name, cached_entry.findings, relative.suffix.lower()
-                )
-                hits += 1
-                findings.extend(current_findings)
-                new_entries[name] = cached
-                continue
+                try:
+                    current_findings = _finding_rows(
+                        name, cached_entry.findings, relative.suffix.lower()
+                    )
+                except ValueError:
+                    cached_entry = None
+                else:
+                    hits += 1
+                    findings.extend(current_findings)
+                    new_entries[name] = cached
+                    continue
             if cached_entry is None:
                 invalidation = "cached finding identity changed"
 

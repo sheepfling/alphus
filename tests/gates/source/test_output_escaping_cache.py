@@ -8,8 +8,9 @@ from pathlib import Path
 from typing import Never
 
 import pytest
+from typer.testing import CliRunner
 
-from alphus.cli import main
+from alphus.cli import app, main
 from alphus.config import SourceScanPolicy
 from alphus.gates.source import output_escaping_cache
 from alphus.gates.source.output_escaping import check_output_escaping
@@ -177,6 +178,34 @@ def test_malformed_cache_entries_are_discarded_and_recomputed(
     assert summary.invalidation == "cache schema or entries are invalid"
 
 
+@pytest.mark.parametrize("identity_field", ["path", "rule_id"])
+def test_valid_cache_entry_with_wrong_finding_identity_is_recomputed(
+    tmp_path: Path, identity_field: str
+) -> None:
+    source = _source(tmp_path, "src/render.py", 'value = value.replace("<", "&lt;")\n')
+    cache = tmp_path / "cache.json"
+    expected = check_output_escaping_cached(tmp_path, [source], _policy(), cache)[0]
+    payload = json.loads(cache.read_text(encoding="utf-8"))
+    finding = payload["entries"]["src/render.py"]["findings"][0]
+    finding[identity_field] = (
+        "src/other.py"
+        if identity_field == "path"
+        else "alphus/python/none/security/different-rule"
+    )
+    cache.write_text(json.dumps(payload), encoding="utf-8")
+
+    actual, summary = check_output_escaping_cached(tmp_path, [source], _policy(), cache)
+    warm, warm_summary = check_output_escaping_cached(
+        tmp_path, [source], _policy(), cache
+    )
+
+    assert actual == expected == check_output_escaping(tmp_path, [source], _policy())
+    assert (summary.hits, summary.misses) == (0, 1)
+    assert summary.invalidation == "cached finding identity changed"
+    assert warm == expected
+    assert (warm_summary.hits, warm_summary.misses) == (1, 0)
+
+
 def test_force_fresh_bypasses_warm_entries_and_replaces_them(tmp_path: Path) -> None:
     source = _source(tmp_path, "src/render.py", "value = html.escape(value)\n")
     cache = tmp_path / "cache.json"
@@ -234,8 +263,28 @@ def test_cli_reports_cache_status_on_stderr_without_changing_json(
 def test_cli_restricts_cache_and_force_fresh_to_direct_output_rule(
     tmp_path: Path,
 ) -> None:
-    assert main(["--force-fresh"]) == 2
+    runner = CliRunner()
+    missing_cache = runner.invoke(app, ["--force-fresh"])
+    assert missing_cache.exit_code == 2
+    assert "Invalid value" in missing_cache.output
+    assert "--force-fresh requires --local-cache" in missing_cache.output
 
-    assert (
-        main(["--rule", "line-length", "--local-cache", str(tmp_path / "c.json")]) == 2
+    unsupported_rule = runner.invoke(
+        app,
+        [
+            "--rule",
+            "line-length",
+            "--local-cache",
+            str(tmp_path / "cache.json"),
+        ],
+        terminal_width=160,
     )
+    assert unsupported_rule.exit_code == 2
+    assert "Invalid value" in unsupported_rule.output
+    assert "limited" in unsupported_rule.output
+    assert "output-escaping" in unsupported_rule.output
+
+    help_result = runner.invoke(app, ["--help"])
+    assert help_result.exit_code == 0
+    assert "--local-cache" in help_result.output
+    assert "--force-fresh" in help_result.output
