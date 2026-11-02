@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import ast
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 
 from alphus.config import ProseAsControlPolicy
@@ -47,7 +47,7 @@ def _rendered_locals(
     return rendered
 
 
-def _uses_rendered_suffix(test: ast.expr, names: set[str]) -> str | None:
+def _uses_rendered_suffix(test: ast.expr, names: Sequence[str]) -> str | None:
     match test:
         case ast.Call(
             func=ast.Attribute(
@@ -81,7 +81,7 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[tuple[int, int, str]]:
                 for branch in ast.walk(function):
                     match branch:
                         case ast.If(test=test) as conditional:
-                            name = _uses_rendered_suffix(test, set(rendered))
+                            name = _uses_rendered_suffix(test, tuple(rendered))
                             if name is not None:
                                 found.add((rendered[name], conditional.lineno, name))
                         case _:
