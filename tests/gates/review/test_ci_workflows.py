@@ -350,6 +350,81 @@ def test_azure_static_scripts_match_only_when_job_context_is_simple() -> None:
     assert workflow_run_findings(conditional, "azure-pipelines.yml", configured) == []
 
 
+def test_azure_matrix_repository_checks_require_an_explicit_static_allowlist() -> None:
+    script = "ruff check src\nmypy src\n"
+    source = """jobs:
+- job: checks
+  pool:
+    vmImage: ubuntu-latest
+  strategy:
+    matrix:
+      python311:
+        PYTHON_VERSION: '3.11'
+      python312:
+        PYTHON_VERSION: '3.12'
+  steps:
+  - bash: |
+      ruff check src
+      mypy src
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: $(PYTHON_VERSION)
+"""
+    configured = policy(azure_workflow_paths=("azure-pipelines.yml",))
+    assert workflow_run_findings(source, "azure-pipelines.yml", configured) == []
+
+    allowed = policy(
+        azure_workflow_paths=("azure-pipelines.yml",),
+        matrix_invariant_run_blocks=(script,),
+    )
+    findings = workflow_run_findings(source, "azure-pipelines.yml", allowed)
+    assert len(findings) == 1
+    assert "each matrix leg" in findings[0].message
+    assert "not proof" in findings[0].message
+    assert "UsePythonVersion" not in findings[0].message
+
+
+@pytest.mark.parametrize(
+    ("strategy", "script"),
+    [
+        (
+            """      matrix:
+        python311:
+          PYTHON_VERSION: '3.11'
+        python312:
+          PYTHON_VERSION: '3.12'""",
+            "ruff check $PYTHON_VERSION\nmypy src\n",
+        ),
+        (
+            """      matrix:
+        python311:
+          PYTHON_VERSION: '3.11'
+        python312:
+          PYTHON_VERSION: '3.12'
+      maxParallel: 2""",
+            "ruff check src\nmypy src\n",
+        ),
+    ],
+)
+def test_azure_matrix_skips_variable_dependent_or_unrecognized_context(
+    strategy: str, script: str
+) -> None:
+    source = f"""jobs:
+- job: checks
+  pool: ubuntu-latest
+  strategy:
+{strategy}
+  steps:
+  - bash: |
+      {script.replace(chr(10), chr(10) + "      ").rstrip()}
+"""
+    configured = policy(
+        azure_workflow_paths=("azure-pipelines.yml",),
+        matrix_invariant_run_blocks=(script,),
+    )
+    assert workflow_run_findings(source, "azure-pipelines.yml", configured) == []
+
+
 def test_azure_repeated_setup_tasks_require_matching_static_pool_and_inputs() -> None:
     source = """jobs:
 - job: lint

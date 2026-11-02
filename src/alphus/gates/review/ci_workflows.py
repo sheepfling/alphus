@@ -272,8 +272,24 @@ def _run_blocks(
     return records
 
 
+def _static_azure_matrix(strategy: Node | None) -> bool:
+    """Recognize only a literal Azure matrix with at least two named legs."""
+    strategy_mapping = _mapping(strategy)
+    if strategy_mapping is None or set(strategy_mapping) != {"matrix"}:
+        return False
+    matrix = _mapping(strategy_mapping.get("matrix"))
+    return bool(
+        matrix
+        and len(matrix) >= 2
+        and all(_azure_fingerprint(leg) is not None for leg in matrix.values())
+    )
+
+
 def _azure_blocks(
-    source: str, path: str, minimum: int
+    source: str,
+    path: str,
+    minimum: int,
+    matrix_allowlist: tuple[str, ...] = (),
 ) -> list[tuple[str, str, str, int, bool]]:
     """Return exact static Azure job script candidates; contextual jobs abstain."""
     yaml_api = cast(_YamlApi, yaml)
@@ -296,7 +312,16 @@ def _azure_blocks(
     records: list[tuple[str, str, str, int, bool]] = []
     for entry in job_nodes:
         job = _mapping(entry)
-        if job is None or not set(job) <= {"job", "displayName", "pool", "steps"}:
+        if job is None or not set(job) <= {
+            "job",
+            "displayName",
+            "pool",
+            "steps",
+            "strategy",
+        }:
+            continue
+        matrix_scoped = _static_azure_matrix(job.get("strategy"))
+        if "strategy" in job and not matrix_scoped:
             continue
         name_node, pool_node = job.get("job"), job.get("pool")
         match name_node:
@@ -325,8 +350,15 @@ def _azure_blocks(
                     and "$ (" not in script
                     and "$(" not in script
                     and "${{" not in script
+                    and not re.search(
+                        r"(?:\$[A-Za-z_][A-Za-z0-9_]*|\$\{[^}]+\}|%[^%]+%|![^!]+!)",
+                        script,
+                    )
+                    and (not matrix_scoped or script in matrix_allowlist)
                 ):
-                    records.append((repr(pool), name, script, mark.line + 1, False))
+                    records.append(
+                        (repr(pool), name, script, mark.line + 1, matrix_scoped)
+                    )
                 case _:
                     continue
     return records
@@ -402,7 +434,12 @@ def workflow_run_findings(
     """Group identical static multiline run blocks across context-matched jobs."""
     azure = any(matches_path(path, pattern) for pattern in policy.azure_workflow_paths)
     blocks = (
-        _azure_blocks(source, path, policy.minimum_run_lines)
+        _azure_blocks(
+            source,
+            path,
+            policy.minimum_run_lines,
+            policy.matrix_invariant_run_blocks,
+        )
         if azure
         else _run_blocks(
             source, path, policy.minimum_run_lines, policy.matrix_invariant_run_blocks

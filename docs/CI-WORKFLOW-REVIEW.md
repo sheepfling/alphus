@@ -16,11 +16,14 @@ exact `uses` value (for example, `actions/setup-python@v5`). Conditional steps,
 dynamic inputs, and jobs with additional execution context are skipped.
 
 A user may explicitly allowlist an exact normalized command string in
-`matrix_invariant_run_blocks`. Only simple literal matrix axes with no other
-strategy settings are eligible, and only the allowlisted script is reported.
-This signals that a repository-only check repeats per leg; it does not assert
-the matrix is unnecessary or remove version-specific testing. `ignore_run_blocks`
-and `severity` configure regular repeated blocks.
+`matrix_invariant_run_blocks`. This applies to GitHub Actions and Azure
+Pipelines. Only literal matrices with at least two statically named legs and
+static values are eligible; any additional strategy setting makes the analyzer
+abstain. For Azure, matrix-scoped scripts must also avoid shell-variable
+references. Only the allowlisted script is reported. This signals that a
+repository-only check repeats per leg; it does not assert the matrix is
+unnecessary or remove version-specific testing. `ignore_run_blocks` and
+`severity` configure regular repeated blocks.
 
 Azure Pipelines can be opted in with `azure_workflow_paths`. That parser only
 compares literal multiline `script`/`bash` steps across jobs with identical
