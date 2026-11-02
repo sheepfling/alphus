@@ -19,6 +19,7 @@ from alphus.gates.review.numeric_literals import check_numeric_literals
 from alphus.gates.review.positional_interfaces import check_positional_interfaces
 from alphus.gates.review.scipy_constants import check_scipy_constants
 from alphus.gates.review.source_families import check_source_families
+from alphus.gates.review.suppression_reasons import check_suppression_reasons
 from alphus.gates.review.test_quality import check_test_quality
 from alphus.policy.base import require_policy
 
@@ -76,6 +77,11 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
             root,
             files,
             require_policy(config.checks.sqlalchemy_practices, "sqlalchemy_practices"),
+        ),
+        "suppression-reasons": lambda root, files, config: check_suppression_reasons(
+            root,
+            files,
+            require_policy(config.checks.suppression_reasons, "suppression_reasons"),
         ),
     }
 )

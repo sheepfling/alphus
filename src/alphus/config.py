@@ -79,6 +79,7 @@ from alphus.policy.review import (
     ScipyConstantsPolicy,
     SourceFamilyPolicy,
     SqlAlchemyPracticePolicy,
+    SuppressionReasonPolicy,
     TestQualityExclusion,
     TestQualityPolicy,
 )
@@ -171,6 +172,7 @@ __all__ = [
     "SourceFamilyPolicy",
     "SourceScanPolicy",
     "SqlAlchemyPracticePolicy",
+    "SuppressionReasonPolicy",
     "TestQualityExclusion",
     "TestQualityPolicy",
     "TrackedPathRule",
