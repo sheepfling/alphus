@@ -668,6 +668,7 @@ python_import_evidence = true
 python_module_roots = ["src"]
 max_import_edges = 12
 max_public_api_names = 20
+max_contract_declarations = 12
 max_import_analysis_bytes = 8388608
 ```
 
@@ -696,7 +697,12 @@ single direct literal module-level `__all__` assignment. Dynamic, augmented,
 or reassigned declarations are reported as unresolved; package-level
 re-exports, external consumers, and names without a literal `__all__` are not
 inferred. This is syntax evidence, not a complete public API or responsibility
-assessment. Change history evidence remains unassessed.
+assessment. The pass also reports bounded, module-level classes with a
+qualified `typing.Protocol` or `typing_extensions.Protocol` base and their
+direct method names. This identifies explicit interface-shaped syntax only;
+aliases, ABCs, other contract forms, implementations, and actual sharing across
+consumers remain unknown. Import edges and declarations do not establish which
+files share responsibility. Change-history evidence remains unassessed.
 
 A typical finding starts: `src/service: Family gateway_*: 12 logical units
 across 12 physical files; 12 of 20 selected sibling source files (60%);

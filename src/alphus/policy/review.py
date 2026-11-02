@@ -226,6 +226,7 @@ class SourceFamilyPolicy(StrictModel):
     python_module_roots: tuple[str, ...] = ()
     max_import_edges: int = 12
     max_public_api_names: int = 20
+    max_contract_declarations: int = 12
     max_import_analysis_bytes: int = 8 * 1024 * 1024
 
     @model_validator(mode="after")
@@ -240,6 +241,7 @@ class SourceFamilyPolicy(StrictModel):
                 self.max_scope_patterns,
                 self.max_import_edges,
                 self.max_public_api_names,
+                self.max_contract_declarations,
                 self.max_import_analysis_bytes,
             )
             < 1

@@ -86,9 +86,8 @@ def test_opt_in_python_import_evidence_reports_resolved_edges(tmp_path: Path) ->
     assert len(findings) == 1
     assert "2 resolved edge(s) target another family member" in findings[0].message
     assert "src/gateway_client.py:1 → src/gateway_server.py" in findings[0].message
-    assert (
-        "Direct imports and literal __all__ declarations are partial syntax evidence"
-        in findings[0].message
+    assert "qualified Protocol declarations are partial syntax evidence only" in (
+        findings[0].message
     )
     assert "No literal module-level __all__ was observed" in findings[0].message
 
@@ -117,7 +116,74 @@ def test_import_evidence_reports_bounded_literal_module_exports(tmp_path: Path) 
     assert "src/gateway_client.py:1 exports Client" in message
     assert "src/gateway_client.py:1 exports connect" in message
     assert "1 declared name(s) omitted by max_public_api_names" in message
-    assert "package-level re-exports, external consumers, responsibility" in message
+    assert "Package-level re-exports, external consumers" in message
+
+
+def test_import_evidence_reports_bounded_qualified_protocol_contracts(
+    tmp_path: Path,
+) -> None:
+    paths = [
+        _write(tmp_path, f"src/gateway_{name}.py")
+        for name in ("client", "server", "routes", "auth", "cache")
+    ]
+    (tmp_path / "src/gateway_client.py").write_text(
+        "import typing\n"
+        "class Client(typing.Protocol):\n"
+        "    def send(self, payload: bytes) -> None: ...\n"
+        "class Store(typing.Protocol[object]):\n"
+        "    def read(self) -> bytes: ...\n",
+        encoding="utf-8",
+    )
+
+    findings = source_family_findings(
+        tmp_path,
+        paths,
+        SourceFamilyPolicy(
+            min_family_files=5,
+            python_import_evidence=True,
+            python_module_roots=("src",),
+            max_contract_declarations=1,
+        ),
+    )
+
+    message = findings[0].message
+    assert (
+        "src/gateway_client.py:2 declares Client with Protocol base (send)" in message
+    )
+    assert "1 declaration(s) omitted by max_contract_declarations" in message
+    assert (
+        "other shared-contract forms, and non-Python dependencies are not assessed"
+        in message
+    )
+
+
+def test_import_evidence_does_not_treat_unqualified_protocol_alias_as_resolved(
+    tmp_path: Path,
+) -> None:
+    paths = [
+        _write(tmp_path, f"src/gateway_{name}.py")
+        for name in ("client", "server", "routes", "auth", "cache")
+    ]
+    (tmp_path / "src/gateway_client.py").write_text(
+        "from typing import Protocol as Contract\n"
+        "class Client(Contract):\n"
+        "    def send(self) -> None: ...\n",
+        encoding="utf-8",
+    )
+
+    findings = source_family_findings(
+        tmp_path,
+        paths,
+        SourceFamilyPolicy(
+            min_family_files=5,
+            python_import_evidence=True,
+            python_module_roots=("src",),
+        ),
+    )
+
+    message = findings[0].message
+    assert "No qualified typing.Protocol or typing_extensions.Protocol" in message
+    assert "aliases, ABCs, and other contract forms are not assessed" in message
 
 
 @pytest.mark.parametrize(
@@ -598,6 +664,10 @@ def test_unreadable_source_remains_in_lexical_candidate_and_marks_scan_incomplet
     [
         pytest.param(lambda: SourceFamilyPolicy(min_family_files=0), id="min-family"),
         pytest.param(lambda: SourceFamilyPolicy(max_files=0), id="max-files"),
+        pytest.param(
+            lambda: SourceFamilyPolicy(max_contract_declarations=0),
+            id="max-contract-declarations",
+        ),
         pytest.param(
             lambda: SourceFamilyPolicy(max_reported_members=0), id="max-members"
         ),

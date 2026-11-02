@@ -183,6 +183,38 @@ def _module_all_exports(tree: ast.Module) -> tuple[int, tuple[str, ...] | None] 
             return line, None
 
 
+def _qualified_protocol_base(base: ast.expr) -> bool:
+    match base:
+        case ast.Attribute(value=ast.Name(id=module), attr="Protocol") if module in {
+            "typing",
+            "typing_extensions",
+        }:
+            return True
+        case ast.Subscript(value=value):
+            return _qualified_protocol_base(value)
+        case _:
+            return False
+
+
+def _module_protocols(tree: ast.Module) -> list[tuple[int, str, tuple[str, ...]]]:
+    """Collect qualified Protocol-shaped declarations without resolving aliases."""
+    declarations: list[tuple[int, str, tuple[str, ...]]] = []
+    for statement in tree.body:
+        match statement:
+            case ast.ClassDef(name=name, bases=bases, body=body) if any(
+                _qualified_protocol_base(base) for base in bases
+            ):
+                methods = tuple(
+                    item.name
+                    for item in body
+                    if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+                )
+                declarations.append((statement.lineno, name, methods))
+            case _:
+                continue
+    return declarations
+
+
 def _python_import_evidence(
     checkout: Path,
     members: AbstractSet[Path],
@@ -216,6 +248,8 @@ def _python_import_evidence(
     public_exports: list[str] = []
     public_export_count = 0
     unresolved_export_modules = 0
+    protocol_declarations: list[str] = []
+    protocol_count = 0
     for source in sorted((p for p in members if p.suffix == ".py"), key=str):
         source_path = (checkout / source).resolve(strict=False)
         if not source_path.is_relative_to(checkout) or bytes_left <= 0:
@@ -244,6 +278,21 @@ def _python_import_evidence(
                         public_exports.append(
                             f"{source.as_posix()}:{export_line} exports {name}"
                         )
+        for contract_line, contract_name, methods in _module_protocols(tree):
+            protocol_count += 1
+            if len(protocol_declarations) < policy.max_contract_declarations:
+                listed_methods = methods[: policy.max_public_api_names]
+                method_text = (
+                    ", ".join(listed_methods) if listed_methods else "no direct methods"
+                )
+                if len(methods) > len(listed_methods):
+                    method_text += (
+                        f", {len(methods) - len(listed_methods)} method name(s) omitted"
+                    )
+                protocol_declarations.append(
+                    f"{source.as_posix()}:{contract_line} declares "
+                    f"{contract_name} with Protocol base ({method_text})"
+                )
         source_module = None
         for root in roots:
             try:
@@ -340,6 +389,20 @@ def _python_import_evidence(
             f" Literal export names remain unresolved in {unresolved_export_modules} "
             "dynamic or reassigned module-level __all__ declaration(s)."
         )
+    if protocol_declarations:
+        context += " Qualified Protocol declaration evidence: "
+        context += "; ".join(protocol_declarations) + "."
+        if protocol_count > len(protocol_declarations):
+            context += (
+                f" {protocol_count - len(protocol_declarations)} declaration(s) "
+                "omitted by max_contract_declarations."
+            )
+    else:
+        context += (
+            " No qualified typing.Protocol or typing_extensions.Protocol "
+            "declaration was observed; aliases, ABCs, and other contract forms "
+            "are not assessed."
+        )
     notes: list[str] = []
     if failures:
         notes.append(f"{failures} Python file(s) could not be analyzed")
@@ -348,8 +411,9 @@ def _python_import_evidence(
     if notes:
         context += " Analysis incomplete: " + "; ".join(notes) + "."
     context += (
-        " Direct imports and literal __all__ declarations are partial syntax evidence; "
-        "package-level re-exports, external consumers, responsibility, and "
+        " Direct imports, literal __all__ declarations, and qualified Protocol "
+        "declarations are partial syntax evidence only. Package-level re-exports, "
+        "external consumers, responsibility, other shared-contract forms, and "
         "non-Python dependencies are not assessed."
     )
     return context, notes
@@ -573,6 +637,7 @@ def source_family_findings(
             f"max_files={policy.max_files}, max_findings={policy.max_findings}, "
             f"max_reported_members={policy.max_reported_members}, "
             f"max_public_api_names={policy.max_public_api_names}, "
+            f"max_contract_declarations={policy.max_contract_declarations}, "
             f"extensions={extension_text}, include={include_text}, "
             f"exclude={exclude_text}{override_text}. "
         )
