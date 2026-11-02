@@ -112,6 +112,65 @@ def test_style_groups_overlapping_duplicate_windows_as_one_advisory_family(
     assert all("end_line" in location for location in evidence["locations"])
 
 
+def test_duplicate_window_grouping_uses_normalized_and_physical_line_positions(
+    tmp_path: Path,
+) -> None:
+    source = (
+        "int alpha = 1;\n"
+        "\n"
+        "// comment removed during normalization\n"
+        '#include "one.hpp"\n'
+        "int beta = alpha + 2;\n"
+        "\n"
+        "// another removed comment\n"
+        '#include "two.hpp"\n'
+        "int gamma = beta * 3;\n"
+        "\n"
+        "// third removed comment\n"
+        '#include "three.hpp"\n'
+        "return gamma;\n"
+        "}\n"
+    )
+    (tmp_path / "a.cpp").write_text(source, encoding="utf-8")
+    (tmp_path / "b.cpp").write_text(source, encoding="utf-8")
+    output = tmp_path / "style.json"
+
+    assert (
+        advisory.main(
+            [
+                "style",
+                str(tmp_path),
+                "--window-lines",
+                "3",
+                "--min-text-chars",
+                "10",
+                "--output",
+                str(output),
+            ]
+        )
+        == 0
+    )
+
+    report = json.loads(output.read_text(encoding="utf-8"))
+    findings = [
+        finding
+        for finding in report["findings"]
+        if finding["code"] == "possible-duplicate-code"
+    ]
+    assert len(findings) == 1
+    evidence = findings[0]["evidence"]
+    assert evidence["window_group_count"] == 2
+    assert {
+        (location["path"], location["line"], location["end_line"])
+        for location in evidence["locations"]
+    } == {
+        ("a.cpp", 1, 9),
+        ("a.cpp", 5, 13),
+        ("b.cpp", 1, 9),
+        ("b.cpp", 5, 13),
+    }
+
+
 def test_overlapping_duplicate_families_keep_disjoint_regions_separate() -> None:
     left = {
         "digest": "left",
@@ -119,7 +178,20 @@ def test_overlapping_duplicate_families_keep_disjoint_regions_separate() -> None
         "file_count": 2,
         "hit_count": 2,
         "sample": "left",
-        "locations": [{"path": "a.cpp", "line": 1}, {"path": "b.cpp", "line": 1}],
+        "locations": [
+            {
+                "path": "a.cpp",
+                "line": 1,
+                "end_line": 3,
+                "normalized_line": 0,
+            },
+            {
+                "path": "b.cpp",
+                "line": 1,
+                "end_line": 3,
+                "normalized_line": 0,
+            },
+        ],
     }
     right = {
         "digest": "right",
@@ -127,7 +199,20 @@ def test_overlapping_duplicate_families_keep_disjoint_regions_separate() -> None
         "file_count": 2,
         "hit_count": 2,
         "sample": "right",
-        "locations": [{"path": "a.cpp", "line": 20}, {"path": "b.cpp", "line": 20}],
+        "locations": [
+            {
+                "path": "a.cpp",
+                "line": 20,
+                "end_line": 22,
+                "normalized_line": 20,
+            },
+            {
+                "path": "b.cpp",
+                "line": 20,
+                "end_line": 22,
+                "normalized_line": 20,
+            },
+        ],
     }
 
     families = advisory._overlapping_duplicate_families([left, right], window_lines=3)

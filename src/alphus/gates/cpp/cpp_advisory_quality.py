@@ -219,6 +219,8 @@ _TREND_METRICS = (
 class DuplicateLocation(TypedDict):
     path: str
     line: int
+    end_line: int
+    normalized_line: int
 
 
 class DuplicateGroup(TypedDict):
@@ -258,9 +260,9 @@ def _overlapping_duplicate_families(
         left_locations: dict[str, list[int]] = defaultdict(list)
         right_locations: dict[str, list[int]] = defaultdict(list)
         for location in left["locations"]:
-            left_locations[location["path"]].append(location["line"])
+            left_locations[location["path"]].append(location["normalized_line"])
         for location in right["locations"]:
-            right_locations[location["path"]].append(location["line"])
+            right_locations[location["path"]].append(location["normalized_line"])
         common_paths = paths(left)
         return common_paths == paths(right) and all(
             any(
@@ -288,10 +290,16 @@ def _overlapping_duplicate_families(
 
     result: list[DuplicateFamily] = []
     for family in families:
-        by_location: dict[tuple[str, int], int] = defaultdict(int)
+        by_location: dict[tuple[str, int, int], int] = defaultdict(int)
         for group in family:
             for location in group["locations"]:
-                by_location[(location["path"], location["line"])] += 1
+                by_location[
+                    (
+                        location["path"],
+                        location["line"],
+                        location["end_line"],
+                    )
+                ] += 1
         ordered_locations = sorted(by_location.items())
         result.append(
             {
@@ -305,10 +313,10 @@ def _overlapping_duplicate_families(
                     {
                         "path": path,
                         "line": line,
-                        "end_line": line + window_lines - 1,
+                        "end_line": end_line,
                         "overlapping_window_count": count,
                     }
-                    for (path, line), count in ordered_locations
+                    for (path, line, end_line), count in ordered_locations
                 ],
             }
         )
@@ -486,7 +494,7 @@ def _duplicate_groups(
     window_lines: int,
     min_text_chars: int,
 ) -> list[DuplicateGroup]:
-    occurrences: dict[str, list[tuple[str, int, str]]] = defaultdict(list)
+    occurrences: dict[str, list[tuple[str, int, int, int, str]]] = defaultdict(list)
     for path in files:
         relative = path.relative_to(root).as_posix()
         if "tests/deps/" in relative:
@@ -501,11 +509,13 @@ def _duplicate_groups(
             if len(sample) < min_text_chars:
                 continue
             digest = hashlib.sha256(sample.encode("utf-8")).hexdigest()[:16]
-            occurrences[digest].append((relative, chunk[0][0], sample))
+            occurrences[digest].append(
+                (relative, chunk[0][0], chunk[-1][0], start, sample)
+            )
 
     groups: list[DuplicateGroup] = []
     for digest, hits in occurrences.items():
-        paths = sorted({path for path, _, _ in hits})
+        paths = sorted({path for path, _, _, _, _ in hits})
         if len(paths) < 2:
             continue
         groups.append(
@@ -514,8 +524,16 @@ def _duplicate_groups(
                 "window_lines": window_lines,
                 "file_count": len(paths),
                 "hit_count": len(hits),
-                "sample": hits[0][2].split("\n", 1)[0][:120],
-                "locations": [{"path": path, "line": line} for path, line, _ in hits],
+                "sample": hits[0][4].split("\n", 1)[0][:120],
+                "locations": [
+                    {
+                        "path": path,
+                        "line": line,
+                        "end_line": end_line,
+                        "normalized_line": normalized_line,
+                    }
+                    for path, line, end_line, normalized_line, _ in hits
+                ],
             }
         )
     groups.sort(
