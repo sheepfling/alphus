@@ -327,3 +327,110 @@ def test_azure_static_scripts_match_only_when_job_context_is_simple() -> None:
         "  pool: ubuntu-latest", "  condition: succeeded()\n  pool: ubuntu-latest", 1
     )
     assert workflow_run_findings(conditional, "azure-pipelines.yml", configured) == []
+
+
+def test_azure_repeated_setup_tasks_require_matching_static_pool_and_inputs() -> None:
+    source = """jobs:
+- job: lint
+  pool:
+    vmImage: ubuntu-latest
+  steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.12'
+      addToPath: true
+- job: audit
+  pool:
+    vmImage: ubuntu-latest
+  steps:
+  - task: UsePythonVersion@0
+    inputs:
+      addToPath: true
+      versionSpec: '3.12'
+"""
+    findings = workflow_run_findings(
+        source,
+        "azure-pipelines.yml",
+        policy(azure_workflow_paths=("azure-pipelines.yml",)),
+    )
+
+    assert len(findings) == 1
+    assert findings[0].rule_id.endswith("/repeated-workflow-setup-action")
+    assert "UsePythonVersion@0" in findings[0].message
+    assert "lint (line 6)" in findings[0].message
+    assert "audit (line 14)" in findings[0].message
+    assert "not a recommendation to remove setup" in findings[0].message
+
+
+def test_azure_setup_task_advisory_skips_context_and_different_inputs() -> None:
+    configured = policy(azure_workflow_paths=("azure-pipelines.yml",))
+    versioned = """jobs:
+- job: py311
+  pool: ubuntu-latest
+  steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.11'
+- job: py312
+  pool: ubuntu-latest
+  steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.12'
+"""
+    assert workflow_run_findings(versioned, "azure-pipelines.yml", configured) == []
+
+    different_pool = """jobs:
+- job: linux
+  pool:
+    vmImage: ubuntu-latest
+  steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.12'
+- job: windows
+  pool:
+    vmImage: windows-latest
+  steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.12'
+"""
+    assert (
+        workflow_run_findings(different_pool, "azure-pipelines.yml", configured) == []
+    )
+
+    contextual = """jobs:
+- job: one
+  pool: ubuntu-latest
+  condition: succeeded()
+  steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.12'
+- job: two
+  pool: ubuntu-latest
+  steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.12'
+"""
+    assert workflow_run_findings(contextual, "azure-pipelines.yml", configured) == []
+
+    dynamic = """jobs:
+- job: one
+  pool:
+    vmImage: $(agentImage)
+  steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: $(pythonVersion)
+- job: two
+  pool:
+    vmImage: $(agentImage)
+  steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: $(pythonVersion)
+"""
+    assert workflow_run_findings(dynamic, "azure-pipelines.yml", configured) == []

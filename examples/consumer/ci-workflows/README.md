@@ -3,6 +3,12 @@
 This provisional profile reports exact static multiline command blocks that
 repeat in distinct jobs with matching static runner/pool values. Azure support
 is opt-in through `azure_workflow_paths`. Contextual jobs and steps are skipped.
+For Azure Pipelines it also reviews a small allowlist of repeated tool setup
+tasks (`UsePythonVersion`, `UseDotNet`, `NodeTool`, `JavaToolInstaller`,
+`GoTool`, and `UseRubyVersion`) when the task version, static inputs, and static
+pool match exactly. It compares mapping-form pools such as `vmImage` as well as
+literal pool names. Azure runtime expressions and additional job/task context
+are not resolved, so those candidates are skipped.
 
 Simple matrix jobs are excluded by default. A specific repository-only command
 may be explicitly listed in `matrix_invariant_run_blocks`; that produces a

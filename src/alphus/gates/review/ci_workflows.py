@@ -93,6 +93,28 @@ def _static_fingerprint(node: Node | None) -> _Fingerprint | None:
             return None
 
 
+def _contains_azure_expression(node: Node | None) -> bool:
+    """Recognize Azure runtime expressions in any static task/pool value."""
+    match node:
+        case ScalarNode(value=value):
+            return re.search(r"\$\(|\$\[|\$\{\{", value) is not None
+        case SequenceNode(value=items):
+            return any(_contains_azure_expression(item) for item in items)
+        case MappingNode(value=entries):
+            return any(
+                _contains_azure_expression(key) or _contains_azure_expression(value)
+                for key, value in entries
+            )
+        case _:
+            return True
+
+
+def _azure_fingerprint(node: Node | None) -> _Fingerprint | None:
+    if _contains_azure_expression(node):
+        return None
+    return _static_fingerprint(node)
+
+
 def _setup_action_blocks(
     source: str, path: str
 ) -> list[tuple[str, str, str, _Fingerprint, int]]:
@@ -274,7 +296,7 @@ def _azure_blocks(
                 name = value
             case _:
                 name = None
-        pool = _fingerprint(pool_node)
+        pool = _azure_fingerprint(pool_node)
         steps = job.get("steps")
         if name is None or pool is None:
             continue
@@ -299,6 +321,70 @@ def _azure_blocks(
                     records.append((repr(pool), name, script, mark.line + 1))
                 case _:
                     continue
+    return records
+
+
+_AZURE_SETUP_TASK = re.compile(
+    r"(?:UsePythonVersion|UseDotNet|NodeTool|JavaToolInstaller|GoTool|UseRubyVersion)@\d+",
+    re.IGNORECASE,
+)
+
+
+def _azure_setup_task_blocks(
+    source: str, path: str
+) -> list[tuple[str, str, str, _Fingerprint, int]]:
+    """Return exact setup-task records from jobs with matching static pools."""
+    yaml_api = cast(_YamlApi, yaml)
+    try:
+        events = tuple(yaml_api.parse(source, Loader=yaml.BaseLoader))
+        root = yaml_api.compose(source, Loader=yaml.BaseLoader)
+    except yaml.YAMLError as error:
+        raise ValueError(
+            f"cannot parse Azure Pipelines workflow {path}: {error}"
+        ) from error
+    if any(_is_alias_event(event) for event in events):
+        return []
+    pipeline = _mapping(root)
+    jobs_node = pipeline.get("jobs") if pipeline is not None else None
+    match jobs_node:
+        case SequenceNode(value=job_nodes):
+            pass
+        case _:
+            return []
+    records: list[tuple[str, str, str, _Fingerprint, int]] = []
+    for entry in job_nodes:
+        job = _mapping(entry)
+        if job is None or not set(job) <= {"job", "displayName", "pool", "steps"}:
+            continue
+        pool = _azure_fingerprint(job.get("pool"))
+        name_node = job.get("job")
+        match name_node:
+            case ScalarNode(value=name):
+                pass
+            case _:
+                continue
+        if pool is None:
+            continue
+        match job.get("steps"):
+            case SequenceNode(value=step_nodes):
+                pass
+            case _:
+                continue
+        for step_node in step_nodes:
+            step = _mapping(step_node)
+            if step is None or not set(step) <= {"displayName", "task", "inputs"}:
+                continue
+            match step.get("task"):
+                case ScalarNode(value=task, start_mark=mark) if (
+                    _AZURE_SETUP_TASK.fullmatch(task)
+                ):
+                    pass
+                case _:
+                    continue
+            inputs = _azure_fingerprint(step.get("inputs"))
+            if "inputs" in step and inputs is None:
+                continue
+            records.append((repr(pool), name, task, inputs or (), mark.line + 1))
     return records
 
 
@@ -382,6 +468,40 @@ def workflow_run_findings(
                         f"{examples}; review whether shared workflow configuration would help. "
                         "Jobs have isolated environments, so repeated setup may be required; "
                         "this is a duplication candidate, not a removal recommendation."
+                    ),
+                    locations[0][0],
+                    policy.severity,
+                )
+            )
+    else:
+        setup_groups: dict[tuple[str, str, _Fingerprint], list[tuple[str, int]]] = (
+            defaultdict(list)
+        )
+        for pool, job, task, inputs, line in _azure_setup_task_blocks(source, path):
+            setup_groups[(pool, task, inputs)].append((job, line))
+        for (_, task, _inputs), occurrences in sorted(
+            setup_groups.items(),
+            key=lambda item: (item[0][0], item[0][1], repr(item[0][2])),
+        ):
+            jobs = sorted({job for job, _ in occurrences})
+            if len(jobs) < 2:
+                continue
+            locations = sorted((line, job) for job, line in occurrences)
+            examples = ", ".join(f"{job} (line {line})" for line, job in locations)
+            findings.append(
+                Finding(
+                    rule_tag(
+                        Scope.ANY,
+                        Framework.NONE,
+                        Category.ORCHESTRATION,
+                        "repeated-workflow-setup-action",
+                    ),
+                    path,
+                    (
+                        f"identical static Azure setup task {task!r} appears in distinct jobs: "
+                        f"{examples}; review whether a shared template would help. "
+                        "Pool and task inputs match exactly, but this is a review candidate, "
+                        "not a recommendation to remove setup from isolated jobs."
                     ),
                     locations[0][0],
                     policy.severity,

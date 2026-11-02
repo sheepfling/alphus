@@ -24,11 +24,15 @@ and `severity` configure regular repeated blocks.
 
 Azure Pipelines can be opted in with `azure_workflow_paths`. That parser only
 compares literal multiline `script`/`bash` steps across jobs with identical
-static scalar pools. Job/step conditions, templates, expressions, aliases,
-mapping pools, and other contextual keys are skipped. It does not execute or
-edit workflows. Parsing uses PyYAML's `BaseLoader` node tree, which avoids
-constructing arbitrary tagged Python objects. Parse errors are reported as
-execution errors.
+static pools, including mapping-form pools such as `vmImage`. It also reports
+exact repeats of selected tool setup tasks (`UsePythonVersion`, `UseDotNet`,
+`NodeTool`, `JavaToolInstaller`, `GoTool`, and `UseRubyVersion`) when task
+versions, inputs, and pools match. Azure runtime expressions, aliases,
+templates, conditions, and jobs/steps with additional context are skipped.
+These are review candidates; setup may still be required in isolated jobs. It
+does not execute or edit workflows. Parsing uses PyYAML's `BaseLoader` node
+tree, which avoids constructing arbitrary tagged Python objects. Parse errors
+are reported as execution errors.
 
 See the [consumer example](../examples/consumer/ci-workflows/README.md) for a
 complete policy and invocation.
