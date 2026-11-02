@@ -129,6 +129,71 @@ def check_prose_as_control(
     return findings
 
 
+def _literal_integer(node: ast.expr) -> int | None:
+    match node:
+        case ast.Constant(value=bool()):
+            return None
+        case ast.Constant(value=int() as value):
+            return value
+        case ast.UnaryOp(op=ast.USub(), operand=ast.Constant(value=bool())):
+            return None
+        case ast.UnaryOp(op=ast.USub(), operand=ast.Constant(value=int() as value)):
+            return -value
+        case ast.UnaryOp(op=ast.UAdd(), operand=ast.Constant(value=bool())):
+            return None
+        case ast.UnaryOp(op=ast.UAdd(), operand=ast.Constant(value=int() as value)):
+            return value
+        case _:
+            return None
+
+
+def _literal_replace_expression(node: ast.Call) -> str | None:
+    match node:
+        case ast.Call(
+            func=ast.Attribute(attr="replace"),
+            args=[
+                ast.Constant(value=str(token)),
+                ast.Constant(value=str(replacement)),
+            ],
+            keywords=[],
+        ):
+            count = None
+        case ast.Call(
+            func=ast.Attribute(attr="replace"),
+            args=[
+                ast.Constant(value=str(token)),
+                ast.Constant(value=str(replacement)),
+                count_node,
+            ],
+            keywords=[],
+        ):
+            count = _literal_integer(count_node)
+            if count is None:
+                return None
+        case ast.Call(
+            func=ast.Attribute(attr="replace"),
+            args=[
+                ast.Constant(value=str(token)),
+                ast.Constant(value=str(replacement)),
+            ],
+            keywords=[ast.keyword(arg="count", value=count_node)],
+        ):
+            count = _literal_integer(count_node)
+            if count is None:
+                return None
+        case _:
+            return None
+    if count == 0:
+        return None
+    if replacement not in {"", " "} or not any(
+        character.isdigit() or character in _SEMANTIC_PUNCTUATION for character in token
+    ):
+        return None
+
+    suffix = f", count={count}" if count is not None else ""
+    return f"replace({token!r}, {replacement!r}{suffix})"
+
+
 def lossy_rewrite_lines(
     source: str, policy: ProseAsControlPolicy
 ) -> list[tuple[int, str]]:
@@ -157,20 +222,9 @@ def lossy_rewrite_lines(
                 and replacement in {"", " "}
             ):
                 observations.add((node.lineno, pattern))
-            case ast.Call(
-                func=ast.Attribute(attr="replace"),
-                args=[
-                    ast.Constant(value=str(token)),
-                    ast.Constant(value=str(replacement)),
-                ],
-                keywords=[],
-            ) if replacement in {"", " "} and any(
-                character.isdigit() or character in _SEMANTIC_PUNCTUATION
-                for character in token
-            ):
-                observations.add(
-                    (node.lineno, f"str.replace({token!r}, {replacement!r})")
-                )
+            case ast.Call() as call:
+                if (expression := _literal_replace_expression(call)) is not None:
+                    observations.add((node.lineno, expression))
             case _:
                 continue
     return sorted(observations)
@@ -207,6 +261,11 @@ def check_lossy_text_rewrite(
         if not path.is_file():
             continue
         for line, pattern in lossy_rewrite_lines(read_python_source(path), policy):
+            if pattern.startswith("replace(") and any(
+                pattern == allowance.expression and matches_path(name, allowance.path)
+                for allowance in policy.allowed_literal_rewrites
+            ):
+                continue
             findings.append(
                 Finding(
                     _LOSSY_REWRITE_RULE_ID,
@@ -214,7 +273,9 @@ def check_lossy_text_rewrite(
                     "configured text rewrite removes a digit/sign/delimiter-bearing "
                     f"token using an empty/space replacement ({pattern}); review "
                     "whether that information is semantic input. This syntax does not "
-                    "establish that content is actually lost for a given source.",
+                    "establish that content is actually lost for a given source. The "
+                    "receiver type is not inferred; custom .replace APIs may have "
+                    "different semantics.",
                     line,
                     policy.severity,
                 )

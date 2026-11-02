@@ -110,8 +110,8 @@ kept = prose.replace("0.25", "value")
 """
 
     assert lossy_rewrite_lines(source, _policy(lossy_text_rewrite=True)) == [
-        (1, "str.replace('0.25', '')"),
-        (2, "str.replace('-', ' ')"),
+        (1, "replace('0.25', '')"),
+        (2, "replace('-', ' ')"),
     ]
 
 
@@ -131,6 +131,84 @@ def test_lossy_text_rewrite_respects_declared_scope_and_exclusions(
         tmp_path, [Path("src/render/generated/cleanup.py")], policy
     )
     assert not check_lossy_text_rewrite(tmp_path, [Path("tests/cleanup.py")], policy)
+
+
+def test_lossy_text_rewrite_handles_literal_replace_counts() -> None:
+    source = """\
+one = prose.replace("0.25", "", 1)
+all = prose.replace("0.25", "", -1)
+keyword = prose.replace("-", " ", count=1)
+zero = prose.replace("0.25", "", 0)
+unknown = prose.replace("0.25", "", count=limit)
+"""
+
+    assert lossy_rewrite_lines(source, _policy(lossy_text_rewrite=True)) == [
+        (1, "replace('0.25', '', count=1)"),
+        (2, "replace('0.25', '', count=-1)"),
+        (3, "replace('-', ' ', count=1)"),
+    ]
+
+
+def test_lossy_text_rewrite_does_not_claim_receiver_is_a_string(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "src/render/custom_api.py"
+    target.parent.mkdir(parents=True)
+    target.write_text("result = registry.replace('0.25', '')\n", encoding="utf-8")
+
+    findings = check_lossy_text_rewrite(
+        tmp_path,
+        [Path("src/render/custom_api.py")],
+        _policy(lossy_text_rewrite=True),
+    )
+    assert len(findings) == 1
+    assert "receiver type is not inferred" in findings[0].message
+
+
+def test_lossy_text_rewrite_allowance_is_exactly_scoped(tmp_path: Path) -> None:
+    target = tmp_path / "src/render/cleanup.py"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        "comma = options.replace(',', ' ')\nnumber = prose.replace('0.25', '')\n",
+        encoding="utf-8",
+    )
+    other = tmp_path / "src/render/other.py"
+    other.write_text("comma = options.replace(',', ' ')\n", encoding="utf-8")
+    policy = _policy(
+        lossy_text_rewrite=True,
+        allowed_literal_rewrites=(
+            {"path": "src/render/cleanup.py", "expression": "replace(',', ' ')"},
+        ),
+    )
+
+    findings = check_lossy_text_rewrite(
+        tmp_path,
+        [Path("src/render/cleanup.py"), Path("src/render/other.py")],
+        policy,
+    )
+    assert [(finding.path, finding.line) for finding in findings] == [
+        ("src/render/cleanup.py", 2),
+        ("src/render/other.py", 1),
+    ]
+
+
+def test_lossy_text_rewrite_allowance_rejects_duplicate_scopes() -> None:
+    with pytest.raises(
+        ValueError, match="allowed literal rewrite scopes must be unique"
+    ):
+        _policy(
+            lossy_text_rewrite=True,
+            allowed_literal_rewrites=(
+                {
+                    "path": "src/render/cleanup.py",
+                    "expression": "replace(',', ' ')",
+                },
+                {
+                    "path": "src/render/cleanup.py",
+                    "expression": "replace(',', ' ')",
+                },
+            ),
+        )
 
 
 def test_lossy_text_rewrite_requires_explicit_regex_helpers_and_reports_evidence(

@@ -15,12 +15,18 @@ review the protocol contract before changing code.
 The same opt-in rule can separately enable `lossy_text_rewrite`. Regex calls
 must name an explicitly configured `regex_sub_helpers` entry, such as `re.sub`,
 and use a literal `\d` pattern with an empty or space replacement. Literal
-`str.replace` calls are also reported when they erase a token containing digits
-or semantic punctuation such as signs and delimiters. Ordinary word replacement,
-whitespace cleanup, and non-erasing replacements are outside this detector. It
-does not trace aliases, establish actual input values, or prove meaningful
-content is lost. Numeric text may be intentionally removed under a declared
-input contract; exclusions and helper names are consumer decisions.
+`.replace` calls are also reported when they erase a token containing digits
+or semantic punctuation such as signs and delimiters. A nonzero constant `count`
+argument is supported; `count=0` and unknown counts are left unreported. Ordinary
+word replacement, whitespace cleanup, and non-erasing replacements are outside
+this detector. The receiver type is not inferred, so a custom `.replace` API can
+be an intentional match. A consumer can add an exact `allowed_literal_rewrites`
+item with a path pattern and the displayed `replace(...)` expression for a
+reviewed format-specific rewrite. This suppresses only that expression under
+matching paths. The check does not trace aliases, establish actual input values,
+or prove meaningful content is lost. Numeric text may be intentionally removed
+under a declared input contract; exclusions, exceptions, and helper names are
+consumer decisions.
 
 `rendered-value-reparsed` uses a separately configured list of rendering helper
 names. It detects a local result assigned from one of those calls when the same

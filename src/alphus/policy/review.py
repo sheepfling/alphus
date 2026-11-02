@@ -78,6 +78,23 @@ class NumericLiteralPolicy(PythonSourceScanPolicy):
         return self
 
 
+class LiteralRewriteAllowance(StrictModel):
+    """Consumer-reviewed exception for one exact literal rewrite shape."""
+
+    path: str
+    expression: str
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, value: str) -> str:
+        return validate_patterns((value,))[0]
+
+    @field_validator("expression")
+    @classmethod
+    def validate_expression(cls, value: str) -> str:
+        return validate_one_line_message(value)
+
+
 class ProseAsControlPolicy(PythonSourceScanPolicy):
     """Scope and thresholds for advisory sentence-literal branch checks."""
 
@@ -88,6 +105,7 @@ class ProseAsControlPolicy(PythonSourceScanPolicy):
     severity: Severity = "info"
     lossy_text_rewrite: bool = False
     regex_sub_helpers: tuple[str, ...] = ()
+    allowed_literal_rewrites: tuple[LiteralRewriteAllowance, ...] = ()
     rendered_value_helpers: tuple[str, ...] = ()
 
     @field_validator("source_paths")
@@ -113,6 +131,15 @@ class ProseAsControlPolicy(PythonSourceScanPolicy):
         ):
             raise ValueError("regex helper names must be dotted identifiers")
         require_unique(values, "regex helper names must be unique")
+        return tuple(values)
+
+    @field_validator("allowed_literal_rewrites")
+    @classmethod
+    def validate_allowed_literal_rewrites(
+        cls, values: Sequence[LiteralRewriteAllowance]
+    ) -> tuple[LiteralRewriteAllowance, ...]:
+        keys = tuple((value.path, value.expression) for value in values)
+        require_unique(keys, "allowed literal rewrite scopes must be unique")
         return tuple(values)
 
     @field_validator("rendered_value_helpers")
