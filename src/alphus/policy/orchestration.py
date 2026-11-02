@@ -38,6 +38,7 @@ from alphus.policy.repository import (
     VersionSyncPolicy,
 )
 from alphus.policy.review import (
+    DocumentStylePolicy,
     FastApiPracticePolicy,
     InputContractPolicy,
     NumericLiteralPolicy,
@@ -82,6 +83,7 @@ class CheckPolicies(StrictModel):
     pydantic_practices: PydanticPracticePolicy | None = None
     fastapi_practices: FastApiPracticePolicy | None = None
     sqlalchemy_practices: SqlAlchemyPracticePolicy | None = None
+    document_style: DocumentStylePolicy | None = None
     shared_utilities: SharedUtilitiesPolicy | None = None
     python_style: PythonStylePolicy | None = None
     runtime_types: RuntimeTypePolicy | None = None

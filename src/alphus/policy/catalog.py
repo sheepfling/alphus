@@ -67,6 +67,7 @@ RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
         "sqlalchemy-practices": RuleSpec(
             "sqlalchemy_practices", RuleOutputShape.FINDINGS
         ),
+        "document-style": RuleSpec("document_style", RuleOutputShape.FINDINGS),
         "cyclomatic-complexity": RuleSpec(
             "cyclomatic_complexity",
             RuleOutputShape.CYCLOMATIC_REPORT,

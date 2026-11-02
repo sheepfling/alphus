@@ -1,0 +1,25 @@
+schema_version = 1
+
+[files]
+include = ["**/*.md", "**/*.mdx"]
+exclude = []
+
+[checks.document_style]
+extensions = [".md", ".mdx"]
+exclude = ["vendor/**", "build/**"]
+minimum_headings = 8
+minimum_family_matches = 2
+minimum_family_density = 0.25
+severity = "info"
+
+[orchestration]
+default_profile = "document-review"
+
+[[orchestration.profiles]]
+name = "document-review"
+steps = ["Document style"]
+
+[[orchestration.steps]]
+name = "Document style"
+kind = "rule"
+rule = "document-style"
