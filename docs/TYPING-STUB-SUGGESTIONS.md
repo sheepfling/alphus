@@ -78,11 +78,14 @@ distribution, runtime and Python version ranges, checker scope, and compatible
 stub-version range. The rule checks that the runtime distribution is declared in PEP 621
 `project.dependencies`, its installed version is inside the configured ranges,
 the selected PEP 621 optional typing groups exist, and the stub distribution is
-not already in those groups. It reads selected-interpreter metadata for both
-runtime and stub distributions. A declared stub missing from that interpreter,
-an installed but undeclared stub, and a version mismatch are reported as
-separate states. It reads installed runtime files to recognize `py.typed` and
-bundled `.pyi` files, and skips packages that provide either.
+not already in those groups. Dependency markers in each optional group are
+evaluated with that group's extra name, matching
+[PEP 621 metadata semantics](https://packaging.python.org/en/latest/specifications/pyproject-toml/).
+It reads selected-interpreter metadata for both runtime and stub distributions.
+A declared stub missing from that interpreter, an installed but undeclared stub,
+and a version mismatch are reported as separate states. It recognizes a package
+typing marker or stub files matching every observed import; unrelated internal
+`.pyi` files do not suppress a suggestion.
 Unavailable runtime metadata is reported as not evaluated; it is not treated as
 proof that stubs are missing.
 

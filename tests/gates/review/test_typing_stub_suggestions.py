@@ -379,6 +379,48 @@ def test_does_not_suggest_when_stub_is_declared(
     )
 
 
+def test_selected_extra_marker_uses_the_optional_group_context(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    _checkout(tmp_path)
+    (tmp_path / "pyproject.toml").write_text(
+        """[project]
+dependencies = ["PyYAML>=6,<7"]
+[project.optional-dependencies]
+typing = ["types-PyYAML>=6; extra == 'typing'"]
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(gate.metadata, "distribution", _distribution)
+
+    assert not gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), _policy()
+    )
+
+
+def test_selected_extra_marker_rejects_an_unselected_extra_name(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    _checkout(tmp_path)
+    (tmp_path / "pyproject.toml").write_text(
+        """[project]
+dependencies = ["PyYAML>=6,<7"]
+[project.optional-dependencies]
+typing = ["types-PyYAML>=6; extra == 'dev'"]
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(gate.metadata, "distribution", _distribution)
+
+    findings = gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), _policy()
+    )
+
+    assert len(findings) == 1
+    assert "already installed at compatible version" in findings[0].message
+    assert "not declared in typing group(s) typing" in findings[0].message
+
+
 def test_reports_a_declared_stub_missing_from_the_selected_interpreter(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:

@@ -274,12 +274,10 @@ def check_typing_stub_suggestions(
         if req.marker is None or req.marker.evaluate(environment)
     ]
     selected = [
-        req for name in policy.typing_groups for req in _requirements(optional[name])
-    ]
-    selected = [
         req
-        for req in selected
-        if req.marker is None or req.marker.evaluate(environment)
+        for name in policy.typing_groups
+        for req in _requirements(optional[name])
+        if req.marker is None or req.marker.evaluate({**environment, "extra": name})
     ]
     findings = input_findings
     python_version = Version(".".join(map(str, sys.version_info[:3])))
