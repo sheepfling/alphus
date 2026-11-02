@@ -9,37 +9,60 @@ from pathlib import Path
 
 from alphus.config import ProseAsControlPolicy
 from alphus.contracts.findings import Finding
+from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 
-_RULE_ID = "alphus/python/none/maintainability/prose-as-control"
+_RULE_ID = rule_tag(
+    Scope.PYTHON, Framework.NONE, Category.MAINTAINABILITY, "prose-as-control"
+)
 _SENTENCE_WORD = re.compile(r"\b[A-Za-z]{2,}\b")
 
 
 def _branch_comparisons(tree: ast.AST) -> Iterable[ast.Compare]:
     for node in ast.walk(tree):
-        if isinstance(node, (ast.If, ast.While, ast.IfExp)):
-            yield from (
-                item for item in ast.walk(node.test) if isinstance(item, ast.Compare)
-            )
+        match node:
+            case ast.If(test=test) | ast.While(test=test) | ast.IfExp(test=test):
+                for item in ast.walk(test):
+                    match item:
+                        case ast.Compare():
+                            yield item
+                        case _:
+                            continue
+            case _:
+                continue
 
 
 def _sentence_literals(node: ast.Compare) -> set[str]:
-    if not any(
-        isinstance(op, (ast.Eq, ast.NotEq, ast.In, ast.NotIn)) for op in node.ops
-    ):
+    if not any(_is_text_comparison(op) for op in node.ops):
         return set()
     literals: set[str] = set()
     for value in (node.left, *node.comparators):
-        if isinstance(value, ast.Constant) and isinstance(value.value, str):
-            literals.add(value.value)
-        elif isinstance(value, (ast.Tuple, ast.List, ast.Set)):
-            literals.update(
-                item.value
-                for item in value.elts
-                if isinstance(item, ast.Constant) and isinstance(item.value, str)
-            )
+        match value:
+            case ast.Constant(value=str(literal)):
+                literals.add(literal)
+            case (
+                ast.Tuple(elts=elements)
+                | ast.List(elts=elements)
+                | ast.Set(elts=elements)
+            ):
+                for item in elements:
+                    match item:
+                        case ast.Constant(value=str(literal)):
+                            literals.add(literal)
+                        case _:
+                            continue
+            case _:
+                continue
     return literals
+
+
+def _is_text_comparison(operator: ast.cmpop) -> bool:
+    match operator:
+        case ast.Eq() | ast.NotEq() | ast.In() | ast.NotIn():
+            return True
+        case _:
+            return False
 
 
 def prose_control_literals(
