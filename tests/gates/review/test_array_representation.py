@@ -193,6 +193,13 @@ def project(values, rows):
 """,
         """import numpy as np
 def project(values, rows):
+    import custom as np
+    for row in rows:
+        rebuilt = np.asarray(values.tolist())
+        consume(rebuilt)
+""",
+        """import numpy as np
+def project(values, rows):
     for row in rows:
         alias = values
         rebuilt = np.asarray(alias.tolist())
@@ -208,6 +215,28 @@ def project(values, rows):
         assert (
             loop_representation_churn_lines(source, policy, path="src/numeric.py") == []
         )
+
+
+def test_nested_function_parameter_is_not_a_loop_value_use() -> None:
+    source = """import numpy as np
+def project(values, rows):
+    for row in rows:
+        rebuilt = np.asarray(values.tolist())
+        def later(rebuilt):
+            return rebuilt
+"""
+    policy = _policy(
+        array_constructors=("numpy.asarray",),
+        loop_contracts=(
+            {
+                "path": "src/numeric.py",
+                "function": "project",
+                "array_variable": "values",
+            },
+        ),
+    )
+
+    assert loop_representation_churn_lines(source, policy, path="src/numeric.py") == []
 
 
 def test_loop_contract_validates_exact_selectors() -> None:

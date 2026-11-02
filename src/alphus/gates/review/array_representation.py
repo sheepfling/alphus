@@ -143,6 +143,18 @@ def _has_local_shadow(
                 return True
             case ast.ClassDef(name=shadowed) if shadowed == name:
                 return True
+            case ast.Import(names=imports):
+                if any(
+                    (imported.asname or imported.name.split(".", maxsplit=1)[0]) == name
+                    for imported in imports
+                ):
+                    return True
+            case ast.ImportFrom(names=imports):
+                if any(
+                    imported.name != "*" and (imported.asname or imported.name) == name
+                    for imported in imports
+                ):
+                    return True
             case _:
                 continue
     return False
@@ -312,15 +324,16 @@ def loop_representation_churn_lines(
                     for later in loop.body[index + 1 :]:
                         if _is_control_flow(later):
                             break
+                        later_nodes = _current_scope_nodes(later)
                         if any(
                             name == output
-                            for node in ast.walk(later)
+                            for node in later_nodes
                             if (name := _stored_name(node)) is not None
                         ):
                             break
                         if any(
                             name == output
-                            for node in ast.walk(later)
+                            for node in later_nodes
                             if (name := _loaded_name(node)) is not None
                         ):
                             consumed = True
@@ -347,6 +360,35 @@ def _loaded_name(node: ast.AST) -> str | None:
             return name
         case _:
             return None
+
+
+class _CurrentScopeNodes(ast.NodeVisitor):
+    """Collect nodes belonging to the current scope, excluding nested scopes."""
+
+    def __init__(self) -> None:
+        self.nodes: list[ast.AST] = []
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        return
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        return
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        return
+
+    def visit_Lambda(self, node: ast.Lambda) -> None:
+        return
+
+    def generic_visit(self, node: ast.AST) -> None:
+        self.nodes.append(node)
+        super().generic_visit(node)
+
+
+def _current_scope_nodes(node: ast.AST) -> list[ast.AST]:
+    visitor = _CurrentScopeNodes()
+    visitor.visit(node)
+    return visitor.nodes
 
 
 def representation_churn_lines(
