@@ -294,5 +294,6 @@ def test_cli_restricts_cache_and_force_fresh_to_direct_output_rule(
 
     help_result = runner.invoke(app, ["--help"], color=False)
     assert help_result.exit_code == 0
-    assert "--local-cache" in help_result.output
-    assert "--force-fresh" in help_result.output
+    help_text = plain(help_result.output)
+    assert "--local-cache" in help_text
+    assert "--force-fresh" in help_text
