@@ -163,12 +163,13 @@ def validate_portability(
                     )
                 continue
             if kind == "/GoToR":
-                file_spec = _text_value(cast(str | None, action.get("/F")))
-                if file_spec is not None:
-                    target = file_spec
+                raw_file_spec = action.get("/F")
+                file_spec_text = _text_value(cast(str | None, raw_file_spec))
+                if file_spec_text is not None:
+                    target = file_spec_text
                 else:
                     try:
-                        file_dictionary = _dictionary(file_spec)
+                        file_dictionary = _dictionary(raw_file_spec)
                         target_value = file_dictionary.get(
                             "/UF", file_dictionary.get("/F")
                         )

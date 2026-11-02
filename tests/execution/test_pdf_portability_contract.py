@@ -34,6 +34,28 @@ def _pdf(path: Path, actions: Sequence[tuple[str, str | None]]) -> None:
     writer.write(path)
 
 
+def _pdf_with_remote_file_spec(path: Path, key: str, target: str) -> None:
+    writer = PdfWriter()
+    writer.add_blank_page(width=100, height=100)
+    file_spec = DictionaryObject({NameObject(key): TextStringObject(target)})
+    action = DictionaryObject(
+        {
+            NameObject("/S"): NameObject("/GoToR"),
+            NameObject("/F"): writer._add_object(file_spec),
+        }
+    )
+    writer.add_annotation(
+        0,
+        {
+            "/Type": "/Annot",
+            "/Subtype": "/Link",
+            "/Rect": [0, 0, 10, 10],
+            "/A": action,
+        },
+    )
+    writer.write(path)
+
+
 def _contract(path: Path, **fields: object) -> None:
     path.write_text(json.dumps(fields), encoding="utf-8")
 
@@ -87,6 +109,43 @@ def test_bundle_allows_existing_relative_companion_and_rejects_escape_or_missing
     assert len(failures) == 2
     assert any("escapes the declared bundle root" in item for item in failures)
     assert any("companion is missing" in item for item in failures)
+
+
+def test_bundle_accepts_dictionary_remote_file_spec_with_unicode_filename(
+    tmp_path: Path,
+) -> None:
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    (bundle / "appendix-Δ.pdf").write_bytes(b"companion")
+    pdf = tmp_path / "report.pdf"
+    contract = tmp_path / "delivery.json"
+    _pdf_with_remote_file_spec(pdf, "/UF", "appendix-Δ.pdf")
+    _contract(contract, mode="bundle", bundle_root=str(bundle))
+
+    assert validate_portability(pdf, contract) == ([], [])
+
+
+@pytest.mark.parametrize(
+    ("key", "target", "expected"),
+    [
+        ("/F", "../outside.pdf", "escapes the declared bundle root"),
+        ("/UF", "/private/secret.pdf", "absolute local target"),
+    ],
+)
+def test_bundle_rejects_dictionary_remote_file_spec_escape_and_absolute_targets(
+    tmp_path: Path, key: str, target: str, expected: str
+) -> None:
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    pdf = tmp_path / "report.pdf"
+    contract = tmp_path / "delivery.json"
+    _pdf_with_remote_file_spec(pdf, key, target)
+    _contract(contract, mode="bundle", bundle_root=str(bundle))
+
+    failures, unknown = validate_portability(pdf, contract)
+    assert unknown == []
+    assert len(failures) == 1
+    assert expected in failures[0]
 
 
 def test_unknown_action_is_reported_without_execution(tmp_path: Path) -> None:

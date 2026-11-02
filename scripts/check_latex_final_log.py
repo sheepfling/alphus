@@ -19,9 +19,10 @@ _UNRESOLVED = (
     re.compile(r"Label\(s\) may have changed\. Rerun", re.IGNORECASE),
     re.compile(r"LaTeX Warning: Label .+ multiply defined", re.IGNORECASE),
     re.compile(
-        r"destination with the same identifier\s+\(name\{[^}\r\n]*\}\)"
+        r"^[ \t]*pdfTeX warning \([^\)\r\n]{1,32}\):\s+"
+        r"destination with the same identifier\s+\(name\{[^}]{0,256}\}\)"
         r"\s+has\s+been\s+already\s+used,\s*duplicate\s+ignored",
-        re.IGNORECASE,
+        re.IGNORECASE | re.MULTILINE,
     ),
 )
 

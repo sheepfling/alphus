@@ -74,6 +74,11 @@ def test_reports_duplicate_labels_and_hyperref_destinations(tmp_path: Path) -> N
             "(name{figure.4}) has been already used, duplicate\n"
             "ignored\n"
         ),
+        (
+            "pdfTeX warning (ext4): destination with the same identifier\n"
+            "(name{chapter.generated.with.a.very.long.destination.identifi\n"
+            "er.2026}) has been already used, duplicate ignored\n"
+        ),
     ],
 )
 def test_reports_wrapped_pdftex_duplicate_destination_warning(
@@ -97,6 +102,21 @@ def test_ignores_unrelated_duplicate_ignored_text(tmp_path: Path) -> None:
         "Output written on report.pdf (14 pages, 123456 bytes).\n"
         "A destination with the same identifier is described in this note;\n"
         "another unrelated check said duplicate ignored.\n"
+    )
+
+    assert validate_final_log(log, pdf) == []
+
+
+def test_ignores_duplicate_destination_phrase_without_pdftex_warning_prefix(
+    tmp_path: Path,
+) -> None:
+    log = tmp_path / "report.log"
+    pdf = tmp_path / "report.pdf"
+    pdf.write_bytes(b"pdf artifact")
+    log.write_text(
+        "Output written on report.pdf (14 pages, 123456 bytes).\n"
+        "Other tool: destination with the same identifier (name{section.2})\n"
+        "has been already used, duplicate ignored\n"
     )
 
     assert validate_final_log(log, pdf) == []
