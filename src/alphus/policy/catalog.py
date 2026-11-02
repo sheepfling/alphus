@@ -64,6 +64,9 @@ RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
         "cholesky-recurrence": RuleSpec(
             "cholesky_recurrence", RuleOutputShape.FINDINGS
         ),
+        "manual-quaternion-products": RuleSpec(
+            "manual_quaternion_products", RuleOutputShape.FINDINGS
+        ),
         "scipy-constants": RuleSpec("scipy_constants", RuleOutputShape.FINDINGS),
         "test-quality": RuleSpec("test_quality", RuleOutputShape.FINDINGS),
         "input-contracts": RuleSpec("input_contracts", RuleOutputShape.FINDINGS),

@@ -18,6 +18,9 @@ from alphus.gates.review.frameworks.sqlalchemy_practices import (
 )
 from alphus.gates.review.input_contracts import check_input_contracts
 from alphus.gates.review.manual_matrix_kernels import check_manual_matrix_kernels
+from alphus.gates.review.manual_quaternion_product import (
+    check_manual_quaternion_products,
+)
 from alphus.gates.review.numeric_literals import check_numeric_literals
 from alphus.gates.review.positional_interfaces import check_positional_interfaces
 from alphus.gates.review.scipy_constants import check_scipy_constants
@@ -59,6 +62,16 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
             root,
             files,
             require_policy(config.checks.cholesky_recurrence, "cholesky_recurrence"),
+        ),
+        "manual-quaternion-products": lambda root, files, config: (
+            check_manual_quaternion_products(
+                root,
+                files,
+                require_policy(
+                    config.checks.manual_quaternion_products,
+                    "manual_quaternion_products",
+                ),
+            )
         ),
         "scipy-constants": lambda root, files, config: check_scipy_constants(
             root,

@@ -1,7 +1,7 @@
 schema_version = 1
 
 [files]
-include = ["src/numerics/*.py"]
+include = ["src/numerics/*.py", "src/geometry/*.py"]
 exclude = []
 
 [checks.manual_matrix_kernels]
@@ -21,6 +21,15 @@ extensions = [".py"]
 exclude = []
 source_paths = ["src/numerics/*.py"]
 square_root_helpers = ["math.sqrt"]
+
+[checks.manual_quaternion_products]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/geometry/*.py"]
+function_names = ["multiply_quaternions"]
+left_components = ["lw", "lx", "ly", "lz"]
+right_components = ["rw", "rx", "ry", "rz"]
+result_components = ["ow", "ox", "oy", "oz"]
 
 [orchestration]
 default_profile = "numerical-review"
@@ -43,6 +52,12 @@ name = "Cholesky recurrence review"
 rule = "cholesky-recurrence"
 rollout = "provisional"
 
+[[orchestration.steps]]
+kind = "rule"
+name = "Quaternion product review"
+rule = "manual-quaternion-products"
+rollout = "provisional"
+
 [[orchestration.profiles]]
 name = "numerical-review"
-steps = ["Manual matrix kernels", "Array representation churn", "Cholesky recurrence review"]
+steps = ["Manual matrix kernels", "Array representation churn", "Cholesky recurrence review", "Quaternion product review"]

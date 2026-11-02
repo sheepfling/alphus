@@ -147,6 +147,38 @@ class CholeskyRecurrencePolicy(PythonSourceScanPolicy):
         return tuple(values)
 
 
+class QuaternionProductPolicy(PythonSourceScanPolicy):
+    """Exact component names for one scalar-first Hamilton product grammar."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    function_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    left_components: Annotated[tuple[str, str, str, str], Field(min_length=4)]
+    right_components: Annotated[tuple[str, str, str, str], Field(min_length=4)]
+    result_components: Annotated[tuple[str, str, str, str], Field(min_length=4)]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("function_names")
+    @classmethod
+    def validate_function_names(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("quaternion function names must be identifiers")
+        require_unique(values, "quaternion function names must be unique")
+        return tuple(values)
+
+    @model_validator(mode="after")
+    def validate_component_names(self) -> Self:
+        names = (*self.left_components, *self.right_components, *self.result_components)
+        if any(not value.isidentifier() for value in names):
+            raise ValueError("quaternion components must be identifiers")
+        require_unique(names, "quaternion input and output names must be distinct")
+        return self
+
+
 class ScipyConstantsPolicy(PythonSourceScanPolicy):
     """Advisory SciPy physical and unit-factor catalog for Python source."""
 

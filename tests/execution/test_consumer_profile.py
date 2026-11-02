@@ -27,7 +27,7 @@ def test_starter_policy_has_one_scoped_command_and_no_global_inventory() -> None
 def test_manual_matrix_kernel_example_is_scoped_and_provisional() -> None:
     config = load_config(Path("examples/numerics/manual-matrix-kernels.toml"))
     assert config.files is not None
-    assert config.files.include == ("src/numerics/*.py",)
+    assert config.files.include == ("src/numerics/*.py", "src/geometry/*.py")
     policy = config.checks.manual_matrix_kernels
     assert policy is not None
     assert policy.source_paths == ("src/numerics/*.py",)
@@ -39,6 +39,7 @@ def test_manual_matrix_kernel_example_is_scoped_and_provisional() -> None:
     assert isinstance(step, RuleRunStep)
     assert step.rule == "manual-matrix-kernels"
     assert step.rollout == "provisional"
+    assert "Quaternion product review" in plan.steps
 
 
 def test_markdown_example_pairs_two_fixers_without_duplicate_missing_links() -> None:

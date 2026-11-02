@@ -75,6 +75,7 @@ def test_gate_themes_own_their_runner_mappings() -> None:
                 "manual-matrix-kernels",
                 "array-representation-churn",
                 "cholesky-recurrence",
+                "manual-quaternion-products",
                 "scipy-constants",
                 "test-quality",
                 "input-contracts",
