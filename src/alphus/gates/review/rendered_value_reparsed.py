@@ -170,7 +170,8 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[tuple[int, int, str]]:
                     for name in _target_names(target):
                         loop_state.pop(name, None)
                     loop_state = scan(body, loop_state)
-                    else_state = scan(orelse, current) if orelse else current.copy()
+                    else_entry = _common_bindings([current, loop_state])
+                    else_state = scan(orelse, else_entry) if orelse else current.copy()
                     current = {
                         name: line
                         for name, line in before.items()

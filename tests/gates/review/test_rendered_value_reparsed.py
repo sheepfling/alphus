@@ -198,6 +198,34 @@ def f(text, chunks):
     assert _sites(source, ("render",)) == []
 
 
+def test_for_target_invalidation_reaches_else_suite() -> None:
+    source = """\
+def f(text):
+    rendered = render(text)
+    for rendered in ["unrendered!"]:
+        pass
+    else:
+        if rendered.rstrip().endswith("!"):
+            return True
+    return False
+"""
+    assert _sites(source, ("render",)) == []
+
+
+def test_for_else_preserves_unmodified_rendered_binding() -> None:
+    source = """\
+def f(text):
+    rendered = render(text)
+    for _item in ():
+        pass
+    else:
+        if rendered.rstrip().endswith("!"):
+            return True
+    return False
+"""
+    assert _sites(source, ("render",)) == [(2, 6, "rendered")]
+
+
 def test_advisory_reports_configured_source_path(tmp_path: Path) -> None:
     source = tmp_path / "src/render/table.py"
     source.parent.mkdir(parents=True)
