@@ -23,6 +23,24 @@ Each consumer repository keeps the facts that define its own contract:
 - positive and marked negative typing fixtures;
 - its API inventory, runtime smoke assertions, and `stubtest` allowlist.
 
+## Evidence ownership
+
+The shared audit deliberately complements native tools instead of acting as a
+second type checker. Use the following ownership when interpreting a green run:
+
+| Claim | Evidence owner | What the shared source audit establishes |
+| --- | --- | --- |
+| Installed member presence and callable shape/default compatibility | `mypy.stubtest` in the target environment | It may report source-specific policy separately; a stub `...` default means a default exists, not that its value equals the runtime expression. |
+| Call acceptance, overload choice, generic inference, and result types | Positive and expected-negative Mypy/Pyright fixtures | The AST audit does not establish checker behavior. |
+| Wheel contents, PEP 561 resolution, and dependency consistency | Installed-artifact checks and `pip check` in the target | A source checkout alone is not package evidence. |
+| Declared public facade, module ownership, annotation completeness, and consumer-specific source fidelity | Package-owned inventory and bounded Alphus audit | These are explicit source policies, not generic runtime compatibility. Exact source default expressions remain checked by the inventory helper. |
+| Returned values, exceptions, mutation, serialization, and output | Consumer-owned runtime assertions against the installed artifact | Matching annotations or callable signatures do not establish behavior. |
+
+The API audit inspects signatures and declared annotations; it does not invoke
+functions or infer types from function bodies. A behavior guarantee therefore
+needs a runtime assertion, even when an `assert_type` fixture also covers the
+static result type.
+
 An API-audit module can receive `api_audit_args`; the verifier expands
 `{source}` and `{consumer}` to the isolated source and consumer-copy paths.
 This lets a source-inspection audit receive its package-specific stub root

@@ -3,14 +3,21 @@
 from __future__ import annotations
 
 import ast
+import importlib.util
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 from alphus.gates.stubs.typing_fixtures import check_result
 from alphus.gates.stubs.verify import read_config
-from alphus_stub_quality.api_audit_support import source_signature_shape
+from alphus_stub_quality.api_audit_support import (
+    source_signature_shape,
+    validate_signature,
+)
 from alphus_stub_quality.api_contracts import ApiCoverageTests
 
 
@@ -72,6 +79,89 @@ def test_source_defaults_preserve_ast_expression_structure() -> None:
     assert isinstance(left, ast.FunctionDef)
     assert isinstance(right, ast.FunctionDef)
     assert source_signature_shape(left) != source_signature_shape(right)
+
+
+def test_signature_audit_accepts_stub_ellipsis_default_but_keeps_source_shape_exact() -> (
+    None
+):
+    stub_node = ast.parse("def f(value: int = ...) -> int: ...").body[0]
+    runtime_node = ast.parse("def f(value: int = 3) -> int:\n    return value").body[0]
+    assert isinstance(stub_node, ast.FunctionDef)
+    assert isinstance(runtime_node, ast.FunctionDef)
+
+    def runtime(value: int = 3) -> int:
+        return value
+
+    validate_signature("f", stub_node, runtime_node, runtime)
+    assert source_signature_shape(stub_node) != source_signature_shape(runtime_node)
+
+
+def test_signature_audit_rejects_mismatched_concrete_defaults() -> None:
+    stub_node = ast.parse("def f(value: int = 2) -> int: ...").body[0]
+    runtime_node = ast.parse("def f(value: int = 3) -> int: return value").body[0]
+    assert isinstance(stub_node, ast.FunctionDef)
+    assert isinstance(runtime_node, ast.FunctionDef)
+
+    def runtime(value: int = 3) -> int:
+        return value
+
+    with pytest.raises(SystemExit, match="signature/default mismatch"):
+        validate_signature("f", stub_node, runtime_node, runtime)
+
+
+def test_signature_audit_rejects_runtime_default_when_stub_requires_argument() -> None:
+    stub_node = ast.parse("def f(value: int) -> int: ...").body[0]
+    runtime_node = ast.parse("def f(value: int = 3) -> int: return value").body[0]
+    assert isinstance(stub_node, ast.FunctionDef)
+    assert isinstance(runtime_node, ast.FunctionDef)
+
+    def runtime(value: int = 3) -> int:
+        return value
+
+    with pytest.raises(SystemExit, match="signature/default mismatch"):
+        validate_signature("f", stub_node, runtime_node, runtime)
+
+
+def test_signature_audit_does_not_claim_runtime_return_behavior() -> None:
+    stub_node = ast.parse("def f() -> int: ...").body[0]
+    runtime_node = ast.parse("def f() -> int:\n    return 'wrong'").body[0]
+    assert isinstance(stub_node, ast.FunctionDef)
+    assert isinstance(runtime_node, ast.FunctionDef)
+
+    def runtime() -> int:
+        return "wrong"  # type: ignore[return-value]
+
+    validate_signature("f", stub_node, runtime_node, runtime)
+    assert not isinstance(runtime(), int)
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("mypy") is None, reason="optional Mypy extra"
+)
+def test_native_stubtest_accepts_concrete_runtime_default_for_stub_ellipsis(
+    tmp_path: Path,
+) -> None:
+    runtime_package = tmp_path / "neutral"
+    runtime_package.mkdir()
+    (runtime_package / "__init__.py").write_text("", encoding="utf-8")
+    (runtime_package / "core.py").write_text(
+        "def f(value: int = 3) -> int:\n    return value\n", encoding="utf-8"
+    )
+    stub_package = tmp_path / "neutral-stubs"
+    stub_package.mkdir()
+    (stub_package / "__init__.pyi").write_text("", encoding="utf-8")
+    (stub_package / "core.pyi").write_text(
+        "def f(value: int = ...) -> int: ...\n", encoding="utf-8"
+    )
+    environment = {**os.environ, "PYTHONPATH": str(tmp_path)}
+    result = subprocess.run(
+        [sys.executable, "-m", "mypy.stubtest", "neutral.core"],
+        capture_output=True,
+        check=False,
+        env=environment,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_fixture_probe_gate_rejects_calls_on_wrong_owner(tmp_path: Path) -> None:
