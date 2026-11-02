@@ -3,6 +3,8 @@
 from pathlib import Path
 from zipfile import ZipFile
 
+import pytest
+
 from alphus.config import load_config
 from alphus.gates.review.document_style import (
     DocumentSection,
@@ -13,7 +15,7 @@ from alphus.gates.review.document_style import (
     extract_markdown_sections,
     rhetorical_heading_findings,
 )
-from alphus.policy.review import DocumentStylePolicy
+from alphus.policy.review import DocumentHeadingSuppression, DocumentStylePolicy
 
 
 def test_markdown_extraction_preserves_lines_and_skips_front_matter_fences_and_toc() -> (
@@ -392,6 +394,69 @@ def test_repeated_paired_imperatives_use_density_and_one_every_families() -> Non
         "imperative-pair",
         "one-every",
     }
+
+
+def test_heading_suppression_is_exactly_scoped_and_rationale_is_required() -> None:
+    sections = tuple(
+        DocumentSection("report.md", title, 2, line)
+        for line, title in enumerate(
+            (
+                "From Inputs to Models",
+                "From Data to Results",
+                "Methods",
+                "Results",
+            ),
+            1,
+        )
+    )
+    policy = DocumentStylePolicy(
+        minimum_headings=4,
+        heading_suppressions=(
+            DocumentHeadingSuppression(
+                path="report.md",
+                heading="From Inputs to Models",
+                reason="Approved transition title retained by the document owner.",
+            ),
+        ),
+    )
+
+    assert rhetorical_heading_findings(sections, policy) == []
+    assert (
+        len(
+            rhetorical_heading_findings(
+                tuple(
+                    DocumentSection("other.md", item.text, item.level, item.line)
+                    for item in sections
+                ),
+                policy,
+            )
+        )
+        == 1
+    )
+
+    with pytest.raises(ValueError, match="20 characters"):
+        DocumentStylePolicy(
+            heading_suppressions=(
+                DocumentHeadingSuppression(
+                    path="report.md", heading="Methods", reason="Too short"
+                ),
+            )
+        )
+    with pytest.raises(ValueError, match="must be unique"):
+        DocumentStylePolicy(
+            heading_suppressions=(
+                DocumentHeadingSuppression(
+                    path="report.md",
+                    heading="Methods",
+                    reason="Approved by the technical documentation owner.",
+                ),
+                DocumentHeadingSuppression(
+                    path="report.md",
+                    heading="Methods",
+                    reason="Approved by the engineering review group.",
+                ),
+            )
+        )
 
 
 def test_latex_extraction_preserves_heading_lines_and_skips_comments_and_verbatim() -> (

@@ -488,7 +488,12 @@ def rhetorical_heading_findings(
     sections: Iterable[DocumentSection], policy: DocumentStylePolicy
 ) -> list[Finding]:
     """Report only repeated template families in sufficiently large outlines."""
-    headings = tuple(sections)
+    suppressed = {(item.path, item.heading) for item in policy.heading_suppressions}
+    headings = tuple(
+        section
+        for section in sections
+        if (section.path, section.text) not in suppressed
+    )
     if len(headings) < policy.minimum_headings:
         return []
     families: dict[str, list[DocumentSection]] = {}

@@ -47,3 +47,15 @@ non-ignored untracked files. Files outside the checkout or ignored by Git are
 not selected by this invocation. A missing, ignored, or excluded required path
 is an operational error; a rule run with no eligible documents and no required
 paths reports that it was not evaluated instead of appearing as a clean pass.
+
+For an intentional exception, configure an exact path and visible heading with
+a substantive reason. The heading is removed from that document's density
+denominator and template matches; the suppression does not apply to the same
+title in another file or to a differently worded title:
+
+```toml
+[[checks.document_style.heading_suppressions]]
+path = "docs/report.md"
+heading = "From Inputs to Models"
+reason = "Approved transition title retained by the document owner."
+```
