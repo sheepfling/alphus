@@ -82,7 +82,6 @@ repeated_literal_paths = [
   "src/alphus/execution/orchestration.py",
   "src/alphus/gates/python/compatibility.py",
   "src/alphus/contracts/findings.py",
-  "src/alphus/gates/review/parallel_normalization.py",
 ]
 semantic_result_paths = [
   "src/alphus/gates/review/positional_interfaces.py",
