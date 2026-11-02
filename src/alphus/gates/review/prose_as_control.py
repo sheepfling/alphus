@@ -205,23 +205,18 @@ def _regex_consumes_digit(pattern: str) -> bool:
     index = 0
     while index < len(pattern):
         character = pattern[index]
-        if pattern.startswith("(?x)", index):
-            verbose = True
-            index += 4
-            continue
-        if pattern.startswith("(?-x)", index):
-            verbose = False
-            index += 5
-            continue
-        if pattern.startswith("(?x:", index):
-            groups.append((False, verbose, False))
-            verbose = True
-            index += 4
-            continue
-        if pattern.startswith("(?-x:", index):
-            groups.append((False, verbose, False))
-            verbose = False
-            index += 5
+        inline_flags = re.match(
+            r"\(\?([aiLmsux]*)(?:-([imsx]+))?([:)])", pattern[index:]
+        )
+        if inline_flags is not None:
+            enabled, disabled, delimiter = inline_flags.groups()
+            if delimiter == ":":
+                groups.append((False, verbose, False))
+            if "x" in enabled:
+                verbose = True
+            elif disabled is not None and "x" in disabled:
+                verbose = False
+            index += inline_flags.end()
             continue
         if verbose and not in_character_class and character == "#":
             newline = pattern.find("\n", index)

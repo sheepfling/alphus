@@ -58,13 +58,6 @@ def _scope_nodes(root: ast.AST) -> Iterable[ast.AST]:
         yield from _scope_nodes(child)
 
 
-def _redefined(tree: ast.Module, selected: tuple[str, ...]) -> bool:
-    counts = module_binding_counts(tree, selected)
-    # A selected function's body is historical evidence if a later import,
-    # class, assignment, deletion, or unknown star import can replace it.
-    return any(count > 1 for count in counts.values())
-
-
 def _input_name(function: ast.FunctionDef, configured: tuple[str, ...]) -> str | None:
     arguments = {
         argument.arg
@@ -147,12 +140,12 @@ def heuristic_total_consumption_sites(
         return []
     if len(list(ast.walk(tree))) > 10_000:
         return []
-    if _redefined(tree, policy.function_names):
-        return []
+    binding_counts = module_binding_counts(tree, policy.function_names)
     sites = {
         site
         for function in _functions(tree.body)
-        if (site := _match_function(function, policy)) is not None
+        if binding_counts.get(function.name) == 1
+        and (site := _match_function(function, policy)) is not None
     }
     return sorted(sites, key=lambda site: (site.function, site.line))
 

@@ -70,6 +70,19 @@ def test_unconfigured_function_scope_does_not_report_token_extractor() -> None:
     assert heuristic_total_consumption_sites(source, _policy()) == []
 
 
+def test_rebinding_one_selected_function_does_not_suppress_other_functions() -> None:
+    source = (
+        _DIRECT.replace("preserve_text", "preserve_a")
+        + "\n"
+        + _DIRECT.replace("preserve_text", "preserve_b")
+        + "\npreserve_b = replacement\n"
+    )
+    sites = heuristic_total_consumption_sites(
+        source, _policy(function_names=("preserve_a", "preserve_b"))
+    )
+    assert [site.function for site in sites] == ["preserve_a"]
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [

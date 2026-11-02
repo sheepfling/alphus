@@ -125,10 +125,13 @@ verbose_actual_zero_count = re.sub(r"(?x)\d{0}", "", text)
 verbose_actual_zero_range = re.sub(r"(?x)\d{0,0}", " ", text)
 verbose_trivia_zero_count = re.sub(r"(?x)\d {0}", "", text)
 verbose_group_trivia_zero_count = re.sub(r"(?x)(?:\d) {0}", "", text)
+combined_verbose_zero_count = re.sub(r"(?ix)\d {0}", "", text)
+scoped_combined_verbose_zero_count = re.sub(r"(?ix:\d {0})", "", text)
 class_zero_count = re.sub(r"[\d]{0}", "", text)
 group_zero_count = re.sub(r"(?:\d){0}", "", text)
 verbose_comment = re.sub(r"""(?x)# \d is only a comment
 \s+""", "", text)
+combined_verbose_comment = re.sub(r"(?ix)foo # \d\nbar", "", text)
 actual_digit_consumer = re.sub(r"""(?x)# \d is a comment
 \d+""", "", text)
 '''
@@ -138,7 +141,7 @@ actual_digit_consumer = re.sub(r"""(?x)# \d is a comment
     ) == [
         (4, "(?x)\\d{ 0 }"),
         (5, "(?x)\\d{0, 0}"),
-        (14, "(?x)# \\d is a comment\n\\d+"),
+        (17, "(?x)# \\d is a comment\n\\d+"),
     ]
 
     assert re.sub(r"(?x)\d{ 0 }", "", "7{0}") == ""
@@ -147,6 +150,8 @@ actual_digit_consumer = re.sub(r"""(?x)# \d is a comment
     assert re.sub(r"(?:\d){0}", "", "123") == "123"
     assert re.sub(r"(?x)\d {0}", "", "123") == "123"
     assert re.sub(r"(?x)(?:\d) {0}", "", "123") == "123"
+    assert re.sub(r"(?ix)\d {0}", "", "123") == "123"
+    assert re.sub(r"(?ix:\d {0})", "", "123") == "123"
 
 
 def test_lossy_text_rewrite_detects_literal_semantic_token_deletion() -> None:
