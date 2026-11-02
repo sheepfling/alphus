@@ -20,6 +20,7 @@ path that matches the repository being checked.
 | Detect docs/default drift                                   | [Docs/config drift](DOCUMENTATION-CONFIG-COUPLING.md) |
 | Separate machine CLI contracts from presentation policy     | [Python CLI policy](CLI-POLICY.md)                    |
 | Gate cyclomatic complexity across Python, C/C++, and JS    | [Cyclomatic complexity](CYCLOMATIC-COMPLEXITY.md) |
+| Select native pytest-style checks on test files           | [Pytest-style review](PYTEST-STYLE.md)          |
 | Review positional argument interfaces                      | [Positional interfaces](POSITIONAL-INTERFACES.md) |
 | Add FastAPI-specific static checks                        | [FastAPI quality](FASTAPI-QUALITY.md)        |
 | Map common lint intents to native rules                   | [Common lint intents](COMMON-LINT-INTENTS.md) |
