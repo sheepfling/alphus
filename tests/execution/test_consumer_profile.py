@@ -66,6 +66,11 @@ def test_manual_matrix_kernel_example_is_scoped_and_provisional() -> None:
     assert ned_matrix_policy.axis_order == "north-east-down"
     assert ned_matrix_policy.vector_orientation == "column"
     assert ned_matrix_policy.output_shape == "matrix3x3"
+    ned_basis_policy = config.checks.ned_basis_vectors
+    assert ned_basis_policy is not None
+    assert ned_basis_policy.latitude_type == "geodetic"
+    assert ned_basis_policy.output_representation == "basis3"
+    assert ned_basis_policy.destination_frame == "GEODETIC_HORIZON"
     orchestration = config.orchestration
     assert orchestration is not None
     plan = orchestration.resolve_profile("numerical-review")

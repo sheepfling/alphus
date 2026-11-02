@@ -41,6 +41,7 @@ from alphus.gates.review.manual_quaternion_product import (
 from alphus.gates.review.manual_quaternion_vector_rotation import (
     check_manual_quaternion_vector_rotation,
 )
+from alphus.gates.review.ned_basis_vectors import check_ned_basis_vectors
 from alphus.gates.review.numeric_literals import check_numeric_literals
 from alphus.gates.review.positional_interfaces import check_positional_interfaces
 from alphus.gates.review.scipy_constants import check_scipy_constants
@@ -162,6 +163,11 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
                     "ecef_ned_matrix_transform",
                 ),
             )
+        ),
+        "ned-basis-vectors": lambda root, files, config: check_ned_basis_vectors(
+            root,
+            files,
+            require_policy(config.checks.ned_basis_vectors, "ned_basis_vectors"),
         ),
         "scipy-constants": lambda root, files, config: check_scipy_constants(
             root,

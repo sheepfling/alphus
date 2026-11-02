@@ -608,6 +608,106 @@ class EcefNedMatrixTransformPolicy(PythonSourceScanPolicy):
         return tuple(values)
 
 
+class NedBasisVectorsPolicy(PythonSourceScanPolicy):
+    """Convention-declared local NED basis-vector implementation fingerprint."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    function_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    preferred_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    latitude_type: Literal["geocentric", "geodetic"]
+    output_representation: Literal["tuple3", "basis3"]
+    longitude_name: str
+    latitude_name: str
+    sine_latitude_name: str
+    cosine_latitude_name: str
+    sine_longitude_name: str
+    cosine_longitude_name: str
+    north_name: str
+    east_name: str
+    vector_constructor: str
+    basis_constructor: str = "Basis3"
+    frame_type: str = "Frame"
+    math_module: Literal["math"] = "math"
+    source_frame: Literal["ECFC"]
+    destination_frame: Literal["GEOCENTRIC_HORIZON", "GEODETIC_HORIZON"]
+    direction: Literal["ecfc-to-local-ned"]
+    angle_units: Literal["radians"]
+    axis_order: Literal["north-east-down"]
+    handedness: Literal["right-handed"]
+    operation: Literal["basis-vectors"]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("function_names")
+    @classmethod
+    def validate_function_names(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("NED basis function names must be identifiers")
+        require_unique(values, "NED basis function names must be unique")
+        return tuple(values)
+
+    @field_validator("preferred_helpers")
+    @classmethod
+    def validate_helpers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not value or any(not part.isidentifier() for part in value.split("."))
+            for value in values
+        ):
+            raise ValueError("preferred NED basis helpers must be dotted identifiers")
+        require_unique(values, "preferred NED basis helpers must be unique")
+        return tuple(values)
+
+    @field_validator(
+        "longitude_name",
+        "latitude_name",
+        "sine_latitude_name",
+        "cosine_latitude_name",
+        "sine_longitude_name",
+        "cosine_longitude_name",
+        "north_name",
+        "east_name",
+        "vector_constructor",
+        "basis_constructor",
+        "frame_type",
+        "math_module",
+    )
+    @classmethod
+    def validate_identifiers(cls, value: str) -> str:
+        if not value.isidentifier():
+            raise ValueError("NED basis names must be identifiers")
+        return value
+
+    @model_validator(mode="after")
+    def validate_convention(self) -> Self:
+        expected = {
+            "geocentric": ("tuple3", "GEOCENTRIC_HORIZON"),
+            "geodetic": ("basis3", "GEODETIC_HORIZON"),
+        }[self.latitude_type]
+        if (self.output_representation, self.destination_frame) != expected:
+            raise ValueError(
+                "NED basis representation and destination frame must match the "
+                "declared latitude convention"
+            )
+        require_unique(
+            (
+                self.longitude_name,
+                self.latitude_name,
+                self.sine_latitude_name,
+                self.cosine_latitude_name,
+                self.sine_longitude_name,
+                self.cosine_longitude_name,
+                self.north_name,
+                self.east_name,
+            ),
+            "NED basis inputs and local names must be distinct",
+        )
+        return self
+
+
 class ScipyConstantsPolicy(PythonSourceScanPolicy):
     """Advisory SciPy physical and unit-factor catalog for Python source."""
 

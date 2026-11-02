@@ -150,6 +150,27 @@ def test_module_imports_and_unique_function_definition_are_required() -> None:
     assert ecef_ned_matrix_transform_sites(duplicate, _policy()) == []
 
 
+@pytest.mark.parametrize(
+    "rebind",
+    [
+        "np.array = fake_array",
+        "math.sin = fake_sin",
+        "if True:\n    np.array = fake_array",
+        "if True:\n    math.cos = fake_cos",
+        "if True:\n    ecef_to_ned_matrix = fake_transform",
+    ],
+)
+def test_module_and_control_flow_rebindings_abstain(rebind: str) -> None:
+    assert (
+        ecef_ned_matrix_transform_sites(_TITAN_SHAPE + "\n" + rebind, _policy()) == []
+    )
+
+
+def test_unrelated_function_local_alias_does_not_hide_candidate() -> None:
+    source = _TITAN_SHAPE + "\ndef unrelated():\n    np = object()\n"
+    assert len(ecef_ned_matrix_transform_sites(source, _policy())) == 1
+
+
 def test_finding_is_scoped_and_names_configured_contract(tmp_path: Path) -> None:
     target = tmp_path / "src/geometry/coordinates.py"
     target.parent.mkdir(parents=True)

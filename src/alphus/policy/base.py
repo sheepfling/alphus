@@ -48,6 +48,7 @@ QualityRuleName: TypeAlias = Literal[
     "manual-quaternion-matrix-conversion",
     "ecef-enu-transform",
     "ecef-ned-matrix-transform",
+    "ned-basis-vectors",
     "scipy-constants",
     "test-quality",
     "input-contracts",

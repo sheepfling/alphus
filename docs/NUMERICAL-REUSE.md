@@ -161,6 +161,15 @@ In particular, pytaos's geocentric basis is not interchangeable with its
 geodetic basis. A match identifies syntax under declarations; it cannot prove
 the declarations describe runtime behavior or that the preferred helper exists.
 
+`ned-basis-vectors` is a distinct opt-in fingerprint for two source forms:
+geocentric latitude returning an ordered N/E/D vector tuple, and geodetic
+latitude returning a typed geodetic-horizon `Basis3`. The policy rejects mixed
+latitude/frame/representation declarations. The formulas may be algebraically
+similar, so latitude semantics are supplied by the consumer's policy and are
+not inferred from trigonometry or a function name. The rule does not follow
+delegated wrappers, construct matrices, or support alternate basis/container
+layouts; it reports a configured formula candidate for contract review.
+
 ### Bounded source calibration (2026-11-02)
 
 I inspected committed source snapshots only. The local Odonata, pytaos, and
@@ -193,16 +202,25 @@ matrix contract with its configured selector names.
 
 - Revision: `331c0848032bfc01ab87fd5f27b73776fbac88c9`.
 - Paths: `src/taoryx/equations/geodesy.py`, lines 143–174, 336–367, and
-  395–411; `src/taoryx/contracts/frames.py`, lines 12–22.
+  395–411; `src/taoryx/coordinates.py`, lines 126–142; and
+  `src/taoryx/contracts/frames.py`, lines 12–22.
 - Candidate: geocentric and geodetic north/east/down basis builders return
   three `CartesianVector3` values; velocity transforms compose/decompose
   through those helpers. Frame names distinguish ECFC from geocentric and
   geodetic horizon frames.
-- Result: no match for either rule. This is a tuple of named N/E/D basis
+- Matrix-rule result: no match. This is a tuple of named N/E/D basis
   vectors, not the configured direct ENU vector or row-major ECEF-to-NED
   matrix. Geocentric and geodetic bases remain separate contracts; no
   equivalence is inferred. The basis helpers are already composed by the
   inspected velocity transforms.
+- NED basis-vector calibration: the lower-level
+  `equations/geodesy.py::geocentric_unit_vectors` implementation matches the
+  geocentric ordered tuple form at its return (line 166), while
+  `coordinates.py::geodetic_unit_vectors` matches the geodetic `Basis3` form
+  at its return (line 139). The public geocentric wrapper delegates to the
+  lower-level helper and is intentionally not traced interprocedurally. These
+  are existing centralized helpers, not evidence of duplicate reimplementations
+  in pytaos; calibration confirms syntax and declared contract boundaries only.
 
 #### `sheepfling/odonata`
 
@@ -229,17 +247,18 @@ matrix contract with its configured selector names.
 
 Observed sample result: the ECEF-to-ENU rule returned zero sites across the
 three geodesy snapshots. The ECEF-to-NED matrix rule returned one site in Titan
-and no site in pytaos's distinct basis-vector functions. This selected sample
-is too small to estimate precision or recall; no downstream duplicate-helper
-case was present. Helper equivalence and detector behavior across consumer
-conventions remain uncalibrated.
+and none in pytaos. The separate NED basis rule matched the two pinned pytaos
+basis implementations under their distinct configured contracts. Those are
+centralized helpers, not downstream duplicate-helper examples. This selected
+sample is too small to estimate precision or recall. Helper equivalence and
+detector behavior across other consumer conventions remain uncalibrated.
 
 Other frame-transform conventions and basis-vector return forms remain
 unimplemented, as do Cholesky covariance and domain checks. The numerical
-examples demonstrate only their explicitly configured syntax families. The quaternion normalization,
-inversion, sandwich, matrix-conversion, and ECEF-to-ENU grammars have synthetic
-positive/negative coverage but no reviewed downstream reimplementation
-calibration or production precision estimate yet.
+examples demonstrate only their explicitly configured syntax families. The
+quaternion normalization, inversion, sandwich, matrix-conversion, and
+ECEF-to-ENU grammars have synthetic positive/negative coverage but no reviewed
+downstream reimplementation calibration or production precision estimate yet.
 
 An elimination recognizer would need a consumer contract that identifies the
 matrix representation and then match, within one configured function, pivot

@@ -135,6 +135,33 @@ vector_orientation = "column"
 matrix_layout = "row-major"
 output_shape = "matrix3x3"
 
+[checks.ned_basis_vectors]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/geometry/*.py"]
+function_names = ["geodetic_unit_vectors"]
+preferred_helpers = ["geometry.frames.geodetic_ned_basis"]
+latitude_type = "geodetic"
+output_representation = "basis3"
+longitude_name = "longitude"
+latitude_name = "latitude"
+sine_latitude_name = "sine_latitude"
+cosine_latitude_name = "cosine_latitude"
+sine_longitude_name = "sine_longitude"
+cosine_longitude_name = "cosine_longitude"
+north_name = "first"
+east_name = "second"
+vector_constructor = "Vector3"
+basis_constructor = "Basis3"
+frame_type = "Frame"
+source_frame = "ECFC"
+destination_frame = "GEODETIC_HORIZON"
+direction = "ecfc-to-local-ned"
+angle_units = "radians"
+axis_order = "north-east-down"
+handedness = "right-handed"
+operation = "basis-vectors"
+
 [orchestration]
 default_profile = "numerical-review"
 
@@ -210,6 +237,12 @@ name = "ECEF to NED matrix review"
 rule = "ecef-ned-matrix-transform"
 rollout = "provisional"
 
+[[orchestration.steps]]
+kind = "rule"
+name = "NED basis vector review"
+rule = "ned-basis-vectors"
+rollout = "provisional"
+
 [[orchestration.profiles]]
 name = "numerical-review"
-steps = ["Manual matrix kernels", "Manual elimination review", "Array representation churn", "Cholesky recurrence review", "Quaternion product review", "Quaternion conjugation review", "Quaternion normalization review", "Quaternion inversion review", "Quaternion vector rotation review", "Quaternion matrix conversion review", "ECEF to ENU transform review", "ECEF to NED matrix review"]
+steps = ["Manual matrix kernels", "Manual elimination review", "Array representation churn", "Cholesky recurrence review", "Quaternion product review", "Quaternion conjugation review", "Quaternion normalization review", "Quaternion inversion review", "Quaternion vector rotation review", "Quaternion matrix conversion review", "ECEF to ENU transform review", "ECEF to NED matrix review", "NED basis vector review"]

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import ast
 from collections.abc import Iterable
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from pathlib import Path
-from typing import AbstractSet
 
 from alphus.config import EcefNedMatrixTransformPolicy
 from alphus.contracts.findings import Finding
@@ -76,20 +76,33 @@ def _shadowed_names(
     array_constructor: str,
 ) -> bool:
     expected_array_alias = array_constructor.split(".")[0]
-    module_import_ids = {id(statement) for statement in tree.body}
-    for child in ast.walk(tree):
+    module_nodes = tuple(_scope_nodes(tree))
+    function_nodes = tuple(_scope_nodes(function))
+    module_import_ids = {
+        id(statement) for statement in tree.body if isinstance(statement, ast.Import)
+    }
+    for node in (*module_nodes, *function_nodes):
         if (
-            isinstance(child, ast.Name)
-            and isinstance(child.ctx, ast.Store)
-            and child.id in names
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+            and node.name in names
         ):
             return True
-    if any(
-        isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
-        and statement.name in names
-        for statement in tree.body
-    ):
-        return True
+        if (
+            isinstance(node, ast.Name)
+            and isinstance(node.ctx, ast.Store)
+            and node.id in names
+        ):
+            return True
+        if (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.ctx, ast.Store)
+            and isinstance(node.value, ast.Name)
+            and (
+                (node.value.id == math_module and node.attr in {"sin", "cos"})
+                or (node.value.id == expected_array_alias and node.attr == "array")
+            )
+        ):
+            return True
     arguments = (
         *function.args.posonlyargs,
         *function.args.args,
@@ -99,7 +112,7 @@ def _shadowed_names(
         return True
 
     expected_imports = {math_module: math_module, "numpy": expected_array_alias}
-    for statement in ast.walk(tree):
+    for statement in (*module_nodes, *function_nodes):
         if isinstance(statement, ast.Import):
             for alias in statement.names:
                 bound_name = alias.asname or alias.name.split(".")[0]
@@ -108,13 +121,33 @@ def _shadowed_names(
                     and expected_imports.get(alias.name) != bound_name
                 ):
                     return True
-                if id(statement) not in module_import_ids and bound_name in names:
+                if bound_name in names and id(statement) not in module_import_ids:
                     return True
         elif isinstance(statement, ast.ImportFrom) and any(
             (alias.asname or alias.name) in names for alias in statement.names
         ):
             return True
     return False
+
+
+def _scope_nodes(root: ast.AST) -> Iterable[ast.AST]:
+    """Walk one lexical scope and its control flow, skipping nested scopes."""
+    yield root
+    for child in ast.iter_child_nodes(root):
+        if isinstance(
+            child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
+        ):
+            yield child
+            continue
+        yield from _scope_nodes(child)
+
+
+def _configured_functions(statements: Iterable[ast.stmt]) -> Iterable[ast.FunctionDef]:
+    for statement in statements:
+        if isinstance(statement, ast.FunctionDef):
+            yield statement
+        elif isinstance(statement, ast.ClassDef):
+            yield from _configured_functions(statement.body)
 
 
 def _match(
@@ -170,21 +203,30 @@ def ecef_ned_matrix_transform_sites(
         return []
     selected_functions = [
         node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.FunctionDef) and node.name in policy.function_names
+        for node in _configured_functions(tree.body)
+        if node.name in policy.function_names
     ]
+    module_rebound_names = {
+        node.id
+        for node in _scope_nodes(tree)
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store)
+    }
     shadowed = set(policy.function_names) & set(
         redefined_function_names(source, policy.function_names)
     )
-    if shadowed or any(
-        _shadowed_names(
-            tree,
-            function,
-            {policy.math_module, array_alias},
-            policy.math_module,
-            policy.array_constructor,
+    if (
+        shadowed
+        or set(policy.function_names) & module_rebound_names
+        or any(
+            _shadowed_names(
+                tree,
+                function,
+                {policy.math_module, array_alias},
+                policy.math_module,
+                policy.array_constructor,
+            )
+            for function in selected_functions
         )
-        for function in selected_functions
     ):
         return []
     return configured_function_observations(
