@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 
@@ -27,28 +30,47 @@ def _persist_failure(
             )
             + "\n"
         )
+        stream.flush()
+        os.fsync(stream.fileno())
 
 
 def _remove_diagnostic(path: Path) -> None:
     path.unlink(missing_ok=True)
 
 
+def _run_child(stderr: str, returncode: int) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            f"import sys; sys.stderr.write({stderr!r}); sys.exit({returncode})",
+        ],
+        capture_output=True,
+        check=False,
+        stdin=subprocess.DEVNULL,
+        text=True,
+        timeout=5,
+    )
+
+
 def _good_failed_run(root: Path, run_id: str, stderr: str, returncode: int) -> None:
     diagnostic_path = root / "child.stderr"
     results_path = root / "failures.jsonl"
-    diagnostic_path.write_text(stderr, encoding="utf-8")
-    if returncode != 0:
-        _persist_failure(results_path, run_id, returncode, diagnostic_path)
+    child = _run_child(stderr, returncode)
+    diagnostic_path.write_text(child.stderr, encoding="utf-8")
+    if child.returncode != 0:
+        _persist_failure(results_path, run_id, child.returncode, diagnostic_path)
         _remove_diagnostic(diagnostic_path)
 
 
 def _bad_failed_run(root: Path, run_id: str, stderr: str, returncode: int) -> None:
     diagnostic_path = root / "child.stderr"
     results_path = root / "failures.jsonl"
-    diagnostic_path.write_text(stderr, encoding="utf-8")
-    if returncode != 0:
+    child = _run_child(stderr, returncode)
+    diagnostic_path.write_text(child.stderr, encoding="utf-8")
+    if child.returncode != 0:
         _remove_diagnostic(diagnostic_path)
-        _persist_failure(results_path, run_id, returncode, diagnostic_path)
+        _persist_failure(results_path, run_id, child.returncode, diagnostic_path)
 
 
 def test_two_failed_runs_persist_current_redacted_evidence_before_cleanup(

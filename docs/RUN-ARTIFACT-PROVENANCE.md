@@ -43,13 +43,14 @@ inspect `finally`, exception handlers, presentation failures, or missing sinks.
 Those cases remain unknown.
 
 `tests/gates/review/test_run_artifacts_failure_fixture.py` is an executable
-two-run fixture for this ordering contract. It reuses one diagnostic path across
-two failed runs and compares persistence-before-cleanup with cleanup-before-
-persistence. The good path retains distinct run IDs, return codes, and redacted
-diagnostics; the bad path retains status but loses the diagnostics. It uses
-synthetic child results and a local JSONL sink, so it illustrates ordering
-behavior without asserting that static analysis proves a consumer sink is
-durable or that any production harness loses evidence.
+two-run fixture for this ordering contract. It launches a bounded controlled
+child using the current Python interpreter, captures stderr, reuses one
+diagnostic path across two failed runs, and compares persistence-before-cleanup
+with cleanup-before-persistence. The good path retains distinct run IDs, return
+codes, and redacted diagnostics in a temporary JSONL sink flushed with `fsync`;
+the bad path retains status but loses the diagnostics. This demonstrates local
+ordering behavior without asserting that static analysis proves other sinks'
+durability or that any production harness loses evidence.
 
 ## Runtime metadata versus imported module origin
 
