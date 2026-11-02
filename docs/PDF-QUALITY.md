@@ -36,7 +36,9 @@ check runs after the build in the same profile, so it inspects the forced
 build's log instead of accepting a previously generated file. It checks
 for a matching `Output written on` filename, common unresolved reference,
 citation and rerun notices, multiply defined labels, and a common pdfTeX
-duplicate-destination warning. It does not parse every TeX engine's diagnostics,
+duplicate-destination warning. The destination-name scan is bounded to 4,096
+characters; an unclosed or longer name is reported for manual review rather
+than silently accepted. It does not parse every TeX engine's diagnostics,
 prove source-map freshness, or validate navigation. A missing or unfamiliar
 output record fails closed with an execution finding. The native `-Werror`
 result remains the primary LaTeX build evidence; the log scanner covers only

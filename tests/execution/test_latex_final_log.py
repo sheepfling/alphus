@@ -122,6 +122,48 @@ def test_ignores_duplicate_destination_phrase_without_pdftex_warning_prefix(
     assert validate_final_log(log, pdf) == []
 
 
+def test_reports_308_character_destination_wrapped_at_79_columns(
+    tmp_path: Path,
+) -> None:
+    log = tmp_path / "report.log"
+    pdf = tmp_path / "report.pdf"
+    pdf.write_bytes(b"pdf artifact")
+    identifier = "d" * 308
+    warning = (
+        "pdfTeX warning (ext4): destination with the same identifier "
+        f"(name{{{identifier}}}) has been already used, duplicate ignored"
+    )
+    wrapped = "\n".join(
+        warning[index : index + 79] for index in range(0, len(warning), 79)
+    )
+    log.write_text(
+        "Output written on report.pdf (14 pages, 123456 bytes).\n" + wrapped + "\n"
+    )
+
+    issues = validate_final_log(log, pdf)
+    assert len(issues) == 1
+    assert "pdfTeX duplicate destination" in issues[0]
+
+
+def test_reports_destination_identifier_beyond_bounded_scan_limit(
+    tmp_path: Path,
+) -> None:
+    log = tmp_path / "report.log"
+    pdf = tmp_path / "report.pdf"
+    pdf.write_bytes(b"pdf artifact")
+    identifier = "d" * 4097
+    log.write_text(
+        "Output written on report.pdf (14 pages, 123456 bytes).\n"
+        "pdfTeX warning (ext4): destination with the same identifier "
+        f"(name{{{identifier}}}) has been already used, duplicate ignored\n"
+    )
+
+    issues = validate_final_log(log, pdf)
+    assert len(issues) == 1
+    assert "4096-character scan bound" in issues[0]
+    assert "manual review required" in issues[0]
+
+
 def test_missing_pdf_or_log_fails_closed(tmp_path: Path) -> None:
     log = tmp_path / "report.log"
     log.write_text("Output written on report.pdf (1 page, 100 bytes).\n")

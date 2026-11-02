@@ -9,6 +9,18 @@ from collections.abc import Sequence
 from pathlib import Path
 
 _OUTPUT = re.compile(r"^Output written on\s+([^\s(]+)\s+\(", re.MULTILINE)
+_PDFTEX_DESTINATION_START = re.compile(
+    r"^[ \t]*pdfTeX warning \([^\)\r\n]{1,32}\):[ \t]+"
+    r"destination with the same identifier"
+    r"(?:[ \t]*\r?\n[ \t]*|[ \t]+)\(name\{",
+    re.IGNORECASE | re.MULTILINE,
+)
+_PDFTEX_DESTINATION_SUFFIX = re.compile(
+    r"\)\s*has\s*been\s*already\s*used,\s*duplicate\s*ignored\b",
+    re.IGNORECASE,
+)
+_MAX_DESTINATION_ID_CHARS = 4096
+_MAX_DESTINATION_SUFFIX_CHARS = 512
 _UNRESOLVED = (
     re.compile(r"LaTeX Warning: Reference .+ undefined", re.IGNORECASE),
     re.compile(r"LaTeX Warning: Citation .+ undefined", re.IGNORECASE),
@@ -18,13 +30,29 @@ _UNRESOLVED = (
     re.compile(r"Rerun to get citations right", re.IGNORECASE),
     re.compile(r"Label\(s\) may have changed\. Rerun", re.IGNORECASE),
     re.compile(r"LaTeX Warning: Label .+ multiply defined", re.IGNORECASE),
-    re.compile(
-        r"^[ \t]*pdfTeX warning \([^\)\r\n]{1,32}\):\s+"
-        r"destination with the same identifier\s+\(name\{[^}]{0,256}\}\)"
-        r"\s+has\s+been\s+already\s+used,\s*duplicate\s+ignored",
-        re.IGNORECASE | re.MULTILINE,
-    ),
 )
+
+
+def _pdftex_destination_issues(log: str) -> list[str]:
+    issues: list[str] = []
+    for start in _PDFTEX_DESTINATION_START.finditer(log):
+        identifier_end = log.find(
+            "}", start.end(), start.end() + _MAX_DESTINATION_ID_CHARS + 1
+        )
+        if identifier_end < 0:
+            issues.append(
+                "pdfTeX duplicate-destination identifier is unclosed or exceeds "
+                f"the {_MAX_DESTINATION_ID_CHARS}-character scan bound; manual review required"
+            )
+            continue
+        suffix_start = identifier_end + 1
+        suffix = log[suffix_start : suffix_start + _MAX_DESTINATION_SUFFIX_CHARS]
+        suffix = re.sub(r"\r?\n[ \t]*", "", suffix)
+        if _PDFTEX_DESTINATION_SUFFIX.match(suffix):
+            issues.append(
+                "unresolved LaTeX cross-reference evidence: pdfTeX duplicate destination"
+            )
+    return issues
 
 
 def validate_final_log(log_path: Path, pdf_path: Path) -> list[str]:
@@ -45,6 +73,7 @@ def validate_final_log(log_path: Path, pdf_path: Path) -> list[str]:
         for pattern in _UNRESOLVED
         if pattern.search(log)
     ]
+    issues.extend(_pdftex_destination_issues(log))
     return issues
 
 
