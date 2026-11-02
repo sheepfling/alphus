@@ -1421,4 +1421,3 @@ def check_pydantic_practices(
         source = read_python_source(checkout / relative)
         findings.extend(pydantic_practice_findings(source, policy, path=name))
     return findings
-
