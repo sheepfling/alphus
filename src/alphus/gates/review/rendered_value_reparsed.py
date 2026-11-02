@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import ast
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 
 from alphus.config import ProseAsControlPolicy
@@ -72,10 +72,10 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[tuple[int, int, str]]:
     found: set[tuple[int, int, str]] = set()
 
     def scan(
-        statements: Sequence[ast.stmt], rendered: dict[str, int]
+        statements: Sequence[ast.stmt], rendered: Mapping[str, int]
     ) -> dict[str, int]:
         """Walk statements in source order, keeping only proven local bindings."""
-        current = rendered.copy()
+        current = dict(rendered)
         for statement in statements:
             match statement:
                 case ast.If(test=test, body=body, orelse=orelse) as conditional:
@@ -89,31 +89,30 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[tuple[int, int, str]]:
                         for name, line in then_state.items()
                         if else_state.get(name) == line
                     }
-                case ast.Assign(targets=targets, value=value):
+                case ast.Assign(
+                    targets=[ast.Name(id=name)],
+                    value=ast.Call(func=func, args=[_, *_]),
+                ):
+                    current.pop(name, None)
+                    if _qualified_name(func) in helpers:
+                        current[name] = statement.lineno
+                case ast.Assign(targets=targets):
                     names: set[str] = set()
                     for target in targets:
                         names.update(_target_names(target))
                     for name in names:
                         current.pop(name, None)
-                    if (
-                        len(targets) == 1
-                        and isinstance(targets[0], ast.Name)
-                        and isinstance(value, ast.Call)
-                        and value.args
-                        and _qualified_name(value.func) in helpers
-                    ):
-                        current[targets[0].id] = statement.lineno
-                case ast.AnnAssign(target=target, value=value):
+                case ast.AnnAssign(
+                    target=ast.Name(id=name),
+                    value=ast.Call(func=func, args=[_, *_]),
+                ):
+                    current.pop(name, None)
+                    if _qualified_name(func) in helpers:
+                        current[name] = statement.lineno
+                case ast.AnnAssign(target=target):
                     names = _target_names(target)
                     for name in names:
                         current.pop(name, None)
-                    if (
-                        isinstance(target, ast.Name)
-                        and isinstance(value, ast.Call)
-                        and value.args
-                        and _qualified_name(value.func) in helpers
-                    ):
-                        current[target.id] = statement.lineno
                 case ast.AugAssign(target=target):
                     for name in _target_names(target):
                         current.pop(name, None)
