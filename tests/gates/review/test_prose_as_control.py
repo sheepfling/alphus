@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from alphus.config import ProseAsControlPolicy
 from alphus.gates.review.prose_as_control import (
     check_prose_as_control,
@@ -35,6 +37,22 @@ message = "{_SENTENCE}"
 def test_allowlist_preserves_known_protocol_or_compatibility_literals() -> None:
     source = f'if note == "{_SENTENCE}":\n    preserve()\n'
     assert not prose_control_literals(source, _policy(allowed_literals=(_SENTENCE,)))
+
+
+@pytest.mark.parametrize("separator", ["\n", "\r"])
+def test_allowlist_accepts_exact_multiline_protocol_literals(separator: str) -> None:
+    literal = (
+        "The remote peer reports a state transition"
+        f"{separator}that this client does not handle and needs review."
+    )
+    source = f"if note == {literal!r}:\n    preserve()\n"
+
+    assert prose_control_literals(source, _policy(allowed_literals=(literal,))) == []
+
+
+def test_allowlist_rejects_empty_literal() -> None:
+    with pytest.raises(ValueError, match="allowed prose literals must be non-empty"):
+        _policy(allowed_literals=("",))
 
 
 def test_only_branch_comparisons_are_reported() -> None:

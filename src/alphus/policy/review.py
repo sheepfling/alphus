@@ -95,7 +95,9 @@ class ProseAsControlPolicy(PythonSourceScanPolicy):
     @field_validator("allowed_literals")
     @classmethod
     def validate_allowed_literals(cls, values: Sequence[str]) -> tuple[str, ...]:
-        literals = tuple(validate_one_line_message(value) for value in values)
+        literals = tuple(values)
+        if any(not value for value in literals):
+            raise ValueError("allowed prose literals must be non-empty")
         require_unique(literals, "allowed prose literals must be unique")
         return literals
 
