@@ -722,6 +722,67 @@ def evaluate(options: Mapping[str, object]):
     assert "from_raw" not in findings[0].message
 
 
+def test_domain_mapping_exception_with_stale_domain_type_does_not_suppress() -> None:
+    source = """from collections.abc import Mapping
+from app.models import NewOptions
+def evaluate(packet: NewOptions | Mapping[str, JsonValue]):
+    return packet["count"]
+"""
+    policy = InputContractPolicy(
+        extensions=[".py"],
+        exclude=[],
+        domain_mapping_types=("app.models.OldOptions", "app.models.NewOptions"),
+        domain_mapping_exceptions=(
+            {
+                "path": "src/internal/evaluate.py",
+                "function": "evaluate",
+                "parameter": "packet",
+                "domain_type": "OldOptions",
+                "reason": "Legacy payload parser.",
+            },
+        ),
+    )
+
+    findings = input_contract_findings(source, policy, path="src/internal/evaluate.py")
+
+    assert len(findings) == 1
+    assert "configured domain type app.models.NewOptions" in findings[0].message
+
+
+def test_domain_mapping_exception_does_not_suppress_changed_contract_type() -> None:
+    source = """from collections.abc import Mapping
+def evaluate(packet: Mapping[str, object]):
+    return packet["count"]
+"""
+    policy = InputContractPolicy(
+        extensions=[".py"],
+        exclude=[],
+        domain_mapping_value_types=("object",),
+        domain_mapping_contracts=(
+            {
+                "path": "src/internal/evaluate.py",
+                "function": "evaluate",
+                "parameter": "packet",
+                "domain_type": "NewOptions",
+            },
+        ),
+        domain_mapping_exceptions=(
+            {
+                "path": "src/internal/evaluate.py",
+                "function": "evaluate",
+                "parameter": "packet",
+                "domain_type": "OldOptions",
+                "reason": "Legacy payload parser.",
+            },
+        ),
+    )
+
+    findings = input_contract_findings(source, policy, path="src/internal/evaluate.py")
+
+    assert len(findings) == 1
+    assert "expects NewOptions" in findings[0].message
+
+
 def test_domain_mapping_exception_requires_a_reason_and_unique_selector() -> None:
     with pytest.raises(ValueError, match="reason must not be empty"):
         InputContractPolicy(

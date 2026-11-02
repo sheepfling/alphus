@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 12597)
+Total output lines: 1396
+
 """Advisory local analysis of collection parameters and their visible uses."""
 
 from __future__ import annotations
@@ -687,69 +690,7 @@ def _function_findings(
     for name, usage in uses.items():
         if policy.report_mutation:
             seen: set[tuple[int, str, bool]] = set()
-            for mutation in usage.mutations:
-                key = (mutation.line, mutation.action, mutation.reachable)
-                if key in seen:
-                    continue
-                seen.add(key)
-                detail = (
-                    (
-                        "possible mutation of a value reached from this parameter; "
-                        "read-only interfaces are shallow"
-                    )
-                    if mutation.reachable
-                    else "possible caller-visible mutation; preserve a typed mutable contract"
-                )
-                findings.append(
-                    Finding(
-                        rule_id=rule_tag(
-                            Scope.PYTHON,
-                            Framework.NONE,
-                            Category.CORRECTNESS,
-                            "argument-mutation",
-                        ),
-                        path=path,
-                        line=mutation.line,
-                        severity="warning",
-                        message=f"parameter {name}: {mutation.action}; {detail}",
-                    )
-                )
-        if (
-            policy.suggest_read_only
-            and (
-                usage.annotation.concrete
-                or (
-                    sequence_narrowing_path
-                    and usage.annotation.family == "sequence"
-                    and usage.annotation.interface
-                    in {"Collection", "Iterable", "MutableSequence", "Sequence"}
-                )
-            )
-            and usage.annotation.family != "binary"
-            and usage.reads
-            and not usage.mutations
-            and not usage.uncertain
-        ):
-            match usage.annotation.family:
-                case "sequence":
-                    interface = (
-                        "Sequence"
-                        if usage.requires_sequence or usage.iterations > 1
-                        else "Iterable"
-                    )
-                case "mapping":
-                    interface = "Mapping"
-                case "set":
-                    interface = "AbstractSet"
-                case _:
-                    continue
-            if interface == usage.annotation.interface:
-                continue
-            findings.append(
-                Finding(
-                    rule_id=rule_tag(
-                        Scope.PYTHON,
-                        Framework.NONE,
+            for mutation in usage.mutation…597 tokens truncated…ework.NONE,
                         Category.CORRECTNESS,
                         "read-only-interface-violation",
                     ),
@@ -1225,18 +1166,19 @@ def _domain_mapping_findings(
         None,
     )
     for argument in arguments:
-        if any(
-            exception.path == path
-            and exception.function == function_name
-            and exception.parameter == argument.arg
-            for exception in policy.domain_mapping_exceptions
-        ):
-            continue
         if argument.annotation is None:
             continue
         alternative = _domain_mapping_alternative(argument.annotation, aliases, policy)
         if alternative is not None:
             model, mapping = alternative
+            if any(
+                exception.path == path
+                and exception.function == function_name
+                and exception.parameter == argument.arg
+                and exception.domain_type == model
+                for exception in policy.domain_mapping_exceptions
+            ):
+                continue
             reads = _mapping_read_evidence(function, argument.arg, local.nodes, aliases)
             forwarded_reads = _direct_forwarded_mapping_reads(
                 function, argument.arg, module, aliases
@@ -1283,6 +1225,14 @@ def _domain_mapping_findings(
 
         contract = configured_contract
         if contract is None or argument.arg != contract.parameter:
+            continue
+        if any(
+            exception.path == path
+            and exception.function == function_name
+            and exception.parameter == argument.arg
+            and exception.domain_type == contract.domain_type
+            for exception in policy.domain_mapping_exceptions
+        ):
             continue
         annotation_name = canonical_expression_name(argument.annotation, aliases)
         mapping = _json_mapping_type(
