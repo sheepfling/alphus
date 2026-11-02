@@ -1,0 +1,4 @@
+{
+  "mode": "self_contained",
+  "allowed_uri_schemes": ["https", "http", "mailto"]
+}

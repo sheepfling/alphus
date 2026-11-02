@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from scripts.check_latex_final_log import validate_final_log
 
 
@@ -54,16 +56,33 @@ def test_reports_duplicate_labels_and_hyperref_destinations(tmp_path: Path) -> N
     assert all("unresolved LaTeX" in issue for issue in issues)
 
 
-def test_reports_wrapped_pdftex_duplicate_destination_warning(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "warning",
+    [
+        (
+            "pdfTeX warning (ext4): destination with the same identifier\n"
+            "(name{section.2}) has been already used,\n"
+            "duplicate ignored\n"
+        ),
+        (
+            "pdfTeX warning (ext4): destination with the same identifier\n"
+            "(name{page.1}) has been\n"
+            "already used, duplicate ignored\n"
+        ),
+        (
+            "pdfTeX warning (ext4): destination with the same identifier\n"
+            "(name{figure.4}) has been already used, duplicate\n"
+            "ignored\n"
+        ),
+    ],
+)
+def test_reports_wrapped_pdftex_duplicate_destination_warning(
+    tmp_path: Path, warning: str
+) -> None:
     log = tmp_path / "report.log"
     pdf = tmp_path / "report.pdf"
     pdf.write_bytes(b"pdf artifact")
-    log.write_text(
-        "Output written on report.pdf (14 pages, 123456 bytes).\n"
-        "pdfTeX warning (ext4): destination with the same identifier\n"
-        "(name{section.2}) has been already used,\n"
-        "duplicate ignored\n"
-    )
+    log.write_text("Output written on report.pdf (14 pages, 123456 bytes).\n" + warning)
 
     issues = validate_final_log(log, pdf)
     assert len(issues) == 1

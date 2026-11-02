@@ -32,6 +32,15 @@ timeout_seconds = 60
 
 [[orchestration.steps]]
 kind = "command"
+name = "PDF delivery portability"
+gate_id = "pdf-delivery-portability"
+argv = ["{python}", "scripts/check_pdf_portability.py", "build/report.pdf", "examples/documents/pdf-delivery-contract.json"]
+working_directory = "."
+rollout = "provisional"
+timeout_seconds = 60
+
+[[orchestration.steps]]
+kind = "command"
 name = "PDF navigation contract"
 gate_id = "pdf-navigation-contract"
 argv = ["{python}", "scripts/check_pdf_navigation.py", "build/report.pdf", "examples/documents/pdf-navigation-contract.json"]
@@ -41,4 +50,4 @@ timeout_seconds = 60
 
 [[orchestration.profiles]]
 name = "pdf-structure"
-steps = ["LaTeX report build", "LaTeX final log evidence", "PDF structural check", "PDF navigation contract"]
+steps = ["LaTeX report build", "LaTeX final log evidence", "PDF structural check", "PDF navigation contract", "PDF delivery portability"]

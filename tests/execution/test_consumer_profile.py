@@ -35,8 +35,9 @@ def test_pdf_example_checks_one_explicit_artifact_provisionally() -> None:
         "LaTeX final log evidence",
         "PDF structural check",
         "PDF navigation contract",
+        "PDF delivery portability",
     )
-    build, final_log, structure, navigation = orchestration.steps
+    build, final_log, structure, portability, navigation = orchestration.steps
     assert isinstance(build, CommandRunStep)
     assert build.argv == (
         "latexmk",
@@ -64,6 +65,14 @@ def test_pdf_example_checks_one_explicit_artifact_provisionally() -> None:
     assert step.files is None
     assert step.rollout == "provisional"
     assert step.timeout_seconds == 60
+    assert isinstance(portability, CommandRunStep)
+    assert portability.argv == (
+        "{python}",
+        "scripts/check_pdf_portability.py",
+        "build/report.pdf",
+        "examples/documents/pdf-delivery-contract.json",
+    )
+    assert portability.rollout == "provisional"
     assert isinstance(navigation, CommandRunStep)
     assert navigation.argv == (
         "{python}",

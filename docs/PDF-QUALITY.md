@@ -3,7 +3,8 @@
 The `pdf-structural-check.toml` consumer example runs the maintained `qpdf`
 structural validator against one explicitly named generated artifact. It also
 forces a `latexmk` build before checking the final log for the expected output
-name and common unresolved cross-reference warnings. It is an opt-in,
+name and common unresolved cross-reference warnings. The profile also checks
+link actions against an explicit offline delivery contract. It is an opt-in,
 provisional command profile and is not added to Alphus's default profiles.
 Adjust source, PDF, log, and helper paths for the consumer's build layout.
 
@@ -106,3 +107,12 @@ page index, source-map provenance, and any viewport/crop adjustments alongside
 the review. The optional native-tool tests generate a minimal one-page PDF and
 skip cleanly when qpdf or Poppler is unavailable; they test tool availability
 and invocation only, not semantic destinations.
+
+The optional `check_pdf_portability.py` helper classifies link actions without
+following them. A `self_contained` contract rejects local file references,
+remote-document GoTo actions, and launch actions while allowing declared URI
+schemes. A `bundle` contract can permit relative companion targets only when
+they resolve to files inside the declared bundle root; traversal and symlink
+escapes are rejected. Unsupported action kinds are returned as unknown and are
+never executed or fetched. This check cannot determine whether an allowed web
+URI is reachable, nor whether a companion is the intended document.
