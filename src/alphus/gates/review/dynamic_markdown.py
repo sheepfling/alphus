@@ -57,12 +57,38 @@ def _empty_fragment_lists() -> dict[str, list[_Fragment]]:
     return {}
 
 
+def _empty_helper_imports() -> dict[str, str]:
+    return {}
+
+
 @dataclass(slots=True)
 class _Scope:
     """Straight-line local string and list state for one lexical scope."""
 
     aliases: dict[str, _Fragment] = field(default_factory=_empty_fragments)
     lists: dict[str, list[_Fragment]] = field(default_factory=_empty_fragment_lists)
+    helper_imports: dict[str, str] = field(default_factory=_empty_helper_imports)
+
+
+def _local_bindings(nodes: Sequence[ast.stmt]) -> set[str]:
+    """Return names bound in one lexical body, excluding nested scopes."""
+    result: set[str] = set()
+    pending: list[ast.AST] = list(nodes)
+    while pending:
+        node = pending.pop()
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            result.add(node.name)
+            continue
+        if isinstance(node, ast.Import):
+            result.update(
+                alias.asname or alias.name.split(".", 1)[0] for alias in node.names
+            )
+        elif isinstance(node, ast.ImportFrom):
+            result.update(alias.asname or alias.name for alias in node.names)
+        elif isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
+            result.add(node.id)
+        pending.extend(ast.iter_child_nodes(node))
+    return result
 
 
 class _Located(Protocol):
@@ -82,6 +108,7 @@ class _MarkdownAnalyzer:
         severity: Severity = "warning",
         findings: MutableMapping[tuple[str, int, str], Finding] | None = None,
         scope: _Scope | None = None,
+        declared_safe_helpers: frozenset[str] = frozenset(),
     ) -> None:
         self.source = source
         self.path = path
@@ -90,6 +117,7 @@ class _MarkdownAnalyzer:
             findings if findings is not None else {}
         )
         self.scope = scope or _Scope()
+        self.declared_safe_helpers = declared_safe_helpers
 
     def analyze(self, nodes: Sequence[ast.stmt]) -> None:
         """Analyze one module or function scope."""
@@ -290,10 +318,28 @@ class _MarkdownAnalyzer:
                 if fragment is None or not fragment.values:
                     return None
                 return self._reframe(fragment, node, "ad-hoc string replacement")
+            case ast.Call() if self._is_declared_safe_helper(node.func):
+                # The configured contract is accepted as a project assertion,
+                # not as proof that the helper is correct.
+                return _Fragment("")
             case ast.Call():
                 return self._format(node) or self._join(node)
             case _:
                 return None
+
+    def _is_declared_safe_helper(self, function: ast.expr) -> bool:
+        attributes: list[str] = []
+        current: ast.expr = function
+        while isinstance(current, ast.Attribute):
+            attributes.append(current.attr)
+            current = current.value
+        if not isinstance(current, ast.Name):
+            return False
+        imported = self.scope.helper_imports.get(current.id)
+        if imported is None:
+            return False
+        attributes.reverse()
+        return ".".join((imported, *attributes)) in self.declared_safe_helpers
 
     def _contexts(self, fragment: _Fragment) -> Mapping[str, frozenset[str]]:
         contexts: dict[str, set[str]] = {
@@ -397,6 +443,7 @@ class _MarkdownAnalyzer:
         sequence = self._sequence(value)
         fragment = self._resolve(value)
         for name in names:
+            self.scope.helper_imports.pop(name, None)
             if sequence is not None:
                 self.scope.lists[name] = sequence
                 self.scope.aliases.pop(name, None)
@@ -416,6 +463,7 @@ class _MarkdownAnalyzer:
             self.severity,
             findings=self.findings,
             scope=scope or _Scope(),
+            declared_safe_helpers=self.declared_safe_helpers,
         )
         child._scan(nodes)
         return child.scope
@@ -429,6 +477,7 @@ class _MarkdownAnalyzer:
         starting = starting or _Scope(
             self.scope.aliases.copy(),
             {key: list(value) for key, value in self.scope.lists.items()},
+            self.scope.helper_imports.copy(),
         )
         outcomes = [
             self._child_scope(
@@ -436,6 +485,7 @@ class _MarkdownAnalyzer:
                 _Scope(
                     starting.aliases.copy(),
                     {key: list(value) for key, value in starting.lists.items()},
+                    starting.helper_imports.copy(),
                 ),
             )
             for branch in branches
@@ -451,6 +501,13 @@ class _MarkdownAnalyzer:
             name: value
             for name, value in outcomes[0].lists.items()
             if all(outcome.lists.get(name) == value for outcome in outcomes[1:])
+        }
+        self.scope.helper_imports = {
+            name: value
+            for name, value in outcomes[0].helper_imports.items()
+            if all(
+                outcome.helper_imports.get(name) == value for outcome in outcomes[1:]
+            )
         }
         if preserve_loop_list_appends:
             for name, initial in starting.lists.items():
@@ -468,22 +525,55 @@ class _MarkdownAnalyzer:
         for node in nodes:
             match node:
                 case (
-                    ast.FunctionDef(name=name, body=body)
-                    | ast.AsyncFunctionDef(name=name, body=body)
+                    ast.FunctionDef(name=name, body=body, args=arguments)
+                    | ast.AsyncFunctionDef(name=name, body=body, args=arguments)
                 ):
-                    self._child_scope(body)
+                    child_scope = _Scope(
+                        helper_imports=self.scope.helper_imports.copy()
+                    )
+                    for local_name in _local_bindings(body):
+                        child_scope.helper_imports.pop(local_name, None)
+                    parameters = (
+                        *arguments.posonlyargs,
+                        *arguments.args,
+                        *arguments.kwonlyargs,
+                    )
+                    for parameter in parameters:
+                        child_scope.helper_imports.pop(parameter.arg, None)
+                    if arguments.vararg is not None:
+                        child_scope.helper_imports.pop(arguments.vararg.arg, None)
+                    if arguments.kwarg is not None:
+                        child_scope.helper_imports.pop(arguments.kwarg.arg, None)
+                    self._child_scope(body, child_scope)
                     self.scope.aliases.pop(name, None)
                     self.scope.lists.pop(name, None)
+                    self.scope.helper_imports.pop(name, None)
                 case ast.ClassDef(name=name, body=body):
-                    self._child_scope(body)
+                    child_scope = _Scope(
+                        helper_imports=self.scope.helper_imports.copy()
+                    )
+                    for local_name in _local_bindings(body):
+                        child_scope.helper_imports.pop(local_name, None)
+                    self._child_scope(body, child_scope)
                     self.scope.aliases.pop(name, None)
                     self.scope.lists.pop(name, None)
+                    self.scope.helper_imports.pop(name, None)
                 case ast.Assign(targets=targets, value=value):
                     self._bind(targets[0], value)
                     for target in targets[1:]:
                         self._bind(target, value)
                 case ast.AnnAssign(target=target, value=value) if value is not None:
                     self._bind(target, value)
+                case ast.Import(names=names):
+                    for alias in names:
+                        local_name = alias.asname or alias.name.split(".", 1)[0]
+                        imported_name = alias.name if alias.asname else local_name
+                        self.scope.helper_imports[local_name] = imported_name
+                case ast.ImportFrom(module=module, level=0, names=names) if module:
+                    for alias in names:
+                        self.scope.helper_imports[alias.asname or alias.name] = (
+                            f"{module}.{alias.name}"
+                        )
                 case ast.Expr(
                     value=ast.Call(
                         func=ast.Attribute(value=ast.Name(id=name), attr="append"),
@@ -508,6 +598,7 @@ class _MarkdownAnalyzer:
                     loop_scope = _Scope(
                         self.scope.aliases.copy(),
                         {key: list(value) for key, value in self.scope.lists.items()},
+                        self.scope.helper_imports.copy(),
                     )
                     for name in self._target_names(target):
                         loop_scope.aliases.pop(name, None)
@@ -539,12 +630,22 @@ class _MarkdownAnalyzer:
 
 
 def dynamic_markdown_findings(
-    source: str, *, path: str = "<source>", severity: Severity = "warning"
+    source: str,
+    *,
+    path: str = "<source>",
+    severity: Severity = "warning",
+    declared_safe_helpers: Iterable[str] = (),
 ) -> list[Finding]:
     """Return review-qualified findings for supported dynamic Markdown structures."""
     module = ast.parse(source, filename=path)
     findings: dict[tuple[str, int, str], Finding] = {}
-    analyzer = _MarkdownAnalyzer(source, path, severity, findings)
+    analyzer = _MarkdownAnalyzer(
+        source,
+        path,
+        severity,
+        findings,
+        declared_safe_helpers=frozenset(declared_safe_helpers),
+    )
     analyzer.analyze(module.body)
     return sorted(
         findings.values(),
@@ -576,6 +677,7 @@ def check_dynamic_markdown(
                 read_python_source(checkout / relative),
                 path=name,
                 severity=policy.severity,
+                declared_safe_helpers=policy.declared_safe_helpers,
             )
         )
     return findings

@@ -337,6 +337,7 @@ class DynamicMarkdownPolicy(PythonSourceScanPolicy):
     producer_paths: tuple[str, ...]
     severity: Severity = "warning"
     exceptions: tuple[DynamicMarkdownException, ...] = ()
+    declared_safe_helpers: tuple[str, ...] = ()
 
     @field_validator("producer_paths")
     @classmethod
@@ -345,6 +346,21 @@ class DynamicMarkdownPolicy(PythonSourceScanPolicy):
         if not normalized:
             raise ValueError("producer_paths must select at least one Python path")
         require_unique(normalized, "producer_paths must be unique")
+        return normalized
+
+    @field_validator("declared_safe_helpers")
+    @classmethod
+    def validate_declared_safe_helpers(cls, helpers: Sequence[str]) -> tuple[str, ...]:
+        normalized = tuple(validate_one_line_message(helper) for helper in helpers)
+        if any(
+            len(parts := helper.split(".")) < 2
+            or any(not part.isidentifier() for part in parts)
+            for helper in normalized
+        ):
+            raise ValueError(
+                "declared safe Markdown helpers must be qualified dotted names"
+            )
+        require_unique(normalized, "declared safe Markdown helpers must be unique")
         return normalized
 
 

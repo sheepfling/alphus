@@ -78,6 +78,55 @@ def test_format_template_alias_and_ad_hoc_replacement_remain_advisory() -> None:
     assert any("ad-hoc string replacement" in finding.message for finding in findings)
 
 
+def test_declared_helper_contract_is_qualified_and_respects_shadowing() -> None:
+    source = (
+        "from docs.markdown_cells import escape_cell as escape\n"
+        "import docs.markdown_cells as cells\n"
+        "def render(value):\n"
+        '    return f"| {escape(value)} |"\n'
+        "def module_alias(value):\n"
+        '    return f"| {cells.escape_cell(value)} |"\n'
+        "def shadow(escape, value):\n"
+        '    return f"| {escape(value)} |"\n'
+        "def rebound(value):\n"
+        "    escape = lambda item: item\n"
+        '    return f"| {escape(value)} |"\n'
+        "def unrelated(value):\n"
+        '    return f"| {docs.markdown_cells.escape_cell(value)} |"\n'
+    )
+
+    findings = dynamic_markdown_findings(
+        source,
+        declared_safe_helpers=("docs.markdown_cells.escape_cell",),
+    )
+
+    assert len(findings) == 3
+    assert {finding.line for finding in findings} == {8, 11, 13}
+    assert all("table cell" in finding.message for finding in findings)
+
+
+def test_declared_helper_contract_does_not_accept_package_import_alone() -> None:
+    findings = dynamic_markdown_findings(
+        "import docs.markdown_cells\n"
+        "def render(value):\n"
+        '    return f"| {value} |"\n'
+        "    docs.markdown_cells.escape_cell(value)\n",
+        declared_safe_helpers=("docs.markdown_cells.escape_cell",),
+    )
+
+    assert len(findings) == 1
+
+
+def test_declared_helpers_require_qualified_names() -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="qualified dotted names"):
+        DynamicMarkdownPolicy(
+            producer_paths=("src/**",),
+            declared_safe_helpers=("escape_cell",),
+        )
+
+
 def test_direct_branch_outputs_and_nested_functions_keep_separate_scopes() -> None:
     findings = dynamic_markdown_findings(
         "def render(enabled, value):\n"

@@ -551,6 +551,7 @@ extensions = [".py"]
 producer_paths = ["src/my_app/markdown/**"]
 exclude = []
 severity = "warning"
+declared_safe_helpers = ["my_app.markdown_cells.escape_table_cell"]
 
 [[checks.dynamic_markdown.exceptions]]
 paths = ["src/my_app/markdown/legacy_serializer.py"]
@@ -564,6 +565,17 @@ f-string alone as evidence that a file produces Markdown. The optional
 `exclude` remains available for ordinary path exclusions. A producer path must
 also be present in the root `[files]` inventory; this rule does not expand the
 repository-wide file scope.
+
+`declared_safe_helpers` is an exact, opt-in project contract for context-specific
+value helpers. An entry is recognized only when the selected source imports that
+qualified helper and uses it through the imported name; import aliases are
+followed, while parameters and local reassignments that shadow the imported name
+remain untrusted. Configuring a helper records the consumer's assertion that the
+helper handles the relevant Markdown context. Alphus does not inspect or certify
+the helper body, and importing a Markdown package alone never suppresses other
+manual assembly findings. Dynamic values passed to undeclared or unresolved
+helpers remain review candidates when the surrounding Markdown structure is
+visible.
 
 The synthetic regression suite separately renders representative table, link,
 code-span, and code-fence builders with `markdown-it-py` and inspects their HTML
