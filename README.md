@@ -27,9 +27,9 @@ launcher analysis, `review` for advisory rules, `repository` for architecture
 and packaging policy, `hygiene` for size and duplicate-helper rules,
 `stubs` for installed stub-package verification, and `python` for
 package-import smoke and compatibility-import removal checks. Portable
-themes own a `runners.py` exposing `<THEME>_RULE_RUNNERS`; dispatch imports
-those mappings explicitly, and tests verify complete selector coverage.
-Runtime dynamic imports remain disallowed by the package-boundary gate.
+themes own a `runners.py` exposing `<THEME>_RULE_RUNNERS`. A repository script
+generates their sorted, literal imports in the dispatcher and verifies complete
+selector coverage; tests fail when the checked-in manifest is stale.
 
 `src/alphus/contracts/` owns shared finding and diagnostic types.
 `src/alphus/policy/` owns validated settings and the built-in rule catalog.
