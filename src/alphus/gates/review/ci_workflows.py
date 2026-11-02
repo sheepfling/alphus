@@ -29,14 +29,27 @@ class _YamlApi(Protocol):
 
 
 def _mapping(node: Node | None) -> dict[str, Node] | None:
-    if not isinstance(node, MappingNode):
-        return None
-    result: dict[str, Node] = {}
-    for key, value in node.value:
-        if not isinstance(key, ScalarNode) or key.value in result:
+    match node:
+        case MappingNode(value=entries):
+            pass
+        case _:
             return None
-        result[key.value] = value
+    result: dict[str, Node] = {}
+    for key, value in entries:
+        match key:
+            case ScalarNode(value=key_value) if key_value not in result:
+                result[key_value] = value
+            case _:
+                return None
     return result
+
+
+def _is_alias_event(event: object) -> bool:
+    match event:
+        case AliasEvent():
+            return True
+        case _:
+            return False
 
 
 def _fingerprint(node: Node | None) -> _Fingerprint | None:
@@ -66,7 +79,7 @@ def _run_blocks(
         ) from error
     # Anchors and aliases can share node identities and obscure which job owns a
     # run block. Abstain on the file rather than attributing a location wrongly.
-    if any(isinstance(event, AliasEvent) for event in events):
+    if any(_is_alias_event(event) for event in events):
         return []
     workflow = _mapping(root)
     jobs = _mapping(workflow.get("jobs") if workflow is not None else None)
@@ -82,23 +95,29 @@ def _run_blocks(
             continue
         runner = _fingerprint(job.get("runs-on")) if "runs-on" in job else None
         steps = job.get("steps")
-        if runner is None or not isinstance(steps, SequenceNode):
+        if runner is None:
             continue
-        for step_node in steps.value:
+        match steps:
+            case SequenceNode(value=step_nodes):
+                pass
+            case _:
+                continue
+        for step_node in step_nodes:
             step = _mapping(step_node)
             if step is None or not set(step) <= {"name", "run"}:
                 # `if`, env, shell, working-directory, uses and similar context
                 # make this initial exact-block comparison uncertain.
                 continue
             run = step.get("run")
-            if (
-                not isinstance(run, ScalarNode)
-                or run.style not in {"|", ">"}
-                or len(run.value.splitlines()) < minimum_run_lines
-                or "${{" in run.value
-            ):
-                continue
-            records.append((repr(runner), job_name, run.value, run.start_mark.line + 1))
+            match run:
+                case ScalarNode(value=script, style=style, start_mark=mark) if (
+                    style in {"|", ">"}
+                    and len(script.splitlines()) >= minimum_run_lines
+                    and "${{" not in script
+                ):
+                    records.append((repr(runner), job_name, script, mark.line + 1))
+                case _:
+                    continue
     return records
 
 

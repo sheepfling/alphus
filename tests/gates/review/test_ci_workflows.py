@@ -9,12 +9,9 @@ from alphus.gates.review.ci_workflows import check_ci_workflows, workflow_run_fi
 
 
 def policy(**updates: object) -> CiWorkflowPolicy:
-    values: dict[str, object] = {
-        "extensions": (".yml", ".yaml"),
-        "exclude": (),
-    }
-    values.update(updates)
-    return CiWorkflowPolicy.model_validate(values)
+    return CiWorkflowPolicy.model_validate(
+        {"extensions": (".yml", ".yaml"), "exclude": (), **updates}
+    )
 
 
 def test_identical_static_multiline_blocks_across_matching_jobs() -> None:
