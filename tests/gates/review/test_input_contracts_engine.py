@@ -580,6 +580,65 @@ def evaluate(packet: Mapping[str, JsonValue]):
     assert findings == []
 
 
+@pytest.mark.parametrize(
+    ("subject", "pattern"),
+    [
+        ('{"reader": "value"}', '{"reader": _read_state}'),
+        ('["value"]', "[*_read_state]"),
+        ('{"reader": "value", "other": "item"}', '{"reader": _, **_read_state}'),
+    ],
+)
+def test_match_capture_names_shadow_module_helpers(subject: str, pattern: str) -> None:
+    source = f"""from collections.abc import Mapping
+from app.json_types import JsonValue
+def _read_state(payload):
+    return payload["state"]
+def evaluate(packet: Mapping[str, JsonValue]):
+    match {subject}:
+        case {pattern}:
+            return _read_state(packet)
+    return None
+"""
+    findings = input_contract_findings(
+        source,
+        DOMAIN_BOUNDARY_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert findings == []
+
+
+@pytest.mark.parametrize(
+    ("subject", "pattern"),
+    [
+        ('{"reader": "value"}', '{"reader": captured}'),
+        ('["value"]', "[*captured]"),
+        ('{"reader": "value", "other": "item"}', '{"reader": _, **captured}'),
+    ],
+)
+def test_unrelated_match_captures_keep_module_helper_evidence(
+    subject: str, pattern: str
+) -> None:
+    source = f"""from collections.abc import Mapping
+from app.json_types import JsonValue
+def _read_state(payload):
+    return payload["state"]
+def evaluate(packet: Mapping[str, JsonValue]):
+    match {subject}:
+        case {pattern}:
+            return _read_state(packet)
+    return None
+"""
+    findings = input_contract_findings(
+        source,
+        DOMAIN_BOUNDARY_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert len(findings) == 1
+    assert "direct helper pass-through" in findings[0].message
+
+
 def test_mapping_escape_cross_function_following_accepts_linear_aliases_but_not_ambiguity() -> (
     None
 ):
