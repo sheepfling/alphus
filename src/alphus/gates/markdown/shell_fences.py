@@ -155,7 +155,7 @@ def _normalise_markdown_line(
     line: str, containers: _MarkdownContainers
 ) -> tuple[str, int]:
     """Remove list indentation and markers while retaining their continuation width."""
-    remaining = _strip_blockquotes(line)
+    remaining = _strip_blockquotes(line).expandtabs(4)
     if not remaining.strip():
         return remaining, containers.list_indents[-1] if containers.list_indents else 0
 
@@ -187,15 +187,52 @@ def _fence_label(info: str) -> str:
     return (match.group(1) or match.group(2)).lower()
 
 
-def _fence_body_line(line: str, container_indent: int, opening_indent: int) -> str:
+def _leading_indent_columns(line: str) -> int:
+    """Measure leading spaces and tabs using CommonMark's four-column stops."""
+    column = 0
+    for character in line:
+        if character == " ":
+            column += 1
+        elif character == "\t":
+            column += 4 - column % 4
+        else:
+            break
+    return column
+
+
+def _strip_indent_columns(line: str, columns: int) -> str:
+    """Strip structural indentation while preserving any remainder of a tab."""
+    if columns <= 0:
+        return line
+    column = 0
+    index = 0
+    while index < len(line) and column < columns:
+        character = line[index]
+        if character == " ":
+            next_column = column + 1
+        elif character == "\t":
+            next_column = column + 4 - column % 4
+        else:
+            break
+        index += 1
+        if next_column > columns:
+            return " " * (next_column - columns) + line[index:]
+        column = next_column
+    return line[index:]
+
+
+def _fence_container_line(line: str, container_indent: int) -> str:
+    """Remove blockquote and list prefixes, preserving code-line indentation."""
     remaining = _strip_blockquotes(line)
-    indent = len(remaining) - len(remaining.lstrip(" "))
-    if container_indent:
-        if indent < container_indent:
-            return remaining
-        remaining = remaining[container_indent:]
-        indent = len(remaining) - len(remaining.lstrip(" "))
-    return remaining[min(indent, opening_indent) :]
+    if _leading_indent_columns(remaining) >= container_indent:
+        return _strip_indent_columns(remaining, container_indent)
+    return remaining
+
+
+def _fence_body_line(line: str, container_indent: int, opening_indent: int) -> str:
+    remaining = _fence_container_line(line, container_indent)
+    opening_prefix = min(_leading_indent_columns(remaining), opening_indent)
+    return _strip_indent_columns(remaining, opening_prefix)
 
 
 def _list_container_ended(line: str, container_indent: int) -> bool:
@@ -205,7 +242,7 @@ def _list_container_ended(line: str, container_indent: int) -> bool:
     remaining = _strip_blockquotes(line)
     if not remaining.strip():
         return False
-    indent = len(remaining) - len(remaining.lstrip(" "))
+    indent = _leading_indent_columns(remaining)
     return indent < container_indent
 
 
@@ -262,10 +299,8 @@ def _markdown_fences(text: str) -> tuple[_Fence, ...]:
             opened = None
 
         if opened is not None:
-            content = _fence_body_line(
-                original, opened.container_indent, opened.opening_indent
-            )
-            closing = _CLOSE_FENCE.fullmatch(content)
+            container_line = _fence_container_line(original, opened.container_indent)
+            closing = _CLOSE_FENCE.fullmatch(container_line)
             if (
                 closing is not None
                 and closing.group(2)[0] == opened.marker
@@ -283,6 +318,9 @@ def _markdown_fences(text: str) -> tuple[_Fence, ...]:
                 )
                 opened = None
             else:
+                content = _fence_body_line(
+                    original, opened.container_indent, opened.opening_indent
+                )
                 opened.body.append(_SourceLine(number, content))
             continue
 

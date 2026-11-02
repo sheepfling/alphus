@@ -192,6 +192,39 @@ def test_fence_opener_indentation_is_removed_from_heredoc_lines(
     assert findings[0].line == 5
 
 
+def test_closing_fence_indent_is_not_reduced_by_opener_indent(
+    tmp_path: Path,
+) -> None:
+    findings = _check(
+        tmp_path,
+        "  ~~~bash\n"
+        "  echo inside\n"
+        "    ~~~\n"
+        "  $env:APP_HOME = still-inside-the-fence\n"
+        "  ~~~\n",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 4
+
+
+def test_tab_indented_list_fence_keeps_heredoc_and_closes_correctly(
+    tmp_path: Path,
+) -> None:
+    findings = _check(
+        tmp_path,
+        "-\t```bash\n"
+        "\tcat <<'SCRIPT'\n"
+        "\t$env:APP_HOME = heredoc-data\n"
+        "\tSCRIPT\n"
+        "\t$env:APP_HOME = visible-command\n"
+        "\t```\n",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 5
+
+
 def test_powershell_backtick_escape_does_not_hide_later_bash_loop(
     tmp_path: Path,
 ) -> None:
