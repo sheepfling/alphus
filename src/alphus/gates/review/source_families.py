@@ -619,6 +619,7 @@ def _strip_cpp_comments(line: str, in_block_comment: bool) -> tuple[str, bool]:
         if in_block_comment:
             if char == "*" and following == "/":
                 in_block_comment = False
+                output.append(" ")
                 index += 2
                 continue
             index += 1
@@ -642,6 +643,7 @@ def _strip_cpp_comments(line: str, in_block_comment: bool) -> tuple[str, bool]:
             break
         if char == "/" and following == "*":
             in_block_comment = True
+            output.append(" ")
             index += 2
             continue
         output.append(char)

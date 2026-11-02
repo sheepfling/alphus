@@ -302,7 +302,8 @@ def test_cpp_include_evidence_ignores_block_comments_and_accepts_trailing_commen
         "/* ignored directive follows\n"
         '#include "gateway_server.hpp"\n'
         "*/\n"
-        '#include "gateway_routes.hpp" // accepted trailing comment\n',
+        '#include "gateway_routes.hpp" // accepted trailing comment\n'
+        '#inc/**/lude "gateway_auth.hpp"\n',
         encoding="utf-8",
     )
 
@@ -319,6 +320,9 @@ def test_cpp_include_evidence_ignores_block_comments_and_accepts_trailing_commen
     assert (
         "member include/gateway_client.hpp:2 → include/gateway_server.hpp"
         not in message
+    )
+    assert (
+        "member include/gateway_client.hpp:5 → include/gateway_auth.hpp" not in message
     )
 
 
