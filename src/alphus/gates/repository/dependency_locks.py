@@ -144,7 +144,6 @@ def _load_requirements(
         name = canonicalize_name(requirement.name)
         declarations.append(RequirementDeclaration(relative, line_number, requirement))
         result[name] = requirement
-    findings.extend(_duplicate_exact_pin_findings(declarations))
     return RequirementLoad(
         MappingProxyType(result), tuple(declarations), tuple(findings)
     )
@@ -230,6 +229,8 @@ def _pair_findings(root: Path, input_file: str, lock_file: str) -> list[Finding]
     declared = declared_load.requirements
     pinned = pinned_load.requirements
     findings = [*declared_load.findings, *pinned_load.findings]
+    findings.extend(_duplicate_exact_pin_findings(declared_load.declarations))
+    findings.extend(_duplicate_exact_pin_findings(pinned_load.declarations))
     findings.extend(_exact_pin_findings(lock_file, pinned))
     for name, requirement in declared.items():
         resolved = pinned.get(name)
@@ -287,5 +288,6 @@ def check_dependency_locks(root: Path, policy: DependencyLockPolicy) -> list[Fin
     for lock_file in policy.exact_pin_files:
         load = _load_requirements(checkout, lock_file)
         findings.extend(load.findings)
+        findings.extend(_duplicate_exact_pin_findings(load.declarations))
         findings.extend(_exact_pin_findings(lock_file, load.requirements))
     return findings

@@ -81,7 +81,8 @@ def test_conflicting_normalized_exact_pins_keep_locations_across_includes(
         "config/requirements.txt",
         "Sample_Lib==1.0\n-r extras/more.txt\n",
     )
-    _write(tmp_path, "config/extras/more.txt", "sample-lib==2.0\n")
+    _write(tmp_path, "config/extras/more.txt", "-r deeper.txt\n")
+    _write(tmp_path, "config/extras/deeper.txt", "sample-lib==2.0\n")
     _write(tmp_path, "locks/base.txt", "sample-lib==2.0\n")
     _write(tmp_path, "locks/build.txt", "")
 
@@ -94,10 +95,10 @@ def test_conflicting_normalized_exact_pins_keep_locations_across_includes(
     ]
 
     assert len(conflicts) == 1
-    assert conflicts[0].path == "config/extras/more.txt"
+    assert conflicts[0].path == "config/extras/deeper.txt"
     assert conflicts[0].line == 1
     assert "config/requirements.txt:1" in conflicts[0].message
-    assert "config/extras/more.txt:1" in conflicts[0].message
+    assert "config/extras/deeper.txt:1" in conflicts[0].message
 
 
 @pytest.mark.parametrize(
