@@ -204,11 +204,17 @@ def _module_protocols(tree: ast.Module) -> list[tuple[int, str, tuple[str, ...]]
             case ast.ClassDef(name=name, bases=bases, body=body) if any(
                 _qualified_protocol_base(base) for base in bases
             ):
-                methods = tuple(
-                    item.name
-                    for item in body
-                    if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
-                )
+                methods_list: list[str] = []
+                for item in body:
+                    match item:
+                        case (
+                            ast.FunctionDef(name=method_name)
+                            | ast.AsyncFunctionDef(name=method_name)
+                        ):
+                            methods_list.append(method_name)
+                        case _:
+                            continue
+                methods = tuple(methods_list)
                 declarations.append((statement.lineno, name, methods))
             case _:
                 continue
