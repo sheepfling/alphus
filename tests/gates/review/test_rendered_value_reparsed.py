@@ -103,6 +103,28 @@ def f(text):
     assert _sites(source, ("render",)) == [(2, 5, "rendered")]
 
 
+def test_expression_statement_walrus_invalidates_rendered_binding() -> None:
+    source = """\
+def f(text, original):
+    rendered = render(text)
+    consume(rendered := original)
+    if rendered.rstrip().endswith('!'):
+        return True
+"""
+    assert _sites(source, ("render",)) == []
+
+
+def test_unrelated_expression_walrus_preserves_rendered_binding() -> None:
+    source = """\
+def f(text, original):
+    rendered = render(text)
+    consume(other := original)
+    if rendered.rstrip().endswith('!'):
+        return True
+"""
+    assert _sites(source, ("render",)) == [(2, 4, "rendered")]
+
+
 def test_finally_predicate_requires_the_rendered_binding_on_all_entry_paths() -> None:
     source = """\
 def f(text, other):

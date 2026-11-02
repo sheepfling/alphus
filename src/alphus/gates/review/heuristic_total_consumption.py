@@ -10,6 +10,7 @@ from pathlib import Path
 from alphus.config import HeuristicTotalConsumptionPolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.gates.review._module_bindings import module_binding_counts
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 
@@ -58,18 +59,10 @@ def _scope_nodes(root: ast.AST) -> Iterable[ast.AST]:
 
 
 def _redefined(tree: ast.Module, selected: tuple[str, ...]) -> bool:
-    selected_names = set(selected)
-    definitions: list[str] = []
-    for node in _scope_nodes(tree):
-        match node:
-            case ast.FunctionDef(name=name) | ast.AsyncFunctionDef(name=name):
-                if name in selected_names:
-                    definitions.append(name)
-            case ast.Name(id=name, ctx=ast.Store()) if name in selected_names:
-                return True
-            case _:
-                continue
-    return len(definitions) != len(set(definitions))
+    counts = module_binding_counts(tree, selected)
+    # A selected function's body is historical evidence if a later import,
+    # class, assignment, deletion, or unknown star import can replace it.
+    return any(count > 1 for count in counts.values())
 
 
 def _input_name(function: ast.FunctionDef, configured: tuple[str, ...]) -> str | None:
