@@ -980,8 +980,11 @@ class _FunctionBoundNames(ast.NodeVisitor):
         self.names.add(node.name)
 
     def visit_Name(self, node: ast.Name) -> None:
-        if isinstance(node.ctx, ast.Store | ast.Del):
-            self.names.add(node.id)
+        match node.ctx:
+            case ast.Store() | ast.Del():
+                self.names.add(node.id)
+            case _:
+                pass
 
     def visit_Import(self, node: ast.Import) -> None:
         self.names.update(
