@@ -71,6 +71,8 @@ def test_self_contained_contract_allows_web_and_mailto_but_rejects_local_actions
             ("/URI", "https://example.org/report"),
             ("/URI", "mailto:editor@example.org"),
             ("/URI", "#overview"),
+            ("/URI", "javascript:#payload"),
+            ("/URI", "ftp:#external"),
             ("/URI", "file:///Users/example/source.tex"),
             ("/GoToR", "appendix.pdf"),
             ("/Launch", "open-me.sh"),
@@ -80,8 +82,10 @@ def test_self_contained_contract_allows_web_and_mailto_but_rejects_local_actions
 
     failures, unknown = validate_portability(pdf, contract)
     assert unknown == []
-    assert len(failures) == 3
+    assert len(failures) == 5
     assert any("local filesystem" in item for item in failures)
+    assert any("URI scheme 'javascript'" in item for item in failures)
+    assert any("URI scheme 'ftp'" in item for item in failures)
     assert any("remote-document GoTo" in item for item in failures)
     assert any("launch/file actions" in item for item in failures)
 
