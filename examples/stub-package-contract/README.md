@@ -51,3 +51,8 @@ that all declared Python/checker/runtime compatibility combinations passed, nor
 that a separate runtime distribution and stub-only distribution interoperate.
 Consumers must add their own installed runtime and stub package constraints,
 public API inventory, allowlist, and actual platform matrix.
+
+See [the installed consumer calibration](../../docs/STUB-PACKAGE-CONSUMER-MATRIX.md)
+for a revision-recorded `mdutils-stubs` run, including an observed ty 0.0.91
+class-object `assert_type` limitation and the distinct unmodified/adjusted
+fixture outcomes.
