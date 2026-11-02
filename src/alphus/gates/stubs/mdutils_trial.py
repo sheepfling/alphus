@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 
 from alphus.support.git import git_value
+from alphus.support.source_text import read_utf8_text
 
 CONSUMER_REVISION = "777b4b600e128721493999ed48867fa664f1a573"
 POSITIVE_REPLACEMENTS = (
@@ -40,8 +41,8 @@ def _package_digest(root: Path) -> str:
 def prepare(root: Path) -> None:
     """Create calibrated test files without changing consumer sources or stubs."""
     root = root.resolve()
-    pyproject = (root / "pyproject.toml").read_text(encoding="utf-8")
-    license_text = (root / "LICENSE").read_text(encoding="utf-8")
+    pyproject = read_utf8_text(root / "pyproject.toml")
+    license_text = read_utf8_text(root / "LICENSE")
     revision = git_value(root, "rev-parse", "--verify", "HEAD")
     if revision != CONSUMER_REVISION:
         raise ValueError(f"unexpected consumer revision: {revision}")
@@ -52,7 +53,7 @@ def prepare(root: Path) -> None:
 
     before = _package_digest(root)
     fixture_dir = root / "tests" / "fixtures"
-    positive = (fixture_dir / "positive.py").read_text(encoding="utf-8")
+    positive = read_utf8_text(fixture_dir / "positive.py")
     calibrated_positive = positive
     for original, replacement in POSITIVE_REPLACEMENTS:
         if calibrated_positive.count(original) != 1:
@@ -62,7 +63,7 @@ def prepare(root: Path) -> None:
         calibrated_positive, encoding="utf-8"
     )
 
-    negative = (fixture_dir / "negative.py").read_text(encoding="utf-8")
+    negative = read_utf8_text(fixture_dir / "negative.py")
     if "# expect-error" in negative:
         raise ValueError("negative fixture unexpectedly already has Alphus markers")
     negative_lines = negative.splitlines()
