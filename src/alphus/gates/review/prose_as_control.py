@@ -234,7 +234,7 @@ def _regex_consumes_digit(pattern: str) -> bool:
                 escaped == "d"
                 and assertion_depth == 0
                 and not (in_character_class and class_is_negated)
-                and not _zero_repetition_follows(pattern, index + 2)
+                and not _zero_repetition_follows(pattern, index + 2, verbose=verbose)
             ):
                 return True
             index += 2
@@ -270,7 +270,7 @@ def _regex_consumes_digit(pattern: str) -> bool:
     return False
 
 
-def _zero_repetition_follows(pattern: str, index: int) -> bool:
+def _zero_repetition_follows(pattern: str, index: int, *, verbose: bool) -> bool:
     """Recognize a zero-only brace quantifier immediately after an atom."""
     if index >= len(pattern) or pattern[index] != "{":
         return False
@@ -278,6 +278,8 @@ def _zero_repetition_follows(pattern: str, index: int) -> bool:
     if closing < 0:
         return False
     count = pattern[index + 1 : closing]
+    if verbose:
+        count = "".join(count.split())
     if "," in count:
         lower, upper = count.split(",", maxsplit=1)
         return lower.isdecimal() and upper.isdecimal() and int(lower) == int(upper) == 0

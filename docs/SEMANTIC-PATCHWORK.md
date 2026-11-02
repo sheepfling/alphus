@@ -31,8 +31,9 @@ under a declared input contract; exclusions, exceptions, and helper names are
 consumer decisions.
 
 For configured regex substitutions, the digit-token scanner ignores zero-only
-quantifiers such as `\d{0}`, lookaround-only digit assertions, negated digit
-classes, and `\d` text inside verbose-mode comments. This is a narrow lexical
+quantifiers such as `\d{0}` (including verbose-mode spacing), lookaround-only
+digit assertions, negated digit classes, and `\d` text inside verbose-mode
+comments. This is a narrow lexical
 boundary check, not a complete regular-expression semantic analyzer.
 
 `rendered-value-reparsed` uses a separately configured list of rendering helper
