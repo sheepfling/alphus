@@ -147,6 +147,47 @@ def test_groups_flat_python_family_as_lexical_only(tmp_path: Path) -> None:
     assert "exclude=**/vendor/**" in findings[0].message
 
 
+def test_legitimate_backend_family_stays_a_low_confidence_advisory(
+    tmp_path: Path,
+) -> None:
+    """Matplotlib's platform backends are a review candidate, not a verdict."""
+    # Representative names from matplotlib/matplotlib at 5a84a6f. Its backend
+    # guide describes these as intentional GUI and file-output implementations.
+    paths = [
+        _write(tmp_path, f"lib/matplotlib/backends/{stem}.py")
+        for stem in (
+            "backend_agg",
+            "backend_cairo",
+            "backend_gtk4",
+            "backend_pdf",
+            "backend_svg",
+        )
+    ]
+    paths.append(_write(tmp_path, "lib/matplotlib/backends/registry.py"))
+
+    findings = source_family_findings(
+        tmp_path,
+        paths,
+        SourceFamilyPolicy(
+            extensions=(".py",),
+            include=("lib/matplotlib/backends/**",),
+            min_family_files=5,
+            min_prefix_characters=4,
+        ),
+    )
+
+    assert len(findings) == 1
+    finding = findings[0]
+    assert finding.severity == "warning"
+    assert "Family backend_*" in finding.message
+    assert "5 of 6 selected sibling source files" in finding.message
+    assert "lexical-only, low-confidence advisory review candidate" in finding.message
+    assert "responsibility, and public surface not assessed" in finding.message
+    assert "filename similarity alone does not establish an architectural problem" in (
+        finding.message
+    )
+
+
 def test_opt_in_python_import_evidence_reports_resolved_edges(tmp_path: Path) -> None:
     paths = []
     for name in ("client", "server", "routes", "auth", "cache"):
