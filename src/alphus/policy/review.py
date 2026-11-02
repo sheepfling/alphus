@@ -26,6 +26,34 @@ from alphus.policy.base import (
 from alphus.policy.sources import PythonSourceScanPolicy
 
 
+class DocumentStylePolicy(StrictModel):
+    """Opt-in Markdown/MDX document-level heading pattern review."""
+
+    extensions: tuple[str, ...] = (".md", ".mdx")
+    exclude: tuple[str, ...] = ()
+    minimum_headings: Annotated[int, Field(ge=3)] = 8
+    minimum_family_matches: Annotated[int, Field(ge=2)] = 2
+    minimum_family_density: Annotated[float, Field(gt=0, le=1)] = 0.25
+    severity: Severity = "info"
+
+    @field_validator("extensions")
+    @classmethod
+    def validate_document_extensions(cls, values: Sequence[str]) -> tuple[str, ...]:
+        checked = validate_extensions(
+            values,
+            "document style extensions must be lowercase suffixes",
+            require_one=True,
+        )
+        if any(value not in {".md", ".mdx"} for value in checked):
+            raise ValueError("document style currently supports only .md and .mdx")
+        return checked
+
+    @field_validator("exclude")
+    @classmethod
+    def validate_document_exclusions(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+
 class NumericLiteralSpec(StrictModel):
     """An explicit catalog of possible constants or unit conversion factors."""
 

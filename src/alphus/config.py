@@ -68,6 +68,7 @@ from alphus.policy.repository import (
     VersionSyncPolicy,
 )
 from alphus.policy.review import (
+    DocumentStylePolicy,
     ErrorCodeCallSpec,
     FastApiFindingOverride,
     FastApiPracticePolicy,
@@ -115,6 +116,7 @@ __all__ = [
     "CyclomaticBackendBinding",
     "CyclomaticComplexityPolicy",
     "DependencyLockPolicy",
+    "DocumentStylePolicy",
     "DocumentationConfigPolicy",
     "DocumentationConfigSuppression",
     "ErrorCodeCallSpec",
