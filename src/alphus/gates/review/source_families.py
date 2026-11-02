@@ -505,6 +505,7 @@ def _python_import_evidence(
     typed_dict_count = 0
     trees: dict[Path, ast.Module] = {}
     source_modules: dict[Path, str | None] = {}
+    module_level_import_ids: dict[Path, set[int]] = {}
     protocol_names_by_path: dict[Path, set[str]] = {}
     typed_dict_names_by_path: dict[Path, set[str]] = {}
     member_directories = {path.parent for path in members}
@@ -534,6 +535,11 @@ def _python_import_evidence(
             failures += 1
             continue
         trees[source] = tree
+        module_level_import_ids[source] = {
+            id(statement)
+            for statement in tree.body
+            if isinstance(statement, ast.ImportFrom)
+        }
         source_module = None
         for root in roots:
             try:
@@ -600,6 +606,27 @@ def _python_import_evidence(
     protocol_use_count = 0
     typed_dict_uses: list[str] = []
     typed_dict_use_count = 0
+
+    def add_package_namespace_candidate(
+        source: Path, node: ast.ImportFrom, alias: ast.alias, target: Path
+    ) -> None:
+        nonlocal package_namespace_import_count
+        if (
+            source.name != "__init__.py"
+            or id(node) not in module_level_import_ids.get(source, set())
+            or target not in members
+            or target == source
+            or alias.name == "*"
+        ):
+            return
+        package_namespace_import_count += 1
+        if len(package_namespace_imports) < policy.max_public_api_names:
+            local_name = alias.asname or alias.name
+            package_namespace_imports.append(
+                f"{source.as_posix()}:{node.lineno} imports {alias.name} from "
+                f"{target.as_posix()} as package name {local_name}"
+            )
+
     for source, tree in trees.items():
         source_module = source_modules[source]
         annotation_lines = _annotation_name_lines(tree)
@@ -618,6 +645,35 @@ def _python_import_evidence(
                             unresolved += 1
                 case ast.ImportFrom(module=module, level=level, names=aliases):
                     if module is None:
+                        if level and source_module is not None:
+                            package = (
+                                source_module
+                                if source.name == "__init__.py"
+                                else source_module.rpartition(".")[0]
+                            )
+                            pieces = package.split(".") if package else []
+                            if level > len(pieces) + 1:
+                                unresolved += max(1, len(aliases))
+                                continue
+                            base = pieces[: len(pieces) - level + 1]
+                            for alias in aliases:
+                                if alias.name == "*":
+                                    unresolved += 1
+                                    continue
+                                target_name = ".".join([*base, *alias.name.split(".")])
+                                targets = modules.get(target_name, [])
+                                if len(targets) == 1:
+                                    target_path = targets[0]
+                                    resolved.append(
+                                        f"{source.as_posix()}:{node.lineno} → "
+                                        f"{target_path.as_posix()}"
+                                    )
+                                    add_package_namespace_candidate(
+                                        source, node, alias, target_path
+                                    )
+                                else:
+                                    unresolved += 1
+                            continue
                         unresolved += 1
                         continue
                     if level:
@@ -645,25 +701,10 @@ def _python_import_evidence(
                         resolved.append(
                             f"{source.as_posix()}:{node.lineno} → {target_path.as_posix()}"
                         )
-                        if (
-                            source.name == "__init__.py"
-                            and target_path in members
-                            and target_path != source
-                        ):
-                            for alias in aliases:
-                                if alias.name == "*":
-                                    continue
-                                package_namespace_import_count += 1
-                                if (
-                                    len(package_namespace_imports)
-                                    < policy.max_public_api_names
-                                ):
-                                    local_name = alias.asname or alias.name
-                                    package_namespace_imports.append(
-                                        f"{source.as_posix()}:{node.lineno} imports "
-                                        f"{alias.name} from {target_path.as_posix()} "
-                                        f"as package name {local_name}"
-                                    )
+                        for alias in aliases:
+                            add_package_namespace_candidate(
+                                source, node, alias, target_path
+                            )
                         if target_path in members:
                             for alias in aliases:
                                 imported_name = alias.name
