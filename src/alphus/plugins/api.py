@@ -68,8 +68,8 @@ class PluginFinding:
                 or ".." in path.parts
             ):
                 raise ValueError("plugin finding paths must be repository-relative")
-        if self.line is not None and self.line < 1:
-            raise ValueError("plugin finding lines must be positive")
+        if self.line is not None and (type(self.line) is not int or self.line < 1):
+            raise ValueError("plugin finding lines must be positive integers")
         if self.severity not in {"error", "warning", "info"}:
             raise ValueError(f"unsupported plugin finding severity: {self.severity!r}")
         if self.priority is not None and self.priority not in {

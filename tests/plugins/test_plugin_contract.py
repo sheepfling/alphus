@@ -77,6 +77,12 @@ steps = ["Markdown titles"]
 """
 
 
+@pytest.mark.parametrize("line", [True, 1.0, 0])
+def test_plugin_finding_requires_a_positive_integer_line(line: object) -> None:
+    with pytest.raises(ValueError, match="positive integers"):
+        PluginFinding(rule_id="bad-line", message="invalid location", line=line)  # type: ignore[arg-type]
+
+
 def test_disabled_plugins_are_not_discovered_or_imported(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
