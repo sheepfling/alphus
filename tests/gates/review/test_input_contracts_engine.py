@@ -530,6 +530,40 @@ def test_manual_schema_advisory_accepts_declared_custom_validator_flow() -> None
     assert findings == []
 
 
+@pytest.mark.parametrize(
+    ("validator", "call"),
+    [
+        (
+            "TypeAdapter.validate_python",
+            "TypeAdapter(Options).validate_python(payload)",
+        ),
+        ("Options.model_validate", "Options.model_validate(payload)"),
+        ("app.validate_payload", "app.validate_payload(payload=payload)"),
+    ],
+)
+def test_manual_schema_advisory_accepts_configured_and_factory_validators(
+    validator: str, call: str
+) -> None:
+    findings = manual_schema_findings(
+        f"""
+        def parse_options(payload):
+            if "kind" not in payload:
+                raise ValueError("missing kind")
+            if not isinstance(payload.get("kind"), str):
+                raise ValueError("invalid kind")
+            if not isinstance(payload.get("limit"), int):
+                raise ValueError("invalid limit")
+            if payload.get("limit") < 0:
+                raise ValueError("negative limit")
+            parsed = {call}
+            return parsed
+        """,
+        validator=validator,
+    )
+
+    assert findings == []
+
+
 def test_manual_schema_advisory_keeps_branch_completeness_unknown() -> None:
     findings = manual_schema_findings("""
         def parse_options(payload):

@@ -926,7 +926,16 @@ def _manual_schema_finding(
                 pass
             case _:
                 return False
-        function_name = canonical_expression_name(call.func, aliases) or ""
+        function_name = canonical_expression_name(call.func, aliases)
+        if function_name is None:
+            match call.func:
+                case ast.Attribute(value=ast.Call(func=factory), attr=method):
+                    factory_name = canonical_expression_name(factory, aliases)
+                    if factory_name is not None:
+                        function_name = f"{factory_name}.{method}"
+                case _:
+                    pass
+        function_name = function_name or ""
         configured = (
             boundary.validator is not None and function_name == boundary.validator
         )
@@ -935,8 +944,9 @@ def _manual_schema_finding(
             "validate_python",
             "parse_obj",
         }
+        input_values = [*call.args, *(keyword.value for keyword in call.keywords)]
         if not (configured or recognized) or not any(
-            is_parameter_name(argument) for argument in call.args
+            is_parameter_name(argument) for argument in input_values
         ):
             return False
         for statement in function.body:
