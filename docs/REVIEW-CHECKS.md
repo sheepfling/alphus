@@ -26,7 +26,8 @@ Selector: `numeric-literals`. IDs: `alphus/python/none/style/inline-constant` an
 `alphus/python/none/style/inline-conversion`.
 
 The built-in catalog recognizes these exact values in binary or augmented
-arithmetic: pi (`3.14`, `3.14159`, `3.141592653589793`), e (`2.71828`,
+arithmetic, bitwise, shift, and matrix multiplication expressions: pi
+(`3.14`, `3.14159`, `3.141592653589793`), e (`2.71828`,
 `2.718281828459045`), and tau (`6.28318`, `6.283185307179586`). A coincidental
 price or coefficient can match; the warning asks whether a named constant is
 appropriate. Matching uses no proximity tolerance or dimensional inference.
