@@ -53,6 +53,36 @@ def test_requires_product_sum_sqrt_and_previous_diagonal_divisor() -> None:
     assert cholesky_recurrence_lines(wrong_diagonal, _policy()) == []
 
 
+def test_import_from_aliases_shadow_sum_and_range() -> None:
+    for binding in (
+        "from custom import range",
+        "from custom import sum",
+        "from custom import iterator as range",
+        "from custom import reducer as sum",
+    ):
+        source = _RECURRENCE.replace("import math", f"import math\n{binding}")
+        assert cholesky_recurrence_lines(source, _policy()) == []
+
+
+def test_sqrt_in_nested_else_branch_is_not_diagonal_evidence() -> None:
+    source = _RECURRENCE.replace(
+        """            if i == j:
+                lower[i][j] = math.sqrt(matrix[i][i] - partial)
+            else:
+                lower[i][j] = (matrix[i][j] - partial) / lower[j][j]
+""",
+        """            if i == j:
+                lower[i][j] = matrix[i][j]
+            else:
+                if i < j:
+                    lower[i][j] = math.sqrt(matrix[i][i] - partial)
+                else:
+                    lower[i][j] = (matrix[i][j] - partial) / lower[j][j]
+""",
+    )
+    assert cholesky_recurrence_lines(source, _policy()) == []
+
+
 def test_scope_and_configured_sqrt_helper_are_respected(tmp_path: Path) -> None:
     target = tmp_path / "src" / "covariance.py"
     target.parent.mkdir()

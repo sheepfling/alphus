@@ -97,6 +97,10 @@ def _shadows_builtins(tree: ast.AST) -> bool:
                 for alias in names
             ):
                 return True
+            case ast.ImportFrom(names=names) if any(
+                (alias.asname or alias.name) in {"sum", "range"} for alias in names
+            ):
+                return True
             case _:
                 continue
     return False
@@ -234,7 +238,9 @@ def _match_function(
                 factor: str | None = None
                 sqrt_line: int | None = None
                 diagonal_assignment: ast.Assign | None = None
-                for candidate in ast.walk(diagonal):
+                # Only a direct assignment in the equality arm is diagonal
+                # evidence; walking the full If also visits its non-diagonal else.
+                for candidate in diagonal.body:
                     target = _assignment_target(candidate)
                     target_factor = (
                         _target_factor(target, row, column)
