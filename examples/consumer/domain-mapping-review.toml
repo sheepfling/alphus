@@ -10,6 +10,10 @@ exclude = ["src/internal/generated/**"]
 domain_mapping_types = ["app.models.EvaluationOptions"]
 domain_mapping_value_types = ["JsonValue"]
 domain_mapping_severity = "info"
+domain_mapping_contracts = [
+  { path = "src/internal/evaluate_packet.py", function = "evaluate", parameter = "packet", domain_type = "app.models.EvaluationOptions" },
+  { path = "src/internal/evaluate_frame.py", function = "FrameEvaluator.evaluate", parameter = "options", domain_type = "app.models.EvaluationOptions" },
+]
 
 [orchestration]
 default_profile = "domain-review"

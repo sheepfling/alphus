@@ -175,6 +175,43 @@ class TestQualityPolicy(PythonSourceScanPolicy):
         return self
 
 
+class DomainMappingContract(StrictModel):
+    """Consumer-declared domain boundary used for narrow mapping/object advice."""
+
+    path: str
+    function: str
+    parameter: str
+    domain_type: str
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, value: str) -> str:
+        return validate_single_path(value, "domain mapping contract path")
+
+    @field_validator("function")
+    @classmethod
+    def validate_function(cls, value: str) -> str:
+        if not value or any(not part.isidentifier() for part in value.split(".")):
+            raise ValueError(
+                "domain mapping contract function must be a dotted identifier"
+            )
+        return value
+
+    @field_validator("parameter")
+    @classmethod
+    def validate_parameter(cls, value: str) -> str:
+        if not value.isidentifier():
+            raise ValueError("domain mapping contract parameter must be an identifier")
+        return value
+
+    @field_validator("domain_type")
+    @classmethod
+    def validate_domain_type(cls, value: str) -> str:
+        if not value or any(not part.isidentifier() for part in value.split(".")):
+            raise ValueError("domain mapping contract type must be a dotted identifier")
+        return value
+
+
 class InputContractPolicy(PythonSourceScanPolicy):
     """Advisory, local collection-use analysis without interprocedural inference."""
 
@@ -183,6 +220,7 @@ class InputContractPolicy(PythonSourceScanPolicy):
     sequence_narrowing_paths: tuple[str, ...] = ()
     domain_mapping_types: tuple[str, ...] = ()
     domain_mapping_value_types: tuple[str, ...] = ("JsonValue",)
+    domain_mapping_contracts: tuple[DomainMappingContract, ...] = ()
     domain_mapping_severity: Severity = "info"
 
     @field_validator("sequence_narrowing_paths")
@@ -202,6 +240,15 @@ class InputContractPolicy(PythonSourceScanPolicy):
             raise ValueError("domain mapping types must be dotted identifiers")
         require_unique(values, "domain mapping types must be unique")
         return tuple(values)
+
+    @model_validator(mode="after")
+    def validate_domain_mapping_contracts(self) -> Self:
+        selectors = tuple(
+            (contract.path, contract.function, contract.parameter)
+            for contract in self.domain_mapping_contracts
+        )
+        require_unique(selectors, "domain mapping contract selectors must be unique")
+        return self
 
 
 class SourceFamilyPolicy(StrictModel):

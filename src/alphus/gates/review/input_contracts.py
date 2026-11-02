@@ -644,6 +644,7 @@ def _function_findings(
     aliases: ImportAliases,
     policy: InputContractPolicy,
     path: str,
+    function_name: str,
 ) -> list[Finding]:
     arguments = [
         *function.args.posonlyargs,
@@ -761,7 +762,11 @@ def _function_findings(
                     ),
                 )
             )
-    findings.extend(_domain_mapping_findings(function, aliases, policy, path))
+    findings.extend(
+        _domain_mapping_findings(
+            function, aliases, policy, path, function_name=function_name
+        )
+    )
     return findings
 
 
@@ -804,34 +809,43 @@ def _domain_mapping_alternative(
     )
     if model is None:
         return None
-    mappings = {
+    for member in members:
+        mapping = _json_mapping_type(member, aliases, value_types)
+        if mapping is not None:
+            return model, mapping
+    return None
+
+
+def _json_mapping_type(
+    annotation: ast.expr, aliases: ImportAliases, value_types: set[str]
+) -> str | None:
+    """Recognize only explicitly supported string-keyed generic JSON mappings."""
+    if not isinstance(annotation, ast.Subscript):
+        return None
+    name = canonical_expression_name(annotation.value, aliases)
+    if name not in {
         "dict",
         "builtins.dict",
         "typing.Dict",
         "typing.Mapping",
         "collections.abc.Mapping",
-    }
-    for member in members:
-        if not isinstance(member, ast.Subscript):
-            continue
-        name = canonical_expression_name(member.value, aliases)
-        if name not in mappings:
-            continue
-        arguments = member.slice.elts if isinstance(member.slice, ast.Tuple) else ()
-        if len(arguments) != 2:
-            continue
-        key_type = canonical_expression_name(arguments[0], aliases)
-        value_type = canonical_expression_name(arguments[1], aliases)
-        if (
-            key_type in {"str", "builtins.str"}
-            and value_type is not None
-            and (
-                value_type in value_types
-                or value_type.rsplit(".", maxsplit=1)[-1] in value_types
-            )
-        ):
-            return model, name or "mapping"
-    return None
+    }:
+        return None
+    arguments = annotation.slice.elts if isinstance(annotation.slice, ast.Tuple) else ()
+    if len(arguments) != 2:
+        return None
+    key_type = canonical_expression_name(arguments[0], aliases)
+    value_type = canonical_expression_name(arguments[1], aliases)
+    if (
+        key_type not in {"str", "builtins.str"}
+        or value_type is None
+        or not (
+            value_type in value_types
+            or value_type.rsplit(".", maxsplit=1)[-1] in value_types
+        )
+    ):
+        return None
+    return name
 
 
 class _FunctionLocalNodes(ast.NodeVisitor):
@@ -862,6 +876,31 @@ class _FunctionLocalNodes(ast.NodeVisitor):
         super().generic_visit(node)
 
 
+class _FunctionNameIndex(ast.NodeVisitor):
+    """Index functions by lexical class/function name for exact policy selectors."""
+
+    def __init__(self) -> None:
+        self.parts: list[str] = []
+        self.names: dict[int, str] = {}
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        self.parts.append(node.name)
+        self.generic_visit(node)
+        self.parts.pop()
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        self._visit_function(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        self._visit_function(node)
+
+    def _visit_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        self.names[id(node)] = ".".join((*self.parts, node.name))
+        self.parts.append(node.name)
+        self.generic_visit(node)
+        self.parts.pop()
+
+
 def _direct_mapping_reads(parameter: str, nodes: Sequence[ast.AST]) -> list[int]:
     """Find literal string-key indexing and ``.get`` reads on the parameter."""
     lines: set[int] = set()
@@ -889,6 +928,21 @@ def _direct_mapping_reads(parameter: str, nodes: Sequence[ast.AST]) -> list[int]
     return sorted(
         line for line in lines if first_rebinding is None or line < first_rebinding
     )
+
+
+def _direct_attribute_reads(
+    parameter: str, nodes: Sequence[ast.AST]
+) -> list[tuple[str, int]]:
+    """Find direct attribute reads without inferring values through helpers."""
+    reads = {
+        (node.attr, node.lineno)
+        for node in nodes
+        if isinstance(node, ast.Attribute)
+        and isinstance(node.ctx, ast.Load)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == parameter
+    }
+    return sorted(reads, key=lambda read: (read[1], read[0]))
 
 
 def _has_normalization_flow(
@@ -961,8 +1015,10 @@ def _domain_mapping_findings(
     aliases: ImportAliases,
     policy: InputContractPolicy,
     path: str,
+    *,
+    function_name: str,
 ) -> list[Finding]:
-    if not policy.domain_mapping_types:
+    if not policy.domain_mapping_types and not policy.domain_mapping_contracts:
         return []
     local = _FunctionLocalNodes(function)
     local.visit(function)
@@ -972,17 +1028,76 @@ def _domain_mapping_findings(
         *function.args.args,
         *function.args.kwonlyargs,
     ]
+    configured_contract = next(
+        (
+            contract
+            for contract in policy.domain_mapping_contracts
+            if contract.path == path and contract.function == function_name
+        ),
+        None,
+    )
     for argument in arguments:
         if argument.annotation is None:
             continue
         alternative = _domain_mapping_alternative(argument.annotation, aliases, policy)
-        if alternative is None:
+        if alternative is not None:
+            model, mapping = alternative
+            reads = _direct_mapping_reads(argument.arg, local.nodes)
+            if not reads or _has_normalization_flow(
+                function, argument.arg, model, aliases, local.nodes
+            ):
+                continue
+            findings.append(
+                Finding(
+                    rule_id=rule_tag(
+                        Scope.PYTHON,
+                        Framework.NONE,
+                        Category.CORRECTNESS,
+                        "generic-mapping-domain-escape",
+                    ),
+                    path=path,
+                    line=argument.lineno,
+                    severity=policy.domain_mapping_severity,
+                    message=(
+                        f"Parameter {argument.arg!r} at line {argument.lineno} accepts "
+                        f"configured domain type {model} or generic {mapping}, with literal-key "
+                        f"reads at line(s) {', '.join(map(str, reads))}. Review whether "
+                        "normalization belongs at the boundary before internal computation. "
+                        "This is a review candidate; it does not prove validation is absent "
+                        "or that the wider interface is incorrect."
+                    ),
+                )
+            )
             continue
-        model, mapping = alternative
-        reads = _direct_mapping_reads(argument.arg, local.nodes)
-        if not reads or _has_normalization_flow(
-            function, argument.arg, model, aliases, local.nodes
-        ):
+
+        contract = configured_contract
+        if contract is None or argument.arg != contract.parameter:
+            continue
+        annotation_name = canonical_expression_name(argument.annotation, aliases)
+        mapping = _json_mapping_type(
+            argument.annotation, aliases, set(policy.domain_mapping_value_types)
+        )
+        if mapping is not None:
+            reads = _direct_mapping_reads(argument.arg, local.nodes)
+            if not reads:
+                continue
+            if _has_normalization_flow(
+                function, argument.arg, contract.domain_type, aliases, local.nodes
+            ):
+                continue
+            kind = "mapping"
+            evidence = f"literal-key reads at line(s) {', '.join(map(str, reads))}"
+            rule_id = "generic-mapping-domain-escape"
+        elif annotation_name in {"object", "builtins.object"}:
+            attributes = _direct_attribute_reads(argument.arg, local.nodes)
+            if not attributes or _has_normalization_flow(
+                function, argument.arg, contract.domain_type, aliases, local.nodes
+            ):
+                continue
+            kind = "object"
+            evidence = ", ".join(f".{name} at line {line}" for name, line in attributes)
+            rule_id = "broad-object-domain-input"
+        else:
             continue
         findings.append(
             Finding(
@@ -990,18 +1105,18 @@ def _domain_mapping_findings(
                     Scope.PYTHON,
                     Framework.NONE,
                     Category.CORRECTNESS,
-                    "generic-mapping-domain-escape",
+                    rule_id,
                 ),
                 path=path,
                 line=argument.lineno,
                 severity=policy.domain_mapping_severity,
                 message=(
-                    f"Parameter {argument.arg!r} at line {argument.lineno} accepts "
-                    f"configured domain type {model} or generic {mapping}, with literal-key "
-                    f"reads at line(s) {', '.join(map(str, reads))}. Review whether "
-                    "normalization belongs at the boundary before internal computation. "
-                    "This is a review candidate; it does not prove validation is absent "
-                    "or that the wider interface is incorrect."
+                    f"Configured domain boundary {function_name}.{argument.arg} "
+                    f"expects {contract.domain_type}, but accepts generic {kind} "
+                    f"with {evidence}. Review whether validation belongs at the "
+                    "admission boundary and the internal interface should preserve "
+                    "the declared domain contract. This review candidate does not "
+                    "prove missing validation or an incorrect interface."
                 ),
             )
         )
@@ -1014,11 +1129,21 @@ def input_contract_findings(
     """Report observed writes and conservative collection-interface suggestions."""
     module = ast.parse(source, filename=path)
     aliases = _scope_imports(module.body)
+    function_names = _FunctionNameIndex()
+    function_names.visit(module)
     findings: list[Finding] = []
     for node in ast.walk(module):
         match node:
             case ast.FunctionDef() | ast.AsyncFunctionDef():
-                findings.extend(_function_findings(node, aliases, policy, path))
+                findings.extend(
+                    _function_findings(
+                        node,
+                        aliases,
+                        policy,
+                        path,
+                        function_names.names.get(id(node), node.name),
+                    )
+                )
             case _:
                 pass
     return sorted(

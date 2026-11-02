@@ -18,6 +18,17 @@ DOMAIN_POLICY = InputContractPolicy(
     exclude=[],
     domain_mapping_types=("app.models.EvaluationOptions",),
 )
+DECLARED_DOMAIN_BOUNDARY = {
+    "path": "src/internal/evaluate.py",
+    "function": "evaluate",
+    "parameter": "packet",
+    "domain_type": "app.models.EvaluationOptions",
+}
+DOMAIN_BOUNDARY_POLICY = InputContractPolicy(
+    extensions=[".py"],
+    exclude=[],
+    domain_mapping_contracts=(DECLARED_DOMAIN_BOUNDARY,),
+)
 
 
 def analyze(source: str, policy: InputContractPolicy = POLICY) -> list[Finding]:
@@ -245,6 +256,134 @@ def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
         )
         == []
     )
+
+
+def test_declared_mapping_only_boundary_requires_literal_mapping_reads() -> None:
+    findings = input_contract_findings(
+        """from collections.abc import Mapping
+def evaluate(packet: Mapping[str, JsonValue]):
+    return packet["state"]
+""",
+        DOMAIN_BOUNDARY_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].rule_id == (
+        "alphus/python/none/correctness/generic-mapping-domain-escape"
+    )
+    assert "expects app.models.EvaluationOptions" in findings[0].message
+    assert "literal-key reads at line(s) 3" in findings[0].message
+
+
+@pytest.mark.parametrize(
+    ("source", "path", "policy"),
+    [
+        (
+            """from collections.abc import Mapping
+def evaluate(packet: Mapping[str, JsonValue]):
+    return packet["state"]
+""",
+            "src/internal/other.py",
+            DOMAIN_BOUNDARY_POLICY,
+        ),
+        (
+            """from collections.abc import Mapping
+def evaluate(packet: Mapping[str, object]):
+    return packet["state"]
+""",
+            "src/internal/evaluate.py",
+            DOMAIN_BOUNDARY_POLICY,
+        ),
+        (
+            """from collections.abc import Mapping
+def evaluate(packet: Mapping[str, JsonValue]):
+    return len(packet)
+""",
+            "src/internal/evaluate.py",
+            DOMAIN_BOUNDARY_POLICY,
+        ),
+        (
+            """from collections.abc import Mapping
+def evaluate(packet: Mapping[str, JsonValue]):
+    return packet["state"]
+""",
+            "src/internal/evaluate.py",
+            InputContractPolicy(extensions=[".py"], exclude=[]),
+        ),
+    ],
+)
+def test_mapping_only_candidate_requires_exact_consumer_scope_and_shape(
+    source: str, path: str, policy: InputContractPolicy
+) -> None:
+    assert input_contract_findings(source, policy, path=path) == []
+
+
+def test_declared_object_boundary_reports_direct_required_attribute_reads() -> None:
+    policy = InputContractPolicy(
+        extensions=[".py"],
+        exclude=[],
+        domain_mapping_contracts=(
+            {
+                **DECLARED_DOMAIN_BOUNDARY,
+                "function": "Evaluator.evaluate",
+            },
+        ),
+    )
+    findings = input_contract_findings(
+        """class Evaluator:
+    def evaluate(self, packet: object):
+        return packet.frame
+""",
+        policy,
+        path="src/internal/evaluate.py",
+    )
+
+    assert len(findings) == 1
+    assert (
+        findings[0].rule_id
+        == "alphus/python/none/correctness/broad-object-domain-input"
+    )
+    assert "expects app.models.EvaluationOptions" in findings[0].message
+    assert ".frame at line 3" in findings[0].message
+
+
+def test_object_attribute_review_requires_declared_contract_and_direct_read() -> None:
+    source = "def evaluate(packet: object):\n    return packet.frame\n"
+    assert input_contract_findings(source, DOMAIN_BOUNDARY_POLICY) == []
+    policy = InputContractPolicy(
+        extensions=[".py"],
+        exclude=[],
+        domain_mapping_contracts=(DECLARED_DOMAIN_BOUNDARY,),
+    )
+    assert (
+        input_contract_findings(
+            "def evaluate(packet: object):\n    return repr(packet)\n",
+            policy,
+            path="src/internal/evaluate.py",
+        )
+        == []
+    )
+
+
+def test_domain_mapping_contract_selectors_must_be_unique_and_relative() -> None:
+    with pytest.raises(ValueError, match="selectors must be unique"):
+        InputContractPolicy(
+            extensions=[".py"],
+            exclude=[],
+            domain_mapping_contracts=(
+                DECLARED_DOMAIN_BOUNDARY,
+                DECLARED_DOMAIN_BOUNDARY,
+            ),
+        )
+    with pytest.raises(ValueError, match="relative POSIX path"):
+        InputContractPolicy(
+            extensions=[".py"],
+            exclude=[],
+            domain_mapping_contracts=(
+                {**DECLARED_DOMAIN_BOUNDARY, "path": "../evaluate.py"},
+            ),
+        )
 
 
 @pytest.mark.parametrize(
