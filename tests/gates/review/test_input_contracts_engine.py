@@ -294,6 +294,37 @@ def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
     )
 
 
+@pytest.mark.parametrize(
+    "validation",
+    [
+        "normalized = EvaluationOptions.model_validate(options)",
+        (
+            "if isinstance(options, Mapping):\n"
+            "        normalized = EvaluationOptions.model_validate(options)"
+        ),
+    ],
+)
+def test_rebinding_normalized_value_does_not_suppress_mapping_review(
+    validation: str,
+) -> None:
+    source = (
+        "from collections.abc import Mapping\n"
+        "from app.models import EvaluationOptions\n"
+        "def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):\n"
+        f"    {validation.replace(chr(10), chr(10) + '    ')}\n"
+        "    normalized = None\n"
+        "    consume(normalized)\n"
+        "    return options['threshold']\n"
+    )
+
+    findings = input_contract_findings(source, DOMAIN_POLICY)
+
+    assert len(findings) == 1
+    assert findings[0].rule_id == (
+        "alphus/python/none/correctness/generic-mapping-domain-escape"
+    )
+
+
 def test_declared_mapping_only_boundary_requires_literal_mapping_reads() -> None:
     findings = input_contract_findings(
         """from collections.abc import Mapping

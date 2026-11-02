@@ -924,6 +924,28 @@ def _loaded_name_after(node: ast.AST, name: str, line: int) -> bool:
             return False
 
 
+def _loaded_name_after_without_rebinding(
+    nodes: Sequence[ast.AST], name: str, line: int
+) -> bool:
+    """Find a later read while the assigned value is still live."""
+    stores = sorted(
+        store_line
+        for node in nodes
+        if (store_line := _rebound_name_line(node, name)) is not None
+        and store_line > line
+    )
+    for node in nodes:
+        match node:
+            case ast.Name(id=used_name, ctx=ast.Load(), lineno=used_line) if (
+                used_name == name and used_line > line
+            ):
+                if not any(line < store_line < used_line for store_line in stores):
+                    return True
+            case _:
+                continue
+    return False
+
+
 class _FunctionLocalNodes(ast.NodeVisitor):
     """Collect nodes for one function without treating nested scopes as local."""
 
@@ -1221,9 +1243,8 @@ def _has_normalization_flow(
                     pass
                 case _:
                     continue
-            if any(
-                _loaded_name_after(node, assigned_name, assignment_line)
-                for node in nodes
+            if _loaded_name_after_without_rebinding(
+                nodes, assigned_name, assignment_line
             ):
                 return True
     for statement in function.body:
@@ -1239,7 +1260,7 @@ def _has_normalization_flow(
         if _normalizer_call(value, parameter, model, aliases):
             validator_calls.append((statement.lineno, target.id))
     for line, name in validator_calls:
-        if any(_loaded_name_after(node, name, line) for node in nodes):
+        if _loaded_name_after_without_rebinding(nodes, name, line):
             return True
     return False
 
