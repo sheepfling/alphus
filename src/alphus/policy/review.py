@@ -199,6 +199,7 @@ class TypingStubCandidate(StrictModel):
     supported_runtime_versions: str
     supported_python_versions: str
     package_path: str | None = None
+    stub_version_specifier: str | None = None
 
     @field_validator("import_name")
     @classmethod
@@ -223,6 +224,19 @@ class TypingStubCandidate(StrictModel):
             raise ValueError("version requirements must be valid specifiers") from error
         return value
 
+    @field_validator("stub_version_specifier")
+    @classmethod
+    def validate_stub_version_specifier(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        try:
+            SpecifierSet(value)
+        except InvalidSpecifier as error:
+            raise ValueError(
+                "stub version requirement must be a valid specifier"
+            ) from error
+        return value
+
     @field_validator("package_path")
     @classmethod
     def validate_package_path(cls, value: str | None) -> str | None:
@@ -237,7 +251,9 @@ class TypingStubSuggestionPolicy(PythonSourceScanPolicy):
     checkers: Annotated[
         tuple[Literal["mypy", "pyright", "ty"], ...], Field(min_length=1)
     ] = ("mypy", "pyright")
-    candidates: Annotated[tuple[TypingStubCandidate, ...], Field(min_length=1)]
+    builtin_catalog: bool = True
+    candidates: tuple[TypingStubCandidate, ...] = ()
+    disabled_imports: tuple[str, ...] = ()
     severity: Severity = "info"
 
     @field_validator("dependency_file")
@@ -245,7 +261,7 @@ class TypingStubSuggestionPolicy(PythonSourceScanPolicy):
     def validate_dependency_file(cls, value: str) -> str:
         return validate_single_path(value, "dependency_file")
 
-    @field_validator("typing_groups", "checkers")
+    @field_validator("typing_groups", "checkers", "disabled_imports")
     @classmethod
     def validate_unique_values(cls, values: Sequence[str]) -> tuple[str, ...]:
         require_unique(values, "typing groups and checkers must be unique")
@@ -257,6 +273,7 @@ class TypingStubSuggestionPolicy(PythonSourceScanPolicy):
             tuple(item.import_name for item in self.candidates),
             "candidate imports must be unique",
         )
+        require_unique(self.disabled_imports, "disabled imports must be unique")
         return self
 
 

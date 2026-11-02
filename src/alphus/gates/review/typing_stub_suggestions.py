@@ -15,8 +15,32 @@ from packaging.specifiers import SpecifierSet
 from packaging.utils import canonicalize_name
 from packaging.version import Version
 
-from alphus.config import TypingStubSuggestionPolicy
+from alphus.config import TypingStubCandidate, TypingStubSuggestionPolicy
 from alphus.contracts.findings import Finding
+
+_RULE_ID = "alphus/python/none/dependencies/typing-stub-suggestion"
+
+# Verified from typeshed's PyYAML metadata and current PyPI package metadata on
+# 2026-11-02, plus scipy-stubs' official project metadata.
+_BUILTIN_CANDIDATES = (
+    TypingStubCandidate(
+        import_name="yaml",
+        runtime_distribution="PyYAML",
+        stub_distribution="types-PyYAML",
+        supported_runtime_versions="==6.0.*",
+        supported_python_versions=">=3.10,<4",
+        package_path="yaml",
+    ),
+    TypingStubCandidate(
+        import_name="scipy",
+        runtime_distribution="scipy",
+        stub_distribution="scipy-stubs",
+        supported_runtime_versions="==1.18.1.*",
+        supported_python_versions=">=3.12,<4",
+        package_path="scipy",
+        stub_version_specifier="==1.18.1.*",
+    ),
+)
 
 
 def _imports(source: str) -> set[str]:
@@ -66,7 +90,7 @@ def check_typing_stub_suggestions(
     except (OSError, ValueError, tomllib.TOMLDecodeError):
         return [
             Finding(
-                rule_id="alphus/python/none/dependencies/typing-stub-suggestion",
+                rule_id=_RULE_ID,
                 path=policy.dependency_file,
                 message="Stub suggestions were not evaluated because the configured dependency manifest could not be read.",
                 severity=policy.severity,
@@ -85,7 +109,7 @@ def check_typing_stub_suggestions(
     if missing_groups:
         return [
             Finding(
-                rule_id="alphus/python/none/dependencies/typing-stub-suggestion",
+                rule_id=_RULE_ID,
                 path=policy.dependency_file,
                 message=f"Stub suggestions were not evaluated: configured PEP 621 typing group(s) are absent: {', '.join(missing_groups)}.",
                 severity=policy.severity,
@@ -108,7 +132,14 @@ def check_typing_stub_suggestions(
     ]
     findings: list[Finding] = []
     python_version = Version(".".join(map(str, sys.version_info[:3])))
-    for candidate in policy.candidates:
+    candidates = {
+        item.import_name: item
+        for item in (_BUILTIN_CANDIDATES if policy.builtin_catalog else ())
+    }
+    candidates.update({item.import_name: item for item in policy.candidates})
+    for import_name in policy.disabled_imports:
+        candidates.pop(import_name, None)
+    for candidate in candidates.values():
         if not any(
             name == candidate.import_name
             or name.startswith(candidate.import_name + ".")
@@ -131,7 +162,7 @@ def check_typing_stub_suggestions(
         except (metadata.PackageNotFoundError, ValueError):
             findings.append(
                 Finding(
-                    rule_id="alphus/python/none/dependencies/typing-stub-suggestion",
+                    rule_id=_RULE_ID,
                     path=policy.dependency_file,
                     message=f"Import {candidate.import_name!r} was observed, but installed metadata for {candidate.runtime_distribution} is unavailable; stub need was not evaluated.",
                     severity=policy.severity,
@@ -142,18 +173,36 @@ def check_typing_stub_suggestions(
             runtime_version, prereleases=True
         ):
             continue
-        if not SpecifierSet(candidate.supported_runtime_versions).contains(
+        runtime_supported = SpecifierSet(candidate.supported_runtime_versions).contains(
             runtime_version, prereleases=True
-        ) or not SpecifierSet(candidate.supported_python_versions).contains(
+        )
+        python_supported = SpecifierSet(candidate.supported_python_versions).contains(
             python_version, prereleases=True
-        ):
+        )
+        if not runtime_supported or not python_supported:
+            if candidate in _BUILTIN_CANDIDATES:
+                findings.append(
+                    Finding(
+                        rule_id=_RULE_ID,
+                        path=policy.dependency_file,
+                        message=(
+                            f"The built-in {candidate.stub_distribution} mapping for "
+                            f"{candidate.runtime_distribution} is verified only for "
+                            f"runtime {candidate.supported_runtime_versions} and Python "
+                            f"{candidate.supported_python_versions}; installed runtime "
+                            f"{runtime_version} under Python {python_version} is outside "
+                            "that verified range, so no stub recommendation was made."
+                        ),
+                        severity=policy.severity,
+                    )
+                )
             continue
         package_path = candidate.package_path or candidate.import_name.split(".")[0]
         runtime_files = runtime.files
         if runtime_files is None:
             findings.append(
                 Finding(
-                    rule_id="alphus/python/none/dependencies/typing-stub-suggestion",
+                    rule_id=_RULE_ID,
                     path=policy.dependency_file,
                     message=f"Installed files for {candidate.runtime_distribution} could not be inspected; bundled typing support and stub need were not evaluated.",
                     severity=policy.severity,
@@ -182,9 +231,9 @@ def check_typing_stub_suggestions(
         )
         findings.append(
             Finding(
-                rule_id="alphus/python/none/dependencies/typing-stub-suggestion",
+                rule_id=_RULE_ID,
                 path=policy.dependency_file,
-                message=f"{', '.join(locations)} imports resolve to declared {candidate.runtime_distribution} {runtime_version}; no inline py.typed or bundled .pyi files were found at {package_path}/, and {candidate.stub_distribution} is not declared in typing group(s) {', '.join(policy.typing_groups)}. Consider verifying and declaring it for {', '.join(policy.checkers)}.",
+                message=f"{', '.join(locations)} imports resolve to declared {candidate.runtime_distribution} {runtime_version}; no inline py.typed or bundled .pyi files were found at {package_path}/, and {candidate.stub_distribution}{candidate.stub_version_specifier or ''} is not declared in typing group(s) {', '.join(policy.typing_groups)}. Consider verifying and declaring it for {', '.join(policy.checkers)}.",
                 severity=policy.severity,
             )
         )
