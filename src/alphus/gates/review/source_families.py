@@ -470,9 +470,10 @@ def _python_import_evidence(
     policy: _SourceFamilyPolicy,
 ) -> tuple[str, list[str]]:
     """Summarize direct, statically resolved imports within the configured roots."""
+    selected_paths = tuple(selected)
     roots = tuple(Path(root) for root in policy.python_module_roots)
     modules: dict[str, list[Path]] = defaultdict(list)
-    for path in selected:
+    for path in selected_paths:
         if path.suffix != ".py":
             continue
         for root in roots:
@@ -496,6 +497,8 @@ def _python_import_evidence(
     public_exports: list[str] = []
     public_export_count = 0
     unresolved_export_modules = 0
+    package_namespace_imports: list[str] = []
+    package_namespace_import_count = 0
     protocol_declarations: list[str] = []
     protocol_count = 0
     typed_dict_declarations: list[str] = []
@@ -504,7 +507,17 @@ def _python_import_evidence(
     source_modules: dict[Path, str | None] = {}
     protocol_names_by_path: dict[Path, set[str]] = {}
     typed_dict_names_by_path: dict[Path, set[str]] = {}
-    for source in sorted((p for p in members if p.suffix == ".py"), key=str):
+    member_directories = {path.parent for path in members}
+    analysis_sources = {
+        path
+        for path in selected_paths
+        if path.suffix == ".py"
+        and (
+            path in members
+            or (path.name == "__init__.py" and path.parent in member_directories)
+        )
+    }
+    for source in sorted(analysis_sources, key=str):
         source_path = (checkout / source).resolve(strict=False)
         if not source_path.is_relative_to(checkout) or bytes_left <= 0:
             failures += 1
@@ -632,6 +645,25 @@ def _python_import_evidence(
                         resolved.append(
                             f"{source.as_posix()}:{node.lineno} → {target_path.as_posix()}"
                         )
+                        if (
+                            source.name == "__init__.py"
+                            and target_path in members
+                            and target_path != source
+                        ):
+                            for alias in aliases:
+                                if alias.name == "*":
+                                    continue
+                                package_namespace_import_count += 1
+                                if (
+                                    len(package_namespace_imports)
+                                    < policy.max_public_api_names
+                                ):
+                                    local_name = alias.asname or alias.name
+                                    package_namespace_imports.append(
+                                        f"{source.as_posix()}:{node.lineno} imports "
+                                        f"{alias.name} from {target_path.as_posix()} "
+                                        f"as package name {local_name}"
+                                    )
                         if target_path in members:
                             for alias in aliases:
                                 imported_name = alias.name
@@ -711,6 +743,16 @@ def _python_import_evidence(
             f" Literal export names remain unresolved in {unresolved_export_modules} "
             "dynamic or reassigned module-level __all__ declaration(s)."
         )
+    if package_namespace_imports:
+        context += (
+            " Package namespace import candidates (syntax only; not verified exports): "
+        )
+        context += "; ".join(package_namespace_imports) + "."
+        if package_namespace_import_count > len(package_namespace_imports):
+            context += (
+                f" {package_namespace_import_count - len(package_namespace_imports)} "
+                "package import name(s) omitted by max_public_api_names."
+            )
     if protocol_declarations:
         context += " Qualified Protocol declaration evidence: "
         context += "; ".join(protocol_declarations) + "."
@@ -775,8 +817,9 @@ def _python_import_evidence(
         context += " Analysis incomplete: " + "; ".join(notes) + "."
     context += (
         " Direct imports, literal __all__ declarations, and qualified Protocol/TypedDict "
-        "declarations are partial syntax evidence only. Package-level re-exports, "
-        "external consumers, responsibility, other shared-contract forms, and "
+        "declarations are partial syntax evidence only. Package-level import candidates "
+        "are not verified re-exports. Package-level re-exports, external consumers, "
+        "responsibility, other shared-contract forms, and "
         "non-Python dependencies are not assessed."
     )
     return context, notes

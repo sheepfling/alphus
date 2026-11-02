@@ -372,6 +372,49 @@ def test_import_evidence_reports_bounded_literal_module_exports(tmp_path: Path) 
     assert "Package-level re-exports, external consumers" in message
 
 
+def test_python_package_init_reports_bounded_namespace_import_candidates(
+    tmp_path: Path,
+) -> None:
+    paths = [
+        _write(tmp_path, f"src/gateway/gateway_{name}.py")
+        for name in ("client", "server", "routes", "auth", "cache")
+    ]
+    init = _write(tmp_path, "src/gateway/__init__.py")
+    paths.append(init)
+    (tmp_path / "src/gateway/gateway_client.py").write_text(
+        "class GatewayClient: ...\n", encoding="utf-8"
+    )
+    (tmp_path / "src/gateway/__init__.py").write_text(
+        "from .gateway_client import GatewayClient as PublicClient\n"
+        "from .gateway_server import GatewayServer\n"
+        "__all__ = ['PublicClient', 'GatewayServer']\n",
+        encoding="utf-8",
+    )
+
+    findings = source_family_findings(
+        tmp_path,
+        paths,
+        SourceFamilyPolicy(
+            min_family_files=5,
+            python_import_evidence=True,
+            python_module_roots=("src",),
+            max_public_api_names=1,
+        ),
+    )
+
+    message = findings[0].message
+    assert (
+        "Package namespace import candidates (syntax only; not verified exports)"
+        in message
+    )
+    assert (
+        "src/gateway/__init__.py:1 imports GatewayClient from "
+        "src/gateway/gateway_client.py as package name PublicClient"
+    ) in message
+    assert "1 package import name(s) omitted by max_public_api_names" in message
+    assert "Package-level import candidates are not verified re-exports" in message
+
+
 def test_import_evidence_reports_bounded_qualified_protocol_contracts(
     tmp_path: Path,
 ) -> None:
