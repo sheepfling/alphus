@@ -1,4 +1,5 @@
 from collections.abc import Iterable
+from importlib import metadata
 from pathlib import Path
 
 from pytest import MonkeyPatch
@@ -53,6 +54,21 @@ def _python_sources(tmp_path: Path) -> tuple[Path, ...]:
     return tuple(path.relative_to(tmp_path) for path in tmp_path.glob("*.py"))
 
 
+def test_checker_installation_reports_versions_and_absent_metadata(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    def version(name: str) -> str:
+        if name == "mypy":
+            raise metadata.PackageNotFoundError(name)
+        return "1.1.414"
+
+    monkeypatch.setattr(gate.metadata, "version", version)
+
+    assert gate._checker_installation(("pyright", "mypy")) == (
+        "pyright 1.1.414, mypy: not installed"
+    )
+
+
 class _Distribution:
     version = "6.0.2"
     files = ()
@@ -88,6 +104,7 @@ def test_suggests_only_explicit_stub_candidate_for_observed_import(
 ) -> None:
     _checkout(tmp_path)
     monkeypatch.setattr(gate.metadata, "distribution", _distribution)
+    monkeypatch.setattr(gate, "_checker_installation", lambda checkers: "mypy 2.3")
 
     findings = gate.check_typing_stub_suggestions(
         tmp_path, _python_sources(tmp_path), _policy()
@@ -97,6 +114,8 @@ def test_suggests_only_explicit_stub_candidate_for_observed_import(
     assert "types-PyYAML" in findings[0].message
     assert "yaml" in findings[0].message
     assert "already installed at compatible version" in findings[0].message
+    assert "Selected checker distribution metadata: mypy 2.3" in findings[0].message
+    assert "no checker was run" in findings[0].message
     assert findings[0].path == "app.py"
     assert findings[0].line == 1
 

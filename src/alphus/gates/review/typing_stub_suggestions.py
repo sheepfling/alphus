@@ -86,6 +86,21 @@ def _requirements(values: object) -> list[Requirement]:
     return result
 
 
+def _checker_installation(checkers: tuple[str, ...]) -> str:
+    """Report selected checker distribution versions without claiming behavior."""
+    observed: list[str] = []
+    for checker in checkers:
+        try:
+            version = metadata.version(checker)
+        except metadata.PackageNotFoundError:
+            observed.append(f"{checker}: not installed")
+        except (OSError, ValueError):
+            observed.append(f"{checker}: metadata unavailable")
+        else:
+            observed.append(f"{checker} {version}")
+    return ", ".join(observed) if observed else "none selected"
+
+
 def check_typing_stub_suggestions(
     root: Path, paths: Iterable[Path], policy: TypingStubSuggestionPolicy
 ) -> list[Finding]:
@@ -431,6 +446,7 @@ def check_typing_stub_suggestions(
                 )
             continue
         location_text = ", ".join(f"{path}:{line}" for path, line in locations[:5])
+        checker_installation = _checker_installation(relevant_checkers)
         findings.append(
             Finding(
                 rule_id=_RULE_ID,
@@ -451,6 +467,10 @@ def check_typing_stub_suggestions(
                         if installed_stub_version is not None
                         else " Consider verifying and declaring it for the selected "
                         f"checker(s) {', '.join(relevant_checkers)}."
+                    )
+                    + (
+                        f" Selected checker distribution metadata: {checker_installation}. "
+                        "This does not verify checker behavior; no checker was run."
                     )
                 ),
                 severity=policy.severity,

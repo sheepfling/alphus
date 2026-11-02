@@ -10,7 +10,11 @@ PyYAML 6.0 on Python 3.10+, and `scipy` → `scipy` → `scipy-stubs==1.18.1.*`
 for SciPy 1.18.1 on Python 3.12+. The PyYAML mapping records its tested stub
 checker set (`mypy`, `pyright`, and `ty`) and compatible stub-version range;
 the SciPy mapping is scoped to the same three checkers. Findings point to the
-importing source line and include the selected checker scope. These bounds were checked against
+importing source line and include the selected checker scope. When a candidate
+is suggested, the rule also reports checker distribution versions visible in
+the selected interpreter, or that a selected checker is not installed. This is
+environment evidence only: the rule does not run the checker or infer checker
+behavior from its version. These bounds were checked against
 [typeshed's PyYAML metadata](https://github.com/python/typeshed/blob/main/stubs/PyYAML/METADATA.toml),
 [types-PyYAML on PyPI](https://pypi.org/project/types-PyYAML/), and the
 [official scipy-stubs project metadata](https://github.com/scipy/scipy-stubs/blob/master/pyproject.toml)
@@ -70,5 +74,6 @@ built-ins, set `builtin_catalog = false`. A custom candidate with the same
 `import_name` replaces its built-in mapping.
 
 The rule is deliberately conservative. It analyzes syntactic imports in the
-selected files, not dynamic imports or checker resolution. It does not query
+selected files, not dynamic imports or checker resolution. It does not run a
+checker to validate the candidate stub. It does not query
 package indexes at runtime, infer names, or automatically install dependencies.
