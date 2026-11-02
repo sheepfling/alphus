@@ -624,7 +624,7 @@ def _ruff_config_suppression_findings(
                         path for path in selected_files if matches_path(path, pattern)
                     ]
                     _, _, reason = inline_comment.partition(policy.reason_delimiter)
-                    if not selected_codes or not applicable or reason.strip():
+                    if not selected_codes or not applicable:
                         continue
                     exception_keys = {
                         (exception.rule_code, exception.line)
@@ -636,6 +636,8 @@ def _ruff_config_suppression_findings(
                         for code in selected_codes
                         if (code, line_number) in exception_keys
                     )
+                    if reason.strip():
+                        continue
                     unaudited = [
                         code
                         for code in selected_codes
@@ -727,8 +729,6 @@ def _ruff_config_suppression_findings(
         if not selected_codes or not applicable:
             continue
         _, _, reason = comment.partition(policy.reason_delimiter)
-        if reason.strip():
-            continue
         exception_keys = {
             (exception.rule_code, exception.line)
             for exception in policy.exceptions
@@ -739,6 +739,8 @@ def _ruff_config_suppression_findings(
             for code in selected_codes
             if (code, line_number) in exception_keys
         )
+        if reason.strip():
+            continue
         unaudited = [
             code for code in selected_codes if (code, line_number) not in exception_keys
         ]

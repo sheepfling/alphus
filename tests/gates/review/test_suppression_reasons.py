@@ -532,6 +532,38 @@ def test_moved_config_exception_is_reported_stale(tmp_path: Path) -> None:
     assert any("stale exception" in finding.message for finding in findings)
 
 
+def test_config_exception_with_documented_matching_entry_is_not_stale(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "app.py").write_text("value = 1\n", encoding="utf-8")
+    config = tmp_path / "ruff.toml"
+    config.write_text(
+        '[lint.per-file-ignores]\n"app.py" = ["E402"] # -- plugin bootstrap\n',
+        encoding="utf-8",
+    )
+    exception = SuppressionReasonException(
+        path="ruff.toml",
+        rule_code="E402",
+        line=2,
+        reason="Reviewed bootstrap exception.",
+    )
+    policy = SuppressionReasonPolicy(
+        extensions=(".py",), rule_codes=("E402",), exceptions=(exception,)
+    )
+
+    assert check_suppression_reasons(tmp_path, [Path("app.py")], policy) == []
+
+    config.write_text(
+        '[lint.per-file-ignores]\n"app.py" = ["F401"] # -- unrelated rule\n',
+        encoding="utf-8",
+    )
+    stale = check_suppression_reasons(tmp_path, [Path("app.py")], policy)
+
+    assert len(stale) == 1
+    assert stale[0].line == 2
+    assert "stale exception" in stale[0].message
+
+
 def test_unreadable_selected_file_is_not_reported_as_an_empty_audit(
     tmp_path: Path,
 ) -> None:
