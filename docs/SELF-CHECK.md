@@ -114,6 +114,9 @@ The configured source exclusions are:
   verify which patterns the rule reports.
 - **Path inspection, `tests/**`:** test code asserts suspicious path strings to
   exercise the string-inspection heuristic; it is not application code.
+- **Source families, the five `src/alphus/execution/profile_*.py` modules:**
+  the profile pipeline is intentionally split by responsibility; the lexical
+  sibling-name heuristic does not assess that architecture.
 
 - **Shared utilities, `tests/**`:** test helpers intentionally define local hash
   routines and run Git commands as fixtures; the canonical utility rule covers

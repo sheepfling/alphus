@@ -622,3 +622,77 @@ consumer's database fixtures and do not belong in Alphus's portable scanner.
 See the [synthetic SQLAlchemy consumer example](../examples/consumer/sqlalchemy-practices/README.md)
 for an opt-in provisional profile, representative findings, and runnable
 plan/report commands.
+
+## Source-family organization review
+
+Selector: `source-families`. This opt-in review groups sibling source files by
+filename-token prefixes in the selected Git inventory. A name is split on
+underscores, hyphens, periods, and spaces, and at lower/digit-to-uppercase
+camel-case boundaries. Tokens are case-folded; standalone numeric tokens are
+discarded. The minimum prefix length counts token characters after separators
+are omitted. A candidate prefix must be a proper token prefix and cover at least
+`min_family_files` logical units. Files in different directories are never
+grouped. When prefixes nest, each member is assigned to its deepest qualifying
+prefix so reports do not repeat the same members.
+
+Python, C, C++, JavaScript, and TypeScript extensions are recognized. Matching
+C/C++ header and implementation suffixes with the same stem in one directory
+count as one logical unit; other same-stem files with different extensions
+remain separate units. Findings retain physical file counts. By default `.h` is
+labeled `C/C++`; consumers can relabel suffixes with `language_overrides`, or
+use ordered `path_language_overrides` when a suffix is ambiguous in particular
+directories. The last matching path override wins and path overrides take
+precedence over suffix overrides.
+
+The heuristic has no semantic or history evidence. Uppercase acronym runs are
+not split into separate words, and files outside the configured extensions or
+supplied inventory are invisible to it. Names that do not share a meaningful
+token prefix are not detected. These are limits of the lexical stage, not
+evidence that a family is cohesive.
+
+```toml
+[checks.source_families]
+extensions = [".py", ".c", ".h", ".cpp", ".hpp", ".js", ".ts"]
+include = ["src/**"]
+exclude = ["src/vendor/**", "src/generated/**"]
+min_family_files = 6
+min_prefix_characters = 4
+max_files = 20000
+max_findings = 100
+max_reported_members = 40
+language_overrides = [[".h", "C++"]]
+path_language_overrides = [["src/legacy_c/**", "C"]]
+file_length_limits = [[".py", 500], [".cpp", 800]]
+```
+
+The first slice is lexical-only and low-confidence. A shared prefix selects a
+review candidate; it does not establish responsibility, coupling, public
+surface, or a need to move files. Each finding reports the family key, selected
+sibling proportion, language counts, physical-line range and distribution,
+per-member line counts, and applicable configured file limits. Member and
+distribution evidence are capped, and truncation is stated in the finding. The
+configured thresholds, extensions, scope, exclusions, and language overrides
+are included so reviewers can see the effective settings. The scan streams line
+counts and never imports or executes consumer code. Selected-source processing,
+per-finding evidence, and total-finding output are bounded; incomplete scans
+produce explicit warnings instead of implying a complete clean result.
+
+A typical finding starts: `src/service: Family gateway_*: 12 logical units
+across 12 physical files; 12 of 20 selected sibling source files (60%);
+language mix Python=12; physical lines 38–190 (12 counted; distribution: 1
+file(s) at 38 lines, ...); configured file limits .py≤500 lines. lexical-only,
+low-confidence review candidate.` It also lists bounded member evidence and
+states that coupling, imports, responsibility, and public surface were not
+assessed.
+
+Use `include`, `exclude`, and `extensions` to scope intentional generated,
+vendor, schema-output, fixture, compatibility, test, public-reexport, platform,
+or interface families. Keep a short reason beside each consumer exclusion in
+the TOML policy so the suppression remains reviewable. Broad names and large
+families can still be legitimate; treat a finding as a prompt to inspect actual
+responsibilities and public contracts. Preserve established import/include/
+export paths before changing a layout. File-length limits remain an independent
+hygiene control: splitting files below a limit does not demonstrate improved
+cohesion. Dependency, responsibility, public-surface, and history analysis are
+not part of this first slice. Fewer files, renamed prefixes, or a new directory
+do not by themselves demonstrate better boundaries.
