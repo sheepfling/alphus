@@ -181,6 +181,9 @@ class InputContractPolicy(PythonSourceScanPolicy):
     report_mutation: bool = True
     suggest_read_only: bool = True
     sequence_narrowing_paths: tuple[str, ...] = ()
+    domain_mapping_types: tuple[str, ...] = ()
+    domain_mapping_value_types: tuple[str, ...] = ("JsonValue",)
+    domain_mapping_severity: Severity = "info"
 
     @field_validator("sequence_narrowing_paths")
     @classmethod
@@ -188,6 +191,17 @@ class InputContractPolicy(PythonSourceScanPolicy):
         cls, patterns: Sequence[str]
     ) -> tuple[str, ...]:
         return validate_patterns(patterns)
+
+    @field_validator("domain_mapping_types", "domain_mapping_value_types")
+    @classmethod
+    def validate_domain_mapping_types(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not value or any(not part.isidentifier() for part in value.split("."))
+            for value in values
+        ):
+            raise ValueError("domain mapping types must be dotted identifiers")
+        require_unique(values, "domain mapping types must be unique")
+        return tuple(values)
 
 
 class SourceFamilyPolicy(StrictModel):

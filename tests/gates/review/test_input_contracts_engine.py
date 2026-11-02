@@ -5,7 +5,7 @@ from textwrap import dedent
 
 import pytest
 
-from alphus.config import InputContractPolicy
+from alphus.config import InputContractPolicy, load_config
 from alphus.contracts.findings import Finding
 from alphus.gates.review.input_contracts import (
     check_input_contracts,
@@ -13,6 +13,11 @@ from alphus.gates.review.input_contracts import (
 )
 
 POLICY = InputContractPolicy(extensions=[".py"], exclude=[])
+DOMAIN_POLICY = InputContractPolicy(
+    extensions=[".py"],
+    exclude=[],
+    domain_mapping_types=("app.models.EvaluationOptions",),
+)
 
 
 def analyze(source: str, policy: InputContractPolicy = POLICY) -> list[Finding]:
@@ -184,6 +189,86 @@ def test_already_abstract_interfaces_are_allowed_and_mutability_stays_typed() ->
         )
         == []
     )
+
+
+def test_domain_union_and_imported_mapping_alias_with_literal_read_are_reviewed() -> (
+    None
+):
+    findings = input_contract_findings(
+        """from collections.abc import Mapping as M
+from app.models import EvaluationOptions as Options
+from app.json_types import JsonValue as JV
+def evaluate(options: Options | M[str, JV]):
+    return options["count"]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert len(findings) == 1
+    assert (
+        findings[0].rule_id
+        == "alphus/python/none/correctness/generic-mapping-domain-escape"
+    )
+    assert findings[0].line == 4
+    assert "app.models.EvaluationOptions" in findings[0].message
+    assert "line(s) 5" in findings[0].message
+    assert "does not prove validation is absent" in findings[0].message
+
+
+def test_typing_union_dict_and_ignored_validation_result_remain_review_candidates() -> (
+    None
+):
+    findings = input_contract_findings(
+        """from typing import Union
+from app.models import EvaluationOptions
+def evaluate(options: Union[EvaluationOptions, dict[str, JsonValue]]):
+    EvaluationOptions.model_validate(options)
+    return options.get("count")
+""",
+        DOMAIN_POLICY,
+    )
+    assert len(findings) == 1
+    assert "dict" in findings[0].message
+
+
+def test_assigned_local_model_normalization_stops_direct_mapping_advice() -> None:
+    assert (
+        input_contract_findings(
+            """from collections.abc import Mapping
+from app.models import EvaluationOptions
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
+    normalized = EvaluationOptions.model_validate(options)
+    return _evaluate(normalized)
+""",
+            DOMAIN_POLICY,
+        )
+        == []
+    )
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "options = {}\n return options['count']",
+        "def nested():\n  return options['count']\n return None",
+        "if isinstance(options, dict):\n  normalized = EvaluationOptions.model_validate(options)\n  return _evaluate(normalized)\n return _evaluate(options)",
+    ],
+)
+def test_rebinding_nested_and_branch_validation_stay_uncertain(body: str) -> None:
+    source = (
+        "from collections.abc import Mapping\n"
+        "from app.models import EvaluationOptions\n"
+        "def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):\n " + body
+    )
+    assert input_contract_findings(source, DOMAIN_POLICY) == []
+
+
+def test_sample_domain_profile_selects_existing_input_contract_rule() -> None:
+    config = load_config(Path("examples/consumer/domain-mapping-review.toml"))
+    plan = config.orchestration.resolve_profile("domain-review")
+    assert plan is not None
+    assert plan.steps == ("Domain mapping review",)
 
 
 def test_set_membership_can_use_an_abstract_set_contract() -> None:

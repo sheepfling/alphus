@@ -761,6 +761,250 @@ def _function_findings(
                     ),
                 )
             )
+    findings.extend(_domain_mapping_findings(function, aliases, policy, path))
+    return findings
+
+
+def _union_alternatives(node: ast.expr, aliases: ImportAliases) -> tuple[ast.expr, ...]:
+    """Flatten only PEP 604 and typing.Union forms with resolvable imports."""
+    match node:
+        case ast.BinOp(left=left, op=ast.BitOr(), right=right):
+            return (
+                *_union_alternatives(left, aliases),
+                *_union_alternatives(right, aliases),
+            )
+        case ast.Subscript(value=value, slice=ast.Tuple(elts=members)) if (
+            canonical_expression_name(value, aliases) == "typing.Union"
+        ):
+            return tuple(
+                member for member in members if not isinstance(member, ast.Starred)
+            )
+        case ast.Subscript(value=value, slice=member) if (
+            canonical_expression_name(value, aliases) == "typing.Union"
+        ):
+            return _union_alternatives(member, aliases)
+        case _:
+            return (node,)
+
+
+def _domain_mapping_alternative(
+    annotation: ast.expr, aliases: ImportAliases, policy: InputContractPolicy
+) -> tuple[str, str] | None:
+    """Return configured model and JSON mapping names in one union annotation."""
+    members = _union_alternatives(annotation, aliases)
+    domain_types = set(policy.domain_mapping_types)
+    value_types = set(policy.domain_mapping_value_types)
+    model = next(
+        (
+            name
+            for member in members
+            if (name := canonical_expression_name(member, aliases)) in domain_types
+        ),
+        None,
+    )
+    if model is None:
+        return None
+    mappings = {
+        "dict",
+        "builtins.dict",
+        "typing.Dict",
+        "typing.Mapping",
+        "collections.abc.Mapping",
+    }
+    for member in members:
+        if not isinstance(member, ast.Subscript):
+            continue
+        name = canonical_expression_name(member.value, aliases)
+        if name not in mappings:
+            continue
+        arguments = member.slice.elts if isinstance(member.slice, ast.Tuple) else ()
+        if len(arguments) != 2:
+            continue
+        key_type = canonical_expression_name(arguments[0], aliases)
+        value_type = canonical_expression_name(arguments[1], aliases)
+        if (
+            key_type in {"str", "builtins.str"}
+            and value_type is not None
+            and (
+                value_type in value_types
+                or value_type.rsplit(".", maxsplit=1)[-1] in value_types
+            )
+        ):
+            return model, name or "mapping"
+    return None
+
+
+class _FunctionLocalNodes(ast.NodeVisitor):
+    """Collect nodes for one function without treating nested scopes as local."""
+
+    def __init__(self, root: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        self.root = root
+        self.nodes: list[ast.AST] = []
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        if node is self.root:
+            for statement in node.body:
+                self.visit(statement)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        if node is self.root:
+            for statement in node.body:
+                self.visit(statement)
+
+    def visit_Lambda(self, node: ast.Lambda) -> None:
+        return
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        return
+
+    def generic_visit(self, node: ast.AST) -> None:
+        self.nodes.append(node)
+        super().generic_visit(node)
+
+
+def _direct_mapping_reads(parameter: str, nodes: Sequence[ast.AST]) -> list[int]:
+    """Find literal string-key indexing and ``.get`` reads on the parameter."""
+    lines: set[int] = set()
+    rebinding_lines = [
+        node.lineno
+        for node in nodes
+        if isinstance(node, ast.Name)
+        and node.id == parameter
+        and isinstance(node.ctx, (ast.Store, ast.Del))
+    ]
+    first_rebinding = min(rebinding_lines, default=None)
+    for node in nodes:
+        match node:
+            case ast.Subscript(
+                value=ast.Name(id=name), slice=ast.Constant(value=str())
+            ) if name == parameter:
+                lines.add(node.lineno)
+            case ast.Call(
+                func=ast.Attribute(value=ast.Name(id=name), attr="get"),
+                args=[ast.Constant(value=str()), *_],
+            ) if name == parameter:
+                lines.add(node.lineno)
+            case _:
+                pass
+    return sorted(
+        line for line in lines if first_rebinding is None or line < first_rebinding
+    )
+
+
+def _has_normalization_flow(
+    function: ast.FunctionDef | ast.AsyncFunctionDef,
+    parameter: str,
+    model: str,
+    aliases: ImportAliases,
+    nodes: Sequence[ast.AST],
+) -> bool:
+    """Recognize a direct assigned model validator result used in the function."""
+    validator_calls: list[tuple[int, str]] = []
+    for node in nodes:
+        if not isinstance(node, (ast.If, ast.Match, ast.Try, ast.TryStar)):
+            continue
+        for child in ast.walk(node):
+            if not isinstance(child, ast.Call) or not isinstance(
+                child.func, ast.Attribute
+            ):
+                continue
+            if (
+                child.func.attr in {"model_validate", "parse_obj"}
+                and canonical_expression_name(child.func.value, aliases) == model
+                and any(
+                    isinstance(argument, ast.Name) and argument.id == parameter
+                    for argument in child.args
+                )
+            ):
+                # Branch-specific normalization is outside this direct-flow slice.
+                return True
+    for statement in function.body:
+        target: ast.expr | None = None
+        value: ast.expr | None = None
+        match statement:
+            case ast.Assign(targets=[ast.Name() as name], value=call):
+                target, value = name, call
+            case ast.AnnAssign(target=ast.Name() as name, value=call) if (
+                call is not None
+            ):
+                target, value = name, call
+            case _:
+                pass
+        if not isinstance(target, ast.Name) or not isinstance(value, ast.Call):
+            continue
+        match value.func:
+            case ast.Attribute(value=owner, attr=method) if method in {
+                "model_validate",
+                "parse_obj",
+            }:
+                if canonical_expression_name(owner, aliases) == model and any(
+                    isinstance(argument, ast.Name) and argument.id == parameter
+                    for argument in value.args
+                ):
+                    validator_calls.append((statement.lineno, target.id))
+            case _:
+                pass
+    for line, name in validator_calls:
+        if any(
+            isinstance(node, ast.Name)
+            and isinstance(node.ctx, ast.Load)
+            and node.id == name
+            and node.lineno > line
+            for node in nodes
+        ):
+            return True
+    return False
+
+
+def _domain_mapping_findings(
+    function: ast.FunctionDef | ast.AsyncFunctionDef,
+    aliases: ImportAliases,
+    policy: InputContractPolicy,
+    path: str,
+) -> list[Finding]:
+    if not policy.domain_mapping_types:
+        return []
+    local = _FunctionLocalNodes(function)
+    local.visit(function)
+    findings: list[Finding] = []
+    arguments = [
+        *function.args.posonlyargs,
+        *function.args.args,
+        *function.args.kwonlyargs,
+    ]
+    for argument in arguments:
+        if argument.annotation is None:
+            continue
+        alternative = _domain_mapping_alternative(argument.annotation, aliases, policy)
+        if alternative is None:
+            continue
+        model, mapping = alternative
+        reads = _direct_mapping_reads(argument.arg, local.nodes)
+        if not reads or _has_normalization_flow(
+            function, argument.arg, model, aliases, local.nodes
+        ):
+            continue
+        findings.append(
+            Finding(
+                rule_id=rule_tag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.CORRECTNESS,
+                    "generic-mapping-domain-escape",
+                ),
+                path=path,
+                line=argument.lineno,
+                severity=policy.domain_mapping_severity,
+                message=(
+                    f"Parameter {argument.arg!r} at line {argument.lineno} accepts "
+                    f"configured domain type {model} or generic {mapping}, with literal-key "
+                    f"reads at line(s) {', '.join(map(str, reads))}. Review whether "
+                    "normalization belongs at the boundary before internal computation. "
+                    "This is a review candidate; it does not prove validation is absent "
+                    "or that the wider interface is incorrect."
+                ),
+            )
+        )
     return findings
 
 
