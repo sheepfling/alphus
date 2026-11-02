@@ -186,7 +186,39 @@ def test_arithmetic_operators_and_duplicate_findings_are_bounded() -> None:
 
     assert [
         finding.line for finding in numeric_literal_findings(source, _policy())
-    ] == [1, 2, 3, 4, 5, 6]
+    ] == [1, 2, 3, 4, 5, 6, 7]
+
+
+def test_bitwise_shift_and_matrix_multiplication_operators_are_reviewed() -> None:
+    source = (
+        "bitwise_and = value & 255\n"
+        "bitwise_or = value | 255\n"
+        "bitwise_xor = value ^ 255\n"
+        "left_shift = value << 255\n"
+        "right_shift = value >> 255\n"
+        "matrix_product = values @ 255\n"
+        "def update(value):\n"
+        "    value <<= 255\n"
+        "    value @= 255\n"
+    )
+    policy = _policy(
+        constants=(
+            NumericLiteralSpec(
+                name="permission mask", values=(255,), replacement="READ_WRITE"
+            ),
+        )
+    )
+
+    assert [finding.line for finding in numeric_literal_findings(source, policy)] == [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        8,
+        9,
+    ]
 
 
 def test_scanner_preserves_scope_paths_and_warning_severity(tmp_path: Path) -> None:

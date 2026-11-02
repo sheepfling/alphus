@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import io
 import json
 import subprocess
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
@@ -34,6 +36,21 @@ from alphus.support.data_access import JsonValue
 FIXTURES = Path(__file__).parent / "fixtures" / "cyclomatic"
 
 
+@dataclass(slots=True)
+class _WorkerCall:
+    root: Path | None = None
+    variant: str | None = None
+    files: tuple[str, ...] = ()
+
+
+@dataclass(slots=True)
+class _WorkerLaunch:
+    command: tuple[str, ...] = ()
+    input: object = ""
+    encoding: object = None
+    timeout: object = None
+
+
 def _repository(root: Path, *files: str) -> Path:
     subprocess.run(["git", "init", "--quiet", str(root)], check=True)
     for value in files:
@@ -43,18 +60,23 @@ def _repository(root: Path, *files: str) -> Path:
     return root
 
 
-def _policy(*bindings: Mapping[str, JsonValue]) -> CyclomaticComplexityPolicy:
-    return CyclomaticComplexityPolicy.model_validate(
-        {
-            "metric": "cyclomatic",
-            "maximum": 3,
-            "files": {
-                "include": ["**/*"],
-                "exclude": ["generated/**", "vendor/**"],
-            },
-            "backends": bindings,
-        }
-    )
+def _policy(
+    *bindings: Mapping[str, JsonValue],
+    maximum: int = 3,
+    lizard_manifest_max_bytes: int | None = None,
+) -> CyclomaticComplexityPolicy:
+    values: dict[str, JsonValue] = {
+        "metric": "cyclomatic",
+        "maximum": maximum,
+        "files": {
+            "include": ["**/*"],
+            "exclude": ["generated/**", "vendor/**"],
+        },
+        "backends": bindings,
+    }
+    if lizard_manifest_max_bytes is not None:
+        values["lizard_manifest_max_bytes"] = lizard_manifest_max_bytes
+    return CyclomaticComplexityPolicy.model_validate(values)
 
 
 def _ruff() -> dict[str, JsonValue]:
@@ -99,6 +121,31 @@ def test_policy_has_explicit_advisory_thresholds_and_rejects_unsupported_options
         _policy(_ruff(), _ruff())
     with pytest.raises(ValidationError, match="canonical exact version"):
         _policy({**_ruff(), "version": "v0.16.1"})
+
+
+def test_policy_accepts_nonnegative_global_and_backend_thresholds() -> None:
+    policy = _policy({**_ruff(), "maximum": 0}, maximum=0)
+
+    assert policy.maximum == 0
+    assert policy.backends[0].maximum == 0
+    with pytest.raises(ValidationError):
+        _policy(_ruff(), maximum=-1)
+    with pytest.raises(ValidationError):
+        _policy({**_ruff(), "maximum": -1})
+
+
+def test_lizard_manifest_limit_is_configurable_and_bounded() -> None:
+    assert _policy(_lizard()).lizard_manifest_max_bytes == 64 * 1024 * 1024
+    assert (
+        _policy(
+            _lizard(), lizard_manifest_max_bytes=128 * 1024 * 1024
+        ).lizard_manifest_max_bytes
+        == 128 * 1024 * 1024
+    )
+    with pytest.raises(ValidationError):
+        _policy(_lizard(), lizard_manifest_max_bytes=0)
+    with pytest.raises(ValidationError):
+        _policy(_lizard(), lizard_manifest_max_bytes=257 * 1024 * 1024)
 
 
 def test_plan_is_sorted_native_and_scopes_out_generated_and_vendor_files(
@@ -323,17 +370,230 @@ def test_lizard_worker_main_emits_validated_json_and_semantic_status(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     root = _repository(tmp_path, "sample.cpp")
+    files = ("src/a space/naïve.cpp", "src/deeper/very-long-name.cpp")
     response = LizardWorkerResponse(
         version="1.24.2",
         analyzed_file_count=1,
         files=(),
     )
-    monkeypatch.setattr(lizard_worker, "analyze_lizard_files", lambda *_: response)
+    observed = _WorkerCall()
 
-    status = lizard_worker.main([str(root), "standard", "sample.cpp"])
+    def analyze(
+        root_arg: Path, variant: str, files_arg: Sequence[str]
+    ) -> LizardWorkerResponse:
+        observed.root = root_arg
+        observed.variant = variant
+        observed.files = tuple(files_arg)
+        return response
+
+    monkeypatch.setattr(lizard_worker, "analyze_lizard_files", analyze)
+    monkeypatch.setattr(
+        lizard_worker.sys,
+        "stdin",
+        io.TextIOWrapper(
+            io.BytesIO(
+                json.dumps({"files": files}, ensure_ascii=False).encode("utf-8")
+            ),
+            encoding="utf-8",
+        ),
+    )
+
+    status = lizard_worker.main([str(root), "modified"])
 
     assert status is ExitCode.SUCCESS
     assert LizardWorkerResponse.model_validate_json(capsys.readouterr().out) == response
+    assert observed == _WorkerCall(root, "modified", files)
+
+
+@pytest.mark.parametrize(
+    ("manifest", "message"),
+    [
+        (b"not-json", "malformed"),
+        (b'{"files":["ok.cpp",42]}', "malformed"),
+    ],
+)
+def test_lizard_worker_rejects_malformed_manifests(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    manifest: bytes,
+    message: str,
+) -> None:
+    root = _repository(tmp_path)
+    monkeypatch.setattr(
+        lizard_worker.sys,
+        "stdin",
+        io.TextIOWrapper(io.BytesIO(manifest), encoding="utf-8"),
+    )
+
+    status = lizard_worker.main([str(root), "standard"])
+
+    output = LizardWorkerResponse.model_validate_json(capsys.readouterr().out)
+    assert status is ExitCode.OPERATIONAL_FAILURE
+    assert output.error is not None and message in output.error
+
+
+def test_lizard_worker_does_not_echo_analyzer_exception_text(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = _repository(tmp_path)
+
+    def fail_analysis(*_: object) -> LizardWorkerResponse:
+        raise ValueError("secret source fragment")
+
+    monkeypatch.setattr(lizard_worker, "analyze_lizard_files", fail_analysis)
+    monkeypatch.setattr(
+        lizard_worker.sys,
+        "stdin",
+        io.TextIOWrapper(io.BytesIO(b'{"files":[]}'), encoding="utf-8"),
+    )
+
+    status = lizard_worker.main([str(root), "standard"])
+
+    output = LizardWorkerResponse.model_validate_json(capsys.readouterr().out)
+    assert status is ExitCode.OPERATIONAL_FAILURE
+    assert output.error == "Lizard API analysis failed (ValueError)"
+
+
+def test_lizard_worker_bounds_the_manifest_input(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = _repository(tmp_path)
+    monkeypatch.setattr(
+        lizard_worker.sys,
+        "stdin",
+        io.TextIOWrapper(io.BytesIO(b'{"files":[]}'), encoding="utf-8"),
+    )
+
+    status = lizard_worker.main([str(root), "standard", "--manifest-max-bytes", "4"])
+
+    output = LizardWorkerResponse.model_validate_json(capsys.readouterr().out)
+    assert status is ExitCode.OPERATIONAL_FAILURE
+    assert output.error == "Lizard file manifest exceeds the size limit"
+
+
+def test_lizard_transport_uses_utf8_stdin_and_fixed_argv_for_large_inventory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repository(tmp_path, "sample.cpp")
+    policy = _policy(_lizard("modified"), lizard_manifest_max_bytes=1024 * 1024)
+    binding = cast(complexity.LizardCyclomaticBinding, policy.backends[0])
+    cyclomatic_plan = complexity.build_cyclomatic_plan(root, policy)
+    original_plan = cyclomatic_plan.backends[0]
+    files = tuple(
+        f"src/{index:05d}/{'long-name' * 12}-café file.cpp" for index in range(5000)
+    )
+    plan = replace(original_plan, files=files)
+    observed = _WorkerLaunch()
+
+    def fake_run(
+        command: Sequence[str], **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        observed.command = tuple(command)
+        observed.input = kwargs["input"]
+        observed.encoding = kwargs["encoding"]
+        observed.timeout = kwargs["timeout"]
+        response = LizardWorkerResponse(
+            version="1.24.2", analyzed_file_count=len(files), files=()
+        )
+        return subprocess.CompletedProcess(command, 0, response.model_dump_json(), "")
+
+    monkeypatch.setattr(complexity, "current_python_executable", lambda: "python")
+    monkeypatch.setattr(complexity.subprocess, "run", fake_run)
+
+    result, records, findings = complexity._run_lizard(root, policy, binding, plan)
+
+    command = observed.command
+    assert len(command) == 7
+    assert not any(path in command for path in files)
+    assert command[-2:] == ("--manifest-max-bytes", "1048576")
+    assert complexity.plan_payload(cyclomatic_plan)["lizard_manifest_max_bytes"] == (
+        1024 * 1024
+    )
+    assert observed.input == json.dumps(
+        {"files": files}, ensure_ascii=False, separators=(",", ":")
+    )
+    assert observed.encoding == "utf-8"
+    assert observed.timeout == policy.timeout_seconds
+    assert result.status == "clean"
+    assert result.variant == "modified"
+    assert result.selected_file_count == result.analyzed_file_count == len(files)
+    assert records == findings == ()
+
+
+def test_lizard_transport_preserves_small_fixture_results(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repository(tmp_path, "sample.cpp")
+    policy = _policy(_lizard())
+    binding = cast(complexity.LizardCyclomaticBinding, policy.backends[0])
+    plan = complexity.build_cyclomatic_plan(root, policy).backends[0]
+    output = _read_fixture("lizard-1.24.2-standard.json")
+
+    def fake_run(
+        command: Sequence[str], **_: object
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(command, 0, output, "")
+
+    monkeypatch.setattr(complexity, "current_python_executable", lambda: "python")
+    monkeypatch.setattr(complexity.subprocess, "run", fake_run)
+
+    result, records, findings = complexity._run_lizard(root, policy, binding, plan)
+
+    assert result.status == "violations"
+    assert [record.value for record in records] == [2, 3, 4]
+    assert [finding.line for finding in findings] == [16]
+
+
+@pytest.mark.parametrize(
+    ("failure", "message"),
+    [
+        ("missing", "could not be launched"),
+        ("timeout", "timed out"),
+        ("malformed", "malformed JSON"),
+        ("coverage", "analyzed 0 of 1"),
+    ],
+)
+def test_lizard_transport_failures_are_operational_not_clean(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
+    message: str,
+) -> None:
+    root = _repository(tmp_path, "sample.cpp")
+    policy = _policy(_lizard())
+    binding = cast(complexity.LizardCyclomaticBinding, policy.backends[0])
+    plan = complexity.build_cyclomatic_plan(root, policy).backends[0]
+
+    def fake_run(
+        command: Sequence[str], **_: object
+    ) -> subprocess.CompletedProcess[str]:
+        if failure == "missing":
+            raise FileNotFoundError("worker")
+        if failure == "timeout":
+            raise subprocess.TimeoutExpired(command, policy.timeout_seconds)
+        if failure == "malformed":
+            output = "SECRET_SOURCE_CONTENT"
+        else:
+            output = LizardWorkerResponse(
+                version="1.24.2", analyzed_file_count=0, files=()
+            ).model_dump_json()
+        return subprocess.CompletedProcess(command, 0, output, "")
+
+    monkeypatch.setattr(complexity, "current_python_executable", lambda: "python")
+    monkeypatch.setattr(complexity.subprocess, "run", fake_run)
+
+    result, records, findings = complexity._run_lizard(root, policy, binding, plan)
+
+    assert result.status == "operational_failure"
+    assert result.failure is not None and message in result.failure
+    assert "SECRET_SOURCE_CONTENT" not in (result.failure or "")
+    assert records == ()
+    assert len(findings) == 1
 
 
 @pytest.mark.parametrize(

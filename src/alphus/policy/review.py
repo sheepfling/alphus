@@ -18,6 +18,7 @@ from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.policy.base import (
     StrictModel,
     require_unique,
+    validate_extensions,
     validate_one_line_message,
     validate_patterns,
     validate_single_path,
@@ -187,6 +188,114 @@ class InputContractPolicy(PythonSourceScanPolicy):
         cls, patterns: Sequence[str]
     ) -> tuple[str, ...]:
         return validate_patterns(patterns)
+
+
+class SourceFamilyPolicy(StrictModel):
+    """Bounded, lexical-only review of similarly named source siblings."""
+
+    extensions: tuple[str, ...] = (
+        ".py",
+        ".pyi",
+        ".c",
+        ".h",
+        ".cc",
+        ".hh",
+        ".cpp",
+        ".hpp",
+        ".cxx",
+        ".hxx",
+        ".js",
+        ".jsx",
+        ".mjs",
+        ".cjs",
+        ".ts",
+        ".tsx",
+    )
+    include: tuple[str, ...] = ("**/*",)
+    exclude: tuple[str, ...] = ("**/vendor/**", "**/generated/**", "**/tests/**")
+    language_overrides: tuple[tuple[str, str], ...] = ()
+    path_language_overrides: tuple[tuple[str, str], ...] = ()
+    min_family_files: int = 5
+    min_prefix_characters: int = 4
+    max_files: int = 20_000
+    max_findings: int = 100
+    max_reported_members: int = 40
+    max_scope_patterns: int = 64
+    file_length_limits: tuple[tuple[str, int], ...] = ()
+
+    @model_validator(mode="after")
+    def validate_limits(self) -> Self:
+        if (
+            min(
+                self.min_family_files,
+                self.min_prefix_characters,
+                self.max_files,
+                self.max_findings,
+                self.max_reported_members,
+                self.max_scope_patterns,
+            )
+            < 1
+        ):
+            raise ValueError("source-family thresholds and bounds must be positive")
+        if (
+            len(self.include) + len(self.exclude) + len(self.path_language_overrides)
+            > self.max_scope_patterns
+        ):
+            raise ValueError("source-family scope exceeds max_scope_patterns")
+        return self
+
+    @field_validator("extensions")
+    @classmethod
+    def validate_source_extensions(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_extensions(
+            values, "source-family extensions must be valid", require_one=True
+        )
+
+    @field_validator("include", "exclude")
+    @classmethod
+    def validate_source_patterns(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("language_overrides")
+    @classmethod
+    def validate_language_overrides(
+        cls, values: Sequence[tuple[str, str]]
+    ) -> tuple[tuple[str, str], ...]:
+        extensions = tuple(extension for extension, _ in values)
+        validate_extensions(
+            extensions, "source-family override extensions must be valid"
+        )
+        require_unique(extensions, "source-family override extensions must be unique")
+        for _, language in values:
+            validate_one_line_message(language)
+            if not language.strip():
+                raise ValueError("source-family override language must not be empty")
+        return tuple(values)
+
+    @field_validator("path_language_overrides")
+    @classmethod
+    def validate_path_language_overrides(
+        cls, values: Sequence[tuple[str, str]]
+    ) -> tuple[tuple[str, str], ...]:
+        patterns = tuple(pattern for pattern, _ in values)
+        validate_patterns(patterns)
+        for _, language in values:
+            validate_one_line_message(language)
+            if not language.strip():
+                raise ValueError("source-family override language must not be empty")
+        return tuple(values)
+
+    @field_validator("file_length_limits")
+    @classmethod
+    def validate_file_limits(
+        cls, values: Sequence[tuple[str, int]]
+    ) -> tuple[tuple[str, int], ...]:
+        extensions = tuple(extension for extension, _ in values)
+        validate_extensions(extensions, "source-family limit extensions must be valid")
+        if any(limit < 1 for _, limit in values):
+            raise ValueError("source-family file limits must be positive")
+        require_unique(extensions, "source-family limit extensions must be unique")
+        return tuple(values)
 
 
 class PositionalInterfacePolicy(PythonSourceScanPolicy):

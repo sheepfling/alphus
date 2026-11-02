@@ -44,6 +44,14 @@ class LizardFunctionRecord(BaseModel):
     value: StrictInt
 
 
+class LizardWorkerRequest(BaseModel):
+    """Bounded command-independent input manifest sent to the worker on stdin."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    files: tuple[StrictStr, ...]
+
+
 class LizardFileRecord(BaseModel):
     """Validated per-file records serialized from the worker process."""
 

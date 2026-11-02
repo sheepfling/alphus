@@ -121,6 +121,12 @@ class _NumericVisitor(ast.NodeVisitor):
                 | ast.FloorDiv()
                 | ast.Mod()
                 | ast.Pow()
+                | ast.BitAnd()
+                | ast.BitOr()
+                | ast.BitXor()
+                | ast.LShift()
+                | ast.RShift()
+                | ast.MatMult()
             ):
                 self._arithmetic(node)
             case _:
@@ -137,6 +143,12 @@ class _NumericVisitor(ast.NodeVisitor):
                 | ast.FloorDiv()
                 | ast.Mod()
                 | ast.Pow()
+                | ast.BitAnd()
+                | ast.BitOr()
+                | ast.BitXor()
+                | ast.LShift()
+                | ast.RShift()
+                | ast.MatMult()
             ):
                 self._arithmetic(node)
             case _:
@@ -155,6 +167,12 @@ class _NumericVisitor(ast.NodeVisitor):
             ast.FloorDiv: NumericOperation.FLOOR_DIVIDE,
             ast.Mod: NumericOperation.MODULO,
             ast.Pow: NumericOperation.POWER,
+            ast.BitAnd: NumericOperation.BITWISE_AND,
+            ast.BitOr: NumericOperation.BITWISE_OR,
+            ast.BitXor: NumericOperation.BITWISE_XOR,
+            ast.LShift: NumericOperation.LEFT_SHIFT,
+            ast.RShift: NumericOperation.RIGHT_SHIFT,
+            ast.MatMult: NumericOperation.MATRIX_MULTIPLY,
         }
         operation = operations.get(type(node.op))
         if operation is None:
