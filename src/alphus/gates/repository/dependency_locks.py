@@ -28,6 +28,12 @@ class RequirementDeclaration:
 
 
 @dataclass(frozen=True, slots=True)
+class _MarkerCondition:
+    operator: str
+    version: str
+
+
+@dataclass(frozen=True, slots=True)
 class RequirementLoad:
     """Requirements parsed from a lock input and any source findings."""
 
@@ -152,8 +158,8 @@ def _load_requirements(
 def _duplicate_exact_pin_findings(
     declarations: Sequence[RequirementDeclaration],
 ) -> list[Finding]:
-    """Report only conflicting exact pins with the same unresolved marker scope."""
-    seen: dict[tuple[str, str | None], RequirementDeclaration] = {}
+    """Report exact conflicts and mark unresolved marker relationships as info."""
+    seen: dict[str, list[RequirementDeclaration]] = {}
     findings: list[Finding] = []
     for declaration in declarations:
         requirement = declaration.requirement
@@ -165,36 +171,82 @@ def _duplicate_exact_pin_findings(
             or "*" in specifiers[0].version
         ):
             continue
-        key = (
-            canonicalize_name(requirement.name),
-            str(requirement.marker) if requirement.marker is not None else None,
-        )
-        previous = seen.get(key)
-        if previous is None:
-            seen[key] = declaration
-            continue
-        previous_specifier = next(iter(previous.requirement.specifier))
-        if previous_specifier.version == specifiers[0].version:
-            continue
-        findings.append(
-            Finding(
-                rule_id=rule_tag(
-                    Scope.REPOSITORY,
-                    Framework.NONE,
-                    Category.DEPENDENCIES,
-                    "duplicate-requirement-conflict",
-                ),
-                path=declaration.source,
-                line=declaration.line,
-                message=(
-                    f"{requirement.name} exact pin {specifiers[0].version} at "
-                    f"{declaration.source}:{declaration.line} conflicts with "
-                    f"{previous_specifier.version} at "
-                    f"{previous.source}:{previous.line}; same environment marker"
-                ),
-            )
-        )
+        name = canonicalize_name(requirement.name)
+        prior_declarations = seen.setdefault(name, [])
+        for previous in prior_declarations:
+            previous_specifier = next(iter(previous.requirement.specifier))
+            if previous_specifier.version == specifiers[0].version:
+                continue
+            if _marker_text(previous.requirement) == _marker_text(requirement):
+                findings.append(
+                    Finding(
+                        rule_id=rule_tag(
+                            Scope.REPOSITORY,
+                            Framework.NONE,
+                            Category.DEPENDENCIES,
+                            "duplicate-requirement-conflict",
+                        ),
+                        path=declaration.source,
+                        line=declaration.line,
+                        message=(
+                            f"{requirement.name} exact pin {specifiers[0].version} at "
+                            f"{declaration.source}:{declaration.line} conflicts with "
+                            f"{previous_specifier.version} at "
+                            f"{previous.source}:{previous.line}; same environment marker"
+                        ),
+                    )
+                )
+            elif not _markers_provably_disjoint(previous.requirement, requirement):
+                findings.append(
+                    Finding(
+                        rule_id=rule_tag(
+                            Scope.REPOSITORY,
+                            Framework.NONE,
+                            Category.DEPENDENCIES,
+                            "duplicate-requirement-marker-uncertain",
+                        ),
+                        path=declaration.source,
+                        line=declaration.line,
+                        severity="info",
+                        message=(
+                            f"{requirement.name} has differing exact pins at "
+                            f"{previous.source}:{previous.line} and "
+                            f"{declaration.source}:{declaration.line}; marker scopes "
+                            "are not proven overlapping or disjoint"
+                        ),
+                    )
+                )
+        prior_declarations.append(declaration)
     return findings
+
+
+def _marker_text(requirement: Requirement) -> str | None:
+    return str(requirement.marker) if requirement.marker is not None else None
+
+
+def _markers_provably_disjoint(first: Requirement, second: Requirement) -> bool:
+    """Prove only complementary simple Python-version half-open intervals."""
+    first_marker = _marker_text(first)
+    second_marker = _marker_text(second)
+    if first_marker is None or second_marker is None:
+        return False
+
+    def condition(marker: str) -> _MarkerCondition | None:
+        parts = marker.split()
+        if len(parts) != 3 or parts[0] != "python_version":
+            return None
+        return _MarkerCondition(parts[1], parts[2].strip("'\""))
+
+    left = condition(first_marker)
+    right = condition(second_marker)
+    if left is None or right is None or left.version != right.version:
+        return False
+    return (left.operator, right.operator) in {
+        ("<", ">="),
+        (">=", "<"),
+        ("<=", ">"),
+        (">", "<="),
+    }
 
 
 def _exact_pin_findings(

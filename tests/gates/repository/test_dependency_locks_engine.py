@@ -149,3 +149,21 @@ def test_dependency_lock_policy_rejects_parent_paths() -> None:
         DependencyLockPolicy.model_validate(
             {"pairs": [{"input_file": "../outside.txt", "lock_file": "lock.txt"}]}
         )
+
+
+def test_unresolved_marker_pin_relationship_is_informational(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "config/requirements.txt",
+        'sample-lib==1; sys_platform == "linux"\n'
+        'sample-lib==2; python_version >= "3.12"\n',
+    )
+    _write(tmp_path, "locks/base.txt", "sample-lib==2\n")
+    _write(tmp_path, "locks/build.txt", "")
+
+    findings = check_dependency_locks(tmp_path, _policy())
+    uncertain = [item for item in findings if "marker-uncertain" in item.rule_id]
+
+    assert len(uncertain) == 1
+    assert uncertain[0].severity == "info"
+    assert "not proven overlapping or disjoint" in uncertain[0].message
