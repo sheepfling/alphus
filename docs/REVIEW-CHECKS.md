@@ -321,7 +321,8 @@ single-pass AST input remains typed as `Iterable`.
 
 The opt-in `input-contracts` rule can review selected internal interfaces for
 a configured domain type unioned with `Mapping[str, JsonValue]` or
-`dict[str, JsonValue]`, including supported `typing_extensions` equivalents.\nSet `domain_mapping_types` to consumer-known, fully
+`dict[str, JsonValue]`, including supported `typing_extensions` equivalents.
+Set `domain_mapping_types` to consumer-known, fully
 qualified model names and select only relevant internal files in the top-level
 inventory. A finding requires a literal string-key read from the union
 parameter and reports the parameter and read locations. A direct assigned
