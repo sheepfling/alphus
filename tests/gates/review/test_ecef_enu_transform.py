@@ -90,6 +90,10 @@ def test_requires_module_import_and_single_definition() -> None:
     assert ecef_enu_transform_sites(_SOURCE + later, _policy()) == []
 
 
+def test_unparseable_source_is_abstained_from() -> None:
+    assert ecef_enu_transform_sites("def broken(:\n", _policy()) == []
+
+
 def test_finding_is_scoped_configured_and_explicitly_advisory(tmp_path: Path) -> None:
     target = tmp_path / "src/geometry/frames.py"
     target.parent.mkdir(parents=True)
@@ -103,6 +107,23 @@ def test_finding_is_scoped_configured_and_explicitly_advisory(tmp_path: Path) ->
     assert not check_ecef_enu_transform(
         tmp_path, paths, _policy(exclude=("src/geometry/frames.py",))
     )
+
+
+def test_unparseable_file_does_not_prevent_later_findings(tmp_path: Path) -> None:
+    broken = tmp_path / "src/geometry/00_broken.py"
+    valid = tmp_path / "src/geometry/frames.py"
+    broken.parent.mkdir(parents=True)
+    broken.write_text("def broken(:\n", encoding="utf-8")
+    valid.write_text(_SOURCE, encoding="utf-8")
+
+    findings = check_ecef_enu_transform(
+        tmp_path,
+        (Path("src/geometry/00_broken.py"), Path("src/geometry/frames.py")),
+        _policy(),
+    )
+
+    assert len(findings) == 1
+    assert findings[0].path == "src/geometry/frames.py"
 
 
 @pytest.mark.parametrize(

@@ -130,7 +130,10 @@ def ecef_enu_transform_sites(
     source: str, policy: EcefEnuTransformPolicy
 ) -> list[_TransformSite]:
     """Return exact direct-formula matches with a module-bound math import."""
-    tree = ast.parse(source)
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return []
     if not _has_module_import(tree, policy.math_module):
         return []
     if any(
