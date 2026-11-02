@@ -65,8 +65,41 @@ def _role_path(
     return None
 
 
+def _assigned_names(function: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
+    names: set[str] = set()
+
+    def visit(node: ast.AST) -> None:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            if node is not function:
+                names.add(node.name)
+                return
+        elif isinstance(
+            node,
+            (ast.Lambda, ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp),
+        ):
+            return
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+            names.add(node.id)
+        elif isinstance(node, ast.Import):
+            names.update(
+                alias.asname or alias.name.split(".", 1)[0] for alias in node.names
+            )
+        elif isinstance(node, ast.ImportFrom):
+            names.update(alias.asname or alias.name for alias in node.names)
+        elif isinstance(node, ast.ExceptHandler) and node.name is not None:
+            names.add(node.name)
+        elif isinstance(node, (ast.Global, ast.Nonlocal)):
+            names.update(node.names)
+        for child in ast.iter_child_nodes(node):
+            visit(child)
+
+    for statement in function.body:
+        visit(statement)
+    return names
+
+
 def _bound_names(function: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
-    names = {
+    return _assigned_names(function) | {
         argument.arg
         for argument in (
             *function.args.posonlyargs,
@@ -74,22 +107,14 @@ def _bound_names(function: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
             *function.args.kwonlyargs,
         )
     }
-    for node in ast.walk(function):
-        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
-            names.add(node.id)
-    return names
 
 
 def _shadowed_helpers(
-    tree: ast.Module,
     function: ast.FunctionDef | ast.AsyncFunctionDef,
     helpers: Iterable[str],
 ) -> set[str]:
     names = set(helpers)
     bound = _bound_names(function)
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
-            bound.add(node.id)
     return {name for name in names if name.split(".", 1)[0] in bound}
 
 
@@ -112,12 +137,8 @@ def _function_findings(
         ),
         *policy.provenance_sinks,
     }
-    shadowed = _shadowed_helpers(tree, function, helper_names)
-    rebound = {
-        node.id
-        for node in ast.walk(function)
-        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store)
-    }
+    shadowed = _shadowed_helpers(function, helper_names)
+    rebound = _assigned_names(function)
     output_paths = frozenset(
         set(policy.reused_output_path_names)
         - set(policy.fresh_output_path_names)

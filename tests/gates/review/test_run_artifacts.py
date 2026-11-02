@@ -86,6 +86,48 @@ def test_helper_rebinding_suppresses_configured_name() -> None:
     assert run_artifact_findings(source, "src/pipeline.py", configured) == []
 
 
+def test_helper_binding_in_unrelated_function_does_not_suppress_finding() -> None:
+    configured = policy(
+        conditional_output_readback=True,
+        reused_output_path_names=("output_path",),
+        output_writers=(ProvenanceCallRole(function="write_output"),),
+        output_readers=(ProvenanceCallRole(function="read_output"),),
+    )
+    source = (
+        "def unrelated():\n"
+        "    write_output = local_value\n"
+        "def run(rows, output_path):\n"
+        "    def nested():\n"
+        "        output_path = local_path\n"
+        "    if rows:\n"
+        "        write_output(output_path, rows)\n"
+        "    read_output(output_path)\n"
+    )
+
+    findings = run_artifact_findings(source, "src/pipeline.py", configured)
+
+    assert [finding.line for finding in findings] == [7]
+
+
+def test_local_helper_function_definition_suppresses_finding() -> None:
+    configured = policy(
+        conditional_output_readback=True,
+        reused_output_path_names=("output_path",),
+        output_writers=(ProvenanceCallRole(function="write_output"),),
+        output_readers=(ProvenanceCallRole(function="read_output"),),
+    )
+    source = (
+        "def run(rows, output_path):\n"
+        "    def write_output(path, value):\n"
+        "        return None\n"
+        "    if rows:\n"
+        "        write_output(output_path, rows)\n"
+        "    read_output(output_path)\n"
+    )
+
+    assert run_artifact_findings(source, "src/pipeline.py", configured) == []
+
+
 def test_output_chain_is_grouped_once_per_path() -> None:
     configured = policy(
         conditional_output_readback=True,
