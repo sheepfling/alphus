@@ -246,6 +246,52 @@ def evaluate(options: Union[EvaluationOptions, dict[str, JsonValue]]):
     assert "dict" in findings[0].message
 
 
+def test_union_mapping_reads_follow_straight_line_local_aliases() -> None:
+    findings = input_contract_findings(
+        """from collections.abc import Mapping
+from app.models import EvaluationOptions
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
+    payload = options
+    return payload["count"]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].rule_id.endswith("generic-mapping-domain-escape")
+    assert "literal-key reads at line(s) 5" in findings[0].message
+
+
+def test_union_mapping_alias_reassignment_and_branch_aliases_stay_unresolved() -> None:
+    reassigned = input_contract_findings(
+        """from collections.abc import Mapping
+from app.models import EvaluationOptions
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
+    payload = options
+    payload = {}
+    return payload["count"]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+    branch_dependent = input_contract_findings(
+        """from collections.abc import Mapping
+from app.models import EvaluationOptions
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
+    payload = options
+    if condition:
+        return payload["count"]
+    return 0
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert reassigned == []
+    assert branch_dependent == []
+
+
 def test_discarded_validator_inside_a_branch_is_not_normalization() -> None:
     findings = input_contract_findings(
         """from collections.abc import Mapping

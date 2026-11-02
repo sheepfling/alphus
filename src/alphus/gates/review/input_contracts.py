@@ -1077,6 +1077,18 @@ def _direct_mapping_reads_with_aliases(
     return sorted(lines)
 
 
+def _mapping_read_evidence(
+    function: ast.FunctionDef | ast.AsyncFunctionDef,
+    parameter: str,
+    nodes: Sequence[ast.AST],
+) -> list[int]:
+    """Combine direct reads with straight-line aliases, preserving branch evidence."""
+    return sorted(
+        set(_direct_mapping_reads(parameter, nodes))
+        | set(_direct_mapping_reads_with_aliases(function, parameter))
+    )
+
+
 def _direct_attribute_reads(
     parameter: str, nodes: Sequence[ast.AST]
 ) -> list[tuple[str, int]]:
@@ -1187,7 +1199,7 @@ def _domain_mapping_findings(
         alternative = _domain_mapping_alternative(argument.annotation, aliases, policy)
         if alternative is not None:
             model, mapping = alternative
-            reads = _direct_mapping_reads(argument.arg, local.nodes)
+            reads = _mapping_read_evidence(function, argument.arg, local.nodes)
             forwarded_reads = _direct_forwarded_mapping_reads(
                 function, argument.arg, module
             )
@@ -1239,7 +1251,7 @@ def _domain_mapping_findings(
             argument.annotation, aliases, set(policy.domain_mapping_value_types)
         )
         if mapping is not None:
-            reads = _direct_mapping_reads(argument.arg, local.nodes)
+            reads = _mapping_read_evidence(function, argument.arg, local.nodes)
             forwarded_reads = _direct_forwarded_mapping_reads(
                 function, argument.arg, module
             )
