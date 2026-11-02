@@ -461,6 +461,42 @@ def test_powershell_backtick_escape_does_not_hide_later_bash_loop(
     assert "Bash loop syntax" in findings[0].message
 
 
+def test_powershell_here_string_quotes_do_not_end_quoted_data(
+    tmp_path: Path,
+) -> None:
+    findings = _check(
+        tmp_path,
+        "```powershell\n"
+        "$script = @'\n"
+        "It's still a here-string: the apostrophe doesn't close it.\n"
+        "for file in *.txt; do\n"
+        '  echo "$file"\n'
+        "done\n"
+        "'@\n"
+        "for file in *.md; do\n"
+        '  Write-Output "$file"\n'
+        "done\n"
+        "```\n",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 8
+    assert "Bash loop syntax" in findings[0].message
+
+
+def test_indented_powershell_command_is_detected_in_bash_fence(
+    tmp_path: Path,
+) -> None:
+    findings = _check(
+        tmp_path,
+        "```bash\nif ($true) {\n  Get-ChildItem\n}\n````\n",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 3
+    assert "PowerShell" in findings[0].message
+
+
 def test_bash_continuations_and_msys_paths_are_reviewed_conservatively(
     tmp_path: Path,
 ) -> None:

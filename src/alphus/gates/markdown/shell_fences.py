@@ -72,7 +72,7 @@ _DATE_FORMAT_SEQUENCE = re.compile(
     _DATE_FORMAT_DIRECTIVE + rf"(?:(?:[-_./:T])?{_DATE_FORMAT_DIRECTIVE})+"
 )
 _POWERSHELL_COMMAND = re.compile(
-    r"(?i)^(?:\s*&\s*)?(?:Write-Host|Write-Output|Get-ChildItem|Set-Location|"
+    r"(?i)^\s*(?:&\s*)?(?:Write-Host|Write-Output|Get-ChildItem|Set-Location|"
     r"Remove-Item|New-Item|Test-Path|Invoke-Expression|Get-Content|Set-Content|"
     r"Copy-Item|Move-Item|Where-Object|ForEach-Object)(?:\s|$)"
 )
@@ -110,6 +110,7 @@ class _Fence:
 class _LexState:
     quote: str | None = None
     block_comment: bool = False
+    here_string: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,6 +154,12 @@ def _mask_shell_line(line: str, shell: str, state: _LexState) -> str:
     visible = list(line)
     index = 0
     while index < len(line):
+        if state.here_string is not None:
+            delimiter = state.here_string
+            if line.startswith(delimiter):
+                state.here_string = None
+            return " " * len(line)
+
         if state.block_comment:
             end = line.find("#>", index)
             stop = len(line) if end < 0 else end + 2
@@ -205,6 +212,10 @@ def _mask_shell_line(line: str, shell: str, state: _LexState) -> str:
             visible[index] = visible[index + 1] = " "
             index += 2
             continue
+
+        if shell == "powershell" and line.startswith(("@'", '@"'), index):
+            state.here_string = "'@" if line[index + 1] == "'" else '"@'
+            return " " * len(line)
 
         character = line[index]
         if character in "'\"`":
