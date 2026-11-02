@@ -246,12 +246,12 @@ def test_inherited_ruff_config_is_scanned_within_the_repository_root(
 
 
 @pytest.mark.parametrize(
-    ("parent_key", "child_key", "expected_audit_count", "expected_ruff_codes"),
+    ("parent_key", "child_key", "expected_audit_count", "expected_ruff_code"),
     [
-        ("per-file-ignores", "per-file-ignores", 1, {"E402"}),
-        ("extend-per-file-ignores", "per-file-ignores", 2, set()),
-        ("per-file-ignores", "extend-per-file-ignores", 2, set()),
-        ("extend-per-file-ignores", "extend-per-file-ignores", 2, set()),
+        ("per-file-ignores", "per-file-ignores", 1, "E402"),
+        ("extend-per-file-ignores", "per-file-ignores", 2, None),
+        ("per-file-ignores", "extend-per-file-ignores", 2, None),
+        ("extend-per-file-ignores", "extend-per-file-ignores", 2, None),
     ],
 )
 def test_inherited_per_file_merge_matches_native_ruff(
@@ -259,7 +259,7 @@ def test_inherited_per_file_merge_matches_native_ruff(
     parent_key: str,
     child_key: str,
     expected_audit_count: int,
-    expected_ruff_codes: set[str],
+    expected_ruff_code: str | None,
 ) -> None:
     ruff = shutil.which("ruff")
     if ruff is None:
@@ -283,7 +283,9 @@ def test_inherited_per_file_merge_matches_native_ruff(
     )
     assert native.returncode in {0, 1}, native.stdout + native.stderr
     diagnostics = json.loads(native.stdout)
-    assert {item["code"] for item in diagnostics} == expected_ruff_codes
+    assert tuple(item["code"] for item in diagnostics) == (
+        (expected_ruff_code,) if expected_ruff_code is not None else ()
+    )
 
     findings = check_suppression_reasons(
         tmp_path,
