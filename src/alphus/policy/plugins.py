@@ -130,7 +130,7 @@ def _normalize_json_value(value: object) -> JsonValue:
             return number
         case float():
             raise ValueError("JSON numbers must be finite")
-        case list():
+        case list() | tuple():
             return [
                 _normalize_json_value(item) for item in cast(Sequence[object], value)
             ]

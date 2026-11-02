@@ -15,7 +15,7 @@ import pytest
 from pydantic import ValidationError
 
 from alphus.cli import main
-from alphus.config import load_config_stream
+from alphus.config import load_config, load_config_stream
 from alphus.contracts.model import StrictModel
 from alphus.plugins import PluginFinding, PluginRuleSpec, RulePlugin, registry
 from alphus.plugins.api import PLUGIN_ENTRY_POINT_GROUP
@@ -269,3 +269,42 @@ def test_plugin_settings_reject_extra_fields(
                 )
             )
         )
+
+
+def test_split_config_accepts_frozen_plugin_arrays(
+    tmp_path: Path,
+    example_entry_point: _EntryPoint,
+) -> None:
+    del example_entry_point
+    languages = tmp_path / "languages"
+    languages.mkdir()
+    (languages / "docs.toml").write_text(
+        "[orchestration]\n"
+        "[[orchestration.steps]]\n"
+        'kind = "rule"\nname = "Markdown titles"\n'
+        'rule = "example:markdown-title"\n'
+        "[[orchestration.profiles]]\n"
+        'name = "docs"\nsteps = ["Markdown titles"]\n',
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "quality.toml"
+    config_path.write_text(
+        "schema_version = 1\n"
+        'orchestration_files = ["languages/docs.toml"]\n'
+        "[plugins]\n"
+        'enabled = ["example"]\n'
+        '[plugins.rules."example:markdown-title"]\n'
+        'extensions = [".md"]\n'
+        "heading_level = 1\n"
+        "[orchestration]\n"
+        'default_profile = "docs"\n',
+        encoding="utf-8",
+    )
+
+    config = load_config(config_path)
+
+    assert config.plugins.enabled == ("example",)
+    assert config.plugins.settings_for("example:markdown-title") == {
+        "extensions": [".md"],
+        "heading_level": 1,
+    }
