@@ -1,5 +1,8 @@
 """Tests for consumer-selected reasons on Ruff suppression comments."""
 
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -296,6 +299,64 @@ def test_ruff_extend_per_file_ignores_are_audited_and_accept_exact_exceptions(
     )
 
     assert findings == []
+
+
+@pytest.mark.parametrize(
+    "form",
+    ["multiline-table", "inline-map", "flat-map", "inline-extend-map", "multiline-map"],
+)
+@pytest.mark.parametrize("with_reason", [False, True])
+def test_multiline_ruff_per_file_ignore_matches_native_ruff(
+    tmp_path: Path, with_reason: bool, form: str
+) -> None:
+    ruff = shutil.which("ruff") or str(Path(sys.executable).with_name("ruff"))
+    if not Path(ruff).is_file():
+        pytest.skip("Ruff executable is not installed in this test environment")
+    (tmp_path / "app.py").write_text("value = 1\nimport os\n", encoding="utf-8")
+    rationale = " # -- bootstrap import order" if with_reason else ""
+    if form == "multiline-table":
+        config = f'[lint.per-file-ignores]\n"app.py" = [\n "E402",{rationale}\n]\n'
+    elif form == "inline-map":
+        config = f'[lint]\nper-file-ignores = {{ "app.py" = ["E402"] }}{rationale}\n'
+    elif form == "flat-map":
+        config = f'per-file-ignores = {{ "app.py" = ["E402"] }}{rationale}\n'
+    elif form == "inline-extend-map":
+        config = (
+            f'[lint]\nextend-per-file-ignores = {{ "app.py" = ["E402"] }}{rationale}\n'
+        )
+    else:
+        config = (
+            '[lint]\nper-file-ignores = {\n "app.py" = [\n  "E402",\n ],\n}'
+            f"{rationale}\n"
+        )
+    (tmp_path / "ruff.toml").write_text(config, encoding="utf-8")
+
+    native = subprocess.run(
+        [ruff, "check", "--select", "E402", "--config", "ruff.toml", "app.py"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert native.returncode == 0, native.stdout + native.stderr
+
+    findings = check_suppression_reasons(
+        tmp_path,
+        [Path("app.py")],
+        SuppressionReasonPolicy(extensions=(".py",), rule_codes=("E402",)),
+    )
+    if form == "multiline-map":
+        assert len(findings) == 1
+        assert "multiline inline table" in findings[0].message
+        assert "not evaluated" in findings[0].message
+    elif with_reason:
+        assert findings == []
+    else:
+        assert len(findings) == 1
+        assert findings[0].path == "ruff.toml"
+        assert findings[0].line == (1 if form == "flat-map" else 2)
+        assert "no rationale" in findings[0].message
 
 
 def test_moved_config_exception_is_reported_stale(tmp_path: Path) -> None:
