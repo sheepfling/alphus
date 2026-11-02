@@ -276,7 +276,17 @@ class _UnverifiedRedisDistribution:
 
 class _PandasDistribution:
     version = "3.1.0"
-    files = ()
+    files = (Path("pandas/_libs/tslibs/timestamps.pyi"),)
+
+
+class _TypedPandasDistribution:
+    version = "3.1.0"
+    files = (Path("pandas/py.typed"),)
+
+
+class _PandasInitStubDistribution:
+    version = "3.1.0"
+    files = (Path("pandas/__init__.pyi"),)
 
 
 class _PandasStubDistribution:
@@ -689,6 +699,42 @@ def test_builtin_pandas_reports_matching_stub_as_installed(
         return _distribution(name)
 
     monkeypatch.setattr(gate.metadata, "distribution", distributions)
+
+    assert not gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), _default_policy()
+    )
+
+
+def test_builtin_pandas_suppresses_suggestion_for_package_marker(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    (tmp_path / "app.py").write_text("import pandas\\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\\ndependencies = ["pandas==3.1.0"]\\n'
+        "[project.optional-dependencies]\\ndev = []\\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        gate.metadata, "distribution", lambda _: _TypedPandasDistribution()
+    )
+
+    assert not gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), _default_policy()
+    )
+
+
+def test_builtin_pandas_suppresses_suggestion_for_matching_root_stub(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    (tmp_path / "app.py").write_text("import pandas\\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\\ndependencies = ["pandas==3.1.0"]\\n'
+        "[project.optional-dependencies]\\ndev = []\\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        gate.metadata, "distribution", lambda _: _PandasInitStubDistribution()
+    )
 
     assert not gate.check_typing_stub_suggestions(
         tmp_path, _python_sources(tmp_path), _default_policy()

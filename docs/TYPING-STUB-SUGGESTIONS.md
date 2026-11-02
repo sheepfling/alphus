@@ -18,7 +18,9 @@ this legacy mapping should be reviewed before upgrading either dependency.
 Pandas 3.1.0 maps to `pandas-stubs==3.1.0.*` on Python 3.11+; no other
 pandas runtime version is currently covered. Pandas-stubs documents its version
 line as the pandas version it was tested against and recommends matching the
-major/minor version when pandas is pinned.
+major/minor version when pandas is pinned. Its API coverage is explicitly
+incomplete and narrower than pandas' accepted API, so this recommendation does
+not claim full coverage or correctness.
 The PyYAML mapping records its tested stub checker set (`mypy`, `pyright`, and
 `ty`) and compatible stub-version range; the SciPy mapping is scoped to the
 same three checkers. The dateutil mapping is scoped to those three checkers,
@@ -49,7 +51,11 @@ version prefix is the pandas version tested, and recommends matching pinned
 pandas major/minor versions; its current 3.1.0.261029 release is for pandas
 3.1.0 and supports Python 3.11+. The pandas project itself describes pandas as
 not yet a `py.typed` library in its
-[official source](https://github.com/pandas-dev/pandas/blob/main/pandas/__init__.py).
+[3.1.0 source](https://github.com/pandas-dev/pandas/blob/v3.1.0/pandas/__init__.py).
+That release also bundles leaf extension stubs such as
+[`pandas/_libs/tslibs/timestamps.pyi`](https://github.com/pandas-dev/pandas/blob/v3.1.0/pandas/_libs/tslibs/timestamps.pyi).
+The scanner checks for a package marker or a stub matching every observed module;
+an unrelated internal `.pyi` file does not suppress a package-level suggestion.
 [types-Pillow on PyPI](https://pypi.org/project/types-Pillow/) is deliberately
 not mapped: its only release targets Pillow 10.2 and directs users to uninstall
 it with Pillow 10.3+, which includes annotations or stubs.

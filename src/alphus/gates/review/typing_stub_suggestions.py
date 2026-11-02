@@ -117,6 +117,36 @@ def _imports(source: str) -> tuple[tuple[str, int], ...] | None:
     return tuple(found)
 
 
+def _has_inline_typing_for_imports(
+    files: Iterable[PurePosixPath],
+    package_parts: tuple[str, ...],
+    root_import: str,
+    imported_names: Iterable[str],
+) -> bool:
+    """Return whether every observed module is covered by runtime typing files."""
+    file_parts = {item.parts for item in files}
+    names = tuple(imported_names)
+    if not names:
+        return False
+    for name in names:
+        relative = name.removeprefix(root_import).lstrip(".")
+        suffix = tuple(part for part in relative.split(".") if part)
+        module_parts = (*package_parts, *suffix)
+        typed_markers = (
+            (*module_parts[:size], "py.typed")
+            for size in range(len(package_parts), len(module_parts) + 1)
+        )
+        module_stubs = (
+            (*module_parts, "__init__.pyi"),
+            (*module_parts[:-1], f"{module_parts[-1]}.pyi"),
+        )
+        if not any(parts in file_parts for parts in typed_markers) and not any(
+            parts in file_parts for parts in module_stubs
+        ):
+            return False
+    return True
+
+
 def _requirements(values: object) -> list[Requirement]:
     match values:
         case list():
@@ -357,16 +387,18 @@ def check_typing_stub_suggestions(
         package_parts = package_path.parts
         runtime_files = runtime.files
         if runtime_files is not None:
-            package_files = [
-                item
-                for item in runtime_files
-                if item.parts[: len(package_parts)] == package_parts
-            ]
-            module_stub_parts = (*package_parts[:-1], f"{package_parts[-1]}.pyi")
-            if any(
-                item.name == "py.typed" or item.suffix == ".pyi"
-                for item in package_files
-            ) or any(item.parts == module_stub_parts for item in runtime_files):
+            imported_names = (
+                name
+                for name in observed
+                if name == candidate.import_name
+                or name.startswith(candidate.import_name + ".")
+            )
+            if _has_inline_typing_for_imports(
+                runtime_files,
+                package_parts,
+                candidate.import_name,
+                imported_names,
+            ):
                 continue
         runtime_supported = SpecifierSet(candidate.supported_runtime_versions).contains(
             runtime_version, prereleases=True
