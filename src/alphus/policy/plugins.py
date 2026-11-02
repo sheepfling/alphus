@@ -5,24 +5,18 @@ from __future__ import annotations
 import json
 import math
 import re
-from typing import Any, Self, TypeAlias, cast
+from collections.abc import Mapping, Sequence
+from typing import Self, TypeAlias, cast
 
-from pydantic import JsonValue as PydanticJsonValue
-from pydantic import TypeAdapter, ValidationError, model_validator
+from pydantic import model_validator
 
 from alphus.policy.base import StrictModel, require_unique
 
 JsonValue: TypeAlias = (
     None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
 )
-_JSON_VALUE_ADAPTER: TypeAdapter[PydanticJsonValue] = TypeAdapter(
-    cast(Any, PydanticJsonValue)
-)
 _PLUGIN_NAME = r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*"
 _SELECTOR = re.compile(rf"{_PLUGIN_NAME}:{_PLUGIN_NAME}\Z")
-_PLUGIN_TABLE_ADAPTER: TypeAdapter[dict[str, JsonValue]] = TypeAdapter(
-    cast(Any, dict[str, PydanticJsonValue])
-)
 
 
 class PluginRuleSettings(StrictModel):
@@ -52,24 +46,23 @@ class PluginPolicy(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def normalize_rule_settings(cls, value: object) -> object:
-        try:
-            document = _PLUGIN_TABLE_ADAPTER.validate_python(value, strict=True)
-        except ValidationError:
-            return value
+        match value:
+            case Mapping():
+                document = _json_object(cast(object, value))
+            case _:
+                return value
         raw_rules = document.get("rules")
         if raw_rules is None:
             return document
         try:
-            rule_mapping = _PLUGIN_TABLE_ADAPTER.validate_python(raw_rules, strict=True)
-        except ValidationError as error:
+            rule_mapping = _json_object(raw_rules)
+        except TypeError as error:
             raise TypeError("plugin rules must map selectors to TOML tables") from error
         normalized: list[PluginRuleSettings] = []
         for selector, raw_settings in sorted(rule_mapping.items()):
             try:
-                settings = _PLUGIN_TABLE_ADAPTER.validate_python(
-                    raw_settings, strict=True
-                )
-            except ValidationError as error:
+                settings = _json_object(raw_settings)
+            except TypeError as error:
                 raise TypeError(
                     "plugin rules must map selectors to TOML tables"
                 ) from error
@@ -122,38 +115,51 @@ class PluginPolicy(StrictModel):
 
 def _validate_json_value(source: str) -> JsonValue:
     """Decode standard JSON values without importing runtime support code."""
-    value = cast(JsonValue, _JSON_VALUE_ADAPTER.validate_json(source))
-    match value:
-        case float() as number if not math.isfinite(number):
-            raise ValueError("JSON numbers must be finite")
-        case dict():
-            for nested in value.values():
-                _validate_nested_json_value(nested)
-        case list():
-            for nested in value:
-                _validate_nested_json_value(nested)
-        case _:
-            pass
-    return value
+    try:
+        decoded: object = json.JSONDecoder(parse_constant=_reject_json_constant).decode(
+            source
+        )
+    except json.JSONDecodeError as error:
+        raise ValueError("plugin rule settings must contain valid JSON") from error
+    return _normalize_json_value(decoded)
 
 
-def _validate_nested_json_value(value: JsonValue) -> None:
+def _normalize_json_value(value: object) -> JsonValue:
     match value:
-        case float() as number if not math.isfinite(number):
+        case float() as number if math.isfinite(number):
+            return number
+        case float():
             raise ValueError("JSON numbers must be finite")
-        case dict():
-            for nested in value.values():
-                _validate_nested_json_value(nested)
         case list():
-            for nested in value:
-                _validate_nested_json_value(nested)
+            return [
+                _normalize_json_value(item) for item in cast(Sequence[object], value)
+            ]
+        case dict():
+            normalized: dict[str, JsonValue] = {}
+            for key, nested in cast(Mapping[object, object], value).items():
+                match key:
+                    case str() as string_key:
+                        normalized[string_key] = _normalize_json_value(nested)
+                    case _:
+                        raise TypeError("plugin rule setting keys must be strings")
+            return normalized
+        case None | bool() | int() | str():
+            return value
         case _:
-            return
+            raise TypeError("plugin rule settings must contain JSON values")
+
+
+def _json_object(value: object) -> dict[str, JsonValue]:
+    match _normalize_json_value(value):
+        case dict() as mapping:
+            return mapping
+        case _:
+            raise TypeError("plugin rule settings must be a TOML table")
 
 
 def _require_json_object(value: JsonValue) -> dict[str, JsonValue]:
-    match value:
-        case dict():
-            return value
-        case _:
-            raise TypeError("plugin rule settings must be a TOML table")
+    return _json_object(value)
+
+
+def _reject_json_constant(value: str) -> None:
+    raise ValueError(f"JSON constant {value} is not permitted")
