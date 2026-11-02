@@ -28,6 +28,13 @@ The later `embedded-semantic-overrides` rule is not included in these runs. Its
 detector requires a consumer-specific mapping and source-anchor contract; this
 sample did not configure one, so it has no calibration result here.
 
+An additional non-fixture negative probe scanned Click
+[`2247b35ea1c47c727d7a06e51fa280e12a863ff6`](https://github.com/pallets/click/tree/2247b35ea1c47c727d7a06e51fa280e12a863ff6)
+(`src/click/**/*.py`, 17 files) with the same thresholds, fields, and helper
+names `format_filename`, `formatting.format_message`, and `termui.echo`. The
+four rules above produced zero findings in 0.172 seconds. This does not add a
+positive candidate or support a precision estimate.
+
 Tests, generated files, and vendored files were excluded. The scan produced no
 candidates to manually classify. Therefore this sample does **not** estimate
 precision, does not establish the requested 90% high-confidence target, and
