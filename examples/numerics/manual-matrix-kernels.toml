@@ -1,0 +1,23 @@
+schema_version = 1
+
+[files]
+include = ["src/numerics/*.py"]
+exclude = []
+
+[checks.manual_matrix_kernels]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/numerics/*.py"]
+
+[orchestration]
+default_profile = "numerical-review"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Manual matrix kernels"
+rule = "manual-matrix-kernels"
+rollout = "provisional"
+
+[[orchestration.profiles]]
+name = "numerical-review"
+steps = ["Manual matrix kernels"]

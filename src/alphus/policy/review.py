@@ -78,6 +78,18 @@ class NumericLiteralPolicy(PythonSourceScanPolicy):
         return self
 
 
+class ManualMatrixKernelPolicy(PythonSourceScanPolicy):
+    """Opt-in detector scope for one narrowly recognized matrix product form."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+
 class ScipyConstantsPolicy(PythonSourceScanPolicy):
     """Advisory SciPy physical and unit-factor catalog for Python source."""
 
