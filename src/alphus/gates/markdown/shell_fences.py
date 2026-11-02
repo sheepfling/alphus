@@ -40,6 +40,7 @@ _LABELS: Mapping[str, str] = MappingProxyType(
 _HERE_DOCUMENT = re.compile(
     r"(?<!<)<<(?P<tabs>-)?[ \t]*(?:"
     r"'(?P<single>[^']+)'|\"(?P<double>[^\"]+)\"|"
+    r"\\(?P<escaped>[A-Za-z_][A-Za-z0-9_]*)|"
     r"(?P<bare>[A-Za-z_][A-Za-z0-9_]*))"
 )
 _WINDOWS_PATH = re.compile(
@@ -51,10 +52,15 @@ _POWERSHELL_DELEGATION = re.compile(
     r"(?i)^\s*(?:pwsh|powershell)(?:\.exe)?\s+(?:-[A-Za-z][A-Za-z-]*\s+)*"
     r"-Command(?:\s|$)"
 )
+_MULTILINE_POWERSHELL_DELEGATION = re.compile(
+    r"(?i)^\s*(?:pwsh|powershell)(?:\.exe)?\s+(?:-[A-Za-z][A-Za-z-]*\s+)*"
+    r"-Command[ \t]+(?P<quote>['\"])[ \t]*$"
+)
 _CMD_ENV = re.compile(r"%[A-Za-z_][A-Za-z0-9_]*%")
 _DATE_COMMAND = re.compile(r"(?i)\bdate(?:\s|$)")
+_DATE_FORMAT_DIRECTIVE = r"%(?:[-_0^#]*\d{0,2})?(?:E|O)?[A-Za-z+]"
 _DATE_FORMAT_SEQUENCE = re.compile(
-    r"%(?:[-_0^#]*\d{0,2})?(?:E|O)?[A-Za-z+](?:%(?:[-_0^#]*\d{0,2})?(?:E|O)?[A-Za-z+])+"
+    _DATE_FORMAT_DIRECTIVE + rf"(?:(?:[-_./:T])?{_DATE_FORMAT_DIRECTIVE})+"
 )
 _POWERSHELL_COMMAND = re.compile(
     r"(?i)^(?:\s*&\s*)?(?:Write-Host|Write-Output|Get-ChildItem|Set-Location|"
@@ -72,7 +78,7 @@ _CMD_COMMAND = re.compile(
 _BASH_LOOP = re.compile(r"(?i)^\s*(?:for|select)\s+\$?[A-Za-z_][A-Za-z0-9_]*\s+in\b")
 _BASH_WHILE_LOOP = re.compile(r"(?i)^\s*while\b.*\bdo\b")
 _TRANSCRIPT_PROMPT = re.compile(
-    r"^(?:\$[ \t]+|PS(?:[ \t]+[^>\r\n]*)?>[ \t]+|"
+    r"^[ \t]*(?:\$[ \t]+|PS(?:[ \t]+[^>\r\n]*)?>[ \t]+|"
     r"[A-Za-z]:\\[^>\r\n]*>[ \t]+|>>>[ \t]+)"
 )
 
@@ -227,7 +233,10 @@ def _heredoc_delimiters(raw: str, visible: str) -> tuple[tuple[str, bool], ...]:
         if visible[match.start() : match.start() + 2] != "<<":
             continue
         delimiter = (
-            match.group("single") or match.group("double") or match.group("bare")
+            match.group("single")
+            or match.group("double")
+            or match.group("escaped")
+            or match.group("bare")
         )
         if delimiter is not None:
             delimiters.append((delimiter, match.group("tabs") is not None))
@@ -249,7 +258,11 @@ def _visible_shell_lines(fence: _Fence, shell: str) -> tuple[_SourceLine, ...]:
             if candidate == delimiter:
                 pending_heredocs.popleft()
             continue
-        if shell == "bash" and _POWERSHELL_DELEGATION.match(source.text):
+        if (
+            shell == "bash"
+            and _POWERSHELL_DELEGATION.match(source.text)
+            and _MULTILINE_POWERSHELL_DELEGATION.match(source.text) is None
+        ):
             output.append(_SourceLine(source.number, " " * len(source.text)))
             continue
         visible = _mask_shell_line(source.text, shell, state)
@@ -282,12 +295,17 @@ def _first_match(
 
 def _cmd_environment_evidence(lines: Sequence[_SourceLine]) -> _Evidence | None:
     """Find cmd variable expansion without mistaking adjacent date directives."""
+    in_date_continuation = False
     for source in lines:
         candidate = source.text
-        if _DATE_COMMAND.search(candidate):
+        if _DATE_COMMAND.search(candidate) or in_date_continuation:
             candidate = _DATE_FORMAT_SEQUENCE.sub(
                 lambda match: " " * len(match.group()), candidate
             )
+            trailing_backslashes = len(source.text) - len(source.text.rstrip("\\"))
+            in_date_continuation = trailing_backslashes % 2 == 1
+        else:
+            in_date_continuation = False
         match = _CMD_ENV.search(candidate)
         if match is not None:
             return _Evidence("cmd", source.number, match.group(0))

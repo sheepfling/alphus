@@ -83,6 +83,34 @@ def test_date_format_percent_tokens_are_not_cmd_environment_evidence(
     assert "cmd syntax" in findings[0].message
 
 
+@pytest.mark.parametrize(
+    "date_command",
+    [
+        "RUN_ID=$(date -u \\\n  +%Y%m%dT%H%M%SZ)",
+        "RUN_ID=$(date -u +%Y_%m_%d)",
+    ],
+)
+def test_date_formats_across_bash_continuations_are_not_cmd_syntax(
+    tmp_path: Path, date_command: str
+) -> None:
+    findings = _check(tmp_path, f"```bash\n{date_command}\n```\n")
+
+    assert findings == []
+
+
+def test_date_formats_and_real_cmd_environment_syntax_stay_distinguishable(
+    tmp_path: Path,
+) -> None:
+    findings = _check(
+        tmp_path,
+        "```bash\nRUN_ID=$(date -u +%Y_%m_%d)\necho %PATH%\n```\n"
+        "```bash\ndate; echo %PATH%\n```\n",
+    )
+
+    assert [finding.line for finding in findings] == [3, 6]
+    assert all("cmd syntax" in finding.message for finding in findings)
+
+
 def test_flags_bash_loop_in_indented_blockquote_pwsh_fence(tmp_path: Path) -> None:
     findings = _check(
         tmp_path,
@@ -143,6 +171,41 @@ def test_ignores_comments_heredocs_and_command_transcripts(tmp_path: Path) -> No
         "$ .venv\\Scripts\\python truss.py C:\\dev\\repo\n"
         "C:\\dev\\repo\n"
         "```\n",
+    )
+
+    assert findings == []
+
+
+def test_escaped_bash_heredoc_delimiter_hides_its_document_body(
+    tmp_path: Path,
+) -> None:
+    findings = _check(
+        tmp_path,
+        "```bash\ncat <<\\END\n$env:APP_HOME = heredoc-data\nEND\necho %PATH%\n```\n",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 5
+    assert "cmd syntax" in findings[0].message
+
+
+def test_multiline_quoted_pwsh_command_is_not_scanned_as_bash(
+    tmp_path: Path,
+) -> None:
+    findings = _check(
+        tmp_path,
+        "```bash\npwsh -Command \"\n$env:APP_HOME = 'C:\\app'\n\"\necho %PATH%\n```\n",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 5
+    assert "cmd syntax" in findings[0].message
+
+
+def test_indented_shell_transcript_prompts_are_ignored(tmp_path: Path) -> None:
+    findings = _check(
+        tmp_path,
+        "```bash\n    $ echo %PATH%\n    %PATH%\n```\n",
     )
 
     assert findings == []
