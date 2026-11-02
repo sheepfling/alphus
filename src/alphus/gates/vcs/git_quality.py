@@ -9,7 +9,11 @@ from pathlib import Path
 
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
-from alphus.policy.repository import GitAttributeRequirement
+from alphus.policy.repository import (
+    GitAttributeRequirement,
+    TrackedGeneratedOutput,
+    TrackedGeneratedProvenance,
+)
 from alphus.support.git import git_output as _git
 from alphus.support.git import run_git
 from alphus.support.inventory import matches_path
@@ -84,8 +88,13 @@ def _selected_languages(paths: AbstractSet[str]) -> set[str]:
     return selected
 
 
-def check_ignores(root: Path, languages: Sequence[str] = ()) -> list[Finding]:
-    """Check effective ignore rules and generated files already in the index."""
+def check_ignores(
+    root: Path,
+    languages: Sequence[str] = (),
+    generated_outputs: Sequence[TrackedGeneratedOutput] = (),
+    generated_provenance: Sequence[TrackedGeneratedProvenance] = (),
+) -> list[Finding]:
+    """Check ignore rules and explicit tracked-output contracts."""
     root = _checkout(root)
     tracked = _tracked(root)
     selected = set(languages) if languages else _selected_languages(tracked)
@@ -114,9 +123,29 @@ def check_ignores(root: Path, languages: Sequence[str] = ()) -> list[Finding]:
                     "git check-ignore failed: "
                     + result.stderr.decode("utf-8", "replace").strip()
                 )
+    native_generated_paths: set[str] = set()
+    intentional_paths = {item.path for item in generated_provenance}
     for path in sorted(tracked):
         for rule in rules:
             if matches_path(path, rule.pattern):
+                native_generated_paths.add(path)
+                contract = next(
+                    (
+                        item
+                        for item in generated_outputs
+                        if path not in intentional_paths
+                        and matches_path(path, item.pattern)
+                    ),
+                    None,
+                )
+                contract_evidence = (
+                    ""
+                    if contract is None
+                    else (
+                        f"; declared {contract.classification} from "
+                        f"{contract.generator} under contract {contract.pattern!r}"
+                    )
+                )
                 findings.append(
                     Finding(
                         rule_id=rule_tag(
@@ -126,7 +155,31 @@ def check_ignores(root: Path, languages: Sequence[str] = ()) -> list[Finding]:
                             "tracked-generated-file",
                         ),
                         path=path,
-                        message="Generated path is tracked; an ignore rule does not untrack it",
+                        message=(
+                            "Generated path is tracked; an ignore rule does not "
+                            f"untrack it{contract_evidence}"
+                        ),
+                    )
+                )
+                break
+    for path in sorted(tracked - intentional_paths - native_generated_paths):
+        for contract in generated_outputs:
+            if matches_path(path, contract.pattern):
+                findings.append(
+                    Finding(
+                        rule_id=rule_tag(
+                            Scope.REPOSITORY,
+                            Framework.GIT,
+                            Category.HYGIENE,
+                            "tracked-generated-output",
+                        ),
+                        path=path,
+                        severity="info",
+                        message=(
+                            f"Tracked {contract.classification} matches output contract "
+                            f"{contract.pattern!r} from {contract.generator}; review "
+                            "whether this path has declared intentional provenance"
+                        ),
                     )
                 )
                 break

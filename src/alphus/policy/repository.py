@@ -46,12 +46,49 @@ class GitAttributeRequirement(StrictModel):
         return value
 
 
+class TrackedGeneratedOutput(StrictModel):
+    """One explicit generator output path contract for tracked-file review."""
+
+    pattern: str
+    generator: str
+    classification: str = "generated output"
+
+    @field_validator("pattern")
+    @classmethod
+    def validate_pattern(cls, pattern: str) -> str:
+        return validate_patterns((pattern,))[0]
+
+    @field_validator("generator", "classification")
+    @classmethod
+    def validate_description(cls, value: str) -> str:
+        return validate_one_line_message(value)
+
+
+class TrackedGeneratedProvenance(StrictModel):
+    """One tracked file intentionally retained with declared provenance."""
+
+    path: str
+    reason: str
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, path: str) -> str:
+        return validate_single_path(path, "generated-output provenance path")
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, reason: str) -> str:
+        return validate_one_line_message(reason)
+
+
 class GitRepositoryPolicy(StrictModel):
     """Shared settings for fast Git ignores and infrequent history audits."""
 
     languages: tuple[SourceLanguage, ...] = ()
     max_blob_mib: Annotated[float, Field(gt=0)] = 5.0
     attributes: tuple[GitAttributeRequirement, ...] = ()
+    generated_outputs: tuple[TrackedGeneratedOutput, ...] = ()
+    generated_provenance: tuple[TrackedGeneratedProvenance, ...] = ()
 
     @field_validator("languages")
     @classmethod
@@ -71,6 +108,30 @@ class GitRepositoryPolicy(StrictModel):
             "Git attribute requirements must not repeat a path and attribute",
         )
         return attributes
+
+    @field_validator("generated_outputs")
+    @classmethod
+    def validate_generated_outputs(
+        cls, outputs: Sequence[TrackedGeneratedOutput]
+    ) -> tuple[TrackedGeneratedOutput, ...]:
+        values = tuple(outputs)
+        require_unique(
+            tuple(item.pattern for item in values),
+            "generated output patterns must be unique",
+        )
+        return values
+
+    @field_validator("generated_provenance")
+    @classmethod
+    def validate_generated_provenance(
+        cls, provenance: Sequence[TrackedGeneratedProvenance]
+    ) -> tuple[TrackedGeneratedProvenance, ...]:
+        values = tuple(provenance)
+        require_unique(
+            tuple(item.path for item in values),
+            "generated output provenance paths must be unique",
+        )
+        return values
 
 
 class PathRule(StrictModel):

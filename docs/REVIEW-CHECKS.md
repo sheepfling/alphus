@@ -577,8 +577,11 @@ unknown rather than proof of a defect.
   does not prove a finite domain.
 - **Keep timezone awareness and UTC distinct:** Ruff `DTZ` covers naive calls.
   Aware types and UTC normalization need boundary contracts.
-- **Separate generated output from inputs:** Git inventory covers configured
-  build artifacts. Path names alone do not prove generatedness or writes.
+- **Separate generated output from inputs:** Git inventory covers known build
+  artifacts and explicitly declared tracked-output contracts with exact
+  provenance exceptions. Untracked files and paths outside a consumer contract
+  are ignored; this does not infer static write locations or generator
+  behavior.
 
 The runnable [pytest-style consumer profile](../examples/python/pytest-style.toml)
 shows native rule selection. The Pydantic example above shows the separate
@@ -603,9 +606,10 @@ precision claim:
   overlap and dynamic build metadata must remain unknown when unresolved.
 - Flush/fsync/replace review needs each selected writer's output role and its
   atomic-visibility or crash-durability requirements.
-- Generated-output review needs declared output/generator paths and provenance
-  for versioned fixtures and operator-maintained inputs. A filesystem path
-  alone cannot distinguish a write from a value.
+- Static generated-output write-location review needs declared output/generator
+  paths and provenance for versioned fixtures and operator-maintained inputs.
+  The Git gate handles only paths already tracked and matching an explicit
+  contract; a filesystem path alone cannot distinguish a write from a value.
 - Finite-state review needs selected fields/types and their declared closed
   variants. Repeated strings alone do not supply that contract.
 - Payload/schema review needs payload paths, the authoritative schema and
@@ -842,4 +846,5 @@ hygiene control: splitting files below a limit does not demonstrate improved
 cohesion. Dependency, responsibility, public-surface, and history analysis are
 not part of this first slice. Fewer files, renamed prefixes, or a new directory
 do not by themselves demonstrate better boundaries.
+
 
