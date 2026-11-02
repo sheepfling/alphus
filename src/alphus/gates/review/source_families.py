@@ -565,8 +565,10 @@ def _cpp_include_index(
             continue
 
         edges: list[tuple[int, Path | None]] = []
+        in_block_comment = False
         for line_number, line in enumerate(text.splitlines(), 1):
-            match = _CPP_INCLUDE.fullmatch(line)
+            visible, in_block_comment = _strip_cpp_comments(line, in_block_comment)
+            match = _CPP_INCLUDE.fullmatch(visible)
             if match is None:
                 continue
             include = match.group(1)
@@ -600,6 +602,51 @@ def _cpp_include_index(
         failed,
         budget_exhausted,
     )
+
+
+def _strip_cpp_comments(line: str, in_block_comment: bool) -> tuple[str, bool]:
+    """Remove C/C++ comments outside quoted literals for lexical directives.
+
+    This intentionally does not evaluate preprocessing conditions or splices.
+    """
+    output: list[str] = []
+    quote: str | None = None
+    escaped = False
+    index = 0
+    while index < len(line):
+        char = line[index]
+        following = line[index + 1] if index + 1 < len(line) else ""
+        if in_block_comment:
+            if char == "*" and following == "/":
+                in_block_comment = False
+                index += 2
+                continue
+            index += 1
+            continue
+        if quote is not None:
+            output.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == quote:
+                quote = None
+            index += 1
+            continue
+        if char in {'"', "'"}:
+            quote = char
+            output.append(char)
+            index += 1
+            continue
+        if char == "/" and following == "/":
+            break
+        if char == "/" and following == "*":
+            in_block_comment = True
+            index += 2
+            continue
+        output.append(char)
+        index += 1
+    return "".join(output), in_block_comment
 
 
 def _python_import_evidence(
@@ -1461,17 +1508,20 @@ def source_family_findings(
             for path in members
             if path.suffix.lower() in _CPP_EXTENSIONS
         }
-        cpp_index = _cpp_include_index(
-            checkout,
-            selected,
-            family_sources,
-            policy.max_import_analysis_bytes,
-        )
-        for _, _, members in retained:
-            key = tuple(sorted(path.as_posix() for path in members))
-            context, notes = _cpp_include_evidence(members, policy, cpp_index)
-            cpp_contexts[key] = context
-            incomplete_notes.extend(notes)
+        if family_sources:
+            cpp_index = _cpp_include_index(
+                checkout,
+                selected,
+                family_sources,
+                policy.max_import_analysis_bytes,
+            )
+            for _, _, members in retained:
+                if not any(path in family_sources for path in members):
+                    continue
+                key = tuple(sorted(path.as_posix() for path in members))
+                context, notes = _cpp_include_evidence(members, policy, cpp_index)
+                cpp_contexts[key] = context
+                incomplete_notes.extend(notes)
     if policy.javascript_import_evidence:
         for _, _, members in retained:
             key = tuple(sorted(path.as_posix() for path in members))

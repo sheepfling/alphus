@@ -291,6 +291,60 @@ def test_cpp_include_evidence_reports_selected_external_family_consumers(
     )
 
 
+def test_cpp_include_evidence_ignores_block_comments_and_accepts_trailing_comments(
+    tmp_path: Path,
+) -> None:
+    family = [
+        _write(tmp_path, f"include/gateway_{name}.hpp")
+        for name in ("client", "server", "routes", "auth", "cache")
+    ]
+    (tmp_path / "include/gateway_client.hpp").write_text(
+        "/* ignored directive follows\n"
+        '#include "gateway_server.hpp"\n'
+        "*/\n"
+        '#include "gateway_routes.hpp" // accepted trailing comment\n',
+        encoding="utf-8",
+    )
+
+    findings = source_family_findings(
+        tmp_path,
+        family,
+        SourceFamilyPolicy(min_family_files=5, cpp_include_evidence=True),
+    )
+
+    assert len(findings) == 1
+    message = findings[0].message
+    assert "1 resolved edge(s) target another family member" in message
+    assert "member include/gateway_client.hpp:4 → include/gateway_routes.hpp" in message
+    assert (
+        "member include/gateway_client.hpp:2 → include/gateway_server.hpp"
+        not in message
+    )
+
+
+def test_cpp_include_budget_is_not_spent_without_a_cpp_family(tmp_path: Path) -> None:
+    paths = [
+        _write(tmp_path, f"src/gateway_{name}.py", 1)
+        for name in ("client", "server", "routes", "auth", "cache")
+    ]
+    unrelated = _write(tmp_path, "src/unrelated.cpp")
+    (tmp_path / unrelated).write_text(" " * 256, encoding="utf-8")
+
+    findings = source_family_findings(
+        tmp_path,
+        [*paths, unrelated],
+        SourceFamilyPolicy(
+            min_family_files=5,
+            cpp_include_evidence=True,
+            max_import_analysis_bytes=32,
+        ),
+    )
+
+    assert len(findings) == 1
+    assert "C/C++ include evidence" not in findings[0].message
+    assert "C/C++ file(s) could not be analyzed" not in findings[0].message
+
+
 def test_cpp_include_budget_reserves_all_family_cores_before_consumers(
     tmp_path: Path,
 ) -> None:
