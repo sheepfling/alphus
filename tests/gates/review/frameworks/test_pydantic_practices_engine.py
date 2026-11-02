@@ -46,6 +46,82 @@ def test_dump_revalidation_detects_inline_json_and_skips_plain_validation() -> N
     ]
 
 
+def test_declared_domain_return_contract_reviews_direct_model_dump() -> None:
+    source = (
+        "from app.models import Summary as Result\n"
+        "def build_summary(summary: Result) -> Result:\n"
+        "    return summary.model_dump()\n"
+        "def write_json(summary: Result) -> dict[str, object]:\n"
+        "    return summary.model_dump()\n"
+    )
+    policy = PydanticPracticePolicy.model_validate(
+        {
+            "extensions": [".py"],
+            "external_model_names": ["Summary"],
+            "domain_return_contracts": [
+                {
+                    "path": "src/domain.py",
+                    "function": "build_summary",
+                    "model": "app.models.Summary",
+                }
+            ],
+        }
+    )
+
+    findings = pydantic_practice_findings(source, policy, path="src/domain.py")
+
+    assert [
+        (item.rule_id, item.line, item.severity, item.path) for item in findings
+    ] == [
+        (
+            "alphus/python/pydantic/correctness/model-dump-domain-return",
+            3,
+            "info",
+            "src/domain.py",
+        )
+    ]
+    assert "does not prove the conversion is unsafe" in findings[0].message
+
+
+def test_domain_return_contract_requires_declared_identity_and_exact_scope() -> None:
+    source = (
+        "from app.models import Summary\n"
+        "def build_summary(summary: Summary) -> Summary:\n"
+        "    return summary.model_dump()\n"
+    )
+    policy = PydanticPracticePolicy.model_validate(
+        {
+            "extensions": [".py"],
+            "external_model_names": ["OtherSummary"],
+            "domain_return_contracts": [
+                {
+                    "path": "src/domain.py",
+                    "function": "build_summary",
+                    "model": "app.models.OtherSummary",
+                }
+            ],
+        }
+    )
+
+    assert pydantic_practice_findings(source, policy, path="src/domain.py") == []
+    assert pydantic_practice_findings(source, policy, path="src/io.py") == []
+
+
+def test_domain_return_contracts_reject_duplicate_selectors() -> None:
+    contract = {
+        "path": "src/domain.py",
+        "function": "build_summary",
+        "model": "app.models.Summary",
+    }
+    with pytest.raises(ValueError, match="selectors must be unique"):
+        PydanticPracticePolicy.model_validate(
+            {
+                "extensions": [".py"],
+                "domain_return_contracts": [contract, contract],
+            }
+        )
+
+
 def test_rebinding_and_nested_functions_do_not_carry_dump_state() -> None:
     source = (
         "def output(model, raw):\n"

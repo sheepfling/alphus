@@ -305,6 +305,26 @@ class PositionalInterfacePolicy(PythonSourceScanPolicy):
     report_same_type_primitives: bool = True
 
 
+class PydanticDomainReturnContract(StrictModel):
+    """One selected function that promises to return a declared domain model."""
+
+    path: str
+    function: str
+    model: str
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, value: str) -> str:
+        return validate_single_path(value, "Pydantic domain return path")
+
+    @field_validator("function", "model")
+    @classmethod
+    def validate_dotted_identifiers(cls, value: str) -> str:
+        if any(not part.isidentifier() for part in value.split(".")):
+            raise ValueError("Pydantic domain return names must be dotted identifiers")
+        return value
+
+
 class PydanticPracticePolicy(PythonSourceScanPolicy):
     """Opt-in review of Pydantic model validation and declaration practices."""
 
@@ -321,6 +341,8 @@ class PydanticPracticePolicy(PythonSourceScanPolicy):
     report_unconstrained_any: bool = False
     external_model_names: tuple[str, ...] = ()
     public_model_paths: tuple[str, ...] = ()
+    domain_return_contracts: tuple[PydanticDomainReturnContract, ...] = ()
+    domain_return_severity: Severity = "info"
 
     @field_validator("external_model_names")
     @classmethod
@@ -336,6 +358,16 @@ class PydanticPracticePolicy(PythonSourceScanPolicy):
         normalized = validate_patterns(paths)
         require_unique(normalized, "public model paths must be unique")
         return normalized
+
+    @field_validator("domain_return_contracts")
+    @classmethod
+    def validate_domain_return_contracts(
+        cls, contracts: Sequence[PydanticDomainReturnContract]
+    ) -> tuple[PydanticDomainReturnContract, ...]:
+        values = tuple(contracts)
+        selectors = tuple((item.path, item.function, item.model) for item in values)
+        require_unique(selectors, "Pydantic domain return selectors must be unique")
+        return values
 
     @model_validator(mode="after")
     def validate_public_any_scope(self) -> Self:

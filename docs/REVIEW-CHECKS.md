@@ -484,15 +484,36 @@ and [performance](https://pydantic.dev/docs/validation/latest/concepts/performan
 See the [runnable Pydantic consumer example](../examples/consumer/pydantic-practices/README.md)
 for a complete opt-in policy, plan command, and JSON findings run.
 
+For selected internal functions that declare a domain-model result, a consumer
+may add an exact `domain_return_contracts` entry:
+
+```toml
+[[checks.pydantic_practices.domain_return_contracts]]
+path = "src/domain/summary.py"
+function = "build_summary"
+model = "app.models.Summary"
+```
+
+`model-dump-domain-return` is informational and requires the selected function
+to return the same locally resolved model type it accepts as a parameter while
+directly returning that parameter's `model_dump()` result. A local Pydantic model
+is recognized from its declaration; an imported model must also be named in
+`external_model_names` so its identity is consumer-declared. The explicit
+selector declares an internal domain-return boundary. Unselected JSON/CSV writers,
+external adapters, unresolved aliases, copied dumps, and cross-function flow
+are not inferred. Review whether serialization belongs at an I/O boundary; the
+finding does not establish that a conversion is unsafe and never recommends
+deleting validation or changing wire behavior automatically.
+
 ## Project-convention coverage and ownership
 
 The checks below are review aids with independent owners. A repository should
 select only the paths and contracts it maintains; lack of static evidence is
 unknown rather than proof of a defect.
 
-- **Preserve domain models:** Pydantic reports dump/revalidation; input-contracts
-  reports configured direct escapes. Identity and cross-module flow need a
-  consumer contract.
+- **Preserve domain models:** Pydantic reports dump/revalidation and selected
+  direct domain-return dumps; input-contracts reports configured direct escapes.
+  Identity and cross-module flow need a consumer contract.
 - **Match collection inputs:** input-contracts follows direct uses and simple
   aliases; mutation and uncertain escapes are preserved.
 - **Review flush/fsync/replace:** human review needs output-role and

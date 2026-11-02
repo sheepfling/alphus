@@ -7,7 +7,7 @@ from collections.abc import Iterable, Sequence
 from collections.abc import Set as AbstractSet
 from pathlib import Path
 
-from alphus.config import PydanticPracticePolicy
+from alphus.config import PydanticDomainReturnContract, PydanticPracticePolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.support.inventory import matches_path
@@ -980,6 +980,93 @@ def _custom_init_lines(module: ast.Module, models: AbstractSet[str]) -> list[int
     )
 
 
+class _FunctionReturnCollector(ast.NodeVisitor):
+    """Collect returns from one function body without entering nested scopes."""
+
+    def __init__(self, function: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        self.function = function
+        self.returns: list[ast.Return] = []
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        if node is self.function:
+            for statement in node.body:
+                self.visit(statement)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        if node is self.function:
+            for statement in node.body:
+                self.visit(statement)
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        return
+
+    def visit_Lambda(self, node: ast.Lambda) -> None:
+        return
+
+    def visit_Return(self, node: ast.Return) -> None:
+        self.returns.append(node)
+        self.generic_visit(node)
+
+
+def _declared_domain_return_dump_lines(
+    module: ast.Module,
+    contract: PydanticDomainReturnContract,
+    aliases: ImportAliases,
+) -> list[tuple[int, str]]:
+    """Find selected functions returning a dump from their declared model input."""
+    selected: dict[str, list[ast.FunctionDef | ast.AsyncFunctionDef]] = {}
+
+    def visit(statements: Sequence[ast.stmt], scope: tuple[str, ...]) -> None:
+        for statement in statements:
+            match statement:
+                case ast.ClassDef(name=name, body=body):
+                    visit(body, (*scope, name))
+                case ast.FunctionDef(name=name) | ast.AsyncFunctionDef(name=name):
+                    key = ".".join((*scope, name))
+                    selected.setdefault(key, []).append(statement)
+                case _:
+                    pass
+
+    visit(module.body, ())
+    evidence: set[tuple[int, str]] = set()
+    for function in selected.get(contract.function, []):
+        if (
+            function.returns is None
+            or canonical_expression_name(function.returns, aliases) != contract.model
+        ):
+            continue
+        parameters = [
+            *function.args.posonlyargs,
+            *function.args.args,
+            *function.args.kwonlyargs,
+        ]
+        parameters.extend(
+            parameter
+            for parameter in (function.args.vararg, function.args.kwarg)
+            if parameter is not None
+        )
+        model_parameters = {
+            parameter.arg
+            for parameter in parameters
+            if parameter.annotation is not None
+            and canonical_expression_name(parameter.annotation, aliases)
+            == contract.model
+        }
+        if not model_parameters:
+            continue
+        returns = _FunctionReturnCollector(function)
+        returns.visit(function)
+        for returned in returns.returns:
+            match returned.value:
+                case ast.Call(
+                    func=ast.Attribute(value=ast.Name(id=parameter), attr=method)
+                ) if parameter in model_parameters and method in _DUMP_METHODS:
+                    evidence.add((returned.lineno, parameter))
+                case _:
+                    pass
+    return sorted(evidence)
+
+
 def pydantic_practice_findings(
     source: str, policy: PydanticPracticePolicy, *, path: str = "<source>"
 ) -> list[Finding]:
@@ -988,6 +1075,37 @@ def pydantic_practice_findings(
     aliases = import_aliases(module)
     models = _model_names(module, aliases)
     findings: list[Finding] = []
+    for contract in policy.domain_return_contracts:
+        if contract.path != path:
+            continue
+        model_is_declared = contract.model in models or (
+            contract.model.rsplit(".", maxsplit=1)[-1] in policy.external_model_names
+        )
+        if not model_is_declared:
+            continue
+        for line, parameter in _declared_domain_return_dump_lines(
+            module, contract, aliases
+        ):
+            findings.append(
+                Finding(
+                    rule_id=rule_tag(
+                        Scope.PYTHON,
+                        Framework.PYDANTIC,
+                        Category.CORRECTNESS,
+                        "model-dump-domain-return",
+                    ),
+                    path=path,
+                    line=line,
+                    severity=policy.domain_return_severity,
+                    message=(
+                        f"Selected domain-return contract {contract.function} "
+                        f"declares {contract.model}, but returns a dump of the "
+                        f"declared model parameter {parameter}. Review whether "
+                        "serialization belongs at an I/O boundary; this advisory "
+                        "does not prove the conversion is unsafe."
+                    ),
+                )
+            )
     if policy.report_dump_revalidation:
         findings.extend(
             Finding(
