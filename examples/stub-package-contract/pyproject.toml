@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sample-contract-stubs"
+version = "0.1.0"
+requires-python = ">=3.10"
+description = "Small installed-wheel example for stub contract checks"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+sample_contract = ["*.pyi", "py.typed"]

@@ -123,13 +123,17 @@ MYPYPATH and VIRTUAL_ENV are removed; user-site loading is disabled. The built
 consumer wheel is installed in the target. Fresh venvs are the reproducible
 isolation boundary; the verifier does not erase unrelated preinstalled packages.
 
-`--report` records both identities, exact stage argv, exits and elapsed times.
-A failure stops later stages, leaves `passed=false`, and preserves native output
-in the caller's log. Spawn failures record exit 127 and the error. Preflight
-errors exit before stages; an old report is removed before preflight, so absence
-of a new report cannot masquerade as a prior success. A missing target tool
-fails in that target; there is no checker fallback. Target smoke or dependency
-failure fails the run even when static fixtures pass.
+`--report` records both interpreter identities, platform and architecture,
+selected runtime distribution versions, source revision, built-wheel identity
+and digest, exact stage argv, exits, elapsed times, and bounded stage output.
+The report distinguishes passed, failed, not-run-after-failure, and omitted
+optional lanes. For each marked negative fixture, the stage output includes the
+checker name, matched lines, and native diagnostics. A failure stops later
+stages and leaves `passed=false`. Spawn failures record exit 127 and the error.
+Preflight errors exit before stages; an old report is removed before preflight,
+so absence of a new report cannot masquerade as a prior success. A missing
+target tool fails in that target; there is no checker fallback. Target smoke or
+dependency failure fails the run even when static fixtures pass.
 
 The POSIX stub action creates distinct checker and target venvs even when their
 versions match. Set `python-version: "3.12"`, `target-python-version: "3.10"`
@@ -154,6 +158,21 @@ The fixture runner probes every selected checker module before running cases.
 The shared `alphus.support.tool_probe` also locates native commands; the C++
 artifact scanner uses it for objdump. The installed-stub verifier still needs
 Mypy in its target environment for the separate `mypy.stubtest` stage.
+
+[`examples/stub-package-contract`](../examples/stub-package-contract) is a
+small installed-wheel recipe with `typing_checkers = ["mypy", "pyright",
+"ty"]`. It checks an annotated `list[str]` variable, recursive lists, marked
+negative tuple/scalar inputs, `stubtest`, and runtime behavior against the
+installed artifact. The example intentionally keeps checker and target venvs
+separate. Its README records the one local interpreter combination actually
+run; it does not claim the full declared compatibility matrix.
+
+For split runtime and stub distributions, list required runtime distribution
+names in `verification.runtime_distributions`. The verifier records their
+installed versions from the target interpreter and fails preflight if a
+configured runtime distribution is missing. The stub wheel's distribution
+name, version, filename, byte size, and SHA-256 are recorded separately from
+the source checkout revision.
 
 Positive examples require exit zero and no errors. Negative contracts require
 an exact set of marked lines, or a configured diagnostic count, plus any

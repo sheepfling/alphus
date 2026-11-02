@@ -256,6 +256,31 @@ def test_mypy_cache_is_temporary_and_subprocess_uses_no_shell(
     assert "PASS mypy positive.py: clean" in capsys.readouterr().out
 
 
+def test_expected_negative_fixture_emits_matched_native_diagnostics(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fixture = tmp_path / "negative.py"
+    fixture.write_text("bad()  # expect-error\n", encoding="utf-8")
+
+    def fake_run(
+        command: Sequence[str], **_kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        diagnostic = f"{command[-1]}:1: error: expected diagnostic"
+        return subprocess.CompletedProcess(command, 1, diagnostic, "")
+
+    assert run_case(
+        CHECKERS[0],
+        fixture,
+        root=tmp_path,
+        expect_errors=True,
+        process_runner=fake_run,
+    )
+    output = capsys.readouterr().out
+    assert "matched diagnostic lines: [1]" in output
+    assert "native diagnostics:" in output
+    assert "error: expected diagnostic" in output
+
+
 @pytest.mark.parametrize(
     ("failure", "expected_reason", "expected_output"),
     [

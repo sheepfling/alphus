@@ -248,6 +248,12 @@ def run_case(
         print(
             f"PASS {checker.name} {actual_fixture.name}: {expectation} ({elapsed:.2f}s)"
         )
+        if expect_errors:
+            lines = sorted(observed_error_lines(output, actual_fixture.name))
+            print(f"  matched diagnostic lines: {lines}")
+            if output.strip():
+                print("  native diagnostics:")
+                print(output.rstrip())
         return True
 
     def run_with_cache(actual_fixture: Path) -> bool:
