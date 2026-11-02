@@ -139,8 +139,9 @@ def test_opt_in_python_import_evidence_reports_resolved_edges(tmp_path: Path) ->
     assert len(findings) == 1
     assert "2 resolved edge(s) target another family member" in findings[0].message
     assert "src/gateway_client.py:1 → src/gateway_server.py" in findings[0].message
-    assert "qualified Protocol declarations are partial syntax evidence only" in (
-        findings[0].message
+    assert (
+        "qualified Protocol/TypedDict declarations are partial syntax evidence only"
+        in (findings[0].message)
     )
     assert "No literal module-level __all__ was observed" in findings[0].message
 
@@ -275,6 +276,73 @@ def test_import_evidence_reports_cross_file_protocol_type_references(
         "src/gateway_contracts.py"
     ) in message
     assert "external consumers, responsibility" in message
+
+
+def test_import_evidence_reports_qualified_typed_dict_contract_and_usage(
+    tmp_path: Path,
+) -> None:
+    paths = [
+        _write(tmp_path, f"src/gateway_{name}.py")
+        for name in ("client", "server", "routes", "auth", "cache", "contracts")
+    ]
+    (tmp_path / "src/gateway_contracts.py").write_text(
+        "import typing\n"
+        "class Payload(typing.TypedDict):\n"
+        "    request_id: str\n"
+        "    accepted: bool\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "src/gateway_client.py").write_text(
+        "from gateway_contracts import Payload\n"
+        "def send(payload: Payload) -> None: ...\n",
+        encoding="utf-8",
+    )
+
+    findings = source_family_findings(
+        tmp_path,
+        paths,
+        SourceFamilyPolicy(
+            min_family_files=6,
+            python_import_evidence=True,
+            python_module_roots=("src",),
+        ),
+    )
+
+    message = findings[0].message
+    assert (
+        "src/gateway_contracts.py:2 declares Payload with qualified TypedDict base "
+        "(request_id, accepted)"
+    ) in message
+    assert (
+        "src/gateway_client.py:2 references TypedDict type Payload from "
+        "src/gateway_contracts.py"
+    ) in message
+
+
+def test_import_evidence_does_not_claim_typed_dict_factory_contracts(
+    tmp_path: Path,
+) -> None:
+    paths = [
+        _write(tmp_path, f"src/gateway_{name}.py")
+        for name in ("client", "server", "routes", "auth", "cache", "contracts")
+    ]
+    (tmp_path / "src/gateway_contracts.py").write_text(
+        "import typing\nPayload = typing.TypedDict('Payload', {'request_id': str})\n",
+        encoding="utf-8",
+    )
+
+    findings = source_family_findings(
+        tmp_path,
+        paths,
+        SourceFamilyPolicy(
+            min_family_files=6,
+            python_import_evidence=True,
+            python_module_roots=("src",),
+        ),
+    )
+
+    assert "No qualified typing.TypedDict" in findings[0].message
+    assert "factory declarations" in findings[0].message
 
 
 def test_import_evidence_abstains_when_protocol_import_name_is_rebound(

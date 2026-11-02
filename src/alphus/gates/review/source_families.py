@@ -290,6 +290,19 @@ def _qualified_protocol_base(base: ast.expr) -> bool:
             return False
 
 
+def _qualified_typed_dict_base(base: ast.expr) -> bool:
+    match base:
+        case ast.Attribute(value=ast.Name(id=module), attr="TypedDict") if module in {
+            "typing",
+            "typing_extensions",
+        }:
+            return True
+        case ast.Subscript(value=value):
+            return _qualified_typed_dict_base(value)
+        case _:
+            return False
+
+
 def _module_protocols(tree: ast.Module) -> list[tuple[int, str, tuple[str, ...]]]:
     """Collect qualified Protocol-shaped declarations without resolving aliases."""
     declarations: list[tuple[int, str, tuple[str, ...]]] = []
@@ -310,6 +323,27 @@ def _module_protocols(tree: ast.Module) -> list[tuple[int, str, tuple[str, ...]]
                             continue
                 methods = tuple(methods_list)
                 declarations.append((statement.lineno, name, methods))
+            case _:
+                continue
+    return declarations
+
+
+def _module_typed_dicts(tree: ast.Module) -> list[tuple[int, str, tuple[str, ...]]]:
+    """Collect qualified TypedDict class declarations and their direct fields."""
+    declarations: list[tuple[int, str, tuple[str, ...]]] = []
+    for statement in tree.body:
+        match statement:
+            case ast.ClassDef(name=name, bases=bases, body=body) if any(
+                _qualified_typed_dict_base(base) for base in bases
+            ):
+                fields: list[str] = []
+                for item in body:
+                    match item:
+                        case ast.AnnAssign(target=ast.Name(id=field_name)):
+                            fields.append(field_name)
+                        case _:
+                            continue
+                declarations.append((statement.lineno, name, tuple(fields)))
             case _:
                 continue
     return declarations
@@ -418,9 +452,12 @@ def _python_import_evidence(
     unresolved_export_modules = 0
     protocol_declarations: list[str] = []
     protocol_count = 0
+    typed_dict_declarations: list[str] = []
+    typed_dict_count = 0
     trees: dict[Path, ast.Module] = {}
     source_modules: dict[Path, str | None] = {}
     protocol_names_by_path: dict[Path, set[str]] = {}
+    typed_dict_names_by_path: dict[Path, set[str]] = {}
     for source in sorted((p for p in members if p.suffix == ".py"), key=str):
         source_path = (checkout / source).resolve(strict=False)
         if not source_path.is_relative_to(checkout) or bytes_left <= 0:
@@ -483,8 +520,27 @@ def _python_import_evidence(
                     f"{source.as_posix()}:{contract_line} declares "
                     f"{contract_name} with Protocol base ({method_text})"
                 )
+        module_typed_dicts = _module_typed_dicts(tree)
+        typed_dict_names_by_path[source] = {name for _, name, _ in module_typed_dicts}
+        for contract_line, contract_name, fields in module_typed_dicts:
+            typed_dict_count += 1
+            if len(typed_dict_declarations) < policy.max_contract_declarations:
+                listed_fields = fields[: policy.max_public_api_names]
+                field_text = (
+                    ", ".join(listed_fields) if listed_fields else "no direct fields"
+                )
+                if len(fields) > len(listed_fields):
+                    field_text += (
+                        f", {len(fields) - len(listed_fields)} field name(s) omitted"
+                    )
+                typed_dict_declarations.append(
+                    f"{source.as_posix()}:{contract_line} declares "
+                    f"{contract_name} with qualified TypedDict base ({field_text})"
+                )
     protocol_uses: list[str] = []
     protocol_use_count = 0
+    typed_dict_uses: list[str] = []
+    typed_dict_use_count = 0
     for source, tree in trees.items():
         source_module = source_modules[source]
         annotation_lines = _annotation_name_lines(tree)
@@ -552,6 +608,23 @@ def _python_import_evidence(
                                             f"Protocol type {local_name} from "
                                             f"{target_path.as_posix()}"
                                         )
+                                if (
+                                    imported_name
+                                    in typed_dict_names_by_path.get(target_path, set())
+                                    and use_lines
+                                    and not _name_is_rebound(tree, local_name, alias)
+                                ):
+                                    typed_dict_use_count += 1
+                                    if (
+                                        len(typed_dict_uses)
+                                        < policy.max_contract_declarations
+                                    ):
+                                        use_line = min(use_lines)
+                                        typed_dict_uses.append(
+                                            f"{source.as_posix()}:{use_line} references "
+                                            f"TypedDict type {local_name} from "
+                                            f"{target_path.as_posix()}"
+                                        )
                     else:
                         unresolved += 1
                 case _:
@@ -606,6 +679,19 @@ def _python_import_evidence(
             "declaration was observed; aliases, ABCs, and other contract forms "
             "are not assessed."
         )
+    if typed_dict_declarations:
+        context += " Qualified TypedDict declaration evidence: "
+        context += "; ".join(typed_dict_declarations) + "."
+        if typed_dict_count > len(typed_dict_declarations):
+            context += (
+                f" {typed_dict_count - len(typed_dict_declarations)} declaration(s) "
+                "omitted by max_contract_declarations."
+            )
+    else:
+        context += (
+            " No qualified typing.TypedDict or typing_extensions.TypedDict "
+            "declaration was observed; factory declarations and aliases are not assessed."
+        )
     if protocol_uses:
         context += " Cross-file Protocol type-reference evidence: "
         context += "; ".join(protocol_uses) + "."
@@ -620,6 +706,20 @@ def _python_import_evidence(
             "was observed; re-exports, aliases, shadowed names, dynamic use, and "
             "unselected modules are not assessed."
         )
+    if typed_dict_uses:
+        context += " Cross-file TypedDict type-reference evidence: "
+        context += "; ".join(typed_dict_uses) + "."
+        if typed_dict_use_count > len(typed_dict_uses):
+            context += (
+                f" {typed_dict_use_count - len(typed_dict_uses)} cross-file "
+                "reference(s) omitted by max_contract_declarations."
+            )
+    else:
+        context += (
+            " No direct cross-file type reference to a detected qualified TypedDict "
+            "was observed; re-exports, aliases, shadowed names, dynamic use, and "
+            "unselected modules are not assessed."
+        )
     notes: list[str] = []
     if failures:
         notes.append(f"{failures} Python file(s) could not be analyzed")
@@ -628,7 +728,7 @@ def _python_import_evidence(
     if notes:
         context += " Analysis incomplete: " + "; ".join(notes) + "."
     context += (
-        " Direct imports, literal __all__ declarations, and qualified Protocol "
+        " Direct imports, literal __all__ declarations, and qualified Protocol/TypedDict "
         "declarations are partial syntax evidence only. Package-level re-exports, "
         "external consumers, responsibility, other shared-contract forms, and "
         "non-Python dependencies are not assessed."

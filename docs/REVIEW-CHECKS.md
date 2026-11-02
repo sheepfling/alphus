@@ -702,15 +702,18 @@ re-exports, external consumers, and names without a literal `__all__` are not
 inferred. This is syntax evidence, not a complete public API or responsibility
 assessment. The pass also reports bounded, module-level classes with a
 qualified `typing.Protocol` or `typing_extensions.Protocol` base and their
-direct method names. This identifies explicit interface-shaped syntax only;
-aliases, ABCs, other contract forms, implementations, and actual sharing across
-consumers remain unknown. Import edges and declarations do not establish which
-files share responsibility. When a selected family member directly imports one
-of those Protocol names and references the unshadowed import in an annotation
-or class base, the report includes both the importing reference location and
-the declaration file. Rebinding causes the reference to be omitted. This is
-cross-file type-reference syntax, not proof of runtime use, an established
-shared contract, or common responsibility. Optional `git_cochange_evidence`
+direct method names. It also reports bounded fields for module-level classes
+with a qualified `typing.TypedDict` or `typing_extensions.TypedDict` base.
+These are explicit contract-shaped syntax only; aliases, ABCs, factory
+declarations, other forms, implementations, and actual sharing across consumers
+remain unknown. Import edges and declarations do not establish which files
+share responsibility. When a selected family member directly imports one of
+those Protocol or TypedDict names and references the unshadowed import in an
+annotation or class base, the report includes both the importing reference
+location and declaration file. Rebinding causes the reference to be omitted.
+This is cross-file type-reference syntax, not proof of runtime use, an
+established shared contract, or common responsibility. Optional
+`git_cochange_evidence`
 uses a bounded read-only `git log` query for selected family paths and reports
 observed commit IDs and co-changed paths. This is correlation only; it does not
 establish causation, ownership, or responsibility. Shallow history, query
