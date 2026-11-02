@@ -5,6 +5,8 @@ from __future__ import annotations
 from io import StringIO
 from pathlib import Path
 
+import pytest
+
 from alphus.config import DynamicMarkdownPolicy, load_config_stream
 from alphus.execution.profile_manifest import gate_manifest_entry
 from alphus.gates.review.dynamic_markdown import (
@@ -118,8 +120,6 @@ def test_declared_helper_contract_does_not_accept_package_import_alone() -> None
 
 
 def test_declared_helpers_require_qualified_names() -> None:
-    import pytest
-
     with pytest.raises(ValueError, match="qualified dotted names"):
         DynamicMarkdownPolicy(
             producer_paths=("src/**",),

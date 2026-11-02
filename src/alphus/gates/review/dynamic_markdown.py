@@ -76,17 +76,23 @@ def _local_bindings(nodes: Sequence[ast.stmt]) -> set[str]:
     pending: list[ast.AST] = list(nodes)
     while pending:
         node = pending.pop()
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            result.add(node.name)
-            continue
-        if isinstance(node, ast.Import):
-            result.update(
-                alias.asname or alias.name.split(".", 1)[0] for alias in node.names
-            )
-        elif isinstance(node, ast.ImportFrom):
-            result.update(alias.asname or alias.name for alias in node.names)
-        elif isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
-            result.add(node.id)
+        match node:
+            case ast.FunctionDef(name=name) | ast.AsyncFunctionDef(name=name):
+                result.add(name)
+                continue
+            case ast.ClassDef(name=name):
+                result.add(name)
+                continue
+            case ast.Import(names=aliases):
+                result.update(
+                    alias.asname or alias.name.split(".", 1)[0] for alias in aliases
+                )
+            case ast.ImportFrom(names=aliases):
+                result.update(alias.asname or alias.name for alias in aliases)
+            case ast.Name(id=name, ctx=ast.Store() | ast.Del()):
+                result.add(name)
+            case _:
+                pass
         pending.extend(ast.iter_child_nodes(node))
     return result
 
