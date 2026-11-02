@@ -97,14 +97,57 @@ def _assigned_call_names(
 def _single_assignment(
     function: ast.FunctionDef | ast.AsyncFunctionDef, name: str
 ) -> bool:
-    stores = 0
-    for node in ast.walk(function):
+    stores: list[None] = []
+
+    def collect_walrus(node: ast.AST) -> None:
+        if isinstance(
+            node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
+        ):
+            return
         match node:
-            case ast.Name(id=bound, ctx=ast.Store()) if bound == name:
-                stores += 1
+            case ast.NamedExpr(target=ast.Name(id=bound), value=value):
+                if bound == name:
+                    stores.append(None)
+                collect_walrus(value)
+                return
             case _:
-                continue
-    return stores == 1
+                pass
+        for child in ast.iter_child_nodes(node):
+            collect_walrus(child)
+
+    def visit(node: ast.AST) -> None:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            if node is not function and node.name == name:
+                stores.append(None)
+            if node is not function:
+                return
+        if isinstance(node, ast.Lambda):
+            return
+        match node:
+            case ast.ListComp() | ast.SetComp() | ast.DictComp() | ast.GeneratorExp():
+                collect_walrus(node)
+                return
+            case ast.Name(id=bound, ctx=(ast.Store() | ast.Del())) if bound == name:
+                stores.append(None)
+            case (
+                ast.MatchAs(name=bound)
+                | ast.MatchStar(name=bound)
+                | ast.MatchMapping(rest=bound)
+            ) if bound == name:
+                stores.append(None)
+            case ast.ExceptHandler(name=bound) if bound == name:
+                stores.append(None)
+            case ast.Global(names=declared) | ast.Nonlocal(names=declared):
+                if name in declared:
+                    stores.extend((None, None))
+            case _:
+                pass
+        for child in ast.iter_child_nodes(node):
+            visit(child)
+
+    for statement in function.body:
+        visit(statement)
+    return len(stores) == 1
 
 
 def _local_bindings(function: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
@@ -156,7 +199,11 @@ def _local_bindings(function: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str
                 )
             case ast.ImportFrom(names=imports):
                 names.update(alias.asname or alias.name for alias in imports)
-            case ast.MatchAs(name=name) | ast.MatchStar(name=name) if name is not None:
+            case (
+                ast.MatchAs(name=name)
+                | ast.MatchStar(name=name)
+                | ast.MatchMapping(rest=name)
+            ) if name is not None:
                 names.add(name)
             case ast.ExceptHandler(name=name) if name is not None:
                 names.add(name)

@@ -403,6 +403,47 @@ def test_runtime_metadata_without_bound_module_origin_is_reported() -> None:
     assert "actual origin is not determined" in findings[0].message
 
 
+def test_runtime_module_assignment_in_nested_scope_does_not_suppress_gap() -> None:
+    configured = policy(
+        runtime_attestation_gap=True,
+        runtime_module_names=("engine",),
+        runtime_import_helpers=("load_runtime_module",),
+        runtime_metadata_helpers=("distribution_version",),
+        runtime_origin_helpers=("module_origin",),
+        runtime_attestation_sinks=("record_runtime",),
+    )
+    source = (
+        "def run():\n"
+        "    engine = load_runtime_module('example-engine')\n"
+        "    def unrelated():\n"
+        "        engine = local_value\n"
+        "    record_runtime(distribution_version('example-engine'))\n"
+    )
+
+    findings = run_artifact_findings(source, "src/harness.py", configured)
+    assert len(findings) == 1
+    assert findings[0].line == 5
+
+
+def test_runtime_module_reassignment_in_same_scope_abstains() -> None:
+    configured = policy(
+        runtime_attestation_gap=True,
+        runtime_module_names=("engine",),
+        runtime_import_helpers=("load_runtime_module",),
+        runtime_metadata_helpers=("distribution_version",),
+        runtime_origin_helpers=("module_origin",),
+        runtime_attestation_sinks=("record_runtime",),
+    )
+    source = (
+        "def run():\n"
+        "    engine = load_runtime_module('example-engine')\n"
+        "    engine = replacement\n"
+        "    record_runtime(distribution_version('example-engine'))\n"
+    )
+
+    assert run_artifact_findings(source, "src/harness.py", configured) == []
+
+
 def test_runtime_origin_binding_and_unknown_import_styles_abstain() -> None:
     configured = policy(
         runtime_attestation_gap=True,
@@ -482,6 +523,7 @@ def test_runtime_attestation_does_not_trust_shadowed_origin_helper() -> None:
     [
         "    match value:\n        case module_origin:\n            pass\n",
         "    match value:\n        case [*module_origin]:\n            pass\n",
+        "    match value:\n        case {**module_origin}:\n            pass\n",
         (
             "    try:\n        raise ValueError()\n"
             "    except ValueError as module_origin:\n        pass\n"
