@@ -260,19 +260,21 @@ quaternion normalization, inversion, sandwich, matrix-conversion, and
 ECEF-to-ENU grammars have synthetic positive/negative coverage but no reviewed
 downstream reimplementation calibration or production precision estimate yet.
 
-An elimination recognizer would need a consumer contract that identifies the
-matrix representation and then match, within one configured function, pivot
-selection, a row swap, diagonal normalization, and elimination updates that use
-the same row and pivot indices. A row update or call to `max` alone is not
-enough. The result should be described as a review of a handwritten elimination
-kernel; it must not infer that a true inverse is needed or that a solve routine
-is equivalent.
+The `manual-elimination` detector implements one configured direct-list
+Gauss-Jordan grammar: maximum-absolute pivot selection, row swap, pivot-row
+normalization, and elimination of other rows using the same pivot column. Its
+synthetic suite includes positive and negative structures, including incomplete
+row updates, unpivoted elimination, aliases, shadowing, and a different matrix
+contract. Other representations, separate right-hand sides, alternate
+factorizations, and broader control flow remain unsupported. A finding is a
+review of handwritten elimination; it does not infer that an inverse is needed
+or that a solve routine is equivalent.
 
-A broader frame-transform recognizer would additionally need the consumer's
-configured preferred helper and an explicit equivalence contract for frame,
-origin, latitude type, angle and length units, axis order, handedness, rotation
-composition, vector-versus-position semantics, and output shape. The shipped
-ECEF-to-ENU fingerprint binds these as policy declarations and exact syntax,
-but cannot prove that the declarations describe runtime behavior. Trigonometric
-calls or a 3x3-looking assignment do not establish equivalence; unsupported
-forms remain unknown.
+Additional frame conventions and formula forms require an explicit consumer
+contract for the preferred helper, frame, origin, latitude type, angle and
+length units, axis order, handedness, rotation composition,
+vector-versus-position semantics, and output shape. The shipped ECEF-to-ENU,
+ECEF-to-NED, and NED-basis fingerprints bind their supported declarations and
+exact syntax, but cannot prove that the declarations describe runtime behavior.
+Trigonometric calls or a 3x3-looking assignment do not establish equivalence;
+unsupported forms remain unknown.
