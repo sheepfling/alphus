@@ -202,6 +202,25 @@ def test_multiline_quoted_pwsh_command_is_not_scanned_as_bash(
     assert "cmd syntax" in findings[0].message
 
 
+@pytest.mark.parametrize("quote", ["'", '"'])
+def test_quoted_pwsh_command_with_opener_content_keeps_bash_lexing(
+    tmp_path: Path, quote: str
+) -> None:
+    findings = _check(
+        tmp_path,
+        "```bash\n"
+        f"pwsh -Command {quote}$x = 1\n"
+        "$env:HOME = data\n"
+        f"{quote}\n"
+        "echo %PATH%\n"
+        "```\n",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 5
+    assert "cmd syntax" in findings[0].message
+
+
 def test_indented_shell_transcript_prompts_are_ignored(tmp_path: Path) -> None:
     findings = _check(
         tmp_path,

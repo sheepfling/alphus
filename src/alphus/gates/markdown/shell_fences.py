@@ -52,9 +52,9 @@ _POWERSHELL_DELEGATION = re.compile(
     r"(?i)^\s*(?:pwsh|powershell)(?:\.exe)?\s+(?:-[A-Za-z][A-Za-z-]*\s+)*"
     r"-Command(?:\s|$)"
 )
-_MULTILINE_POWERSHELL_DELEGATION = re.compile(
+_QUOTED_POWERSHELL_DELEGATION = re.compile(
     r"(?i)^\s*(?:pwsh|powershell)(?:\.exe)?\s+(?:-[A-Za-z][A-Za-z-]*\s+)*"
-    r"-Command[ \t]+(?P<quote>['\"])[ \t]*$"
+    r"-Command[ \t]+(?P<quote>['\"])"
 )
 _CMD_ENV = re.compile(r"%[A-Za-z_][A-Za-z0-9_]*%")
 _DATE_COMMAND = re.compile(r"(?i)\bdate(?:\s|$)")
@@ -261,7 +261,7 @@ def _visible_shell_lines(fence: _Fence, shell: str) -> tuple[_SourceLine, ...]:
         if (
             shell == "bash"
             and _POWERSHELL_DELEGATION.match(source.text)
-            and _MULTILINE_POWERSHELL_DELEGATION.match(source.text) is None
+            and _QUOTED_POWERSHELL_DELEGATION.match(source.text) is None
         ):
             output.append(_SourceLine(source.number, " " * len(source.text)))
             continue
