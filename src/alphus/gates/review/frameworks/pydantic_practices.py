@@ -1079,7 +1079,23 @@ def _known_non_utc_zone(expression: ast.expr, aliases: ImportAliases) -> bool:
             return name in {
                 "zoneinfo.ZoneInfo",
                 "backports.zoneinfo.ZoneInfo",
-            } and zone.upper() not in {"UTC", "ETC/UTC", "GMT", "Z"}
+            } and zone.upper() not in {
+                "UTC",
+                "ETC/UTC",
+                "GMT",
+                "ETC/GMT",
+                "ETC/GMT0",
+                "ETC/GMT-0",
+                "ETC/GMT+0",
+                "GMT0",
+                "GREENWICH",
+                "UCT",
+                "UNIVERSAL",
+                "ETC/UNIVERSAL",
+                "ZULU",
+                "ETC/ZULU",
+                "Z",
+            }
         case _:
             return False
 
@@ -1095,6 +1111,34 @@ def _contains_astimezone(expression: ast.expr, aliases: ImportAliases) -> bool:
             case _:
                 pass
     return False
+
+
+class _SelectedFunctionCallCollector(ast.NodeVisitor):
+    """Collect calls in one selected function, skipping nested lexical scopes."""
+
+    def __init__(self, function: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        self.function = function
+        self.calls: list[ast.Call] = []
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        if node is self.function:
+            for statement in node.body:
+                self.visit(statement)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        if node is self.function:
+            for statement in node.body:
+                self.visit(statement)
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        return
+
+    def visit_Lambda(self, node: ast.Lambda) -> None:
+        return
+
+    def visit_Call(self, node: ast.Call) -> None:
+        self.calls.append(node)
+        self.generic_visit(node)
 
 
 def _utc_persistence_lines(
@@ -1116,12 +1160,9 @@ def _utc_persistence_lines(
     visit(module.body, ())
     lines: set[int] = set()
     for function in selected:
-        for node in ast.walk(function):
-            match node:
-                case ast.Call() as call:
-                    pass
-                case _:
-                    continue
+        calls = _SelectedFunctionCallCollector(function)
+        calls.visit(function)
+        for call in calls.calls:
             if (
                 canonical_expression_name(call.func, aliases) != contract.call
                 and ast.unparse(call.func) != contract.call
@@ -1377,4 +1418,3 @@ def check_pydantic_practices(
         source = read_python_source(checkout / relative)
         findings.extend(pydantic_practice_findings(source, policy, path=name))
     return findings
-

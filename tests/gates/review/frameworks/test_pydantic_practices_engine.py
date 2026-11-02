@@ -149,6 +149,50 @@ def test_utc_persistence_contract_reports_only_known_non_utc_capture() -> None:
     assert pydantic_practice_findings(source, policy, path="src/other.py") == []
 
 
+def test_utc_persistence_accepts_zero_offset_etc_gmt_zone() -> None:
+    source = (
+        "from datetime import datetime\n"
+        "from zoneinfo import ZoneInfo\n"
+        "def save_created_at(writer):\n"
+        "    writer.save(created_at=datetime.now(ZoneInfo('Etc/GMT')))\n"
+    )
+    policy = _policy(
+        utc_persistence_contracts=(
+            {
+                "path": "src/storage.py",
+                "function": "save_created_at",
+                "call": "writer.save",
+                "keyword": "created_at",
+            },
+        )
+    )
+
+    assert pydantic_practice_findings(source, policy, path="src/storage.py") == []
+
+
+def test_utc_persistence_ignores_nested_function_outside_selected_boundary() -> None:
+    source = (
+        "from datetime import datetime\n"
+        "from zoneinfo import ZoneInfo\n"
+        "def save_created_at(writer):\n"
+        "    def local_example():\n"
+        "        writer.save(created_at=datetime.now(ZoneInfo('Europe/Paris')))\n"
+        "    return None\n"
+    )
+    policy = _policy(
+        utc_persistence_contracts=(
+            {
+                "path": "src/storage.py",
+                "function": "save_created_at",
+                "call": "writer.save",
+                "keyword": "created_at",
+            },
+        )
+    )
+
+    assert pydantic_practice_findings(source, policy, path="src/storage.py") == []
+
+
 def test_rebinding_and_nested_functions_do_not_carry_dump_state() -> None:
     source = (
         "def output(model, raw):\n"
