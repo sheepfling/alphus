@@ -135,6 +135,53 @@ def test_ignores_comments_heredocs_and_command_transcripts(tmp_path: Path) -> No
     assert findings == []
 
 
+@pytest.mark.parametrize("terminator", [" SCRIPT", "SCRIPT ", " SCRIPT "])
+def test_heredoc_terminator_must_match_exactly(tmp_path: Path, terminator: str) -> None:
+    findings = _check(
+        tmp_path,
+        "```bash\n"
+        "cat <<'SCRIPT'\n"
+        "$env:APP_HOME = data\n"
+        f"{terminator}\n"
+        "$env:APP_HOME = still-heredoc-data\n"
+        "SCRIPT\n"
+        "```\n",
+    )
+
+    assert findings == []
+
+
+def test_quoted_fence_ends_when_its_blockquote_container_ends(
+    tmp_path: Path,
+) -> None:
+    findings = _check(
+        tmp_path,
+        "> ```bash\n"
+        "> echo inside quoted fence\n"
+        "Outside prose with PowerShell-looking text: $env:APP_HOME = data\n",
+    )
+
+    assert findings == []
+
+
+def test_powershell_backtick_escape_does_not_hide_later_bash_loop(
+    tmp_path: Path,
+) -> None:
+    findings = _check(
+        tmp_path,
+        "```powershell\n"
+        "Write-Output value`\n"
+        "for name in values; do\n"
+        '  echo "$name"\n'
+        "done\n"
+        "```\n",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 3
+    assert "Bash loop syntax" in findings[0].message
+
+
 def test_bash_continuations_and_msys_paths_are_reviewed_conservatively(
     tmp_path: Path,
 ) -> None:

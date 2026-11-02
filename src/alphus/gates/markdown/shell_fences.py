@@ -105,6 +105,7 @@ class _OpenFence:
     marker_length: int
     opening_line: int
     container_indent: int
+    blockquote_depth: int
     body: list[_SourceLine] = field(default_factory=_new_source_lines)
 
 
@@ -134,6 +135,18 @@ def _strip_blockquotes(line: str) -> str:
         match = re.match(r"^ {0,3}>[ \t]?", remaining)
         if match is None:
             return remaining
+        remaining = remaining[match.end() :]
+
+
+def _blockquote_depth(line: str) -> int:
+    """Count source-level blockquote containers on a Markdown line."""
+    remaining = line
+    depth = 0
+    while True:
+        match = re.match(r"^ {0,3}>[ \t]?", remaining)
+        if match is None:
+            return depth
+        depth += 1
         remaining = remaining[match.end() :]
 
 
@@ -217,6 +230,19 @@ def _markdown_fences(text: str) -> tuple[_Fence, ...]:
     opened: _OpenFence | None = None
     in_html_comment = False
     for number, original in enumerate(text.splitlines(), start=1):
+        if opened is not None and _blockquote_depth(original) < opened.blockquote_depth:
+            fences.append(
+                _Fence(
+                    opened.label,
+                    opened.marker,
+                    opened.marker_length,
+                    opened.opening_line,
+                    opened.container_indent,
+                    tuple(opened.body),
+                )
+            )
+            opened = None
+
         if opened is not None:
             content = _fence_body_line(original, opened.container_indent)
             closing = _CLOSE_FENCE.fullmatch(content)
@@ -254,6 +280,7 @@ def _markdown_fences(text: str) -> tuple[_Fence, ...]:
             len(marker),
             number,
             container_indent,
+            _blockquote_depth(original),
         )
 
     if opened is not None:
@@ -330,6 +357,14 @@ def _mask_shell_line(line: str, shell: str, state: _LexState) -> str:
 
         character = line[index]
         if character in "'\"`":
+            if shell == "powershell" and character == "`":
+                visible[index] = " "
+                if index + 1 < len(line):
+                    visible[index + 1] = " "
+                    index += 2
+                else:
+                    index += 1
+                continue
             state.quote = character
             visible[index] = " "
             index += 1
@@ -376,7 +411,7 @@ def _visible_shell_lines(fence: _Fence, shell: str) -> tuple[_SourceLine, ...]:
         if pending_heredocs:
             delimiter, strip_tabs = pending_heredocs[0]
             candidate = source.text.lstrip("\t") if strip_tabs else source.text
-            if candidate.strip() == delimiter:
+            if candidate == delimiter:
                 pending_heredocs.popleft()
             continue
         if shell == "bash" and _POWERSHELL_DELEGATION.match(source.text):
