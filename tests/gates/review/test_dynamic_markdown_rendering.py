@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from html.parser import HTMLParser
 from urllib.parse import quote, unquote
 
@@ -21,7 +22,9 @@ class _StructureParser(HTMLParser):
         self._link_text: list[str] = []
         self._code_text: list[str] | None = None
 
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+    def handle_starttag(
+        self, tag: str, attrs: Sequence[tuple[str, str | None]]
+    ) -> None:
         if tag in {"td", "th"}:
             self._cell = []
         elif tag == "br" and self._cell is not None:
