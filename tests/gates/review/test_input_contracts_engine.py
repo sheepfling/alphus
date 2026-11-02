@@ -372,6 +372,15 @@ def evaluate(options: Either[Options, M[str, JV]]):
     assert input_contract_findings(source, DOMAIN_POLICY) == []
 
 
+def test_unresolved_model_identity_does_not_match_configured_domain_contract() -> None:
+    source = """from collections.abc import Mapping
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
+    return options["state"]
+"""
+
+    assert input_contract_findings(source, DOMAIN_POLICY) == []
+
+
 @pytest.mark.parametrize(
     ("source", "path", "policy"),
     [
