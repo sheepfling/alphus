@@ -5,11 +5,22 @@ consumer. It records both the unmodified outcome and a temporary reviewed
 fixture adjustment; the adjusted run is not a claim that the unmodified
 consumer suite passes three checkers.
 
+The self-quality workflow also reproduces this row on Ubuntu with Python 3.11.
+It checks out `sheepfling/mdutils-stubs` at the recorded commit and installs the
+official `mdutils==1.8.1` release from PyPI. The stub wheel is built from that
+pinned, MIT-licensed source because no `mdutils-stubs` wheel is published on
+PyPI. Calibration is confined to a disposable local copy: the original
+class-object assertions and negative fixture remain untouched, and the CI job
+separately requires the original Ty class-object diagnostic to remain visible.
+The uploaded report records the wheel hash and tool/runtime identities for the
+hosted run. This is a single reproducible trial row, not a full consumer support
+matrix.
+
 | Evidence | Identity |
 | --- | --- |
 | Consumer source | `sheepfling/mdutils-stubs` commit `777b4b600e128721493999ed48867fa664f1a573` |
 | Runtime contract | `mdutils==1.8.1`; upstream source commit `170f7d040ea598672c53015a5db4fab868dacba0` |
-| Alphus implementation | PR #68 head `78822f071c0680b68852a2fc6cc9ba2944e14ea2` |
+| Alphus implementation | Local run: PR #68 head `78822f071c0680b68852a2fc6cc9ba2944e14ea2`; hosted reports record their exact head |
 | Checker interpreter | Python 3.11.16, macOS `darwin` arm64; MyPy 2.4.1, Pyright 1.1.414, ty 0.0.91 |
 | Target interpreter | Python 3.11.16, macOS `darwin` arm64; `mdutils==1.8.1`, `mypy==2.4.1` |
 | Built stub artifact | `mdutils_stubs-1.8.1.0-py3-none-any.whl` |

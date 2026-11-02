@@ -201,3 +201,87 @@ jobs:
           path: ${{ runner.temp }}/stub-package-verification.json
           if-no-files-found: ignore
           retention-days: 30
+
+  mdutils-stub-consumer-trial:
+    name: pinned mdutils stub consumer trial (Python 3.11)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: sheepfling/mdutils-stubs
+          ref: 777b4b600e128721493999ed48867fa664f1a573
+          path: mdutils-stubs-source
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        id: checker-python
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-python@v7
+        id: target-python
+        with:
+          python-version: "3.11"
+      - name: Provision isolated checker and target environments
+        shell: bash
+        run: |
+          "${{ steps.checker-python.outputs.python-path }}" -m venv "$RUNNER_TEMP/mdutils-checker"
+          "${{ steps.target-python.outputs.python-path }}" -m venv "$RUNNER_TEMP/mdutils-target"
+          "$RUNNER_TEMP/mdutils-checker/bin/python" -m pip install \
+            --disable-pip-version-check --index-url https://pypi.org/simple \
+            -e '.[python,mypy,ty]' \
+            'mypy==2.4.1' 'pyright==1.1.414' 'ty==0.0.91'
+          "$RUNNER_TEMP/mdutils-target/bin/python" -m pip install \
+            --disable-pip-version-check --index-url https://pypi.org/simple \
+            'build>=1.2,<2' 'setuptools>=80' 'setuptools-scm>=9.2,<10' \
+            wheel 'mypy==2.4.1' 'mdutils==1.8.1'
+      - name: Create a calibrated copy of the pinned consumer checkout
+        shell: bash
+        run: |
+          cp -a mdutils-stubs-source "$RUNNER_TEMP/mdutils-stubs-calibrated"
+          "$RUNNER_TEMP/mdutils-checker/bin/python" \
+            scripts/prepare_mdutils_stub_trial.py \
+            --consumer-root "$RUNNER_TEMP/mdutils-stubs-calibrated"
+      - name: Run the pinned installed consumer recipe
+        shell: bash
+        env:
+          PYTHONIOENCODING: utf-8
+          SETUPTOOLS_SCM_PRETEND_VERSION: 1.8.1.0
+        run: |
+          "$RUNNER_TEMP/mdutils-checker/bin/python" -m alphus.gates.stubs.verify \
+            --root "$RUNNER_TEMP/mdutils-stubs-calibrated" \
+            --config stub-quality.json \
+            --target-python "$RUNNER_TEMP/mdutils-target/bin/python" \
+            --report "$RUNNER_TEMP/mdutils-stub-consumer-report.json"
+      - name: Preserve the unmodified Ty class-object limitation
+        shell: bash
+        run: |
+          fixtures="$RUNNER_TEMP/mdutils-stubs-calibrated/tests/fixtures"
+          log="$RUNNER_TEMP/mdutils-stub-unmodified-ty.log"
+          if "$RUNNER_TEMP/mdutils-checker/bin/python" \
+            -m alphus.gates.stubs.typing_fixtures \
+            --positive-fixture "$RUNNER_TEMP/mdutils-stubs-source/tests/fixtures/positive.py" \
+            --negative-fixture "$fixtures/negative_calibrated.py" \
+            --root "$RUNNER_TEMP/mdutils-stubs-calibrated" \
+            --checkers ty \
+            --target-python "$RUNNER_TEMP/mdutils-target/bin/python" \
+            --python-version 3.11 >"$log" 2>&1; then
+            echo "The recorded Ty limitation unexpectedly disappeared; review and update the calibration." >&2
+            cat "$log"
+            exit 1
+          fi
+          if ! grep -Fq 'assert-type-unspellable-subtype' "$log"; then
+            echo "Ty failed for a reason other than the recorded class-object assertion limitation." >&2
+            cat "$log"
+            exit 1
+          fi
+      - name: Retain consumer verification evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mdutils-stub-consumer-python-3.11
+          path: |
+            ${{ runner.temp }}/mdutils-stub-consumer-report.json
+            ${{ runner.temp }}/mdutils-stub-unmodified-ty.log
+          if-no-files-found: ignore
+          retention-days: 90
