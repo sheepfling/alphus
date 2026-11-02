@@ -18,6 +18,8 @@ _RULE_ID = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.STYLE, "missing-suppression-reason"
 )
 _DIRECTIVE = re.compile(r"^#\s*noqa\s*:\s*(?P<body>.*)$", re.IGNORECASE)
+_FILE_DIRECTIVE = re.compile(r"^#\s*ruff\s*:\s*noqa\s*:\s*(?P<body>.*)$", re.IGNORECASE)
+_BLANKET_DIRECTIVE = re.compile(r"^#\s*(?:ruff\s*:\s*)?noqa\s*$", re.IGNORECASE)
 _CODE = re.compile(r"\b[A-Z]+[0-9]{3,4}\b", re.IGNORECASE)
 
 
@@ -27,36 +29,101 @@ def suppression_reason_findings(
     """Find selected inline ``noqa`` codes without the configured reason marker."""
     findings: list[Finding] = []
     required_codes = set(policy.rule_codes)
-    for token in tokenize.generate_tokens(io.StringIO(source).readline):
-        if token.type != tokenize.COMMENT:
-            continue
-        if not token.line[: token.start[1]].strip():
-            # Ruff line-level noqa directives apply to the statement they
-            # trail. File-level directives use a different native spelling.
-            continue
-        directive = _DIRECTIVE.fullmatch(token.string.strip())
-        if directive is None:
-            continue
-        body = directive.group("body")
-        code_list, separator, reason = body.partition(policy.reason_delimiter)
-        selected = sorted(
-            required_codes.intersection(
-                code.upper() for code in _CODE.findall(code_list)
+    exceptions = {
+        (exception.path, exception.rule_code, exception.line): exception
+        for exception in policy.exceptions
+        if exception.path == path
+    }
+    used_exceptions: set[tuple[str, str, int]] = set()
+    try:
+        tokens = tokenize.generate_tokens(io.StringIO(source).readline)
+        comments = (token for token in tokens if token.type == tokenize.COMMENT)
+        for token in comments:
+            comment = token.string.strip()
+            if _BLANKET_DIRECTIVE.fullmatch(comment):
+                findings.append(
+                    Finding(
+                        rule_id=_RULE_ID,
+                        path=path,
+                        line=token.start[0],
+                        severity=policy.severity,
+                        message=(
+                            "Blanket Ruff suppression has no selected rule code, so "
+                            "its reason obligation is unknown to this audit. Review "
+                            "the native Ruff blanket-suppression diagnostics; no "
+                            "reason status was inferred."
+                        ),
+                    )
+                )
+                continue
+            inline = bool(token.line[: token.start[1]].strip())
+            directive = (
+                _DIRECTIVE.fullmatch(comment)
+                if inline
+                else _FILE_DIRECTIVE.fullmatch(comment)
             )
-        )
-        if not selected or (separator and reason.strip()):
+            if directive is None:
+                continue
+            body = directive.group("body")
+            code_list, separator, reason = body.partition(policy.reason_delimiter)
+            selected = sorted(
+                required_codes.intersection(
+                    code.upper() for code in _CODE.findall(code_list)
+                )
+            )
+            if not selected:
+                continue
+            unaudited = [
+                code
+                for code in selected
+                if (path, code, token.start[0]) not in exceptions
+            ]
+            used_exceptions.update(
+                (path, code, token.start[0])
+                for code in selected
+                if code not in unaudited
+            )
+            if not unaudited or (separator and reason.strip()):
+                continue
+            findings.append(
+                Finding(
+                    rule_id=_RULE_ID,
+                    path=path,
+                    line=token.start[0],
+                    severity=policy.severity,
+                    message=(
+                        f"Selected Ruff suppression {', '.join(unaudited)} has no rationale "
+                        f"after {policy.reason_delimiter!r}. Add a concise reason to this "
+                        "comment. This audit checks documentation only; Ruff still owns "
+                        "whether the suppression is valid or used."
+                    ),
+                )
+            )
+    except (IndentationError, tokenize.TokenError) as error:
+        return [
+            Finding(
+                rule_id=_RULE_ID,
+                path=path,
+                severity=policy.severity,
+                message=(
+                    "Suppression reasons were not evaluated because Python comment "
+                    f"tokenization failed: {type(error).__name__}."
+                ),
+            )
+        ]
+    for key, exception in exceptions.items():
+        if key in used_exceptions:
             continue
         findings.append(
             Finding(
                 rule_id=_RULE_ID,
-                path=path,
-                line=token.start[0],
+                path=exception.path,
+                line=exception.line,
                 severity=policy.severity,
                 message=(
-                    f"Selected Ruff suppression {', '.join(selected)} has no rationale "
-                    f"after {policy.reason_delimiter!r}. Add a concise reason to this "
-                    "comment. This audit checks documentation only; Ruff still owns "
-                    "whether the suppression is valid or used."
+                    f"Approved Ruff suppression exception for {exception.rule_code} "
+                    "does not match a selected directive at this path and line; "
+                    "review or remove the stale exception."
                 ),
             )
         )
@@ -75,9 +142,20 @@ def check_suppression_reasons(
             matches_path(name, pattern) for pattern in policy.exclude
         ):
             continue
-        findings.extend(
-            suppression_reason_findings(
-                read_python_source(checkout / relative), policy, path=name
+        try:
+            source = read_python_source(checkout / relative)
+        except (OSError, UnicodeError, SyntaxError) as error:
+            findings.append(
+                Finding(
+                    rule_id=_RULE_ID,
+                    path=name,
+                    severity=policy.severity,
+                    message=(
+                        "Suppression reasons were not evaluated because the Python "
+                        f"source could not be read: {type(error).__name__}."
+                    ),
+                )
             )
-        )
+            continue
+        findings.extend(suppression_reason_findings(source, policy, path=name))
     return sorted(findings, key=lambda item: (item.path, item.line or 0, item.message))
