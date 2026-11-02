@@ -856,8 +856,8 @@ def test_python_import_byte_budget_is_shared_and_reports_missing_coverage(
     consumer = tmp_path / "src/app.py"
     consumer.write_text("import gateway_client\n", encoding="utf-8")
     paths.append(consumer.relative_to(tmp_path))
-    # The first family and consumer fit; parsing all selected files once for a
-    # second family would exceed this run-wide cap.
+    # The first family's core plus the consumer fit, but the rest of the second
+    # family did not. The run-wide pass now spends the cap on family cores first.
     budget = sum(
         (tmp_path / path).stat().st_size
         for path in paths
@@ -884,7 +884,8 @@ def test_python_import_byte_budget_is_shared_and_reports_missing_coverage(
         ),
     )
 
-    assert len(parsed) == 6
+    assert len(parsed) == 7
+    assert "src/app.py" not in parsed
     assert (
         sum(
             (tmp_path / path).stat().st_size
@@ -899,6 +900,53 @@ def test_python_import_byte_budget_is_shared_and_reports_missing_coverage(
         for item in findings
     )
     assert any("no clean result can be inferred" in item.message for item in findings)
+
+
+def test_python_import_budget_reserves_all_family_cores_before_external_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    core_paths = [
+        _write(tmp_path, f"src/{family}_{name}.py")
+        for family in ("gateway", "storage")
+        for name in ("client", "server", "routes", "auth", "cache")
+    ]
+    unrelated = tmp_path / "src/aaa_unrelated.py"
+    unrelated.write_text("u" * 19 + "\n", encoding="utf-8")
+    paths = [*core_paths, unrelated.relative_to(tmp_path)]
+    core_budget = sum((tmp_path / path).stat().st_size for path in core_paths)
+    parsed: list[str] = []
+    original_parse = source_families.ast.parse
+
+    def count_parse(
+        source: str | bytes, filename: str = "<unknown>", mode: str = "exec"
+    ) -> ast.Module:
+        parsed.append(filename)
+        return original_parse(source, filename=filename, mode=mode)
+
+    monkeypatch.setattr(source_families.ast, "parse", count_parse)
+    findings = source_family_findings(
+        tmp_path,
+        paths,
+        SourceFamilyPolicy(
+            min_family_files=5,
+            python_import_evidence=True,
+            python_module_roots=("src",),
+            max_import_analysis_bytes=core_budget,
+        ),
+    )
+
+    assert set(parsed) == {path.as_posix() for path in core_paths}
+    assert unrelated.as_posix() not in parsed
+    assert any(
+        "Python import byte budget was exhausted across the source-family run"
+        in item.message
+        for item in findings
+    )
+    for family in ("gateway", "storage"):
+        message = next(
+            item.message for item in findings if f"Family {family}_*" in item.message
+        )
+        assert "could not be analyzed" in message
 
 
 def test_python_external_consumer_scan_reports_budget_exhaustion(
