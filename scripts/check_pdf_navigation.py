@@ -8,7 +8,7 @@ import math
 import sys
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Annotated, Protocol, cast
+from typing import Annotated, Protocol, TypeAlias, cast
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -68,16 +68,22 @@ class _IndirectObject(Protocol):
     def get_object(self) -> _PdfDictionary: ...
 
 
+_OutlineItem: TypeAlias = _Destination | list["_OutlineItem"]
+_PdfDestination: TypeAlias = _Destination | _IndirectObject | list["_PdfDestination"]
+
+
 class _Reader(Protocol):
-    outline: object
+    outline: _OutlineItem | list[_OutlineItem]
     pages: Sequence[_Page]
 
-    def get_destination_page_number(self, destination: object) -> int | None: ...
+    def get_destination_page_number(
+        self, destination: _PdfDestination
+    ) -> int | None: ...
 
     def get_page_number(self, page: _Page) -> int | None: ...
 
     @property
-    def named_destinations(self) -> dict[str, object]: ...
+    def named_destinations(self) -> dict[str, _Destination]: ...
 
 
 class _ReaderFactory(Protocol):
@@ -101,17 +107,17 @@ def _pdf_api() -> _PdfApi:
         ) from error
 
 
-def _flatten_outline(items: object) -> list[object]:
-    result: list[object] = []
+def _flatten_outline(items: _OutlineItem | list[_OutlineItem]) -> list[_Destination]:
+    result: list[_Destination] = []
     if isinstance(items, list):
-        for item in cast(list[object], items):
+        for item in items:
             result.extend(_flatten_outline(item))
-    elif items is not None:
+    else:
         result.append(items)
     return result
 
 
-def _page_for_destination(reader: _Reader, destination: object) -> int | None:
+def _page_for_destination(reader: _Reader, destination: _PdfDestination) -> int | None:
     named = reader.named_destinations.get(str(destination).lstrip("/"))
     if named is not None:
         try:
@@ -125,7 +131,7 @@ def _page_for_destination(reader: _Reader, destination: object) -> int | None:
         except (IndexError, KeyError, TypeError, ValueError):
             return None
     try:
-        return reader.get_destination_page_number(cast(object, destination))
+        return reader.get_destination_page_number(destination)
     except (IndexError, KeyError, TypeError, ValueError):
         return None
 
@@ -135,11 +141,9 @@ def _link_rect(annotation: _PdfDictionary) -> tuple[float, ...] | None:
     if rectangle is None:
         return None
     try:
-        values = cast(Sequence[object], rectangle)
+        values = cast(Sequence[int | float], rectangle)
         coordinates_list: list[float] = []
         for value in values:
-            if not isinstance(value, (int, float)):
-                return None
             coordinates_list.append(float(value))
         coordinates = tuple(coordinates_list)
         return (
@@ -149,22 +153,22 @@ def _link_rect(annotation: _PdfDictionary) -> tuple[float, ...] | None:
         return None
 
 
-def _link_target(annotation: _PdfDictionary) -> object | None:
+def _link_target(annotation: _PdfDictionary) -> _PdfDestination | None:
     destination = annotation.get("/Dest")
     if destination is not None:
-        return destination
+        return cast(_PdfDestination, destination)
     action = annotation.get("/A")
     if action is None:
         return None
     action_dictionary = cast(_IndirectObject, action).get_object()
     if str(action_dictionary.get("/S")) == "/GoTo":
-        return action_dictionary.get("/D")
+        return cast(_PdfDestination, action_dictionary.get("/D"))
     return None
 
 
 def _verify_contents_link(
     reader: _Reader,
-    outline: list[object],
+    outline: list[_Destination],
     link: _ContentsLinkContract,
 ) -> tuple[list[str], list[str]]:
     label = link.contents_label
@@ -201,7 +205,11 @@ def _verify_contents_link(
             matching.append(annotation)
     if len(matching) != 1:
         return [
-            f"Contents label {label!r} rectangle resolves to {len(matching)} link annotations; expected one"
+            (
+                "Contents label "
+                f"{label!r} rectangle resolves to {len(matching)} link annotations; "
+                "expected one"
+            )
         ], []
     target = _link_target(matching[0])
     if target is None:
@@ -212,10 +220,13 @@ def _verify_contents_link(
         return [f"Contents link {label!r} has an unresolvable destination"], []
     if page_index + 1 != expected_page:
         return [
-            f"Contents link {label!r} targets physical page {page_index + 1}; expected {expected_page}"
+            (
+                f"Contents link {label!r} targets physical page {page_index + 1}; "
+                f"expected {expected_page}"
+            )
         ], []
     title = link.target_outline_title
-    destinations = [item for item in outline if cast(_Destination, item).title == title]
+    destinations = [item for item in outline if item.title == title]
     if len(destinations) != 1:
         return [
             f"outline title {title!r} resolves to {len(destinations)} entries; expected one"
@@ -258,9 +269,7 @@ def validate_navigation(
     unknown: list[str] = []
     for section in contract.sections:
         title = section.outline_title
-        candidates = [
-            item for item in outline if cast(_Destination, item).title == title
-        ]
+        candidates = [item for item in outline if item.title == title]
         if len(candidates) != 1:
             mismatches.append(
                 f"outline title {title!r} resolves to {len(candidates)} entries; expected one"
