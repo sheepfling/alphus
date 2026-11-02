@@ -133,11 +133,29 @@ that convention. Review handedness, active/passive semantics, vector orientation
 normalization, dtype, failures, and output shape before considering reuse. The
 finding does not establish a defect or performance gain.
 
-Frame-transform recognition remains unimplemented, as do Cholesky covariance
-and domain checks. The numerical examples demonstrate only their explicitly
-configured syntax families. The quaternion normalization, inversion, sandwich,
-and matrix-conversion grammars have synthetic positive/negative coverage but no
-reviewed real-consumer calibration or production precision estimate yet.
+`ecef-enu-transform` is an opt-in exact fingerprint for one direct tuple return
+that rotates an ECEF **displacement vector** into right-handed ENU at an anchor
+point. Its policy must declare geodetic latitude, radians, meters, the
+east/north/up tuple layout, reference ellipsoid, and a preferred helper name.
+The only supported grammar uses `math.sin`/`math.cos` with the configured
+`(dx, dy, dz, latitude, longitude)` signature and the exact basis signs and
+products. It rejects imported aliases, local aliases, shadowed `math`, matrix
+outputs, positions with translation, intermediates, branches, alternate
+formulas, and other axis orders. The configured helper is a maintainer-provided
+review target; its existence or semantic equivalence is not verified. This
+detector does not cover NED, geocentric latitude, degree inputs, other datums or
+ellipsoids without explicit policy support, batches, covariance, positions, or
+quaternion composition. The finding is only a candidate to review against the
+declared origin/datum, vector semantics, shape, dtype, and failure behavior; it
+does not establish a defect or performance gain. No real-consumer calibration
+has been performed.
+
+Other frame-transform conventions remain unimplemented, as do Cholesky
+covariance and domain checks. The numerical examples demonstrate only their
+explicitly configured syntax families. The quaternion normalization,
+inversion, sandwich, matrix-conversion, and ECEF-to-ENU grammars have synthetic
+positive/negative coverage but no reviewed real-consumer calibration or
+production precision estimate yet.
 
 An elimination recognizer would need a consumer contract that identifies the
 matrix representation and then match, within one configured function, pivot
@@ -147,11 +165,11 @@ enough. The result should be described as a review of a handwritten elimination
 kernel; it must not infer that a true inverse is needed or that a solve routine
 is equivalent.
 
-A frame-transform recognizer would additionally need the consumer's configured
-preferred helper and an explicit equivalence contract for frame, origin,
-latitude type, angle and length units, axis order, handedness, rotation
-composition, vector-versus-position semantics, and output shape. Trigonometric
-calls or a 3x3-looking assignment do not establish equivalence. Until a
-candidate grammar can bind those details to a tested consumer contract, it
-should remain unknown rather than produce a confident duplicate-transform
-finding.
+A broader frame-transform recognizer would additionally need the consumer's
+configured preferred helper and an explicit equivalence contract for frame,
+origin, latitude type, angle and length units, axis order, handedness, rotation
+composition, vector-versus-position semantics, and output shape. The shipped
+ECEF-to-ENU fingerprint binds these as policy declarations and exact syntax,
+but cannot prove that the declarations describe runtime behavior. Trigonometric
+calls or a 3x3-looking assignment do not establish equivalence; unsupported
+forms remain unknown.

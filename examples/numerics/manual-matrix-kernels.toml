@@ -84,6 +84,28 @@ function_names = ["quaternion_to_matrix"]
 components = ["w", "x", "y", "z"]
 convention = "active-column-scalar-first"
 
+[checks.ecef_enu_transform]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/geometry/*.py"]
+function_names = ["ecef_delta_to_enu"]
+components = ["dx", "dy", "dz"]
+latitude_name = "latitude"
+longitude_name = "longitude"
+preferred_helpers = ["geometry.frames.ecef_delta_to_enu"]
+source_frame = "ECEF"
+destination_frame = "ENU"
+direction = "ecef-to-enu"
+latitude_type = "geodetic"
+origin = "anchor-point"
+reference_ellipsoid = "WGS84"
+angle_units = "radians"
+length_units = "meters"
+axis_order = "east-north-up"
+handedness = "right-handed"
+operation = "displacement-vector"
+output_shape = "tuple3"
+
 [orchestration]
 default_profile = "numerical-review"
 
@@ -147,6 +169,12 @@ name = "Quaternion matrix conversion review"
 rule = "manual-quaternion-matrix-conversion"
 rollout = "provisional"
 
+[[orchestration.steps]]
+kind = "rule"
+name = "ECEF to ENU transform review"
+rule = "ecef-enu-transform"
+rollout = "provisional"
+
 [[orchestration.profiles]]
 name = "numerical-review"
-steps = ["Manual matrix kernels", "Manual elimination review", "Array representation churn", "Cholesky recurrence review", "Quaternion product review", "Quaternion conjugation review", "Quaternion normalization review", "Quaternion inversion review", "Quaternion vector rotation review", "Quaternion matrix conversion review"]
+steps = ["Manual matrix kernels", "Manual elimination review", "Array representation churn", "Cholesky recurrence review", "Quaternion product review", "Quaternion conjugation review", "Quaternion normalization review", "Quaternion inversion review", "Quaternion vector rotation review", "Quaternion matrix conversion review", "ECEF to ENU transform review"]

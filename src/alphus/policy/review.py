@@ -435,6 +435,77 @@ class QuaternionMatrixConversionPolicy(PythonSourceScanPolicy):
         return tuple(values)
 
 
+class EcefEnuTransformPolicy(PythonSourceScanPolicy):
+    """Consumer-declared contract for one ECEF displacement to ENU basis."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    function_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    components: Annotated[tuple[str, str, str], Field(min_length=3)]
+    latitude_name: str
+    longitude_name: str
+    preferred_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    source_frame: Literal["ECEF"]
+    destination_frame: Literal["ENU"]
+    direction: Literal["ecef-to-enu"]
+    latitude_type: Literal["geodetic"]
+    origin: Literal["anchor-point"]
+    reference_ellipsoid: str
+    angle_units: Literal["radians"]
+    length_units: Literal["meters"]
+    axis_order: Literal["east-north-up"]
+    handedness: Literal["right-handed"]
+    operation: Literal["displacement-vector"]
+    output_shape: Literal["tuple3"]
+    math_module: str = "math"
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("function_names")
+    @classmethod
+    def validate_function_names(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("frame transform function names must be identifiers")
+        require_unique(values, "frame transform function names must be unique")
+        return tuple(values)
+
+    @field_validator("components")
+    @classmethod
+    def validate_components(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if len(values) != 3 or any(not value.isidentifier() for value in values):
+            raise ValueError("frame transform components must be three identifiers")
+        require_unique(values, "frame transform components must be unique")
+        return tuple(values)
+
+    @field_validator("latitude_name", "longitude_name", "math_module")
+    @classmethod
+    def validate_identifier(cls, value: str) -> str:
+        if not value.isidentifier():
+            raise ValueError("frame transform names must be identifiers")
+        return value
+
+    @field_validator("reference_ellipsoid")
+    @classmethod
+    def validate_ellipsoid(cls, value: str) -> str:
+        if not value.strip() or "\n" in value or "\r" in value:
+            raise ValueError("reference ellipsoid must be a non-empty single line")
+        return value
+
+    @field_validator("preferred_helpers")
+    @classmethod
+    def validate_helpers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not value or any(not part.isidentifier() for part in value.split("."))
+            for value in values
+        ):
+            raise ValueError("preferred transform helpers must be dotted identifiers")
+        require_unique(values, "preferred transform helpers must be unique")
+        return tuple(values)
+
+
 class ScipyConstantsPolicy(PythonSourceScanPolicy):
     """Advisory SciPy physical and unit-factor catalog for Python source."""
 

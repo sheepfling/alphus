@@ -40,6 +40,7 @@ from alphus.policy.repository import (
 from alphus.policy.review import (
     ArrayRepresentationPolicy,
     CholeskyRecurrencePolicy,
+    EcefEnuTransformPolicy,
     FastApiPracticePolicy,
     InputContractPolicy,
     ManualEliminationPolicy,
@@ -94,6 +95,7 @@ class CheckPolicies(StrictModel):
     manual_quaternion_inversion: QuaternionInversionPolicy | None = None
     manual_quaternion_vector_rotation: QuaternionVectorRotationPolicy | None = None
     manual_quaternion_matrix_conversion: QuaternionMatrixConversionPolicy | None = None
+    ecef_enu_transform: EcefEnuTransformPolicy | None = None
     scipy_constants: ScipyConstantsPolicy | None = None
     test_quality: TestQualityPolicy | None = None
     input_contracts: InputContractPolicy | None = None

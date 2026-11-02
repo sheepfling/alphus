@@ -72,6 +72,15 @@ def quaternion_to_matrix(w, x, y, z):
     assert quaternion_matrix_conversion_sites(_SOURCE + "\n" + later, _policy()) == []
 
 
+def test_rejects_later_assignment_rebinding_configured_function_name() -> None:
+    rebinding = (
+        _SOURCE
+        + "\nquaternion_to_matrix = lambda *args: "
+        + "[[1, 0, 0], [0, 1, 0], [0, 0, 1]]\n"
+    )
+    assert quaternion_matrix_conversion_sites(rebinding, _policy()) == []
+
+
 def test_configuration_and_scope_bound_the_finding(tmp_path: Path) -> None:
     target = tmp_path / "src/geometry/matrix.py"
     target.parent.mkdir(parents=True)

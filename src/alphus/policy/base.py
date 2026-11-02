@@ -46,6 +46,7 @@ QualityRuleName: TypeAlias = Literal[
     "manual-quaternion-inversion",
     "manual-quaternion-vector-rotation",
     "manual-quaternion-matrix-conversion",
+    "ecef-enu-transform",
     "scipy-constants",
     "test-quality",
     "input-contracts",

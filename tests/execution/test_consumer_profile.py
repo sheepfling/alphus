@@ -54,6 +54,12 @@ def test_manual_matrix_kernel_example_is_scoped_and_provisional() -> None:
     matrix_policy = config.checks.manual_quaternion_matrix_conversion
     assert matrix_policy is not None
     assert matrix_policy.convention == "active-column-scalar-first"
+    frame_policy = config.checks.ecef_enu_transform
+    assert frame_policy is not None
+    assert frame_policy.source_frame == "ECEF"
+    assert frame_policy.destination_frame == "ENU"
+    assert frame_policy.operation == "displacement-vector"
+    assert frame_policy.reference_ellipsoid == "WGS84"
     orchestration = config.orchestration
     assert orchestration is not None
     plan = orchestration.resolve_profile("numerical-review")
@@ -67,6 +73,7 @@ def test_manual_matrix_kernel_example_is_scoped_and_provisional() -> None:
     assert "Quaternion inversion review" in plan.steps
     assert "Quaternion vector rotation review" in plan.steps
     assert "Quaternion matrix conversion review" in plan.steps
+    assert "ECEF to ENU transform review" in plan.steps
     assert "Manual elimination review" in plan.steps
 
 
