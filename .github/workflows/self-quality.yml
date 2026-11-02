@@ -260,7 +260,7 @@ jobs:
           log="$RUNNER_TEMP/mdutils-stub-unmodified-ty.log"
           if "$RUNNER_TEMP/mdutils-checker/bin/python" \
             -m alphus.gates.stubs.typing_fixtures \
-            --positive-fixture "$RUNNER_TEMP/mdutils-stubs-source/tests/fixtures/positive.py" \
+            --positive-fixture "$fixtures/positive.py" \
             --negative-fixture "$fixtures/negative_calibrated.py" \
             --root "$RUNNER_TEMP/mdutils-stubs-calibrated" \
             --checkers ty \
