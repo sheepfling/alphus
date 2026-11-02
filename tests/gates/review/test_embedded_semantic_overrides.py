@@ -53,6 +53,17 @@ def render(cell):
     assert not embedded_override_sites(wrong_anchor, _policy())
 
 
+def test_rebound_map_value_is_not_reported_as_the_mapped_replacement() -> None:
+    source = """\
+def render(cell):
+    replacement = fixed_paragraphs.get(cell.attribute)
+    replacement = cell.text
+    if replacement is not None:
+        return source_anchor(cell.id) + replacement
+"""
+    assert embedded_override_sites(source, _policy()) == []
+
+
 def test_reports_only_configured_scope_and_honors_exclusions(tmp_path: Path) -> None:
     path = tmp_path / "src/render/replacements.py"
     path.parent.mkdir(parents=True)

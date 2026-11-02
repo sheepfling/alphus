@@ -79,6 +79,32 @@ def f(text):
     assert _sites(source, ("render",)) == [(2, 5, "rendered")]
 
 
+def test_finally_predicate_requires_the_rendered_binding_on_all_entry_paths() -> None:
+    source = """\
+def f(text, other):
+    rendered = render(text)
+    try:
+        rendered = other
+    finally:
+        if rendered.rstrip().endswith('!'):
+            return True
+"""
+    assert _sites(source, ("render",)) == []
+
+
+def test_finally_predicate_accepts_a_binding_preserved_on_all_paths() -> None:
+    source = """\
+def f(text):
+    rendered = render(text)
+    try:
+        consume(rendered)
+    finally:
+        if rendered.rstrip().endswith('!'):
+            return True
+"""
+    assert _sites(source, ("render",)) == [(2, 6, "rendered")]
+
+
 def test_advisory_reports_configured_source_path(tmp_path: Path) -> None:
     source = tmp_path / "src/render/table.py"
     source.parent.mkdir(parents=True)

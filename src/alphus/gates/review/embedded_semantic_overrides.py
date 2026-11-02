@@ -68,6 +68,43 @@ def _replacement_return(
             return False
 
 
+def _stores_name(statement: ast.AST, name: str) -> bool:
+    for node in ast.walk(statement):
+        match node:
+            case ast.Name(id=stored, ctx=ast.Store() | ast.Del()) if stored == name:
+                return True
+            case _:
+                continue
+    return False
+
+
+def _is_none_guard(statement: ast.stmt, name: str) -> ast.If | None:
+    match statement:
+        case ast.If(
+            test=ast.Compare(
+                left=ast.Name(id=actual),
+                ops=[ast.IsNot()],
+                comparators=[ast.Constant(value=None)],
+            )
+        ) if actual == name:
+            return statement
+        case _:
+            return None
+
+
+def _guard_returns_replacement(
+    body: Iterable[ast.stmt],
+    replacement_name: str,
+    policy: EmbeddedSemanticOverridePolicy,
+) -> bool:
+    for statement in body:
+        if _stores_name(statement, replacement_name):
+            return False
+        if _replacement_return(statement, replacement_name, policy):
+            return True
+    return False
+
+
 def embedded_override_sites(
     source: str, policy: EmbeddedSemanticOverridePolicy
 ) -> list[tuple[str, int, int, str]]:
@@ -79,42 +116,26 @@ def embedded_override_sites(
     for node in ast.walk(tree):
         match node:
             case ast.FunctionDef(name=function) | ast.AsyncFunctionDef(name=function):
-                replacements = [
-                    (match[0], match[1])
-                    for statement in node.body
-                    if (match := _lookup_assignment(statement, policy)) is not None
-                ]
-                for statement in ast.walk(node):
-                    match statement:
-                        case (
-                            ast.If(
-                                test=ast.Compare(
-                                    left=ast.Name(id=name),
-                                    ops=[ast.IsNot()],
-                                    comparators=[ast.Constant(value=None)],
-                                ),
-                                body=body,
-                            ) as conditional
+                for index, statement in enumerate(node.body):
+                    lookup = _lookup_assignment(statement, policy)
+                    if lookup is None:
+                        continue
+                    replacement_name, lookup_line = lookup
+                    for following in node.body[index + 1 :]:
+                        if _stores_name(following, replacement_name):
+                            break
+                        conditional = _is_none_guard(following, replacement_name)
+                        if conditional is not None and _guard_returns_replacement(
+                            conditional.body, replacement_name, policy
                         ):
-                            for replacement_name, lookup_line in replacements:
-                                if name not in {replacement_name}:
-                                    continue
-                                if any(
-                                    _replacement_return(
-                                        branch, replacement_name, policy
-                                    )
-                                    for branch in body
-                                ):
-                                    sites.add(
-                                        (
-                                            function,
-                                            lookup_line,
-                                            conditional.lineno,
-                                            replacement_name,
-                                        )
-                                    )
-                        case _:
-                            continue
+                            sites.add(
+                                (
+                                    function,
+                                    lookup_line,
+                                    conditional.lineno,
+                                    replacement_name,
+                                )
+                            )
             case _:
                 continue
     return sorted(sites)

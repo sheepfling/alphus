@@ -62,6 +62,17 @@ def _uses_rendered_suffix(test: ast.expr, names: Sequence[str]) -> str | None:
             return None
 
 
+def _common_bindings(states: Sequence[Mapping[str, int]]) -> dict[str, int]:
+    if not states:
+        return {}
+    first = states[0]
+    return {
+        name: line
+        for name, line in first.items()
+        if all(state.get(name) == line for state in states[1:])
+    }
+
+
 def _sites(source: str, helpers: tuple[str, ...]) -> list[tuple[int, int, str]]:
     if not helpers:
         return []
@@ -159,18 +170,18 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[tuple[int, int, str]]:
                 case ast.Try(
                     body=body, handlers=handlers, orelse=orelse, finalbody=finalbody
                 ):
-                    before = current.copy()
-                    paths = [scan(body, current)]
+                    body_state = scan(body, current)
+                    normal_state = scan(orelse, body_state) if orelse else body_state
+                    paths = [normal_state]
                     paths.extend(scan(handler.body, current) for handler in handlers)
-                    if orelse:
-                        paths.append(scan(orelse, current))
                     if finalbody:
-                        paths.append(scan(finalbody, current))
-                    current = {
-                        name: line
-                        for name, line in before.items()
-                        if all(path.get(name) == line for path in paths)
-                    }
+                        # An exception can enter finally before the body completes,
+                        # so only bindings common to normal and exceptional paths
+                        # are available there.
+                        paths.append(current.copy())
+                    current = _common_bindings(paths)
+                    if finalbody:
+                        current = scan(finalbody, current)
                 case ast.Match(cases=cases):
                     before = current.copy()
                     paths = [scan(case.body, current) for case in cases]
