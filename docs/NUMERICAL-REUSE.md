@@ -38,11 +38,19 @@ one scalar-first Hamilton product form. The policy names the exact function and
 the four left, four right, and four output component identifiers. One tuple
 assignment must match all four bilinear equations, including signs; four-vector
 arithmetic or a function name alone does not trigger. This does not resolve
-quaternion types, aliases, scalar-last layouts, separate assignments,
-conjugation, inversion, normalization, sandwich rotation, or matrix conversion.
+quaternion types, aliases, scalar-last layouts, or separate assignments.
 Review any reuse proposal for composition order, handedness, active/passive
 convention, unit-norm behavior, zero and non-finite handling, dtype, shape, and
 returned representation. A match says nothing about correctness or speed.
+
+`manual-quaternion-conjugation` recognizes one additional exact function form:
+a configured function with four configured scalar parameter names and a single
+direct return `(w, -x, -y, -z)` (optionally preceded by a docstring). It does not
+infer quaternion identity from a tuple or function name; the configured path,
+function, and component names supply that contract. Branching, reassignment,
+attribute-based components, and aliases are skipped. The rule does not
+recognize general inversion, normalization, sandwich rotation, or matrix
+conversion.
 
 Handwritten elimination and frame-transform recognition remain unimplemented.
 So do the other quaternion fingerprints and Cholesky covariance/domain checks.

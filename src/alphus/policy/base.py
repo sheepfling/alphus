@@ -39,6 +39,7 @@ QualityRuleName: TypeAlias = Literal[
     "manual-matrix-kernels",
     "array-representation-churn",
     "cholesky-recurrence",
+    "manual-quaternion-conjugation",
     "manual-quaternion-products",
     "scipy-constants",
     "test-quality",

@@ -179,6 +179,36 @@ class QuaternionProductPolicy(PythonSourceScanPolicy):
         return self
 
 
+class QuaternionConjugationPolicy(PythonSourceScanPolicy):
+    """Configured scalar parameters and functions for exact conjugation returns."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    function_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    components: Annotated[tuple[str, str, str, str], Field(min_length=4)]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("function_names")
+    @classmethod
+    def validate_function_names(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("quaternion function names must be identifiers")
+        require_unique(values, "quaternion function names must be unique")
+        return tuple(values)
+
+    @field_validator("components")
+    @classmethod
+    def validate_components(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if len(values) != 4 or any(not value.isidentifier() for value in values):
+            raise ValueError("quaternion components must be four identifiers")
+        require_unique(values, "quaternion components must be unique")
+        return tuple(values)
+
+
 class ScipyConstantsPolicy(PythonSourceScanPolicy):
     """Advisory SciPy physical and unit-factor catalog for Python source."""
 

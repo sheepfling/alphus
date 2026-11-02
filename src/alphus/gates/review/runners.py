@@ -18,6 +18,9 @@ from alphus.gates.review.frameworks.sqlalchemy_practices import (
 )
 from alphus.gates.review.input_contracts import check_input_contracts
 from alphus.gates.review.manual_matrix_kernels import check_manual_matrix_kernels
+from alphus.gates.review.manual_quaternion_conjugation import (
+    check_manual_quaternion_conjugation,
+)
 from alphus.gates.review.manual_quaternion_product import (
     check_manual_quaternion_products,
 )
@@ -70,6 +73,16 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
                 require_policy(
                     config.checks.manual_quaternion_products,
                     "manual_quaternion_products",
+                ),
+            )
+        ),
+        "manual-quaternion-conjugation": lambda root, files, config: (
+            check_manual_quaternion_conjugation(
+                root,
+                files,
+                require_policy(
+                    config.checks.manual_quaternion_conjugation,
+                    "manual_quaternion_conjugation",
                 ),
             )
         ),

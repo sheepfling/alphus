@@ -31,6 +31,13 @@ left_components = ["lw", "lx", "ly", "lz"]
 right_components = ["rw", "rx", "ry", "rz"]
 result_components = ["ow", "ox", "oy", "oz"]
 
+[checks.manual_quaternion_conjugation]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/geometry/*.py"]
+function_names = ["conjugate_quaternion"]
+components = ["w", "x", "y", "z"]
+
 [orchestration]
 default_profile = "numerical-review"
 
@@ -58,6 +65,12 @@ name = "Quaternion product review"
 rule = "manual-quaternion-products"
 rollout = "provisional"
 
+[[orchestration.steps]]
+kind = "rule"
+name = "Quaternion conjugation review"
+rule = "manual-quaternion-conjugation"
+rollout = "provisional"
+
 [[orchestration.profiles]]
 name = "numerical-review"
-steps = ["Manual matrix kernels", "Array representation churn", "Cholesky recurrence review", "Quaternion product review"]
+steps = ["Manual matrix kernels", "Array representation churn", "Cholesky recurrence review", "Quaternion product review", "Quaternion conjugation review"]

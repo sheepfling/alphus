@@ -46,6 +46,7 @@ from alphus.policy.review import (
     NumericLiteralPolicy,
     PositionalInterfacePolicy,
     PydanticPracticePolicy,
+    QuaternionConjugationPolicy,
     QuaternionProductPolicy,
     ScipyConstantsPolicy,
     SourceFamilyPolicy,
@@ -81,6 +82,7 @@ class CheckPolicies(StrictModel):
     manual_matrix_kernels: ManualMatrixKernelPolicy | None = None
     array_representation_churn: ArrayRepresentationPolicy | None = None
     cholesky_recurrence: CholeskyRecurrencePolicy | None = None
+    manual_quaternion_conjugation: QuaternionConjugationPolicy | None = None
     manual_quaternion_products: QuaternionProductPolicy | None = None
     scipy_constants: ScipyConstantsPolicy | None = None
     test_quality: TestQualityPolicy | None = None
