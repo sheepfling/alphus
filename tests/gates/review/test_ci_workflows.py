@@ -252,6 +252,103 @@ def test_single_line_runs_and_other_workflow_formats_are_ignored() -> None:
     )
 
 
+def test_long_static_inline_script_is_configurable_and_suppressible() -> None:
+    script = """echo prepare
+python -m pip install -e .
+ruff check src
+mypy src
+python -m pytest -q
+"""
+    source = """jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo prepare
+          python -m pip install -e .
+          ruff check src
+          mypy src
+          python -m pytest -q
+"""
+    configured = policy(maximum_inline_run_lines=5)
+    findings = workflow_run_findings(source, ".github/workflows/ci.yml", configured)
+    assert len(findings) == 1
+    assert findings[0].rule_id.endswith("/long-inline-workflow-script")
+    assert "5 nonblank lines" in findings[0].message
+    assert "job 'checks' (line 5)" in findings[0].message
+
+    assert (
+        workflow_run_findings(
+            source,
+            ".github/workflows/ci.yml",
+            policy(maximum_inline_run_lines=6),
+        )
+        == []
+    )
+    assert (
+        workflow_run_findings(
+            source,
+            ".github/workflows/ci.yml",
+            policy(maximum_inline_run_lines=5, ignore_run_blocks=(script,)),
+        )
+        == []
+    )
+
+
+def test_long_script_review_skips_contextual_and_unallowlisted_matrix_commands() -> (
+    None
+):
+    matrix = """jobs:
+  checks:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.11', '3.12']
+    steps:
+      - run: |
+          echo prepare
+          python -m pip install -e .
+          ruff check src
+          mypy src
+          python -m pytest --python ${{ matrix.python }}
+"""
+    conditional = matrix.replace(
+        "      - run: |", "      - if: runner.os == 'Linux'\n        run: |"
+    ).replace("    strategy:\n      matrix:\n        python: ['3.11', '3.12']\n", "")
+    configured = policy(maximum_inline_run_lines=5)
+    assert workflow_run_findings(matrix, ".github/workflows/ci.yml", configured) == []
+    assert (
+        workflow_run_findings(conditional, ".github/workflows/ci.yml", configured) == []
+    )
+
+
+def test_long_azure_inline_script_uses_the_same_threshold() -> None:
+    source = """jobs:
+- job: checks
+  pool: ubuntu-latest
+  steps:
+  - bash: |
+      echo prepare
+      python -m pip install -e .
+      ruff check src
+      mypy src
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.12'
+"""
+    findings = workflow_run_findings(
+        source,
+        "azure-pipelines.yml",
+        policy(
+            azure_workflow_paths=("azure-pipelines.yml",),
+            maximum_inline_run_lines=4,
+        ),
+    )
+    assert len(findings) == 1
+    assert findings[0].rule_id.endswith("/long-inline-workflow-script")
+    assert "4 nonblank lines" in findings[0].message
+
+
 def test_malformed_yaml_is_an_explicit_error() -> None:
     with pytest.raises(ValueError, match="cannot parse GitHub Actions workflow"):
         workflow_run_findings("jobs: [", ".github/workflows/bad.yml", policy())

@@ -1,12 +1,18 @@
 # CI workflow duplication review
 
-`ci-workflows` is an opt-in, read-only review rule for repeated static
-multiline GitHub Actions `run` blocks and repeated setup actions. It groups
+`ci-workflows` is an opt-in, read-only review rule for long static inline
+scripts, repeated GitHub Actions `run` blocks, and repeated setup actions. It groups
 exact command text or an identical `setup-*` action with identical static
 `with` inputs across distinct jobs with the same static `runs-on` value. By default matrix jobs,
 conditions, dependencies, permissions, environments, step overrides, expressions,
 and aliases are excluded. Literal block scalars and configured minimum line
 counts constrain the scan.
+
+`maximum_inline_run_lines` (default `20`) reports a long inline script as a
+maintainability candidate. It counts nonblank source lines in literal multiline
+`run`/`script`/`bash` blocks. Contextual steps and unsupported jobs remain
+excluded, and `ignore_run_blocks` suppresses an exact script. A finding does
+not claim that the steps are redundant or should be removed.
 
 A repeated setup-action candidate is informational: jobs have isolated
 environments, so setup may be required in every job. It recommends reviewing

@@ -96,7 +96,7 @@ class ScipyConstantsPolicy(PythonSourceScanPolicy):
 
 
 class CiWorkflowPolicy(SourceScanPolicy):
-    """Read-only, low-confidence review for repeated static Actions run blocks."""
+    """Read-only review for repeated workflow blocks and long inline scripts."""
 
     workflow_paths: tuple[str, ...] = (".github/workflows/**",)
     azure_workflow_paths: tuple[str, ...] = ()
@@ -104,6 +104,7 @@ class CiWorkflowPolicy(SourceScanPolicy):
     ignore_setup_actions: tuple[str, ...] = ()
     matrix_invariant_run_blocks: tuple[str, ...] = ()
     minimum_run_lines: Annotated[int, Field(ge=2)] = 2
+    maximum_inline_run_lines: Annotated[int, Field(ge=3)] = 20
     severity: Severity = "info"
 
     @field_validator("workflow_paths", "azure_workflow_paths")

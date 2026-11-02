@@ -445,13 +445,39 @@ def workflow_run_findings(
             source, path, policy.minimum_run_lines, policy.matrix_invariant_run_blocks
         )
     )
+    findings: list[Finding] = []
+    for _runner, job, script, line, _matrix_scoped in blocks:
+        nonblank_lines = sum(bool(part.strip()) for part in script.splitlines())
+        if (
+            script in policy.ignore_run_blocks
+            or nonblank_lines < policy.maximum_inline_run_lines
+        ):
+            continue
+        findings.append(
+            Finding(
+                rule_tag(
+                    Scope.ANY,
+                    Framework.NONE,
+                    Category.ORCHESTRATION,
+                    "long-inline-workflow-script",
+                ),
+                path,
+                (
+                    f"static inline workflow script has {nonblank_lines} nonblank lines "
+                    f"in job {job!r} (line {line}); review whether a checked-in script "
+                    "would make this workflow easier to maintain. This is a maintainability "
+                    "candidate, not evidence the steps or matrix are redundant."
+                ),
+                line,
+                policy.severity,
+            )
+        )
     groups: dict[tuple[str, str], list[tuple[str, int, bool]]] = defaultdict(list)
     for runner, job, script, line, matrix_scoped in blocks:
         if script in policy.ignore_run_blocks:
             continue
         groups[(runner, script)].append((job, line, matrix_scoped))
 
-    findings: list[Finding] = []
     for (_, script), occurrences in sorted(groups.items(), key=lambda item: item[0]):
         unique_jobs = sorted({job for job, _, _ in occurrences})
         matrix_only = len(unique_jobs) == 1 and all(

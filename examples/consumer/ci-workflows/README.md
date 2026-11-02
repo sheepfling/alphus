@@ -16,6 +16,9 @@ candidate that the command runs for every matrix leg. Matrix-dependent tests
 are excluded, and the finding is not a claim that the matrix is redundant.
 
 The rule is read-only and advisory. It does not execute workflows or edit them.
+Long static inline scripts can also be reviewed with the configurable
+`maximum_inline_run_lines` threshold (default 20 nonblank lines); contextual or
+unsupported jobs remain excluded.
 Run the consumer example with an installed Alphus checkout:
 
 ```shell

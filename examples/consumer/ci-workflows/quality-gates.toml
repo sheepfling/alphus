@@ -13,6 +13,7 @@ ignore_run_blocks = []
 ignore_setup_actions = []
 matrix_invariant_run_blocks = []
 minimum_run_lines = 2
+maximum_inline_run_lines = 20
 severity = "info"
 
 [orchestration]
