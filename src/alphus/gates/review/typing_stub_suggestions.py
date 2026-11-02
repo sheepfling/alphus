@@ -7,7 +7,7 @@ import sys
 import tomllib
 from collections.abc import Iterable
 from importlib import metadata
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, cast
 
 from packaging.requirements import InvalidRequirement, Requirement
@@ -17,8 +17,12 @@ from packaging.version import Version
 
 from alphus.config import TypingStubCandidate, TypingStubSuggestionPolicy
 from alphus.contracts.findings import Finding
+from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.support.source_text import read_utf8_text
 
-_RULE_ID = "alphus/python/none/dependencies/typing-stub-suggestion"
+_RULE_ID = rule_tag(
+    Scope.PYTHON, Framework.NONE, Category.DEPENDENCIES, "typing-stub-suggestion"
+)
 
 # Verified from typeshed's PyYAML metadata and current PyPI package metadata on
 # 2026-11-02, plus scipy-stubs' official project metadata.
@@ -50,22 +54,31 @@ def _imports(source: str) -> set[str]:
         return set()
     found: set[str] = set()
     for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            found.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            found.add(node.module)
+        match node:
+            case ast.Import(names=names):
+                found.update(alias.name for alias in names)
+            case ast.ImportFrom(module=str() as module):
+                found.add(module)
+            case _:
+                continue
     return found
 
 
 def _requirements(values: object) -> list[Requirement]:
-    if not isinstance(values, list):
-        return []
+    match values:
+        case list():
+            pass
+        case _:
+            return []
     result: list[Requirement] = []
     for value in cast(list[object], values):
-        if isinstance(value, str):
-            try:
-                result.append(Requirement(value))
-            except InvalidRequirement:
+        match value:
+            case str() as requirement:
+                try:
+                    result.append(Requirement(requirement))
+                except InvalidRequirement:
+                    continue
+            case _:
                 continue
     return result
 
@@ -80,38 +93,50 @@ def check_typing_stub_suggestions(
         if relative.suffix != ".py" or not (checkout / relative).is_file():
             continue
         try:
-            observed.update(_imports((checkout / relative).read_text(encoding="utf-8")))
+            observed.update(_imports(read_utf8_text(checkout / relative)))
         except (OSError, UnicodeError):
             continue
     try:
         manifest_path = checkout / policy.dependency_file
         manifest_path.resolve(strict=True).relative_to(checkout)
-        manifest = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest = tomllib.loads(read_utf8_text(manifest_path))
     except (OSError, ValueError, tomllib.TOMLDecodeError):
         return [
             Finding(
                 rule_id=_RULE_ID,
                 path=policy.dependency_file,
-                message="Stub suggestions were not evaluated because the configured dependency manifest could not be read.",
+                message=(
+                    "Stub suggestions were not evaluated because the configured "
+                    "dependency manifest could not be read."
+                ),
                 severity=policy.severity,
             )
         ]
 
     project_value = manifest.get("project", {})
-    project: dict[str, Any] = (
-        cast(dict[str, Any], project_value) if isinstance(project_value, dict) else {}
-    )
+    match project_value:
+        case dict():
+            # opaque-boundary: TOML project tables contain heterogeneous fields before validation.
+            project: dict[str, Any] = cast(dict[str, Any], project_value)
+        case _:
+            project = {}
     optional_value = project.get("optional-dependencies", {})
-    optional: dict[str, Any] = (
-        cast(dict[str, Any], optional_value) if isinstance(optional_value, dict) else {}
-    )
+    match optional_value:
+        case dict():
+            # opaque-boundary: TOML optional groups are heterogeneous before validation.
+            optional: dict[str, Any] = cast(dict[str, Any], optional_value)
+        case _:
+            optional = {}
     missing_groups = [name for name in policy.typing_groups if name not in optional]
     if missing_groups:
         return [
             Finding(
                 rule_id=_RULE_ID,
                 path=policy.dependency_file,
-                message=f"Stub suggestions were not evaluated: configured PEP 621 typing group(s) are absent: {', '.join(missing_groups)}.",
+                message=(
+                    "Stub suggestions were not evaluated: configured PEP 621 typing "
+                    f"group(s) are absent: {', '.join(missing_groups)}."
+                ),
                 severity=policy.severity,
             )
         ]
@@ -164,7 +189,11 @@ def check_typing_stub_suggestions(
                 Finding(
                     rule_id=_RULE_ID,
                     path=policy.dependency_file,
-                    message=f"Import {candidate.import_name!r} was observed, but installed metadata for {candidate.runtime_distribution} is unavailable; stub need was not evaluated.",
+                    message=(
+                        f"Import {candidate.import_name!r} was observed, but installed "
+                        f"metadata for {candidate.runtime_distribution} is unavailable; "
+                        "stub need was not evaluated."
+                    ),
                     severity=policy.severity,
                 )
             )
@@ -197,14 +226,21 @@ def check_typing_stub_suggestions(
                     )
                 )
             continue
-        package_path = candidate.package_path or candidate.import_name.split(".")[0]
+        package_path = PurePosixPath(
+            candidate.package_path or candidate.import_name.split(".")[0]
+        )
+        package_parts = package_path.parts
         runtime_files = runtime.files
         if runtime_files is None:
             findings.append(
                 Finding(
                     rule_id=_RULE_ID,
                     path=policy.dependency_file,
-                    message=f"Installed files for {candidate.runtime_distribution} could not be inspected; bundled typing support and stub need were not evaluated.",
+                    message=(
+                        f"Installed files for {candidate.runtime_distribution} could "
+                        "not be inspected; bundled typing support and stub need were "
+                        "not evaluated."
+                    ),
                     severity=policy.severity,
                 )
             )
@@ -212,7 +248,7 @@ def check_typing_stub_suggestions(
         package_files = [
             item
             for item in runtime_files
-            if item.as_posix().startswith(package_path + "/")
+            if item.parts[: len(package_parts)] == package_parts
         ]
         if any(
             item.name == "py.typed" or item.suffix == ".pyi" for item in package_files
@@ -233,7 +269,15 @@ def check_typing_stub_suggestions(
             Finding(
                 rule_id=_RULE_ID,
                 path=policy.dependency_file,
-                message=f"{', '.join(locations)} imports resolve to declared {candidate.runtime_distribution} {runtime_version}; no inline py.typed or bundled .pyi files were found at {package_path}/, and {candidate.stub_distribution}{candidate.stub_version_specifier or ''} is not declared in typing group(s) {', '.join(policy.typing_groups)}. Consider verifying and declaring it for {', '.join(policy.checkers)}.",
+                message=(
+                    f"{', '.join(locations)} imports resolve to declared "
+                    f"{candidate.runtime_distribution} {runtime_version}; no inline "
+                    f"py.typed or bundled .pyi files were found at {package_path}, "
+                    f"and {candidate.stub_distribution}"
+                    f"{candidate.stub_version_specifier or ''} is not declared in "
+                    f"typing group(s) {', '.join(policy.typing_groups)}. Consider "
+                    f"verifying and declaring it for {', '.join(policy.checkers)}."
+                ),
                 severity=policy.severity,
             )
         )

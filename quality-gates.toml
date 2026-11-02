@@ -69,6 +69,7 @@ opaque_boundary_paths = [
   "src/alphus/execution/step_results.py",
   "src/alphus/execution/worker_protocol.py",
   "src/alphus/gates/source/cyclomatic_complexity.py",
+  "src/alphus/gates/review/typing_stub_suggestions.py",
   "src/alphus/policy/sources.py",
   "tests/execution/test_shared_quality_intent_execution.py",
   "tests/execution/test_history_index.py",

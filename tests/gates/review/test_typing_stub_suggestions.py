@@ -1,4 +1,7 @@
+from collections.abc import Iterable
 from pathlib import Path
+
+from pytest import MonkeyPatch
 
 from alphus.config import TypingStubCandidate, TypingStubSuggestionPolicy
 from alphus.gates.review import typing_stub_suggestions as gate
@@ -32,7 +35,7 @@ def _default_policy(
     )
 
 
-def _checkout(tmp_path: Path, dependencies: list[str] | None = None) -> None:
+def _checkout(tmp_path: Path, dependencies: Iterable[str] | None = None) -> None:
     (tmp_path / "yaml").mkdir()
     (tmp_path / "app.py").write_text("import yaml\n", encoding="utf-8")
     deps = dependencies or []
@@ -44,33 +47,43 @@ def _checkout(tmp_path: Path, dependencies: list[str] | None = None) -> None:
     )
 
 
+def _python_sources(tmp_path: Path) -> tuple[Path, ...]:
+    return tuple(tmp_path.glob("*.py"))
+
+
 class _Distribution:
     version = "6.0.2"
     files = ()
 
 
 def test_suggests_only_explicit_stub_candidate_for_observed_import(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     _checkout(tmp_path)
     monkeypatch.setattr(gate.metadata, "distribution", lambda _: _Distribution())
 
-    findings = gate.check_typing_stub_suggestions(tmp_path, [Path("app.py")], _policy())
+    findings = gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), _policy()
+    )
 
     assert len(findings) == 1
     assert "types-PyYAML" in findings[0].message
     assert "yaml" in findings[0].message
 
 
-def test_does_not_suggest_when_stub_is_declared(tmp_path: Path, monkeypatch) -> None:
+def test_does_not_suggest_when_stub_is_declared(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
     _checkout(tmp_path, ['"types-PyYAML>=6"'])
     monkeypatch.setattr(gate.metadata, "distribution", lambda _: _Distribution())
 
-    assert not gate.check_typing_stub_suggestions(tmp_path, [Path("app.py")], _policy())
+    assert not gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), _policy()
+    )
 
 
 def test_skips_candidate_outside_configured_runtime_version(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     _checkout(tmp_path)
     monkeypatch.setattr(gate.metadata, "distribution", lambda _: _Distribution())
@@ -79,37 +92,47 @@ def test_skips_candidate_outside_configured_runtime_version(
         update={"supported_runtime_versions": ">=7"}
     )
     policy = policy.model_copy(update={"candidates": (candidate,)})
-    assert not gate.check_typing_stub_suggestions(tmp_path, [Path("app.py")], policy)
+    assert not gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), policy
+    )
 
 
 def test_missing_runtime_metadata_is_unknown_not_missing_stub(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     _checkout(tmp_path)
 
-    def unavailable(_: str):
+    def unavailable(_: str) -> None:
         raise gate.metadata.PackageNotFoundError
 
     monkeypatch.setattr(gate.metadata, "distribution", unavailable)
-    findings = gate.check_typing_stub_suggestions(tmp_path, [Path("app.py")], _policy())
+    findings = gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), _policy()
+    )
     assert len(findings) == 1
     assert "not evaluated" in findings[0].message
     assert "types-PyYAML" not in findings[0].message
 
 
-def test_suppresses_inline_typed_package(tmp_path: Path, monkeypatch) -> None:
+def test_suppresses_inline_typed_package(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
     _checkout(tmp_path)
     monkeypatch.setattr(
         gate.metadata, "distribution", lambda _: _DistributionWithFiles()
     )
-    assert not gate.check_typing_stub_suggestions(tmp_path, [Path("app.py")], _policy())
+    assert not gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), _policy()
+    )
 
 
 class _DistributionWithFiles(_Distribution):
     files = (Path("yaml/py.typed"),)
 
 
-def test_builtin_yaml_mapping_works_with_dev_group(tmp_path: Path, monkeypatch) -> None:
+def test_builtin_yaml_mapping_works_with_dev_group(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
     _checkout(tmp_path)
     (tmp_path / "pyproject.toml").write_text(
         '[project]\ndependencies = ["PyYAML>=6,<7"]\n'
@@ -119,7 +142,7 @@ def test_builtin_yaml_mapping_works_with_dev_group(tmp_path: Path, monkeypatch) 
     monkeypatch.setattr(gate.metadata, "distribution", lambda _: _Distribution())
 
     findings = gate.check_typing_stub_suggestions(
-        tmp_path, [Path("app.py")], _default_policy()
+        tmp_path, _python_sources(tmp_path), _default_policy()
     )
     assert len(findings) == 1
     assert "types-PyYAML" in findings[0].message
@@ -127,7 +150,7 @@ def test_builtin_yaml_mapping_works_with_dev_group(tmp_path: Path, monkeypatch) 
 
 
 def test_builtin_yaml_mapping_skips_duplicate_dev_stubs(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     _checkout(tmp_path)
     (tmp_path / "pyproject.toml").write_text(
@@ -138,12 +161,12 @@ def test_builtin_yaml_mapping_skips_duplicate_dev_stubs(
     monkeypatch.setattr(gate.metadata, "distribution", lambda _: _Distribution())
 
     assert not gate.check_typing_stub_suggestions(
-        tmp_path, [Path("app.py")], _default_policy()
+        tmp_path, _python_sources(tmp_path), _default_policy()
     )
 
 
 def test_builtin_scipy_mapping_recommends_matching_release(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     _checkout(tmp_path)
     (tmp_path / "app.py").write_text("import scipy\n", encoding="utf-8")
@@ -156,14 +179,14 @@ def test_builtin_scipy_mapping_recommends_matching_release(
     monkeypatch.setattr(gate.sys, "version_info", (3, 12, 0, "final", 0))
 
     findings = gate.check_typing_stub_suggestions(
-        tmp_path, [Path("app.py")], _default_policy()
+        tmp_path, _python_sources(tmp_path), _default_policy()
     )
     assert len(findings) == 1
     assert "scipy-stubs==1.18.1.*" in findings[0].message
 
 
 def test_builtin_scipy_mapping_reports_unverified_runtime_version(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     _checkout(tmp_path)
     (tmp_path / "app.py").write_text("import scipy\n", encoding="utf-8")
@@ -178,7 +201,7 @@ def test_builtin_scipy_mapping_reports_unverified_runtime_version(
     monkeypatch.setattr(gate.sys, "version_info", (3, 12, 0, "final", 0))
 
     findings = gate.check_typing_stub_suggestions(
-        tmp_path, [Path("app.py")], _default_policy()
+        tmp_path, _python_sources(tmp_path), _default_policy()
     )
     assert len(findings) == 1
     assert "outside that verified range" in findings[0].message
@@ -186,7 +209,7 @@ def test_builtin_scipy_mapping_reports_unverified_runtime_version(
 
 
 def test_builtin_scipy_mapping_reports_unsupported_python(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     _checkout(tmp_path)
     (tmp_path / "app.py").write_text("import scipy\n", encoding="utf-8")
@@ -199,7 +222,7 @@ def test_builtin_scipy_mapping_reports_unsupported_python(
     monkeypatch.setattr(gate.sys, "version_info", (3, 11, 0, "final", 0))
 
     findings = gate.check_typing_stub_suggestions(
-        tmp_path, [Path("app.py")], _default_policy()
+        tmp_path, _python_sources(tmp_path), _default_policy()
     )
     assert len(findings) == 1
     assert "Python >=3.12,<4" in findings[0].message
@@ -207,7 +230,7 @@ def test_builtin_scipy_mapping_reports_unsupported_python(
 
 
 def test_builtin_catalog_can_be_disabled_per_import(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     _checkout(tmp_path)
     (tmp_path / "pyproject.toml").write_text(
@@ -218,7 +241,7 @@ def test_builtin_catalog_can_be_disabled_per_import(
     monkeypatch.setattr(gate.metadata, "distribution", lambda _: _Distribution())
 
     assert not gate.check_typing_stub_suggestions(
-        tmp_path, [Path("app.py")], _default_policy(disabled_imports=("yaml",))
+        tmp_path, _python_sources(tmp_path), _default_policy(disabled_imports=("yaml",))
     )
 
 
