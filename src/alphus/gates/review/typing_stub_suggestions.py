@@ -110,7 +110,7 @@ def _imports(source: str) -> tuple[tuple[str, int], ...] | None:
         match node:
             case ast.Import(names=names):
                 found.extend((alias.name, node.lineno) for alias in names)
-            case ast.ImportFrom(module=str() as module):
+            case ast.ImportFrom(module=str() as module, level=0):
                 found.append((module, node.lineno))
             case _:
                 continue

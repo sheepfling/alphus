@@ -351,6 +351,34 @@ def test_unparseable_source_is_not_reported_as_executed_zero(
     assert "syntax could not be parsed" in findings[0].message
 
 
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("from .yaml import local_helper\n", ()),
+        ("from ..yaml.submodule import local_helper\n", ()),
+        ("from yaml import safe_load\n", (("yaml", 1),)),
+    ],
+)
+def test_relative_imports_are_not_treated_as_external_yaml_imports(
+    source: str, expected: tuple[tuple[str, int], ...]
+) -> None:
+    assert gate._imports(source) == expected
+
+
+def test_relative_yaml_import_does_not_recommend_external_stub(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    _checkout(tmp_path)
+    (tmp_path / "app.py").write_text(
+        "from .yaml import local_helper\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(gate.metadata, "distribution", _distribution)
+
+    assert not gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), _policy()
+    )
+
+
 def test_runtime_distribution_must_be_declared_before_stub_need_is_evaluated(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
