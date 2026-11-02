@@ -9,9 +9,9 @@ from alphus.gates.review.run_artifacts import check_run_artifacts, run_artifact_
 
 
 def policy(**updates: object) -> RunArtifactPolicy:
-    values: dict[str, object] = {"extensions": (".py",), "exclude": ()}
-    values.update(updates)
-    return RunArtifactPolicy.model_validate(values)
+    return RunArtifactPolicy.model_validate(
+        {"extensions": (".py",), "exclude": (), **updates}
+    )
 
 
 def test_conditional_write_then_read_same_declared_reused_path() -> None:

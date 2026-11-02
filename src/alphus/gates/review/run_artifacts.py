@@ -69,27 +69,37 @@ def _assigned_names(function: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str
     names: set[str] = set()
 
     def visit(node: ast.AST) -> None:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            if node is not function:
-                names.add(node.name)
+        match node:
+            case (
+                ast.FunctionDef(name=name)
+                | ast.AsyncFunctionDef(name=name)
+                | ast.ClassDef(name=name)
+            ):
+                if node is not function:
+                    names.add(name)
+                    return
+            case (
+                ast.Lambda()
+                | ast.ListComp()
+                | ast.SetComp()
+                | ast.DictComp()
+                | ast.GeneratorExp()
+            ):
                 return
-        elif isinstance(
-            node,
-            (ast.Lambda, ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp),
-        ):
-            return
-        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
-            names.add(node.id)
-        elif isinstance(node, ast.Import):
-            names.update(
-                alias.asname or alias.name.split(".", 1)[0] for alias in node.names
-            )
-        elif isinstance(node, ast.ImportFrom):
-            names.update(alias.asname or alias.name for alias in node.names)
-        elif isinstance(node, ast.ExceptHandler) and node.name is not None:
-            names.add(node.name)
-        elif isinstance(node, (ast.Global, ast.Nonlocal)):
-            names.update(node.names)
+            case ast.Name(ctx=ast.Store(), id=name):
+                names.add(name)
+            case ast.Import(names=aliases):
+                names.update(
+                    alias.asname or alias.name.split(".", 1)[0] for alias in aliases
+                )
+            case ast.ImportFrom(names=aliases):
+                names.update(alias.asname or alias.name for alias in aliases)
+            case ast.ExceptHandler(name=name) if name is not None:
+                names.add(name)
+            case ast.Global(names=global_names) | ast.Nonlocal(names=global_names):
+                names.update(global_names)
+            case _:
+                pass
         for child in ast.iter_child_nodes(node):
             visit(child)
 
@@ -186,7 +196,8 @@ def _function_findings(
                         path,
                         f"configured output writer at line {writer.lineno} is conditional, "
                         f"while the same declared reusable path `{name}` is read later; "
-                        "review current-run artifact membership (stale reuse is possible, not proven)",
+                        "review current-run artifact membership (stale reuse is possible, "
+                        "not proven)",
                         writer.lineno,
                         "warning",
                     )
