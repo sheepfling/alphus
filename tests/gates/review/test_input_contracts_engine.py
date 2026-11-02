@@ -608,14 +608,6 @@ def evaluate(packet: Mapping[str, JsonValue]):
     assert findings == []
 
 
-@pytest.mark.parametrize(
-    ("subject", "pattern"),
-    [
-        ('{"reader": "value"}', '{"reader": captured}'),
-        ('["value"]', "[*captured]"),
-        ('{"reader": "value", "other": "item"}', '{"reader": _, **captured}'),
-    ],
-)
 def test_match_capture_of_selected_parameter_is_not_original_mapping_evidence() -> None:
     source = """from collections.abc import Mapping
 from app.json_types import JsonValue
@@ -683,9 +675,9 @@ def evaluate(packet: Mapping[str, JsonValue]):
 @pytest.mark.parametrize(
     ("subject", "pattern"),
     [
-        ('{"reader": "value"}', '{"reader": _read_state}'),
-        ('["value"]', "[*_read_state]"),
-        ('{"reader": "value", "other": "item"}', '{"reader": _, **_read_state}'),
+        ('{"reader": "value"}', '{"reader": captured}'),
+        ('["value"]', "[*captured]"),
+        ('{"reader": "value", "other": "item"}', '{"reader": _, **captured}'),
     ],
 )
 def test_unrelated_match_captures_keep_module_helper_evidence(
