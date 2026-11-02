@@ -20,6 +20,16 @@ Other consumers retain the default error threshold unless they explicitly set
 `orchestration.failure_threshold = "warning"` or a rule step's `severity`.
 Native command failures still fail.
 
+The opt-in `python-style.semantic_result_paths` check reviews visibly public
+functions and methods in the selected files for fixed-position tuple results.
+Private names, methods on private classes, homogeneous variadic tuples, named
+records, and conventional coordinate/range or wire conversion APIs are
+accepted. `typing.Tuple` and its imported aliases are followed in nested result
+annotations. The rule uses names and local syntax only: it cannot resolve
+arbitrary imported type aliases or determine external/dynamic consumers. Give
+wire and compatibility contracts explicit names, and review each finding; the
+check never rewrites APIs or callers.
+
 ## Numeric literals
 
 Selector: `numeric-literals`. IDs: `alphus/python/none/style/inline-constant` and

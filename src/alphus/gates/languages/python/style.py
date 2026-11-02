@@ -229,13 +229,27 @@ def has_undifferentiated_pattern_name(name: str, value: ast.expr) -> bool:
     return False
 
 
-def has_unnamed_tuple_result(annotation: ast.expr) -> bool:
+def has_unnamed_tuple_result(
+    annotation: ast.expr,
+    tuple_names: AbstractSet[str] = frozenset({"tuple", "Tuple"}),
+    container_modules: AbstractSet[str] = frozenset({"typing"}),
+) -> bool:
     """Require a named record for fixed-position tuple results."""
     if isinstance(annotation, ast.BinOp) and isinstance(annotation.op, ast.BitOr):
-        return has_unnamed_tuple_result(annotation.left) or has_unnamed_tuple_result(
-            annotation.right
-        )
-    if isinstance(annotation, ast.Subscript) and type_name(annotation.value) == "tuple":
+        return has_unnamed_tuple_result(
+            annotation.left, tuple_names, container_modules
+        ) or has_unnamed_tuple_result(annotation.right, tuple_names, container_modules)
+    tuple_type = (
+        type_name(annotation.value) if isinstance(annotation, ast.Subscript) else ""
+    )
+    is_tuple = tuple_type in tuple_names or (
+        isinstance(annotation, ast.Subscript)
+        and isinstance(annotation.value, ast.Attribute)
+        and annotation.value.attr == "Tuple"
+        and isinstance(annotation.value.value, ast.Name)
+        and annotation.value.value.id in container_modules
+    )
+    if isinstance(annotation, ast.Subscript) and is_tuple:
         if not isinstance(annotation.slice, ast.Tuple):
             return False
         items = annotation.slice.elts
@@ -243,7 +257,9 @@ def has_unnamed_tuple_result(annotation: ast.expr) -> bool:
             isinstance(item, ast.Constant) and item.value is Ellipsis for item in items
         )
     if isinstance(annotation, ast.Subscript):
-        return has_unnamed_tuple_result(annotation.slice)
+        return has_unnamed_tuple_result(
+            annotation.slice, tuple_names, container_modules
+        )
     return False
 
 
@@ -427,7 +443,8 @@ class StyleVisitor(ast.NodeVisitor):
         self.boundary_min_reason_chars = policy.opaque_boundary_min_reason_chars
         self.forbidden_main_imports = set(policy.forbidden_main_imports)
         self.function_depth = 0
-        self.tuple_result_functions: list[tuple[int, bool]] = []
+        self.tuple_result_functions: list[tuple[int, bool, bool]] = []
+        self.private_result_scope = 0
         self.type_checking_depth = 0
         self.type_checking_names = {"TYPE_CHECKING"}
         self.typing_names = {"typing"}
@@ -644,12 +661,36 @@ class StyleVisitor(ast.NodeVisitor):
             ):
                 self.findings["bare_containers"].append(arg.lineno)
             self.check_opaque(arg.annotation, declaration_line)
-        has_tuple_result = (
+        conventional_pair = node.name.casefold() in {
+            "coordinate",
+            "coordinates",
+            "range",
+            "range_bounds",
+            "bounds",
+            "interval",
+            "to_wire",
+            "from_wire",
+            "serialize",
+            "deserialize",
+            "to_legacy",
+            "from_legacy",
+        }
+        public_result_api = (
             self.semantic_results
-            and node.returns is not None
-            and has_unnamed_tuple_result(node.returns)
+            and self.private_result_scope == 0
+            and not node.name.startswith("_")
+            and not conventional_pair
         )
-        self.tuple_result_functions.append((node.lineno, has_tuple_result))
+        has_tuple_result = (
+            public_result_api
+            and node.returns is not None
+            and has_unnamed_tuple_result(
+                node.returns, self.tuple_names, self.container_modules
+            )
+        )
+        self.tuple_result_functions.append(
+            (node.lineno, public_result_api, has_tuple_result)
+        )
         if node.returns is not None and has_quoted_type(node.returns):
             self.findings["quoted_types"].append(node.lineno)
         if node.returns is not None:
@@ -665,7 +706,7 @@ class StyleVisitor(ast.NodeVisitor):
         self.function_depth += 1
         for statement in node.body:
             self.visit(statement)
-        tuple_result_line, has_tuple_result = self.tuple_result_functions.pop()
+        tuple_result_line, _, has_tuple_result = self.tuple_result_functions.pop()
         if has_tuple_result:
             self.findings["unnamed_tuple_returns"].append(tuple_result_line)
             self.findings["unnamed_tuple_returns"].sort()
@@ -678,10 +719,15 @@ class StyleVisitor(ast.NodeVisitor):
         if (
             self.semantic_results
             and self.tuple_result_functions
+            and self.tuple_result_functions[-1][1]
             and is_unnamed_tuple_value(node.value)
         ):
-            function_line, _ = self.tuple_result_functions[-1]
-            self.tuple_result_functions[-1] = (function_line, True)
+            function_line, public_result_api, _ = self.tuple_result_functions[-1]
+            self.tuple_result_functions[-1] = (
+                function_line,
+                public_result_api,
+                True,
+            )
         self.generic_visit(node)
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
@@ -829,7 +875,11 @@ class StyleVisitor(ast.NodeVisitor):
             )
             if not slotted:
                 self.findings["unslotted_dataclasses"].append(node.lineno)
+        if node.name.startswith("_"):
+            self.private_result_scope += 1
         self.generic_visit(node)
+        if node.name.startswith("_"):
+            self.private_result_scope -= 1
         self.frozen_model_stack.pop()
         self.pydantic_model_stack.pop()
 

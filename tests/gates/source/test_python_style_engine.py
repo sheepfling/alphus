@@ -455,7 +455,26 @@ def test_scoped_semantic_results_check_raw_tuple_return_values() -> None:
     )
     visitor = StyleVisitor(POLICY, semantic_results=True)
     visitor.visit(ast.parse(source))
-    assert visitor.findings["unnamed_tuple_returns"] == [1, 5]
+    assert visitor.findings["unnamed_tuple_returns"] == [1]
+
+
+def test_semantic_results_respect_public_named_and_wire_contracts() -> None:
+    source = (
+        "from typing import NamedTuple, Tuple as Pair\n"
+        "import typing as t\n"
+        "class Record(NamedTuple):\n    x: int\n    y: str\n"
+        "def public_pair() -> Pair[int, str]: ...\n"
+        "def nested() -> list[t.Tuple[int, str]]: ...\n"
+        "def _private() -> tuple[int, str]: ...\n"
+        "def coordinates() -> tuple[float, float]: return 1.0, 2.0\n"
+        "def range_bounds() -> tuple[int, int]: ...\n"
+        "def to_wire(): return 'x', 1\n"
+        "def tags() -> tuple[str, ...]: ...\n"
+        "def named() -> Record: ...\n"
+    )
+    visitor = StyleVisitor(POLICY, semantic_results=True)
+    visitor.visit(ast.parse(source))
+    assert visitor.findings["unnamed_tuple_returns"] == [6, 7]
 
 
 def test_typed_and_raw_tuple_result_is_reported_once() -> None:
