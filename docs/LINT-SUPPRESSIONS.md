@@ -9,6 +9,19 @@ requirement:
 from optional_runtime import plugin  # noqa: E402 -- initialize the plugin registry first
 ```
 
+It also checks Ruff's TOML `per-file-ignores` tables in `pyproject.toml`,
+`ruff.toml`, and `.ruff.toml` against the selected Python paths. A matching
+selected code needs a comment containing the configured delimiter and a reason:
+
+```toml
+[tool.ruff.lint.per-file-ignores]
+"src/bootstrap/**" = ["E402"] # -- plugin initialization order
+```
+
+The table form is evaluated one assignment per line. Other per-file-ignore
+forms, including inline maps and multiline values, are reported as not evaluated
+when encountered; inherited Ruff configuration is not resolved.
+
 Consumers select the codes, file scope, exclusion patterns, severity, and reason
 delimiter in `[checks.suppression_reasons]`; see
 [`examples/consumer/lint-suppressions.toml`](../examples/consumer/lint-suppressions.toml).

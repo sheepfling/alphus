@@ -166,6 +166,61 @@ def test_source_encoding_cookie_preserves_suppression_comments(tmp_path: Path) -
     assert "E402" in findings[0].message
 
 
+def test_ruff_per_file_ignores_require_reasons_for_selected_codes(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "src/app.py").write_text("value = 1\n", encoding="utf-8")
+    (tmp_path / "tests/test_app.py").write_text("value = 1\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        "[tool.ruff.lint.per-file-ignores]\n"
+        '"src/**" = ["E402", "F401"]\n'
+        '"tests/**" = ["F401"]\n',
+        encoding="utf-8",
+    )
+    policy = SuppressionReasonPolicy(
+        extensions=(".py",), rule_codes=("E402",), reason_delimiter="--"
+    )
+
+    findings = check_suppression_reasons(
+        tmp_path,
+        [Path("src/app.py"), Path("tests/test_app.py")],
+        policy,
+    )
+
+    assert len(findings) == 1
+    assert findings[0].path == "pyproject.toml"
+    assert findings[0].line == 2
+    assert "E402" in findings[0].message
+    assert "src/app.py" in findings[0].message
+
+
+def test_ruff_per_file_ignore_comment_rationale_and_unselected_codes_are_accepted(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "src/app.py").write_text("value = 1\n", encoding="utf-8")
+    (tmp_path / "tests/test_app.py").write_text("value = 1\n", encoding="utf-8")
+    (tmp_path / "ruff.toml").write_text(
+        "[lint.per-file-ignores]\n"
+        '"src/**" = ["E402"] # -- plugin bootstrap order\n'
+        '"tests/**" = ["F401"]\n',
+        encoding="utf-8",
+    )
+
+    findings = check_suppression_reasons(
+        tmp_path,
+        [Path("src/app.py"), Path("tests/test_app.py")],
+        SuppressionReasonPolicy(
+            extensions=(".py",), rule_codes=("E402",), reason_delimiter="--"
+        ),
+    )
+
+    assert findings == []
+
+
 def test_unreadable_selected_file_is_not_reported_as_an_empty_audit(
     tmp_path: Path,
 ) -> None:
