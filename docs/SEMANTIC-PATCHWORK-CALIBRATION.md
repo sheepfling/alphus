@@ -45,3 +45,30 @@ the patterns are absent from either repository.
 This first sample also does not quantify overlap with existing rules or
 suppression rates. The next calibration needs reviewed positive candidates and
 more repositories before any precision or enforcement claim is meaningful.
+
+## Labeled boundary corpus
+
+The focused test corpus in `tests/gates/review/test_semantic_patchwork_corpus.py`
+contains twelve sanitized synthetic cases: one expected-positive and one
+boundary-negative case for each implemented detector (`prose-as-control`,
+`lossy-text-rewrite`, `rendered-value-reparsed`,
+`positional-semantic-override`, `unexplained-empty-result`, and
+`embedded-semantic-override`). All twelve pass their expected labels. The
+positive labels represent the issue's deliberately constructed risk shapes;
+the negative labels cover protocol text, output-only rendering, whitespace
+normalization, layout offsets, valid empty input, and preservation of source
+text. This corpus checks rule boundaries; it is not production calibration and
+does not contribute to the 90% precision target.
+
+One independently reviewed public-source negative is Sphinx's
+[`rfc1123_to_epoch` parser][sphinx-http-date] at revision
+`035a07c32c3241fd3356f4d827800c1f88525272`.
+It checks the RFC-required `GMT` suffix and zero timezone offset on the input
+date. That is explicit protocol validation, not a sentence discriminator or
+rendered-output feedback; it is a useful reviewed boundary example, not a
+detector finding. The public scans still contain no reviewed positive
+candidates. Production precision and the requested 90% target therefore remain
+unestimable.
+
+[sphinx-http-date]:
+  <https://github.com/sphinx-doc/sphinx/blob/035a07c32c32/sphinx/util/http_date.py>
