@@ -23,10 +23,15 @@ _Term = tuple[tuple[str, str], int]
 
 def _signed_terms(node: ast.expr, sign: int = 1) -> list[_Term] | None:
     match node:
-        case ast.BinOp(left=left, op=ast.Add() | ast.Sub(), right=right):
-            right_sign = -sign if isinstance(node.op, ast.Sub) else sign
+        case ast.BinOp(left=left, op=ast.Add(), right=right):
             left_terms = _signed_terms(left, sign)
-            right_terms = _signed_terms(right, right_sign)
+            right_terms = _signed_terms(right, sign)
+            if left_terms is None or right_terms is None:
+                return None
+            return [*left_terms, *right_terms]
+        case ast.BinOp(left=left, op=ast.Sub(), right=right):
+            left_terms = _signed_terms(left, sign)
+            right_terms = _signed_terms(right, -sign)
             if left_terms is None or right_terms is None:
                 return None
             return [*left_terms, *right_terms]
@@ -34,11 +39,15 @@ def _signed_terms(node: ast.expr, sign: int = 1) -> list[_Term] | None:
             return _signed_terms(operand, -sign)
         case ast.UnaryOp(op=ast.UAdd(), operand=operand):
             return _signed_terms(operand, sign)
-        case ast.BinOp(left=left, op=ast.Mult(), right=right):
-            if not isinstance(left, ast.Name) or not isinstance(right, ast.Name):
-                return None
+        case ast.BinOp(
+            left=ast.Name(id=left_name),
+            op=ast.Mult(),
+            right=ast.Name(id=right_name),
+        ):
             factors = (
-                (left.id, right.id) if left.id <= right.id else (right.id, left.id)
+                (left_name, right_name)
+                if left_name <= right_name
+                else (right_name, left_name)
             )
             return [(factors, sign)]
         case _:
