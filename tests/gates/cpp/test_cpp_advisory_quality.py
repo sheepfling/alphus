@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from unittest import mock
 
+import pytest
+
 from alphus.gates.cpp import cpp_advisory_quality as advisory
 from alphus.gates.cpp import cpp_common_quality as common
 from alphus.support.data_access import require_json_array, require_json_object
@@ -38,6 +40,111 @@ def test_style_review_is_nonblocking_unless_requested(tmp_path: Path) -> None:
         for item in findings
     )
     assert advisory.main([*args, "--fail-on-findings"]) == 1
+
+
+def test_style_setup_failure_writes_versioned_incomplete_report(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    output = tmp_path / "reports" / "style-failure.json"
+
+    assert (
+        advisory.main(
+            ["style", str(tmp_path / "missing-root"), "--output", str(output)]
+        )
+        == 2
+    )
+    report = json.loads(output.read_text(encoding="utf-8"))
+    assert report["schema"] == "alphus.execution-failure"
+    assert report["schema_version"] == 1
+    assert report["component"] == "cpp-advisory"
+    assert report["status"] == "execution_failure"
+    assert report["execution_failure"]["exit_code"] == 2
+    assert report["findings"] == []
+    assert report["confidence"] is None
+    assert report["enforcement"] is None
+    assert report["raw_child_exit"] is None
+    assert report["evidence_complete"] is False
+    assert report["artifact_paths"] == [str(output)]
+    captured = capsys.readouterr()
+    assert "cpp advisory quality:" in captured.err
+    assert str(tmp_path / "missing-root") not in captured.err
+
+
+def test_style_setup_failure_without_output_emits_json(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert advisory.main(["style", str(tmp_path / "missing-root")]) == 2
+
+    report = json.loads(capsys.readouterr().out)
+    assert report["schema"] == "alphus.execution-failure"
+    assert report["status"] == "execution_failure"
+    assert report["evidence_complete"] is False
+
+
+def test_style_failure_redacts_source_text_from_json_and_stderr(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source_secret = "PRIVATE_SOURCE_SENTINEL_94AC"
+    with mock.patch.object(
+        advisory,
+        "_style_report",
+        side_effect=ValueError(f"invalid source excerpt: {source_secret}"),
+    ):
+        assert advisory.main(["style", str(tmp_path)]) == 2
+
+    captured = capsys.readouterr()
+    report = json.loads(captured.out)
+    assert report["execution_failure"]["kind"] == "operational_error"
+    assert report["execution_failure"]["message"] == (
+        "C++ advisory style analysis failed because an option or input value is invalid."
+    )
+    assert source_secret not in captured.out
+    assert source_secret not in captured.err
+
+
+def test_style_failure_redacts_source_text_from_interactive_stderr(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source_secret = "PRIVATE_INTERACTIVE_SOURCE_SENTINEL_9B3E"
+    with (
+        mock.patch.object(
+            advisory,
+            "_style_report",
+            side_effect=ValueError(f"source excerpt: {source_secret}"),
+        ),
+        mock.patch.object(advisory.sys.stdout, "isatty", return_value=True),
+    ):
+        assert advisory.main(["style", str(tmp_path)]) == 2
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "style analysis" in captured.err
+    assert source_secret not in captured.err
+
+
+def test_style_failure_artifact_write_error_redacts_exception_text(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    sentinel = "PRIVATE_ARTIFACT_ERROR_SENTINEL_658D"
+    output = tmp_path / "failure.json"
+    with (
+        mock.patch.object(
+            advisory,
+            "_style_report",
+            side_effect=ValueError(f"source excerpt: {sentinel}"),
+        ),
+        mock.patch.object(
+            advisory,
+            "emit_execution_failure",
+            side_effect=OSError(f"private output path: {sentinel}"),
+        ),
+    ):
+        assert advisory.main(["style", str(tmp_path), "--output", str(output)]) == 2
+
+    captured = capsys.readouterr()
+    assert "could not write failure report artifact" in captured.err
+    assert sentinel not in captured.out
+    assert sentinel not in captured.err
 
 
 def test_impact_uses_measured_fanout_report(tmp_path: Path) -> None:

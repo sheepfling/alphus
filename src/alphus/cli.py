@@ -13,7 +13,16 @@ from contextvars import ContextVar
 from functools import partial
 from io import StringIO
 from pathlib import Path
-from typing import Annotated, Literal, NamedTuple, NotRequired, TextIO, TypedDict, cast
+from typing import (
+    Annotated,
+    Literal,
+    NamedTuple,
+    Never,
+    NotRequired,
+    TextIO,
+    TypedDict,
+    cast,
+)
 
 import typer
 from pydantic import ValidationError
@@ -69,6 +78,10 @@ from alphus.policy.intents import intent_bindings_for_steps
 from alphus.policy.recipes import render_recipe
 from alphus.support.data_access import JsonValue
 from alphus.support.inventory import candidate_files, matches_path
+from alphus.support.reporting import (
+    emit_execution_failure,
+    execution_failure_payload,
+)
 
 QualityRule = QualityRuleName
 
@@ -266,18 +279,61 @@ def _log_verbose(rule: QualityRule, root: Path, file_count: int) -> None:
         logger.propagate = previous_propagate
 
 
-def _load_policy(path: Path) -> QualityGateConfig:
+def _raise_policy_load_failure(
+    error: Exception, message: str, *, json_output: bool
+) -> Never:
+    if json_output:
+        emit_execution_failure(
+            execution_failure_payload(
+                component="alphus-profile",
+                kind="configuration_error",
+                message=message,
+                exit_code=ExitCode.CONFIG_ERROR,
+            )
+        )
+    else:
+        _human_error(message)
+    raise typer.Exit(2) from error
+
+
+def _load_policy(path: Path, *, json_output: bool = False) -> QualityGateConfig:
     """Load a policy and turn file/validation failures into CLI diagnostics."""
     try:
         return load_config(path)
-    except (
-        OSError,
-        tomllib.TOMLDecodeError,
-        ValidationError,
-        ValueError,
-    ) as error:
-        _human_error(f"Invalid quality policy {path}: {error}")
-        raise typer.Exit(2) from error
+    except OSError as error:
+        _raise_policy_load_failure(
+            error,
+            "Invalid quality policy: the configuration file could not be read.",
+            json_output=json_output,
+        )
+    except tomllib.TOMLDecodeError as error:
+        _raise_policy_load_failure(
+            error,
+            "Invalid quality policy: the configuration file is not valid TOML.",
+            json_output=json_output,
+        )
+    except (ValidationError, ValueError) as error:
+        _raise_policy_load_failure(
+            error,
+            "Invalid quality policy: configuration values failed validation.",
+            json_output=json_output,
+        )
+
+
+def _profile_failure(message: str, *, json_output: bool) -> int:
+    """Report a profile that could not start without presenting it as clean."""
+    if json_output:
+        emit_execution_failure(
+            execution_failure_payload(
+                component="alphus-profile",
+                kind="configuration_error",
+                message=message,
+                exit_code=ExitCode.CONFIG_ERROR,
+            )
+        )
+    else:
+        _human_error(message)
+    return ExitCode.CONFIG_ERROR
 
 
 def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
@@ -830,25 +886,30 @@ def _execute_profile(
     resolved_config = (
         config_path if config_path.is_absolute() else checkout / config_path
     )
-    config = _load_policy(resolved_config)
+    config = _load_policy(resolved_config, json_output=json_output)
     policy = config.orchestration
     if policy is None:
-        _human_error("The selected policy has no [orchestration] section.")
-        return ExitCode.CONFIG_ERROR
+        return _profile_failure(
+            "The selected policy has no [orchestration] section.",
+            json_output=json_output,
+        )
     selected_profile = profile_name or policy.default_profile
     plan = policy.resolve_profile(selected_profile)
-    if plan is not None:
-        try:
-            for step in policy.steps:
-                if step.name in plan.steps and step.kind == "rule":
-                    if config.files is None and RULE_SPECS[step.rule].requires_files:
-                        raise MissingPolicyError(
-                            "a selected built-in rule requires a top-level [files] inventory"
-                        )
-                    config.checks.require_rule(step.rule)
-        except MissingPolicyError as error:
-            _human_error(str(error))
-            return ExitCode.CONFIG_ERROR
+    if plan is None:
+        return _profile_failure(
+            "The requested orchestration profile is not defined by the policy.",
+            json_output=json_output,
+        )
+    try:
+        for step in policy.steps:
+            if step.name in plan.steps and step.kind == "rule":
+                if config.files is None and RULE_SPECS[step.rule].requires_files:
+                    raise MissingPolicyError(
+                        "a selected built-in rule requires a top-level [files] inventory"
+                    )
+                config.checks.require_rule(step.rule)
+    except MissingPolicyError as error:
+        return _profile_failure(str(error), json_output=json_output)
 
     def run_rule(rule: QualityRule) -> RuleRunResult:
         return run_profile_rule(checkout, resolved_config, rule, verbose, config)

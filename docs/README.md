@@ -10,6 +10,7 @@ path that matches the repository being checked.
 | Plan and apply available fixes                            | [Fixes](FIXES.md)                           |
 | Run independent quality checks concurrently               | [Parallel execution](PARALLEL-EXECUTION.md) |
 | Analyze gate history across repositories                   | [History analytics](QUALITY-HISTORY-ANALYTICS.md) |
+| Export profile evidence and inspect early failures          | [Profile reporting](REPORTING.md)            |
 | Check Python stubs in an isolated target                  | [Stub package CI](STUB-PACKAGE-CI.md)       |
 | Reuse CI integrations across providers                    | [CI integrations](CI-INTEGRATIONS.md)       |
 | Check C++ source, builds, and artifacts                   | [C++ quality](CPP-QUALITY.md)               |
