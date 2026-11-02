@@ -14,6 +14,7 @@ from alphus.gates.hygiene.shared_utilities import (
     duplicate_helpers,
     file_sha256_helpers,
 )
+from alphus.gates.languages.python.runtime_types import type_check_findings
 
 POLICY = SharedUtilitiesPolicy(
     extensions=[".py"],
@@ -177,6 +178,24 @@ def test_duplicate_helpers_exclude_only_conventional_cli_wrappers(
     assert list(groups.values()) == [
         ["src/first.py:normalize", "src/second.py:clean_name"]
     ]
+
+
+def test_cli_wrapper_ast_shape_does_not_look_like_runtime_input_narrowing() -> None:
+    source = """import ast
+def is_cli_wrapper(body):
+    match body[0]:
+        case ast.Raise(
+            exc=ast.Call(
+                func=ast.Name(id="SystemExit"),
+                args=[ast.Call(keywords=[])],
+                keywords=[],
+            )
+        ):
+            return True
+        case _:
+            return False
+"""
+    assert type_check_findings(source) == []
 
 
 def test_file_hash_scan_skips_configured_canonical_and_non_file_hashes(

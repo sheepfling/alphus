@@ -95,17 +95,17 @@ def _is_conventional_cli_wrapper(body: Sequence[ast.stmt]) -> bool:
     normalized = _without_docstring(body)
     if len(normalized) != 1:
         return False
-    statement = normalized[0]
-    return (
-        isinstance(statement, ast.Raise)
-        and isinstance(statement.exc, ast.Call)
-        and isinstance(statement.exc.func, ast.Name)
-        and statement.exc.func.id == "SystemExit"
-        and len(statement.exc.args) == 1
-        and isinstance(statement.exc.args[0], ast.Call)
-        and not statement.exc.keywords
-        and not statement.exc.args[0].keywords
-    )
+    match normalized[0]:
+        case ast.Raise(
+            exc=ast.Call(
+                func=ast.Name(id="SystemExit"),
+                args=[ast.Call(keywords=[])],
+                keywords=[],
+            )
+        ):
+            return True
+        case _:
+            return False
 
 
 def duplicate_helpers(
