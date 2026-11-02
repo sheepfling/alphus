@@ -146,6 +146,26 @@ def test_file_scope_and_exclusions_are_respected(tmp_path: Path) -> None:
     assert [finding.path for finding in findings] == ["included.py"]
 
 
+def test_source_encoding_cookie_preserves_suppression_comments(tmp_path: Path) -> None:
+    path = tmp_path / "encoded.py"
+    path.write_bytes(
+        "# coding: latin-1\n"
+        "value = 'café'\n"
+        "import optional_runtime  # noqa: E402\n".encode("latin-1")
+    )
+
+    findings = check_suppression_reasons(
+        tmp_path,
+        [Path("encoded.py")],
+        SuppressionReasonPolicy(extensions=(".py",), rule_codes=("E402",)),
+    )
+
+    assert len(findings) == 1
+    assert findings[0].path == "encoded.py"
+    assert findings[0].line == 3
+    assert "E402" in findings[0].message
+
+
 def test_unreadable_selected_file_is_not_reported_as_an_empty_audit(
     tmp_path: Path,
 ) -> None:
