@@ -73,7 +73,7 @@ def test_gate_themes_own_their_runner_mappings() -> None:
             {
                 "numeric-literals",
                 "manual-matrix-kernels",
-                    "array-representation-churn",
+                "array-representation-churn",
                 "scipy-constants",
                 "test-quality",
                 "input-contracts",
