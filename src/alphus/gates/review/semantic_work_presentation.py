@@ -135,8 +135,6 @@ def semantic_work_presentation_sites(
                         bindings[name] = bindings.get(name, 0) + 1
             case _:
                 continue
-    if any(bindings.get(name, 0) != 1 for name in policy.function_names):
-        return []
     configured_roles = (
         policy.source_layout_helpers,
         policy.content_correction_helpers,
@@ -147,6 +145,7 @@ def semantic_work_presentation_sites(
         (
             _BoundarySite(function.name, function.lineno)
             for function in functions
+            if bindings.get(function.name, 0) == 1
             if len(_matched_roles(function, policy)) == len(configured_roles)
         ),
         key=lambda site: (site.function, site.line),

@@ -235,13 +235,14 @@ def provenance_ownership_sites(
                 functions.append(statement)
             case _:
                 continue
-    if any(
-        sum(function.name == name for function in functions) != 1
+    binding_counts = {
+        name: sum(function.name == name for function in functions)
         for name in policy.function_names
-    ):
-        return []
+    }
     sites: set[_OwnershipSite] = set()
     for function in functions:
+        if binding_counts[function.name] != 1:
+            continue
         path_sets = _path_set_assignments(function, policy)
         for node in _local_nodes(function):
             match node:

@@ -108,6 +108,42 @@ def outer(tables, paragraphs):
     assert provenance_ownership_sites(nested, _policy()) == []
 
 
+def test_configured_functions_are_selected_independently_per_file(
+    tmp_path: Path,
+) -> None:
+    policy = _policy(function_names=("remaining_paragraphs", "remaining_tables"))
+    remaining_tables = _PATH_ONLY.replace("remaining_paragraphs", "remaining_tables")
+    first = tmp_path / "src/render/paragraphs.py"
+    second = tmp_path / "src/render/tables.py"
+    first.parent.mkdir(parents=True)
+    first.write_text(_PATH_ONLY, encoding="utf-8")
+    second.write_text(remaining_tables, encoding="utf-8")
+
+    findings = check_provenance_ownership(
+        tmp_path,
+        (Path("src/render/paragraphs.py"), Path("src/render/tables.py")),
+        policy,
+    )
+
+    assert [finding.path for finding in findings] == [
+        "src/render/paragraphs.py",
+        "src/render/tables.py",
+    ]
+
+
+def test_ambiguous_function_suppresses_only_its_own_candidate() -> None:
+    policy = _policy(function_names=("remaining_paragraphs", "remaining_tables"))
+    source = (
+        _PATH_ONLY
+        + "\ndef remaining_paragraphs(tables, paragraphs):\n    return paragraphs\n"
+        + _PATH_ONLY.replace("remaining_paragraphs", "remaining_tables")
+    )
+
+    assert [site.function for site in provenance_ownership_sites(source, policy)] == [
+        "remaining_tables"
+    ]
+
+
 def test_policy_requires_explicit_basis_and_scoped_names() -> None:
     with pytest.raises(ValidationError):
         _policy(ownership_basis="unknown")
