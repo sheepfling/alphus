@@ -51,10 +51,6 @@ def _bad_failed_run(root: Path, run_id: str, stderr: str, returncode: int) -> No
         _persist_failure(results_path, run_id, returncode, diagnostic_path)
 
 
-def _records(path: Path) -> list[dict[str, object]]:
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
-
-
 def test_two_failed_runs_persist_current_redacted_evidence_before_cleanup(
     tmp_path: Path,
 ) -> None:
@@ -63,18 +59,16 @@ def test_two_failed_runs_persist_current_redacted_evidence_before_cleanup(
     _good_failed_run(good_root, "run-1", "TOKEN=secret-one first failure", 7)
     _good_failed_run(good_root, "run-2", "TOKEN=secret-two second failure", 9)
 
-    good_records = _records(good_root / "failures.jsonl")
-    assert good_records == [
-        {
-            "run_id": "run-1",
-            "returncode": 7,
-            "diagnostic": "TOKEN=[REDACTED] first failure",
-        },
-        {
-            "run_id": "run-2",
-            "returncode": 9,
-            "diagnostic": "TOKEN=[REDACTED] second failure",
-        },
+    good_records = (good_root / "failures.jsonl").read_text(encoding="utf-8")
+    assert good_records.splitlines() == [
+        (
+            '{"run_id": "run-1", "returncode": 7, "diagnostic": '
+            '"TOKEN=[REDACTED] first failure"}'
+        ),
+        (
+            '{"run_id": "run-2", "returncode": 9, "diagnostic": '
+            '"TOKEN=[REDACTED] second failure"}'
+        ),
     ]
     assert not (good_root / "child.stderr").exists()
 
@@ -83,9 +77,9 @@ def test_two_failed_runs_persist_current_redacted_evidence_before_cleanup(
     _bad_failed_run(bad_root, "run-1", "TOKEN=secret-one first failure", 7)
     _bad_failed_run(bad_root, "run-2", "TOKEN=secret-two second failure", 9)
 
-    bad_records = _records(bad_root / "failures.jsonl")
-    assert bad_records == [
-        {"run_id": "run-1", "returncode": 7, "diagnostic": None},
-        {"run_id": "run-2", "returncode": 9, "diagnostic": None},
+    bad_records = (bad_root / "failures.jsonl").read_text(encoding="utf-8")
+    assert bad_records.splitlines() == [
+        '{"run_id": "run-1", "returncode": 7, "diagnostic": null}',
+        '{"run_id": "run-2", "returncode": 9, "diagnostic": null}',
     ]
     assert not (bad_root / "child.stderr").exists()
