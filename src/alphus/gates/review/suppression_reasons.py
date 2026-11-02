@@ -165,7 +165,40 @@ def check_suppression_reasons(
             continue
         findings.extend(suppression_reason_findings(source, policy, path=name))
     findings.extend(_missing_exception_file_findings(checkout, selected_files, policy))
-    findings.extend(_ruff_config_suppression_findings(checkout, selected_files, policy))
+    active_ruff_configs: set[str] = set()
+    findings.extend(
+        _ruff_config_suppression_findings(
+            checkout,
+            selected_files,
+            policy,
+            active_configs=active_ruff_configs,
+        )
+    )
+    for exception in policy.exceptions:
+        if (
+            Path(exception.path).suffix == ".toml"
+            and exception.path not in active_ruff_configs
+        ):
+            config_path = checkout / exception.path
+            try:
+                resolved_config = config_path.resolve(strict=True)
+                resolved_config.relative_to(checkout)
+            except (OSError, ValueError):
+                continue
+            if resolved_config.is_file():
+                findings.append(
+                    Finding(
+                        rule_id=_RULE_ID,
+                        path=exception.path,
+                        line=exception.line,
+                        severity=policy.severity,
+                        message=(
+                            f"Approved Ruff config exception for {exception.rule_code} "
+                            "does not belong to the active Ruff configuration or its "
+                            "extend chain; review or remove the stale exception."
+                        ),
+                    )
+                )
     return sorted(findings, key=lambda item: (item.path, item.line or 0, item.message))
 
 
@@ -457,6 +490,7 @@ def _ruff_config_suppression_findings(
     seen: frozenset[Path] = frozenset(),
     depth: int = 0,
     skip_inherited_normal_per_file: bool = False,
+    active_configs: set[str] | None = None,
 ) -> list[Finding]:
     """Audit simple Ruff per-file-ignore table entries without executing Ruff."""
     findings: list[Finding] = []
@@ -486,6 +520,8 @@ def _ruff_config_suppression_findings(
                 ),
             )
         ]
+    if active_configs is not None:
+        active_configs.add(config_name)
     if depth >= 8 or config_path in seen:
         return [
             Finding(
@@ -771,6 +807,7 @@ def _ruff_config_suppression_findings(
                     skip_inherited_normal_per_file=(
                         skip_inherited_normal_per_file or local_normal_per_file
                     ),
+                    active_configs=active_configs,
                 )
             )
     return findings

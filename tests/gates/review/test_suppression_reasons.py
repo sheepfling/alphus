@@ -169,6 +169,38 @@ def test_deleted_ruff_config_exception_site_is_reported_stale(tmp_path: Path) ->
     assert "stale after a move or deletion" in findings[0].message
 
 
+def test_existing_inactive_ruff_config_exception_is_reported_stale(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src/app.py").write_text("value = 1\n", encoding="utf-8")
+    (tmp_path / "ruff.toml").write_text('[lint]\nselect = ["E"]\n', encoding="utf-8")
+    (tmp_path / "extra.toml").write_text(
+        '[lint.per-file-ignores]\n"src/**" = ["E402"]\n', encoding="utf-8"
+    )
+    exception = SuppressionReasonException(
+        path="extra.toml",
+        rule_code="E402",
+        line=2,
+        reason="Bootstrap import must precede plugin registration.",
+    )
+
+    findings = check_suppression_reasons(
+        tmp_path,
+        [Path("src/app.py")],
+        SuppressionReasonPolicy(
+            extensions=(".py",), rule_codes=("E402",), exceptions=(exception,)
+        ),
+    )
+
+    assert len(findings) == 1
+    assert findings[0].path == "extra.toml"
+    assert findings[0].line == 2
+    assert "not belong to the active Ruff configuration or its extend chain" in (
+        findings[0].message
+    )
+
+
 def test_selected_code_in_a_multi_code_directive_requires_a_reason() -> None:
     findings = suppression_reason_findings(
         "import optional_runtime  # noqa: F401, E402\n",
