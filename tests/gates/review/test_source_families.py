@@ -186,6 +186,78 @@ def test_import_evidence_does_not_treat_unqualified_protocol_alias_as_resolved(
     assert "aliases, ABCs, and other contract forms are not assessed" in message
 
 
+def test_import_evidence_reports_cross_file_protocol_type_references(
+    tmp_path: Path,
+) -> None:
+    paths = [
+        _write(tmp_path, f"src/gateway_{name}.py")
+        for name in ("client", "server", "routes", "auth", "cache", "contracts")
+    ]
+    (tmp_path / "src/gateway_contracts.py").write_text(
+        "import typing\n"
+        "class Connector(typing.Protocol):\n"
+        "    def send(self, payload: bytes) -> None: ...\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "src/gateway_client.py").write_text(
+        "from gateway_contracts import Connector as Port\n"
+        "def connect(channel: Port) -> None:\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+
+    findings = source_family_findings(
+        tmp_path,
+        paths,
+        SourceFamilyPolicy(
+            min_family_files=5,
+            python_import_evidence=True,
+            python_module_roots=("src",),
+        ),
+    )
+
+    message = findings[0].message
+    assert (
+        "src/gateway_client.py:2 references Protocol type Port from "
+        "src/gateway_contracts.py"
+    ) in message
+    assert "external consumers, responsibility" in message
+
+
+def test_import_evidence_abstains_when_protocol_import_name_is_rebound(
+    tmp_path: Path,
+) -> None:
+    paths = [
+        _write(tmp_path, f"src/gateway_{name}.py")
+        for name in ("client", "server", "routes", "auth", "cache", "contracts")
+    ]
+    (tmp_path / "src/gateway_contracts.py").write_text(
+        "import typing\nclass Port(typing.Protocol):\n    def send(self) -> None: ...\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "src/gateway_client.py").write_text(
+        "from gateway_contracts import Port\n"
+        "Port = object\n"
+        "def connect(channel: Port) -> None:\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+
+    findings = source_family_findings(
+        tmp_path,
+        paths,
+        SourceFamilyPolicy(
+            min_family_files=5,
+            python_import_evidence=True,
+            python_module_roots=("src",),
+        ),
+    )
+
+    assert "No direct cross-file type reference to a detected qualified Protocol" in (
+        findings[0].message
+    )
+
+
 @pytest.mark.parametrize(
     "declaration",
     (

@@ -702,7 +702,13 @@ qualified `typing.Protocol` or `typing_extensions.Protocol` base and their
 direct method names. This identifies explicit interface-shaped syntax only;
 aliases, ABCs, other contract forms, implementations, and actual sharing across
 consumers remain unknown. Import edges and declarations do not establish which
-files share responsibility. Change-history evidence remains unassessed.
+files share responsibility. When a selected family member directly imports one
+of those Protocol names and references the unshadowed import in an annotation
+or class base, the report includes both the importing reference location and
+the declaration file. Rebinding causes the reference to be omitted. This is
+cross-file type-reference syntax, not proof of runtime use, an established
+shared contract, or common responsibility. Change-history evidence remains
+unassessed.
 
 A typical finding starts: `src/service: Family gateway_*: 12 logical units
 across 12 physical files; 12 of 20 selected sibling source files (60%);

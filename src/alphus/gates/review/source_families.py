@@ -221,6 +221,74 @@ def _module_protocols(tree: ast.Module) -> list[tuple[int, str, tuple[str, ...]]
     return declarations
 
 
+def _annotation_name_lines(tree: ast.Module) -> dict[str, set[int]]:
+    """Map names appearing directly in annotations or class bases to source lines."""
+    names: dict[str, set[int]] = defaultdict(set)
+    expressions: list[ast.expr] = []
+    for node in ast.walk(tree):
+        match node:
+            case (
+                ast.FunctionDef(args=args, returns=returns)
+                | ast.AsyncFunctionDef(args=args, returns=returns)
+            ):
+                arguments = [*args.posonlyargs, *args.args, *args.kwonlyargs]
+                arguments.extend(
+                    item for item in (args.vararg, args.kwarg) if item is not None
+                )
+                expressions.extend(
+                    item.annotation for item in arguments if item.annotation is not None
+                )
+                if returns is not None:
+                    expressions.append(returns)
+            case ast.AnnAssign(annotation=annotation):
+                expressions.append(annotation)
+            case ast.ClassDef(bases=bases):
+                expressions.extend(bases)
+            case _:
+                continue
+    for expression in expressions:
+        for item in ast.walk(expression):
+            match item:
+                case ast.Name(id=name):
+                    names[name].add(item.lineno)
+                case _:
+                    continue
+    return names
+
+
+def _name_is_rebound(tree: ast.Module, name: str, import_alias: ast.alias) -> bool:
+    """Abstain when a direct import name is also bound or shadowed in the file."""
+    for node in ast.walk(tree):
+        if node is import_alias:
+            continue
+        match node:
+            case ast.Name(id=bound, ctx=ast.Store()) if bound == name:
+                return True
+            case ast.arg(arg=bound) if bound == name:
+                return True
+            case ast.FunctionDef(name=bound) | ast.AsyncFunctionDef(name=bound) if (
+                bound == name
+            ):
+                return True
+            case ast.ClassDef(name=bound) if bound == name:
+                return True
+            case ast.alias(name=imported, asname=alias) if alias == name or (
+                alias is None and imported.rpartition(".")[2] == name
+            ):
+                return True
+            case ast.ExceptHandler(name=bound) if bound == name:
+                return True
+            case ast.MatchAs(name=bound) | ast.MatchStar(name=bound) if bound == name:
+                return True
+            case ast.Global(names=bound_names) | ast.Nonlocal(names=bound_names) if (
+                name in bound_names
+            ):
+                return True
+            case _:
+                continue
+    return False
+
+
 def _python_import_evidence(
     checkout: Path,
     members: AbstractSet[Path],
@@ -256,6 +324,9 @@ def _python_import_evidence(
     unresolved_export_modules = 0
     protocol_declarations: list[str] = []
     protocol_count = 0
+    trees: dict[Path, ast.Module] = {}
+    source_modules: dict[Path, str | None] = {}
+    protocol_names_by_path: dict[Path, set[str]] = {}
     for source in sorted((p for p in members if p.suffix == ".py"), key=str):
         source_path = (checkout / source).resolve(strict=False)
         if not source_path.is_relative_to(checkout) or bytes_left <= 0:
@@ -272,33 +343,7 @@ def _python_import_evidence(
         except (OSError, UnicodeError, SyntaxError, ValueError):
             failures += 1
             continue
-        export_declaration = _module_all_exports(tree)
-        if export_declaration is not None:
-            export_line, names = export_declaration
-            if names is None:
-                unresolved_export_modules += 1
-            else:
-                for name in names:
-                    public_export_count += 1
-                    if len(public_exports) < policy.max_public_api_names:
-                        public_exports.append(
-                            f"{source.as_posix()}:{export_line} exports {name}"
-                        )
-        for contract_line, contract_name, methods in _module_protocols(tree):
-            protocol_count += 1
-            if len(protocol_declarations) < policy.max_contract_declarations:
-                listed_methods = methods[: policy.max_public_api_names]
-                method_text = (
-                    ", ".join(listed_methods) if listed_methods else "no direct methods"
-                )
-                if len(methods) > len(listed_methods):
-                    method_text += (
-                        f", {len(methods) - len(listed_methods)} method name(s) omitted"
-                    )
-                protocol_declarations.append(
-                    f"{source.as_posix()}:{contract_line} declares "
-                    f"{contract_name} with Protocol base ({method_text})"
-                )
+        trees[source] = tree
         source_module = None
         for root in roots:
             try:
@@ -314,6 +359,41 @@ def _python_import_evidence(
             if parts and all(part.isidentifier() for part in parts):
                 source_module = ".".join(parts)
             break
+        source_modules[source] = source_module
+        export_declaration = _module_all_exports(tree)
+        if export_declaration is not None:
+            export_line, names = export_declaration
+            if names is None:
+                unresolved_export_modules += 1
+            else:
+                for name in names:
+                    public_export_count += 1
+                    if len(public_exports) < policy.max_public_api_names:
+                        public_exports.append(
+                            f"{source.as_posix()}:{export_line} exports {name}"
+                        )
+        module_protocols = _module_protocols(tree)
+        protocol_names_by_path[source] = {name for _, name, _ in module_protocols}
+        for contract_line, contract_name, methods in module_protocols:
+            protocol_count += 1
+            if len(protocol_declarations) < policy.max_contract_declarations:
+                listed_methods = methods[: policy.max_public_api_names]
+                method_text = (
+                    ", ".join(listed_methods) if listed_methods else "no direct methods"
+                )
+                if len(methods) > len(listed_methods):
+                    method_text += (
+                        f", {len(methods) - len(listed_methods)} method name(s) omitted"
+                    )
+                protocol_declarations.append(
+                    f"{source.as_posix()}:{contract_line} declares "
+                    f"{contract_name} with Protocol base ({method_text})"
+                )
+    protocol_uses: list[str] = []
+    protocol_use_count = 0
+    for source, tree in trees.items():
+        source_module = source_modules[source]
+        annotation_lines = _annotation_name_lines(tree)
         for node in ast.walk(tree):
             match node:
                 case ast.Import(names=names):
@@ -327,7 +407,7 @@ def _python_import_evidence(
                             )
                         else:
                             unresolved += 1
-                case ast.ImportFrom(module=module, level=level):
+                case ast.ImportFrom(module=module, level=level, names=aliases):
                     if module is None:
                         unresolved += 1
                         continue
@@ -352,9 +432,32 @@ def _python_import_evidence(
                         target_name = module
                     targets = modules.get(target_name, []) if target_name else []
                     if len(targets) == 1:
+                        target_path = targets[0]
                         resolved.append(
-                            f"{source.as_posix()}:{node.lineno} → {targets[0].as_posix()}"
+                            f"{source.as_posix()}:{node.lineno} → {target_path.as_posix()}"
                         )
+                        if target_path in members:
+                            for alias in aliases:
+                                imported_name = alias.name
+                                local_name = alias.asname or imported_name
+                                use_lines = annotation_lines.get(local_name, set())
+                                if (
+                                    imported_name
+                                    in protocol_names_by_path.get(target_path, set())
+                                    and use_lines
+                                    and not _name_is_rebound(tree, local_name, alias)
+                                ):
+                                    protocol_use_count += 1
+                                    if (
+                                        len(protocol_uses)
+                                        < policy.max_contract_declarations
+                                    ):
+                                        use_line = min(use_lines)
+                                        protocol_uses.append(
+                                            f"{source.as_posix()}:{use_line} references "
+                                            f"Protocol type {local_name} from "
+                                            f"{target_path.as_posix()}"
+                                        )
                     else:
                         unresolved += 1
                 case _:
@@ -408,6 +511,20 @@ def _python_import_evidence(
             " No qualified typing.Protocol or typing_extensions.Protocol "
             "declaration was observed; aliases, ABCs, and other contract forms "
             "are not assessed."
+        )
+    if protocol_uses:
+        context += " Cross-file Protocol type-reference evidence: "
+        context += "; ".join(protocol_uses) + "."
+        if protocol_use_count > len(protocol_uses):
+            context += (
+                f" {protocol_use_count - len(protocol_uses)} cross-file "
+                "reference(s) omitted by max_contract_declarations."
+            )
+    else:
+        context += (
+            " No direct cross-file type reference to a detected qualified Protocol "
+            "was observed; re-exports, aliases, shadowed names, dynamic use, and "
+            "unselected modules are not assessed."
         )
     notes: list[str] = []
     if failures:
