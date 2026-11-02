@@ -1084,6 +1084,19 @@ def _known_non_utc_zone(expression: ast.expr, aliases: ImportAliases) -> bool:
             return False
 
 
+def _contains_astimezone(expression: ast.expr, aliases: ImportAliases) -> bool:
+    for child in ast.walk(expression):
+        match child:
+            case ast.Call(func=func) if canonical_expression_name(func, aliases) in {
+                "datetime.datetime.astimezone",
+                "astimezone",
+            }:
+                return True
+            case _:
+                pass
+    return False
+
+
 def _utc_persistence_lines(
     module: ast.Module, contract: UtcPersistenceContract, aliases: ImportAliases
 ) -> list[int]:
@@ -1104,32 +1117,35 @@ def _utc_persistence_lines(
     lines: set[int] = set()
     for function in selected:
         for node in ast.walk(function):
-            if not isinstance(node, ast.Call) or (
-                canonical_expression_name(node.func, aliases) != contract.call
-                and ast.unparse(node.func) != contract.call
+            match node:
+                case ast.Call() as call:
+                    pass
+                case _:
+                    continue
+            if (
+                canonical_expression_name(call.func, aliases) != contract.call
+                and ast.unparse(call.func) != contract.call
             ):
                 continue
             argument = next(
-                (item.value for item in node.keywords if item.arg == contract.keyword),
+                (item.value for item in call.keywords if item.arg == contract.keyword),
                 None,
             )
-            if not isinstance(argument, ast.Call) or canonical_expression_name(
-                argument.func, aliases
-            ) not in {"datetime.datetime.now", "datetime.now"}:
-                continue
-            if any(
-                isinstance(child, ast.Call)
-                and canonical_expression_name(child.func, aliases)
-                in {"datetime.datetime.astimezone", "astimezone"}
-                for child in ast.walk(argument)
-            ):
+            match argument:
+                case ast.Call() as capture if canonical_expression_name(
+                    capture.func, aliases
+                ) in {"datetime.datetime.now", "datetime.now"}:
+                    pass
+                case _:
+                    continue
+            if _contains_astimezone(capture, aliases):
                 continue
             zone = next(
-                (item.value for item in argument.keywords if item.arg == "tz"),
-                argument.args[0] if argument.args else None,
+                (item.value for item in capture.keywords if item.arg == "tz"),
+                capture.args[0] if capture.args else None,
             )
             if zone is not None and _known_non_utc_zone(zone, aliases):
-                lines.add(node.lineno)
+                lines.add(call.lineno)
     return sorted(lines)
 
 
@@ -1361,3 +1377,4 @@ def check_pydantic_practices(
         source = read_python_source(checkout / relative)
         findings.extend(pydantic_practice_findings(source, policy, path=name))
     return findings
+
