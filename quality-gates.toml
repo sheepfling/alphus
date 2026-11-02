@@ -106,6 +106,7 @@ exclude = [
   "src/alphus/gates/languages/python/style.py",
   "src/alphus/gates/languages/python/runtime_types.py",
   "src/alphus/gates/review/manual_elimination.py", # isinstance checks narrow AST grammar nodes; Pyright verifies the Python typing contracts
+  "src/alphus/gates/review/manual_quaternion_vector_rotation.py", # isinstance checks narrow AST grammar nodes; Pyright verifies the Python typing contracts
   "src/alphus/gates/python/compatibility.py",
 ]
 

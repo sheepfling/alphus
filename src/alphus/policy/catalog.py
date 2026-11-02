@@ -77,6 +77,9 @@ RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
         "manual-quaternion-inversion": RuleSpec(
             "manual_quaternion_inversion", RuleOutputShape.FINDINGS
         ),
+        "manual-quaternion-vector-rotation": RuleSpec(
+            "manual_quaternion_vector_rotation", RuleOutputShape.FINDINGS
+        ),
         "scipy-constants": RuleSpec("scipy_constants", RuleOutputShape.FINDINGS),
         "test-quality": RuleSpec("test_quality", RuleOutputShape.FINDINGS),
         "input-contracts": RuleSpec("input_contracts", RuleOutputShape.FINDINGS),

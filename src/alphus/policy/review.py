@@ -352,6 +352,58 @@ class QuaternionInversionPolicy(PythonSourceScanPolicy):
         return tuple(values)
 
 
+class QuaternionVectorRotationPolicy(PythonSourceScanPolicy):
+    """Configured pure-vector quaternion sandwich signature and helper names."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    function_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    components: Annotated[tuple[str, str, str, str], Field(min_length=4)]
+    vector_components: Annotated[tuple[str, str, str], Field(min_length=3)]
+    multiplication_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    conjugation_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("function_names")
+    @classmethod
+    def validate_function_names(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("quaternion rotation function names must be identifiers")
+        require_unique(values, "quaternion rotation function names must be unique")
+        return tuple(values)
+
+    @field_validator("components", "vector_components")
+    @classmethod
+    def validate_components(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("quaternion rotation components must be identifiers")
+        require_unique(values, "quaternion rotation components must be unique")
+        return tuple(values)
+
+    @field_validator("multiplication_helpers", "conjugation_helpers")
+    @classmethod
+    def validate_helpers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not value or any(not part.isidentifier() for part in value.split("."))
+            for value in values
+        ):
+            raise ValueError("quaternion helper names must be dotted identifiers")
+        require_unique(values, "quaternion helper names must be unique")
+        return tuple(values)
+
+    @model_validator(mode="after")
+    def validate_component_partition(self) -> Self:
+        require_unique(
+            (*self.components, *self.vector_components),
+            "quaternion and vector component names must be distinct",
+        )
+        return self
+
+
 class ScipyConstantsPolicy(PythonSourceScanPolicy):
     """Advisory SciPy physical and unit-factor catalog for Python source."""
 

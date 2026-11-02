@@ -13,6 +13,7 @@ from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.gates.review.quaternion_ast import (
     configured_function_observations,
     is_sum_of_four_squares,
+    qualified_call_name,
 )
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
@@ -31,20 +32,6 @@ class _NormalizationSite:
     norm_line: int
     components_line: int
     consumer_line: int
-
-
-def _call_name(node: ast.expr) -> str | None:
-    parts: list[str] = []
-    current = node
-    while True:
-        match current:
-            case ast.Attribute(value=value, attr=attribute):
-                parts.append(attribute)
-                current = value
-            case ast.Name(id=name):
-                return ".".join((name, *reversed(parts)))
-            case _:
-                return None
 
 
 def _is_division(node: ast.expr, component: str, norm: str) -> bool:
@@ -111,8 +98,8 @@ def _match_function(
         or norm in policy.components
         or normalized in policy.components
         or consumer_input != normalized
-        or _call_name(norm_call.func) not in policy.square_root_helpers
-        or _call_name(consumer) not in policy.rotation_consumer_helpers
+        or qualified_call_name(norm_call.func) not in policy.square_root_helpers
+        or qualified_call_name(consumer) not in policy.rotation_consumer_helpers
         or len(normalized_components) != 4
     ):
         return None

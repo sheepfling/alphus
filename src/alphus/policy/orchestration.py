@@ -51,6 +51,7 @@ from alphus.policy.review import (
     QuaternionInversionPolicy,
     QuaternionNormalizationPolicy,
     QuaternionProductPolicy,
+    QuaternionVectorRotationPolicy,
     ScipyConstantsPolicy,
     SourceFamilyPolicy,
     SqlAlchemyPracticePolicy,
@@ -90,6 +91,7 @@ class CheckPolicies(StrictModel):
     manual_quaternion_products: QuaternionProductPolicy | None = None
     manual_quaternion_normalization: QuaternionNormalizationPolicy | None = None
     manual_quaternion_inversion: QuaternionInversionPolicy | None = None
+    manual_quaternion_vector_rotation: QuaternionVectorRotationPolicy | None = None
     scipy_constants: ScipyConstantsPolicy | None = None
     test_quality: TestQualityPolicy | None = None
     input_contracts: InputContractPolicy | None = None

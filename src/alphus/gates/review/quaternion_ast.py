@@ -9,6 +9,18 @@ from typing import TypeVar
 _Observation = TypeVar("_Observation")
 
 
+def qualified_call_name(node: ast.expr) -> str | None:
+    """Return a direct dotted name for a call target without resolving aliases."""
+    match node:
+        case ast.Name(id=name):
+            return name
+        case ast.Attribute(value=value, attr=attribute):
+            parent = qualified_call_name(value)
+            return f"{parent}.{attribute}" if parent else None
+        case _:
+            return None
+
+
 def is_sum_of_four_squares(
     node: ast.expr, components: tuple[str, str, str, str]
 ) -> bool:

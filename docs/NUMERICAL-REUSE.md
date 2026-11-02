@@ -114,8 +114,18 @@ handwritten elimination candidate; it does not imply that a matrix inverse is
 needed or that a library routine preserves representation, pivoting, stability,
 dtype or failure behavior.
 
-Frame-transform recognition remains unimplemented. So do quaternion vector
-rotation/sandwich or matrix conversion, and Cholesky
+`manual-quaternion-vector-rotation` recognizes a configured direct expression
+`multiply(multiply((w, x, y, z), (0, vx, vy, vz)), conjugate((w, x, y, z)))`.
+The configured component order and helper spellings are required; aliases,
+separate statements, alternate multiplication APIs and matrix-conversion forms
+are not followed. The configured helper names are syntactic evidence, not
+interprocedural proof of their implementations. This reports a review candidate,
+not a defect or speedup; conjugation is the inverse only for unit quaternions, so
+normalization, handedness, active/passive convention, dtype, failures, and output
+shape remain consumer contracts.
+
+Frame-transform recognition remains unimplemented. So does quaternion matrix
+conversion, and Cholesky
 covariance/domain checks. The current examples demonstrate only the explicitly
 documented syntax families above. The normalization and inversion grammars have
 synthetic positive/negative coverage but no reviewed real-consumer calibration

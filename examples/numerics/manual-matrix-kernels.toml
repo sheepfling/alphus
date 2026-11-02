@@ -66,6 +66,16 @@ source_paths = ["src/geometry/*.py"]
 function_names = ["inverse_quaternion"]
 components = ["w", "x", "y", "z"]
 
+[checks.manual_quaternion_vector_rotation]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/geometry/*.py"]
+function_names = ["rotate_vector"]
+components = ["w", "x", "y", "z"]
+vector_components = ["vx", "vy", "vz"]
+multiplication_helpers = ["multiply"]
+conjugation_helpers = ["conjugate"]
+
 [orchestration]
 default_profile = "numerical-review"
 
@@ -117,6 +127,12 @@ name = "Quaternion inversion review"
 rule = "manual-quaternion-inversion"
 rollout = "provisional"
 
+[[orchestration.steps]]
+kind = "rule"
+name = "Quaternion vector rotation review"
+rule = "manual-quaternion-vector-rotation"
+rollout = "provisional"
+
 [[orchestration.profiles]]
 name = "numerical-review"
-steps = ["Manual matrix kernels", "Manual elimination review", "Array representation churn", "Cholesky recurrence review", "Quaternion product review", "Quaternion conjugation review", "Quaternion normalization review", "Quaternion inversion review"]
+steps = ["Manual matrix kernels", "Manual elimination review", "Array representation churn", "Cholesky recurrence review", "Quaternion product review", "Quaternion conjugation review", "Quaternion normalization review", "Quaternion inversion review", "Quaternion vector rotation review"]

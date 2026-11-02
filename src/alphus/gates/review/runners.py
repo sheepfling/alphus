@@ -31,6 +31,9 @@ from alphus.gates.review.manual_quaternion_normalization import (
 from alphus.gates.review.manual_quaternion_product import (
     check_manual_quaternion_products,
 )
+from alphus.gates.review.manual_quaternion_vector_rotation import (
+    check_manual_quaternion_vector_rotation,
+)
 from alphus.gates.review.numeric_literals import check_numeric_literals
 from alphus.gates.review.positional_interfaces import check_positional_interfaces
 from alphus.gates.review.scipy_constants import check_scipy_constants
@@ -115,6 +118,16 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
                 require_policy(
                     config.checks.manual_quaternion_inversion,
                     "manual_quaternion_inversion",
+                ),
+            )
+        ),
+        "manual-quaternion-vector-rotation": lambda root, files, config: (
+            check_manual_quaternion_vector_rotation(
+                root,
+                files,
+                require_policy(
+                    config.checks.manual_quaternion_vector_rotation,
+                    "manual_quaternion_vector_rotation",
                 ),
             )
         ),
