@@ -1,0 +1,27 @@
+schema_version = 1
+
+[files]
+include = [".github/workflows/**/*.yml", ".github/workflows/**/*.yaml"]
+exclude = []
+
+[checks.ci_workflows]
+extensions = [".yml", ".yaml"]
+exclude = []
+workflow_paths = [".github/workflows/**"]
+ignore_run_blocks = []
+minimum_run_lines = 2
+severity = "info"
+
+[orchestration]
+default_profile = "ci-workflow-review"
+failure_threshold = "warning"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "CI workflow duplicate review"
+rule = "ci-workflows"
+rollout = "provisional"
+
+[[orchestration.profiles]]
+name = "ci-workflow-review"
+steps = ["CI workflow duplicate review"]
