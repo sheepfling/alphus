@@ -1,4 +1,5 @@
 from sample_contract import NameNode, flatten_names, format_value
+from sample_contract.checkout_only import checkout_only  # expect-error
 
 nested_tuples: list[tuple[str, ...]] = [("alpha",)]
 invalid_values: list[object] = ["alpha", 7]

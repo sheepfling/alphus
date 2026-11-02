@@ -237,15 +237,18 @@ def test_three_checker_installed_example_selects_all_lanes(
     settings = verify.read_config(example, Path("stub-quality.json"))
     positive = (example / settings.positive_fixture).read_text(encoding="utf-8")
     negative = (example / settings.negative_fixture).read_text(encoding="utf-8")
+    build_config = (example / "pyproject.toml").read_text(encoding="utf-8")
 
     assert settings.typing_checkers == ("mypy", "pyright", "ty")
     assert settings.mypy_diagnostics == ("[arg-type]",)
     assert settings.pyright_diagnostics == ("reportArgumentType",)
     assert settings.ty_diagnostics == ("invalid-argument-type",)
     assert settings.runtime_smoke_module == "tests.runtime_smoke"
-    assert len(typing_fixtures.expected_error_lines(negative)) == 4
+    assert len(typing_fixtures.expected_error_lines(negative)) == 5
     assert "flat_names: list[str]" in positive
     assert "recursive_names: list[NameNode]" in positive
+    assert "sample_contract.checkout_only" in negative
+    assert "checkout_only.pyi" in build_config
 
 
 def test_target_overlay_contains_only_unchanged_pure_python_engines(

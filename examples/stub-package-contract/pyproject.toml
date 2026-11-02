@@ -13,3 +13,6 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 sample_contract = ["*.pyi", "py.typed"]
+
+[tool.setuptools.exclude-package-data]
+sample_contract = ["checkout_only.pyi"]

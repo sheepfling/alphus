@@ -7,9 +7,12 @@ not add Alphus to an end user's runtime dependencies.
 The checker contract includes an annotated `list[str]` variable, a recursive
 list variable, and overloaded calls with distinct inferred results as positive
 inputs. Marked negative lines cover a tuple variable, a nested tuple literal, a
-non-string value, and a value rejected by every overload. The target runtime smoke checks
-accepted nested lists and rejects the same unsupported nested tuple and scalar
-shapes, checks actual overloaded return values, and asserts that its package
+non-string value, a value rejected by every overload, and a development-only
+submodule stub that the installed wheel intentionally omits. That last check
+fails if the checker resolves stubs from the source checkout. The target
+runtime smoke checks accepted nested lists and rejects the same unsupported
+nested tuple and scalar shapes, checks actual overloaded return values, and
+asserts that its package
 import comes from the target interpreter prefix. Native `mypy.stubtest`
 separately checks the installed module's
 runtime/stub member and callable shape. Static fixtures and runtime assertions
