@@ -170,6 +170,28 @@ def test_utc_persistence_accepts_zero_offset_etc_gmt_zone() -> None:
     assert pydantic_practice_findings(source, policy, path="src/storage.py") == []
 
 
+@pytest.mark.parametrize("zone", ("Etc/UCT", "Etc/Greenwich", "GMT+0", "GMT-0"))
+def test_utc_persistence_accepts_additional_zero_offset_zone_aliases(zone: str) -> None:
+    source = (
+        "from datetime import datetime\n"
+        "from zoneinfo import ZoneInfo\n"
+        "def save_created_at(writer):\n"
+        f"    writer.save(created_at=datetime.now(ZoneInfo({zone!r})))\n"
+    )
+    policy = _policy(
+        utc_persistence_contracts=(
+            {
+                "path": "src/storage.py",
+                "function": "save_created_at",
+                "call": "writer.save",
+                "keyword": "created_at",
+            },
+        )
+    )
+
+    assert pydantic_practice_findings(source, policy, path="src/storage.py") == []
+
+
 def test_utc_persistence_ignores_nested_function_outside_selected_boundary() -> None:
     source = (
         "from datetime import datetime\n"
