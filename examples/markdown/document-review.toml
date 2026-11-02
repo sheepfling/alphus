@@ -1,11 +1,11 @@
 schema_version = 1
 
 [files]
-include = ["**/*.md", "**/*.mdx"]
+include = ["**/*.md", "**/*.mdx", "**/*.tex"]
 exclude = []
 
 [checks.document_style]
-extensions = [".md", ".mdx"]
+extensions = [".md", ".mdx", ".tex"]
 exclude = ["vendor/**", "build/**"]
 minimum_headings = 8
 minimum_family_matches = 2

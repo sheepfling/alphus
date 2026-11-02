@@ -2,7 +2,13 @@
 
 Rule `alphus/any/none/style/rhetorical-heading-density` reports repeated
 rhetorical templates in a document outline. It is a prompt for human review,
-not a claim that a heading is wrong.
+not a claim that a heading is wrong. The opt-in review currently extracts
+Markdown/MDX ATX and setext headings and conventional LaTeX sectioning commands
+(`chapter`, `section`, `subsection`, and related levels). It skips Markdown
+front matter, fences and TOC lists, and LaTeX comments plus common literal
+environments (`verbatim`, `Verbatim`, `lstlisting`, `minted`, and `comment`).
+Custom sectioning commands, unresolved macros in titles, and unclosed title
+groups are unsupported and are skipped; no TeX engine is run.
 
 Descriptive headings help readers use a table of contents to find inputs,
 methods, examples, results, and limitations. Rhetorical headings can work well

@@ -18,6 +18,21 @@ _RULE_ID = rule_tag(
 )
 _PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("from-to", re.compile(r"^from\b.+\bto\b.+$", re.IGNORECASE)),
+    (
+        "one-every",
+        re.compile(r"^one\b.+[.!?]\s+every\b.+$", re.IGNORECASE),
+    ),
+    (
+        "imperative-pair",
+        re.compile(
+            r"^(?:see|reveal|measure|find|build|make|discover|explore|shape|turn|"
+            r"connect|follow|show|know|start|choose|bring|design|create|unlock|"
+            r"track)\b.+[.!?]\s+(?:see|reveal|measure|find|build|make|discover|"
+            r"explore|shape|turn|connect|follow|show|know|start|choose|bring|"
+            r"design|create|unlock|track)\b.+$",
+            re.IGNORECASE,
+        ),
+    ),
     ("why-matters", re.compile(r"^why\b.+\bmatters\??$", re.IGNORECASE)),
     ("what-reveals", re.compile(r"^what\b.+\b(reveals?|shows?)\b.+$", re.IGNORECASE)),
     ("beyond", re.compile(r"^beyond\b.+$", re.IGNORECASE)),
@@ -27,6 +42,14 @@ _PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
 _TOC_LABEL = re.compile(
     r"^\s{0,3}#{1,6}\s+(?:table of contents|contents)\s*#*\s*$", re.IGNORECASE
 )
+_LATEX_COMMAND = re.compile(
+    r"\\(?P<name>chapter|section|subsection|subsubsection|paragraph|subparagraph)\*?"
+)
+_LATEX_OPTION = re.compile(r"\s*\[[^\]]*\]")
+_LATEX_IGNORED_ENVIRONMENT = re.compile(
+    r"\\begin\{(?P<name>verbatim\*?|Verbatim|lstlisting|minted|comment)\}"
+)
+_LATEX_FORMAT_COMMAND = re.compile(r"\\(?:emph|textbf|textit|textrm|textsf)\s*")
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,10 +99,9 @@ def extract_markdown_sections(
             else:
                 continue
         if atx:
+            heading = re.sub(r"\s+\{[^{}]*\}\s*$", "", atx.group(2).strip())
             sections.append(
-                DocumentSection(
-                    path, atx.group(2).strip(), len(atx.group(1)), index + 1
-                )
+                DocumentSection(path, heading, len(atx.group(1)), index + 1)
             )
             continue
         if index + 1 < len(lines):
@@ -93,6 +115,112 @@ def extract_markdown_sections(
                         index + 1,
                     )
                 )
+    return tuple(sections)
+
+
+def _mask_latex_comments_and_verbatim(source: str) -> str:
+    """Blank comments and literal environments while preserving source offsets."""
+    chars = list(source)
+    index = 0
+    while index < len(source):
+        environment = _LATEX_IGNORED_ENVIRONMENT.match(source, index)
+        if environment is not None:
+            closing = f"\\end{{{environment.group('name')}}}"
+            end = source.find(closing, environment.end())
+            stop = len(source) if end < 0 else end + len(closing)
+            for offset in range(index, stop):
+                if chars[offset] != "\n":
+                    chars[offset] = " "
+            index = stop
+            continue
+        if source[index] == "%":
+            backslashes = 0
+            cursor = index - 1
+            while cursor >= 0 and source[cursor] == "\\":
+                backslashes += 1
+                cursor -= 1
+            if backslashes % 2 == 0:
+                end = source.find("\n", index)
+                stop = len(source) if end < 0 else end
+                for offset in range(index, stop):
+                    chars[offset] = " "
+                index = stop
+                continue
+        index += 1
+    return "".join(chars)
+
+
+def _balanced_brace_end(source: str, opening: int) -> int | None:
+    """Return the matching close brace, respecting escaped braces."""
+    depth = 0
+    for index in range(opening, len(source)):
+        char = source[index]
+        if char == "{" and not _is_escaped(source, index):
+            depth += 1
+        elif char == "}" and not _is_escaped(source, index):
+            depth -= 1
+            if depth == 0:
+                return index
+    return None
+
+
+def _is_escaped(source: str, index: int) -> bool:
+    """Tell whether a character is preceded by an odd run of backslashes."""
+    preceding = index - 1
+    count = 0
+    while preceding >= 0 and source[preceding] == "\\":
+        count += 1
+        preceding -= 1
+    return count % 2 == 1
+
+
+def extract_latex_sections(
+    source: str, *, path: str = "<source>"
+) -> tuple[DocumentSection, ...]:
+    """Extract conventional LaTeX section titles without compiling the document.
+
+    Unclosed titles and custom sectioning macros are left unexamined. Comments
+    and literal ``verbatim``, ``Verbatim``, ``lstlisting``, ``minted`` and
+    ``comment`` environments do not contribute headings.
+    """
+    masked = _mask_latex_comments_and_verbatim(source)
+    sections: list[DocumentSection] = []
+    for command in _LATEX_COMMAND.finditer(masked):
+        if _is_escaped(masked, command.start()):
+            continue
+        cursor = command.end()
+        option = _LATEX_OPTION.match(masked, cursor)
+        if option is not None:
+            cursor = option.end()
+        while cursor < len(masked) and masked[cursor].isspace():
+            cursor += 1
+        if cursor >= len(masked) or masked[cursor] != "{":
+            continue
+        end = _balanced_brace_end(masked, cursor)
+        if end is None:
+            continue
+        title = masked[cursor + 1 : end].strip()
+        title = _LATEX_FORMAT_COMMAND.sub("", title).replace("{", "").replace("}", "")
+        if not title or "\\" in title:
+            # A macro in the title may expand to unknown text; don't treat it
+            # as evidence of a clean or rhetorical heading.
+            continue
+        level = {
+            "chapter": 1,
+            "section": 2,
+            "subsection": 3,
+            "subsubsection": 4,
+            "paragraph": 5,
+            "subparagraph": 6,
+        }[command.group("name")]
+        sections.append(
+            DocumentSection(
+                path,
+                title,
+                level,
+                masked.count("\n", 0, command.start()) + 1,
+            )
+        )
     return tuple(sections)
 
 
@@ -142,7 +270,7 @@ def rhetorical_heading_findings(
 def check_document_style(
     root: Path, paths: Iterable[Path], policy: DocumentStylePolicy
 ) -> list[Finding]:
-    """Review selected Markdown/MDX files independently as whole documents."""
+    """Review each selected document using its bounded format-specific extractor."""
     checkout = root.resolve(strict=True)
     findings: list[Finding] = []
     for relative in sorted(set(paths)):
@@ -152,9 +280,26 @@ def check_document_style(
         ):
             continue
         source = read_utf8_text(checkout / relative)
-        findings.extend(
-            rhetorical_heading_findings(
-                extract_markdown_sections(source, path=name), policy
-            )
+        extractor = (
+            extract_latex_sections
+            if relative.suffix.lower() == ".tex"
+            else extract_markdown_sections
         )
+        findings.extend(
+            rhetorical_heading_findings(extractor(source, path=name), policy)
+        )
+        if relative.suffix.lower() == ".tex":
+            findings.append(
+                Finding(
+                    rule_id=_RULE_ID,
+                    path=name,
+                    severity="info",
+                    message=(
+                        "LaTeX heading analysis covers conventional sectioning "
+                        "commands only. Custom sectioning macros, unresolved title "
+                        "macros, and unsupported environments are unknown; this is "
+                        "not a complete outline pass."
+                    ),
+                )
+            )
     return sorted(findings, key=lambda item: (item.path, item.line or 0, item.message))
