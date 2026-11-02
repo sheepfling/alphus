@@ -42,6 +42,7 @@ def test_pdf_example_checks_one_explicit_artifact_provisionally() -> None:
         "latexmk",
         "-pdf",
         "-g",
+        "-outdir=build",
         "-interaction=nonstopmode",
         "-halt-on-error",
         "-file-line-error",

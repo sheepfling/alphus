@@ -26,8 +26,10 @@ that a page is visibly correct, or that the PDF is portable under a delivery
 contract. In particular, do not use a stale expected-navigation manifest as
 independent semantic evidence.
 
-The log check runs after `latexmk -g` in the same profile, so it inspects the
-forced build's log instead of accepting a previously generated file. It checks
+The build uses `latexmk -outdir=build` so its PDF and log land beside the
+configured `build/report.tex` source where the later checks expect them. The log
+check runs after `latexmk -g` in the same profile, so it inspects the forced
+build's log instead of accepting a previously generated file. It checks
 for a matching `Output written on` filename and common unresolved reference,
 citation, and rerun notices. It does not parse every TeX engine's diagnostics,
 prove source-map freshness, or validate navigation. A missing or unfamiliar
