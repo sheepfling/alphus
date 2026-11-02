@@ -6,10 +6,14 @@ a package or edits a manifest. The default optional dependency group is
 `dev`; set `typing_groups` to other PEP 621 groups when needed.
 
 The built-in catalog currently maps `yaml` → `PyYAML` → `types-PyYAML` for
-PyYAML 6.0 on Python 3.10+, and `scipy` → `scipy` → `scipy-stubs==1.18.1.*`
-for SciPy 1.18.1 on Python 3.12+. The PyYAML mapping records its tested stub
-checker set (`mypy`, `pyright`, and `ty`) and compatible stub-version range;
-the SciPy mapping is scoped to the same three checkers. Findings point to the
+PyYAML 6.0 on Python 3.10+, `scipy` → `scipy` → `scipy-stubs==1.18.1.*`
+for SciPy 1.18.1 on Python 3.12+, `dateutil` → `python-dateutil` →
+`types-python-dateutil==2.9.0.*` for python-dateutil 2.9 on Python 3.10+, and
+`toml` → `toml` → `types-toml==0.10.8.*` for toml 0.10 on Python 3.10+.
+The PyYAML mapping records its tested stub checker set (`mypy`, `pyright`, and
+`ty`) and compatible stub-version range; the SciPy mapping is scoped to the
+same three checkers. The dateutil mapping is scoped to those three checkers,
+and the toml mapping to `mypy` and `pyright`. Findings point to the
 importing source line and include the selected checker scope. When a candidate
 is suggested, the rule also reports checker distribution versions visible in
 the selected interpreter, or that a selected checker is not installed. This is
@@ -18,7 +22,14 @@ behavior from its version. These bounds were checked against
 [typeshed's PyYAML metadata](https://github.com/python/typeshed/blob/main/stubs/PyYAML/METADATA.toml),
 [types-PyYAML on PyPI](https://pypi.org/project/types-PyYAML/), and the
 [official scipy-stubs project metadata](https://github.com/scipy/scipy-stubs/blob/master/pyproject.toml)
-on 2026-11-02. This small catalog is a maintained snapshot, not a live lookup.
+[official scipy-stubs project metadata](https://github.com/scipy/scipy-stubs/blob/master/pyproject.toml),
+[types-python-dateutil on PyPI](https://pypi.org/project/types-python-dateutil/),
+and [types-toml on PyPI](https://pypi.org/project/types-toml/) on 2026-11-02.
+Pyright 1.1.414 was also run against installed PyYAML, SciPy, dateutil, and toml
+runtime/stub packages; deliberate incompatible assignments were rejected and
+valid return types were inferred. The catalog's dateutil and toml checker
+scopes follow their published checker metadata, while this local compatibility
+probe used Pyright only. This small catalog is a maintained snapshot, not a live lookup.
 When a known import is outside its verified runtime or Python range, the rule
 reports that it made no recommendation. Add candidates to override mappings,
 or set `builtin_catalog = false` to disable the catalog. `disabled_imports`

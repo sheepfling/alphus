@@ -120,28 +120,44 @@ def test_installed_pyright_observes_a_controlled_module_stub(
     assert not any('for class "int"' in item["message"] for item in source_diagnostics)
 
 
-def test_pyright_consumes_installed_pyyaml_and_scipy_stubs(
+def test_pyright_consumes_installed_real_package_stubs(
     tmp_path: Path,
 ) -> None:
     pyright = shutil.which("pyright")
     if pyright is None:
         pytest.skip("Pyright executable is not installed in this test environment")
-    distributions = ("PyYAML", "types-PyYAML", "scipy", "scipy-stubs")
+    distributions = (
+        "PyYAML",
+        "types-PyYAML",
+        "scipy",
+        "scipy-stubs",
+        "python-dateutil",
+        "types-python-dateutil",
+        "toml",
+        "types-toml",
+    )
     try:
         for distribution in distributions:
             metadata.version(distribution)
     except metadata.PackageNotFoundError:
-        pytest.skip("PyYAML and SciPy runtime/stub packages are not all installed")
+        pytest.skip("All catalog runtime/stub packages are not installed")
 
     (tmp_path / "client.py").write_text(
         "import scipy.linalg\n"
         "import yaml\n"
+        "import toml\n"
+        "from dateutil.parser import parse\n"
         "\n"
         "yaml_output: str = yaml.safe_dump({'value': 1})\n"
         "yaml_bad: int = yaml.safe_dump({'value': 1})\n"
         "scipy_output = scipy.linalg.norm([3.0, 4.0])\n"
         "reveal_type(scipy_output)\n"
-        "scipy_bad: str = scipy_output\n",
+        "scipy_bad: str = scipy_output\n"
+        "date_value = parse('2026-01-01')\n"
+        "reveal_type(date_value)\n"
+        "date_bad: str = date_value\n"
+        "toml_output: str = toml.dumps({'value': 1})\n"
+        "toml_bad: int = toml.dumps({'value': 1})\n",
         encoding="utf-8",
     )
     (tmp_path / "pyrightconfig.json").write_text(
@@ -172,7 +188,14 @@ def test_pyright_consumes_installed_pyyaml_and_scipy_stubs(
         '"float" is not assignable to "str"' in item["message"] for item in errors
     )
     assert any(
+        '"datetime" is not assignable to "str"' in item["message"] for item in errors
+    )
+    assert any('"str" is not assignable to "int"' in item["message"] for item in errors)
+    assert any(
         'Type of "scipy_output" is "float"' in item["message"] for item in diagnostics
+    )
+    assert any(
+        'Type of "date_value" is "datetime"' in item["message"] for item in diagnostics
     )
 
 
@@ -196,6 +219,26 @@ class _OldStubDistribution:
     files = ()
 
 
+class _DateutilDistribution:
+    version = "2.9.0.post0"
+    files = ()
+
+
+class _DateutilStubDistribution:
+    version = "2.9.0.20261021"
+    files = ()
+
+
+class _TomlDistribution:
+    version = "0.10.2"
+    files = ()
+
+
+class _TomlStubDistribution:
+    version = "0.10.8.20260518"
+    files = ()
+
+
 def _distribution(name: str) -> object:
     if name == "types-PyYAML":
         return _PyYAMLStubDistribution()
@@ -203,6 +246,14 @@ def _distribution(name: str) -> object:
         return _ScipyStubDistribution()
     if name == "scipy":
         return _ScipyDistribution()
+    if name == "python-dateutil":
+        return _DateutilDistribution()
+    if name == "types-python-dateutil":
+        return _DateutilStubDistribution()
+    if name == "toml":
+        return _TomlDistribution()
+    if name == "types-toml":
+        return _TomlStubDistribution()
     return _Distribution()
 
 
@@ -414,6 +465,57 @@ def test_builtin_yaml_mapping_skips_duplicate_dev_stubs(
 
     assert not gate.check_typing_stub_suggestions(
         tmp_path, _python_sources(tmp_path), _default_policy()
+    )
+
+
+@pytest.mark.parametrize(
+    ("import_name", "runtime_requirement", "stub_requirement", "stub_name"),
+    [
+        (
+            "dateutil",
+            "python-dateutil==2.9.0.post0",
+            "types-python-dateutil==2.9.0.20261021",
+            "types-python-dateutil",
+        ),
+        (
+            "toml",
+            "toml==0.10.2",
+            "types-toml==0.10.8.20260518",
+            "types-toml",
+        ),
+    ],
+)
+def test_builtin_popular_mappings_respect_selected_dev_groups_and_duplicates(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    import_name: str,
+    runtime_requirement: str,
+    stub_requirement: str,
+    stub_name: str,
+) -> None:
+    (tmp_path / "app.py").write_text(f"import {import_name}\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        "[project]\n"
+        f'dependencies = ["{runtime_requirement}"]\n'
+        "[project.optional-dependencies]\n"
+        "dev = []\n"
+        f'test = ["{stub_requirement}"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(gate.metadata, "distribution", _distribution)
+
+    findings = gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), _default_policy()
+    )
+    assert len(findings) == 1
+    assert stub_name in findings[0].message
+    assert "typing group(s) dev" in findings[0].message
+
+    selected_groups = _default_policy().model_copy(
+        update={"typing_groups": ("dev", "test")}
+    )
+    assert not gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), selected_groups
     )
 
 

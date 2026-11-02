@@ -47,6 +47,26 @@ _BUILTIN_CANDIDATES = (
         package_path="scipy",
         stub_version_specifier="==1.18.1.*",
     ),
+    TypingStubCandidate(
+        import_name="dateutil",
+        runtime_distribution="python-dateutil",
+        stub_distribution="types-python-dateutil",
+        supported_runtime_versions="==2.9.*",
+        supported_python_versions=">=3.10,<4",
+        checkers=("mypy", "pyright", "ty"),
+        package_path="dateutil",
+        stub_version_specifier="==2.9.0.*",
+    ),
+    TypingStubCandidate(
+        import_name="toml",
+        runtime_distribution="toml",
+        stub_distribution="types-toml",
+        supported_runtime_versions="==0.10.*",
+        supported_python_versions=">=3.10,<4",
+        checkers=("mypy", "pyright"),
+        package_path="toml",
+        stub_version_specifier="==0.10.8.*",
+    ),
 )
 
 
