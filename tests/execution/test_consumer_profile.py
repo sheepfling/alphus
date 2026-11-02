@@ -3,9 +3,17 @@
 from __future__ import annotations
 
 import tomllib
+from collections.abc import Sequence
 from pathlib import Path
 
-from alphus.config import CommandRunStep, RuleRunStep, load_config
+import pytest
+
+from alphus.config import (
+    CommandRunStep,
+    ProseAsControlPolicy,
+    RuleRunStep,
+    load_config,
+)
 from alphus.gates.review import runners as review_runners
 
 _POLICY = Path("examples/consumer/quality-gates.toml")
@@ -42,12 +50,14 @@ def test_prose_as_control_example_is_scoped_and_provisional() -> None:
 
 
 def test_rendered_feedback_is_dispatched_only_by_its_dedicated_rule(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config = load_config(Path("examples/review/prose-as-control.toml"))
     calls: list[str] = []
 
-    def rendered_result(root, files, policy):
+    def rendered_result(
+        root: Path, files: Sequence[Path], policy: ProseAsControlPolicy
+    ) -> list[str]:
         calls.append("rendered")
         return ["rendered finding"]
 
