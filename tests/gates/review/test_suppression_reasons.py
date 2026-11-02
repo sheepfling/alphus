@@ -146,7 +146,9 @@ def test_existing_unselected_source_exception_is_not_called_stale(
         SuppressionReasonPolicy(extensions=(".py",), exceptions=(exception,)),
     )
 
-    assert findings == []
+    assert len(findings) == 1
+    assert findings[0].path == "."
+    assert "no selected Python source files" in findings[0].message
 
 
 def test_deleted_ruff_config_exception_site_is_reported_stale(tmp_path: Path) -> None:
@@ -163,10 +165,12 @@ def test_deleted_ruff_config_exception_site_is_reported_stale(tmp_path: Path) ->
         SuppressionReasonPolicy(extensions=(".py",), exceptions=(exception,)),
     )
 
-    assert len(findings) == 1
-    assert findings[0].path == "ruff.toml"
-    assert findings[0].line == 2
-    assert "stale after a move or deletion" in findings[0].message
+    assert len(findings) == 2
+    stale = next(item for item in findings if item.path == "ruff.toml")
+    scope = next(item for item in findings if item.path == ".")
+    assert stale.line == 2
+    assert "stale after a move or deletion" in stale.message
+    assert "no selected Python source files" in scope.message
 
 
 def test_existing_inactive_ruff_config_exception_is_reported_stale(
@@ -536,8 +540,11 @@ def test_inherited_ruff_config_outside_root_is_not_evaluated(tmp_path: Path) -> 
         SuppressionReasonPolicy(extensions=(".py",), rule_codes=("E402",)),
     )
 
-    assert len(findings) == 1
-    assert "missing or outside the repository root" in findings[0].message
+    assert len(findings) == 2
+    assert any("no selected Python source files" in item.message for item in findings)
+    assert any(
+        "missing or outside the repository root" in item.message for item in findings
+    )
 
 
 def test_inherited_ruff_config_cycle_is_bounded(tmp_path: Path) -> None:
@@ -550,8 +557,9 @@ def test_inherited_ruff_config_cycle_is_bounded(tmp_path: Path) -> None:
         SuppressionReasonPolicy(extensions=(".py",), rule_codes=("E402",)),
     )
 
-    assert len(findings) == 1
-    assert "cyclic or exceeds the depth limit" in findings[0].message
+    assert len(findings) == 2
+    assert any("no selected Python source files" in item.message for item in findings)
+    assert any("cyclic or exceeds the depth limit" in item.message for item in findings)
 
 
 def test_ruff_extend_per_file_ignores_are_audited_and_accept_exact_exceptions(

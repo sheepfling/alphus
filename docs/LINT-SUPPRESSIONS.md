@@ -71,4 +71,9 @@ documented reason. It does not decide whether the import is misplaced or the
 reason is true. Blanket directives without selected codes produce an
 "unknown / not evaluated" advisory; Ruff remains responsible for unused,
 invalid, blanket, and foreign-tool suppression diagnostics. Non-Ruff
-directives are outside this rule's selected Ruff syntax.
+directives are outside this rule's selected Ruff syntax. If no selected Python
+source remains after scope and exclusions, the rule emits an informational
+not-evaluated finding at repository scope; it still audits any configured Ruff
+TOML suppression entries. A rule that does run over selected Python files and
+finds no missing reasons returns no findings, while policy absence remains a
+configuration failure.

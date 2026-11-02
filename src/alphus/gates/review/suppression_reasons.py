@@ -199,7 +199,22 @@ def check_suppression_reasons(
                         ),
                     )
                 )
-    return sorted(findings, key=lambda item: (item.path, item.line or 0, item.message))
+    if not selected_files:
+        findings.append(
+            Finding(
+                rule_id=_RULE_ID,
+                path=".",
+                severity="info",
+                message=(
+                    "Python inline suppression reasons were not evaluated because "
+                    "no selected Python source files matched the configured scope. "
+                    "Ruff TOML suppression entries, when present, were still audited."
+                ),
+            )
+        )
+    return sorted(
+        findings, key=lambda item: (item.path or "", item.line or 0, item.message)
+    )
 
 
 def _missing_exception_file_findings(
