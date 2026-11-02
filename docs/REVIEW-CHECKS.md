@@ -583,6 +583,24 @@ structure. These fixtures validate the chosen table dialect and builder
 examples; they do not certify arbitrary consumer output or imply that a static
 finding proves rendered Markdown is malformed.
 
+### Real-generator source checks
+
+At SnakeMD [commit `21256ece8c73edfe13e255218374dda54da3eb51`][snakemd-revision],
+the selected [`readme.py`][snakemd-readme] (281 Python lines) is the project's
+checked-in README generator. It builds content through `snakemd.Document`
+methods and structured `Inline`, `Table`, and `Code` objects. Running the
+source advisory from Alphus commit
+`7f923bd4b7767a8629c8c256703a5f95aa20e339` with Python 3.11.16 on that file
+produced zero findings. This is one accepted-builder example and one zero-
+candidate result; it is not a precision estimate or evidence that SnakeMD's
+output is safe. The consumer source was not executed and its rendered README
+was not parsed in this check. Positive real-generator evidence remains the
+mdutils table-builder example recorded in PR #81; these small samples do not
+establish broad calibration or justify enforcement.
+
+[snakemd-revision]: https://github.com/TheRenegadeCoder/SnakeMD/tree/21256ece8c73edfe13e255218374dda54da3eb51
+[snakemd-readme]: https://github.com/TheRenegadeCoder/SnakeMD/blob/21256ece8c73edfe13e255218374dda54da3eb51/readme.py
+
 ```toml
 [[orchestration.steps]]
 kind = "rule"
