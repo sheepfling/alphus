@@ -22,6 +22,15 @@ form. This is a review prompt, not a measured performance claim; the list may
 be an intentional serialization or API boundary.
 
 The profile selects `src/numerics/*.py` only; adapt that path to a
-consumer-owned numeric module. Cholesky-like recurrences, handwritten
+consumer-owned numeric module. Broader Cholesky-like recurrences, handwritten
 elimination, rotations, and quaternion math remain unimplemented and are not
-implied by these two narrow detectors.
+implied by the narrow detectors in this profile.
+
+The separate opt-in `cholesky-recurrence` advisory recognizes one coordinated
+lower-triangular recurrence shape: prior-factor product reduction, a configured
+square-root helper in the diagonal branch, and division by the earlier
+diagonal in the off-diagonal branch. It reports syntax evidence only; it does
+not judge whether an input is SPD or PSD, prove the recurrence correct, or
+recommend removing consumer validation. The configured square-root helper and
+source paths are required. Conjugate/Hermitian arithmetic and other recurrence
+forms remain unknown.

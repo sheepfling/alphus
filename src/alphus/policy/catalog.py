@@ -61,6 +61,9 @@ RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
         "array-representation-churn": RuleSpec(
             "array_representation_churn", RuleOutputShape.FINDINGS
         ),
+        "cholesky-recurrence": RuleSpec(
+            "cholesky_recurrence", RuleOutputShape.FINDINGS
+        ),
         "scipy-constants": RuleSpec("scipy_constants", RuleOutputShape.FINDINGS),
         "test-quality": RuleSpec("test_quality", RuleOutputShape.FINDINGS),
         "input-contracts": RuleSpec("input_contracts", RuleOutputShape.FINDINGS),

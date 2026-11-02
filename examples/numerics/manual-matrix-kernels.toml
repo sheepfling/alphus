@@ -16,6 +16,12 @@ source_paths = ["src/numerics/*.py"]
 array_constructors = ["numpy.asarray", "np.asarray"]
 list_conversion_methods = ["tolist"]
 
+[checks.cholesky_recurrence]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/numerics/*.py"]
+square_root_helpers = ["math.sqrt"]
+
 [orchestration]
 default_profile = "numerical-review"
 
@@ -31,6 +37,12 @@ name = "Array representation churn"
 rule = "array-representation-churn"
 rollout = "provisional"
 
+[[orchestration.steps]]
+kind = "rule"
+name = "Cholesky recurrence review"
+rule = "cholesky-recurrence"
+rollout = "provisional"
+
 [[orchestration.profiles]]
 name = "numerical-review"
-steps = ["Manual matrix kernels", "Array representation churn"]
+steps = ["Manual matrix kernels", "Array representation churn", "Cholesky recurrence review"]

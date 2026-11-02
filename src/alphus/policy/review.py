@@ -123,6 +123,30 @@ class ArrayRepresentationPolicy(PythonSourceScanPolicy):
         return tuple(values)
 
 
+class CholeskyRecurrencePolicy(PythonSourceScanPolicy):
+    """Opt-in AST review for one coordinated Cholesky recurrence grammar."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    square_root_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("square_root_helpers")
+    @classmethod
+    def validate_sqrt_helpers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not value or any(not part.isidentifier() for part in value.split("."))
+            for value in values
+        ):
+            raise ValueError("square-root helper names must be dotted identifiers")
+        require_unique(values, "square-root helper names must be unique")
+        return tuple(values)
+
+
 class ScipyConstantsPolicy(PythonSourceScanPolicy):
     """Advisory SciPy physical and unit-factor catalog for Python source."""
 

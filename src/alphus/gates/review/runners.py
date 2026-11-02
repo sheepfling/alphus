@@ -10,6 +10,7 @@ from typing import TypeAlias
 from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.execution.results import RuleOutput
 from alphus.gates.review.array_representation import check_array_representation
+from alphus.gates.review.cholesky_recurrence import check_cholesky_recurrence
 from alphus.gates.review.frameworks.fastapi_practices import check_fastapi_practices
 from alphus.gates.review.frameworks.pydantic_practices import check_pydantic_practices
 from alphus.gates.review.frameworks.sqlalchemy_practices import (
@@ -53,6 +54,11 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
                     "array_representation_churn",
                 ),
             )
+        ),
+        "cholesky-recurrence": lambda root, files, config: check_cholesky_recurrence(
+            root,
+            files,
+            require_policy(config.checks.cholesky_recurrence, "cholesky_recurrence"),
         ),
         "scipy-constants": lambda root, files, config: check_scipy_constants(
             root,

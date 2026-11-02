@@ -69,6 +69,7 @@ from alphus.policy.repository import (
 )
 from alphus.policy.review import (
     ArrayRepresentationPolicy,
+    CholeskyRecurrencePolicy,
     ErrorCodeCallSpec,
     FastApiFindingOverride,
     FastApiPracticePolicy,
@@ -112,6 +113,7 @@ __all__ = [
     "ArrayRepresentationPolicy",
     "CallableRegistryPolicy",
     "CheckPolicies",
+    "CholeskyRecurrencePolicy",
     "CliPolicy",
     "CommandRunStep",
     "CommentMarkerPolicy",
