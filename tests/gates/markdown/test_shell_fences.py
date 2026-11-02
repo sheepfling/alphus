@@ -70,6 +70,19 @@ def test_flags_power_shell_and_cmd_syntax_in_bash_aliases(tmp_path: Path) -> Non
     assert "cmd syntax" in findings[1].message
 
 
+def test_date_format_percent_tokens_are_not_cmd_environment_evidence(
+    tmp_path: Path,
+) -> None:
+    findings = _check(
+        tmp_path,
+        "```bash\nRUN_ID=$(date -u +%Y%m%dT%H%M%SZ)\necho %PATH%\n```\n",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 3
+    assert "cmd syntax" in findings[0].message
+
+
 def test_flags_bash_loop_in_indented_blockquote_pwsh_fence(tmp_path: Path) -> None:
     findings = _check(
         tmp_path,

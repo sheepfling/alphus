@@ -52,6 +52,10 @@ _POWERSHELL_DELEGATION = re.compile(
     r"-Command(?:\s|$)"
 )
 _CMD_ENV = re.compile(r"%[A-Za-z_][A-Za-z0-9_]*%")
+_DATE_COMMAND = re.compile(r"(?i)\bdate(?:\s|$)")
+_DATE_FORMAT_SEQUENCE = re.compile(
+    r"%(?:[-_0^#]*\d{0,2})?(?:E|O)?[A-Za-z+](?:%(?:[-_0^#]*\d{0,2})?(?:E|O)?[A-Za-z+])+"
+)
 _POWERSHELL_COMMAND = re.compile(
     r"(?i)^(?:\s*&\s*)?(?:Write-Host|Write-Output|Get-ChildItem|Set-Location|"
     r"Remove-Item|New-Item|Test-Path|Invoke-Expression|Get-Content|Set-Content|"
@@ -276,6 +280,20 @@ def _first_match(
     return None
 
 
+def _cmd_environment_evidence(lines: Sequence[_SourceLine]) -> _Evidence | None:
+    """Find cmd variable expansion without mistaking adjacent date directives."""
+    for source in lines:
+        candidate = source.text
+        if _DATE_COMMAND.search(candidate):
+            candidate = _DATE_FORMAT_SEQUENCE.sub(
+                lambda match: " " * len(match.group()), candidate
+            )
+        match = _CMD_ENV.search(candidate)
+        if match is not None:
+            return _Evidence("cmd", source.number, match.group(0))
+    return None
+
+
 def _bash_loop_evidence(lines: Sequence[_SourceLine]) -> _Evidence | None:
     for index, source in enumerate(lines):
         if not (_BASH_LOOP.match(source.text) or _BASH_WHILE_LOOP.match(source.text)):
@@ -312,7 +330,7 @@ def _fence_evidence(fence: _Fence) -> tuple[_Evidence, ...]:
                 ),
                 None,
             )
-        cmd = _first_match(lines, _CMD_ENV, "cmd")
+        cmd = _cmd_environment_evidence(lines)
         if cmd is None:
             cmd = _first_match(lines, _CMD_COMMAND, "cmd")
         candidate = _first_match(
