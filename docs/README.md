@@ -17,6 +17,7 @@ path that matches the repository being checked.
 | Check Git ignores or historical repository artifacts      | [Repository hygiene](REPOSITORY-HYGIENE.md) |
 | Understand shared text and file-size measurements          | [Source hygiene](SOURCE-HYGIENE.md)         |
 | Review test, input, source-family, and framework checks   | [Review checks](REVIEW-CHECKS.md)           |
+| Review long prose used in a branch condition              | [Semantic patchwork](SEMANTIC-PATCHWORK.md) |
 | Detect docs/default drift                                   | [Docs/config drift](DOCUMENTATION-CONFIG-COUPLING.md) |
 | Separate machine CLI contracts from presentation policy     | [Python CLI policy](CLI-POLICY.md)                    |
 | Gate cyclomatic complexity across Python, C/C++, and JS    | [Cyclomatic complexity](CYCLOMATIC-COMPLEXITY.md) |

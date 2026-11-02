@@ -78,6 +78,28 @@ class NumericLiteralPolicy(PythonSourceScanPolicy):
         return self
 
 
+class ProseAsControlPolicy(PythonSourceScanPolicy):
+    """Scope and thresholds for advisory sentence-literal branch checks."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    allowed_literals: tuple[str, ...] = ()
+    minimum_characters: Annotated[int, Field(gt=0)] = 60
+    minimum_words: Annotated[int, Field(gt=0)] = 8
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("allowed_literals")
+    @classmethod
+    def validate_allowed_literals(cls, values: Sequence[str]) -> tuple[str, ...]:
+        literals = tuple(validate_one_line_message(value) for value in values)
+        require_unique(literals, "allowed prose literals must be unique")
+        return literals
+
+
 class ScipyConstantsPolicy(PythonSourceScanPolicy):
     """Advisory SciPy physical and unit-factor catalog for Python source."""
 

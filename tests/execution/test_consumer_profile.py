@@ -10,6 +10,23 @@ from alphus.config import CommandRunStep, RuleRunStep, load_config
 _POLICY = Path("examples/consumer/quality-gates.toml")
 
 
+def test_prose_as_control_example_is_scoped_and_provisional() -> None:
+    config = load_config(Path("examples/review/prose-as-control.toml"))
+    assert config.files is not None
+    assert config.files.include == ("src/render/*.py",)
+    policy = config.checks.prose_as_control
+    assert policy is not None
+    assert policy.source_paths == ("src/render/*.py",)
+    orchestration = config.orchestration
+    assert orchestration is not None
+    plan = orchestration.resolve_profile("semantic-review")
+    assert plan is not None
+    step = orchestration.steps[0]
+    assert isinstance(step, RuleRunStep)
+    assert step.rule == "prose-as-control"
+    assert step.rollout == "provisional"
+
+
 def test_starter_policy_has_one_scoped_command_and_no_global_inventory() -> None:
     config = load_config(Path("examples/starter/quality-gates.toml"))
     assert config.files is None

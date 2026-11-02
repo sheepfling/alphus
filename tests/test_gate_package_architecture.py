@@ -72,6 +72,7 @@ def test_gate_themes_own_their_runner_mappings() -> None:
             REVIEW_RULE_RUNNERS,
             {
                 "numeric-literals",
+                "prose-as-control",
                 "scipy-constants",
                 "test-quality",
                 "input-contracts",
