@@ -509,6 +509,42 @@ def evaluate(packet: Mapping[str, JsonValue]):
     assert "literal-key reads at line(s) 4" in findings[0].message
 
 
+def test_multiple_declared_mapping_parameters_are_all_reviewed() -> None:
+    policy = InputContractPolicy(
+        extensions=[".py"],
+        exclude=[],
+        domain_mapping_contracts=(
+            {
+                "path": "src/internal/evaluate.py",
+                "function": "evaluate",
+                "parameter": "options",
+                "domain_type": "app.models.EvaluationOptions",
+            },
+            {
+                "path": "src/internal/evaluate.py",
+                "function": "evaluate",
+                "parameter": "limits",
+                "domain_type": "app.models.EvaluationLimits",
+            },
+        ),
+    )
+    findings = input_contract_findings(
+        """from collections.abc import Mapping
+from app.json_types import JsonValue
+def evaluate(options: Mapping[str, JsonValue], limits: Mapping[str, JsonValue]):
+    return options["mode"], limits["maximum"]
+""",
+        policy,
+        path="src/internal/evaluate.py",
+    )
+
+    assert len(findings) == 2
+    assert all(
+        any(f"evaluate.{parameter}" in finding.message for finding in findings)
+        for parameter in ("options", "limits")
+    )
+
+
 def test_mapping_escape_evidence_follows_one_direct_local_helper_pass() -> None:
     findings = input_contract_findings(
         """from collections.abc import Mapping
@@ -524,6 +560,24 @@ def _read_state(payload):
     assert len(findings) == 1
     assert "direct helper pass-through at line 4 to _read_state" in findings[0].message
     assert "reads 6" in findings[0].message
+
+
+def test_locally_shadowed_helper_name_does_not_use_module_helper_evidence() -> None:
+    source = """from collections.abc import Mapping
+from app.json_types import JsonValue
+def _read_state(payload):
+    return payload["state"]
+def evaluate(packet: Mapping[str, JsonValue]):
+    _read_state = lambda value: value
+    return _read_state(packet)
+"""
+    findings = input_contract_findings(
+        source,
+        DOMAIN_BOUNDARY_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert findings == []
 
 
 def test_mapping_escape_cross_function_following_accepts_linear_aliases_but_not_ambiguity() -> (

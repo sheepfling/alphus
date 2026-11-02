@@ -939,6 +939,75 @@ class _FunctionLocalNodes(ast.NodeVisitor):
         super().generic_visit(node)
 
 
+class _FunctionBoundNames(ast.NodeVisitor):
+    """Collect names that cannot resolve to a module-level helper in a function."""
+
+    def __init__(self, root: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        self.root = root
+        self.names = {
+            argument.arg
+            for argument in (
+                *root.args.posonlyargs,
+                *root.args.args,
+                *root.args.kwonlyargs,
+            )
+        }
+        if root.args.vararg is not None:
+            self.names.add(root.args.vararg.arg)
+        if root.args.kwarg is not None:
+            self.names.add(root.args.kwarg.arg)
+        for statement in root.body:
+            self.visit(statement)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        if node is self.root:
+            for statement in node.body:
+                self.visit(statement)
+        else:
+            self.names.add(node.name)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        if node is self.root:
+            for statement in node.body:
+                self.visit(statement)
+        else:
+            self.names.add(node.name)
+
+    def visit_Lambda(self, node: ast.Lambda) -> None:
+        return
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        self.names.add(node.name)
+
+    def visit_Name(self, node: ast.Name) -> None:
+        if isinstance(node.ctx, ast.Store | ast.Del):
+            self.names.add(node.id)
+
+    def visit_Import(self, node: ast.Import) -> None:
+        self.names.update(
+            alias.asname or alias.name.split(".")[0] for alias in node.names
+        )
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        self.names.update(
+            alias.asname or alias.name for alias in node.names if alias.name != "*"
+        )
+
+    def visit_ExceptHandler(self, node: ast.ExceptHandler) -> None:
+        if node.name is not None:
+            self.names.add(node.name)
+        if node.type is not None:
+            self.visit(node.type)
+        for statement in node.body:
+            self.visit(statement)
+
+    def visit_Global(self, node: ast.Global) -> None:
+        self.names.update(node.names)
+
+    def visit_Nonlocal(self, node: ast.Nonlocal) -> None:
+        self.names.update(node.names)
+
+
 class _FunctionNameIndex(ast.NodeVisitor):
     """Index functions by lexical class/function name for exact policy selectors."""
 
@@ -1147,6 +1216,7 @@ def _direct_forwarded_mapping_reads(
                 pass
     local = _FunctionLocalNodes(function)
     local.visit(function)
+    bound_names = _FunctionBoundNames(function).names
     rebinding = min(
         (
             line
@@ -1165,7 +1235,11 @@ def _direct_forwarded_mapping_reads(
         if rebinding is not None and node.lineno >= rebinding:
             continue
         candidates = helpers.get(call_name, [])
-        if len(candidates) != 1 or candidates[0] is function:
+        if (
+            call_name in bound_names
+            or len(candidates) != 1
+            or candidates[0] is function
+        ):
             continue
         passed_names = _linear_aliases_before(function, parameter, node.lineno)
         helper = candidates[0]
@@ -1216,14 +1290,11 @@ def _domain_mapping_findings(
         *function.args.args,
         *function.args.kwonlyargs,
     ]
-    configured_contract = next(
-        (
-            contract
-            for contract in policy.domain_mapping_contracts
-            if contract.path == path and contract.function == function_name
-        ),
-        None,
-    )
+    configured_contracts = {
+        contract.parameter: contract
+        for contract in policy.domain_mapping_contracts
+        if contract.path == path and contract.function == function_name
+    }
     for argument in arguments:
         if argument.annotation is None:
             continue
@@ -1288,8 +1359,8 @@ def _domain_mapping_findings(
             )
             continue
 
-        contract = configured_contract
-        if contract is None or argument.arg != contract.parameter:
+        contract = configured_contracts.get(argument.arg)
+        if contract is None:
             continue
         if any(
             exception.path == path
