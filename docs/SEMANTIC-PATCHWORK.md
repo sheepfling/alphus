@@ -102,12 +102,22 @@ for source-layout reconstruction, content correction, semantic ownership, and
 serialization. It reports only when all four configured call-name groups occur
 within one selected function. It does not resolve aliases, prove data flow or
 coupling between operations, or claim that any presentation transformation is
-wrong. Co-location is a prompt to review the declared responsibility boundary.
+wrong. Calls in defaults, annotations, decorators, or nested function/class
+bodies are ignored. Co-location is a prompt to review the declared
+responsibility boundary.
 The P2 proposals are also deferred: evaluate
 parallel-normalization through the existing duplication capabilities and issue
 [#33](https://github.com/sheepfling/alphus/issues/33), and do not ship a
 patch-cascade heuristic without reviewed real clusters and actionable
-remediation. None of these deferred patterns is implied to be covered. The P1
+remediation. The narrow parallel-normalization rule is implemented only for a
+consumer-declared pair of equivalent `str` functions, each returning a direct
+`join(split(input))` expression. It reports differing literal split or join
+separators under an explicit same-output contract. Existing shared-utility
+fingerprinting groups identical AST bodies and therefore does not cover this
+separator-drift case. The rule does not infer that two helpers are equivalent;
+aliases, multi-step transformations, and unconfigured functions are outside
+its grammar. This P2 advisory also lacks positive production calibration. No
+patch-cascade pattern is implemented. The P1
 rules have synthetic boundary tests but no positive production calibration;
 their precision is not estimable.
 

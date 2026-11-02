@@ -22,6 +22,7 @@ from alphus.gates.review.heuristic_total_consumption import (
 )
 from alphus.gates.review.input_contracts import check_input_contracts
 from alphus.gates.review.numeric_literals import check_numeric_literals
+from alphus.gates.review.parallel_normalization import check_parallel_normalization
 from alphus.gates.review.positional_interfaces import check_positional_interfaces
 from alphus.gates.review.positional_semantic_overrides import (
     check_positional_semantic_overrides,
@@ -136,6 +137,15 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
                 require_policy(
                     config.checks.semantic_work_presentation,
                     "semantic_work_presentation",
+                ),
+            )
+        ),
+        "parallel-normalization": lambda root, files, config: (
+            check_parallel_normalization(
+                root,
+                files,
+                require_policy(
+                    config.checks.parallel_normalization, "parallel_normalization"
                 ),
             )
         ),

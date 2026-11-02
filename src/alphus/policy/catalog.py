@@ -77,6 +77,9 @@ RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
         "semantic-work-in-presentation": RuleSpec(
             "semantic_work_presentation", RuleOutputShape.FINDINGS
         ),
+        "parallel-normalization": RuleSpec(
+            "parallel_normalization", RuleOutputShape.FINDINGS
+        ),
         "scipy-constants": RuleSpec("scipy_constants", RuleOutputShape.FINDINGS),
         "test-quality": RuleSpec("test_quality", RuleOutputShape.FINDINGS),
         "input-contracts": RuleSpec("input_contracts", RuleOutputShape.FINDINGS),

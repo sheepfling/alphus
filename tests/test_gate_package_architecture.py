@@ -80,6 +80,7 @@ def test_gate_themes_own_their_runner_mappings() -> None:
                 "heuristic-total-consumption",
                 "provenance-as-ownership",
                 "semantic-work-in-presentation",
+                "parallel-normalization",
                 "scipy-constants",
                 "test-quality",
                 "input-contracts",

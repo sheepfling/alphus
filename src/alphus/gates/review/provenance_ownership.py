@@ -94,12 +94,15 @@ def _path_set_assignments(
     result: dict[str, _OwnerPathSet] = {}
     for name, values in assignments.items():
         store_count = 0
+        load_count = 0
         declarations = False
         mutated = False
         for node in nodes:
             match node:
                 case ast.Name(id=bound, ctx=ast.Store() | ast.Del()) if bound == name:
                     store_count += 1
+                case ast.Name(id=bound, ctx=ast.Load()) if bound == name:
+                    load_count += 1
                 case ast.Global(names=names) | ast.Nonlocal(names=names) if (
                     name in names
                 ):
@@ -117,7 +120,13 @@ def _path_set_assignments(
                     mutated = True
                 case _:
                     continue
-        if len(values) == 1 and store_count == 1 and not declarations and not mutated:
+        if (
+            len(values) == 1
+            and store_count == 1
+            and load_count == 1
+            and not declarations
+            and not mutated
+        ):
             result[name] = values[0]
     return result
 

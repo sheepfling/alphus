@@ -52,6 +52,13 @@ def test_reports_all_consumer_declared_roles_in_selected_function() -> None:
             "    def nested():\n        return serialize_output(owned)\n"
             "    return owned",
         ),
+        (
+            "def render_document("
+            "source=reconstruct_layout(None), "
+            "corrected=apply_content_correction(None), "
+            "owned=decide_semantic_ownership(None)):\n"
+            "    return serialize_output(source)\n"
+        ),
         _COMPOSITE + "\nrender_document = lambda source: source\n",
         _COMPOSITE
         + "\nif condition:\n    def render_document(source):\n        return source\n",

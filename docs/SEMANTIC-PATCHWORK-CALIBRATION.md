@@ -94,15 +94,15 @@ before any precision or enforcement claim is meaningful.
 ## Labeled boundary corpus
 
 The focused test corpus in `tests/gates/review/test_semantic_patchwork_corpus.py`
-contains twenty sanitized synthetic cases across the implemented detectors,
+contains twenty-two sanitized synthetic cases across the implemented detectors,
 with at least one expected-positive and one boundary-negative for each
 (`prose-as-control`,
 `lossy-text-rewrite`, `rendered-value-reparsed`,
 `positional-semantic-override`, `unexplained-empty-result`, and
 `embedded-semantic-override`, `heuristic-total-consumption`,
-`provenance-as-ownership`, and `semantic-work-in-presentation`). Two extra
-provenance cases check returned and unused filter results. All twenty pass
-their expected labels. The
+`provenance-as-ownership`, `semantic-work-in-presentation`, and
+`parallel-normalization`). Two extra provenance cases check returned and unused
+filter results. All twenty-two pass their expected labels. The
 positive labels represent the issue's deliberately constructed risk shapes;
 the negative labels cover protocol text, output-only rendering, whitespace
 normalization, layout offsets, valid empty input, and preservation of source

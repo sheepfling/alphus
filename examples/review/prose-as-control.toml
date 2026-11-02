@@ -67,6 +67,17 @@ semantic_ownership_helpers = ["decide_semantic_ownership"]
 serialization_helpers = ["serialize_output"]
 module_role = "presentation"
 
+[checks.parallel_normalization]
+extensions = [".py"]
+exclude = ["**/generated/**", "**/vendor/**"]
+source_paths = ["src/render/*.py"]
+
+[[checks.parallel_normalization.pairs]]
+concept = "canonical display text"
+first_function = "normalize_for_display"
+second_function = "normalize_for_key"
+output_contract = "same-output-for-same-input"
+
 [orchestration]
 default_profile = "semantic-review"
 
@@ -118,6 +129,12 @@ name = "Presentation responsibility boundary review"
 rule = "semantic-work-in-presentation"
 rollout = "provisional"
 
+[[orchestration.steps]]
+kind = "rule"
+name = "Parallel normalization review"
+rule = "parallel-normalization"
+rollout = "provisional"
+
 [[orchestration.profiles]]
 name = "semantic-review"
-steps = ["Prose branch review", "Rendered value feedback review", "Positional semantic override review", "Unknown inference empty-result review", "Embedded semantic replacement review", "Heuristic text consumption review", "Provenance ownership review", "Presentation responsibility boundary review"]
+steps = ["Prose branch review", "Rendered value feedback review", "Positional semantic override review", "Unknown inference empty-result review", "Embedded semantic replacement review", "Heuristic text consumption review", "Provenance ownership review", "Presentation responsibility boundary review", "Parallel normalization review"]

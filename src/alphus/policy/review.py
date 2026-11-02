@@ -358,6 +358,65 @@ class SemanticWorkPresentationPolicy(PythonSourceScanPolicy):
         return self
 
 
+class ParallelNormalizationPair(StrictModel):
+    """Two consumer-declared equivalent string canonicalizers to compare."""
+
+    concept: str
+    first_function: str
+    second_function: str
+    output_contract: Literal["same-output-for-same-input"]
+
+    @field_validator("concept")
+    @classmethod
+    def validate_concept(cls, value: str) -> str:
+        concept = validate_one_line_message(value)
+        if not concept:
+            raise ValueError("normalization concepts must be non-empty")
+        return concept
+
+    @field_validator("first_function", "second_function")
+    @classmethod
+    def validate_function_name(cls, value: str) -> str:
+        if not value.isidentifier():
+            raise ValueError("normalizer function names must be identifiers")
+        return value
+
+    @model_validator(mode="after")
+    def require_distinct_functions(self) -> Self:
+        if self.first_function == self.second_function:
+            raise ValueError("normalization pairs require two distinct functions")
+        return self
+
+
+class ParallelNormalizationPolicy(PythonSourceScanPolicy):
+    """Opt-in same-output contract for direct split/join string normalizers."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    pairs: Annotated[tuple[ParallelNormalizationPair, ...], Field(min_length=1)]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @model_validator(mode="after")
+    def validate_pair_names(self) -> Self:
+        require_unique(
+            tuple(pair.concept for pair in self.pairs),
+            "normalization concept labels must be unique",
+        )
+        functions = tuple(
+            name
+            for pair in self.pairs
+            for name in (pair.first_function, pair.second_function)
+        )
+        require_unique(
+            functions, "a function cannot appear in multiple normalization pairs"
+        )
+        return self
+
+
 class ScipyConstantsPolicy(PythonSourceScanPolicy):
     """Advisory SciPy physical and unit-factor catalog for Python source."""
 

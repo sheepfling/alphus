@@ -81,14 +81,20 @@ def _matched_roles(
         ("serialization", policy.serialization_helpers),
     )
     called: set[str] = set()
-    for node in _local_nodes(function):
-        match node:
-            case ast.Call(func=function_expr):
-                name = _qualified_name(function_expr)
-                if name is not None:
-                    called.add(name)
-            case _:
+    for statement in function.body:
+        match statement:
+            case ast.FunctionDef() | ast.AsyncFunctionDef() | ast.ClassDef():
                 continue
+            case _:
+                pass
+        for node in _local_nodes(statement):
+            match node:
+                case ast.Call(func=function_expr):
+                    name = _qualified_name(function_expr)
+                    if name is not None:
+                        called.add(name)
+                case _:
+                    continue
     return frozenset(
         role for role, helpers in configured_roles if called.intersection(helpers)
     )

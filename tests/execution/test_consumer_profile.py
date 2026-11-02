@@ -35,6 +35,9 @@ def test_prose_as_control_example_is_scoped_and_provisional() -> None:
     presentation = config.checks.semantic_work_presentation
     assert presentation is not None
     assert presentation.module_role == "presentation"
+    normalization = config.checks.parallel_normalization
+    assert normalization is not None
+    assert normalization.pairs[0].output_contract == "same-output-for-same-input"
 
 
 def test_starter_policy_has_one_scoped_command_and_no_global_inventory() -> None:

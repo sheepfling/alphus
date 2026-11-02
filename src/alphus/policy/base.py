@@ -44,6 +44,7 @@ QualityRuleName: TypeAlias = Literal[
     "heuristic-total-consumption",
     "provenance-as-ownership",
     "semantic-work-in-presentation",
+    "parallel-normalization",
     "scipy-constants",
     "test-quality",
     "input-contracts",

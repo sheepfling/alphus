@@ -43,6 +43,7 @@ from alphus.policy.review import (
     HeuristicTotalConsumptionPolicy,
     InputContractPolicy,
     NumericLiteralPolicy,
+    ParallelNormalizationPolicy,
     PositionalInterfacePolicy,
     PositionalSemanticOverridePolicy,
     ProseAsControlPolicy,
@@ -88,6 +89,7 @@ class CheckPolicies(StrictModel):
     heuristic_total_consumption: HeuristicTotalConsumptionPolicy | None = None
     provenance_ownership: ProvenanceOwnershipPolicy | None = None
     semantic_work_presentation: SemanticWorkPresentationPolicy | None = None
+    parallel_normalization: ParallelNormalizationPolicy | None = None
     scipy_constants: ScipyConstantsPolicy | None = None
     test_quality: TestQualityPolicy | None = None
     input_contracts: InputContractPolicy | None = None

@@ -10,6 +10,7 @@ import pytest
 from alphus.config import (
     EmbeddedSemanticOverridePolicy,
     HeuristicTotalConsumptionPolicy,
+    ParallelNormalizationPolicy,
     PositionalSemanticOverridePolicy,
     ProseAsControlPolicy,
     ProvenanceOwnershipPolicy,
@@ -20,6 +21,7 @@ from alphus.gates.review.embedded_semantic_overrides import embedded_override_si
 from alphus.gates.review.heuristic_total_consumption import (
     heuristic_total_consumption_sites,
 )
+from alphus.gates.review.parallel_normalization import parallel_normalization_sites
 from alphus.gates.review.positional_semantic_overrides import positional_override_sites
 from alphus.gates.review.prose_as_control import (
     lossy_rewrite_lines,
@@ -100,6 +102,19 @@ _PRESENTATION_BOUNDARY = SemanticWorkPresentationPolicy(
     serialization_helpers=("serialize_output",),
     module_role="presentation",
 )
+_PARALLEL_NORMALIZATION = ParallelNormalizationPolicy(
+    extensions=(".py",),
+    exclude=(),
+    source_paths=("src/render/*.py",),
+    pairs=(
+        {
+            "concept": "canonical display text",
+            "first_function": "normalize_for_display",
+            "second_function": "normalize_for_key",
+            "output_contract": "same-output-for-same-input",
+        },
+    ),
+)
 
 
 def _matches(detector: Callable[[str], object], source: str) -> bool:
@@ -148,6 +163,10 @@ def _provenance_ownership(text: str) -> object:
 
 def _presentation_boundary(text: str) -> object:
     return semantic_work_presentation_sites(text, _PRESENTATION_BOUNDARY)
+
+
+def _parallel_normalization(text: str) -> object:
+    return parallel_normalization_sites(text, _PARALLEL_NORMALIZATION)
 
 
 _CASES = (
@@ -285,6 +304,22 @@ _CASES = (
         "presentation-only serialization has no semantic boundary signal",
         "def render_document(source):\n    return serialize_output(source)\n",
         _presentation_boundary,
+    ),
+    _case(
+        "declared equivalent normalizers differ in join separator",
+        "def normalize_for_display(text: str) -> str:\n"
+        "    return ' '.join(text.split())\n"
+        "def normalize_for_key(text: str) -> str:\n"
+        "    return '-'.join(text.split())\n",
+        _parallel_normalization,
+    ),
+    _negative(
+        "same canonicalizer separators under declared contract",
+        "def normalize_for_display(text: str) -> str:\n"
+        "    return ' '.join(text.split())\n"
+        "def normalize_for_key(text: str) -> str:\n"
+        "    return ' '.join(text.split())\n",
+        _parallel_normalization,
     ),
 )
 
