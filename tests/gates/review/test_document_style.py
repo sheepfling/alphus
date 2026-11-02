@@ -112,6 +112,68 @@ def test_html_review_skips_likely_generated_and_minified_inputs(tmp_path: Path) 
     )
 
 
+def test_empty_eligible_inventory_is_reported_as_not_evaluated(
+    tmp_path: Path,
+) -> None:
+    findings = check_document_style(
+        tmp_path,
+        [Path("notes.txt")],
+        DocumentStylePolicy(extensions=(".md",)),
+    )
+
+    assert len(findings) == 1
+    assert findings[0].severity == "info"
+    assert "no eligible document was selected" in findings[0].message
+
+
+def test_missing_explicit_artifact_is_an_operational_error(tmp_path: Path) -> None:
+    findings = check_document_style(
+        tmp_path,
+        [],
+        DocumentStylePolicy(
+            extensions=(".docx",), required_paths=("build/review.docx",)
+        ),
+    )
+
+    assert len(findings) == 1
+    assert findings[0].path == "build/review.docx"
+    assert findings[0].severity == "error"
+    assert "Required document was not present" in findings[0].message
+
+
+def test_required_artifact_in_selected_inventory_is_reviewed(tmp_path: Path) -> None:
+    artifact = tmp_path / "build" / "review.md"
+    artifact.parent.mkdir()
+    artifact.write_text("# Inputs\n\n# Methods\n\n# Results\n", encoding="utf-8")
+
+    findings = check_document_style(
+        tmp_path,
+        [Path("build/review.md")],
+        DocumentStylePolicy(extensions=(".md",), required_paths=("build/review.md",)),
+    )
+
+    assert findings == []
+
+
+def test_explicit_artifact_must_be_in_inventory_and_not_excluded(
+    tmp_path: Path,
+) -> None:
+    artifact = tmp_path / "build" / "review.docx"
+    artifact.parent.mkdir()
+    artifact.write_bytes(b"fixture")
+    policy = DocumentStylePolicy(
+        extensions=(".docx",),
+        exclude=("build/**",),
+        required_paths=("build/review.docx",),
+    )
+
+    findings = check_document_style(tmp_path, [Path("build/review.docx")], policy)
+
+    assert len(findings) == 1
+    assert findings[0].severity == "error"
+    assert "excluded by document-style policy" in findings[0].message
+
+
 def test_docx_headings_use_structural_styles_and_paragraph_anchors(
     tmp_path: Path,
 ) -> None:
@@ -151,7 +213,11 @@ def test_docx_headings_use_structural_styles_and_paragraph_anchors(
     findings = check_document_style(
         tmp_path,
         [Path("report.docx")],
-        DocumentStylePolicy(extensions=(".docx",), minimum_headings=4),
+        DocumentStylePolicy(
+            extensions=(".docx",),
+            minimum_headings=4,
+            required_paths=("report.docx",),
+        ),
     )
 
     density = next(
@@ -403,18 +469,19 @@ def test_consumer_can_exclude_a_slogan_dense_marketing_document(tmp_path: Path) 
         "# Build the Story. Shape the Future.\n",
         encoding="utf-8",
     )
-    assert (
-        check_document_style(
-            tmp_path,
-            [document.relative_to(tmp_path)],
-            DocumentStylePolicy(
-                exclude=("marketing/**",),
-                minimum_headings=3,
-                minimum_family_density=0.5,
-            ),
-        )
-        == []
+    findings = check_document_style(
+        tmp_path,
+        [document.relative_to(tmp_path)],
+        DocumentStylePolicy(
+            exclude=("marketing/**",),
+            minimum_headings=3,
+            minimum_family_density=0.5,
+        ),
     )
+
+    assert len(findings) == 1
+    assert findings[0].severity == "info"
+    assert "no eligible document was selected" in findings[0].message
 
 
 def test_isolated_creative_heading_and_marketing_exclusion_do_not_report(

@@ -31,6 +31,7 @@ class DocumentStylePolicy(StrictModel):
 
     extensions: tuple[str, ...] = (".md", ".mdx")
     exclude: tuple[str, ...] = ()
+    required_paths: tuple[str, ...] = ()
     minimum_headings: Annotated[int, Field(ge=3)] = 8
     minimum_family_matches: Annotated[int, Field(ge=2)] = 2
     minimum_family_density: Annotated[float, Field(gt=0, le=1)] = 0.25
@@ -57,6 +58,24 @@ class DocumentStylePolicy(StrictModel):
     @classmethod
     def validate_document_exclusions(cls, values: Sequence[str]) -> tuple[str, ...]:
         return validate_patterns(values)
+
+    @field_validator("required_paths")
+    @classmethod
+    def validate_required_document_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        checked = tuple(
+            validate_single_path(value, "required document paths") for value in values
+        )
+        require_unique(checked, "required document paths must be unique")
+        return checked
+
+    @model_validator(mode="after")
+    def validate_required_document_extensions(self) -> Self:
+        if any(
+            PurePosixPath(path).suffix.lower() not in self.extensions
+            for path in self.required_paths
+        ):
+            raise ValueError("required document paths must use a selected extension")
+        return self
 
 
 class NumericLiteralSpec(StrictModel):

@@ -533,8 +533,71 @@ def check_document_style(
     """Review each selected document using its bounded format-specific extractor."""
     checkout = root.resolve(strict=True)
     findings: list[Finding] = []
-    for relative in sorted(set(paths)):
+    inventory = set(paths)
+    inventory_names = {item.as_posix() for item in inventory}
+    invalid_required: set[str] = set()
+    for required in policy.required_paths:
+        if any(matches_path(required, pattern) for pattern in policy.exclude):
+            invalid_required.add(required)
+            findings.append(
+                Finding(
+                    rule_id=_RULE_ID,
+                    path=required,
+                    severity="error",
+                    message=(
+                        "Required document was excluded by document-style policy; "
+                        "remove the exclusion or the required-path declaration."
+                    ),
+                )
+            )
+        elif required not in inventory_names:
+            invalid_required.add(required)
+            findings.append(
+                Finding(
+                    rule_id=_RULE_ID,
+                    path=required,
+                    severity="error",
+                    message=(
+                        "Required document was not present in the selected repository "
+                        "inventory; check that the artifact exists, is not ignored, "
+                        "and is included by the file policy."
+                    ),
+                )
+            )
+        else:
+            try:
+                required_file = (checkout / required).resolve(strict=True)
+                required_file.relative_to(checkout)
+            except (OSError, ValueError):
+                invalid_required.add(required)
+                findings.append(
+                    Finding(
+                        rule_id=_RULE_ID,
+                        path=required,
+                        severity="error",
+                        message=(
+                            "Required document is missing or resolves outside the "
+                            "repository root."
+                        ),
+                    )
+                )
+            else:
+                if not required_file.is_file():
+                    invalid_required.add(required)
+                    findings.append(
+                        Finding(
+                            rule_id=_RULE_ID,
+                            path=required,
+                            severity="error",
+                            message="Required document is not a regular file.",
+                        )
+                    )
+
+    eligible = 0
+    for relative in sorted(inventory):
         name = relative.as_posix()
+        if name in invalid_required:
+            continue
         if relative.suffix.lower() not in policy.extensions or any(
             matches_path(name, pattern) for pattern in policy.exclude
         ):
@@ -559,6 +622,7 @@ def check_document_style(
                 )
             )
             continue
+        eligible += 1
         suffix = relative.suffix.lower()
         if suffix in {".docx", ".pptx"}:
             try:
@@ -645,4 +709,17 @@ def check_document_style(
                     ),
                 )
             )
+    if eligible == 0 and not findings:
+        findings.append(
+            Finding(
+                rule_id=_RULE_ID,
+                path=".",
+                severity="info",
+                message=(
+                    "Document style was not evaluated because no eligible document "
+                    "was selected; check the file inventory, configured extensions, "
+                    "and exclusions."
+                ),
+            )
+        )
     return sorted(findings, key=lambda item: (item.path, item.line or 0, item.message))

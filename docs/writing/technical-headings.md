@@ -39,8 +39,11 @@ specificity, overall prose quality, or an automatically appropriate rewrite.
 
 For an explicit generated-file review, place the artifact under the checkout in
 a non-ignored path, set `[files].include` to its exact repository-relative path,
-set `checks.document_style.extensions` to `.docx` or `.pptx`, then run
+set `checks.document_style.extensions` to `.docx` or `.pptx`, and list that path
+under `checks.document_style.required_paths`, then run
 `alphus --root . --config artifact-review.toml --rule document-style --report`.
 This uses Alphus's existing root-bounded Git inventory, which includes
 non-ignored untracked files. Files outside the checkout or ignored by Git are
-not selected by this invocation.
+not selected by this invocation. A missing, ignored, or excluded required path
+is an operational error; a rule run with no eligible documents and no required
+paths reports that it was not evaluated instead of appearing as a clean pass.
