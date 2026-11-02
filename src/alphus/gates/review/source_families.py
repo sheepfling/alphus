@@ -535,11 +535,14 @@ def _python_import_evidence(
             failures += 1
             continue
         trees[source] = tree
-        module_level_import_ids[source] = {
-            id(statement)
-            for statement in tree.body
-            if isinstance(statement, ast.ImportFrom)
-        }
+        module_import_ids: set[int] = set()
+        for statement in tree.body:
+            match statement:
+                case ast.ImportFrom():
+                    module_import_ids.add(id(statement))
+                case _:
+                    continue
+        module_level_import_ids[source] = module_import_ids
         source_module = None
         for root in roots:
             try:
