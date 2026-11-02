@@ -49,6 +49,7 @@ _C_CPP_IMPLEMENTATIONS = frozenset({".c", ".cc", ".cpp", ".cxx"})
 _LINE_ENDINGS = frozenset("\n\v\f\x1c\x1d\x1e\x85\u2028\u2029")
 _GIT_SHA = re.compile(rb"^[0-9a-f]{40,64}$")
 _CPP_INCLUDE = re.compile(r'^\s*#\s*include\s*"([^"\\\r\n]+)"\s*$')
+_CPP_RAW_STRING_START = re.compile(r'(?:u8|u|U|L)?R"([^ ()"\\\t\r\n]{0,16})\(')
 _CPP_EXTENSIONS = frozenset({".c", ".h", ".cc", ".hh", ".cpp", ".hpp", ".cxx", ".hxx"})
 _JAVASCRIPT_EXTENSIONS = frozenset({".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"})
 _CppIncludeEdge: TypeAlias = tuple[int, Path | None]
@@ -566,9 +567,12 @@ def _cpp_include_index(
 
         edges: list[tuple[int, Path | None]] = []
         in_block_comment = False
+        raw_string_end: str | None = None
         for line_number, line in enumerate(text.splitlines(), 1):
-            visible, in_block_comment = _strip_cpp_comments(line, in_block_comment)
-            match = _CPP_INCLUDE.fullmatch(visible)
+            visible, in_block_comment, raw_string_end, contains_raw = (
+                _strip_cpp_comments(line, in_block_comment, raw_string_end)
+            )
+            match = None if contains_raw else _CPP_INCLUDE.fullmatch(visible)
             if match is None:
                 continue
             include = match.group(1)
@@ -604,18 +608,32 @@ def _cpp_include_index(
     )
 
 
-def _strip_cpp_comments(line: str, in_block_comment: bool) -> tuple[str, bool]:
-    """Remove C/C++ comments outside quoted literals for lexical directives.
+def _strip_cpp_comments(
+    line: str, in_block_comment: bool, raw_string_end: str | None = None
+) -> tuple[str, bool, str | None, bool]:
+    """Remove comments and abstain on directives inside C++ raw strings.
 
     This intentionally does not evaluate preprocessing conditions or splices.
     """
     output: list[str] = []
     quote: str | None = None
     escaped = False
+    contains_raw = False
     index = 0
     while index < len(line):
         char = line[index]
         following = line[index + 1] if index + 1 < len(line) else ""
+        if raw_string_end is not None:
+            contains_raw = True
+            end = line.find(raw_string_end, index)
+            if end < 0:
+                output.append(line[index:])
+                break
+            end += len(raw_string_end)
+            output.append(line[index:end])
+            index = end
+            raw_string_end = None
+            continue
         if in_block_comment:
             if char == "*" and following == "/":
                 in_block_comment = False
@@ -623,6 +641,20 @@ def _strip_cpp_comments(line: str, in_block_comment: bool) -> tuple[str, bool]:
                 index += 2
                 continue
             index += 1
+            continue
+        raw_start = _CPP_RAW_STRING_START.match(line, index)
+        previous = line[index - 1] if index else ""
+        if raw_start and not (previous.isalnum() or previous == "_"):
+            contains_raw = True
+            raw_string_end = f'){raw_start.group(1)}"'
+            end = line.find(raw_string_end, raw_start.end())
+            if end < 0:
+                output.append(line[index:])
+                break
+            end += len(raw_string_end)
+            output.append(line[index:end])
+            index = end
+            raw_string_end = None
             continue
         if quote is not None:
             output.append(char)
@@ -648,7 +680,7 @@ def _strip_cpp_comments(line: str, in_block_comment: bool) -> tuple[str, bool]:
             continue
         output.append(char)
         index += 1
-    return "".join(output), in_block_comment
+    return "".join(output), in_block_comment, raw_string_end, contains_raw
 
 
 def _python_import_evidence(

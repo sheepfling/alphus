@@ -349,6 +349,35 @@ def test_cpp_include_budget_is_not_spent_without_a_cpp_family(tmp_path: Path) ->
     assert "C/C++ file(s) could not be analyzed" not in findings[0].message
 
 
+def test_cpp_include_evidence_ignores_multiline_raw_string_contents(
+    tmp_path: Path,
+) -> None:
+    family = [
+        _write(tmp_path, f"include/gateway_{name}.hpp")
+        for name in ("client", "server", "routes", "auth", "cache")
+    ]
+    consumer = _write(tmp_path, "src/consumer.cpp")
+    (tmp_path / consumer).write_text(
+        'const char *example = R"tag(\n'
+        '#include "../include/gateway_client.hpp"\n'
+        ')tag";\n'
+        '#include "../include/gateway_server.hpp" // actual include\n',
+        encoding="utf-8",
+    )
+
+    findings = source_family_findings(
+        tmp_path,
+        [*family, consumer],
+        SourceFamilyPolicy(min_family_files=5, cpp_include_evidence=True),
+    )
+
+    assert len(findings) == 1
+    message = findings[0].message
+    assert "1 incoming edge(s)" in message
+    assert "incoming src/consumer.cpp:4 → include/gateway_server.hpp" in message
+    assert "incoming src/consumer.cpp:2 → include/gateway_client.hpp" not in message
+
+
 def test_cpp_include_budget_reserves_all_family_cores_before_consumers(
     tmp_path: Path,
 ) -> None:
