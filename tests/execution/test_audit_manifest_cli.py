@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -134,6 +135,102 @@ steps = ["Numeric"]
     assert payload["evidence_complete"] is False
     assert payload["audit_completion"]["status"] == "incomplete"
     assert payload["audit_completion"]["checks"][0]["status"] == "incomplete"
+
+
+def test_manifest_retains_native_selector_scope_and_annotation_evidence(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    source = tmp_path / "src"
+    source.mkdir()
+    (source / "annotated.py").write_text(
+        "def already_typed(value: int) -> int:\n    return value\n",
+        encoding="utf-8",
+    )
+    (source / "unannotated.py").write_text(
+        "def needs_types(value):\n    return value\n",
+        encoding="utf-8",
+    )
+    config_text = """schema_version = 1
+[orchestration]
+default_profile = "audit"
+[[orchestration.steps]]
+kind = "command"
+name = "Python annotations"
+argv = [
+  "{python}", "-m", "ruff", "check", "--select=ANN",
+  "--output-format=json", "--exit-zero", "{files}"
+]
+files = { include = ["src/*.py"] }
+[[orchestration.profiles]]
+name = "audit"
+steps = ["Python annotations"]
+"""
+    (tmp_path / "quality.toml").write_text(config_text, encoding="utf-8")
+    expected_files = ("src/annotated.py", "src/unannotated.py")
+    _write_manifest(
+        tmp_path,
+        "audit",
+        [
+            AuditManifestCheck(
+                check_id="annotations",
+                step="Python annotations",
+                expected_files=expected_files,
+                required_argv=("--select=ANN",),
+            )
+        ],
+    )
+
+    exit_code = main(
+        [
+            "--root",
+            str(tmp_path),
+            "--config",
+            "quality.toml",
+            "--json",
+            "--audit-manifest",
+            "audit.json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert "steps" in payload, payload.get("execution_failure")
+    assessment = payload["audit_completion"]["checks"][0]
+    step = next(row for row in payload["steps"] if row["name"] == "Python annotations")
+    diagnostics = json.loads(step["stdout"])
+
+    assert exit_code == 0
+    assert payload["audit_completion"]["status"] == "complete"
+    assert assessment["status"] == "executed"
+    assert assessment["expected_files"] == list(expected_files)
+    assert assessment["selected_files"] == list(expected_files)
+    assert "--select=ANN" in assessment["expanded_argv"]
+    assert any(
+        row["filename"].endswith("src/unannotated.py") and row["code"] == "ANN001"
+        for row in diagnostics
+    )
+    assert all(not row["filename"].endswith("src/annotated.py") for row in diagnostics)
+
+    (tmp_path / "quality.toml").write_text(
+        config_text.replace("--select=ANN", "--select=E"), encoding="utf-8"
+    )
+    missing_selector_exit = main(
+        [
+            "--root",
+            str(tmp_path),
+            "--config",
+            "quality.toml",
+            "--json",
+            "--audit-manifest",
+            "audit.json",
+        ]
+    )
+    missing_selector = json.loads(capsys.readouterr().out)["audit_completion"]
+
+    assert missing_selector_exit == 2
+    assert missing_selector["status"] == "incomplete"
+    assert missing_selector["checks"][0]["status"] == "selector_mismatch"
+    assert "--select=ANN" in missing_selector["checks"][0]["required_argv"]
+    assert "--select=E" in missing_selector["checks"][0]["expanded_argv"]
 
 
 @pytest.mark.parametrize(

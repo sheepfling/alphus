@@ -210,6 +210,10 @@ def test_manifest_rejects_parent_traversal() -> None:
         ("not_applicable", "no_matching_files", "empty_inventory"),
         ("failed", "violation", "executed_with_findings"),
         ("failed", "operational_error", "execution_failure"),
+        ("failed", None, "incomplete"),
+        ("failed", "unrecognized", "incomplete"),
+        ("passed", "violation", "incomplete"),
+        ("running", None, "incomplete"),
         ("passed", None, "executed_zero"),
     ],
 )

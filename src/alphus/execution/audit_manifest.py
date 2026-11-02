@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import PurePosixPath
 from typing import Literal, NotRequired, Required, Self
 
@@ -174,6 +175,9 @@ class AuditCheckAssessment(TypedDict, total=False):
     selected_files: list[str] | None
     required_argv: list[str]
     expanded_argv: list[str]
+    rule_id: str
+    language: str
+    native_rule: str
     findings_state: Literal["with_findings", "zero_findings", "unknown"]
     structured_finding_count: int
 
@@ -203,22 +207,64 @@ _OPERATIONAL_FAILURE_RULES = frozenset(
 
 
 def _incomplete_assessment(manifest: AuditManifest, reason: str) -> AuditCompletion:
+    checks: list[AuditCheckAssessment] = [
+        {
+            "check_id": check.check_id,
+            "step": check.step,
+            "status": "incomplete",
+            "complete": False,
+        }
+        for check in manifest.checks
+    ]
+    _attach_check_scope(checks, manifest, None)
     return {
         "schema": "alphus.profile-audit-completion",
         "schema_version": 1,
         "profile": manifest.profile,
         "status": "incomplete",
         "reason": reason,
-        "checks": [
-            {
-                "check_id": check.check_id,
-                "step": check.step,
-                "status": "incomplete",
-                "complete": False,
-            }
-            for check in manifest.checks
-        ],
+        "checks": checks,
     }
+
+
+def _attach_check_scope(
+    assessments: Sequence[AuditCheckAssessment],
+    manifest: AuditManifest,
+    planned_steps: Sequence[AuditPlanStep] | None,
+) -> None:
+    """Retain declared and resolved scope with every completion outcome."""
+    for manifest_check in manifest.checks:
+        assessment = next(
+            row for row in assessments if row["check_id"] == manifest_check.check_id
+        )
+        planned_step = (
+            next(
+                (row for row in planned_steps if row["name"] == manifest_check.step),
+                None,
+            )
+            if planned_steps is not None
+            else None
+        )
+        assessment["expected_files"] = (
+            None
+            if manifest_check.expected_files is None
+            else list(manifest_check.expected_files)
+        )
+        assessment["selected_files"] = (
+            None if planned_step is None else planned_step.get("selected_files")
+        )
+        assessment["required_argv"] = list(manifest_check.required_argv)
+        assessment["expanded_argv"] = (
+            [] if planned_step is None else planned_step.get("expanded_argv", [])
+        )
+        if (
+            manifest_check.rule_id is not None
+            and manifest_check.language is not None
+            and manifest_check.native_rule is not None
+        ):
+            assessment["rule_id"] = manifest_check.rule_id
+            assessment["language"] = manifest_check.language
+            assessment["native_rule"] = manifest_check.native_rule
 
 
 def assess_profile_audit(
@@ -392,6 +438,44 @@ def assess_profile_audit(
                     }
                 )
                 continue
+            failure_kind = executed_intent.get("failure_kind")
+            if intent_status == "failed" and failure_kind not in {
+                "violation",
+                "operational_error",
+                "configuration_error",
+            }:
+                checks.append(
+                    {
+                        "check_id": check.check_id,
+                        "step": check.step,
+                        "status": "incomplete",
+                        "complete": False,
+                        "reason": "failed intent has no recognized failure kind",
+                    }
+                )
+                continue
+            if intent_status == "passed" and failure_kind is not None:
+                checks.append(
+                    {
+                        "check_id": check.check_id,
+                        "step": check.step,
+                        "status": "incomplete",
+                        "complete": False,
+                        "reason": "passed intent has a contradictory failure kind",
+                    }
+                )
+                continue
+            if intent_status not in {"passed", "failed"}:
+                checks.append(
+                    {
+                        "check_id": check.check_id,
+                        "step": check.step,
+                        "status": "incomplete",
+                        "complete": False,
+                        "reason": "intent has an unknown execution status",
+                    }
+                )
+                continue
 
         executed_step = executed_steps.get(check.step)
         if executed_step is None:
@@ -481,6 +565,7 @@ def assess_profile_audit(
             }
         )
 
+    _attach_check_scope(checks, manifest, plan["steps"])
     complete = all(check["complete"] for check in checks)
     return {
         "schema": "alphus.profile-audit-completion",
