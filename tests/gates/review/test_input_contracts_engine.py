@@ -680,6 +680,14 @@ def evaluate(packet: Mapping[str, JsonValue]):
     assert findings == []
 
 
+@pytest.mark.parametrize(
+    ("subject", "pattern"),
+    [
+        ('{"reader": "value"}', '{"reader": _read_state}'),
+        ('["value"]', "[*_read_state]"),
+        ('{"reader": "value", "other": "item"}', '{"reader": _, **_read_state}'),
+    ],
+)
 def test_unrelated_match_captures_keep_module_helper_evidence(
     subject: str, pattern: str
 ) -> None:
