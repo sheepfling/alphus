@@ -53,7 +53,7 @@ def test_built_wheel_cli_uses_git_inventory_and_respects_scope(
     tmp_path: Path, pytestconfig: pytest.Config
 ) -> None:
     project = pytestconfig.rootpath
-    isolated_env = isolated_env.copy()
+    isolated_env = os.environ.copy()
     isolated_env.pop("PYTHONPATH", None)
     wheelhouse = tmp_path / "wheelhouse"
     wheelhouse.mkdir()
@@ -90,7 +90,7 @@ def test_built_wheel_cli_uses_git_inventory_and_respects_scope(
     dependency_site = Path(sysconfig.get_paths()["purelib"])
     dependencies = tmp_path / "runtime-dependencies"
     _dependency_overlay(dependency_site, dependencies)
-    env = os.environ.copy()
+    env = isolated_env.copy()
     env["PYTHONPATH"] = str(dependencies)
 
     identity_process = _run(
