@@ -114,6 +114,21 @@ consuming = re.sub(r"(?=\d)\d+", "", text)
     ) == [(6, r"(?=\d)\d+")]
 
 
+def test_lossy_regex_rewrite_ignores_zero_count_and_verbose_comments() -> None:
+    source = r'''\
+zero_count = re.sub(r"\d{0}", "", text)
+zero_range = re.sub(r"\d{0,0}", " ", text)
+verbose_comment = re.sub(r"""(?x)# \d is only a comment
+\s+""", "", text)
+actual_digit_consumer = re.sub(r"""(?x)# \d is a comment
+\d+""", "", text)
+'''
+
+    assert lossy_rewrite_lines(
+        source, _policy(lossy_text_rewrite=True, regex_sub_helpers=("re.sub",))
+    ) == [(6, "(?x)# \\d is a comment\n\\d+")]
+
+
 def test_lossy_text_rewrite_detects_literal_semantic_token_deletion() -> None:
     source = """\
 cleaned = prose.replace("0.25", "")

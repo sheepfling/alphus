@@ -30,6 +30,11 @@ or prove meaningful content is lost. Numeric text may be intentionally removed
 under a declared input contract; exclusions, exceptions, and helper names are
 consumer decisions.
 
+For configured regex substitutions, the digit-token scanner ignores zero-only
+quantifiers such as `\d{0}`, lookaround-only digit assertions, negated digit
+classes, and `\d` text inside verbose-mode comments. This is a narrow lexical
+boundary check, not a complete regular-expression semantic analyzer.
+
 `rendered-value-reparsed` uses a separately configured list of rendering helper
 names. It detects a local result assigned from one of those calls when the same
 value is used in the narrow `rstrip().endswith(<non-empty literal>)` condition

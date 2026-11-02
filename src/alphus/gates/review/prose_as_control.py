@@ -195,20 +195,46 @@ def _literal_replace_expression(node: ast.Call) -> str | None:
 
 
 def _regex_consumes_digit(pattern: str) -> bool:
-    """Find a literal digit class outside regex assertions and negated classes."""
-    groups: list[bool] = []
+    """Find a consuming digit class outside assertions/comments/zero counts."""
+    groups: list[tuple[bool, bool]] = []
     assertion_depth = 0
     in_character_class = False
     class_is_negated = False
+    verbose = False
     index = 0
     while index < len(pattern):
         character = pattern[index]
+        if pattern.startswith("(?x)", index):
+            verbose = True
+            index += 4
+            continue
+        if pattern.startswith("(?-x)", index):
+            verbose = False
+            index += 5
+            continue
+        if pattern.startswith("(?x:", index):
+            groups.append((False, verbose))
+            verbose = True
+            index += 4
+            continue
+        if pattern.startswith("(?-x:", index):
+            groups.append((False, verbose))
+            verbose = False
+            index += 5
+            continue
+        if verbose and not in_character_class and character == "#":
+            newline = pattern.find("\n", index)
+            if newline < 0:
+                break
+            index = newline + 1
+            continue
         if character == "\\" and index + 1 < len(pattern):
             escaped = pattern[index + 1]
             if (
                 escaped == "d"
                 and assertion_depth == 0
                 and not (in_character_class and class_is_negated)
+                and not _zero_repetition_follows(pattern, index + 2)
             ):
                 return True
             index += 2
@@ -232,14 +258,30 @@ def _regex_consumes_digit(pattern: str) -> bool:
             continue
         if character == "(":
             is_assertion = pattern.startswith(("(?=", "(?!", "(?<=", "(?<!"), index)
-            groups.append(is_assertion)
+            groups.append((is_assertion, verbose))
             if is_assertion:
                 assertion_depth += 1
         elif character == ")" and groups:
-            if groups.pop():
+            is_assertion, previous_verbose = groups.pop()
+            if is_assertion:
                 assertion_depth -= 1
+            verbose = previous_verbose
         index += 1
     return False
+
+
+def _zero_repetition_follows(pattern: str, index: int) -> bool:
+    """Recognize a zero-only brace quantifier immediately after an atom."""
+    if index >= len(pattern) or pattern[index] != "{":
+        return False
+    closing = pattern.find("}", index + 1)
+    if closing < 0:
+        return False
+    count = pattern[index + 1 : closing]
+    if "," in count:
+        lower, upper = count.split(",", maxsplit=1)
+        return lower.isdecimal() and upper.isdecimal() and int(lower) == int(upper) == 0
+    return count.isdecimal() and int(count) == 0
 
 
 def lossy_rewrite_lines(
