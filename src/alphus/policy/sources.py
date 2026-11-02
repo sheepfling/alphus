@@ -668,6 +668,7 @@ class PythonStylePolicy(PythonSourceScanPolicy):
     structured_reporting_paths: Annotated[tuple[str, ...], Field(default_factory=tuple)]
     repeated_literal_paths: Annotated[tuple[str, ...], Field(default_factory=tuple)]
     semantic_result_paths: Annotated[tuple[str, ...], Field(default_factory=tuple)]
+    semantic_result_apis: Annotated[tuple[str, ...], Field(default_factory=tuple)]
     pattern_kind_paths: Annotated[tuple[str, ...], Field(default_factory=tuple)]
     self_return_paths: Annotated[tuple[str, ...], Field(default_factory=tuple)]
     shared_text_reader_paths: Annotated[tuple[str, ...], Field(default_factory=tuple)]
@@ -687,6 +688,19 @@ class PythonStylePolicy(PythonSourceScanPolicy):
     @classmethod
     def validate_boundary_paths(cls, patterns: Sequence[str]) -> tuple[str, ...]:
         return validate_patterns(patterns)
+
+    @field_validator("semantic_result_apis")
+    @classmethod
+    def validate_semantic_result_apis(cls, names: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not name or any(not part.isidentifier() for part in name.split("."))
+            for name in names
+        ):
+            raise ValueError(
+                "semantic result APIs must be dotted module/callable identifiers"
+            )
+        require_unique(names, "semantic result APIs must be unique")
+        return tuple(names)
 
     @field_validator("opaque_boundary_marker_prefix")
     @classmethod

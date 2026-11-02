@@ -35,15 +35,27 @@ only: it does not establish that a cycle exists, that an optional dependency is
 packaged incorrectly, or that moving an import is safe. Preserve and review
 lazy boundaries in their application context.
 
-The opt-in `python-style.semantic_result_paths` check reviews visibly public
-functions and methods in the selected files for fixed-position tuple results.
-Private names, methods on private classes, homogeneous variadic tuples, named
-records, and conventional coordinate/range or wire conversion APIs are
-accepted. `typing.Tuple` and its imported aliases are followed in nested result
-annotations. The rule uses names and local syntax only: it cannot resolve
-arbitrary imported type aliases or determine external/dynamic consumers. Give
-wire and compatibility contracts explicit names, and review each finding; the
-check never rewrites APIs or callers.
+The opt-in `python-style.semantic_result_paths` check limits scanning to chosen
+files; a file selection alone does not prove that every callable in the file
+is public. Pair it with exact, fully qualified `semantic_result_apis` entries
+such as `my_package.api.load_pair` or `my_package.api.Factory.create` to declare
+the public contracts under review. Private names, methods on private classes,
+unselected callables, homogeneous variadic tuples, named records, and
+conventional coordinate/range or wire conversion APIs are accepted.
+`typing.Tuple` and its imported aliases are followed in nested result
+annotations. The rule uses configured symbol identity and local syntax only:
+it cannot resolve arbitrary imported type aliases or determine
+external/dynamic consumers. Give wire and compatibility contracts explicit
+names, and review each finding; the check never rewrites APIs or callers.
+
+For example, a consumer can select the source inventory and declare only the
+public callable whose result contract is under review:
+
+```toml
+[checks.python_style]
+semantic_result_paths = ["src/my_package/api.py"]
+semantic_result_apis = ["my_package.api.load_pair"]
+```
 
 ## Numeric literals
 

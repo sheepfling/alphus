@@ -587,10 +587,51 @@ def test_semantic_result_paths_are_opt_in_and_respect_exclusions(
 
     enabled = POLICY.model_copy(update={"semantic_result_paths": ["src/**"]})
     selected = findings_for(tmp_path, [relative], enabled)
+    assert selected.get(relative.as_posix(), {}).get("unnamed_tuple_returns") is None
+
+    public = enabled.model_copy(
+        update={"semantic_result_apis": ["results.load", "results.pair"]}
+    )
+    selected = findings_for(tmp_path, [relative], public)
     assert selected[relative.as_posix()]["unnamed_tuple_returns"] == [1, 2]
+
+    private = public.model_copy(update={"semantic_result_apis": ["results.pair"]})
+    selected = findings_for(tmp_path, [relative], private)
+    assert selected[relative.as_posix()]["unnamed_tuple_returns"] == [2]
 
     excluded = enabled.model_copy(update={"exclude": ["src/**"]})
     assert findings_for(tmp_path, [relative], excluded) == {}
+
+
+def test_semantic_result_api_contracts_are_validated_and_unique() -> None:
+    config = {
+        "extensions": [".py"],
+        "exclude": [],
+        "opaque_boundary_paths": [],
+        "opaque_boundary_marker_prefix": "# opaque-boundary: ",
+        "opaque_boundary_min_reason_chars": 12,
+        "forbidden_main_imports": [],
+        "semantic_rule_id_paths": [],
+        "structured_reporting_paths": [],
+        "repeated_literal_paths": [],
+        "semantic_result_paths": [],
+        "semantic_result_apis": [],
+        "pattern_kind_paths": [],
+        "self_return_paths": [],
+        "shared_text_reader_paths": [],
+        "public_constant_paths": [],
+    }
+    with pytest.raises(ValueError, match="dotted module/callable identifiers"):
+        PythonStylePolicy.model_validate(
+            {**config, "semantic_result_apis": ["src/*.py::load"]}
+        )
+    with pytest.raises(ValueError, match="must be unique"):
+        PythonStylePolicy.model_validate(
+            {
+                **config,
+                "semantic_result_apis": ["results.load", "results.load"],
+            }
+        )
 
 
 def test_scoped_text_reader_check_detects_direct_path_reads() -> None:

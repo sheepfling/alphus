@@ -428,6 +428,7 @@ class StyleVisitor(ast.NodeVisitor):
         self_returns: bool = False,
         shared_text_readers: bool = False,
         public_constants: bool = False,
+        public_result_apis: AbstractSet[str] | None = None,
         module_name: str = "",
         imported_symbols: AbstractSet[str] = frozenset(),
     ) -> None:
@@ -465,6 +466,7 @@ class StyleVisitor(ast.NodeVisitor):
         self.structured_reporting = structured_reporting
         self.check_repeated_literals = repeated_literals
         self.semantic_results = semantic_results
+        self.public_result_apis = public_result_apis
         self.pattern_kinds = pattern_kinds
         self.self_returns = self_returns
         self.shared_text_readers = shared_text_readers
@@ -477,6 +479,7 @@ class StyleVisitor(ast.NodeVisitor):
         self.function_depth = 0
         self.tuple_result_functions: list[tuple[int, bool, bool]] = []
         self.private_result_scope = 0
+        self.result_class_stack: list[str] = []
         self.type_checking_depth = 0
         self.type_checking_names = {"TYPE_CHECKING"}
         self.typing_names = {"typing"}
@@ -708,11 +711,25 @@ class StyleVisitor(ast.NodeVisitor):
             "to_legacy",
             "from_legacy",
         }
+        qualified_result_name = ".".join(
+            part
+            for part in (
+                self.module_name,
+                *self.result_class_stack,
+                node.name,
+            )
+            if part
+        )
         public_result_api = (
             self.semantic_results
+            and self.function_depth == 0
             and self.private_result_scope == 0
             and not node.name.startswith("_")
             and not conventional_pair
+            and (
+                self.public_result_apis is None
+                or qualified_result_name in self.public_result_apis
+            )
         )
         has_tuple_result = (
             public_result_api
@@ -910,7 +927,9 @@ class StyleVisitor(ast.NodeVisitor):
                 self.findings["unslotted_dataclasses"].append(node.lineno)
         if node.name.startswith("_"):
             self.private_result_scope += 1
+        self.result_class_stack.append(node.name)
         self.generic_visit(node)
+        self.result_class_stack.pop()
         if node.name.startswith("_"):
             self.private_result_scope -= 1
         self.frozen_model_stack.pop()
@@ -1151,6 +1170,7 @@ def findings_for(
                 matches_path(relative.as_posix(), pattern)
                 for pattern in policy.semantic_result_paths
             ),
+            public_result_apis=frozenset(policy.semantic_result_apis),
             pattern_kinds=any(
                 matches_path(relative.as_posix(), pattern)
                 for pattern in policy.pattern_kind_paths
@@ -1167,7 +1187,7 @@ def findings_for(
                 matches_path(relative.as_posix(), pattern)
                 for pattern in policy.public_constant_paths
             ),
-            module_name=".".join(relative.with_suffix("").parts[1:]),
+            module_name=_module_path(relative),
             imported_symbols=frozenset(imported_symbols),
         )
         visitor.visit(ast.parse(source, filename=str(relative)))
