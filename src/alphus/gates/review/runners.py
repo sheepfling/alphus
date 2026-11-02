@@ -1,4 +1,8 @@
-"""Register the advisory review theme's built-in quality rules."""
+"""Register explicit, deterministic adapters for advisory review rules.
+
+The theme registry is intentionally hand-composed; architecture tests ensure its
+selectors remain complete as the public rule catalog evolves.
+"""
 
 from __future__ import annotations
 

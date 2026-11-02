@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 from importlib.resources import files
+from typing import get_args
 
 from alphus.execution.dispatch import RULE_RUNNERS
 from alphus.gates.hygiene.runners import HYGIENE_RULE_RUNNERS
@@ -11,6 +12,7 @@ from alphus.gates.repository.runners import REPOSITORY_RULE_RUNNERS
 from alphus.gates.review.runners import REVIEW_RULE_RUNNERS
 from alphus.gates.source.runners import SOURCE_RULE_RUNNERS
 from alphus.gates.vcs.runners import VCS_RULE_RUNNERS
+from alphus.policy.base import QualityRuleName
 
 
 def test_shared_support_modules_do_not_import_gate_implementations() -> None:
@@ -127,6 +129,10 @@ def test_gate_themes_own_their_runner_mappings() -> None:
     for runners, expected in themes:
         assert set(runners) == expected
         assert all(RULE_RUNNERS[name] is runner for name, runner in runners.items())
+
+
+def test_explicit_runner_adapters_cover_the_public_rule_catalog() -> None:
+    assert set(RULE_RUNNERS) == set(get_args(QualityRuleName))
 
 
 def test_root_contains_only_public_configuration_and_cli_boundaries() -> None:

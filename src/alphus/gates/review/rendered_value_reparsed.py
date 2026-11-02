@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
+from typing import NamedTuple
 
 from alphus.config import ProseAsControlPolicy
 from alphus.contracts.findings import Finding
@@ -15,6 +16,14 @@ from alphus.support.source_text import read_python_source
 _RULE_ID = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.CORRECTNESS, "rendered-value-reparsed"
 )
+
+
+class _RenderedValueSite(NamedTuple):
+    """A rendered-value assignment and its later predicate use."""
+
+    render_line: int
+    predicate_line: int
+    variable: str
 
 
 def _qualified_name(node: ast.expr) -> str | None:
@@ -103,6 +112,7 @@ def _uses_rendered_suffix(test: ast.expr, names: Sequence[str]) -> str | None:
 
 
 def _common_bindings(states: Sequence[Mapping[str, int]]) -> dict[str, int]:
+    """Return names bound on every path, mapped to their assignment line."""
     if not states:
         return {}
     first = states[0]
@@ -113,26 +123,28 @@ def _common_bindings(states: Sequence[Mapping[str, int]]) -> dict[str, int]:
     }
 
 
-def _sites(source: str, helpers: tuple[str, ...]) -> list[tuple[int, int, str]]:
+def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
     if not helpers:
         return []
     try:
         tree = ast.parse(source)
     except SyntaxError:
         return []
-    found: set[tuple[int, int, str]] = set()
+    found: set[_RenderedValueSite] = set()
 
     def scan(
         statements: Sequence[ast.stmt], rendered: Mapping[str, int]
     ) -> dict[str, int]:
-        """Walk statements in source order, keeping only proven local bindings."""
+        """Track rendered local names to assignment lines in source order."""
         current = dict(rendered)
         for statement in statements:
             match statement:
                 case ast.If(test=test, body=body, orelse=orelse) as conditional:
                     name = _uses_rendered_suffix(test, tuple(current))
                     if name is not None:
-                        found.add((current[name], conditional.lineno, name))
+                        found.add(
+                            _RenderedValueSite(current[name], conditional.lineno, name)
+                        )
                     branch_state = current.copy()
                     for node in ast.walk(test):
                         match node:
@@ -305,18 +317,17 @@ def check_rendered_value_reparsed(
         path = checkout / relative
         if not path.is_file():
             continue
-        for render_line, predicate_line, variable in _sites(
-            read_python_source(path), policy.rendered_value_helpers
-        ):
+        for site in _sites(read_python_source(path), policy.rendered_value_helpers):
             findings.append(
                 Finding(
                     _RULE_ID,
                     name,
                     "configured rendered output flows into a semantic suffix predicate "
-                    f"({variable}.rstrip().endswith(...), lines {render_line}/"
-                    f"{predicate_line}); inspect whether source semantics should be "
+                    f"({site.variable}.rstrip().endswith(...), lines "
+                    f"{site.render_line}/{site.predicate_line}); inspect whether "
+                    "source semantics should be "
                     "checked before rendering. Static flow does not prove corruption.",
-                    predicate_line,
+                    site.predicate_line,
                     policy.severity,
                 )
             )

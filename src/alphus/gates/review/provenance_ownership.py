@@ -6,6 +6,7 @@ import ast
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import NamedTuple
 
 from alphus.config import ProvenanceOwnershipPolicy
 from alphus.contracts.findings import Finding
@@ -20,6 +21,24 @@ _RULE_ID = rule_tag(
     Category.ARCHITECTURE,
     "provenance-as-ownership",
 )
+_MAX_AST_NODES = 10_000
+_MUTATING_PATH_SET_METHODS = frozenset(
+    {"add", "clear", "discard", "pop", "remove", "update"}
+)
+
+
+class _AttributeParts(NamedTuple):
+    """A simple attribute chain as its root name and dotted suffix."""
+
+    root: str
+    suffix: str
+
+
+class _CandidateEvidence(NamedTuple):
+    """The owner collection and comparison line supporting a filter match."""
+
+    owner_collection: str
+    condition_line: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,16 +55,20 @@ class _OwnerPathSet:
     line: int
 
 
-def _attribute_parts(node: ast.expr) -> tuple[str, str] | None:
+def _attribute_parts(node: ast.expr) -> _AttributeParts | None:
     match node:
         case ast.Name(id=name):
-            return name, ""
+            return _AttributeParts(name, "")
         case ast.Attribute(value=parent, attr=attribute):
             parent_parts = _attribute_parts(parent)
             if parent_parts is None:
                 return None
-            root, suffix = parent_parts
-            return root, f"{suffix}.{attribute}" if suffix else attribute
+            return _AttributeParts(
+                parent_parts.root,
+                f"{parent_parts.suffix}.{attribute}"
+                if parent_parts.suffix
+                else attribute,
+            )
         case _:
             return None
 
@@ -68,6 +91,7 @@ def _local_nodes(root: ast.AST) -> Iterable[ast.AST]:
 def _path_set_assignments(
     function: ast.FunctionDef, policy: ProvenanceOwnershipPolicy
 ) -> dict[str, _OwnerPathSet]:
+    """Map each local set variable name to its proven owner-path set evidence."""
     nodes = tuple(_local_nodes(function))
     # A nested closure may mutate a captured set and be called before the
     # comprehension. Without call-order and escape analysis, its effect is
@@ -103,8 +127,8 @@ def _path_set_assignments(
                 parts = _attribute_parts(element)
                 if (
                     parts is not None
-                    and parts[0] == owner_target
-                    and parts[1] == policy.source_path_suffix
+                    and parts.root == owner_target
+                    and parts.suffix == policy.source_path_suffix
                 ):
                     assignments.setdefault(target_name, []).append(
                         _OwnerPathSet(owner_name, node.lineno)
@@ -129,14 +153,7 @@ def _path_set_assignments(
                     declarations = True
                 case ast.Call(
                     func=ast.Attribute(value=ast.Name(id=bound), attr=method)
-                ) if bound == name and method in {
-                    "add",
-                    "clear",
-                    "discard",
-                    "pop",
-                    "remove",
-                    "update",
-                }:
+                ) if bound == name and method in _MUTATING_PATH_SET_METHODS:
                     mutated = True
                 case _:
                     continue
@@ -155,7 +172,7 @@ def _candidate_filter(
     node: ast.AST,
     path_sets: Mapping[str, _OwnerPathSet],
     policy: ProvenanceOwnershipPolicy,
-) -> tuple[str, int] | None:
+) -> _CandidateEvidence | None:
     match node:
         case ast.ListComp(
             lineno=site_line,
@@ -179,14 +196,17 @@ def _candidate_filter(
                         comparators=[ast.Name(id=path_set_name)],
                     ) if path_set_name in path_sets:
                         parts = _attribute_parts(left)
-                        if parts is None or parts != (
-                            candidate,
-                            policy.source_path_suffix,
+                        if (
+                            parts is None
+                            or parts.root != candidate
+                            or parts.suffix != policy.source_path_suffix
                         ):
                             continue
                         owner_path_set = path_sets[path_set_name]
                         if owner_path_set.line < site_line:
-                            return owner_path_set.collection, condition.lineno
+                            return _CandidateEvidence(
+                                owner_path_set.collection, condition.lineno
+                            )
                     case _:
                         continue
         case _:
@@ -231,7 +251,7 @@ def provenance_ownership_sites(
         tree = ast.parse(source)
     except SyntaxError:
         return []
-    if len(list(ast.walk(tree))) > 10_000:
+    if len(list(ast.walk(tree))) > _MAX_AST_NODES:
         return []
     functions: list[ast.FunctionDef] = []
     for statement in tree.body:
@@ -255,7 +275,7 @@ def provenance_ownership_sites(
                     return_line = _returned_filter_line(function, candidate_filter)
                     if return_line is None:
                         continue
-                    owner_collection, _condition_line = evidence
+                    owner_collection = evidence.owner_collection
                     match candidate_filter.generators:
                         case [
                             ast.comprehension(iter=ast.Name(id=candidate_collection))

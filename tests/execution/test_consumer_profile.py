@@ -16,11 +16,17 @@ from alphus.config import (
 )
 from alphus.gates.review import runners as review_runners
 
-_POLICY = Path("examples/consumer/quality-gates.toml")
+
+@pytest.fixture
+def examples_root(request: pytest.FixtureRequest) -> Path:
+    """Locate published examples from pytest's repository context."""
+    return Path(request.config.rootpath) / "examples"
 
 
-def test_prose_as_control_example_is_scoped_and_provisional() -> None:
-    config = load_config(Path("examples/review/prose-as-control.toml"))
+def test_prose_as_control_example_is_scoped_and_provisional(
+    examples_root: Path,
+) -> None:
+    config = load_config(examples_root / "review" / "prose-as-control.toml")
     assert config.files is not None
     assert config.files.include == ("src/render/*.py",)
     policy = config.checks.prose_as_control
@@ -51,8 +57,9 @@ def test_prose_as_control_example_is_scoped_and_provisional() -> None:
 
 def test_rendered_feedback_is_dispatched_only_by_its_dedicated_rule(
     monkeypatch: pytest.MonkeyPatch,
+    examples_root: Path,
 ) -> None:
-    config = load_config(Path("examples/review/prose-as-control.toml"))
+    config = load_config(examples_root / "review" / "prose-as-control.toml")
     calls: list[str] = []
 
     def rendered_result(
@@ -78,8 +85,10 @@ def test_rendered_feedback_is_dispatched_only_by_its_dedicated_rule(
     assert calls == ["rendered"]
 
 
-def test_starter_policy_has_one_scoped_command_and_no_global_inventory() -> None:
-    config = load_config(Path("examples/starter/quality-gates.toml"))
+def test_starter_policy_has_one_scoped_command_and_no_global_inventory(
+    examples_root: Path,
+) -> None:
+    config = load_config(examples_root / "starter" / "quality-gates.toml")
     assert config.files is None
     orchestration = config.orchestration
     assert orchestration is not None
@@ -92,8 +101,10 @@ def test_starter_policy_has_one_scoped_command_and_no_global_inventory() -> None
     assert step.fix_argv == ("rumdl", "fmt", "{files}")
 
 
-def test_markdown_example_pairs_two_fixers_without_duplicate_missing_links() -> None:
-    config = load_config(Path("examples/markdown/quality-gates.toml"))
+def test_markdown_example_pairs_two_fixers_without_duplicate_missing_links(
+    examples_root: Path,
+) -> None:
+    config = load_config(examples_root / "markdown" / "quality-gates.toml")
     assert config.files is None
     orchestration = config.orchestration
     assert orchestration is not None
@@ -105,14 +116,16 @@ def test_markdown_example_pairs_two_fixers_without_duplicate_missing_links() -> 
         for step in orchestration.steps
     )
     mdrepo_config = tomllib.loads(
-        Path("examples/markdown/mdrepo.toml").read_text(encoding="utf-8")
+        (examples_root / "markdown" / "mdrepo.toml").read_text(encoding="utf-8")
     )
     assert mdrepo_config["orphans"]["roots"] == ["README.md"]
     assert not mdrepo_config.get("links", {}).get("check-missing-targets", False)
 
 
-def test_consumer_example_composes_portable_rules_and_native_tools() -> None:
-    config = load_config(_POLICY)
+def test_consumer_example_composes_portable_rules_and_native_tools(
+    examples_root: Path,
+) -> None:
+    config = load_config(examples_root / "consumer" / "quality-gates.toml")
     orchestration = config.orchestration
     assert orchestration is not None
     profile = orchestration.resolve_profile("check")
@@ -186,8 +199,10 @@ def test_consumer_example_composes_portable_rules_and_native_tools() -> None:
     )
 
 
-def test_consumer_documentation_profile_has_only_native_doc_owners() -> None:
-    config = load_config(_POLICY)
+def test_consumer_documentation_profile_has_only_native_doc_owners(
+    examples_root: Path,
+) -> None:
+    config = load_config(examples_root / "consumer" / "quality-gates.toml")
     orchestration = config.orchestration
     assert orchestration is not None
     profile = orchestration.resolve_profile("docs")
@@ -195,8 +210,10 @@ def test_consumer_documentation_profile_has_only_native_doc_owners() -> None:
     assert profile.steps == ("Markdown style", "Markdown links and graph")
 
 
-def test_consumer_data_formats_have_separate_profiles_with_format_fixers() -> None:
-    config = load_config(_POLICY)
+def test_consumer_data_formats_have_separate_profiles_with_format_fixers(
+    examples_root: Path,
+) -> None:
+    config = load_config(examples_root / "consumer" / "quality-gates.toml")
     orchestration = config.orchestration
     assert orchestration is not None
     toml = orchestration.resolve_profile("toml")
@@ -225,3 +242,13 @@ def test_consumer_data_formats_have_separate_profiles_with_format_fixers() -> No
     )
     assert steps["TOML syntax"].fix_argv is None
     assert steps["JSON syntax"].fix_argv is None
+
+
+def test_consumer_policy_path_is_independent_of_working_directory(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, examples_root: Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    assert (
+        load_config(examples_root / "consumer" / "quality-gates.toml").orchestration
+        is not None
+    )
