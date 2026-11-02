@@ -95,6 +95,29 @@ class ScipyConstantsPolicy(PythonSourceScanPolicy):
         return self
 
 
+class SuppressionReasonPolicy(PythonSourceScanPolicy):
+    """Consumer-selected inline Ruff suppressions that require a rationale."""
+
+    rule_codes: tuple[str, ...] = ("E402",)
+    reason_delimiter: str = "--"
+    severity: Severity = "info"
+
+    @field_validator("rule_codes")
+    @classmethod
+    def validate_rule_codes(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not re.fullmatch(r"[A-Z]+[0-9]{3,4}", code) for code in values):
+            raise ValueError("suppression rule codes must be uppercase Ruff codes")
+        require_unique(values, "suppression rule codes must be unique")
+        if not values:
+            raise ValueError("at least one suppression rule code must be selected")
+        return tuple(values)
+
+    @field_validator("reason_delimiter")
+    @classmethod
+    def validate_reason_delimiter(cls, value: str) -> str:
+        return validate_one_line_message(value)
+
+
 class TestQualityExclusion(StrictModel):
     """One documented test excluded from shared-oracle review."""
 
