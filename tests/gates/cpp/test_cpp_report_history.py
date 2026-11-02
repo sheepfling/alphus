@@ -215,7 +215,13 @@ def test_trend_rejects_naive_legacy_timestamps(
     (directory / "one.json").write_text(json.dumps(snapshot), encoding="utf-8")
 
     assert advisory.main(["trend", str(directory)]) == 2
-    assert "needs a UTC offset" in capsys.readouterr().err
+    captured = capsys.readouterr()
+    report = json.loads(captured.out)
+    assert report["execution_failure"]["kind"] == "operational_error"
+    assert report["execution_failure"]["message"] == (
+        "C++ advisory trend analysis failed because an option or input value is invalid."
+    )
+    assert "needs a UTC offset" not in captured.err
 
 
 def test_trend_normalizes_offset_timestamps_before_ordering(

@@ -131,6 +131,29 @@ extensions = [".py"]
 exclude = []
 sequence_narrowing_paths = ["src/alphus/gates/review/positional_interfaces.py"]
 
+[checks.source_families]
+extensions = [
+  ".py", ".pyi", ".c", ".h", ".cc", ".hh", ".cpp", ".hpp",
+  ".cxx", ".hxx", ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx",
+]
+include = ["**/*"]
+exclude = [
+  "**/vendor/**", # third-party sources do not define this project's boundaries
+  "**/generated/**", # generated sources should be reviewed at their schema
+  "**/tests/**", # test and fixture families use different naming conventions
+  "src/alphus/execution/profile_analysis.py", # intentionally split profile pipeline
+  "src/alphus/execution/profile_history.py",
+  "src/alphus/execution/profile_manifest.py",
+  "src/alphus/execution/profile_reporting.py",
+  "src/alphus/execution/profile_results.py",
+]
+min_family_files = 5
+min_prefix_characters = 4
+max_files = 20000
+max_findings = 100
+max_reported_members = 40
+max_scope_patterns = 64
+
 [checks.pydantic_practices]
 extensions = [".py"]
 exclude = []
@@ -460,6 +483,12 @@ rule = "input-contracts"
 
 [[orchestration.steps]]
 kind = "rule"
+name = "Source family review"
+rule = "source-families"
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "rule"
 name = "Pydantic practice review"
 rule = "pydantic-practices"
 
@@ -478,5 +507,6 @@ rollout = "provisional"
 name = "review"
 steps = [
   "Numeric review", "SciPy constants review", "Test review", "Input contract review",
-  "Pydantic practice review", "FastAPI practice review", "SQLAlchemy practices review",
+  "Source family review", "Pydantic practice review", "FastAPI practice review",
+  "SQLAlchemy practices review",
 ]

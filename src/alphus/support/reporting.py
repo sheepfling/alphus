@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import json
+import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from typing import Literal, Never, TypedDict
 
 from rich.console import Console
 from rich.table import Table
@@ -33,6 +36,66 @@ class ReportView:
     metrics: str
     findings: tuple[ReportLine, ...] = ()
     details: tuple[str, ...] = ()
+
+
+class _ExecutionFailureDetails(TypedDict):
+    kind: str
+    message: str
+    exit_code: int
+
+
+class _ExecutionFailurePayload(TypedDict):
+    schema: Literal["alphus.execution-failure"]
+    schema_version: Literal[1]
+    component: str
+    status: Literal["execution_failure"]
+    execution_failure: _ExecutionFailureDetails
+    findings: list[Never]
+    confidence: None
+    enforcement: None
+    raw_child_exit: None
+    evidence_complete: Literal[False]
+    artifact_paths: list[str]
+
+
+def execution_failure_payload(
+    *,
+    component: str,
+    kind: str,
+    message: str,
+    exit_code: int,
+    artifact_paths: Sequence[Path] = (),
+) -> _ExecutionFailurePayload:
+    """Build the versioned incomplete-run envelope shared by CLI entry points."""
+    return {
+        "schema": "alphus.execution-failure",
+        "schema_version": 1,
+        "component": component,
+        "status": "execution_failure",
+        "execution_failure": {
+            "kind": kind,
+            "message": message,
+            "exit_code": exit_code,
+        },
+        "findings": [],
+        "confidence": None,
+        "enforcement": None,
+        "raw_child_exit": None,
+        "evidence_complete": False,
+        "artifact_paths": [str(path) for path in artifact_paths],
+    }
+
+
+def emit_execution_failure(
+    payload: _ExecutionFailurePayload, *, output: Path | None = None
+) -> None:
+    """Write a failure envelope to its requested artifact or JSON stdout."""
+    encoded = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+    if output is None:
+        sys.stdout.write(encoded)
+        return
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(encoded, encoding="utf-8")
 
 
 def emit_report(

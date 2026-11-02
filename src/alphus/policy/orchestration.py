@@ -46,6 +46,7 @@ from alphus.policy.review import (
     PositionalInterfacePolicy,
     PydanticPracticePolicy,
     ScipyConstantsPolicy,
+    SourceFamilyPolicy,
     SqlAlchemyPracticePolicy,
     TestQualityPolicy,
 )
@@ -78,6 +79,7 @@ class CheckPolicies(StrictModel):
     scipy_constants: ScipyConstantsPolicy | None = None
     test_quality: TestQualityPolicy | None = None
     input_contracts: InputContractPolicy | None = None
+    source_families: SourceFamilyPolicy | None = None
     positional_interfaces: PositionalInterfacePolicy | None = None
     pydantic_practices: PydanticPracticePolicy | None = None
     fastapi_practices: FastApiPracticePolicy | None = None

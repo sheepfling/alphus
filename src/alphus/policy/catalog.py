@@ -207,6 +207,12 @@ RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             "Reviews local Python collection mutation and read-only input contracts.",
             ("python",),
         ),
+        "source-families": RuleSpec(
+            "source_families",
+            RuleOutputShape.FINDINGS,
+            "Flags flat similarly named source families for human architectural review.",
+            ("configurable-source",),
+        ),
         "positional-interfaces": RuleSpec(
             "positional_interfaces",
             RuleOutputShape.FINDINGS,

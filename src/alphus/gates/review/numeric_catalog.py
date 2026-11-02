@@ -18,6 +18,12 @@ class NumericOperation(StrEnum):
     FLOOR_DIVIDE = "floor_divide"
     MODULO = "modulo"
     POWER = "power"
+    BITWISE_AND = "bitwise_and"
+    BITWISE_OR = "bitwise_or"
+    BITWISE_XOR = "bitwise_xor"
+    LEFT_SHIFT = "left_shift"
+    RIGHT_SHIFT = "right_shift"
+    MATRIX_MULTIPLY = "matrix_multiply"
 
 
 @dataclass(frozen=True, slots=True)

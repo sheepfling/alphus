@@ -6,10 +6,11 @@ from collections.abc import Sequence
 from typing import Annotated, Literal
 
 from packaging.version import InvalidVersion, Version
-from pydantic import Field, field_validator
+from pydantic import Field, NonNegativeInt, field_validator
 
 from alphus.contracts.findings import Severity
 from alphus.policy.base import StrictModel, require_unique
+from alphus.policy.languages import CppLanguage, JavaScriptLanguage, PythonLanguage
 from alphus.policy.sources import FileInventoryPolicy
 
 
@@ -17,7 +18,7 @@ class _BackendBinding(StrictModel):
     """Shared controls for one explicitly selected native metric backend."""
 
     version: str
-    maximum: Annotated[int | None, Field(default=None, gt=0)]
+    maximum: NonNegativeInt | None = None
     severity: Severity | None = None
 
     @field_validator("version")
@@ -37,7 +38,7 @@ class _BackendBinding(StrictModel):
 class RuffCyclomaticBinding(_BackendBinding):
     """Use Ruff C901 as a Python threshold gate, without score extraction."""
 
-    language: Literal["python"]
+    language: PythonLanguage
     backend: Literal["ruff"]
     executable: str = "ruff"
 
@@ -52,7 +53,7 @@ class RuffCyclomaticBinding(_BackendBinding):
 class LizardCyclomaticBinding(_BackendBinding):
     """Use the pinned Lizard API for C/C++ function-level CCN records."""
 
-    language: Literal["cpp"]
+    language: CppLanguage
     backend: Literal["lizard"]
     variant: Literal["standard", "modified"]
 
@@ -60,7 +61,7 @@ class LizardCyclomaticBinding(_BackendBinding):
 class EslintCyclomaticBinding(_BackendBinding):
     """Use ESLint's native complexity gate for JavaScript."""
 
-    language: Literal["javascript"]
+    language: JavaScriptLanguage
     backend: Literal["eslint"]
     variant: Literal["classic", "modified"]
     executable: str = "eslint"
@@ -83,11 +84,14 @@ class CyclomaticComplexityPolicy(StrictModel):
     """Opt-in cyclomatic threshold and per-language backend selection."""
 
     metric: Literal["cyclomatic"]
-    maximum: Annotated[int, Field(gt=0)]
+    maximum: NonNegativeInt
     severity: Severity = "warning"
     files: FileInventoryPolicy
     backends: Annotated[tuple[CyclomaticBackendBinding, ...], Field(min_length=1)]
     timeout_seconds: Annotated[int, Field(gt=0, le=600)] = 60
+    lizard_manifest_max_bytes: Annotated[int, Field(gt=0, le=256 * 1024 * 1024)] = (
+        64 * 1024 * 1024
+    )
 
     @field_validator("backends")
     @classmethod
