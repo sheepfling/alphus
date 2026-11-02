@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 import pytest
@@ -114,12 +115,14 @@ consuming = re.sub(r"(?=\d)\d+", "", text)
     ) == [(6, r"(?=\d)\d+")]
 
 
-def test_lossy_regex_rewrite_ignores_zero_count_and_verbose_comments() -> None:
+def test_lossy_regex_rewrite_preserves_verbose_brace_semantics() -> None:
     source = r'''\
 zero_count = re.sub(r"\d{0}", "", text)
 zero_range = re.sub(r"\d{0,0}", " ", text)
 verbose_zero_count = re.sub(r"(?x)\d{ 0 }", "", text)
 verbose_zero_range = re.sub(r"(?x)\d{0, 0}", " ", text)
+verbose_actual_zero_count = re.sub(r"(?x)\d{0}", "", text)
+verbose_actual_zero_range = re.sub(r"(?x)\d{0,0}", " ", text)
 verbose_comment = re.sub(r"""(?x)# \d is only a comment
 \s+""", "", text)
 actual_digit_consumer = re.sub(r"""(?x)# \d is a comment
@@ -128,7 +131,14 @@ actual_digit_consumer = re.sub(r"""(?x)# \d is a comment
 
     assert lossy_rewrite_lines(
         source, _policy(lossy_text_rewrite=True, regex_sub_helpers=("re.sub",))
-    ) == [(8, "(?x)# \\d is a comment\n\\d+")]
+    ) == [
+        (4, "(?x)\\d{ 0 }"),
+        (5, "(?x)\\d{0, 0}"),
+        (10, "(?x)# \\d is a comment\n\\d+"),
+    ]
+
+    assert re.sub(r"(?x)\d{ 0 }", "", "7{0}") == ""
+    assert re.sub(r"(?x)\d{0}", "", "7{0}") == "7{0}"
 
 
 def test_lossy_text_rewrite_detects_literal_semantic_token_deletion() -> None:

@@ -41,6 +41,30 @@ def merge(cell):
     assert not _sites(other_renderer, ("render_latex",))
 
 
+def test_tracks_renderer_calls_with_keyword_only_inputs() -> None:
+    assignment = """\
+def merge(text):
+    rendered = render_latex(text=text)
+    if rendered.rstrip().endswith("!"):
+        return True
+"""
+    annotated_assignment = """\
+def merge(text):
+    rendered: str = render_latex(text=text)
+    if rendered.rstrip().endswith("!"):
+        return True
+"""
+    zero_argument_call = """\
+def merge(text):
+    rendered = render_latex()
+    if rendered.rstrip().endswith("!"):
+        return True
+"""
+    assert _sites(assignment, ("render_latex",)) == [(2, 3, "rendered")]
+    assert _sites(annotated_assignment, ("render_latex",)) == [(2, 3, "rendered")]
+    assert _sites(zero_argument_call, ("render_latex",)) == []
+
+
 def test_rendered_binding_must_precede_predicate_in_same_scope() -> None:
     predicate_first = """\
 def f(text):

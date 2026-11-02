@@ -138,11 +138,10 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[tuple[int, int, str]]:
                     }
                 case ast.Assign(
                     targets=[ast.Name(id=name)],
-                    value=ast.Call(func=func, args=[_, *_]),
-                ):
+                    value=ast.Call(func=func, args=args, keywords=keywords),
+                ) if _qualified_name(func) in helpers and (args or keywords):
                     current.pop(name, None)
-                    if _qualified_name(func) in helpers:
-                        current[name] = statement.lineno
+                    current[name] = statement.lineno
                 case ast.Assign(targets=targets):
                     names: set[str] = set()
                     for target in targets:
@@ -151,11 +150,10 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[tuple[int, int, str]]:
                         current.pop(name, None)
                 case ast.AnnAssign(
                     target=ast.Name(id=name),
-                    value=ast.Call(func=func, args=[_, *_]),
-                ):
+                    value=ast.Call(func=func, args=args, keywords=keywords),
+                ) if _qualified_name(func) in helpers and (args or keywords):
                     current.pop(name, None)
-                    if _qualified_name(func) in helpers:
-                        current[name] = statement.lineno
+                    current[name] = statement.lineno
                 case ast.AnnAssign(target=target):
                     names = _target_names(target)
                     for name in names:
