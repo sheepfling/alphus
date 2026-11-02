@@ -75,7 +75,9 @@ def _path_set_assignments(
     for statement in function.body:
         for node in ast.walk(statement):
             match node:
-                case ast.FunctionDef() | ast.AsyncFunctionDef() if node is not function:
+                case ast.FunctionDef() | ast.AsyncFunctionDef() | ast.Lambda() if (
+                    node is not function
+                ):
                     has_nested_scope = True
                 case _:
                     continue

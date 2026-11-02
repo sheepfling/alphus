@@ -117,10 +117,25 @@ def patch_cascade_sites(
                         ast.FunctionDef(name=name) | ast.AsyncFunctionDef(name=name)
                     ) if name == configured.function_name:
                         bindings += 1
-                    case ast.Name(id=name, ctx=ast.Store()) if (
+                    case ast.ClassDef(name=name) if name == configured.function_name:
+                        bindings += 1
+                    case ast.Name(id=name, ctx=ast.Store() | ast.Del()) if (
                         name == configured.function_name
                     ):
                         bindings += 1
+                    case ast.Import(names=aliases):
+                        if any(
+                            (alias.asname or alias.name.split(".", maxsplit=1)[0])
+                            == configured.function_name
+                            for alias in aliases
+                        ):
+                            bindings += 1
+                    case ast.ImportFrom(names=aliases):
+                        if any(
+                            (alias.asname or alias.name) == configured.function_name
+                            for alias in aliases
+                        ):
+                            bindings += 1
                     case _:
                         continue
         if len(definitions) != 1 or bindings != 1:

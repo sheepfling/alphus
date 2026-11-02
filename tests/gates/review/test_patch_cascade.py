@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import pytest
+
 from alphus.config import PatchCascadePolicy
 from alphus.gates.review.patch_cascade import check_patch_cascade, patch_cascade_sites
 
@@ -100,6 +102,31 @@ def parse_document(repair_id, text):
     return text
 parse_document = replacement
 """
+    assert patch_cascade_sites(source, _policy()) == []
+
+
+@pytest.mark.parametrize(
+    "rebind",
+    [
+        "from other_module import parse_document",
+        "import other_module as parse_document",
+        "class parse_document:\n    pass",
+        "del parse_document",
+    ],
+)
+def test_import_class_and_delete_rebindings_make_parser_unknown(rebind: str) -> None:
+    source = (
+        """\
+def parse_document(repair_id, text):
+    if repair_id == "vendor-a":
+        text = normalize_text(text, " ")
+    if repair_id == "vendor-b":
+        text = normalize_text(text, "-")
+    return text
+"""
+        + rebind
+        + "\n"
+    )
     assert patch_cascade_sites(source, _policy()) == []
 
 
