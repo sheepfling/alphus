@@ -151,6 +151,7 @@ AuditCheckStatus = Literal[
     "not_selected",
     "scope_mismatch",
     "selector_mismatch",
+    "missing_policy",
     "not_executed",
     "disabled",
     "unsupported",
@@ -206,12 +207,17 @@ _OPERATIONAL_FAILURE_RULES = frozenset(
 )
 
 
-def _incomplete_assessment(manifest: AuditManifest, reason: str) -> AuditCompletion:
+def _incomplete_assessment(
+    manifest: AuditManifest,
+    reason: str,
+    *,
+    status: AuditCheckStatus = "incomplete",
+) -> AuditCompletion:
     checks: list[AuditCheckAssessment] = [
         {
             "check_id": check.check_id,
             "step": check.step,
-            "status": "incomplete",
+            "status": status,
             "complete": False,
         }
         for check in manifest.checks
@@ -273,6 +279,7 @@ def assess_profile_audit(
     result: ProfileAuditResult | None,
     *,
     unavailable_reason: str | None = None,
+    unavailable_status: AuditCheckStatus = "incomplete",
 ) -> AuditCompletion:
     """Compare declared checks with selected scope and observed execution states.
 
@@ -280,7 +287,9 @@ def assess_profile_audit(
     unknown finding state. Its exit status alone is not evidence of zero findings.
     """
     if unavailable_reason is not None:
-        return _incomplete_assessment(manifest, unavailable_reason)
+        return _incomplete_assessment(
+            manifest, unavailable_reason, status=unavailable_status
+        )
     if (
         plan is None
         or result is None

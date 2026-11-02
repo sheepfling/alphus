@@ -44,6 +44,7 @@ from alphus.contracts.findings import (
 from alphus.contracts.process import ExitCode
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.execution.audit_manifest import (
+    AuditCheckStatus,
     AuditManifest,
     AuditPlanIntent,
     AuditPlanStep,
@@ -946,7 +947,9 @@ def _execute_profile(
         config_path if config_path.is_absolute() else checkout / config_path
     )
 
-    def audit_preflight_failure(message: str) -> int:
+    def audit_preflight_failure(
+        message: str, *, assessment_status: AuditCheckStatus = "incomplete"
+    ) -> int:
         if audit_manifest is None:
             return _profile_failure(message, json_output=json_output)
         payload = execution_failure_payload(
@@ -960,6 +963,7 @@ def _execute_profile(
             None,
             None,
             unavailable_reason="profile configuration or selection failed before execution",
+            unavailable_status=assessment_status,
         )
         encoded = dict(payload)
         encoded["audit_completion"] = cast(JsonValue, audit)
@@ -1015,7 +1019,7 @@ def _execute_profile(
                     )
                 config.checks.require_rule(step.rule)
     except MissingPolicyError as error:
-        return audit_preflight_failure(str(error))
+        return audit_preflight_failure(str(error), assessment_status="missing_policy")
 
     audit_plan: ProfileAuditPlan | None = None
     if audit_manifest is not None:

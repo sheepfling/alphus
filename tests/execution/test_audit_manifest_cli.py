@@ -90,8 +90,8 @@ def test_profile_cli_marks_manifest_incomplete_on_missing_policy(
 ) -> None:
     (tmp_path / "quality.toml").write_text(
         """schema_version = 1
-[checks.numeric_literals]
-extensions = [".py"]
+[files]
+include = ["source.py"]
 [orchestration]
 default_profile = "audit"
 [[orchestration.steps]]
@@ -134,7 +134,7 @@ steps = ["Numeric"]
     assert payload["schema"] == "alphus.execution-failure"
     assert payload["evidence_complete"] is False
     assert payload["audit_completion"]["status"] == "incomplete"
-    assert payload["audit_completion"]["checks"][0]["status"] == "incomplete"
+    assert payload["audit_completion"]["checks"][0]["status"] == "missing_policy"
 
 
 def test_manifest_retains_native_selector_scope_and_annotation_evidence(
