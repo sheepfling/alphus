@@ -68,12 +68,12 @@ class _IndirectObject(Protocol):
     def get_object(self) -> _PdfDictionary: ...
 
 
-_OutlineItem: TypeAlias = _Destination | list["_OutlineItem"]
+_OutlineItem: TypeAlias = _Destination | Sequence["_OutlineItem"]
 _PdfDestination: TypeAlias = _Destination | _IndirectObject | list["_PdfDestination"]
 
 
 class _Reader(Protocol):
-    outline: _OutlineItem | list[_OutlineItem]
+    outline: _OutlineItem
     pages: Sequence[_Page]
 
     def get_destination_page_number(
@@ -107,9 +107,9 @@ def _pdf_api() -> _PdfApi:
         ) from error
 
 
-def _flatten_outline(items: _OutlineItem | list[_OutlineItem]) -> list[_Destination]:
+def _flatten_outline(items: _OutlineItem) -> list[_Destination]:
     result: list[_Destination] = []
-    if isinstance(items, list):
+    if isinstance(items, Sequence):
         for item in items:
             result.extend(_flatten_outline(item))
     else:
@@ -168,7 +168,7 @@ def _link_target(annotation: _PdfDictionary) -> _PdfDestination | None:
 
 def _verify_contents_link(
     reader: _Reader,
-    outline: list[_Destination],
+    outline: Sequence[_Destination],
     link: _ContentsLinkContract,
 ) -> tuple[list[str], list[str]]:
     label = link.contents_label
