@@ -1,7 +1,8 @@
-"""Lexical-only, advisory discovery of flat similarly named source families."""
+"""Advisory discovery of similarly named source families."""
 
 from __future__ import annotations
 
+import ast
 import codecs
 import re
 from collections import Counter, defaultdict
@@ -138,6 +139,130 @@ def _selected_paths(
         yield Path(*posix.parts)
 
 
+def _python_import_evidence(
+    checkout: Path,
+    members: set[Path],
+    selected: list[Path],
+    policy: _SourceFamilyPolicy,
+) -> tuple[str, list[str]]:
+    """Summarize direct, statically resolved imports within the configured roots."""
+    roots = tuple(Path(root) for root in policy.python_module_roots)
+    modules: dict[str, list[Path]] = defaultdict(list)
+    for path in selected:
+        if path.suffix != ".py":
+            continue
+        for root in roots:
+            try:
+                relative = path.relative_to(root)
+            except ValueError:
+                continue
+            parts = list(relative.parts)
+            if parts[-1] == "__init__.py":
+                parts.pop()
+            else:
+                parts[-1] = Path(parts[-1]).stem
+            if parts and all(part.isidentifier() for part in parts):
+                modules[".".join(parts)].append(path)
+            break
+
+    bytes_left = policy.max_import_analysis_bytes
+    resolved: list[str] = []
+    unresolved = 0
+    failures = 0
+    for source in sorted((p for p in members if p.suffix == ".py"), key=str):
+        source_path = (checkout / source).resolve(strict=False)
+        if not source_path.is_relative_to(checkout) or bytes_left <= 0:
+            failures += 1
+            continue
+        try:
+            with source_path.open("rb") as handle:
+                raw = handle.read(min(bytes_left, 1_048_576) + 1)
+            if len(raw) > bytes_left or len(raw) > 1_048_576:
+                failures += 1
+                continue
+            bytes_left -= len(raw)
+            tree = ast.parse(raw.decode("utf-8"), filename=source.as_posix())
+        except (OSError, UnicodeError, SyntaxError, ValueError):
+            failures += 1
+            continue
+        source_module = None
+        for root in roots:
+            try:
+                relative = source.relative_to(root)
+            except ValueError:
+                continue
+            parts = list(relative.parts)
+            is_package = parts[-1] == "__init__.py"
+            if is_package:
+                parts.pop()
+            else:
+                parts[-1] = Path(parts[-1]).stem
+            if parts and all(part.isidentifier() for part in parts):
+                source_module = ".".join(parts)
+            break
+        for node in ast.walk(tree):
+            target_name = None
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    target_name = alias.name
+                    targets = modules.get(target_name, [])
+                    if len(targets) == 1:
+                        target = targets[0]
+                        resolved.append(
+                            f"{source.as_posix()}:{node.lineno} → {target.as_posix()}"
+                        )
+                    else:
+                        unresolved += 1
+            elif isinstance(node, ast.ImportFrom):
+                if node.module is None:
+                    unresolved += 1
+                    continue
+                if node.level:
+                    if source_module is None:
+                        unresolved += 1
+                        continue
+                    package = source_module if source.name == "__init__.py" else source_module.rpartition(".")[0]
+                    pieces = package.split(".") if package else []
+                    if node.level > len(pieces) + 1:
+                        unresolved += 1
+                        continue
+                    base = pieces[: len(pieces) - node.level + 1]
+                    if node.module:
+                        base.extend(node.module.split("."))
+                    target_name = ".".join(base)
+                else:
+                    target_name = node.module
+                targets = modules.get(target_name, []) if target_name else []
+                if len(targets) == 1:
+                    resolved.append(
+                        f"{source.as_posix()}:{node.lineno} → {targets[0].as_posix()}"
+                    )
+                else:
+                    unresolved += 1
+    internal = sum(
+        1 for edge in resolved if edge.split(" → ", 1)[1] in {p.as_posix() for p in members}
+    )
+    shown = resolved[: policy.max_import_edges]
+    context = (
+        f"Direct Python import evidence: {internal} resolved edge(s) target another "
+        f"family member; {len(resolved) - internal} target other selected Python files; "
+        f"{unresolved} import(s) unresolved/outside the configured inventory."
+    )
+    if shown:
+        context += " Examples: " + ", ".join(shown) + "."
+    if len(shown) < len(resolved):
+        context += f" {len(resolved) - len(shown)} edge(s) omitted by max_import_edges."
+    notes: list[str] = []
+    if failures:
+        notes.append(f"{failures} Python file(s) could not be analyzed")
+    if bytes_left == 0:
+        notes.append("the configured Python import byte budget was exhausted")
+    if notes:
+        context += " Analysis incomplete: " + "; ".join(notes) + "."
+    context += " Direct imports are partial evidence only; public APIs and non-Python dependencies are not assessed."
+    return context, notes
+
+
 def source_family_findings(
     root: Path, paths: Iterable[Path], policy: _SourceFamilyPolicy
 ) -> list[Finding]:
@@ -221,6 +346,13 @@ def source_family_findings(
         assigned[directory].update(members)
 
     retained.sort(key=lambda row: (row[0], row[1]))
+    import_contexts: dict[tuple[str, ...], str] = {}
+    if policy.python_import_evidence:
+        for _, _, members in retained:
+            key = tuple(sorted(path.as_posix() for path in members))
+            context, notes = _python_import_evidence(checkout, members, selected, policy)
+            import_contexts[key] = context
+            incomplete_notes.extend(notes)
     incomplete_finding = (
         Finding(
             rule_id,
@@ -349,6 +481,7 @@ def source_family_findings(
             f"extensions={extension_text}, include={include_text}, "
             f"exclude={exclude_text}{override_text}. "
         )
+        import_context = import_contexts.get(tuple(path.as_posix() for path in ordered))
         findings.append(
             Finding(
                 rule_id,
@@ -357,9 +490,11 @@ def source_family_findings(
                 f"logical units across {len(ordered)} physical files; {len(ordered)} of "
                 f"{len(siblings)} {sibling_basis} "
                 f"({len(ordered) / max(1, len(siblings)):.0%}); language mix "
-                f"{language_text}; {line_context}{limit_context}. lexical-only, "
+                f"{language_text}; {line_context}{limit_context}. "
+                f"{'bounded Python import evidence enabled' if import_context else 'lexical-only'}, "
                 "low-confidence advisory review candidate. "
-                f"{settings_text}{member_context}. Coupling, imports, responsibility, "
+                f"{settings_text}{member_context}. "
+                f"{import_context + ' ' if import_context else ''}Coupling, responsibility, "
                 "and public surface not assessed; filename similarity alone does not establish an "
                 "architectural problem.",
                 severity="warning",

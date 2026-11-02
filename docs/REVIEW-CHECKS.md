@@ -644,11 +644,11 @@ use ordered `path_language_overrides` when a suffix is ambiguous in particular
 directories. The last matching path override wins and path overrides take
 precedence over suffix overrides.
 
-The heuristic has no semantic or history evidence. Uppercase acronym runs are
-not split into separate words, and files outside the configured extensions or
-supplied inventory are invisible to it. Names that do not share a meaningful
-token prefix are not detected. These are limits of the lexical stage, not
-evidence that a family is cohesive.
+The default heuristic has no dependency or history evidence. Uppercase acronym
+runs are not split into separate words, and files outside the configured
+extensions or supplied inventory are invisible to it. Names that do not share
+a meaningful token prefix are not detected. These are limits of the lexical
+stage, not evidence that a family is cohesive.
 
 ```toml
 [checks.source_families]
@@ -663,6 +663,11 @@ max_reported_members = 40
 language_overrides = [[".h", "C++"]]
 path_language_overrides = [["src/legacy_c/**", "C"]]
 file_length_limits = [[".py", 500], [".cpp", 800]]
+# Optional: direct Python import evidence for selected .py files under `src`.
+python_import_evidence = true
+python_module_roots = ["src"]
+max_import_edges = 12
+max_import_analysis_bytes = 8388608
 ```
 
 The first slice is lexical-only and low-confidence. A shared prefix selects a
@@ -675,7 +680,17 @@ configured thresholds, extensions, scope, exclusions, and language overrides
 are included so reviewers can see the effective settings. The scan streams line
 counts and never imports or executes consumer code. Selected-source processing,
 per-finding evidence, and total-finding output are bounded; incomplete scans
-produce explicit warnings instead of implying a complete clean result.
+produce explicit warnings instead of implying a complete clean result. The
+optional Python import pass is disabled by default and requires explicit
+`python_module_roots`; it parses only selected `.py` files, reports uniquely
+resolved direct `import` and `from ... import ...` module edges, and bounds
+file reads, bytes per family, and displayed edges. Unresolved, ambiguous,
+relative-import forms it cannot resolve, parse failures, and files outside the
+selected inventory are not treated as absent dependencies. It does not follow
+dynamic imports, aliases/re-exports, type-checker resolution, or imports in
+other languages. These edges are partial dependency evidence and do not prove
+shared responsibility, coupling strength, or a public contract. Public API and
+history evidence remain unassessed.
 
 A typical finding starts: `src/service: Family gateway_*: 12 logical units
 across 12 physical files; 12 of 20 selected sibling source files (60%);
