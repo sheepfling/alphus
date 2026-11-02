@@ -1,3 +1,4 @@
+import subprocess
 from collections.abc import Callable
 from pathlib import Path
 
@@ -13,6 +14,58 @@ def _write(root: Path, name: str, lines: int = 2) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join("pass" for _ in range(lines)), encoding="utf-8")
     return path.relative_to(root)
+
+
+def _git(root: Path, *args: str) -> str:
+    return subprocess.run(
+        ["git", "-C", str(root), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+def test_opt_in_git_history_reports_correlated_paths_without_claiming_cause(
+    tmp_path: Path,
+) -> None:
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.name", "Test")
+    _git(tmp_path, "config", "user.email", "test@example.invalid")
+    paths = [
+        _write(tmp_path, f"src/gateway_{name}.py")
+        for name in ("client", "server", "routes", "auth", "cache")
+    ]
+    _git(tmp_path, "add", "src")
+    _git(tmp_path, "commit", "-qm", "add gateway family")
+
+    findings = source_family_findings(
+        tmp_path,
+        paths,
+        SourceFamilyPolicy(min_family_files=5, git_cochange_evidence=True),
+    )
+
+    message = findings[0].message
+    assert "bounded Git history evidence enabled" in message
+    assert "Observed 1 bounded commit(s) co-changing family paths" in message
+    assert "correlation only" in message
+    assert "does not establish causation, ownership, or responsibility" in message
+    assert "filename similarity alone does not establish" in message
+
+
+def test_git_history_failure_is_explicit_and_not_a_clean_zero(tmp_path: Path) -> None:
+    paths = [
+        _write(tmp_path, f"src/gateway_{name}.py")
+        for name in ("client", "server", "routes", "auth", "cache")
+    ]
+
+    findings = source_family_findings(
+        tmp_path,
+        paths,
+        SourceFamilyPolicy(min_family_files=5, git_cochange_evidence=True),
+    )
+
+    assert "Git co-change evidence incomplete" in findings[0].message
+    assert "bounded read-only Git history query failed" in findings[0].message
 
 
 def test_groups_flat_python_family_as_lexical_only(tmp_path: Path) -> None:

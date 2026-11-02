@@ -224,6 +224,8 @@ class SourceFamilyPolicy(StrictModel):
     file_length_limits: tuple[tuple[str, int], ...] = ()
     python_import_evidence: bool = False
     python_module_roots: tuple[str, ...] = ()
+    git_cochange_evidence: bool = False
+    max_git_history_commits: int = 100
     max_import_edges: int = 12
     max_public_api_names: int = 20
     max_contract_declarations: int = 12
@@ -243,6 +245,7 @@ class SourceFamilyPolicy(StrictModel):
                 self.max_public_api_names,
                 self.max_contract_declarations,
                 self.max_import_analysis_bytes,
+                self.max_git_history_commits,
             )
             < 1
         ):
@@ -259,6 +262,8 @@ class SourceFamilyPolicy(StrictModel):
             raise ValueError(
                 "Python import evidence requires explicit python_module_roots"
             )
+        if self.max_git_history_commits > 500:
+            raise ValueError("max_git_history_commits must not exceed 500")
         return self
 
     @field_validator("extensions")

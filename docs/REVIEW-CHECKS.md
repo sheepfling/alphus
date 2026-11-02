@@ -670,6 +670,9 @@ max_import_edges = 12
 max_public_api_names = 20
 max_contract_declarations = 12
 max_import_analysis_bytes = 8388608
+# Optional: bounded, read-only co-change evidence for selected family paths.
+git_cochange_evidence = true
+max_git_history_commits = 100
 ```
 
 The first slice is lexical-only and low-confidence. A shared prefix selects a
@@ -707,8 +710,14 @@ of those Protocol names and references the unshadowed import in an annotation
 or class base, the report includes both the importing reference location and
 the declaration file. Rebinding causes the reference to be omitted. This is
 cross-file type-reference syntax, not proof of runtime use, an established
-shared contract, or common responsibility. Change-history evidence remains
-unassessed.
+shared contract, or common responsibility. Optional `git_cochange_evidence`
+uses a bounded read-only `git log` query for selected family paths and reports
+observed commit IDs and co-changed paths. This is correlation only; it does not
+establish causation, ownership, or responsibility. Shallow history, query
+failures, pathspec limits, and a full commit window are called out, and no
+co-changes are explicitly not evidence of independence. Renames are not
+followed, and unrelated/historical path names outside the current family are
+not mapped.
 
 A typical finding starts: `src/service: Family gateway_*: 12 logical units
 across 12 physical files; 12 of 20 selected sibling source files (60%);

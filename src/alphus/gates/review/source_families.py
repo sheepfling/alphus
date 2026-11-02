@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import codecs
 import re
+import subprocess
 from collections import Counter, defaultdict
 from collections.abc import Iterable
 from collections.abc import Set as AbstractSet
@@ -15,6 +16,7 @@ from types import MappingProxyType
 from alphus.config import SourceFamilyPolicy as _SourceFamilyPolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.support.git import git_output
 from alphus.support.inventory import matches_path
 
 _SEPARATORS = re.compile(r"[_\-. ]+")
@@ -42,6 +44,98 @@ _LANGUAGE_EXTENSIONS = MappingProxyType(
 _C_CPP_HEADERS = frozenset({".h", ".hh", ".hpp", ".hxx"})
 _C_CPP_IMPLEMENTATIONS = frozenset({".c", ".cc", ".cpp", ".cxx"})
 _LINE_ENDINGS = frozenset("\n\v\f\x1c\x1d\x1e\x85\u2028\u2029")
+_GIT_SHA = re.compile(rb"^[0-9a-f]{40,64}$")
+
+
+def _git_cochange_evidence(
+    checkout: Path, members: AbstractSet[Path], max_commits: int
+) -> str:
+    """Report bounded path co-changes as correlation, never as responsibility."""
+    paths = sorted(path.as_posix() for path in members)
+    if any("\n" in path or "\r" in path or "\x00" in path for path in paths):
+        return "Git co-change evidence incomplete: member paths contain control separators."
+    if len(paths) > 100 or sum(len(path.encode("utf-8")) + 1 for path in paths) > 8192:
+        return "Git co-change evidence incomplete: family pathspec budget exceeded."
+    try:
+        shallow = (
+            git_output(checkout, "rev-parse", "--is-shallow-repository", timeout=5)
+            .decode("ascii")
+            .strip()
+            == "true"
+        )
+        history = git_output(
+            checkout,
+            "log",
+            "-z",
+            "--format=%H",
+            "--name-only",
+            "--no-renames",
+            "--topo-order",
+            "-n",
+            str(max_commits),
+            "--",
+            *paths,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError, UnicodeError):
+        return "Git co-change evidence incomplete: bounded read-only Git history query failed."
+
+    tokens = history.split(b"\0")
+    records: list[tuple[str, set[str]]] = []
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        if not token:
+            index += 1
+            continue
+        if not _GIT_SHA.fullmatch(token):
+            return (
+                "Git co-change evidence incomplete: history output could not be "
+                "parsed safely."
+            )
+        sha = token.decode("ascii")
+        index += 1
+        touched: set[str] = set()
+        while index < len(tokens) and not _GIT_SHA.fullmatch(tokens[index]):
+            name = tokens[index]
+            index += 1
+            if name.startswith(b"\n"):
+                name = name[1:]
+            if name:
+                try:
+                    touched.add(name.decode("utf-8"))
+                except UnicodeError:
+                    return (
+                        "Git co-change evidence incomplete: non-UTF-8 history "
+                        "paths are unsupported."
+                    )
+        records.append((sha, touched.intersection(paths)))
+    examples = [(sha, sorted(touched)) for sha, touched in records if len(touched) > 1][
+        :5
+    ]
+    if examples:
+        detail = "; ".join(
+            f"{sha[:12]} ({', '.join(names[:4])}{', …' if len(names) > 4 else ''})"
+            for sha, names in examples
+        )
+        summary = f"Observed {len(examples)} bounded commit(s) co-changing family paths: {detail}."
+    else:
+        summary = (
+            f"No multi-member co-change observed in the {len(records)}-commit "
+            "selected-path window; "
+            "this is not evidence of independence."
+        )
+    caveats = [
+        (
+            "Git co-change is correlation only; it does not establish causation, "
+            "ownership, or responsibility"
+        )
+    ]
+    if shallow:
+        caveats.append("the checkout is shallow, so earlier history is unavailable")
+    if len(records) == max_commits:
+        caveats.append("the configured history window may be truncated")
+    return summary + " " + "; ".join(caveats) + "."
 
 
 def _tokens(stem: str) -> tuple[str, ...]:
@@ -626,6 +720,7 @@ def source_family_findings(
 
     retained.sort(key=lambda row: (row[0], row[1]))
     import_contexts: dict[tuple[str, ...], str] = {}
+    history_contexts: dict[tuple[str, ...], str] = {}
     if policy.python_import_evidence:
         for _, _, members in retained:
             key = tuple(sorted(path.as_posix() for path in members))
@@ -634,6 +729,12 @@ def source_family_findings(
             )
             import_contexts[key] = context
             incomplete_notes.extend(notes)
+    if policy.git_cochange_evidence:
+        for _, _, members in retained:
+            key = tuple(sorted(path.as_posix() for path in members))
+            history_contexts[key] = _git_cochange_evidence(
+                checkout, members, policy.max_git_history_commits
+            )
     incomplete_finding = (
         Finding(
             rule_id,
@@ -765,10 +866,19 @@ def source_family_findings(
             f"exclude={exclude_text}{override_text}. "
         )
         import_context = import_contexts.get(tuple(path.as_posix() for path in ordered))
+        history_context = history_contexts.get(
+            tuple(path.as_posix() for path in ordered)
+        )
         evidence_mode = (
-            "bounded Python import evidence enabled"
-            if import_context
-            else "lexical-only"
+            ", ".join(
+                label
+                for enabled, label in (
+                    (bool(import_context), "bounded Python import evidence enabled"),
+                    (bool(history_context), "bounded Git history evidence enabled"),
+                )
+                if enabled
+            )
+            or "lexical-only"
         )
         findings.append(
             Finding(
@@ -782,7 +892,9 @@ def source_family_findings(
                 f"{evidence_mode}, "
                 "low-confidence advisory review candidate. "
                 f"{settings_text}{member_context}. "
-                f"{import_context + ' ' if import_context else ''}Coupling, responsibility, "
+                f"{import_context + ' ' if import_context else ''}"
+                f"{history_context + ' ' if history_context else ''}"
+                "Coupling, responsibility, "
                 "and public surface not assessed; filename similarity alone does not establish an "
                 "architectural problem.",
                 severity="warning",
