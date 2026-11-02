@@ -106,6 +106,7 @@ class _OpenFence:
     opening_line: int
     container_indent: int
     blockquote_depth: int
+    opening_indent: int
     body: list[_SourceLine] = field(default_factory=_new_source_lines)
 
 
@@ -186,12 +187,26 @@ def _fence_label(info: str) -> str:
     return (match.group(1) or match.group(2)).lower()
 
 
-def _fence_body_line(line: str, container_indent: int) -> str:
+def _fence_body_line(line: str, container_indent: int, opening_indent: int) -> str:
     remaining = _strip_blockquotes(line)
     indent = len(remaining) - len(remaining.lstrip(" "))
-    if container_indent and indent >= container_indent:
-        return remaining[container_indent:]
-    return remaining
+    if container_indent:
+        if indent < container_indent:
+            return remaining
+        remaining = remaining[container_indent:]
+        indent = len(remaining) - len(remaining.lstrip(" "))
+    return remaining[min(indent, opening_indent) :]
+
+
+def _list_container_ended(line: str, container_indent: int) -> bool:
+    """Detect a nonblank line that has outdented a list-contained fence."""
+    if not container_indent:
+        return False
+    remaining = _strip_blockquotes(line)
+    if not remaining.strip():
+        return False
+    indent = len(remaining) - len(remaining.lstrip(" "))
+    return indent < container_indent
 
 
 def _mask_markdown_comments(line: str, in_comment: bool) -> tuple[str, bool]:
@@ -230,7 +245,10 @@ def _markdown_fences(text: str) -> tuple[_Fence, ...]:
     opened: _OpenFence | None = None
     in_html_comment = False
     for number, original in enumerate(text.splitlines(), start=1):
-        if opened is not None and _blockquote_depth(original) < opened.blockquote_depth:
+        if opened is not None and (
+            _blockquote_depth(original) < opened.blockquote_depth
+            or _list_container_ended(original, opened.container_indent)
+        ):
             fences.append(
                 _Fence(
                     opened.label,
@@ -244,7 +262,9 @@ def _markdown_fences(text: str) -> tuple[_Fence, ...]:
             opened = None
 
         if opened is not None:
-            content = _fence_body_line(original, opened.container_indent)
+            content = _fence_body_line(
+                original, opened.container_indent, opened.opening_indent
+            )
             closing = _CLOSE_FENCE.fullmatch(content)
             if (
                 closing is not None
@@ -281,6 +301,7 @@ def _markdown_fences(text: str) -> tuple[_Fence, ...]:
             number,
             container_indent,
             _blockquote_depth(original),
+            len(opening.group(1)),
         )
 
     if opened is not None:

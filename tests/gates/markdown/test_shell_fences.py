@@ -164,6 +164,34 @@ def test_quoted_fence_ends_when_its_blockquote_container_ends(
     assert findings == []
 
 
+def test_list_fence_ends_when_its_list_container_ends(tmp_path: Path) -> None:
+    findings = _check(
+        tmp_path,
+        "- ```bash\n"
+        "  echo inside list fence\n"
+        "Outside prose with PowerShell-looking text: $env:APP_HOME = data\n",
+    )
+
+    assert findings == []
+
+
+def test_fence_opener_indentation_is_removed_from_heredoc_lines(
+    tmp_path: Path,
+) -> None:
+    findings = _check(
+        tmp_path,
+        "  ```bash\n"
+        "  cat <<'SCRIPT'\n"
+        "  $env:APP_HOME = heredoc-data\n"
+        "  SCRIPT\n"
+        "  $env:APP_HOME = visible-command\n"
+        "  ```\n",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 5
+
+
 def test_powershell_backtick_escape_does_not_hide_later_bash_loop(
     tmp_path: Path,
 ) -> None:
