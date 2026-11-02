@@ -1072,6 +1072,23 @@ def _declared_domain_return_dump_lines(
     return sorted(evidence)
 
 
+def _binds_name(node: ast.AST, name: str) -> bool:
+    match node:
+        case ast.Name(id=bound, ctx=ast.Store() | ast.Del()):
+            return bound == name
+        case ast.Import(names=items) | ast.ImportFrom(names=items):
+            return any(
+                item.name == "*" or (item.asname or item.name.split(".")[0]) == name
+                for item in items
+            )
+        case ast.FunctionDef(name=bound) | ast.AsyncFunctionDef(name=bound):
+            return bound == name
+        case ast.ClassDef(name=bound):
+            return bound == name
+        case _:
+            return False
+
+
 def _finite_state_selector_lines(
     module: ast.Module, contract: FiniteStateContract, aliases: ImportAliases
 ) -> list[int]:
@@ -1125,29 +1142,17 @@ def _finite_state_selector_lines(
         if parameter is None or parameter.annotation is None:
             continue
         annotation_name = canonical_expression_name(parameter.annotation, aliases)
-        is_unshadowed_builtin_str = (
-            isinstance(parameter.annotation, ast.Name)
-            and parameter.annotation.id == "str"
-            and not any(
-                (
-                    isinstance(node, ast.Name)
-                    and node.id == "str"
-                    and isinstance(node.ctx, (ast.Store, ast.Del))
+        match parameter.annotation:
+            case ast.Name(id="str"):
+                is_unshadowed_builtin_str = not any(
+                    _binds_name(node, "str") for node in ast.walk(module)
                 )
-                or isinstance(node, (ast.Import, ast.ImportFrom))
-                and any(
-                    (alias.asname or alias.name.split(".")[0]) == "str"
-                    for alias in node.names
-                )
-                for node in ast.walk(module)
-            )
-        )
+            case _:
+                is_unshadowed_builtin_str = False
         if annotation_name != "builtins.str" and not is_unshadowed_builtin_str:
             continue
         if any(
-            isinstance(node, ast.Name)
-            and node.id == contract.parameter
-            and isinstance(node.ctx, (ast.Store, ast.Del))
+            _binds_name(node, contract.parameter)
             for statement in function.body
             for node in ast.walk(statement)
         ):
@@ -1155,13 +1160,18 @@ def _finite_state_selector_lines(
 
         def visit_statements(statements: Sequence[ast.stmt]) -> None:
             for statement in statements:
-                if not isinstance(statement, ast.If):
-                    continue
+                match statement:
+                    case ast.If():
+                        pass
+                    case _:
+                        continue
                 chain = [statement]
-                while len(chain[-1].orelse) == 1 and isinstance(
-                    chain[-1].orelse[0], ast.If
-                ):
-                    chain.append(chain[-1].orelse[0])
+                while len(chain[-1].orelse) == 1:
+                    match chain[-1].orelse[0]:
+                        case ast.If() as elif_statement:
+                            chain.append(elif_statement)
+                        case _:
+                            break
                 observed: set[str] = set()
                 for item in chain:
                     observed.update(comparisons(item.test))
