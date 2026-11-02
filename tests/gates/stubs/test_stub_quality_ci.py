@@ -281,6 +281,39 @@ def test_expected_negative_fixture_emits_matched_native_diagnostics(
     assert "error: expected diagnostic" in output
 
 
+def test_ty_unspellable_subtype_failure_gets_fixture_guidance_without_passing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fixture = tmp_path / "positive.py"
+    fixture.write_text(
+        "from typing import assert_type\n"
+        "class Model: ...\n"
+        "assert_type(Model, type[Model])\n",
+        encoding="utf-8",
+    )
+
+    def ty_unspellable_subtype(
+        command: Sequence[str], **_kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        diagnostic = (
+            f"{fixture.name}:3:1: error[assert-type-unspellable-subtype] "
+            "Type `<class 'Model'>` does not match asserted type `type[Model]`"
+        )
+        return subprocess.CompletedProcess(command, 1, diagnostic, "")
+
+    assert not run_case(
+        OPTIONAL_CHECKERS[0],
+        fixture,
+        root=tmp_path,
+        expect_errors=False,
+        process_runner=ty_unspellable_subtype,
+    )
+    error = capsys.readouterr().err
+    assert "fixture guidance:" in error
+    assert "model_class: type[Model] = Model" in error
+    assert "keep this failure visible" in error
+
+
 @pytest.mark.parametrize(
     ("failure", "expected_reason", "expected_output"),
     [

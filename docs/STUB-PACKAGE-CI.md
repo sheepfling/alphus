@@ -188,6 +188,13 @@ the configured expected errors. Multiple diagnostics on one marked line are
 allowed unless an explicit count says otherwise. Timeouts and spawn failures
 fail.
 
+When Ty reports `assert-type-unspellable-subtype` for a class-object
+`assert_type` assertion, the fixture failure includes checker-specific guidance
+to keep that failure visible and consider an explicitly annotated assignment
+such as `model_class: type[Model] = Model`. This is not a pass or a suppression;
+retain ordinary `assert_type` coverage for values and rerun the three-checker
+fixture after any consumer-specific adjustment.
+
 ### Keep intentional negative fixtures readable in IDEs
 
 Put expected-invalid examples in clearly named negative-fixture files or
