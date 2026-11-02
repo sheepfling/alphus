@@ -11,31 +11,15 @@ precision estimate. For each heading, I also checked the following paragraph
 or list when present to judge whether terse titles such as "Required slots"
 and "Build and review" had clear local context.
 
-## Manual labels
+## Human-label status
 
-| Source heading | Label |
-| --- | --- |
-| Profile boundary and promotion rules | Descriptive |
-| Common contracts | Descriptive |
-| Example boundary | Descriptive |
-| Composition recipe extension | Descriptive |
-| Existing native family compositions | Descriptive |
-| Connected product story proofs | Descriptive |
-| Shared typography output suite | Descriptive |
-| Required slots | Descriptive |
-| Build and review | Descriptive |
-| Customer intake and portfolio coverage | Descriptive |
-| Customer source intake | Descriptive |
-| Six-profile coverage report | Descriptive |
-| Print-production capability boundary | Descriptive |
-| Long-form document component proof | Descriptive |
-
-None of these 14 headings matches the current repeated rhetorical-template
-families, and the sample produced no advisory. The manual labels agree with
-that outcome. The sample has no clearly rhetorical heading, no presentation
-deck, no marketing slick, and no LaTeX or HTML source, so it cannot measure
-misses or false positives for those contexts. No private proof packet or
-customer copy was inspected.
+No human labels have been collected. An earlier pass annotated the 14 headings
+as descriptive-looking after inspecting nearby text, but there is no independent
+review evidence for those judgments; they are withdrawn as validation labels.
+The sample has no clearly rhetorical heading, no presentation deck, no marketing
+slick, and no LaTeX or HTML source, so it cannot measure misses or false
+positives for those contexts. No private proof packet or customer copy was
+inspected.
 
 ## Synthetic fixture candidates
 
@@ -58,6 +42,12 @@ Use synthetic data to cover the absent cases without copying brand material:
   finding solely because a title makes a claim.
 
 ## Limits and follow-up
+
+A separate mixed-context review packet is available in
+[heading-style-review-packet.md](heading-style-review-packet.md). It contains
+source excerpts and blank human-label fields for technical documentation, a
+presentation example, and marketing copy. Its labels remain pending; it is not
+an extension of the manual labels above.
 
 This sample supports only the narrow statement that the selected technical
 headings are descriptive and the current scanner leaves them alone. It does
