@@ -477,6 +477,42 @@ def test_runtime_attestation_does_not_trust_shadowed_origin_helper() -> None:
     assert findings[0].line == 3
 
 
+@pytest.mark.parametrize(
+    "binding",
+    [
+        "    match value:\n        case module_origin:\n            pass\n",
+        "    match value:\n        case [*module_origin]:\n            pass\n",
+        (
+            "    try:\n        raise ValueError()\n"
+            "    except ValueError as module_origin:\n        pass\n"
+        ),
+    ],
+)
+def test_runtime_attestation_does_not_trust_pattern_or_exception_bindings(
+    binding: str,
+) -> None:
+    configured = policy(
+        runtime_attestation_gap=True,
+        runtime_module_names=("engine",),
+        runtime_import_helpers=("load_runtime_module",),
+        runtime_metadata_helpers=("distribution_version",),
+        runtime_origin_helpers=("module_origin",),
+        runtime_attestation_sinks=("record_runtime",),
+    )
+    source = (
+        "def run(value):\n"
+        + binding
+        + "    engine = load_runtime_module('example-engine')\n"
+        + "    record_runtime(\n"
+        + "        distribution_version('example-engine'), module_origin(engine)\n"
+        + "    )\n"
+    )
+
+    findings = run_artifact_findings(source, "src/harness.py", configured)
+    assert len(findings) == 1
+    assert "actual origin is not determined" in findings[0].message
+
+
 def test_policy_requires_complete_roles_for_each_enabled_family() -> None:
     with pytest.raises(ValueError, match="conditional_output_readback needs"):
         policy(conditional_output_readback=True)

@@ -156,6 +156,10 @@ def _local_bindings(function: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str
                 )
             case ast.ImportFrom(names=imports):
                 names.update(alias.asname or alias.name for alias in imports)
+            case ast.MatchAs(name=name) | ast.MatchStar(name=name) if name is not None:
+                names.add(name)
+            case ast.ExceptHandler(name=name) if name is not None:
+                names.add(name)
             case ast.Global(names=declared) | ast.Nonlocal(names=declared):
                 names.update(declared)
             case _:
