@@ -62,6 +62,8 @@ _CPP_SUFFIXES = frozenset(
 _DEFAULT_INCLUDE = tuple(f"**/*{suffix}" for suffix in sorted(_CPP_SUFFIXES))
 _DEFAULT_EXCLUDE = (
     "**/.git/**",
+    ".cache/**",
+    "**/.cache/**",
     "build/**",
     "**/build/**",
     "out/**",
@@ -599,6 +601,10 @@ def _style_report(args: argparse.Namespace) -> dict[str, JsonValue]:
         "blocking": False,
         "root": str(root),
         "generated_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
+        "scope": {
+            "include_patterns": list(includes),
+            "exclude_patterns": list(excludes),
+        },
         "metrics": report_metrics,
         "findings": findings,
     }

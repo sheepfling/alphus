@@ -42,6 +42,56 @@ def test_style_review_is_nonblocking_unless_requested(tmp_path: Path) -> None:
     assert advisory.main([*args, "--fail-on-findings"]) == 1
 
 
+def test_style_scope_excludes_root_and_nested_cache_directories_by_default(
+    tmp_path: Path,
+) -> None:
+    cache = tmp_path / ".cache"
+    nested_cache = tmp_path / "src" / ".cache"
+    cache.mkdir()
+    nested_cache.mkdir(parents=True)
+    (cache / "generated.cpp").write_text("int generated() { return 0; }\n")
+    (nested_cache / "generated.hpp").write_text("int generated_nested();\n")
+    (tmp_path / "src" / "main.cpp").write_text("int main() { return 0; }\n")
+    output = tmp_path / "style.json"
+
+    assert advisory.main(["style", str(tmp_path), "--output", str(output)]) == 0
+
+    report = json.loads(output.read_text(encoding="utf-8"))
+    assert report["metrics"]["source_file_count"] == 1
+    assert report["scope"]["include_patterns"] == list(advisory._DEFAULT_INCLUDE)
+    assert ".cache/**" in report["scope"]["exclude_patterns"]
+    assert "**/.cache/**" in report["scope"]["exclude_patterns"]
+
+
+def test_style_report_exposes_effective_custom_scope_patterns(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "main.cpp").write_text("int main() { return 0; }\n")
+    output = tmp_path / "style.json"
+
+    assert (
+        advisory.main(
+            [
+                "style",
+                str(tmp_path),
+                "--include",
+                "src/**",
+                "--exclude",
+                "src/private/**",
+                "--output",
+                str(output),
+            ]
+        )
+        == 0
+    )
+
+    report = json.loads(output.read_text(encoding="utf-8"))
+    assert report["scope"]["include_patterns"] == ["src/**"]
+    assert report["scope"]["exclude_patterns"][-1] == "src/private/**"
+    assert report["metrics"]["source_file_count"] == 1
+
+
 def test_style_setup_failure_writes_versioned_incomplete_report(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
