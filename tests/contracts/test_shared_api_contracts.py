@@ -96,6 +96,19 @@ def test_signature_audit_accepts_stub_ellipsis_default_but_keeps_source_shape_ex
     assert source_signature_shape(stub_node) != source_signature_shape(runtime_node)
 
 
+def test_signature_audit_rejects_stub_default_when_runtime_requires_argument() -> None:
+    stub_node = ast.parse("def f(value: int = ...) -> int: ...").body[0]
+    runtime_node = ast.parse("def f(value: int) -> int: return value").body[0]
+    assert isinstance(stub_node, ast.FunctionDef)
+    assert isinstance(runtime_node, ast.FunctionDef)
+
+    def runtime(value: int) -> int:
+        return value
+
+    with pytest.raises(SystemExit, match="signature/default mismatch"):
+        validate_signature("f", stub_node, runtime_node, runtime)
+
+
 def test_signature_audit_rejects_mismatched_concrete_defaults() -> None:
     stub_node = ast.parse("def f(value: int = 2) -> int: ...").body[0]
     runtime_node = ast.parse("def f(value: int = 3) -> int: return value").body[0]
