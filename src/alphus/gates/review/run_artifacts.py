@@ -532,6 +532,12 @@ def _assigned_names(function: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str
                 )
             case ast.ImportFrom(names=aliases):
                 names.update(alias.asname or alias.name for alias in aliases)
+            case (
+                ast.MatchAs(name=name)
+                | ast.MatchStar(name=name)
+                | ast.MatchMapping(rest=name)
+            ) if name is not None:
+                names.add(name)
             case ast.ExceptHandler(name=name) if name is not None:
                 names.add(name)
             case ast.Global(names=global_names) | ast.Nonlocal(names=global_names):

@@ -147,6 +147,35 @@ def test_conditional_output_rule_abstains_on_fresh_namespace_and_rebinding() -> 
     assert run_artifact_findings(source, "src/pipeline.py", configured) == []
 
 
+@pytest.mark.parametrize(
+    ("capture", "expected"),
+    [
+        ("read_output", "read_output"),
+        ("[*read_output]", "read_output"),
+        ("output_path", "output_path"),
+        ("{**read_output}", "read_output"),
+    ],
+)
+def test_pattern_capture_shadows_configured_output_names(
+    capture: str, expected: str
+) -> None:
+    configured = policy(
+        conditional_output_readback=True,
+        reused_output_path_names=("output_path",),
+        output_writers=(ProvenanceCallRole(function="write_output"),),
+        output_readers=(ProvenanceCallRole(function="read_output"),),
+    )
+    source = (
+        "def build(rows, output_path, subject):\n"
+        f"    match subject:\n        case {capture}:\n            pass\n"
+        "    if rows:\n"
+        "        write_output(output_path, rows)\n"
+        f"    read_output({expected})\n"
+    )
+
+    assert run_artifact_findings(source, "src/pipeline.py", configured) == []
+
+
 def test_helper_rebinding_suppresses_configured_name() -> None:
     configured = policy(
         conditional_output_readback=True,
