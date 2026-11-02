@@ -26,14 +26,20 @@ that a page is visibly correct, or that the PDF is portable under a delivery
 contract. In particular, do not use a stale expected-navigation manifest as
 independent semantic evidence.
 
-The build uses `latexmk -outdir=build` so its PDF and log land beside the
+The build uses `latexmk -Werror` so final unresolved and multiply defined
+reference warnings fail after latexmk's required reruns; `-g` forces this
+profile to rebuild instead of trusting an older output. The command also uses
+`-outdir=build` so its PDF and log land beside the
 configured `build/report.tex` source where the later checks expect them. The log
-check runs after `latexmk -g` in the same profile, so it inspects the forced
+check runs after the build in the same profile, so it inspects the forced
 build's log instead of accepting a previously generated file. It checks
-for a matching `Output written on` filename and common unresolved reference,
-citation, and rerun notices. It does not parse every TeX engine's diagnostics,
+for a matching `Output written on` filename, common unresolved reference,
+citation and rerun notices, multiply defined labels, and a common pdfTeX
+duplicate-destination warning. It does not parse every TeX engine's diagnostics,
 prove source-map freshness, or validate navigation. A missing or unfamiliar
-output record fails closed with an execution finding.
+output record fails closed with an execution finding. The native `-Werror`
+result remains the primary LaTeX build evidence; the log scanner covers only
+the listed messages and does not claim to recognize all backend warning forms.
 
 ## Evidence that needs a consumer contract
 

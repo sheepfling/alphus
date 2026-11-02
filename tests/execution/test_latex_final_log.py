@@ -38,6 +38,22 @@ def test_reports_missing_output_mismatch_and_unresolved_references(
     assert any("unresolved LaTeX" in issue for issue in validate_final_log(log, pdf))
 
 
+def test_reports_duplicate_labels_and_hyperref_destinations(tmp_path: Path) -> None:
+    log = tmp_path / "report.log"
+    pdf = tmp_path / "report.pdf"
+    pdf.write_bytes(b"pdf artifact")
+    log.write_text(
+        "Output written on report.pdf (14 pages, 123456 bytes).\n"
+        "LaTeX Warning: Label `overview' multiply defined.\n"
+        "pdfTeX warning (ext4): destination with the same identifier "
+        "(name{page.1}) has been already used, duplicate ignored\n"
+    )
+
+    issues = validate_final_log(log, pdf)
+    assert len(issues) == 2
+    assert all("unresolved LaTeX" in issue for issue in issues)
+
+
 def test_missing_pdf_or_log_fails_closed(tmp_path: Path) -> None:
     log = tmp_path / "report.log"
     log.write_text("Output written on report.pdf (1 page, 100 bytes).\n")

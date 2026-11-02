@@ -17,6 +17,10 @@ _UNRESOLVED = (
     re.compile(r"Rerun to get cross-references right", re.IGNORECASE),
     re.compile(r"Rerun to get citations right", re.IGNORECASE),
     re.compile(r"Label\(s\) may have changed\. Rerun", re.IGNORECASE),
+    re.compile(r"LaTeX Warning: Label .+ multiply defined", re.IGNORECASE),
+    re.compile(
+        r"destination with the same identifier .+ duplicate ignored", re.IGNORECASE
+    ),
 )
 
 
