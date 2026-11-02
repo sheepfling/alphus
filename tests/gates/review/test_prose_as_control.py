@@ -123,6 +123,8 @@ verbose_zero_count = re.sub(r"(?x)\d{ 0 }", "", text)
 verbose_zero_range = re.sub(r"(?x)\d{0, 0}", " ", text)
 verbose_actual_zero_count = re.sub(r"(?x)\d{0}", "", text)
 verbose_actual_zero_range = re.sub(r"(?x)\d{0,0}", " ", text)
+class_zero_count = re.sub(r"[\d]{0}", "", text)
+group_zero_count = re.sub(r"(?:\d){0}", "", text)
 verbose_comment = re.sub(r"""(?x)# \d is only a comment
 \s+""", "", text)
 actual_digit_consumer = re.sub(r"""(?x)# \d is a comment
@@ -134,11 +136,13 @@ actual_digit_consumer = re.sub(r"""(?x)# \d is a comment
     ) == [
         (4, "(?x)\\d{ 0 }"),
         (5, "(?x)\\d{0, 0}"),
-        (10, "(?x)# \\d is a comment\n\\d+"),
+        (12, "(?x)# \\d is a comment\n\\d+"),
     ]
 
     assert re.sub(r"(?x)\d{ 0 }", "", "7{0}") == ""
     assert re.sub(r"(?x)\d{0}", "", "7{0}") == "7{0}"
+    assert re.sub(r"[\d]{0}", "", "123") == "123"
+    assert re.sub(r"(?:\d){0}", "", "123") == "123"
 
 
 def test_lossy_text_rewrite_detects_literal_semantic_token_deletion() -> None:

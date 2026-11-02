@@ -196,10 +196,11 @@ def _literal_replace_expression(node: ast.Call) -> str | None:
 
 def _regex_consumes_digit(pattern: str) -> bool:
     """Find a consuming digit class outside assertions/comments/zero counts."""
-    groups: list[tuple[bool, bool]] = []
+    groups: list[tuple[bool, bool, bool]] = []
     assertion_depth = 0
     in_character_class = False
     class_is_negated = False
+    class_has_digit = False
     verbose = False
     index = 0
     while index < len(pattern):
@@ -213,12 +214,12 @@ def _regex_consumes_digit(pattern: str) -> bool:
             index += 5
             continue
         if pattern.startswith("(?x:", index):
-            groups.append((False, verbose))
+            groups.append((False, verbose, False))
             verbose = True
             index += 4
             continue
         if pattern.startswith("(?-x:", index):
-            groups.append((False, verbose))
+            groups.append((False, verbose, False))
             verbose = False
             index += 5
             continue
@@ -230,19 +231,29 @@ def _regex_consumes_digit(pattern: str) -> bool:
             continue
         if character == "\\" and index + 1 < len(pattern):
             escaped = pattern[index + 1]
-            if (
-                escaped == "d"
-                and assertion_depth == 0
-                and not (in_character_class and class_is_negated)
-                and not _zero_repetition_follows(pattern, index + 2)
-            ):
-                return True
+            if escaped == "d" and assertion_depth == 0:
+                if in_character_class:
+                    if not class_is_negated:
+                        class_has_digit = True
+                elif not _zero_repetition_follows(pattern, index + 2):
+                    if groups:
+                        is_assertion, previous_verbose, _has_digit = groups[-1]
+                        groups[-1] = (is_assertion, previous_verbose, True)
+                    else:
+                        return True
             index += 2
             continue
         if in_character_class:
             if character == "]":
                 in_character_class = False
                 class_is_negated = False
+                if class_has_digit and not _zero_repetition_follows(pattern, index + 1):
+                    if groups:
+                        is_assertion, previous_verbose, _has_digit = groups[-1]
+                        groups[-1] = (is_assertion, previous_verbose, True)
+                    else:
+                        return True
+                class_has_digit = False
             index += 1
             continue
         if pattern.startswith("(?#", index):
@@ -254,18 +265,30 @@ def _regex_consumes_digit(pattern: str) -> bool:
         if character == "[":
             in_character_class = True
             class_is_negated = pattern.startswith("[^", index)
+            class_has_digit = False
             index += 1
             continue
         if character == "(":
             is_assertion = pattern.startswith(("(?=", "(?!", "(?<=", "(?<!"), index)
-            groups.append((is_assertion, verbose))
+            groups.append((is_assertion, verbose, False))
             if is_assertion:
                 assertion_depth += 1
         elif character == ")" and groups:
-            is_assertion, previous_verbose = groups.pop()
+            is_assertion, previous_verbose, has_digit = groups.pop()
             if is_assertion:
                 assertion_depth -= 1
             verbose = previous_verbose
+            if (
+                has_digit
+                and not is_assertion
+                and assertion_depth == 0
+                and not _zero_repetition_follows(pattern, index + 1)
+            ):
+                if groups:
+                    parent_assertion, parent_verbose, _parent_has_digit = groups[-1]
+                    groups[-1] = (parent_assertion, parent_verbose, True)
+                else:
+                    return True
         index += 1
     return False
 

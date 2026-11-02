@@ -184,6 +184,20 @@ def f(text, original):
     assert _sites(source, ("render",)) == []
 
 
+def test_while_walrus_invalidates_rendered_binding_in_body_and_afterward() -> None:
+    source = """\
+def f(text, chunks):
+    rendered = render(text)
+    while (rendered := next(chunks, "")):
+        if rendered.rstrip().endswith("!"):
+            return True
+    if rendered.rstrip().endswith("?"):
+        return True
+    return False
+"""
+    assert _sites(source, ("render",)) == []
+
+
 def test_advisory_reports_configured_source_path(tmp_path: Path) -> None:
     source = tmp_path / "src/render/table.py"
     source.parent.mkdir(parents=True)

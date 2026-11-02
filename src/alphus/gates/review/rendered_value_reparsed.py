@@ -176,10 +176,19 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[tuple[int, int, str]]:
                         for name, line in before.items()
                         if loop_state.get(name) == line and else_state.get(name) == line
                     }
-                case ast.While(body=body, orelse=orelse):
+                case ast.While(test=test, body=body, orelse=orelse):
                     before = current.copy()
-                    body_state = scan(body, current)
-                    else_state = scan(orelse, current) if orelse else current.copy()
+                    loop_state = current.copy()
+                    for node in ast.walk(test):
+                        match node:
+                            case ast.NamedExpr(target=ast.Name(id=name)):
+                                loop_state.pop(name, None)
+                            case _:
+                                continue
+                    body_state = scan(body, loop_state)
+                    else_state = (
+                        scan(orelse, loop_state) if orelse else loop_state.copy()
+                    )
                     current = {
                         name: line
                         for name, line in before.items()
