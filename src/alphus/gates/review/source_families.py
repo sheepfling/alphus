@@ -463,11 +463,57 @@ def _name_is_rebound(tree: ast.Module, name: str, import_alias: ast.alias) -> bo
     return False
 
 
+class _PythonImportParseCache:
+    """Cache selected-file ASTs under one byte budget for the whole review pass."""
+
+    def __init__(self, max_bytes: int) -> None:
+        self.max_bytes = max_bytes
+        self.bytes_left = max_bytes
+        self.budget_exhausted = False
+        self.trees: dict[Path, ast.Module | None] = {}
+
+    @property
+    def bytes_used(self) -> int:
+        return self.max_bytes - self.bytes_left
+
+    def parse(self, checkout: Path, source: Path) -> ast.Module | None:
+        """Read and parse a selected file at most once, preserving failures too."""
+        if source in self.trees:
+            return self.trees[source]
+        if self.bytes_left <= 0:
+            self.budget_exhausted = True
+            self.trees[source] = None
+            return None
+        source_path = (checkout / source).resolve(strict=False)
+        if not source_path.is_relative_to(checkout):
+            self.trees[source] = None
+            return None
+        try:
+            bytes_available = self.bytes_left
+            with source_path.open("rb") as handle:
+                raw = handle.read(min(bytes_available, 1_048_576) + 1)
+            self.bytes_left -= min(len(raw), bytes_available)
+            if len(raw) > bytes_available:
+                self.budget_exhausted = True
+                self.trees[source] = None
+                return None
+            if len(raw) > 1_048_576:
+                self.trees[source] = None
+                return None
+            tree = ast.parse(raw.decode("utf-8"), filename=source.as_posix())
+        except (OSError, UnicodeError, SyntaxError, ValueError):
+            self.trees[source] = None
+            return None
+        self.trees[source] = tree
+        return tree
+
+
 def _python_import_evidence(
     checkout: Path,
     members: AbstractSet[Path],
     selected: Iterable[Path],
     policy: _SourceFamilyPolicy,
+    parse_cache: _PythonImportParseCache,
 ) -> tuple[str, list[str]]:
     """Summarize direct, statically resolved imports within the configured roots."""
     selected_paths = tuple(selected)
@@ -490,7 +536,6 @@ def _python_import_evidence(
                 modules[".".join(parts)].append(path)
             break
 
-    bytes_left = policy.max_import_analysis_bytes
     resolved: list[str] = []
     unresolved = 0
     failures = 0
@@ -532,23 +577,8 @@ def _python_import_evidence(
         *sorted(external_sources, key=str),
     ]
     for source in sources_to_parse:
-        source_path = (checkout / source).resolve(strict=False)
-        if not source_path.is_relative_to(checkout) or bytes_left <= 0:
-            failures += 1
-            if source in external_sources:
-                external_parse_failures += 1
-            continue
-        try:
-            with source_path.open("rb") as handle:
-                raw = handle.read(min(bytes_left, 1_048_576) + 1)
-            if len(raw) > bytes_left or len(raw) > 1_048_576:
-                failures += 1
-                if source in external_sources:
-                    external_parse_failures += 1
-                continue
-            bytes_left -= len(raw)
-            tree = ast.parse(raw.decode("utf-8"), filename=source.as_posix())
-        except (OSError, UnicodeError, SyntaxError, ValueError):
+        tree = parse_cache.parse(checkout, source)
+        if tree is None:
             failures += 1
             if source in external_sources:
                 external_parse_failures += 1
@@ -685,7 +715,7 @@ def _python_import_evidence(
                                 else source_module.rpartition(".")[0]
                             )
                             pieces = package.split(".") if package else []
-                            if level > len(pieces) + 1:
+                            if level > len(pieces):
                                 if source in analysis_sources:
                                     unresolved += max(1, len(aliases))
                                 continue
@@ -733,7 +763,7 @@ def _python_import_evidence(
                             else source_module.rpartition(".")[0]
                         )
                         pieces = package.split(".") if package else []
-                        if level > len(pieces) + 1:
+                        if level > len(pieces):
                             if source in analysis_sources:
                                 unresolved += 1
                             continue
@@ -814,6 +844,11 @@ def _python_import_evidence(
         f"Direct Python import evidence: {internal} resolved edge(s) target another "
         f"family member; {len(resolved) - internal} target other selected Python files; "
         f"{unresolved} import(s) unresolved/outside the configured inventory."
+    )
+    context += (
+        f" Shared Python import parse budget: {parse_cache.bytes_used} of "
+        f"{parse_cache.max_bytes} configured bytes used across this source-family run; "
+        "source reads and parsed ASTs are reused across family reports."
     )
     if shown:
         context += " Examples: " + ", ".join(shown) + "."
@@ -949,8 +984,11 @@ def _python_import_evidence(
     notes: list[str] = []
     if failures:
         notes.append(f"{failures} Python file(s) could not be analyzed")
-    if bytes_left == 0:
-        notes.append("the configured Python import byte budget was exhausted")
+    if parse_cache.budget_exhausted:
+        notes.append(
+            "the configured Python import byte budget was exhausted across the "
+            "source-family run"
+        )
     if notes:
         context += " Analysis incomplete: " + "; ".join(notes) + "."
     context += (
@@ -1299,10 +1337,11 @@ def source_family_findings(
     javascript_contexts: dict[tuple[str, ...], str] = {}
     history_contexts: dict[tuple[str, ...], str] = {}
     if policy.python_import_evidence:
+        python_parse_cache = _PythonImportParseCache(policy.max_import_analysis_bytes)
         for _, _, members in retained:
             key = tuple(sorted(path.as_posix() for path in members))
             context, notes = _python_import_evidence(
-                checkout, members, selected, policy
+                checkout, members, selected, policy, python_parse_cache
             )
             import_contexts[key] = context
             incomplete_notes.extend(notes)
@@ -1326,6 +1365,7 @@ def source_family_findings(
             history_contexts[key] = _git_cochange_evidence(
                 checkout, members, policy.max_git_history_commits
             )
+    incomplete_notes = list(dict.fromkeys(incomplete_notes))
     incomplete_finding = (
         Finding(
             rule_id,
