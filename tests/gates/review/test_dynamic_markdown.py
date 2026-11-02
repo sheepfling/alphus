@@ -133,6 +133,36 @@ def test_loop_appends_retain_one_reviewable_row_for_later_join() -> None:
     assert "local append/join assembly" in findings[0].message
 
 
+def test_nested_list_and_blockquote_composition_report_their_contexts() -> None:
+    findings = dynamic_markdown_findings(
+        "def render(item, quote):\n"
+        '    return f"- {item}\\n  1. {quote}\\n> {quote}\\n"\n'
+    )
+
+    contexts = {
+        finding.message.partition("Markdown ")[2].partition(" by ")[0]
+        for finding in findings
+    }
+    assert contexts == {"list item", "block quote"}
+    assert any(
+        "list-marker spacing, indentation, and block boundaries" in f.message
+        for f in findings
+    )
+    assert any(
+        "quote-prefix consistency and block boundaries" in f.message for f in findings
+    )
+
+
+def test_list_syntax_inside_fenced_code_is_not_reported_as_a_list_item() -> None:
+    findings = dynamic_markdown_findings(
+        'def render(value):\n    return f"```markdown\\n- {value}\\n```"\n'
+    )
+
+    assert len(findings) == 1
+    assert "Markdown code fence" in findings[0].message
+    assert "Markdown list item" not in findings[0].message
+
+
 def test_static_prose_non_markdown_and_reassigned_aliases_are_ignored() -> None:
     source = (
         "def render(name, rate):\n"

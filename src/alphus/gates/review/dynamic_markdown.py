@@ -25,6 +25,9 @@ _RULE_ID = rule_tag(
 _LINK = re.compile(r"\[(?P<label>(?:\\.|[^\]])*)\]\((?P<destination>(?:\\.|[^)])*)\)")
 _CODE_SPAN = re.compile(r"(?P<ticks>`+)(?P<body>.*?)(?P=ticks)", re.DOTALL)
 _FIELD_ROOT = re.compile(r"^([^.[\]]+)")
+_FENCE = re.compile(r"^ {0,3}(?P<marker>`{3,}|~{3,})(?P<info>.*)$")
+_LIST_ITEM = re.compile(r"^ {0,8}(?:[-+*]|\d+[.)])\s+(?P<body>.*)$")
+_BLOCK_QUOTE = re.compile(r"^ {0,3}>\s?(?P<body>.*)$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -296,12 +299,44 @@ class _MarkdownAnalyzer:
         contexts: dict[str, set[str]] = {
             value.token: set() for value in fragment.values
         }
+        fence_character: str | None = None
+        fence_length = 0
         for line in fragment.template.splitlines():
+            fence = _FENCE.match(line)
+            if fence_character is not None:
+                if (
+                    fence is not None
+                    and fence.group("marker")[0] == fence_character
+                    and len(fence.group("marker")) >= fence_length
+                    and not fence.group("info").strip()
+                ):
+                    fence_character = None
+                    fence_length = 0
+                continue
+            if fence is not None:
+                marker = fence.group("marker")
+                info = fence.group("info")
+                if marker[0] != "`" or "`" not in info:
+                    fence_character = marker[0]
+                    fence_length = len(marker)
+                continue
             row = line.strip()
             if row.startswith("|") and row.endswith("|") and row.count("|") >= 2:
                 for value in fragment.values:
                     if value.token in row:
                         contexts[value.token].add("table cell")
+            list_item = _LIST_ITEM.match(line)
+            if list_item is not None:
+                body = list_item.group("body")
+                for value in fragment.values:
+                    if value.token in body:
+                        contexts[value.token].add("list item")
+            block_quote = _BLOCK_QUOTE.match(line)
+            if block_quote is not None:
+                body = block_quote.group("body")
+                for value in fragment.values:
+                    if value.token in body:
+                        contexts[value.token].add("block quote")
         for match in _LINK.finditer(fragment.template):
             for value in fragment.values:
                 if value.token in match.group("label"):
@@ -318,6 +353,8 @@ class _MarkdownAnalyzer:
     def _emit(self, fragment: _Fragment) -> None:
         remedies = {
             "table cell": "cell escaping and pipe/newline row boundaries",
+            "list item": "list-marker spacing, indentation, and block boundaries",
+            "block quote": "quote-prefix consistency and block boundaries",
             "link label": "label escaping and bracket boundaries",
             "link destination": "destination encoding, parenthesis boundaries, and URL policy",
             "code span": "backtick delimiting",

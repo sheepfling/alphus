@@ -589,20 +589,23 @@ The first supported patterns are f-strings, string concatenation, literal
 `append`/`join` assembly, including a list initialized before a loop and
 appended to with a recognizable one-iteration row pattern. For that loop case,
 the analyzer treats the loop body as a representative row; it does not infer
-iteration counts or execute the producer. It reports values in pipe-delimited table rows,
-simple Markdown link labels or destinations, and matched backtick spans or
-fences. Findings include the dynamic expression and observed source
-construction. They ask for context-specific review, such as table-cell
-escaping and row boundaries or link destination encoding; they do not claim
-that rendered output is malformed or prescribe one universal escaping call.
+iteration counts or execute the producer. It reports values in pipe-delimited
+table rows, common unordered and ordered list items (up to eight leading
+spaces), block quotes, simple Markdown link labels or destinations, and
+matched backtick spans or fences. List and block-quote matching is skipped
+inside recognized fenced code blocks. Findings include the dynamic expression
+and observed source construction. They ask for context-specific review, such
+as table-cell escaping and row boundaries, list-marker indentation, block
+boundaries, or link destination encoding; they do not claim that rendered
+output is malformed or prescribe one universal escaping call.
 
 The analyzer does not execute or import consumer modules. It follows local
 bindings only when their value remains unambiguous; assignments that differ
 across branches are left unresolved. Unknown helpers, interprocedural flow,
 computed templates, raw-fragment provenance, and library APIs are not
 recognized as safe. Importing a Markdown package does not suppress a separate
-manual construction. This first pass does not analyze block composition or
-certify renderer output. Calibrate it against sanitized real generator
+manual construction. This first pass does not analyze general block composition
+or certify renderer output. Calibrate it against sanitized real generator
 examples and independently check representative rendered structure before
 considering broader rollout. Prefer a dialect-aware library or tested shared
 builder for document production.
