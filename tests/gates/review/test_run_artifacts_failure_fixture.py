@@ -9,6 +9,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 
 def _persist_failure(
     results_path: Path, run_id: str, returncode: int, diagnostic_path: Path
@@ -38,6 +40,11 @@ def _remove_diagnostic(path: Path) -> None:
     path.unlink(missing_ok=True)
 
 
+def _present_failure(*, fail: bool) -> None:
+    if fail:
+        raise RuntimeError("synthetic presentation failure")
+
+
 def _run_child(stderr: str, returncode: int) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [
@@ -53,14 +60,24 @@ def _run_child(stderr: str, returncode: int) -> subprocess.CompletedProcess[str]
     )
 
 
-def _good_failed_run(root: Path, run_id: str, stderr: str, returncode: int) -> None:
+def _good_failed_run(
+    root: Path,
+    run_id: str,
+    stderr: str,
+    returncode: int,
+    *,
+    presentation_fails: bool = False,
+) -> None:
     diagnostic_path = root / "child.stderr"
     results_path = root / "failures.jsonl"
     child = _run_child(stderr, returncode)
     diagnostic_path.write_text(child.stderr, encoding="utf-8")
     if child.returncode != 0:
         _persist_failure(results_path, run_id, child.returncode, diagnostic_path)
-        _remove_diagnostic(diagnostic_path)
+        try:
+            _present_failure(fail=presentation_fails)
+        finally:
+            _remove_diagnostic(diagnostic_path)
 
 
 def _bad_failed_run(root: Path, run_id: str, stderr: str, returncode: int) -> None:
@@ -105,3 +122,44 @@ def test_two_failed_runs_persist_current_redacted_evidence_before_cleanup(
         '{"run_id": "run-2", "returncode": 9, "diagnostic": null}',
     ]
     assert not (bad_root / "child.stderr").exists()
+
+
+def test_presentation_failure_preserves_durable_status_and_redacted_evidence(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "presentation-failure"
+    root.mkdir()
+
+    with pytest.raises(RuntimeError, match="synthetic presentation failure"):
+        _good_failed_run(
+            root,
+            "run-presentation-failure",
+            "TOKEN=secret before presentation failure",
+            11,
+            presentation_fails=True,
+        )
+
+    record = json.loads((root / "failures.jsonl").read_text(encoding="utf-8"))
+    assert record == {
+        "run_id": "run-presentation-failure",
+        "returncode": 11,
+        "diagnostic": "TOKEN=[REDACTED] before presentation failure",
+    }
+    assert not (root / "child.stderr").exists()
+
+
+def test_failed_child_without_stderr_retains_status_before_cleanup(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "empty-diagnostic"
+    root.mkdir()
+
+    _good_failed_run(root, "run-no-output", "", 12)
+
+    record = json.loads((root / "failures.jsonl").read_text(encoding="utf-8"))
+    assert record == {
+        "run_id": "run-no-output",
+        "returncode": 12,
+        "diagnostic": "",
+    }
+    assert not (root / "child.stderr").exists()

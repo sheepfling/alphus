@@ -59,9 +59,11 @@ child using the current Python interpreter, captures stderr, reuses one
 diagnostic path across two failed runs, and compares persistence-before-cleanup
 with cleanup-before-persistence. The good path retains distinct run IDs, return
 codes, and redacted diagnostics in a temporary JSONL sink flushed with `fsync`;
-the bad path retains status but loses the diagnostics. This demonstrates local
-ordering behavior without asserting that static analysis proves other sinks'
-durability or that any production harness loses evidence.
+the bad path retains status but loses the diagnostics. Separate cases exercise
+a presentation exception after persistence and a failed child with empty stderr;
+both preserve the return code and clean up the temporary diagnostic path. This
+demonstrates local ordering behavior without asserting that static analysis
+proves other sinks' durability or that any production harness loses evidence.
 
 ## Parse/hash snapshot fixture
 
