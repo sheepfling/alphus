@@ -875,16 +875,6 @@ def _is_starred(node: ast.expr) -> bool:
             return False
 
 
-def _rebound_name_line(node: ast.AST, parameter: str) -> int | None:
-    match node:
-        case ast.Name(id=name, ctx=ast.Store() | ast.Del(), lineno=line) if (
-            name == parameter
-        ):
-            return line
-        case _:
-            return None
-
-
 def _loaded_attribute_name(node: ast.AST, parameter: str) -> tuple[str, int] | None:
     match node:
         case ast.Attribute(attr=attribute, ctx=ast.Load(), value=ast.Name(id=name)) if (
@@ -939,45 +929,190 @@ class _FunctionLocalNodes(ast.NodeVisitor):
         super().generic_visit(node)
 
 
-class _FunctionBoundNames(ast.NodeVisitor):
-    """Collect names that cannot resolve to a module-level helper in a function."""
+class _FunctionScopeBindings(ast.NodeVisitor):
+    """Collect local names and write sites within one function scope."""
 
     def __init__(self, root: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
         self.root = root
-        self.names = {
-            argument.arg
-            for argument in (
-                *root.args.posonlyargs,
-                *root.args.args,
-                *root.args.kwonlyargs,
-            )
-        }
+        self.names: set[str] = set()
+        self.rebindings: dict[str, list[int]] = defaultdict(list)
+        arguments = (
+            *root.args.posonlyargs,
+            *root.args.args,
+            *root.args.kwonlyargs,
+        )
+        for argument in arguments:
+            self._bind(argument.arg)
         if root.args.vararg is not None:
-            self.names.add(root.args.vararg.arg)
+            self._bind(root.args.vararg.arg)
         if root.args.kwarg is not None:
-            self.names.add(root.args.kwarg.arg)
+            self._bind(root.args.kwarg.arg)
         for statement in root.body:
             self.visit(statement)
+
+    def _bind(self, name: str, line: int | None = None) -> None:
+        self.names.add(name)
+        if line is not None:
+            self.rebindings[name].append(line)
+
+    def _visit_definition_expressions(
+        self, node: ast.FunctionDef | ast.AsyncFunctionDef
+    ) -> None:
+        for expression in [
+            *node.decorator_list,
+            *node.args.defaults,
+            *(value for value in node.args.kw_defaults if value is not None),
+            *(
+                argument.annotation
+                for argument in (
+                    *node.args.posonlyargs,
+                    *node.args.args,
+                    *node.args.kwonlyargs,
+                )
+                if argument.annotation is not None
+            ),
+        ]:
+            self.visit(expression)
+        if node.returns is not None:
+            self.visit(node.returns)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         if node is self.root:
             for statement in node.body:
                 self.visit(statement)
         else:
-            self.names.add(node.name)
+            self._bind(node.name, node.lineno)
+            self._visit_definition_expressions(node)
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
         if node is self.root:
             for statement in node.body:
                 self.visit(statement)
         else:
-            self.names.add(node.name)
+            self._bind(node.name, node.lineno)
+            self._visit_definition_expressions(node)
 
     def visit_Lambda(self, node: ast.Lambda) -> None:
-        return
+        for expression in (
+            *node.args.defaults,
+            *(value for value in node.args.kw_defaults if value is not None),
+        ):
+            self.visit(expression)
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        self._bind(node.name, node.lineno)
+        for expression in (*node.decorator_list, *node.bases):
+            self.visit(expression)
+        for keyword in node.keywords:
+            self.visit(keyword.value)
+
+    def visit_Name(self, node: ast.Name) -> None:
+        match node.ctx:
+            case ast.Store() | ast.Del():
+                self._bind(node.id, node.lineno)
+            case _:
+                pass
+
+    def visit_Import(self, node: ast.Import) -> None:
+        for alias in node.names:
+            self._bind(alias.asname or alias.name.split(".")[0], node.lineno)
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        for alias in node.names:
+            if alias.name != "*":
+                self._bind(alias.asname or alias.name, node.lineno)
+
+    def visit_ExceptHandler(self, node: ast.ExceptHandler) -> None:
+        if node.name is not None:
+            self._bind(node.name, node.lineno)
+        if node.type is not None:
+            self.visit(node.type)
+        for statement in node.body:
+            self.visit(statement)
+
+    def visit_Global(self, node: ast.Global) -> None:
+        for name in node.names:
+            self._bind(name, node.lineno)
+
+    def visit_Nonlocal(self, node: ast.Nonlocal) -> None:
+        for name in node.names:
+            self._bind(name, node.lineno)
+
+    def visit_MatchAs(self, node: ast.MatchAs) -> None:
+        if node.name is not None:
+            self._bind(node.name, node.lineno)
+        self.generic_visit(node)
+
+    def visit_MatchStar(self, node: ast.MatchStar) -> None:
+        if node.name is not None:
+            self._bind(node.name, node.lineno)
+        self.generic_visit(node)
+
+    def visit_MatchMapping(self, node: ast.MatchMapping) -> None:
+        if node.rest is not None:
+            self._bind(node.rest, node.lineno)
+        self.generic_visit(node)
+
+
+class _ModuleScopeBindings(ast.NodeVisitor):
+    """Collect module-level names that can replace a candidate helper."""
+
+    def __init__(self, module: ast.Module) -> None:
+        self.direct_functions: set[int] = set()
+        for statement in module.body:
+            match statement:
+                case ast.FunctionDef() | ast.AsyncFunctionDef():
+                    self.direct_functions.add(id(statement))
+                case _:
+                    pass
+        self.names: set[str] = set()
+        for statement in module.body:
+            self.visit(statement)
+
+    def _visit_definition_expressions(
+        self, node: ast.FunctionDef | ast.AsyncFunctionDef
+    ) -> None:
+        for expression in [
+            *node.decorator_list,
+            *node.args.defaults,
+            *(value for value in node.args.kw_defaults if value is not None),
+            *(
+                argument.annotation
+                for argument in (
+                    *node.args.posonlyargs,
+                    *node.args.args,
+                    *node.args.kwonlyargs,
+                )
+                if argument.annotation is not None
+            ),
+        ]:
+            self.visit(expression)
+        if node.returns is not None:
+            self.visit(node.returns)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        if id(node) not in self.direct_functions:
+            self.names.add(node.name)
+        self._visit_definition_expressions(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        if id(node) not in self.direct_functions:
+            self.names.add(node.name)
+        self._visit_definition_expressions(node)
+
+    def visit_Lambda(self, node: ast.Lambda) -> None:
+        for expression in (
+            *node.args.defaults,
+            *(value for value in node.args.kw_defaults if value is not None),
+        ):
+            self.visit(expression)
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         self.names.add(node.name)
+        for expression in (*node.decorator_list, *node.bases):
+            self.visit(expression)
+        for keyword in node.keywords:
+            self.visit(keyword.value)
 
     def visit_Name(self, node: ast.Name) -> None:
         match node.ctx:
@@ -1003,12 +1138,6 @@ class _FunctionBoundNames(ast.NodeVisitor):
             self.visit(node.type)
         for statement in node.body:
             self.visit(statement)
-
-    def visit_Global(self, node: ast.Global) -> None:
-        self.names.update(node.names)
-
-    def visit_Nonlocal(self, node: ast.Nonlocal) -> None:
-        self.names.update(node.names)
 
     def visit_MatchAs(self, node: ast.MatchAs) -> None:
         if node.name is not None:
@@ -1051,15 +1180,14 @@ class _FunctionNameIndex(ast.NodeVisitor):
         self.parts.pop()
 
 
-def _direct_mapping_reads(parameter: str, nodes: Sequence[ast.AST]) -> list[int]:
+def _direct_mapping_reads(
+    parameter: str,
+    nodes: Sequence[ast.AST],
+    bindings: _FunctionScopeBindings,
+) -> list[int]:
     """Find literal string-key indexing and ``.get`` reads on the parameter."""
     lines: set[int] = set()
-    rebinding_lines = [
-        line
-        for node in nodes
-        if (line := _rebound_name_line(node, parameter)) is not None
-    ]
-    first_rebinding = min(rebinding_lines, default=None)
+    first_rebinding = min(bindings.rebindings.get(parameter, []), default=None)
     for node in nodes:
         match node:
             case ast.Subscript(
@@ -1198,10 +1326,11 @@ def _mapping_read_evidence(
     parameter: str,
     nodes: Sequence[ast.AST],
     imports: ImportAliases,
+    bindings: _FunctionScopeBindings,
 ) -> list[int]:
     """Combine direct reads with straight-line aliases, preserving branch evidence."""
     return sorted(
-        set(_direct_mapping_reads(parameter, nodes))
+        set(_direct_mapping_reads(parameter, nodes, bindings))
         | set(_direct_mapping_reads_with_aliases(function, parameter, imports))
     )
 
@@ -1223,6 +1352,7 @@ def _direct_forwarded_mapping_reads(
     parameter: str,
     module: ast.Module,
     aliases: ImportAliases,
+    bindings: _FunctionScopeBindings,
 ) -> list[tuple[str, int, tuple[int, ...]]]:
     """Follow one exact parameter pass into a unique module-level helper."""
     helpers: dict[str, list[ast.FunctionDef | ast.AsyncFunctionDef]] = defaultdict(list)
@@ -1234,15 +1364,8 @@ def _direct_forwarded_mapping_reads(
                 pass
     local = _FunctionLocalNodes(function)
     local.visit(function)
-    bound_names = _FunctionBoundNames(function).names
-    rebinding = min(
-        (
-            line
-            for node in local.nodes
-            if (line := _rebound_name_line(node, parameter)) is not None
-        ),
-        default=None,
-    )
+    module_bound_names = _ModuleScopeBindings(module).names
+    rebinding = min(bindings.rebindings.get(parameter, []), default=None)
     evidence: set[tuple[str, int, tuple[int, ...]]] = set()
     for node in local.nodes:
         match node:
@@ -1254,7 +1377,8 @@ def _direct_forwarded_mapping_reads(
             continue
         candidates = helpers.get(call_name, [])
         if (
-            call_name in bound_names
+            call_name in bindings.names
+            or call_name in module_bound_names
             or len(candidates) != 1
             or candidates[0] is function
         ):
@@ -1302,6 +1426,7 @@ def _domain_mapping_findings(
         return []
     local = _FunctionLocalNodes(function)
     local.visit(function)
+    bindings = _FunctionScopeBindings(function)
     findings: list[Finding] = []
     arguments = [
         *function.args.posonlyargs,
@@ -1333,9 +1458,11 @@ def _domain_mapping_findings(
                 for exception in policy.domain_mapping_exceptions
             ):
                 continue
-            reads = _mapping_read_evidence(function, argument.arg, local.nodes, aliases)
+            reads = _mapping_read_evidence(
+                function, argument.arg, local.nodes, aliases, bindings
+            )
             forwarded_reads = _direct_forwarded_mapping_reads(
-                function, argument.arg, module, aliases
+                function, argument.arg, module, aliases, bindings
             )
             if not reads and forwarded_reads:
                 reads = sorted(
@@ -1393,9 +1520,11 @@ def _domain_mapping_findings(
             argument.annotation, aliases, set(policy.domain_mapping_value_types)
         )
         if mapping is not None:
-            reads = _mapping_read_evidence(function, argument.arg, local.nodes, aliases)
+            reads = _mapping_read_evidence(
+                function, argument.arg, local.nodes, aliases, bindings
+            )
             forwarded_reads = _direct_forwarded_mapping_reads(
-                function, argument.arg, module, aliases
+                function, argument.arg, module, aliases, bindings
             )
             if not reads and forwarded_reads:
                 reads = sorted(

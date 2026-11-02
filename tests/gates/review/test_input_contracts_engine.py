@@ -616,6 +616,70 @@ def evaluate(packet: Mapping[str, JsonValue]):
         ('{"reader": "value", "other": "item"}', '{"reader": _, **captured}'),
     ],
 )
+def test_match_capture_of_selected_parameter_is_not_original_mapping_evidence() -> None:
+    source = """from collections.abc import Mapping
+from app.json_types import JsonValue
+def evaluate(packet: Mapping[str, JsonValue]):
+    match {"packet": {"state": "captured"}}:
+        case {"packet": packet}:
+            return packet["state"]
+    return None
+"""
+    findings = input_contract_findings(
+        source,
+        DOMAIN_BOUNDARY_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert findings == []
+
+
+@pytest.mark.parametrize(
+    "binding_expression",
+    [
+        "def nested(callback=(_read_state := lambda value: value)):\\n        pass",
+        "callback = lambda value=(_read_state := (lambda item: item)): value",
+    ],
+)
+def test_nested_default_walrus_binding_shadows_module_helper(
+    binding_expression: str,
+) -> None:
+    source = (
+        "from collections.abc import Mapping\\n"
+        "from app.json_types import JsonValue\\n"
+        "def _read_state(payload):\\n"
+        '    return payload["state"]\\n'
+        "def evaluate(packet: Mapping[str, JsonValue]):\\n"
+        f"    {binding_expression.replace(chr(10), chr(10) + '    ')}\\n"
+        "    return _read_state(packet)\\n"
+    )
+    findings = input_contract_findings(
+        source,
+        DOMAIN_BOUNDARY_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert findings == []
+
+
+def test_reassigned_module_helper_is_not_used_for_forwarded_read_evidence() -> None:
+    source = """from collections.abc import Mapping
+from app.json_types import JsonValue
+def _read_state(payload):
+    return payload["state"]
+_read_state = lambda value: value
+def evaluate(packet: Mapping[str, JsonValue]):
+    return _read_state(packet)
+"""
+    findings = input_contract_findings(
+        source,
+        DOMAIN_BOUNDARY_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert findings == []
+
+
 def test_unrelated_match_captures_keep_module_helper_evidence(
     subject: str, pattern: str
 ) -> None:
