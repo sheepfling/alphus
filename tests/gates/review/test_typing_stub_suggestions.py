@@ -708,10 +708,10 @@ def test_builtin_pandas_reports_matching_stub_as_installed(
 def test_builtin_pandas_suppresses_suggestion_for_package_marker(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
-    (tmp_path / "app.py").write_text("import pandas\\n", encoding="utf-8")
+    (tmp_path / "app.py").write_text("import pandas\n", encoding="utf-8")
     (tmp_path / "pyproject.toml").write_text(
-        '[project]\\ndependencies = ["pandas==3.1.0"]\\n'
-        "[project.optional-dependencies]\\ndev = []\\n",
+        '[project]\ndependencies = ["pandas==3.1.0"]\n'
+        "[project.optional-dependencies]\ndev = []\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(
@@ -726,10 +726,10 @@ def test_builtin_pandas_suppresses_suggestion_for_package_marker(
 def test_builtin_pandas_suppresses_suggestion_for_matching_root_stub(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
-    (tmp_path / "app.py").write_text("import pandas\\n", encoding="utf-8")
+    (tmp_path / "app.py").write_text("import pandas\n", encoding="utf-8")
     (tmp_path / "pyproject.toml").write_text(
-        '[project]\\ndependencies = ["pandas==3.1.0"]\\n'
-        "[project.optional-dependencies]\\ndev = []\\n",
+        '[project]\ndependencies = ["pandas==3.1.0"]\n'
+        "[project.optional-dependencies]\ndev = []\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(
