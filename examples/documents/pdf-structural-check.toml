@@ -7,7 +7,7 @@ default_profile = "pdf-structure"
 kind = "command"
 name = "LaTeX report build"
 gate_id = "latex-report-build"
-argv = ["latexmk", "-pdf", "-g", "-Werror", "-outdir=build", "-interaction=nonstopmode", "-halt-on-error", "-file-line-error", "build/report.tex"]
+argv = ["latexmk", "-pdf", "-g", "-Werror", "-outdir=build", "-interaction=nonstopmode", "-halt-on-error", "-file-line-error", "examples/documents/report.tex"]
 working_directory = "."
 rollout = "provisional"
 timeout_seconds = 600

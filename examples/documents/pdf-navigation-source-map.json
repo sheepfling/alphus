@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "source": "report.tex",
+  "notice": "Synthetic fixture mapping authored independently of the generated PDF outline; it is not production calibration evidence.",
+  "sections": [
+    {
+      "id": "overview",
+      "tex_label": "sec:overview",
+      "physical_page": 1
+    }
+  ]
+}

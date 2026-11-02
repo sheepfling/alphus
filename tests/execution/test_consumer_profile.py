@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import tomllib
 from pathlib import Path
 
@@ -25,6 +26,16 @@ def test_starter_policy_has_one_scoped_command_and_no_global_inventory() -> None
 
 
 def test_pdf_example_checks_one_explicit_artifact_provisionally() -> None:
+    navigation_contract = Path("examples/documents/pdf-navigation-contract.json")
+    source_map = Path("examples/documents/pdf-navigation-source-map.json")
+    assert navigation_contract.is_file()
+    assert source_map.is_file()
+    contract = json.loads(navigation_contract.read_text(encoding="utf-8"))
+    assert contract["source_evidence"] == str(source_map)
+    assert r"\section{Overview}\label{sec:overview}" in Path(
+        "examples/documents/report.tex"
+    ).read_text(encoding="utf-8")
+
     config = load_config(Path("examples/documents/pdf-structural-check.toml"))
     orchestration = config.orchestration
     assert orchestration is not None
@@ -48,9 +59,10 @@ def test_pdf_example_checks_one_explicit_artifact_provisionally() -> None:
         "-interaction=nonstopmode",
         "-halt-on-error",
         "-file-line-error",
-        "build/report.tex",
+        "examples/documents/report.tex",
     )
     assert build.timeout_seconds == 600
+    assert Path("examples/documents/report.tex").is_file()
     assert isinstance(final_log, CommandRunStep)
     assert final_log.argv == (
         "{python}",

@@ -1,12 +1,11 @@
 # PDF and LaTeX evidence example
 
-The `pdf-structural-check.toml` consumer example runs the maintained `qpdf`
-structural validator against one explicitly named generated artifact. It also
-forces a `latexmk` build before checking the final log for the expected output
-name and common unresolved cross-reference warnings. The profile also checks
-link actions against an explicit offline delivery contract. It is an opt-in,
-provisional command profile and is not added to Alphus's default profiles.
-Adjust source, PDF, log, and helper paths for the consumer's build layout.
+The `pdf-structural-check.toml` example runs a complete, opt-in provisional
+profile over the small synthetic report in `examples/documents/report.tex`.
+It forces a `latexmk` build, checks the final log, runs `qpdf --check`, and
+checks navigation and link actions against explicit contracts. The example is
+not added to Alphus's default profiles. Adjust source, PDF, log, and helper
+paths for a consumer's build layout.
 
 Install and manage `qpdf`, `latexmk`, and Poppler in the consumer's environment.
 The navigation contract helper uses the optional `pypdf` dependency; install it
@@ -14,18 +13,31 @@ with `pip install 'alphus[pdf]'`. Alphus does not install native tools or build
 the PDF outside the explicitly selected profile. Missing commands/artifacts
 report failure or unknown evidence rather than an empty successful scan.
 
-Run the profile with the consumer's `.tex` source at `build/report.tex`:
+Run the profile from the repository root:
 
 ```shell
 alphus --root . --config examples/documents/pdf-structural-check.toml \
   --run --profile pdf-structure
 ```
 
+The `pdf-native-toolchain-smoke` hosted job installs `qpdf`, `latexmk`, and
+`texlive-latex-recommended` from Ubuntu's package repositories, then runs this
+same profile against the checked-in synthetic report. It retains the generated
+PDF and final log as a short-lived workflow artifact. This verifies the
+configured command path and selected structural/navigation/portability checks
+with real native tools; it is not a build of an external consumer document or
+evidence from a second document pipeline.
+
 `qpdf --check` tests PDF syntax and structural consistency. A successful result
 does not establish that bookmarks or links point to the intended sections,
 that a page is visibly correct, or that the PDF is portable under a delivery
 contract. In particular, do not use a stale expected-navigation manifest as
 independent semantic evidence.
+
+The synthetic report places its declared Overview section on physical page 1,
+and its separately maintained source map is named in the navigation contract.
+That map is fixture evidence only: the checker cannot verify its provenance,
+and passing this fixture is not production calibration.
 
 The build uses `latexmk -Werror` so final unresolved and multiply defined
 reference warnings fail after latexmk's required reruns; `-g` forces this

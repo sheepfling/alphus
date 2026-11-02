@@ -1,5 +1,5 @@
 {
-  "source_evidence": "build/section-map.json (replace with an independently generated source/build map)",
+  "source_evidence": "examples/documents/pdf-navigation-source-map.json",
   "contents_links": [],
   "sections": [
     {
