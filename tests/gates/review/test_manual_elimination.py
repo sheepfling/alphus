@@ -99,3 +99,9 @@ def test_matrix_alias_and_wrong_matrix_name_are_unknown() -> None:
 
     assert manual_elimination_sites(alias, _policy()) == []
     assert manual_elimination_sites(other_matrix, _policy()) == []
+
+
+def test_module_level_range_shadowing_makes_loop_semantics_unknown() -> None:
+    shadowed = "range = lambda count: ()\n\n" + _SOURCE
+
+    assert manual_elimination_sites(shadowed, _policy()) == []

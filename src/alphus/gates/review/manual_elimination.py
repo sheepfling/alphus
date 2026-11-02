@@ -264,12 +264,48 @@ def manual_elimination_sites(
     source: str, policy: ManualEliminationPolicy
 ) -> list[_Site]:
     """Return only complete, configured direct-list pivot/swap/eliminate shapes."""
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return []
+    if _module_shadows_elimination_builtins(tree):
+        return []
     return configured_function_observations(
         source,
         policy.function_names,
         lambda function: _match(function, policy),
         lambda site: (site.function, site.pivot_line),
     )
+
+
+def _module_shadows_elimination_builtins(tree: ast.Module) -> bool:
+    """Abstain when module-scope bindings can replace required builtin calls."""
+    builtins = {"range", "max", "abs", "zip"}
+    pending: list[ast.AST] = list(reversed(tree.body))
+    while pending:
+        node = pending.pop()
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            if node.name in builtins:
+                return True
+            continue
+        if isinstance(node, ast.Import):
+            bound = {alias.asname or alias.name.split(".")[0] for alias in node.names}
+            if bound & builtins:
+                return True
+        elif isinstance(node, ast.ImportFrom):
+            bound = {alias.asname or alias.name for alias in node.names}
+            if bound & builtins:
+                return True
+        elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+            if node.id in builtins:
+                return True
+        if isinstance(
+            node,
+            ast.Lambda | ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp,
+        ):
+            continue
+        pending.extend(reversed(tuple(ast.iter_child_nodes(node))))
+    return False
 
 
 def check_manual_elimination(
