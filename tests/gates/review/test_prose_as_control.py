@@ -4,7 +4,9 @@ import pytest
 
 from alphus.config import ProseAsControlPolicy
 from alphus.gates.review.prose_as_control import (
+    check_lossy_text_rewrite,
     check_prose_as_control,
+    lossy_rewrite_lines,
     prose_control_literals,
 )
 
@@ -77,3 +79,40 @@ def test_scans_only_declared_paths_and_respects_exclusions(tmp_path: Path) -> No
     assert not check_prose_as_control(
         tmp_path, [Path("src/render/report.py")], excluded
     )
+
+
+def test_lossy_text_rewrite_matches_configured_number_erasure_only() -> None:
+    source = """\
+import re
+cleaned = re.sub(r"(?<!\\S)\\d{1,3}\\.\\d{2}(?!\\S)", " ", prose)
+trimmed = prose.strip()
+kept = re.sub(r"\\s+", " ", prose)
+"""
+    configured = _policy(lossy_text_rewrite=True, regex_sub_helpers=("re.sub",))
+    assert lossy_rewrite_lines(source, configured) == [
+        (2, r"(?<!\S)\d{1,3}\.\d{2}(?!\S)")
+    ]
+    assert (
+        lossy_rewrite_lines(
+            source, _policy(lossy_text_rewrite=True, regex_sub_helpers=("regex.sub",))
+        )
+        == []
+    )
+
+
+def test_lossy_text_rewrite_requires_explicit_helpers_and_reports_evidence(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValueError, match="regex_sub_helpers is required"):
+        _policy(lossy_text_rewrite=True)
+    target = tmp_path / "src/render/cleanup.py"
+    target.parent.mkdir(parents=True)
+    target.write_text('import re\nre.sub(r"\\d+", "", prose)\n', encoding="utf-8")
+    findings = check_lossy_text_rewrite(
+        tmp_path,
+        [Path("src/render/cleanup.py")],
+        _policy(lossy_text_rewrite=True, regex_sub_helpers=("re.sub",)),
+    )
+    assert len(findings) == 1
+    assert findings[0].rule_id == "alphus/python/none/correctness/lossy-text-rewrite"
+    assert "does not establish" in findings[0].message

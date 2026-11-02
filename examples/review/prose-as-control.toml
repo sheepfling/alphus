@@ -11,6 +11,8 @@ source_paths = ["src/render/*.py"]
 minimum_characters = 60
 minimum_words = 8
 allowed_literals = ["The remote peer reports a state transition that this client does not handle."]
+lossy_text_rewrite = true
+regex_sub_helpers = ["re.sub"]
 
 [orchestration]
 default_profile = "semantic-review"

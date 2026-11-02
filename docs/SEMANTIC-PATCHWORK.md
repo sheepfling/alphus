@@ -12,7 +12,14 @@ renderer path and opts into the provisional rule. Consider whether behavior
 could instead branch on a named mode/state while keeping full prose as data;
 review the protocol contract before changing code.
 
-This rule does not infer AI authorship, prove a defect, or detect the other
-semantic-patchwork patterns in issue #50. It does not cover long strings that
-flow through variables or helpers, or comparisons outside supported branch
-tests. Allowlisting and scope are explicit consumer decisions.
+The same opt-in rule can separately enable `lossy_text_rewrite` with explicit
+`regex_sub_helpers`, such as `re.sub`. That narrow check reports a configured
+regex call with a literal `\d` pattern and an empty or space replacement. It
+does not trace aliases, establish actual input values, or prove meaningful
+content is lost. Numeric text may be intentionally removed under a declared
+input contract; exclusions and helper names are consumer decisions.
+
+These checks do not infer AI authorship or prove a defect. Other patterns in
+issue #50, including rendered feedback, positional overrides, source
+replacement/provenance, heuristic unmatched-span loss, empty-result handling,
+ownership, module boundaries, and patchwork clusters remain uncovered.

@@ -86,6 +86,8 @@ class ProseAsControlPolicy(PythonSourceScanPolicy):
     minimum_characters: Annotated[int, Field(gt=0)] = 60
     minimum_words: Annotated[int, Field(gt=0)] = 8
     severity: Severity = "info"
+    lossy_text_rewrite: bool = False
+    regex_sub_helpers: tuple[str, ...] = ()
 
     @field_validator("source_paths")
     @classmethod
@@ -100,6 +102,25 @@ class ProseAsControlPolicy(PythonSourceScanPolicy):
             raise ValueError("allowed prose literals must be non-empty")
         require_unique(literals, "allowed prose literals must be unique")
         return literals
+
+    @field_validator("regex_sub_helpers")
+    @classmethod
+    def validate_regex_helpers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not value or any(not part.isidentifier() for part in value.split("."))
+            for value in values
+        ):
+            raise ValueError("regex helper names must be dotted identifiers")
+        require_unique(values, "regex helper names must be unique")
+        return tuple(values)
+
+    @model_validator(mode="after")
+    def require_regex_helpers_when_enabled(self) -> Self:
+        if self.lossy_text_rewrite and not self.regex_sub_helpers:
+            raise ValueError(
+                "regex_sub_helpers is required when lossy_text_rewrite is enabled"
+            )
+        return self
 
 
 class ScipyConstantsPolicy(PythonSourceScanPolicy):

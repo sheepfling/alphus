@@ -16,6 +16,9 @@ from alphus.support.source_text import read_python_source
 _RULE_ID = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.MAINTAINABILITY, "prose-as-control"
 )
+_LOSSY_REWRITE_RULE_ID = rule_tag(
+    Scope.PYTHON, Framework.NONE, Category.CORRECTNESS, "lossy-text-rewrite"
+)
 _SENTENCE_WORD = re.compile(r"\b[A-Za-z]{2,}\b")
 
 
@@ -120,6 +123,85 @@ def check_prose_as_control(
                         f"imply AI authorship or prove a defect; literal: {excerpt!r}"
                     ),
                     severity=policy.severity,
+                )
+            )
+    return findings
+
+
+def lossy_rewrite_lines(
+    source: str, policy: ProseAsControlPolicy
+) -> list[tuple[int, str]]:
+    """Return configured regex substitutions that erase digit-bearing spans."""
+    if not policy.lossy_text_rewrite:
+        return []
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return []
+    helpers = set(policy.regex_sub_helpers)
+    observations: set[tuple[int, str]] = set()
+    for node in ast.walk(tree):
+        match node:
+            case ast.Call(
+                func=func,
+                args=[
+                    ast.Constant(value=str(pattern)),
+                    ast.Constant(value=str(replacement)),
+                    _,
+                ],
+                keywords=[],
+            ) if (
+                _qualified_name(func) in helpers
+                and "\\d" in pattern
+                and replacement in {"", " "}
+            ):
+                observations.add((node.lineno, pattern))
+            case _:
+                continue
+    return sorted(observations)
+
+
+def _qualified_name(node: ast.expr) -> str | None:
+    match node:
+        case ast.Name(id=name):
+            return name
+        case ast.Attribute(value=value, attr=attr):
+            parent = _qualified_name(value)
+            return f"{parent}.{attr}" if parent else None
+        case _:
+            return None
+
+
+def check_lossy_text_rewrite(
+    root: Path, paths: Iterable[Path], policy: ProseAsControlPolicy
+) -> list[Finding]:
+    """Report only configured regex calls that erase digit-bearing spans."""
+    if not policy.lossy_text_rewrite:
+        return []
+    checkout = root.resolve(strict=True)
+    findings: list[Finding] = []
+    for relative in sorted(paths):
+        name = relative.as_posix()
+        if (
+            relative.suffix != ".py"
+            or any(matches_path(name, pattern) for pattern in policy.exclude)
+            or not any(matches_path(name, pattern) for pattern in policy.source_paths)
+        ):
+            continue
+        path = checkout / relative
+        if not path.is_file():
+            continue
+        for line, pattern in lossy_rewrite_lines(read_python_source(path), policy):
+            findings.append(
+                Finding(
+                    _LOSSY_REWRITE_RULE_ID,
+                    name,
+                    "configured regex substitution removes a digit-matching span "
+                    f"using an empty/space replacement (pattern {pattern!r}); review "
+                    "whether numeric information is semantic input. This syntax does "
+                    "not establish that content is actually lost for a given source.",
+                    line,
+                    policy.severity,
                 )
             )
     return findings
