@@ -165,9 +165,12 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[tuple[int, int, str]]:
                     # Walrus targets in evaluated expression statements can
                     # replace a previously rendered value before later tests.
                     for node in ast.walk(value):
-                        if isinstance(node, ast.NamedExpr):
-                            for name in _target_names(node.target):
-                                current.pop(name, None)
+                        match node:
+                            case ast.NamedExpr(target=target):
+                                for name in _target_names(target):
+                                    current.pop(name, None)
+                            case _:
+                                continue
                 case (
                     ast.For(target=target, body=body, orelse=orelse)
                     | ast.AsyncFor(target=target, body=body, orelse=orelse)
