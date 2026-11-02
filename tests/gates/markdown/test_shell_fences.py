@@ -132,6 +132,33 @@ def test_printf_arguments_preserve_real_cmd_environment_evidence(
     assert "cmd syntax" in findings[0].message
 
 
+def test_quoted_printf_format_preserves_cmd_environment_arguments(
+    tmp_path: Path,
+) -> None:
+    findings = _check(tmp_path, "```bash\nprintf '%s' %userprofile%\n````\n")
+
+    assert len(findings) == 1
+    assert findings[0].line == 2
+    assert "cmd syntax" in findings[0].message
+
+
+def test_printf_options_and_backslash_continuation_keep_format_context(
+    tmp_path: Path,
+) -> None:
+    findings = _check(
+        tmp_path,
+        "```bash\n"
+        'printf -- %s%s "$prefix" "$suffix"\n'
+        "printf \\\n"
+        "  %s%s \\\n"
+        '  "$prefix" \\\n'
+        '  "$suffix"\n'
+        "````\n",
+    )
+
+    assert findings == []
+
+
 def test_flags_bash_loop_in_indented_blockquote_pwsh_fence(tmp_path: Path) -> None:
     findings = _check(
         tmp_path,

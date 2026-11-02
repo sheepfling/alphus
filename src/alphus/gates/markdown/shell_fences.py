@@ -57,9 +57,8 @@ _QUOTED_POWERSHELL_DELEGATION = re.compile(
     r"-Command[ \t]+(?P<quote>['\"])"
 )
 _CMD_ENV = re.compile(r"%[A-Za-z_][A-Za-z0-9_]*%")
-_PRINTF_FORMAT_COMMAND = re.compile(
-    r"^\s*printf[ \t]+(?:(?:-v[ \t]+\S+)[ \t]+)?(?P<format>(?:\\.|[^\s])+)"
-)
+_PRINTF_FORMAT_COMMAND = re.compile(r"^\s*printf\b")
+_SHELL_WORD = re.compile(r"(?:'[^']*'|\"(?:\\.|[^\"])*\"|\\.|[^\s])+")
 _PRINTF_FORMAT_DIRECTIVE = re.compile(
     r"%(?:%|[-+#0 ']*(?:\d+|\*)?(?:\.(?:\d+|\*))?"
     r"(?:hh|h|ll|l|L|z|j|t)?[bcdeEfFgGiosuxXq])"
@@ -94,6 +93,7 @@ _TRANSCRIPT_PROMPT = re.compile(
 class _SourceLine:
     number: int
     text: str
+    raw_text: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -276,7 +276,7 @@ def _visible_shell_lines(fence: _Fence, shell: str) -> tuple[_SourceLine, ...]:
         if shell == "bash":
             pending_heredocs.extend(_heredoc_delimiters(source.text, visible))
         if visible.strip():
-            output.append(_SourceLine(source.number, visible))
+            output.append(_SourceLine(source.number, visible, source.text))
     return tuple(output)
 
 
@@ -303,8 +303,21 @@ def _first_match(
 def _cmd_environment_evidence(lines: Sequence[_SourceLine]) -> _Evidence | None:
     """Find cmd expansion without mistaking date and printf format directives."""
     in_date_continuation = False
+    in_printf_continuation = False
     for source in lines:
-        candidate = _mask_printf_format_argument(source.text)
+        raw_line = source.raw_text if source.raw_text is not None else source.text
+        candidate, printf_format_found = _mask_printf_format_argument(
+            source.text, raw_line, continued=in_printf_continuation
+        )
+        trailing_backslashes = len(raw_line) - len(raw_line.rstrip("\\"))
+        in_printf_continuation = (
+            not printf_format_found
+            and trailing_backslashes % 2 == 1
+            and (
+                _PRINTF_FORMAT_COMMAND.match(raw_line) is not None
+                or in_printf_continuation
+            )
+        )
         if _DATE_COMMAND.search(candidate) or in_date_continuation:
             candidate = _DATE_FORMAT_SEQUENCE.sub(
                 lambda match: " " * len(match.group()), candidate
@@ -319,19 +332,63 @@ def _cmd_environment_evidence(lines: Sequence[_SourceLine]) -> _Evidence | None:
     return None
 
 
-def _mask_printf_format_argument(line: str) -> str:
-    """Mask only recognized printf conversions in a leading format argument."""
-    match = _PRINTF_FORMAT_COMMAND.match(line)
-    if match is None:
-        return line
-    start, end = match.span("format")
-    format_argument = line[start:end]
+def _mask_printf_format_argument(
+    line: str, raw_line: str, *, continued: bool = False
+) -> tuple[str, bool]:
+    """Mask conversions only when they occupy printf's unquoted format word."""
+    offset = 0
+    if continued:
+        indentation = len(raw_line) - len(raw_line.lstrip())
+        raw_command = f"printf {raw_line.lstrip()}"
+        offset = len("printf ") - indentation
+    elif _PRINTF_FORMAT_COMMAND.match(raw_line):
+        raw_command = raw_line
+    else:
+        return line, False
+
+    words = list(_SHELL_WORD.finditer(raw_command))
+    if not words:
+        return line, False
+    index = 1  # printf command name
+    while index < len(words):
+        word = words[index].group()
+        if word == "--":
+            index += 1
+            break
+        if word == "-v":
+            index += 2
+            continue
+        if word.startswith("-") and word != "-":
+            index += 1
+            continue
+        break
+    if index >= len(words):
+        return line, False
+
+    match = words[index]
+    format_word = match.group()
+    if format_word == "\\":
+        return line, False
+    if format_word.startswith(("'", '"')):
+        return line, True
+    directives = list(_PRINTF_FORMAT_DIRECTIVE.finditer(format_word))
+    percent_positions = [i for i, char in enumerate(format_word) if char == "%"]
+    covered = {
+        position for directive in directives for position in range(*directive.span())
+    }
+    if not percent_positions or not all(
+        position in covered for position in percent_positions
+    ):
+        return line, True
+    start, end = match.span()
+    start -= offset
+    end -= offset
+    if start < 0 or end > len(line):
+        return line, True
     masked = _PRINTF_FORMAT_DIRECTIVE.sub(
-        lambda conversion: " " * len(conversion.group()), format_argument
+        lambda conversion: " " * len(conversion.group()), line[start:end]
     )
-    if masked == format_argument:
-        return line
-    return f"{line[:start]}{masked}{line[end:]}"
+    return f"{line[:start]}{masked}{line[end:]}", True
 
 
 def _bash_loop_evidence(lines: Sequence[_SourceLine]) -> _Evidence | None:
