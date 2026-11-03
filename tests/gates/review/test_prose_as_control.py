@@ -163,6 +163,20 @@ omitted_lower_group_zero_count = re.sub(r"(?:\d){,0}", "", text)
 
     assert re.sub(r"(?x)\d{ 0 }", "", "7{0}") == ""
     assert re.sub(r"(?x)\d{0}", "", "7{0}") == "7{0}"
+
+
+def test_lossy_regex_rewrite_skips_python_regex_comments_before_zero_counts() -> None:
+    source = r"""\
+digit = re.sub(r"\d(?#comment){0}", "", text)
+character_class = re.sub(r"[\d](?#comment){0}", "", text)
+group = re.sub(r"(?:\d)(?#comment){0}", "", text)
+positive_count = re.sub(r"\d(?#comment){1}", "", text)
+"""
+
+    assert lossy_rewrite_lines(
+        source, _policy(lossy_text_rewrite=True, regex_sub_helpers=("re.sub",))
+    ) == [(5, r"\d(?#comment){1}")]
+    assert re.sub(r"\d(?#comment){0}", "", "7") == "7"
     assert re.sub(r"[\d]{0}", "", "123") == "123"
     assert re.sub(r"(?:\d){0}", "", "123") == "123"
     assert re.sub(r"(?x)\d {0}", "", "123") == "123"

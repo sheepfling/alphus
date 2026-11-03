@@ -308,18 +308,22 @@ def _regex_consumes_digit(pattern: str) -> bool:
 
 
 def _zero_repetition_follows(pattern: str, index: int, *, verbose: bool) -> bool:
-    """Recognize a zero-only brace quantifier immediately after an atom."""
-    if verbose:
-        while index < len(pattern):
-            if pattern[index].isspace():
-                index += 1
-            elif pattern[index] == "#":
-                newline = pattern.find("\n", index)
-                if newline < 0:
-                    return False
-                index = newline + 1
-            else:
-                break
+    """Recognize a zero-only quantifier after regex trivia/comments."""
+    while index < len(pattern):
+        if pattern.startswith("(?#", index):
+            closing = pattern.find(")", index + 3)
+            if closing < 0:
+                return False
+            index = closing + 1
+        elif verbose and pattern[index].isspace():
+            index += 1
+        elif verbose and pattern[index] == "#":
+            newline = pattern.find("\n", index)
+            if newline < 0:
+                return False
+            index = newline + 1
+        else:
+            break
     if index >= len(pattern) or pattern[index] != "{":
         return False
     closing = pattern.find("}", index + 1)

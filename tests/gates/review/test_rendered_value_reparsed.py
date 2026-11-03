@@ -353,6 +353,37 @@ def test_unrelated_nested_definition_time_walrus_preserves_outer_binding() -> No
     assert _sites(source, ("render",)) == [(2, 5, "rendered")]
 
 
+@pytest.mark.parametrize(
+    "definition", ["@str\ndef rendered(): pass", "class rendered: pass"]
+)
+def test_nested_definition_rebinding_invalidates_rendered_value(
+    definition: str,
+) -> None:
+    source = (
+        "def f(text):\n"
+        "    rendered = render(text)\n"
+        + "    "
+        + definition.replace("\n", "\n    ")
+        + "\n"
+        + '    if rendered.rstrip().endswith("!"):\n'
+        + "        return True\n"
+    )
+    assert _sites(source, ("render",)) == []
+
+
+def test_unrelated_nested_definition_preserves_rendered_value() -> None:
+    source = """\
+def f(text):
+    rendered = render(text)
+    @str
+    def helper(): pass
+    class Other: pass
+    if rendered.rstrip().endswith("!"):
+        return True
+"""
+    assert _sites(source, ("render",)) == [(2, 6, "rendered")]
+
+
 def test_lambda_body_walrus_does_not_invalidate_outer_binding() -> None:
     source = (
         "def f(text, original):\n"

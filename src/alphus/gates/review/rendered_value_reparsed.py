@@ -583,6 +583,9 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                     for expression in expressions:
                         for name in _named_expression_names(expression):
                             current.pop(name, None)
+                    # Defining the nested function binds its name in this
+                    # scope after evaluating decorators/defaults/annotations.
+                    current.pop(definition.name, None)
                     # The body has a separate scope and is visited independently.
                     continue
                 case ast.ClassDef(
@@ -596,6 +599,8 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                     for keyword in keys:
                         for name in _named_expression_names(keyword.value):
                             current.pop(name, None)
+                    # The class name is likewise bound after its header runs.
+                    current.pop(statement.name, None)
                     continue
                 case _:
                     continue
