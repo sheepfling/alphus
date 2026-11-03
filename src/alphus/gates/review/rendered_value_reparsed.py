@@ -419,6 +419,14 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                     names.update(_named_expression_names(value))
                     for name in names:
                         current.pop(name, None)
+                case ast.Delete(targets=targets):
+                    # Deletion targets are evaluated, including any walrus
+                    # expressions nested in attribute/subscript indices.
+                    for target in targets:
+                        for name in _target_names(target) | _named_expression_names(
+                            target
+                        ):
+                            current.pop(name, None)
                 case ast.Expr(value=value):
                     # Walrus targets in evaluated expression statements can
                     # replace a previously rendered value before later tests.

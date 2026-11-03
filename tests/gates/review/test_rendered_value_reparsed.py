@@ -532,6 +532,28 @@ def f(text, original, other):
     assert _sites(source, ("render",)) == []
 
 
+def test_walrus_in_deletion_target_invalidates_rendered_binding() -> None:
+    source = """\
+def f(text, original, values):
+    rendered = render(text)
+    del values[(rendered := original)]
+    if rendered.rstrip().endswith("!"):
+        return True
+"""
+    assert _sites(source, ("render",)) == []
+
+
+def test_unrelated_deletion_target_preserves_rendered_binding() -> None:
+    source = """\
+def f(text, values):
+    rendered = render(text)
+    del values[key]
+    if rendered.rstrip().endswith("!"):
+        return True
+"""
+    assert _sites(source, ("render",)) == [(2, 4, "rendered")]
+
+
 def test_finally_predicate_requires_the_rendered_binding_on_all_entry_paths() -> None:
     source = """\
 def f(text, other):
