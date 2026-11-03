@@ -38,6 +38,28 @@ def merge(text):
     assert _sites(source, ("render_latex",)) == [(2, 4, "rendered")]
 
 
+def test_annotation_only_subscript_target_walrus_invalidates_rendered_binding() -> None:
+    source = """\
+def merge(text, original, values):
+    rendered = render_latex(text)
+    values[(rendered := original)]: str
+    if rendered.rstrip().endswith("!"):
+        return True
+"""
+    assert _sites(source, ("render_latex",)) == []
+
+
+def test_annotation_only_attribute_target_without_walrus_preserves_binding() -> None:
+    source = """\
+def merge(text, values):
+    rendered = render_latex(text)
+    values.item: str
+    if rendered.rstrip().endswith("!"):
+        return True
+"""
+    assert _sites(source, ("render_latex",)) == [(2, 4, "rendered")]
+
+
 @pytest.mark.parametrize(
     "assignment",
     [

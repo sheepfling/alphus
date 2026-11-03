@@ -193,10 +193,17 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                         current.pop(rebound, None)
                     current.pop(name, None)
                     current[name] = statement.lineno
-                case ast.AnnAssign(value=None):
+                case ast.AnnAssign(target=ast.Name(), value=None):
                     # A local annotation without a value leaves the runtime
                     # binding untouched; it does not replace the rendered value.
                     continue
+                case ast.AnnAssign(target=target, value=None):
+                    # Attribute and subscript targets are still evaluated for
+                    # annotation-only statements. A walrus inside that target
+                    # can replace a rendered local even though no assignment
+                    # to the target itself occurs.
+                    for name in _named_expression_names(target):
+                        current.pop(name, None)
                 case ast.AnnAssign(target=target, value=value):
                     names = _target_names(target)
                     names.update(_named_expression_names(target))
