@@ -788,7 +788,7 @@ def test_per_file_code_prefix_matches_native_ruff(
     assert "E402" in findings[0].message
 
 
-def test_legacy_tch_noqa_redirect_matches_native_ruff() -> None:
+def test_legacy_tch_noqa_redirect_policy_matching() -> None:
     policy = SuppressionReasonPolicy(extensions=(".py",), rule_codes=("TC001",))
     missing_reason = suppression_reason_findings(
         "from myapp import Model  # noqa: TCH001\n", policy
