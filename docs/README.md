@@ -16,7 +16,9 @@ path that matches the repository being checked.
 | Check C++ source, builds, and artifacts                   | [C++ quality](CPP-QUALITY.md)               |
 | Check Git ignores or historical repository artifacts      | [Repository hygiene](REPOSITORY-HYGIENE.md) |
 | Understand shared text and file-size measurements          | [Source hygiene](SOURCE-HYGIENE.md)         |
-| Review test, input, source-family, and framework checks   | [Review checks](REVIEW-CHECKS.md)           |
+| Review Python source and framework checks                | [Review guides](review/README.md)            |
+| Review semantic patchwork advisories and their evidence  | [Semantic patchwork](review/semantic-patchwork/README.md) |
+| Review test, input, source-family, and framework checks   | [Review checks](review/README.md)            |
 | Review one handwritten matrix-product pattern             | [Numerical reuse](NUMERICAL-REUSE.md)         |
 | Review shell labels in Markdown examples                  | [Markdown shell fences](MARKDOWN-SHELL-FENCES.md) |
 | Detect docs/default drift                                   | [Docs/config drift](DOCUMENTATION-CONFIG-COUPLING.md) |
