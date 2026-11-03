@@ -155,6 +155,7 @@ def run_orchestration(
     history_dir: Path | None = None,
     consumer_id: str | None = None,
     version_control: VersionControlProvider | None = None,
+    execution_scope: Callable[[RuleRunStep], list[str] | None] | None = None,
 ) -> int:
     """Run every configured profile step and summarize all outcomes."""
     checkout = root.resolve(strict=True)
@@ -224,6 +225,7 @@ def run_orchestration(
     all_findings: list[Diagnostic] = []
     output_invalid_steps: set[str] = set()
     operational_error_steps: set[str] = set()
+    execution_scopes: dict[str, list[str] | None] = {}
     threshold = policy.failure_threshold
     active_profiles = set(plan.profiles)
     resolved_intents = resolve_intent_bindings(policy.intents, threshold)
@@ -286,6 +288,18 @@ def run_orchestration(
                     ):
                         break
                     block.append(later)
+            if execution_scope is not None:
+                has_command = any(isinstance(item, CommandRunStep) for item in block)
+                for block_step in block:
+                    if not isinstance(block_step, RuleRunStep):
+                        continue
+                    try:
+                        scope = execution_scope(block_step)
+                    except (OSError, ValueError):
+                        scope = []
+                    # A concurrent command can mutate any selected path while
+                    # the rule runs, so do not certify a pre-dispatch snapshot.
+                    execution_scopes[block_step.name] = [] if has_command else scope
             try:
                 parallel_results.update(
                     run_profile_steps(
@@ -762,6 +776,8 @@ def run_orchestration(
             ]
             if step_result.report is None:
                 step_payload.pop("report")
+            if step_result.name in execution_scopes:
+                step_payload["selected_files"] = execution_scopes[step_result.name]
         if not not_applicable:
             del payload[_STATUS_NOT_APPLICABLE]
         if result.intent_bindings:

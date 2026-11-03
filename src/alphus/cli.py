@@ -86,6 +86,7 @@ from alphus.policy.base import MissingPolicyError
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
 from alphus.policy.function_shape import plan_function_shape
 from alphus.policy.intents import intent_bindings_for_steps
+from alphus.policy.orchestration import RuleRunStep
 from alphus.policy.recipes import render_recipe
 from alphus.support.data_access import (
     JsonValue,
@@ -1081,6 +1082,20 @@ def _execute_profile(
     def run_rule(rule: QualityRule) -> RuleRunResult:
         return run_profile_rule(checkout, resolved_config, rule, verbose, config)
 
+    def audit_execution_scope(step: RuleRunStep) -> list[str] | None:
+        if audit_plan is None:
+            return None
+        planned = next(
+            (item for item in audit_plan["steps"] if item["name"] == step.name),
+            None,
+        )
+        if planned is None or planned.get("selected_files") is None:
+            return None
+        try:
+            return _selected_rule_files(checkout, config, step.rule)
+        except (OSError, ValueError):
+            return []
+
     if audit_manifest is None:
         return run_orchestration(
             checkout,
@@ -1119,6 +1134,7 @@ def _execute_profile(
         config=config,
         history_dir=history_dir,
         consumer_id=consumer_id,
+        execution_scope=audit_execution_scope,
         stdout=captured_result,
         stderr=(
             cast(TextIO, _HumanStream(stderr=True))
@@ -1144,27 +1160,12 @@ def _execute_profile(
         unavailable_reason = (
             "profile execution did not produce a valid structured result"
         )
-    if audit_plan is not None:
-        # A preceding command may have changed the working-tree inventory after
-        # preflight. Re-resolve scoped built-in rules after execution so the
-        # manifest cannot certify files that were no longer available to scan.
-        policy_steps = {step.name: step for step in policy.steps}
+    if audit_plan is not None and audit_result is not None:
+        execution_steps = {step["name"]: step for step in audit_result["steps"]}
         for planned_step in audit_plan["steps"]:
-            step = policy_steps.get(planned_step["name"])
-            if (
-                step is None
-                or step.kind != "rule"
-                or planned_step.get("selected_files") is None
-            ):
-                continue
-            try:
-                planned_step["selected_files"] = _selected_rule_files(
-                    checkout, config, step.rule
-                )
-            except (OSError, ValueError):
-                # An unresolved post-execution inventory must fail closed. An
-                # empty selected inventory is always incomplete for a rule.
-                planned_step["selected_files"] = []
+            observed = execution_steps.get(planned_step["name"])
+            if observed is not None and "selected_files" in observed:
+                planned_step["selected_files"] = observed["selected_files"]
     assessment = assess_profile_audit(
         audit_manifest,
         audit_plan,
