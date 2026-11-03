@@ -150,6 +150,21 @@ def test_printf_format_directives_are_not_cmd_environment_evidence(
     assert findings == []
 
 
+def test_multiline_printf_quote_with_many_backslashes_is_scanned_linearly(
+    tmp_path: Path,
+) -> None:
+    backslashes = "\\" * 200
+    findings = _check(
+        tmp_path,
+        '```bash\nprintf "%s' + backslashes + '\ncontinued" value\n'
+        "$env:APP_HOME = value\n```\n",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 4
+    assert "PowerShell" in findings[0].message
+
+
 def test_printf_arguments_preserve_real_cmd_environment_evidence(
     tmp_path: Path,
 ) -> None:
@@ -305,6 +320,23 @@ def test_accepts_bash_while_loop_with_separate_do_line_in_bash_fence(
     findings = _check(
         tmp_path,
         "```bash\nwhile true\ndo\n  echo ok\ndone\n```\n",
+    )
+
+    assert findings == []
+
+
+def test_accepts_native_powershell_while_and_do_loops(
+    tmp_path: Path,
+) -> None:
+    findings = _check(
+        tmp_path,
+        "```powershell\n"
+        "while ($true) {\n"
+        "  do { Write-Output 'nested' } while ($false)\n"
+        "}\n"
+        "while ($true) { Write-Output 'first' }\n"
+        "do { Write-Output 'second' } while ($false)\n"
+        "```\n",
     )
 
     assert findings == []

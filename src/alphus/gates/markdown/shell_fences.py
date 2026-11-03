@@ -58,7 +58,6 @@ _PRINTF_FORMAT_COMMAND = re.compile(
     r"(?:^[ \t]*|(?:&&|\|\||[;&|()])[ \t]*)"
     r"(?:(?:command|builtin)[ \t]+)?(?P<command>printf)\b"
 )
-_SHELL_WORD = re.compile(r"(?:'[^']*'|\"(?:\\.|[^\"])*\"|\\.|[^\s])+")
 _PRINTF_FORMAT_DIRECTIVE = re.compile(
     r"%(?:%|[-+#0 ']*(?:\d+|\*)?(?:\.(?:\d+|\*))?"
     r"(?:hh|h|ll|l|L|z|j|t)?[bcdeEfFgGiosuxXq])"
@@ -83,6 +82,7 @@ _CMD_COMMAND = re.compile(
 )
 _BASH_LOOP = re.compile(r"(?i)^\s*(?:for|select)\s+\$?[A-Za-z_][A-Za-z0-9_]*\s+in\b")
 _BASH_WHILE_LOOP = re.compile(r"(?i)^\s*while\b")
+_POWERSHELL_WHILE_LOOP = re.compile(r"(?i)^\s*while\s*\(")
 _TRANSCRIPT_PROMPT = re.compile(
     r"^[ \t]*(?:\$[ \t]+|PS(?:[ \t]+[^>\r\n]*)?>[ \t]+|"
     r"[A-Za-z]:\\[^>\r\n]*>[ \t]+|>>>[ \t]+)"
@@ -466,12 +466,12 @@ def _mask_printf_format_argument(
         if command_start + offset > len(raw_command):
             continue
         command_text = raw_command[command_start:]
-        words = list(_SHELL_WORD.finditer(command_text))
+        words = _shell_words(command_text)
         if not words:
             continue
         index = 1  # printf command name
         while index < len(words):
-            word = words[index].group()
+            word = words[index][2]
             if word == "--":
                 index += 1
                 break
@@ -485,8 +485,7 @@ def _mask_printf_format_argument(
         if index >= len(words):
             continue
 
-        match = words[index]
-        format_word = match.group()
+        start_in_command, end_in_command, format_word = words[index]
         if format_word == "\\":
             continue
         format_found = True
@@ -503,9 +502,8 @@ def _mask_printf_format_argument(
             position in covered for position in percent_positions
         ):
             continue
-        start, end = match.span()
-        start += command_start - offset
-        end += command_start - offset
+        start = start_in_command + command_start - offset
+        end = end_in_command + command_start - offset
         if 0 <= start <= end <= len(line):
             spans.append((start, end))
 
@@ -517,9 +515,49 @@ def _mask_printf_format_argument(
     return "".join(masked_line), format_found
 
 
+def _shell_words(source: str) -> list[tuple[int, int, str]]:
+    """Split a shell line into words in linear time, retaining source spans.
+
+    This is deliberately a small tokenizer for printf option/format context,
+    not a shell parser. Unterminated quotes consume the rest of the line.
+    """
+    words: list[tuple[int, int, str]] = []
+    index = 0
+    while index < len(source):
+        while index < len(source) and source[index].isspace():
+            index += 1
+        if index == len(source):
+            break
+        start = index
+        quote: str | None = None
+        while index < len(source):
+            char = source[index]
+            if quote is not None:
+                if quote == '"' and char == "\\" and index + 1 < len(source):
+                    index += 2
+                    continue
+                if char == quote:
+                    quote = None
+            elif char in "'\"":
+                quote = char
+            elif char == "\\" and index + 1 < len(source):
+                index += 2
+                continue
+            elif char.isspace():
+                break
+            index += 1
+        end = index
+        words.append((start, end, source[start:end]))
+        while index < len(source) and source[index].isspace():
+            index += 1
+    return words
+
+
 def _bash_loop_evidence(lines: Sequence[_SourceLine]) -> _Evidence | None:
     for index, source in enumerate(lines):
         if not (_BASH_LOOP.match(source.text) or _BASH_WHILE_LOOP.match(source.text)):
+            continue
+        if _POWERSHELL_WHILE_LOOP.match(source.text):
             continue
         combined = source.text
         last = index
