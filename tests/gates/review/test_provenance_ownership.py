@@ -48,6 +48,14 @@ def test_reports_filter_capture_returned_immediately() -> None:
     assert len(provenance_ownership_sites(source, _policy())) == 1
 
 
+def test_comprehension_local_target_does_not_rebind_owner_path_set() -> None:
+    source = _PATH_ONLY.replace(
+        "return [",
+        "previews = [table_paths for table_paths in callbacks]\n    return [",
+    )
+    assert len(provenance_ownership_sites(source, _policy())) == 1
+
+
 @pytest.mark.parametrize(
     "source",
     [

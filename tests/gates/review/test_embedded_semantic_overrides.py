@@ -79,6 +79,32 @@ def render(cell):
     assert embedded_override_sites(source, _policy()) == []
 
 
+def test_nested_function_body_write_does_not_invalidate_replacement() -> None:
+    source = """\
+def render(cell):
+    replacement = fixed_paragraphs.get(cell.attribute)
+    def unrelated():
+        replacement = "other"
+    if replacement is not None:
+        return source_anchor(cell.id) + replacement
+"""
+    assert embedded_override_sites(source, _policy()) == [
+        ("render", 2, 5, "replacement")
+    ]
+
+
+def test_definition_time_walrus_invalidates_replacement() -> None:
+    source = """\
+def render(cell):
+    replacement = fixed_paragraphs.get(cell.attribute)
+    def unrelated(value=(replacement := cell.text)):
+        pass
+    if replacement is not None:
+        return source_anchor(cell.id) + replacement
+"""
+    assert embedded_override_sites(source, _policy()) == []
+
+
 @pytest.mark.parametrize(
     "import_statement",
     [

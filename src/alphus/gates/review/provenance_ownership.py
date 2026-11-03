@@ -84,8 +84,64 @@ def _local_nodes(root: ast.AST) -> Iterable[ast.AST]:
                 | ast.Lambda()
             ):
                 continue
+            case (
+                ast.ListComp(generators=generators, elt=element)
+                | ast.SetComp(generators=generators, elt=element)
+                | ast.GeneratorExp(generators=generators, elt=element)
+            ):
+                yield child
+                shadowed: frozenset[str] = frozenset()
+                for generator in generators:
+                    yield from _comprehension_nodes(generator.iter, shadowed)
+                    shadowed = shadowed | _comprehension_target_names(generator.target)
+                    for condition in generator.ifs:
+                        yield from _comprehension_nodes(condition, shadowed)
+                yield from _comprehension_nodes(element, shadowed)
+                continue
+            case ast.DictComp(generators=generators, key=key, value=value):
+                yield child
+                shadowed = frozenset()
+                for generator in generators:
+                    yield from _comprehension_nodes(generator.iter, shadowed)
+                    shadowed = shadowed | _comprehension_target_names(generator.target)
+                    for condition in generator.ifs:
+                        yield from _comprehension_nodes(condition, shadowed)
+                yield from _comprehension_nodes(key, shadowed)
+                yield from _comprehension_nodes(value, shadowed)
+                continue
             case _:
                 yield from _local_nodes(child)
+
+
+def _comprehension_target_names(target: ast.expr) -> frozenset[str]:
+    match target:
+        case ast.Name(id=name):
+            return frozenset((name,))
+        case ast.Tuple(elts=items) | ast.List(elts=items):
+            names: set[str] = set()
+            for item in items:
+                names.update(_comprehension_target_names(item))
+            return frozenset(names)
+        case ast.Starred(value=value):
+            return _comprehension_target_names(value)
+        case _:
+            return frozenset()
+
+
+def _comprehension_nodes(root: ast.AST, shadowed: frozenset[str]) -> Iterable[ast.AST]:
+    if isinstance(root, ast.Name) and root.id in shadowed:
+        return
+    yield root
+    match root:
+        case ast.FunctionDef() | ast.AsyncFunctionDef() | ast.ClassDef() | ast.Lambda():
+            return
+        case ast.ListComp() | ast.SetComp() | ast.GeneratorExp() | ast.DictComp():
+            yield from _local_nodes(root)
+            return
+        case _:
+            pass
+    for child in ast.iter_child_nodes(root):
+        yield from _comprehension_nodes(child, shadowed)
 
 
 def _path_set_assignments(

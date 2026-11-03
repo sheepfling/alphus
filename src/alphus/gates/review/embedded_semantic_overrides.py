@@ -68,9 +68,65 @@ def _replacement_return(
             return False
 
 
+def _current_scope_nodes(root: ast.AST) -> Iterable[ast.AST]:
+    """Walk current-scope statements and evaluated definition-time expressions."""
+    yield root
+    match root:
+        case ast.FunctionDef() | ast.AsyncFunctionDef():
+            arguments = root.args
+            expressions = [
+                *root.decorator_list,
+                *arguments.defaults,
+                *(item for item in arguments.kw_defaults if item is not None),
+                *(
+                    argument.annotation
+                    for argument in (
+                        *arguments.posonlyargs,
+                        *arguments.args,
+                        *arguments.kwonlyargs,
+                    )
+                    if argument.annotation is not None
+                ),
+                *(
+                    [arguments.vararg.annotation]
+                    if arguments.vararg is not None
+                    and arguments.vararg.annotation is not None
+                    else []
+                ),
+                *(
+                    [arguments.kwarg.annotation]
+                    if arguments.kwarg is not None
+                    and arguments.kwarg.annotation is not None
+                    else []
+                ),
+                *([root.returns] if root.returns is not None else []),
+            ]
+            children = expressions
+        case ast.ClassDef():
+            children = [
+                *root.decorator_list,
+                *root.bases,
+                *(keyword.value for keyword in root.keywords),
+            ]
+        case ast.Lambda():
+            children = [
+                *root.args.defaults,
+                *(item for item in root.args.kw_defaults if item is not None),
+            ]
+        case _:
+            children = list(ast.iter_child_nodes(root))
+    for child in children:
+        yield from _current_scope_nodes(child)
+
+
 def _stores_name(statement: ast.AST, name: str) -> bool:
-    for node in ast.walk(statement):
+    for node in _current_scope_nodes(statement):
         match node:
+            case ast.FunctionDef(name=stored) | ast.AsyncFunctionDef(name=stored):
+                if stored == name:
+                    return True
+            case ast.ClassDef(name=stored) if stored == name:
+                return True
             case ast.Import(names=aliases) if any(
                 (alias.asname or alias.name.split(".")[0]) == name for alias in aliases
             ):
@@ -87,6 +143,8 @@ def _stores_name(statement: ast.AST, name: str) -> bool:
             ):
                 return True
             case ast.MatchMapping(rest=stored) if stored == name:
+                return True
+            case ast.ExceptHandler(name=stored) if stored == name:
                 return True
             case _:
                 continue
