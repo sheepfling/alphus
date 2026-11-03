@@ -56,7 +56,11 @@ from alphus.execution.audit_manifest import (
 from alphus.execution.dispatch import run_builtin_rule
 from alphus.execution.fixes import apply_fixes as apply_configured_fixes
 from alphus.execution.fixes import resolve_fix_plan
-from alphus.execution.orchestration import RuleRunResult, run_orchestration
+from alphus.execution.orchestration import (
+    RuleRunResult,
+    execution_scope_context,
+    run_orchestration,
+)
 from alphus.execution.parallel import run_parallel_cyclomatic
 from alphus.execution.profile_analysis import (
     rollup_profile_history,
@@ -1122,26 +1126,26 @@ def _execute_profile(
         )
 
     captured_result = StringIO()
-    result_exit_code = run_orchestration(
-        checkout,
-        resolved_config,
-        policy,
-        selected_profile,
-        run_rule,
-        json_output=True,
-        jobs=jobs,
-        verbose=verbose,
-        config=config,
-        history_dir=history_dir,
-        consumer_id=consumer_id,
-        execution_scope=audit_execution_scope,
-        stdout=captured_result,
-        stderr=(
-            cast(TextIO, _HumanStream(stderr=True))
-            if _OUTPUT_FORMAT.get() == "rich" and not json_output
-            else sys.stderr
-        ),
-    )
+    with execution_scope_context(audit_execution_scope):
+        result_exit_code = run_orchestration(
+            checkout,
+            resolved_config,
+            policy,
+            selected_profile,
+            run_rule,
+            json_output=True,
+            jobs=jobs,
+            verbose=verbose,
+            config=config,
+            history_dir=history_dir,
+            consumer_id=consumer_id,
+            stdout=captured_result,
+            stderr=(
+                cast(TextIO, _HumanStream(stderr=True))
+                if _OUTPUT_FORMAT.get() == "rich" and not json_output
+                else sys.stderr
+            ),
+        )
     audit_result: ProfileAuditResult | None
     try:
         result_payload = _decode_json_object(captured_result.getvalue())
