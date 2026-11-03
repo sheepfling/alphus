@@ -734,6 +734,45 @@ def f(text, chunks):
     assert _sites(source, ("render",)) == []
 
 
+def test_loop_back_edge_rebinding_invalidates_later_for_iteration_evidence() -> None:
+    source = """\
+def f(text):
+    rendered = render(text)
+    for index in range(2):
+        if index:
+            if rendered.rstrip().endswith("!"):
+                return True
+        rendered = text
+"""
+    assert _sites(source, ("render",)) == []
+
+
+def test_loop_back_edge_rebinding_invalidates_later_while_iteration_evidence() -> None:
+    source = """\
+def f(text, running):
+    rendered = render(text)
+    seen = False
+    while running:
+        if seen:
+            if rendered.rstrip().endswith("!"):
+                return True
+        rendered = text
+        seen = True
+"""
+    assert _sites(source, ("render",)) == []
+
+
+def test_loop_predicate_with_stable_rendered_binding_remains_detected() -> None:
+    source = """\
+def f(text, values):
+    rendered = render(text)
+    for value in values:
+        if rendered.rstrip().endswith("!"):
+            return True
+"""
+    assert _sites(source, ("render",)) == [(2, 4, "rendered")]
+
+
 def test_for_target_invalidation_reaches_else_suite() -> None:
     source = """\
 def f(text):

@@ -448,7 +448,13 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                         loop_state.pop(name, None)
                     for name in _named_expression_names(target):
                         loop_state.pop(name, None)
-                    loop_state = scan(body, loop_state)
+                    probe_state = scan_without_findings(body, loop_state)
+                    repeated_entry = _common_bindings([iteration_state, probe_state])
+                    for name in _target_names(target):
+                        repeated_entry.pop(name, None)
+                    for name in _named_expression_names(target):
+                        repeated_entry.pop(name, None)
+                    loop_state = scan(body, repeated_entry)
                     else_entry = _common_bindings([iteration_state, loop_state])
                     else_state = (
                         scan(orelse, else_entry) if orelse else iteration_state.copy()
@@ -463,7 +469,9 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                     loop_state = current.copy()
                     for name in _named_expression_names(test):
                         loop_state.pop(name, None)
-                    body_state = scan(body, loop_state)
+                    probe_state = scan_without_findings(body, loop_state)
+                    repeated_entry = _common_bindings([loop_state, probe_state])
+                    body_state = scan(body, repeated_entry)
                     else_state = (
                         scan(orelse, _common_bindings([loop_state, body_state]))
                         if orelse
@@ -623,6 +631,16 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                 case _:
                     continue
         return current
+
+    def scan_without_findings(
+        statements: Sequence[ast.stmt], rendered: Mapping[str, int]
+    ) -> dict[str, int]:
+        """Compute a loop back-edge without keeping speculative findings."""
+        prior_findings = found.copy()
+        state = scan(statements, rendered)
+        found.clear()
+        found.update(prior_findings)
+        return state
 
     helper_roots = frozenset(helper.split(".", 1)[0] for helper in helpers)
 
