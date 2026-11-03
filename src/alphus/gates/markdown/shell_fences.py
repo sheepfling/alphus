@@ -69,6 +69,7 @@ _FIND_FORMAT_DIRECTIVE = re.compile(
     r"%(?:%|[-]?\d*(?:\.\d+)?[aAbBcCdDfFgGhHkKlLmMnNpPsStTuUwWxXyYZA])"
 )
 _FIND_COMMAND = re.compile(r"(?:^[ \t]*|(?:&&|\|\||[;&|()])[ \t]*)(?P<command>find)\b")
+_COMMAND_SCAN_BUDGET = 64 * 1024
 _DATE_COMMAND = re.compile(r"(?i)\bdate(?:\s|$)")
 _DATE_FORMAT_DIRECTIVE = r"%(?:[-_0^#]*\d{0,2})?(?:E|O)?[A-Za-z+]"
 _DATE_FORMAT_SEQUENCE = re.compile(
@@ -501,6 +502,13 @@ def _cmd_environment_evidence(lines: Sequence[_SourceLine]) -> _Evidence | None:
     in_printf_continuation = False
     for source in lines:
         raw_line = source.raw_text if source.raw_text is not None else source.text
+        if _shell_command_scan_over_budget(source.text):
+            # Extremely dense nested shell text is ambiguous to this advisory.
+            # Skip cmd evidence on this physical line rather than rescan suffixes
+            # for every candidate command.
+            in_printf_continuation = False
+            in_date_continuation = False
+            continue
         candidate, printf_format_found = _mask_printf_format_argument(
             source.text, raw_line, continued=in_printf_continuation
         )
@@ -530,6 +538,17 @@ def _cmd_environment_evidence(lines: Sequence[_SourceLine]) -> _Evidence | None:
         if match is not None:
             return _Evidence("cmd", source.number, match.group(0))
     return None
+
+
+def _shell_command_scan_over_budget(line: str) -> bool:
+    """Abstain when repeated candidate suffix scans could exceed a fixed budget."""
+    candidates = _mask_escaped_command_operators(line)
+    candidate_count = sum(
+        1
+        for expression in (_PRINTF_FORMAT_COMMAND, _FIND_COMMAND)
+        for _ in expression.finditer(candidates)
+    )
+    return len(line) * candidate_count > _COMMAND_SCAN_BUDGET
 
 
 def _mask_find_format_arguments(line: str, raw_line: str | None = None) -> str:

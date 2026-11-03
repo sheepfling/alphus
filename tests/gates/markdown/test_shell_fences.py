@@ -220,6 +220,30 @@ def test_escaped_printf_separators_are_not_command_boundaries(
     assert 'cmd syntax "%PATH%"' in findings[0].message
 
 
+@pytest.mark.parametrize("command", ["find . ", "printf a "])
+def test_nested_command_substitution_scan_is_bounded(
+    tmp_path: Path, command: str
+) -> None:
+    fence = chr(96) * 3
+    substitutions = ("$(" + command) * 2000 + ")" * 2000
+    findings = _check(
+        tmp_path,
+        "\n".join(
+            [
+                fence + "bash",
+                "echo " + substitutions,
+                "echo %PATH%",
+                fence,
+                "",
+            ]
+        ),
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 3
+    assert 'cmd syntax "%PATH%"' in findings[0].message
+
+
 def test_find_format_arguments_are_not_cmd_environment_evidence(
     tmp_path: Path,
 ) -> None:
