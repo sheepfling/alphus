@@ -601,17 +601,36 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                     continue
         return current
 
-    for node in ast.walk(tree):
+    helper_roots = frozenset(helper.split(".", 1)[0] for helper in helpers)
+
+    def analyze_nested(node: ast.AST, enclosing_roots: frozenset[str]) -> None:
+        nonlocal shadowed_helper_roots
         match node:
             case ast.FunctionDef() | ast.AsyncFunctionDef() as function:
-                helper_roots = frozenset(helper.split(".", 1)[0] for helper in helpers)
-                shadowed_helper_roots = helper_roots & (
-                    _parameter_names(function)
-                    | _local_helper_bindings(function, helper_roots)
+                shadowed_helper_roots = enclosing_roots | (
+                    helper_roots
+                    & (
+                        _parameter_names(function)
+                        | _local_helper_bindings(function, helper_roots)
+                    )
                 )
                 scan(function.body, {})
+                for statement in function.body:
+                    analyze_nested(statement, shadowed_helper_roots)
+                return
+            case ast.ClassDef(body=body):
+                # Class bindings do not become lexical closures for methods,
+                # but an enclosing function's local names still do.
+                for statement in body:
+                    analyze_nested(statement, enclosing_roots)
+                return
+            case ast.Lambda():
+                return
             case _:
-                continue
+                for child in ast.iter_child_nodes(node):
+                    analyze_nested(child, enclosing_roots)
+
+    analyze_nested(tree, frozenset())
     return sorted(found)
 
 

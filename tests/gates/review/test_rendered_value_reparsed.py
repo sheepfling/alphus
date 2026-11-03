@@ -68,6 +68,37 @@ def merge(text):
     assert _sites(source, (helper,)) == []
 
 
+@pytest.mark.parametrize(
+    "outer_binding",
+    [
+        "def merge(text, render_latex):",
+        "def merge(text):\n    render_latex = str",
+    ],
+)
+def test_nested_renderer_call_respects_enclosing_helper_binding(
+    outer_binding: str,
+) -> None:
+    source = (
+        f"{outer_binding}\n"
+        "    def nested():\n"
+        "        rendered = render_latex(text)\n"
+        '        if rendered.rstrip().endswith("!"):\n'
+        "            return True\n"
+    )
+    assert _sites(source, ("render_latex",)) == []
+
+
+def test_nested_renderer_call_with_unshadowed_global_helper_is_reported() -> None:
+    source = (
+        "def merge(text):\n"
+        "    def nested():\n"
+        "        rendered = render_latex(text)\n"
+        '        if rendered.rstrip().endswith("!"):\n'
+        "            return True\n"
+    )
+    assert _sites(source, ("render_latex",)) == [(3, 4, "rendered")]
+
+
 def test_annotation_only_statement_preserves_rendered_binding() -> None:
     source = """\
 def merge(text):
