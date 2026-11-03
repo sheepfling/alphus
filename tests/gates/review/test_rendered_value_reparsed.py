@@ -319,6 +319,78 @@ def f(text, original):
     assert _sites(source, ("render",)) == [(2, 4, "rendered")]
 
 
+def test_import_alias_invalidates_rendered_binding() -> None:
+    source = """\
+def f(text):
+    rendered = render(text)
+    from constants import RAW_TEXT as rendered
+    if rendered.rstrip().endswith("!"):
+        return True
+    return False
+"""
+    assert _sites(source, ("render",)) == []
+
+
+def test_unrelated_import_alias_preserves_rendered_binding() -> None:
+    source = """\
+def f(text):
+    rendered = render(text)
+    from constants import RAW_TEXT as original
+    if rendered.rstrip().endswith("!"):
+        return True
+    return False
+"""
+    assert _sites(source, ("render",)) == [(2, 4, "rendered")]
+
+
+def test_match_subject_and_guard_walruses_invalidate_rendered_binding() -> None:
+    source = """\
+def f(text, original):
+    rendered = render(text)
+    match (rendered := original):
+        case str():
+            if rendered.rstrip().endswith("!"):
+                return True
+    if rendered.rstrip().endswith("?"):
+        return True
+    rendered = render(text)
+    match original:
+        case str() if (rendered := original):
+            if rendered.rstrip().endswith("!"):
+                return True
+    return False
+"""
+    assert _sites(source, ("render",)) == []
+
+
+def test_match_guard_walrus_invalidates_later_case_after_guard_fallthrough() -> None:
+    source = """\
+def f(text, original):
+    rendered = render(text)
+    match original:
+        case str() if (rendered := original) and False:
+            pass
+        case str():
+            if rendered.rstrip().endswith("!"):
+                return True
+    return False
+"""
+    assert _sites(source, ("render",)) == []
+
+
+def test_unrelated_match_subject_and_guard_walruses_preserve_rendered_binding() -> None:
+    source = """\
+def f(text, original):
+    rendered = render(text)
+    match (other := original):
+        case str() if (also_other := original):
+            if rendered.rstrip().endswith("!"):
+                return True
+    return False
+"""
+    assert _sites(source, ("render",)) == [(2, 5, "rendered")]
+
+
 def test_for_else_preserves_unmodified_rendered_binding() -> None:
     source = """\
 def f(text):

@@ -200,6 +200,19 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                                     current.pop(name, None)
                             case _:
                                 continue
+                case ast.Import(names=aliases):
+                    # An import binds its alias (or the top-level package name)
+                    # in the local scope, replacing any previously rendered value.
+                    for alias in aliases:
+                        current.pop(alias.asname or alias.name.split(".")[0], None)
+                case ast.ImportFrom(names=aliases):
+                    # Import-star is invalid in a function body, but keep the
+                    # transfer conservative if a future AST producer permits it.
+                    if any(alias.name == "*" for alias in aliases):
+                        current.clear()
+                    else:
+                        for alias in aliases:
+                            current.pop(alias.asname or alias.name, None)
                 case (
                     ast.For(iter=iterable, target=target, body=body, orelse=orelse)
                     | ast.AsyncFor(
@@ -281,14 +294,25 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                     current = _common_bindings(paths)
                     if finalbody:
                         current = scan(finalbody, current)
-                case ast.Match(cases=cases):
+                case ast.Match(subject=subject, cases=cases):
                     before = current.copy()
+                    for name in _named_expression_names(subject):
+                        before.pop(name, None)
                     paths: list[dict[str, int]] = []
+                    possible_guard_writes: set[str] = set()
                     for case in cases:
-                        case_state = current.copy()
+                        case_state = before.copy()
+                        # A false guard may fall through to a later case after
+                        # its walrus writes have already replaced local values.
+                        for name in possible_guard_writes:
+                            case_state.pop(name, None)
                         for name in _pattern_names(case.pattern):
                             case_state.pop(name, None)
+                        guard_writes = _named_expression_names(case.guard)
+                        for name in guard_writes:
+                            case_state.pop(name, None)
                         paths.append(scan(case.body, case_state))
+                        possible_guard_writes.update(guard_writes)
                     current = {
                         name: line
                         for name, line in before.items()
