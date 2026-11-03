@@ -57,8 +57,8 @@ from alphus.execution.dispatch import run_builtin_rule
 from alphus.execution.fixes import apply_fixes as apply_configured_fixes
 from alphus.execution.fixes import resolve_fix_plan
 from alphus.execution.orchestration import (
+    EXECUTION_SCOPE,
     RuleRunResult,
-    execution_scope_context,
     run_orchestration,
 )
 from alphus.execution.parallel import run_parallel_cyclomatic
@@ -1126,7 +1126,8 @@ def _execute_profile(
         )
 
     captured_result = StringIO()
-    with execution_scope_context(audit_execution_scope):
+    scope_token = EXECUTION_SCOPE.set(audit_execution_scope)
+    try:
         result_exit_code = run_orchestration(
             checkout,
             resolved_config,
@@ -1146,6 +1147,8 @@ def _execute_profile(
                 else sys.stderr
             ),
         )
+    finally:
+        EXECUTION_SCOPE.reset(scope_token)
     audit_result: ProfileAuditResult | None
     try:
         result_payload = _decode_json_object(captured_result.getvalue())

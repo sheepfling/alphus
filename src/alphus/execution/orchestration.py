@@ -5,8 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from collections.abc import Callable, Generator, Mapping
-from contextlib import contextmanager
+from collections.abc import Callable, Mapping
 from contextvars import ContextVar
 from dataclasses import asdict
 from io import StringIO
@@ -65,21 +64,9 @@ from alphus.support.data_access import JsonValue, validate_json_value
 from alphus.support.version_control import VersionControlProvider
 
 _ORCHESTRATION_CATEGORY = Category.ORCHESTRATION
-_EXECUTION_SCOPE: ContextVar[Callable[[RuleRunStep], list[str] | None] | None] = (
+EXECUTION_SCOPE: ContextVar[Callable[[RuleRunStep], list[str] | None] | None] = (
     ContextVar("alphus_execution_scope", default=None)
 )
-
-
-@contextmanager
-def execution_scope_context(
-    callback: Callable[[RuleRunStep], list[str] | None],
-) -> Generator[None, None, None]:
-    """Temporarily capture audit-only file scope at rule dispatch."""
-    token = _EXECUTION_SCOPE.set(callback)
-    try:
-        yield
-    finally:
-        _EXECUTION_SCOPE.reset(token)
 
 
 _RULE_EXECUTION_FAILED = rule_tag(
@@ -177,7 +164,7 @@ def run_orchestration(
 ) -> int:
     """Run every configured profile step and summarize all outcomes."""
     checkout = root.resolve(strict=True)
-    execution_scope = _EXECUTION_SCOPE.get()
+    execution_scope = EXECUTION_SCOPE.get()
     resolved_config = config_path.resolve(strict=True)
     output = stdout if stdout is not None else sys.stdout
     errors = stderr if stderr is not None else sys.stderr
