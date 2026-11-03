@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from heapq import nsmallest
 from pathlib import Path, PurePosixPath
 
@@ -37,6 +37,11 @@ _BENCHMARK_LANGUAGE = re.compile(
     re.IGNORECASE,
 )
 _METHOD_LINK = re.compile(r"\[([^\]]+)\]\(([^)]+)\)", re.IGNORECASE)
+_REFERENCE_DEFINITION = re.compile(
+    r"^\s{0,3}\[([^\]]+)\]:\s*(?:<([^>]+)>|([^\s]+))",
+    re.IGNORECASE | re.MULTILINE,
+)
+_REFERENCE_LINK = re.compile(r"\[([^\]]+)\](?:\[([^\]]*)\])?(?!\s*\()")
 _METHOD_TERMS = re.compile(
     r"\b(?:method(?:ology)?|protocol|reproduc(?:e|ible|ibility)|command)\b",
     re.IGNORECASE,
@@ -103,11 +108,29 @@ def _measurement_count(text: str) -> int:
     )
 
 
-def _has_method_link(text: str) -> bool:
-    return any(
+def _reference_key(label: str) -> str:
+    return " ".join(label.split()).casefold()
+
+
+def _method_link_definitions(text: str) -> dict[str, str]:
+    return {
+        _reference_key(label): target or bare_target
+        for label, target, bare_target in _REFERENCE_DEFINITION.findall(text)
+    }
+
+
+def _has_method_link(text: str, definitions: Mapping[str, str]) -> bool:
+    if any(
         _METHOD_TERMS.search(f"{label} {target}")
         for label, target in _METHOD_LINK.findall(text)
-    )
+    ):
+        return True
+    for label, reference in _REFERENCE_LINK.findall(text):
+        resolved_reference = reference or label
+        target = definitions.get(_reference_key(resolved_reference))
+        if target and _METHOD_TERMS.search(f"{label} {target}"):
+            return True
+    return False
 
 
 def benchmark_doc_findings(
@@ -175,7 +198,10 @@ def benchmark_doc_findings(
                 return findings
             continue
 
-        for section, line, body in _sections(text.splitlines()):
+        sections = list(_sections(text.splitlines()))
+        visible_document = "\n".join(body for _, _, body in sections)
+        method_definitions = _method_link_definitions(visible_document)
+        for section, line, body in sections:
             if (relative_name, section) in exceptions:
                 continue
             section_text = f"{section}\n{body}"
@@ -183,7 +209,7 @@ def benchmark_doc_findings(
             if (
                 measurements < policy.min_measurements
                 or not _BENCHMARK_LANGUAGE.search(section_text)
-                or _has_method_link(section_text)
+                or _has_method_link(section_text, method_definitions)
             ):
                 continue
             if record(

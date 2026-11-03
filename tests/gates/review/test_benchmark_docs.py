@@ -113,6 +113,18 @@ def test_false_positive_boundaries_are_suppressed(name: str, tmp_path: Path) -> 
     assert findings == []
 
 
+def test_reference_style_method_link_resolves_across_document(tmp_path: Path) -> None:
+    root, paths = _copy_fixtures(tmp_path, "linked-method-reference.md")
+
+    findings = benchmark_doc_findings(
+        root,
+        paths,
+        BenchmarkDocPolicy(include=("docs/**",)),
+    )
+
+    assert findings == []
+
+
 def test_exact_reasoned_exception_suppresses_only_its_section(
     tmp_path: Path,
 ) -> None:
