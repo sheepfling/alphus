@@ -7,10 +7,11 @@ import json
 import re
 import tokenize
 import tomllib
-from collections.abc import Collection, Iterable, MutableSequence, MutableSet
+from collections.abc import Collection, Iterable, Mapping, MutableSequence, MutableSet
 from collections.abc import Set as AbstractSet
 from fnmatch import fnmatchcase
 from pathlib import Path, PurePosixPath
+from types import MappingProxyType
 from typing import cast
 
 from alphus.config import SuppressionReasonPolicy
@@ -32,16 +33,18 @@ _FILE_IGNORE_DIRECTIVE = re.compile(
     r"^#\s*ruff\s*:\s*file-ignore\s*\[(?P<codes>[^]]*)\](?P<tail>.*)$"
 )
 _CODE = re.compile(r"\b[A-Z]+[0-9]{3,4}\b")
-_RUFF_RULE_REDIRECTS = {
-    "TCH": "TC",
-    "TCH001": "TC001",
-    "TCH002": "TC002",
-    "TCH003": "TC003",
-    "TCH004": "TC004",
-    "TCH005": "TC005",
-    "TCH006": "TC010",
-    "TCH010": "TC010",
-}
+_RUFF_RULE_REDIRECTS: Mapping[str, str] = MappingProxyType(
+    {
+        "TCH": "TC",
+        "TCH001": "TC001",
+        "TCH002": "TC002",
+        "TCH003": "TC003",
+        "TCH004": "TC004",
+        "TCH005": "TC005",
+        "TCH006": "TC010",
+        "TCH010": "TC010",
+    }
+)
 
 
 def _canonical_ruff_selector(selector: str) -> str:
