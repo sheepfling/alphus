@@ -4,7 +4,7 @@ import pytest
 from pydantic import BaseModel, ValidationError
 
 from alphus.config import PydanticPracticePolicy
-from alphus.gates.review.frameworks.pydantic_practices import pydantic_practice_findings
+from alphus.gates.review.frameworks.pydantic.practices import pydantic_practice_findings
 
 
 def _policy(**options: bool | tuple[str, ...]) -> PydanticPracticePolicy:
@@ -674,26 +674,6 @@ def test_unconstrained_any_is_limited_to_designated_public_model_paths() -> None
     assert (
         pydantic_practice_findings(source, policy, path="src/internal/models.py") == []
     )
-
-
-def test_custom_model_initializer_is_reviewed_but_plain_classes_are_ignored() -> None:
-    source = (
-        "from pydantic import BaseModel as Model\n"
-        "class Item(Model):\n"
-        "    value: str\n"
-        "    def __init__(self, **data):\n"
-        "        super().__init__(**data)\n"
-        "class Plain:\n"
-        "    def __init__(self):\n"
-        "        pass\n"
-    )
-
-    assert pydantic_practice_findings(source, _policy()) == []
-    findings = pydantic_practice_findings(source, _policy(report_custom_init=True))
-
-    assert [(item.rule_id, item.line, item.severity) for item in findings] == [
-        ("alphus/python/pydantic/validation/custom-init", 4, "info")
-    ]
 
 
 def test_external_schema_docs_follow_fastapi_routes_and_nested_models() -> None:

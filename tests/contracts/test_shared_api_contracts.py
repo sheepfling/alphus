@@ -3,14 +3,21 @@
 from __future__ import annotations
 
 import ast
+import importlib.util
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 from alphus.gates.stubs.typing_fixtures import check_result
 from alphus.gates.stubs.verify import read_config
-from alphus_stub_quality.api_audit_support import source_signature_shape
+from alphus_stub_quality.api_audit_support import (
+    source_signature_shape,
+    validate_signature,
+)
 from alphus_stub_quality.api_contracts import ApiCoverageTests
 
 
@@ -72,6 +79,309 @@ def test_source_defaults_preserve_ast_expression_structure() -> None:
     assert isinstance(left, ast.FunctionDef)
     assert isinstance(right, ast.FunctionDef)
     assert source_signature_shape(left) != source_signature_shape(right)
+
+
+def test_signature_audit_accepts_stub_ellipsis_default_but_keeps_source_shape_exact() -> (
+    None
+):
+    stub_node = ast.parse("def f(value: int = ...) -> int: ...").body[0]
+    runtime_node = ast.parse("def f(value: int = 3) -> int:\n    return value").body[0]
+    assert isinstance(stub_node, ast.FunctionDef)
+    assert isinstance(runtime_node, ast.FunctionDef)
+
+    def runtime(value: int = 3) -> int:
+        return value
+
+    validate_signature("f", stub_node, runtime_node, runtime)
+    assert source_signature_shape(stub_node) != source_signature_shape(runtime_node)
+
+
+def test_signature_audit_rejects_stub_default_when_runtime_requires_argument() -> None:
+    stub_node = ast.parse("def f(value: int = ...) -> int: ...").body[0]
+    runtime_node = ast.parse("def f(value: int) -> int: return value").body[0]
+    assert isinstance(stub_node, ast.FunctionDef)
+    assert isinstance(runtime_node, ast.FunctionDef)
+
+    def runtime(value: int) -> int:
+        return value
+
+    with pytest.raises(SystemExit, match="signature/default mismatch"):
+        validate_signature("f", stub_node, runtime_node, runtime)
+
+
+def test_signature_audit_rejects_mismatched_concrete_defaults() -> None:
+    stub_node = ast.parse("def f(value: int = 2) -> int: ...").body[0]
+    runtime_node = ast.parse("def f(value: int = 3) -> int: return value").body[0]
+    assert isinstance(stub_node, ast.FunctionDef)
+    assert isinstance(runtime_node, ast.FunctionDef)
+
+    def runtime(value: int = 3) -> int:
+        return value
+
+    with pytest.raises(SystemExit, match="signature/default mismatch"):
+        validate_signature("f", stub_node, runtime_node, runtime)
+
+
+def test_signature_audit_rejects_runtime_default_when_stub_requires_argument() -> None:
+    stub_node = ast.parse("def f(value: int) -> int: ...").body[0]
+    runtime_node = ast.parse("def f(value: int = 3) -> int: return value").body[0]
+    assert isinstance(stub_node, ast.FunctionDef)
+    assert isinstance(runtime_node, ast.FunctionDef)
+
+    def runtime(value: int = 3) -> int:
+        return value
+
+    with pytest.raises(SystemExit, match="signature/default mismatch"):
+        validate_signature("f", stub_node, runtime_node, runtime)
+
+
+def test_signature_audit_does_not_claim_runtime_return_behavior() -> None:
+    stub_node = ast.parse("def f() -> int: ...").body[0]
+    runtime_node = ast.parse("def f() -> int:\n    return 'wrong'").body[0]
+    assert isinstance(stub_node, ast.FunctionDef)
+    assert isinstance(runtime_node, ast.FunctionDef)
+
+    def runtime() -> int:
+        return "wrong"  # type: ignore[return-value]
+
+    validate_signature("f", stub_node, runtime_node, runtime)
+    assert not isinstance(runtime(), int)
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("mypy") is None, reason="optional Mypy extra"
+)
+def test_native_stubtest_accepts_concrete_runtime_default_for_stub_ellipsis(
+    tmp_path: Path,
+) -> None:
+    runtime_package = tmp_path / "neutral"
+    runtime_package.mkdir()
+    (runtime_package / "__init__.py").write_text("", encoding="utf-8")
+    (runtime_package / "core.py").write_text(
+        "def f(value: int = 3) -> int:\n    return value\n", encoding="utf-8"
+    )
+    stub_package = tmp_path / "neutral-stubs"
+    stub_package.mkdir()
+    (stub_package / "__init__.pyi").write_text("", encoding="utf-8")
+    (stub_package / "core.pyi").write_text(
+        "def f(value: int = ...) -> int: ...\n", encoding="utf-8"
+    )
+    environment = {**os.environ, "PYTHONPATH": str(tmp_path)}
+    result = subprocess.run(
+        [sys.executable, "-m", "mypy.stubtest", "neutral.core"],
+        capture_output=True,
+        check=False,
+        env=environment,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("mypy") is None, reason="optional Mypy extra"
+)
+def test_native_stubtest_cannot_replace_a_runtime_return_assertion(
+    tmp_path: Path,
+) -> None:
+    runtime_package = tmp_path / "probe"
+    stubs_package = tmp_path / "probe-stubs"
+    runtime_package.mkdir()
+    stubs_package.mkdir()
+    (runtime_package / "__init__.py").write_text(
+        "def value() -> int:\n    return 'wrong'\n", encoding="utf-8"
+    )
+    (stubs_package / "__init__.pyi").write_text(
+        "def value() -> int: ...\n", encoding="utf-8"
+    )
+    (stubs_package / "py.typed").write_text("partial\n", encoding="utf-8")
+    environment = {**os.environ, "PYTHONPATH": str(tmp_path)}
+
+    structural = subprocess.run(
+        [sys.executable, "-m", "mypy.stubtest", "probe"],
+        capture_output=True,
+        check=False,
+        env=environment,
+        text=True,
+    )
+    assert structural.returncode == 0, structural.stdout + structural.stderr
+
+    behavior = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from probe import value; assert type(value()) is int",
+        ],
+        capture_output=True,
+        check=False,
+        env=environment,
+        text=True,
+    )
+    assert behavior.returncode != 0
+    assert "AssertionError" in behavior.stderr
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("mypy") is None, reason="optional Mypy extra"
+)
+@pytest.mark.parametrize(
+    ("runtime_source", "stub_source"),
+    [
+        pytest.param(
+            "def f(value=1 + 1): return value\n",
+            "def f(value=2): ...\n",
+            id="equivalent-default-expression",
+        ),
+        pytest.param(
+            ("def f(value):\n    return value\n"),
+            (
+                "from typing import overload\n"
+                "@overload\n"
+                "def f(value: int) -> int: ...\n"
+                "@overload\n"
+                "def f(value: str) -> str: ...\n"
+            ),
+            id="overloaded-stub",
+        ),
+        pytest.param(
+            "from .core import f\n",
+            "from .core import f as f\n",
+            id="public-reexport",
+        ),
+        pytest.param(
+            (
+                "class Base:\n"
+                "    def read(self) -> int: return 1\n"
+                "class Child(Base):\n"
+                "    pass\n"
+            ),
+            (
+                "class Base:\n"
+                "    def read(self) -> int: ...\n"
+                "class Child(Base):\n"
+                "    pass\n"
+            ),
+            id="inherited-member",
+        ),
+        pytest.param(
+            "from math import sqrt\n",
+            "from math import sqrt as sqrt\n",
+            id="extension-no-source-export",
+        ),
+    ],
+)
+def test_native_stubtest_accepts_documented_compatibility_boundaries(
+    tmp_path: Path, runtime_source: str, stub_source: str
+) -> None:
+    runtime_package = tmp_path / "probe"
+    stubs_package = tmp_path / "probe-stubs"
+    runtime_package.mkdir()
+    stubs_package.mkdir()
+    (runtime_package / "__init__.py").write_text(runtime_source, encoding="utf-8")
+    (stubs_package / "__init__.pyi").write_text(stub_source, encoding="utf-8")
+    (stubs_package / "py.typed").write_text("partial\n", encoding="utf-8")
+    if "from .core import f" in runtime_source:
+        (runtime_package / "core.py").write_text(
+            "def f(value: int = 2) -> int: return value\n", encoding="utf-8"
+        )
+        (stubs_package / "core.pyi").write_text(
+            "def f(value: int = 2) -> int: ...\n", encoding="utf-8"
+        )
+    result = subprocess.run(
+        [sys.executable, "-m", "mypy.stubtest", "probe"],
+        capture_output=True,
+        check=False,
+        env={**os.environ, "PYTHONPATH": str(tmp_path)},
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("mypy") is None, reason="optional Mypy extra"
+)
+@pytest.mark.parametrize(
+    ("runtime_source", "stub_source", "diagnostic"),
+    [
+        (
+            "def present(value: int) -> int: return value\n",
+            "",
+            "present is not present in stub",
+        ),
+        (
+            "def f(value, /): return value\n",
+            "def f(value): ...\n",
+            "should be positional-only",
+        ),
+        (
+            "def f(value: int = 1): return value\n",
+            "def f(value: str = ...): ...\n",
+            "incompatible with stub parameter type",
+        ),
+        (
+            "def f(value: int = 1): return value\n",
+            "def f(value: int): ...\n",
+            'runtime parameter "value" has a default value but stub parameter does not',
+        ),
+        (
+            "def f(value: int = 1): return value\n",
+            "def f(value: int = 2): ...\n",
+            "which is different from stub parameter",
+        ),
+        (
+            "class C:\n @property\n def value(self): return 1\n",
+            "class C:\n value: int\n",
+            "read-only at runtime",
+        ),
+    ],
+)
+def test_native_stubtest_owns_runtime_api_boundary_failures(
+    tmp_path: Path,
+    runtime_source: str,
+    stub_source: str,
+    diagnostic: str,
+) -> None:
+    runtime_package = tmp_path / "probe"
+    stubs_package = tmp_path / "probe-stubs"
+    runtime_package.mkdir()
+    stubs_package.mkdir()
+    (runtime_package / "__init__.py").write_text(runtime_source, encoding="utf-8")
+    (stubs_package / "__init__.pyi").write_text(stub_source, encoding="utf-8")
+    (stubs_package / "py.typed").write_text("partial\n", encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, "-m", "mypy.stubtest", "probe"],
+        capture_output=True,
+        check=False,
+        env={**os.environ, "PYTHONPATH": str(tmp_path)},
+        text=True,
+    )
+    assert result.returncode != 0
+    assert diagnostic in result.stdout + result.stderr
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("mypy") is None, reason="optional Mypy extra"
+)
+def test_native_stubtest_rejects_unused_allowlist_entries(tmp_path: Path) -> None:
+    package = tmp_path / "probe"
+    package.mkdir()
+    (package / "__init__.py").write_text("\n", encoding="utf-8")
+    (tmp_path / "allowlist.txt").write_text("probe.missing\n", encoding="utf-8")
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "mypy.stubtest",
+            "--allowlist",
+            str(tmp_path / "allowlist.txt"),
+            "probe",
+        ],
+        capture_output=True,
+        check=False,
+        env={**os.environ, "PYTHONPATH": str(tmp_path)},
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "unused allowlist entry" in result.stdout + result.stderr
 
 
 def test_fixture_probe_gate_rejects_calls_on_wrong_owner(tmp_path: Path) -> None:
