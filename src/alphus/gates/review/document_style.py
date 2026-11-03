@@ -676,7 +676,21 @@ def check_document_style(
                 )
             )
             continue
-        source = read_utf8_text(checkout / relative)
+        try:
+            source = read_utf8_text(checkout / relative)
+        except (OSError, UnicodeError) as error:
+            findings.append(
+                Finding(
+                    rule_id=_RULE_ID,
+                    path=name,
+                    severity="error",
+                    message=(
+                        "Document outline was not evaluated because the source "
+                        f"could not be read as UTF-8: {type(error).__name__}."
+                    ),
+                )
+            )
+            continue
         extractor = (
             extract_latex_sections
             if suffix == ".tex"

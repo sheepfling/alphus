@@ -143,6 +143,23 @@ def test_missing_explicit_artifact_is_an_operational_error(tmp_path: Path) -> No
     assert "Required document was not present" in findings[0].message
 
 
+def test_unreadable_text_document_is_reported_as_incomplete(tmp_path: Path) -> None:
+    document = tmp_path / "report.md"
+    document.write_bytes(b"# valid heading\n\xff")
+
+    findings = check_document_style(
+        tmp_path,
+        [Path("report.md")],
+        DocumentStylePolicy(extensions=(".md",)),
+    )
+
+    assert len(findings) == 1
+    assert findings[0].path == "report.md"
+    assert findings[0].severity == "error"
+    assert "outline was not evaluated" in findings[0].message
+    assert "UnicodeDecodeError" in findings[0].message
+
+
 def test_required_artifact_in_selected_inventory_is_reviewed(tmp_path: Path) -> None:
     artifact = tmp_path / "build" / "review.md"
     artifact.parent.mkdir()
