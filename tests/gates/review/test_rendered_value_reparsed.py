@@ -147,6 +147,43 @@ def f(text):
     assert _sites(source, ("render",)) == [(2, 5, "rendered")]
 
 
+def test_nested_function_default_walrus_invalidates_outer_binding() -> None:
+    source = (
+        "def f(text, original):\n"
+        "    rendered = render(text)\n"
+        "    def nested(value=(rendered := original)):\n"
+        "        return value\n"
+        "    if rendered.rstrip().endswith('!'):\n"
+        "        return True\n"
+    )
+    assert _sites(source, ("render",)) == []
+
+
+def test_nested_function_decorator_walrus_invalidates_outer_binding() -> None:
+    source = (
+        "def f(text, original):\n"
+        "    rendered = render(text)\n"
+        "    @decorate((rendered := original))\n"
+        "    def nested():\n"
+        "        return None\n"
+        "    if rendered.rstrip().endswith('!'):\n"
+        "        return True\n"
+    )
+    assert _sites(source, ("render",)) == []
+
+
+def test_unrelated_nested_definition_time_walrus_preserves_outer_binding() -> None:
+    source = (
+        "def f(text, original):\n"
+        "    rendered = render(text)\n"
+        "    def nested(value=(other := original)):\n"
+        "        return value\n"
+        "    if rendered.rstrip().endswith('!'):\n"
+        "        return True\n"
+    )
+    assert _sites(source, ("render",)) == [(2, 5, "rendered")]
+
+
 def test_expression_statement_walrus_invalidates_rendered_binding() -> None:
     source = """\
 def f(text, original):

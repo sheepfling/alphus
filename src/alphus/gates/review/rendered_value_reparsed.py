@@ -322,9 +322,53 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                         for name, line in before.items()
                         if all(path.get(name) == line for path in paths)
                     }
-                case ast.FunctionDef() | ast.AsyncFunctionDef() | ast.ClassDef():
-                    # Nested definitions have separate scopes and are visited
-                    # independently by the outer function walk below.
+                case ast.FunctionDef() | ast.AsyncFunctionDef() as definition:
+                    # Decorators, defaults, and annotations execute while a
+                    # nested function is defined in the enclosing scope.
+                    expressions = [
+                        *definition.decorator_list,
+                        *definition.args.defaults,
+                        *(
+                            value
+                            for value in definition.args.kw_defaults
+                            if value is not None
+                        ),
+                        *(
+                            argument.annotation
+                            for argument in (
+                                *definition.args.posonlyargs,
+                                *definition.args.args,
+                                *definition.args.kwonlyargs,
+                            )
+                            if argument.annotation is not None
+                        ),
+                    ]
+                    if definition.args.vararg is not None:
+                        annotation = definition.args.vararg.annotation
+                        if annotation is not None:
+                            expressions.append(annotation)
+                    if definition.args.kwarg is not None:
+                        annotation = definition.args.kwarg.annotation
+                        if annotation is not None:
+                            expressions.append(annotation)
+                    if definition.returns is not None:
+                        expressions.append(definition.returns)
+                    for expression in expressions:
+                        for name in _named_expression_names(expression):
+                            current.pop(name, None)
+                    # The body has a separate scope and is visited independently.
+                    continue
+                case ast.ClassDef(
+                    decorator_list=decorators, bases=bases, keywords=keys
+                ):
+                    # Class decorators, bases, and keyword values execute in
+                    # the enclosing scope; the class body does not.
+                    for expression in (*decorators, *bases):
+                        for name in _named_expression_names(expression):
+                            current.pop(name, None)
+                    for keyword in keys:
+                        for name in _named_expression_names(keyword.value):
+                            current.pop(name, None)
                     continue
                 case _:
                     continue
