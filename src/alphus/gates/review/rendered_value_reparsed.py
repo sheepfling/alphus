@@ -402,9 +402,13 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                     # replace a previously rendered value before later tests.
                     for name in _named_expression_names(value):
                         current.pop(name, None)
-                case ast.Assert(test=test):
-                    # A passing assertion evaluates its test before later code.
-                    for name in _named_expression_names(test):
+                case ast.Assert(test=test, msg=message):
+                    # A passing assertion evaluates its test, and a failing
+                    # one evaluates its message before a surrounding handler
+                    # or finally suite runs. Invalidate either possible write.
+                    for name in _named_expression_names(test) | _named_expression_names(
+                        message
+                    ):
                         current.pop(name, None)
                 case ast.Return(value=value):
                     # Return values are evaluated before a surrounding finally

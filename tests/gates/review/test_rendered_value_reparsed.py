@@ -691,6 +691,32 @@ def f(text):
     assert _sites(source, ("render",)) == [(2, 5, "rendered")]
 
 
+def test_assertion_message_walrus_invalidates_rendered_binding_in_finally() -> None:
+    source = """\
+def f(text):
+    rendered = render(text)
+    try:
+        assert False, (rendered := text)
+    finally:
+        if rendered.rstrip().endswith("!"):
+            return True
+"""
+    assert _sites(source, ("render",)) == []
+
+
+def test_unrelated_assertion_message_walrus_preserves_rendered_binding() -> None:
+    source = """\
+def f(text, original):
+    rendered = render(text)
+    try:
+        assert False, (other := original)
+    finally:
+        if rendered.rstrip().endswith("!"):
+            return True
+"""
+    assert _sites(source, ("render",)) == [(2, 6, "rendered")]
+
+
 def test_try_handler_requires_rendered_binding_to_survive_possible_exception() -> None:
     source = """\
 def f(text, original):
