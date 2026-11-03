@@ -306,6 +306,28 @@ def test_escaped_bash_heredoc_delimiter_hides_its_document_body(
     assert "cmd syntax" in findings[0].message
 
 
+def test_bash_heredocs_accept_punctuated_and_numeric_delimiters(
+    tmp_path: Path,
+) -> None:
+    findings = _check(
+        tmp_path,
+        "```bash\n"
+        "cat <<EOF-JSON\n"
+        "$env:APP_HOME = heredoc-data\n"
+        "EOF-JSON\n"
+        "$env:APP_HOME = after-heredoc\n"
+        "````\n"
+        "```bash\n"
+        "cat <<123\n"
+        "$env:APP_HOME = numeric-heredoc-data\n"
+        "123\n"
+        "````\n",
+    )
+
+    assert [finding.line for finding in findings] == [5]
+    assert "PowerShell" in findings[0].message
+
+
 def test_arithmetic_shifts_are_not_treated_as_heredocs(tmp_path: Path) -> None:
     findings = _check(
         tmp_path,

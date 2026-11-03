@@ -37,12 +37,7 @@ _LABELS: Mapping[str, str] = MappingProxyType(
         "batch": "cmd",
     }
 )
-_HERE_DOCUMENT = re.compile(
-    r"(?<!<)<<(?P<tabs>-)?[ \t]*(?:"
-    r"'(?P<single>[^']+)'|\"(?P<double>[^\"]+)\"|"
-    r"\\(?P<escaped>[A-Za-z_][A-Za-z0-9_]*)|"
-    r"(?P<bare>[A-Za-z_][A-Za-z0-9_]*))"
-)
+_HERE_DOCUMENT_OPERATOR = re.compile(r"(?<!<)<<(?P<tabs>-)?[ \t]*(?!<)")
 _WINDOWS_PATH = re.compile(
     r"(?<![\w'\"])(?:[A-Za-z]:\\(?:[^\\/:*?\"<>| \t]+\\)*[^\\/:*?\"<>| \t]+|"
     r"(?:\.?\\)?\.venv\\Scripts\\(?:python(?:\.exe)?|activate(?:\.bat)?))"
@@ -267,18 +262,53 @@ def _heredoc_delimiters(
     """Return real here-document delimiters, excluding quoted and commented text."""
     delimiters: list[tuple[str, bool]] = []
     heredoc_visible = _mask_arithmetic_shifts(visible, arithmetic)
-    for match in _HERE_DOCUMENT.finditer(raw):
+    for match in _HERE_DOCUMENT_OPERATOR.finditer(raw):
         if heredoc_visible[match.start() : match.start() + 2] != "<<":
             continue
-        delimiter = (
-            match.group("single")
-            or match.group("double")
-            or match.group("escaped")
-            or match.group("bare")
-        )
+        delimiter = _heredoc_word(raw, match.end())
         if delimiter is not None:
             delimiters.append((delimiter, match.group("tabs") is not None))
     return tuple(delimiters)
+
+
+def _heredoc_word(raw: str, start: int) -> str | None:
+    """Read one here-document word with shell quote removal, without expansion."""
+    result: list[str] = []
+    quote: str | None = None
+    index = start
+    while index < len(raw):
+        character = raw[index]
+        if quote is not None:
+            if character == quote:
+                quote = None
+                index += 1
+                continue
+            if character == "\\" and quote == '"' and index + 1 < len(raw):
+                result.append(raw[index + 1])
+                index += 2
+                continue
+            result.append(character)
+            index += 1
+            continue
+
+        if character in "'\"":
+            quote = character
+            index += 1
+            continue
+        if character == "\\":
+            if index + 1 >= len(raw):
+                return None
+            result.append(raw[index + 1])
+            index += 2
+            continue
+        if character.isspace() or character in ";&|()<>":
+            break
+        result.append(character)
+        index += 1
+
+    if quote is not None or not result:
+        return None
+    return "".join(result)
 
 
 def _mask_arithmetic_shifts(line: str, state: _ArithmeticState) -> str:
