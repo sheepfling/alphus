@@ -32,6 +32,10 @@ exclude = ["docs/cpp/**"]
 ".py" = 100
 ".md" = 120
 
+[checks.markdown_shell_fences]
+include = ["**/*.md"]
+exclude = []
+
 [checks.json_structure]
 extensions = [".py"]
 exclude = ["tests/**"]
@@ -106,6 +110,7 @@ exclude = [
   "tests/**",
   "src/alphus/gates/languages/python/style.py",
   "src/alphus/gates/languages/python/runtime_types.py",
+  "src/alphus/gates/review/numerical/**/*.py", # AST detectors narrow grammar nodes; Pyright verifies their Python typing contracts
   "src/alphus/gates/python/compatibility.py",
 ]
 
@@ -150,6 +155,7 @@ exclude = [
   "**/vendor/**", # third-party sources do not define this project's boundaries
   "**/generated/**", # generated sources should be reviewed at their schema
   "**/tests/**", # test and fixture families use different naming conventions
+  "src/alphus/gates/review/numerical/quaternions/manual_quaternion_*.py", # configured quaternion review rules are separate advisory detectors, not consumer implementation families
   "src/alphus/execution/profile_analysis.py", # intentionally split profile pipeline
   "src/alphus/execution/profile_history.py",
   "src/alphus/execution/profile_manifest.py",
@@ -323,6 +329,11 @@ rule = "line-length"
 
 [[orchestration.steps]]
 kind = "rule"
+name = "Markdown shell fences"
+rule = "markdown-shell-fences"
+
+[[orchestration.steps]]
+kind = "rule"
 name = "File size"
 rule = "file-size"
 
@@ -436,6 +447,10 @@ steps = [
   "CLI contracts", "JSON structure", "Output escaping", "Path handling", "Line length",
   "File size", "Comment markers",
 ]
+
+[[orchestration.profiles]]
+name = "markdown-shell-review"
+steps = ["Markdown shell fences"]
 
 [[orchestration.profiles]]
 name = "python"

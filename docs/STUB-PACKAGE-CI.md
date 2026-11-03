@@ -23,6 +23,31 @@ Each consumer repository keeps the facts that define its own contract:
 - positive and marked negative typing fixtures;
 - its API inventory, runtime smoke assertions, and `stubtest` allowlist.
 
+## Evidence ownership
+
+The shared audit deliberately complements native tools instead of acting as a
+second type checker. Use the following ownership when interpreting a green run:
+
+- **Runtime members and callable compatibility:** target-environment `mypy.stubtest`.
+  Stub `...` means a default exists; it does not compare the runtime value.
+- **Call acceptance, overload choice, inference and result types:** positive and
+  expected-negative Mypy/Pyright fixtures. The AST audit does not establish
+  checker behavior.
+- **Wheel contents, PEP 561 resolution and dependencies:** installed-artifact
+  checks and target-environment `pip check`. A source checkout alone is not
+  package evidence.
+- **Public facade, module ownership, annotations and source fidelity:** the
+  package inventory and bounded Alphus audit. These are explicit source
+  policies, not generic runtime compatibility.
+- **Returned values, exceptions, mutation, serialization and output:** consumer
+  runtime assertions against the installed artifact. Matching annotations and
+  signatures do not establish behavior.
+
+The API audit inspects signatures and declared annotations; it does not invoke
+functions or infer types from function bodies. A behavior guarantee therefore
+needs a runtime assertion, even when an `assert_type` fixture also covers the
+static result type.
+
 An API-audit module can receive `api_audit_args`; the verifier expands
 `{source}` and `{consumer}` to the isolated source and consumer-copy paths.
 This lets a source-inspection audit receive its package-specific stub root
@@ -105,13 +130,17 @@ MYPYPATH and VIRTUAL_ENV are removed; user-site loading is disabled. The built
 consumer wheel is installed in the target. Fresh venvs are the reproducible
 isolation boundary; the verifier does not erase unrelated preinstalled packages.
 
-`--report` records both identities, exact stage argv, exits and elapsed times.
-A failure stops later stages, leaves `passed=false`, and preserves native output
-in the caller's log. Spawn failures record exit 127 and the error. Preflight
-errors exit before stages; an old report is removed before preflight, so absence
-of a new report cannot masquerade as a prior success. A missing target tool
-fails in that target; there is no checker fallback. Target smoke or dependency
-failure fails the run even when static fixtures pass.
+`--report` records both interpreter identities, platform and architecture,
+selected runtime distribution versions, source revision, built-wheel identity
+and digest, exact stage argv, exits, elapsed times, and bounded stage output.
+The report distinguishes passed, failed, not-run-after-failure, and omitted
+optional lanes. For each marked negative fixture, the stage output includes the
+checker name, matched lines, and native diagnostics. A failure stops later
+stages and leaves `passed=false`. Spawn failures record exit 127 and the error.
+Preflight errors exit before stages; an old report is removed before preflight,
+so absence of a new report cannot masquerade as a prior success. A missing
+target tool fails in that target; there is no checker fallback. Target smoke or
+dependency failure fails the run even when static fixtures pass.
 
 The POSIX stub action creates distinct checker and target venvs even when their
 versions match. Set `python-version: "3.12"`, `target-python-version: "3.10"`
@@ -137,12 +166,37 @@ The shared `alphus.support.tool_probe` also locates native commands; the C++
 artifact scanner uses it for objdump. The installed-stub verifier still needs
 Mypy in its target environment for the separate `mypy.stubtest` stage.
 
+[`examples/stub-package-contract`](../examples/stub-package-contract) is a
+small installed-wheel recipe with `typing_checkers = ["mypy", "pyright",
+"ty"]`. It checks an annotated `list[str]` variable, recursive lists, marked
+negative tuple/scalar inputs, `stubtest`, and runtime behavior against the
+installed artifact. The example intentionally keeps checker and target venvs
+separate. Its README records the one local interpreter combination actually
+run; it does not claim the full declared compatibility matrix.
+
+For split runtime and stub distributions, list required runtime distribution
+names in `verification.runtime_distributions`. The verifier records their
+installed versions from the target interpreter and fails preflight if a
+configured runtime distribution is missing. The stub wheel's distribution
+name, version, filename, byte size, and SHA-256 are recorded separately from
+the source checkout revision.
+
 Positive examples require exit zero and no errors. Negative contracts require
 an exact set of marked lines, or a configured diagnostic count, plus any
 checker-specific diagnostic fragments. An unrelated failure never establishes
 the configured expected errors. Multiple diagnostics on one marked line are
-allowed unless an explicit count says otherwise. Timeouts and spawn failures
-fail.
+allowed unless an explicit count says otherwise. Each verifier subprocess has a
+900-second timeout. A timeout is recorded as a failed stage with exit code 124 and
+bounded partial output. Spawn failures fail with exit 127. Checker fixture
+commands have their own 180-second limit. Timeouts and spawn failures never count
+as passing lanes.
+
+When Ty reports `assert-type-unspellable-subtype` for a class-object
+`assert_type` assertion, the fixture failure includes checker-specific guidance
+to keep that failure visible and consider an explicitly annotated assignment
+such as `model_class: type[Model] = Model`. This is not a pass or a suppression;
+retain ordinary `assert_type` coverage for values and rerun the three-checker
+fixture after any consumer-specific adjustment.
 
 ### Keep intentional negative fixtures readable in IDEs
 

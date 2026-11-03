@@ -10,6 +10,7 @@ from types import ModuleType
 
 import pytest
 
+from alphus.gates.stubs import verify
 from alphus.gates.stubs.typing_fixtures import (
     CHECKERS,
     DEFAULT_CHECKERS,
@@ -25,6 +26,7 @@ from alphus.gates.stubs.verify import (
     VerificationConfig,
     expand_path_arguments,
     read_config,
+    run_step,
 )
 from alphus_stub_quality.api_audit_support import (
     ast_parameters,
@@ -256,6 +258,64 @@ def test_mypy_cache_is_temporary_and_subprocess_uses_no_shell(
     assert "PASS mypy positive.py: clean" in capsys.readouterr().out
 
 
+def test_expected_negative_fixture_emits_matched_native_diagnostics(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fixture = tmp_path / "negative.py"
+    fixture.write_text("bad()  # expect-error\n", encoding="utf-8")
+
+    def fake_run(
+        command: Sequence[str], **_kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        diagnostic = f"{command[-1]}:1: error: expected diagnostic"
+        return subprocess.CompletedProcess(command, 1, diagnostic, "")
+
+    assert run_case(
+        CHECKERS[0],
+        fixture,
+        root=tmp_path,
+        expect_errors=True,
+        process_runner=fake_run,
+    )
+    output = capsys.readouterr().out
+    assert "matched diagnostic lines: [1]" in output
+    assert "native diagnostics:" in output
+    assert "error: expected diagnostic" in output
+
+
+def test_ty_unspellable_subtype_failure_gets_fixture_guidance_without_passing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fixture = tmp_path / "positive.py"
+    fixture.write_text(
+        "from typing import assert_type\n"
+        "class Model: ...\n"
+        "assert_type(Model, type[Model])\n",
+        encoding="utf-8",
+    )
+
+    def ty_unspellable_subtype(
+        command: Sequence[str], **_kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        diagnostic = (
+            f"{fixture.name}:3:1: error[assert-type-unspellable-subtype] "
+            "Type `<class 'Model'>` does not match asserted type `type[Model]`"
+        )
+        return subprocess.CompletedProcess(command, 1, diagnostic, "")
+
+    assert not run_case(
+        OPTIONAL_CHECKERS[0],
+        fixture,
+        root=tmp_path,
+        expect_errors=False,
+        process_runner=ty_unspellable_subtype,
+    )
+    error = capsys.readouterr().err
+    assert "fixture guidance:" in error
+    assert "model_class: type[Model] = Model" in error
+    assert "keep this failure visible" in error
+
+
 @pytest.mark.parametrize(
     ("failure", "expected_reason", "expected_output"),
     [
@@ -308,6 +368,49 @@ def test_runner_reports_failure_and_cleans_temporary_cache(
     assert "command:" in report
     if expected_output is not None:
         assert expected_output in report
+
+
+def test_verifier_stage_timeout_is_reported_as_failed_with_partial_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def timeout_run(
+        command: Sequence[str], **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        assert kwargs["timeout"] == 7
+        raise subprocess.TimeoutExpired(
+            command, 7, output=b"partial stdout", stderr=b"partial stderr"
+        )
+
+    monkeypatch.setattr(verify.subprocess, "run", timeout_run)
+    stages: list[verify.VerificationStage] = []
+
+    with pytest.raises(SystemExit) as error:
+        run_step(
+            "Build wheel and sdist outside the checkout",
+            ("python", "-m", "build"),
+            tmp_path,
+            {},
+            stages=stages,
+            timeout_seconds=7,
+        )
+
+    assert error.value.code == 124
+    assert len(stages) == 1
+    assert stages[0].exit_code == 124
+    assert stages[0].error == "timed out after 7 seconds"
+    assert stages[0].output == "partial stdout\npartial stderr"
+    assert stages[0].timeout_seconds == 7
+    settings = VerificationConfig(
+        stubtest_module="sample",
+        stubtest_allowlist="allow.txt",
+        positive_fixture="positive.py",
+        negative_fixture="negative.py",
+    )
+    lanes = verify._verification_lanes(settings, with_twine=False, stages=stages)
+    assert lanes[0].status == "failed"
+    assert lanes[1].status == "omitted"
+    assert lanes[2].status == "not_run"
+    assert "timed out after 7 seconds" in capsys.readouterr().err
 
 
 def test_api_audit_helpers_normalize_signature_shapes() -> None:
