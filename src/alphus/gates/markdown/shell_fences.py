@@ -349,23 +349,24 @@ def _ansi_c_escape(raw: str, index: int) -> tuple[str, int] | None:
     if index + 1 >= len(raw):
         return None
     following = raw[index + 1]
-    simple = {
-        "a": "\a",
-        "b": "\b",
-        "e": "\x1b",
-        "E": "\x1b",
-        "f": "\f",
-        "n": "\n",
-        "r": "\r",
-        "t": "\t",
-        "v": "\v",
-        "\\": "\\",
-        "'": "'",
-        '"': '"',
-        "?": "?",
-    }
-    if following in simple:
-        return simple[following], index + 2
+    if following == "a":
+        return "\a", index + 2
+    if following == "b":
+        return "\b", index + 2
+    if following in {"e", "E"}:
+        return "\x1b", index + 2
+    if following == "f":
+        return "\f", index + 2
+    if following == "n":
+        return "\n", index + 2
+    if following == "r":
+        return "\r", index + 2
+    if following == "t":
+        return "\t", index + 2
+    if following == "v":
+        return "\v", index + 2
+    if following in {"\\", "'", '"', "?"}:
+        return following, index + 2
     if following == "\n":
         return "", index + 2
     if following == "c" and index + 2 < len(raw):
