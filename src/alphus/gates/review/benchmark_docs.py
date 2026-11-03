@@ -169,9 +169,48 @@ def _method_link_definitions(sections: Iterable[str]) -> dict[str, tuple[str, bo
     return definitions
 
 
+def _mask_inline_code_spans(text: str) -> str:
+    runs: dict[int, list[tuple[int, int]]] = {}
+    index = 0
+    while index < len(text):
+        if text[index] != "`":
+            index += 1
+            continue
+        end = index + 1
+        while end < len(text) and text[end] == "`":
+            end += 1
+        runs.setdefault(end - index, []).append((index, end))
+        index = end
+
+    spans: list[tuple[int, int]] = []
+    for occurrences in runs.values():
+        spans.extend(
+            (occurrences[offset][0], occurrences[offset + 1][1])
+            for offset in range(0, len(occurrences) - 1, 2)
+        )
+    if not spans:
+        return text
+
+    spans.sort()
+    merged: list[tuple[int, int]] = []
+    for start, end in spans:
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+
+    characters = list(text)
+    for start, end in merged:
+        characters[start:end] = [
+            " " if char not in "\r\n" else char for char in text[start:end]
+        ]
+    return "".join(characters)
+
+
 def _has_method_link(text: str, definitions: Mapping[str, tuple[str, bool]]) -> bool:
     lines = text.splitlines()
     text = "\n".join(line for line in lines if _reference_definition(line) is None)
+    text = _mask_inline_code_spans(text)
     label_start: int | None = None
     reference_primary: str | None = None
     pending_label: tuple[str, int] | None = None
