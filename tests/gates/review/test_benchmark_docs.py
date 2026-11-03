@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from alphus.config import BenchmarkDocPolicy, load_config_stream
 from alphus.execution.dispatch import run_builtin_rule
 from alphus.execution.results import diagnostics_from_output
-from alphus.gates.review.benchmark_docs import benchmark_doc_findings
+from alphus.gates.review.benchmark_docs import _sections, benchmark_doc_findings
 
 FIXTURE_BASE = Path("tests/fixtures/benchmark_docs")
 
@@ -86,6 +86,76 @@ def test_benchmark_context_is_inherited_by_subsections(tmp_path: Path) -> None:
     assert len(findings) == 1
     assert findings[0].line == 3
     assert "Small input" in findings[0].message
+
+
+def test_setext_headings_separate_methodology_from_benchmark_sections(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path
+    relative = Path("docs/setext-benchmark.md")
+    source = root / relative
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "Setup\n=====\nSee [methodology](benchmark-method.md).\n\n"
+        "Benchmarks\n==========\n"
+        "Scalar: 0.42 ms; vector: 0.13 ms.\n",
+        encoding="utf-8",
+    )
+
+    findings = benchmark_doc_findings(
+        root,
+        [relative],
+        BenchmarkDocPolicy(include=("docs/**",)),
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 5
+    assert "Benchmarks" in findings[0].message
+
+
+def test_setext_section_name_can_be_used_for_reasoned_exception(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path
+    relative = Path("docs/setext-exception.md")
+    source = root / relative
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "Benchmarks\n==========\nScalar: 0.42 ms; vector: 0.13 ms.\n",
+        encoding="utf-8",
+    )
+
+    findings = benchmark_doc_findings(
+        root,
+        [relative],
+        BenchmarkDocPolicy(
+            include=("docs/**",),
+            exceptions=(
+                {
+                    "path": relative.as_posix(),
+                    "section": "Benchmarks",
+                    "reason": "This historical benchmark section remains useful.",
+                },
+            ),
+        ),
+    )
+
+    assert findings == []
+
+
+def test_heading_context_is_shared_across_many_subsections() -> None:
+    parent = "Benchmark " + "context " * 1_000
+    lines = [f"# {parent}"]
+    for index in range(2_000):
+        lines.extend((f"## Case {index}", "A short section."))
+
+    sections = iter(_sections(lines))
+    first = next(sections)
+    second = next(sections)
+
+    assert isinstance(first[3], tuple)
+    assert len(first[3]) == 2
+    assert first[3][0] is second[3][0]
 
 
 def test_detects_throughput_and_comparison_sections_deterministically(

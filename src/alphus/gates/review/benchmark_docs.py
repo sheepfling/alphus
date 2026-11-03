@@ -42,6 +42,7 @@ _METHOD_TERMS = re.compile(
 )
 _FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
 _HEADING = re.compile(r"^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$")
+_SETEXT_HEADING = re.compile(r"^\s{0,3}(=+|-+)\s*$")
 
 
 def _selected_paths(paths: Iterable[Path], policy: _BenchmarkDocPolicy) -> list[Path]:
@@ -60,14 +61,19 @@ def _selected_paths(paths: Iterable[Path], policy: _BenchmarkDocPolicy) -> list[
     return nsmallest(policy.max_files + 1, selected, key=Path.as_posix)
 
 
-def _sections(lines: Sequence[str]) -> Iterable[tuple[str, int, str, str]]:
+def _sections(
+    lines: Sequence[str],
+) -> Iterable[tuple[str, int, str, tuple[str, ...]]]:
     title = "(document introduction)"
     start_line = 1
     body: list[str] = []
     heading_path: list[tuple[int, str]] = []
     fence: str | None = None
     fence_length = 0
-    for line_number, line in enumerate(lines, start=1):
+    index = 0
+    while index < len(lines):
+        line_number = index + 1
+        line = lines[index]
         fence_match = _FENCE.match(line)
         if fence is not None:
             if (
@@ -77,27 +83,43 @@ def _sections(lines: Sequence[str]) -> Iterable[tuple[str, int, str, str]]:
             ):
                 fence = None
                 fence_length = 0
+            index += 1
             continue
         if fence_match:
             fence = fence_match.group(1)[0]
             fence_length = len(fence_match.group(1))
+            index += 1
             continue
         heading = _HEADING.match(line)
-        if heading:
+        setext_heading = (
+            _SETEXT_HEADING.match(lines[index + 1])
+            if index + 1 < len(lines) and line.strip()
+            else None
+        )
+        if heading or setext_heading:
             if body:
-                context = " > ".join(part for _, part in heading_path) or title
+                context = tuple(part for _, part in heading_path) or (title,)
                 yield title, start_line, "\n".join(body), context
-            level = len(heading.group(1))
-            title = heading.group(2).strip()
+            if heading:
+                level = len(heading.group(1))
+                title = heading.group(2).strip()
+                consumed = 1
+            else:
+                assert setext_heading is not None
+                level = 1 if setext_heading.group(1).startswith("=") else 2
+                title = line.strip()
+                consumed = 2
             while heading_path and heading_path[-1][0] >= level:
                 heading_path.pop()
             heading_path.append((level, title))
             start_line = line_number
             body = []
+            index += consumed
         else:
             body.append(line)
+            index += 1
     if body:
-        context = " > ".join(part for _, part in heading_path) or title
+        context = tuple(part for _, part in heading_path) or (title,)
         yield title, start_line, "\n".join(body), context
 
 
@@ -136,13 +158,14 @@ def _reference_definition(line: str) -> tuple[str, str, bool] | None:
     return content[1:label_end], target, bool(_METHOD_TERMS.search(target))
 
 
-def _method_link_definitions(text: str) -> dict[str, tuple[str, bool]]:
+def _method_link_definitions(sections: Iterable[str]) -> dict[str, tuple[str, bool]]:
     definitions: dict[str, tuple[str, bool]] = {}
-    for line in text.splitlines():
-        definition = _reference_definition(line)
-        if definition is not None:
-            label, target, has_method_term = definition
-            definitions[_reference_key(label)] = (target, has_method_term)
+    for section in sections:
+        for line in section.splitlines():
+            definition = _reference_definition(line)
+            if definition is not None:
+                label, target, has_method_term = definition
+                definitions[_reference_key(label)] = (target, has_method_term)
     return definitions
 
 
@@ -296,13 +319,14 @@ def benchmark_doc_findings(
                 return findings
             continue
 
-        sections = list(_sections(text.splitlines()))
-        visible_document = "\n".join(body for _, _, body, _ in sections)
-        method_definitions = _method_link_definitions(visible_document)
-        for section, line, body, heading_context in sections:
+        lines = text.splitlines()
+        method_definitions = _method_link_definitions(
+            body for _, _, body, _ in _sections(lines)
+        )
+        for section, line, body, heading_context in _sections(lines):
             if (relative_name, section) in exceptions:
                 continue
-            section_text = f"{heading_context}\n{body}"
+            section_text = f"{' > '.join(heading_context)}\n{body}"
             measurements = _measurement_count(section_text)
             if (
                 measurements < policy.min_measurements
