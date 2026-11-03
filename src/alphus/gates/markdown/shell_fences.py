@@ -155,7 +155,7 @@ def _markdown_fences(text: str) -> tuple[_Fence, ...]:
 def _mask_shell_line(line: str, shell: str, state: _LexState) -> str:
     """Blank comments and quoted data while preserving source columns."""
     visible = list(line)
-    escaped_shell_characters = "'\"`\\" if shell == "bash" else "'\""
+    escaped_shell_characters = "'\"`\\" if shell == "bash" else ""
     index = 0
     while index < len(line):
         if state.here_string is not None:
@@ -282,6 +282,7 @@ def _heredoc_word(raw: str, start: int) -> str | None:
     """Read one here-document word with shell quote removal, without expansion."""
     result: list[str] = []
     quote: str | None = None
+    word_started = False
     index = start
     while index < len(raw):
         character = raw[index]
@@ -299,21 +300,24 @@ def _heredoc_word(raw: str, start: int) -> str | None:
             continue
 
         if character in "'\"":
+            word_started = True
             quote = character
             index += 1
             continue
         if character == "\\":
             if index + 1 >= len(raw):
                 return None
+            word_started = True
             result.append(raw[index + 1])
             index += 2
             continue
         if character.isspace() or character in ";&|()<>":
             break
+        word_started = True
         result.append(character)
         index += 1
 
-    if quote is not None or not result:
+    if quote is not None or not word_started:
         return None
     return "".join(result)
 

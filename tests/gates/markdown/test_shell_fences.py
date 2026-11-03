@@ -717,6 +717,37 @@ def test_powershell_here_string_quotes_do_not_end_quoted_data(
     assert "Bash loop syntax" in findings[0].message
 
 
+def test_powershell_backslash_before_quote_does_not_hide_later_bash_loop(
+    tmp_path: Path,
+) -> None:
+    findings = _check(
+        tmp_path,
+        "```powershell\n"
+        'Write-Output C:\\"Program Files"\n'
+        "for file in *.txt; do\n"
+        '  echo "$file"\n'
+        "done\n"
+        "```\n",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 3
+    assert "Bash loop syntax" in findings[0].message
+
+
+def test_quoted_empty_bash_heredoc_delimiter_hides_body(
+    tmp_path: Path,
+) -> None:
+    findings = _check(
+        tmp_path,
+        "```bash\ncat <<''\n$env:APP_HOME = heredoc-data\n\nGet-ChildItem\n```\n",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 5
+    assert "PowerShell" in findings[0].message
+
+
 def test_indented_powershell_command_is_detected_in_bash_fence(
     tmp_path: Path,
 ) -> None:
