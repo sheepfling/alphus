@@ -385,9 +385,9 @@ def lossy_rewrite_lines(
 def _regex_helper_root_is_shadowed(
     function: ast.expr, call: ast.AST, parents: Mapping[ast.AST, ast.AST]
 ) -> bool:
-    """Abstain when a configured dotted helper root is locally rebound."""
+    """Abstain when a configured helper root is locally rebound."""
     qualified_name = _qualified_name(function)
-    if qualified_name is None or "." not in qualified_name:
+    if qualified_name is None:
         return False
     root = qualified_name.split(".", maxsplit=1)[0]
     ancestor = parents.get(call)

@@ -139,6 +139,18 @@ def clean(text=re.sub(r"\d+", "", "abc123"), re=None):
     assert lossy_rewrite_lines(source, configured) == [(3, r"\d+")]
 
 
+def test_lossy_regex_rewrite_checks_shadowing_for_bare_helpers() -> None:
+    source = r"""\
+def clean(text, sub):
+    return sub(r"\d+", "", text)
+
+sub(r"\d+", "", text)
+"""
+    configured = _policy(lossy_text_rewrite=True, regex_sub_helpers=("sub",))
+
+    assert lossy_rewrite_lines(source, configured) == [(5, r"\d+")]
+
+
 def test_lossy_regex_rewrite_ignores_zero_width_digit_assertions() -> None:
     source = r"""\
 zero_width = re.sub(r"(?=\d)", "", text)
