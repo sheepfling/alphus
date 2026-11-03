@@ -310,6 +310,27 @@ def test_find_format_is_masked_across_bash_line_continuation(
     assert 'cmd syntax "%PATH%"' in findings[0].message
 
 
+def test_cumulative_find_continuation_scan_is_bounded(
+    tmp_path: Path,
+) -> None:
+    fence = chr(96) * 3
+    continuation_count = 400
+    source_lines = [
+        fence + "bash",
+        "find . \\",
+        *("  . \\" for _ in range(continuation_count)),
+        "  -printf %f%p",
+        "echo %PATH%",
+        fence,
+        "",
+    ]
+    findings = _check(tmp_path, "\n".join(source_lines))
+
+    assert len(findings) == 1
+    assert findings[0].line == continuation_count + 4
+    assert 'cmd syntax "%PATH%"' in findings[0].message
+
+
 def test_quoted_find_text_is_not_repeatedly_scanned_as_commands(
     tmp_path: Path,
 ) -> None:

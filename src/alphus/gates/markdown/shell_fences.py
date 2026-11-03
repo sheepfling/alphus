@@ -498,16 +498,27 @@ def _cmd_environment_evidence(lines: Sequence[_SourceLine]) -> _Evidence | None:
     in_printf_continuation = False
     find_continuation_visible = ""
     find_continuation_raw = ""
+    find_continuation_work = 0
+    skip_find_continuation = False
     for source in lines:
         raw_line = source.raw_text if source.raw_text is not None else source.text
+        physical_continues = (len(raw_line) - len(raw_line.rstrip("\\"))) % 2 == 1
+        if skip_find_continuation:
+            skip_find_continuation = physical_continues
+            continue
         if _shell_command_scan_over_budget(source.text):
             # Extremely dense nested shell text is ambiguous to this advisory.
             # Skip cmd evidence on this physical line rather than rescan suffixes
             # for every candidate command.
+            skip_find_continuation = physical_continues and bool(
+                find_continuation_visible
+                or _FIND_COMMAND.search(source.text) is not None
+            )
             in_printf_continuation = False
             in_date_continuation = False
             find_continuation_visible = ""
             find_continuation_raw = ""
+            find_continuation_work = 0
             continue
         candidate, printf_format_found = _mask_printf_format_argument(
             source.text, raw_line, continued=in_printf_continuation
@@ -526,9 +537,12 @@ def _cmd_environment_evidence(lines: Sequence[_SourceLine]) -> _Evidence | None:
                 logical_visible = find_candidate_line
                 logical_raw = find_raw_line
                 current_offset = 0
-            if _shell_command_scan_over_budget(logical_visible):
+            logical_work = _shell_command_scan_cost(logical_visible)
+            if find_continuation_work + logical_work > _COMMAND_SCAN_BUDGET:
                 find_continuation_visible = ""
                 find_continuation_raw = ""
+                find_continuation_work = 0
+                skip_find_continuation = continues_line
                 in_printf_continuation = False
                 in_date_continuation = False
                 continue
@@ -542,12 +556,15 @@ def _cmd_environment_evidence(lines: Sequence[_SourceLine]) -> _Evidence | None:
             if continues_line:
                 find_continuation_visible = logical_visible
                 find_continuation_raw = logical_raw
+                find_continuation_work += logical_work
             else:
                 find_continuation_visible = ""
                 find_continuation_raw = ""
+                find_continuation_work = 0
         else:
             find_continuation_visible = ""
             find_continuation_raw = ""
+            find_continuation_work = 0
         in_printf_continuation = (
             not printf_format_found
             and trailing_backslashes % 2 == 1
@@ -573,13 +590,18 @@ def _cmd_environment_evidence(lines: Sequence[_SourceLine]) -> _Evidence | None:
 
 def _shell_command_scan_over_budget(line: str) -> bool:
     """Abstain when repeated candidate suffix scans could exceed a fixed budget."""
+    return _shell_command_scan_cost(line) > _COMMAND_SCAN_BUDGET
+
+
+def _shell_command_scan_cost(line: str) -> int:
+    """Estimate suffix parsing work from candidate count and line length."""
     candidates = _mask_escaped_command_operators(line)
     candidate_count = sum(
         1
         for expression in (_PRINTF_FORMAT_COMMAND, _FIND_COMMAND)
         for _ in expression.finditer(candidates)
     )
-    return len(line) * candidate_count > _COMMAND_SCAN_BUDGET
+    return len(line) * candidate_count
 
 
 def _mask_find_format_arguments(line: str, raw_line: str | None = None) -> str:
