@@ -601,6 +601,31 @@ def test_quoted_pwsh_command_with_opener_content_keeps_bash_lexing(
     assert "cmd syntax" in findings[0].message
 
 
+@pytest.mark.parametrize("quote", ["'", '"'])
+def test_pwsh_quote_after_command_text_hides_payload_but_resumes_bash(
+    tmp_path: Path, quote: str
+) -> None:
+    fence = chr(96) * 3
+    findings = _check(
+        tmp_path,
+        "\n".join(
+            [
+                fence + "bash",
+                f"pwsh -Command Write-Output {quote}quoted text",
+                "$env:HOME = data",
+                quote,
+                "echo %PATH%",
+                fence,
+                "",
+            ]
+        ),
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 5
+    assert "cmd syntax" in findings[0].message
+
+
 def test_indented_shell_transcript_prompts_are_ignored(tmp_path: Path) -> None:
     findings = _check(
         tmp_path,

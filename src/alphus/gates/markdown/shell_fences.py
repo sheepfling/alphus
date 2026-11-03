@@ -49,7 +49,7 @@ _POWERSHELL_DELEGATION = re.compile(
 )
 _QUOTED_POWERSHELL_DELEGATION = re.compile(
     r"(?i)^\s*(?:pwsh|powershell)(?:\.exe)?\s+(?:-[A-Za-z][A-Za-z-]*\s+)*"
-    r"-Command[ \t]+(?P<quote>['\"])"
+    r"-Command[ \t]+[^'\"]*(?P<quote>['\"])"
 )
 _CMD_ENV = re.compile(r"%[A-Za-z_][A-Za-z0-9_]*%")
 _URL_TOKEN = re.compile(r"(?i)\b(?:https?://|ftp://|www\.)[^\s'\"<>]+")
@@ -456,11 +456,13 @@ def _visible_shell_lines(fence: _Fence, shell: str) -> tuple[_SourceLine, ...]:
             if candidate == delimiter:
                 pending_heredocs.popleft()
             continue
-        if (
-            shell == "bash"
-            and _POWERSHELL_DELEGATION.match(source.text)
-            and _QUOTED_POWERSHELL_DELEGATION.match(source.text) is None
-        ):
+        if shell == "bash" and _POWERSHELL_DELEGATION.match(source.text):
+            if _QUOTED_POWERSHELL_DELEGATION.match(source.text) is None:
+                output.append(_SourceLine(source.number, " " * len(source.text)))
+                continue
+            # Update Bash quote state for multiline delegated text, but do not
+            # interpret the PowerShell command line itself as Bash evidence.
+            _mask_shell_line(source.text, shell, state)
             output.append(_SourceLine(source.number, " " * len(source.text)))
             continue
         visible = _mask_shell_line(source.text, shell, state)
