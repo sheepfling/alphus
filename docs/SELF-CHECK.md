@@ -8,8 +8,10 @@ The `check` profile validates the package against its own repository policy. It
 runs Alphus portable rules, shared-utility analysis, the comment-marker and
 review rules, TOML syntax, installed-package import smoke and compatibility-
 import removal checks, native Ruff lint and format checks, strict Pyright, and
-the package tests. The opt-in `markdown-shell-review` profile is separate from
-`check`; run it explicitly when reviewing the repository's Markdown fences:
+the package tests. The opt-in `markdown-shell-review` profile stays separate
+from `check` so consumer defaults do not change. The repository CI runner
+invokes it as a separate stage after the self-check, including after installing
+the built wheel. To run it explicitly when reviewing Markdown fences:
 
 ```sh
 alphus --run --profile markdown-shell-review
