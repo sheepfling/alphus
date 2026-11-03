@@ -93,6 +93,30 @@ def render(cell):
     ]
 
 
+def test_comprehension_local_target_does_not_invalidate_replacement() -> None:
+    source = """\
+def render(cell, callbacks):
+    replacement = fixed_paragraphs.get(cell.attribute)
+    previews = [replacement for replacement in callbacks]
+    if replacement is not None:
+        return source_anchor(cell.id) + replacement
+"""
+    assert embedded_override_sites(source, _policy()) == [
+        ("render", 2, 4, "replacement")
+    ]
+
+
+def test_comprehension_walrus_invalidates_enclosing_replacement() -> None:
+    source = """\
+def render(cell, callbacks):
+    replacement = fixed_paragraphs.get(cell.attribute)
+    previews = [item for item in callbacks if (replacement := item)]
+    if replacement is not None:
+        return source_anchor(cell.id) + replacement
+"""
+    assert embedded_override_sites(source, _policy()) == []
+
+
 def test_definition_time_walrus_invalidates_replacement() -> None:
     source = """\
 def render(cell):

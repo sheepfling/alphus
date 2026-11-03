@@ -66,6 +66,10 @@ def _stored_helper_name(node: ast.AST, names: frozenset[str]) -> bool:
                 alias.name == "*" or (alias.asname or alias.name) in names
                 for alias in aliases
             )
+        case ast.MatchAs(name=name) | ast.MatchStar(name=name) if name in names:
+            return True
+        case ast.MatchMapping(rest=name) if name in names:
+            return True
         case _:
             return False
 

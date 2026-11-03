@@ -80,6 +80,23 @@ def parse_document(repair_id, text):
     assert patch_cascade_sites(source, _policy()) == []
 
 
+def test_pattern_capture_shadowing_normalization_helper_makes_identity_unknown() -> (
+    None
+):
+    source = """\
+def parse_document(repair_id, text, options):
+    if repair_id == "vendor-a":
+        text = normalize_text(text, " ")
+    if repair_id == "vendor-b":
+        text = normalize_text(text, "-")
+    match options:
+        case {"normalize": normalize_text}:
+            pass
+    return text
+"""
+    assert patch_cascade_sites(source, _policy()) == []
+
+
 def test_parameter_shadowing_of_helper_makes_identity_unknown() -> None:
     source = """\
 def parse_document(repair_id, text, normalize_text):

@@ -68,8 +68,12 @@ def _replacement_return(
             return False
 
 
-def _current_scope_nodes(root: ast.AST) -> Iterable[ast.AST]:
+def _current_scope_nodes(
+    root: ast.AST, shadowed: frozenset[str] = frozenset()
+) -> Iterable[ast.AST]:
     """Walk current-scope statements and evaluated definition-time expressions."""
+    if isinstance(root, ast.Name) and root.id in shadowed:
+        return
     yield root
     match root:
         case ast.FunctionDef() | ast.AsyncFunctionDef():
@@ -113,10 +117,52 @@ def _current_scope_nodes(root: ast.AST) -> Iterable[ast.AST]:
                 *root.args.defaults,
                 *(item for item in root.args.kw_defaults if item is not None),
             ]
+        case (
+            ast.ListComp(generators=generators, elt=element)
+            | ast.SetComp(generators=generators, elt=element)
+            | ast.GeneratorExp(generators=generators, elt=element)
+        ):
+            local_names = shadowed
+            for generator in generators:
+                yield from _current_scope_nodes(generator.iter, local_names)
+                local_names = local_names | _comprehension_target_names(
+                    generator.target
+                )
+                for condition in generator.ifs:
+                    yield from _current_scope_nodes(condition, local_names)
+            yield from _current_scope_nodes(element, local_names)
+            return
+        case ast.DictComp(generators=generators, key=key, value=value):
+            local_names = shadowed
+            for generator in generators:
+                yield from _current_scope_nodes(generator.iter, local_names)
+                local_names = local_names | _comprehension_target_names(
+                    generator.target
+                )
+                for condition in generator.ifs:
+                    yield from _current_scope_nodes(condition, local_names)
+            yield from _current_scope_nodes(key, local_names)
+            yield from _current_scope_nodes(value, local_names)
+            return
         case _:
             children = list(ast.iter_child_nodes(root))
     for child in children:
-        yield from _current_scope_nodes(child)
+        yield from _current_scope_nodes(child, shadowed)
+
+
+def _comprehension_target_names(target: ast.expr) -> frozenset[str]:
+    match target:
+        case ast.Name(id=name):
+            return frozenset((name,))
+        case ast.Tuple(elts=items) | ast.List(elts=items):
+            names: set[str] = set()
+            for item in items:
+                names.update(_comprehension_target_names(item))
+            return frozenset(names)
+        case ast.Starred(value=value):
+            return _comprehension_target_names(value)
+        case _:
+            return frozenset()
 
 
 def _stores_name(statement: ast.AST, name: str) -> bool:
