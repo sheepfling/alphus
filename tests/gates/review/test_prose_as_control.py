@@ -280,6 +280,23 @@ positive_count = re.sub(r"\d(?#comment){1}", "", text)
     assert re.sub(r"(?:\d){,0}", "", "123") == "123"
 
 
+def test_lossy_regex_rewrite_respects_escaped_closes_in_python_regex_comments() -> None:
+    zero_count = r"\d(?# escaped \) comment){0}"
+    commented_digit = r"\D(?# escaped \) \d )"
+    consuming_digit = r"\D(?# escaped \) comment)\d+"
+    source = "\n".join(
+        f"result = re.sub({pattern!r}, '', text)"
+        for pattern in (zero_count, commented_digit, consuming_digit)
+    )
+
+    assert lossy_rewrite_lines(
+        source, _policy(lossy_text_rewrite=True, regex_sub_helpers=("re.sub",))
+    ) == [(3, consuming_digit)]
+    assert re.sub(zero_count, "", "7") == "7"
+    assert re.sub(commented_digit, "", "7") == "7"
+    assert re.sub(consuming_digit, "", "x7") == ""
+
+
 def test_lossy_text_rewrite_detects_literal_semantic_token_deletion() -> None:
     source = """\
 cleaned = prose.replace("0.25", "")

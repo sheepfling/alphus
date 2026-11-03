@@ -270,8 +270,8 @@ def _regex_consumes_digit(pattern: str) -> bool:
             index += 1
             continue
         if pattern.startswith("(?#", index):
-            closing = pattern.find(")", index + 3)
-            if closing < 0:
+            closing = _regex_comment_end(pattern, index + 3)
+            if closing is None:
                 return False
             index = closing + 1
             continue
@@ -311,8 +311,8 @@ def _zero_repetition_follows(pattern: str, index: int, *, verbose: bool) -> bool
     """Recognize a zero-only quantifier after regex trivia/comments."""
     while index < len(pattern):
         if pattern.startswith("(?#", index):
-            closing = pattern.find(")", index + 3)
-            if closing < 0:
+            closing = _regex_comment_end(pattern, index + 3)
+            if closing is None:
                 return False
             index = closing + 1
         elif verbose and pattern[index].isspace():
@@ -338,6 +338,21 @@ def _zero_repetition_follows(pattern: str, index: int, *, verbose: bool) -> bool
             and (lower == "" or (lower.isdecimal() and int(lower) == 0))
         )
     return count.isdecimal() and int(count) == 0
+
+
+def _regex_comment_end(pattern: str, index: int) -> int | None:
+    """Return the first unescaped closing parenthesis in a ``(?#...)`` comment."""
+    while index < len(pattern):
+        if pattern[index] == "\\":
+            # Regex comments honor backslash escapes, so an escaped closing
+            # parenthesis is comment content. Skipping escaped pairs also
+            # leaves a close parenthesis after an even number of slashes active.
+            index += 2
+        elif pattern[index] == ")":
+            return index
+        else:
+            index += 1
+    return None
 
 
 def lossy_rewrite_lines(
