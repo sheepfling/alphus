@@ -202,6 +202,32 @@ def test_indented_and_sequential_printf_formats_are_not_cmd_evidence(
     )
 
 
+def test_bash_ansi_c_escaped_apostrophe_keeps_scanning_following_lines(
+    tmp_path: Path,
+) -> None:
+    findings = _check(
+        tmp_path,
+        "```bash\nprintf $'It\\'s ready\\n'\n$env:APP_HOME = value\n````\n",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 3
+    assert "PowerShell" in findings[0].message
+
+
+def test_bash_ansi_c_quoted_loop_text_is_not_shell_evidence(
+    tmp_path: Path,
+) -> None:
+    findings = _check(
+        tmp_path,
+        "```bash\n"
+        "message=$'It\\'s ready\\nfor item in values; do echo $item; done'\n"
+        "````\n",
+    )
+
+    assert findings == []
+
+
 def test_flags_bash_loop_in_indented_blockquote_pwsh_fence(tmp_path: Path) -> None:
     findings = _check(
         tmp_path,

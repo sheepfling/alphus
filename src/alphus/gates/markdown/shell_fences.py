@@ -109,6 +109,7 @@ class _Fence:
 @dataclass(slots=True)
 class _LexState:
     quote: str | None = None
+    ansi_c_quote: bool = False
     block_comment: bool = False
     here_string: str | None = None
 
@@ -181,7 +182,7 @@ def _mask_shell_line(line: str, shell: str, state: _LexState) -> str:
             visible[index] = " "
             if (
                 shell == "bash"
-                and state.quote == '"'
+                and (state.quote == '"' or state.ansi_c_quote)
                 and character == "\\"
                 and index + 1 < len(line)
             ):
@@ -209,6 +210,7 @@ def _mask_shell_line(line: str, shell: str, state: _LexState) -> str:
                 continue
             if character == state.quote:
                 state.quote = None
+                state.ansi_c_quote = False
             index += 1
             continue
 
@@ -221,6 +223,13 @@ def _mask_shell_line(line: str, shell: str, state: _LexState) -> str:
         if shell == "powershell" and line.startswith(("@'", '@"'), index):
             state.here_string = "'@" if line[index + 1] == "'" else '"@'
             return " " * len(line)
+
+        if shell == "bash" and line.startswith("$'", index):
+            state.quote = "'"
+            state.ansi_c_quote = True
+            visible[index] = visible[index + 1] = " "
+            index += 2
+            continue
 
         character = line[index]
         if character in "'\"`":
