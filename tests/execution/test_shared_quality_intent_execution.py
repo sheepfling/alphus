@@ -292,6 +292,20 @@ def test_shared_native_command_runs_when_another_selected_binding_is_enabled(
     assert bindings["cpp"]["status"] == "passed"
 
 
+def test_default_profile_can_pass_while_requested_optional_intent_is_unselected(
+    tmp_path: Path,
+) -> None:
+    """A passing default profile must not imply optional audit coverage."""
+    optional_intent = _intent().model_copy(update={"profiles": ("aggregate",)})
+    policy = _policy(tmp_path, intent=optional_intent)
+
+    result = _run(tmp_path, policy, profile_name="check")
+
+    assert result.exit_code == 0
+    assert result.report["steps"][0]["status"] == "passed"
+    assert result.report["intent_bindings"][0]["status"] == "not_selected"
+
+
 @pytest.mark.parametrize(
     ("output", "expected_status", "expected_failure_kind", "expected_code"),
     [

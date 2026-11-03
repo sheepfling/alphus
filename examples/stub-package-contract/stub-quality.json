@@ -1,0 +1,13 @@
+{
+  "verification": {
+    "stubtest_module": "sample_contract",
+    "stubtest_allowlist": "tests/stubtest-allowlist.txt",
+    "positive_fixture": "tests/fixtures/positive.py",
+    "negative_fixture": "tests/fixtures/negative.py",
+    "runtime_smoke_module": "tests.runtime_smoke",
+    "typing_checkers": ["mypy", "pyright", "ty"],
+    "mypy_diagnostics": ["[arg-type]"],
+    "pyright_diagnostics": ["reportArgumentType"],
+    "ty_diagnostics": ["invalid-argument-type"]
+  }
+}

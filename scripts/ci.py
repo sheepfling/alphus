@@ -192,6 +192,16 @@ def python_profile(
         stage="Run Alphus self profile",
         output=output,
     )
+    run(
+        root,
+        sys.executable,
+        "-m",
+        "alphus",
+        "--profile",
+        "markdown-shell-review",
+        stage="Run Alphus Markdown shell review",
+        output=output,
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:

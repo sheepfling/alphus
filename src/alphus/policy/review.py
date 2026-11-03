@@ -169,6 +169,636 @@ class NumericLiteralPolicy(PythonSourceScanPolicy):
         return self
 
 
+class ManualMatrixKernelPolicy(PythonSourceScanPolicy):
+    """Opt-in detector scope for one narrowly recognized matrix product form."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+
+class ManualEliminationPolicy(PythonSourceScanPolicy):
+    """Consumer-declared scope for a direct-list elimination kernel shape."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    function_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    matrix_name: str
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("function_names")
+    @classmethod
+    def validate_function_names(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("elimination function names must be identifiers")
+        require_unique(values, "elimination function names must be unique")
+        return tuple(values)
+
+    @field_validator("matrix_name")
+    @classmethod
+    def validate_matrix_name(cls, value: str) -> str:
+        if not value.isidentifier():
+            raise ValueError("elimination matrix name must be an identifier")
+        return value
+
+
+class ArrayRepresentationContract(StrictModel):
+    """One consumer-declared array variable inside a selected numerical function."""
+
+    path: str
+    function: str
+    array_variable: str
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, value: str) -> str:
+        return validate_single_path(value, "array representation contract path")
+
+    @field_validator("function")
+    @classmethod
+    def validate_function(cls, value: str) -> str:
+        if any(not part.isidentifier() for part in value.split(".")):
+            raise ValueError("array representation function must be dotted identifiers")
+        return value
+
+    @field_validator("array_variable")
+    @classmethod
+    def validate_array_variable(cls, value: str) -> str:
+        if not value.isidentifier():
+            raise ValueError("array representation variable must be an identifier")
+        return value
+
+
+class ArrayRepresentationPolicy(PythonSourceScanPolicy):
+    """Opt-in review of exact array/list round trips and selected loop churn."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    array_constructors: Annotated[tuple[str, ...], Field(min_length=1)]
+    list_conversion_methods: tuple[str, ...] = ("tolist",)
+    loop_contracts: tuple[ArrayRepresentationContract, ...] = ()
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("array_constructors")
+    @classmethod
+    def validate_constructor_names(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not value or any(not part.isidentifier() for part in value.split("."))
+            for value in values
+        ):
+            raise ValueError("array constructor names must be dotted identifiers")
+        require_unique(values, "array constructor names must be unique")
+        return tuple(values)
+
+    @field_validator("list_conversion_methods")
+    @classmethod
+    def validate_list_methods(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("list conversion methods must be identifiers")
+        require_unique(values, "list conversion methods must be unique")
+        return tuple(values)
+
+    @field_validator("loop_contracts")
+    @classmethod
+    def validate_loop_contracts(
+        cls, contracts: Sequence[ArrayRepresentationContract]
+    ) -> tuple[ArrayRepresentationContract, ...]:
+        values = tuple(contracts)
+        selectors = tuple(
+            (contract.path, contract.function, contract.array_variable)
+            for contract in values
+        )
+        require_unique(selectors, "array representation loop selectors must be unique")
+        return values
+
+
+class CholeskyRecurrencePolicy(PythonSourceScanPolicy):
+    """Opt-in AST review for one coordinated Cholesky recurrence grammar."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    square_root_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("square_root_helpers")
+    @classmethod
+    def validate_sqrt_helpers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not value or any(not part.isidentifier() for part in value.split("."))
+            for value in values
+        ):
+            raise ValueError("square-root helper names must be dotted identifiers")
+        require_unique(values, "square-root helper names must be unique")
+        return tuple(values)
+
+
+class QuaternionProductPolicy(PythonSourceScanPolicy):
+    """Exact component names for one scalar-first Hamilton product grammar."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    function_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    left_components: Annotated[tuple[str, str, str, str], Field(min_length=4)]
+    right_components: Annotated[tuple[str, str, str, str], Field(min_length=4)]
+    result_components: Annotated[tuple[str, str, str, str], Field(min_length=4)]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("function_names")
+    @classmethod
+    def validate_function_names(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("quaternion function names must be identifiers")
+        require_unique(values, "quaternion function names must be unique")
+        return tuple(values)
+
+    @model_validator(mode="after")
+    def validate_component_names(self) -> Self:
+        names = (*self.left_components, *self.right_components, *self.result_components)
+        if any(not value.isidentifier() for value in names):
+            raise ValueError("quaternion components must be identifiers")
+        require_unique(names, "quaternion input and output names must be distinct")
+        return self
+
+
+class QuaternionConjugationPolicy(PythonSourceScanPolicy):
+    """Configured scalar parameters and functions for exact conjugation returns."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    function_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    components: Annotated[tuple[str, str, str, str], Field(min_length=4)]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("function_names")
+    @classmethod
+    def validate_function_names(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("quaternion function names must be identifiers")
+        require_unique(values, "quaternion function names must be unique")
+        return tuple(values)
+
+    @field_validator("components")
+    @classmethod
+    def validate_components(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if len(values) != 4 or any(not value.isidentifier() for value in values):
+            raise ValueError("quaternion components must be four identifiers")
+        require_unique(values, "quaternion components must be unique")
+        return tuple(values)
+
+
+class QuaternionNormalizationPolicy(PythonSourceScanPolicy):
+    """Consumer-declared names for one local quaternion normalization shape."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    function_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    components: Annotated[tuple[str, str, str, str], Field(min_length=4)]
+    square_root_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    rotation_consumer_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("function_names")
+    @classmethod
+    def validate_function_names(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("quaternion function names must be identifiers")
+        require_unique(values, "quaternion function names must be unique")
+        return tuple(values)
+
+    @field_validator("components")
+    @classmethod
+    def validate_components(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if len(values) != 4 or any(not value.isidentifier() for value in values):
+            raise ValueError("quaternion components must be four identifiers")
+        require_unique(values, "quaternion components must be unique")
+        return tuple(values)
+
+    @field_validator("square_root_helpers", "rotation_consumer_helpers")
+    @classmethod
+    def validate_helper_names(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not value or any(not part.isidentifier() for part in value.split("."))
+            for value in values
+        ):
+            raise ValueError("quaternion helper names must be dotted identifiers")
+        require_unique(values, "quaternion helper names must be unique")
+        return tuple(values)
+
+
+class QuaternionInversionPolicy(PythonSourceScanPolicy):
+    """Consumer-declared names for one direct quaternion inverse kernel."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    function_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    components: Annotated[tuple[str, str, str, str], Field(min_length=4)]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("function_names")
+    @classmethod
+    def validate_function_names(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("quaternion function names must be identifiers")
+        require_unique(values, "quaternion function names must be unique")
+        return tuple(values)
+
+    @field_validator("components")
+    @classmethod
+    def validate_components(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if len(values) != 4 or any(not value.isidentifier() for value in values):
+            raise ValueError("quaternion components must be four identifiers")
+        require_unique(values, "quaternion components must be unique")
+        return tuple(values)
+
+
+class QuaternionVectorRotationPolicy(PythonSourceScanPolicy):
+    """Configured pure-vector quaternion sandwich signature and helper names."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    function_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    components: Annotated[tuple[str, str, str, str], Field(min_length=4)]
+    vector_components: Annotated[tuple[str, str, str], Field(min_length=3)]
+    multiplication_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    conjugation_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("function_names")
+    @classmethod
+    def validate_function_names(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("quaternion rotation function names must be identifiers")
+        require_unique(values, "quaternion rotation function names must be unique")
+        return tuple(values)
+
+    @field_validator("components", "vector_components")
+    @classmethod
+    def validate_components(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("quaternion rotation components must be identifiers")
+        require_unique(values, "quaternion rotation components must be unique")
+        return tuple(values)
+
+    @field_validator("multiplication_helpers", "conjugation_helpers")
+    @classmethod
+    def validate_helpers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not value or any(not part.isidentifier() for part in value.split("."))
+            for value in values
+        ):
+            raise ValueError("quaternion helper names must be dotted identifiers")
+        require_unique(values, "quaternion helper names must be unique")
+        return tuple(values)
+
+    @model_validator(mode="after")
+    def validate_component_partition(self) -> Self:
+        require_unique(
+            (*self.components, *self.vector_components),
+            "quaternion and vector component names must be distinct",
+        )
+        return self
+
+
+class QuaternionMatrixConversionPolicy(PythonSourceScanPolicy):
+    """Configured signature for one scalar-first active column-vector matrix form."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    function_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    components: Annotated[tuple[str, str, str, str], Field(min_length=4)]
+    convention: Literal["active-column-scalar-first"]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("function_names")
+    @classmethod
+    def validate_function_names(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("quaternion matrix function names must be identifiers")
+        require_unique(values, "quaternion matrix function names must be unique")
+        return tuple(values)
+
+    @field_validator("components")
+    @classmethod
+    def validate_components(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if len(values) != 4 or any(not value.isidentifier() for value in values):
+            raise ValueError("quaternion matrix components must be four identifiers")
+        require_unique(values, "quaternion matrix components must be unique")
+        return tuple(values)
+
+
+class EcefEnuTransformPolicy(PythonSourceScanPolicy):
+    """Consumer-declared contract for one ECEF displacement to ENU basis."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    function_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    components: Annotated[tuple[str, str, str], Field(min_length=3)]
+    latitude_name: str
+    longitude_name: str
+    preferred_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    source_frame: Literal["ECEF"]
+    destination_frame: Literal["ENU"]
+    direction: Literal["ecef-to-enu"]
+    latitude_type: Literal["geodetic"]
+    origin: Literal["anchor-point"]
+    reference_ellipsoid: str
+    angle_units: Literal["radians"]
+    length_units: Literal["meters"]
+    axis_order: Literal["east-north-up"]
+    handedness: Literal["right-handed"]
+    operation: Literal["displacement-vector"]
+    output_shape: Literal["tuple3"]
+    math_module: Literal["math"] = "math"
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("function_names")
+    @classmethod
+    def validate_function_names(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("frame transform function names must be identifiers")
+        require_unique(values, "frame transform function names must be unique")
+        return tuple(values)
+
+    @field_validator("components")
+    @classmethod
+    def validate_components(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if len(values) != 3 or any(not value.isidentifier() for value in values):
+            raise ValueError("frame transform components must be three identifiers")
+        require_unique(values, "frame transform components must be unique")
+        return tuple(values)
+
+    @field_validator("latitude_name", "longitude_name", "math_module")
+    @classmethod
+    def validate_identifier(cls, value: str) -> str:
+        if not value.isidentifier():
+            raise ValueError("frame transform names must be identifiers")
+        return value
+
+    @field_validator("reference_ellipsoid")
+    @classmethod
+    def validate_ellipsoid(cls, value: str) -> str:
+        if not value.strip() or "\n" in value or "\r" in value:
+            raise ValueError("reference ellipsoid must be a non-empty single line")
+        return value
+
+    @field_validator("preferred_helpers")
+    @classmethod
+    def validate_helpers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not value or any(not part.isidentifier() for part in value.split("."))
+            for value in values
+        ):
+            raise ValueError("preferred transform helpers must be dotted identifiers")
+        require_unique(values, "preferred transform helpers must be unique")
+        return tuple(values)
+
+
+class EcefNedMatrixTransformPolicy(PythonSourceScanPolicy):
+    """Consumer-declared geodetic ECEF-to-NED matrix contract."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    function_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    latitude_name: str
+    longitude_name: str
+    sin_latitude_name: str
+    cos_latitude_name: str
+    sin_longitude_name: str
+    cos_longitude_name: str
+    preferred_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    array_constructor: str = "np.array"
+    math_module: Literal["math"] = "math"
+    source_frame: Literal["ECEF"]
+    destination_frame: Literal["NED"]
+    direction: Literal["ecef-to-ned"]
+    latitude_type: Literal["geodetic"]
+    origin: Literal["anchor-point"]
+    reference_ellipsoid: str
+    angle_units: Literal["radians"]
+    length_units: Literal["meters"]
+    axis_order: Literal["north-east-down"]
+    handedness: Literal["right-handed"]
+    operation: Literal["displacement-vector"]
+    vector_orientation: Literal["column"]
+    matrix_layout: Literal["row-major"]
+    output_shape: Literal["matrix3x3"]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("function_names")
+    @classmethod
+    def validate_function_names(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("NED matrix function names must be identifiers")
+        require_unique(values, "NED matrix function names must be unique")
+        return tuple(values)
+
+    @field_validator(
+        "latitude_name",
+        "longitude_name",
+        "sin_latitude_name",
+        "cos_latitude_name",
+        "sin_longitude_name",
+        "cos_longitude_name",
+        "math_module",
+    )
+    @classmethod
+    def validate_identifiers(cls, value: str) -> str:
+        if not value.isidentifier():
+            raise ValueError("NED matrix names must be identifiers")
+        return value
+
+    @field_validator("array_constructor")
+    @classmethod
+    def validate_array_constructor(cls, value: str) -> str:
+        parts = value.split(".")
+        if len(parts) != 2 or any(not part.isidentifier() for part in parts):
+            raise ValueError("array constructor must be a dotted call such as np.array")
+        if parts[-1] != "array":
+            raise ValueError("NED matrix constructor must end in 'array'")
+        return value
+
+    @model_validator(mode="after")
+    def validate_component_names(self) -> Self:
+        require_unique(
+            (
+                self.latitude_name,
+                self.longitude_name,
+                self.sin_latitude_name,
+                self.cos_latitude_name,
+                self.sin_longitude_name,
+                self.cos_longitude_name,
+            ),
+            "NED matrix input and trigonometric names must be distinct",
+        )
+        return self
+
+    @field_validator("reference_ellipsoid")
+    @classmethod
+    def validate_ellipsoid(cls, value: str) -> str:
+        if not value.strip() or "\n" in value or "\r" in value:
+            raise ValueError("reference ellipsoid must be a non-empty single line")
+        return value
+
+    @field_validator("preferred_helpers")
+    @classmethod
+    def validate_helpers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not value or any(not part.isidentifier() for part in value.split("."))
+            for value in values
+        ):
+            raise ValueError("preferred NED helpers must be dotted identifiers")
+        require_unique(values, "preferred NED helpers must be unique")
+        return tuple(values)
+
+
+class NedBasisVectorsPolicy(PythonSourceScanPolicy):
+    """Convention-declared local NED basis-vector implementation fingerprint."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    function_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    preferred_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    latitude_type: Literal["geocentric", "geodetic"]
+    output_representation: Literal["tuple3", "basis3"]
+    longitude_name: str
+    latitude_name: str
+    sine_latitude_name: str
+    cosine_latitude_name: str
+    sine_longitude_name: str
+    cosine_longitude_name: str
+    north_name: str
+    east_name: str
+    vector_constructor: str
+    basis_constructor: str = "Basis3"
+    frame_type: str = "Frame"
+    math_module: Literal["math"] = "math"
+    source_frame: Literal["ECFC"]
+    destination_frame: Literal["GEOCENTRIC_HORIZON", "GEODETIC_HORIZON"]
+    direction: Literal["ecfc-to-local-ned"]
+    angle_units: Literal["radians"]
+    axis_order: Literal["north-east-down"]
+    handedness: Literal["right-handed"]
+    operation: Literal["basis-vectors"]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("function_names")
+    @classmethod
+    def validate_function_names(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("NED basis function names must be identifiers")
+        require_unique(values, "NED basis function names must be unique")
+        return tuple(values)
+
+    @field_validator("preferred_helpers")
+    @classmethod
+    def validate_helpers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not value or any(not part.isidentifier() for part in value.split("."))
+            for value in values
+        ):
+            raise ValueError("preferred NED basis helpers must be dotted identifiers")
+        require_unique(values, "preferred NED basis helpers must be unique")
+        return tuple(values)
+
+    @field_validator(
+        "longitude_name",
+        "latitude_name",
+        "sine_latitude_name",
+        "cosine_latitude_name",
+        "sine_longitude_name",
+        "cosine_longitude_name",
+        "north_name",
+        "east_name",
+        "vector_constructor",
+        "basis_constructor",
+        "frame_type",
+        "math_module",
+    )
+    @classmethod
+    def validate_identifiers(cls, value: str) -> str:
+        if not value.isidentifier():
+            raise ValueError("NED basis names must be identifiers")
+        return value
+
+    @model_validator(mode="after")
+    def validate_convention(self) -> Self:
+        expected = {
+            "geocentric": ("tuple3", "GEOCENTRIC_HORIZON"),
+            "geodetic": ("basis3", "GEODETIC_HORIZON"),
+        }[self.latitude_type]
+        if (self.output_representation, self.destination_frame) != expected:
+            raise ValueError(
+                "NED basis representation and destination frame must match the "
+                "declared latitude convention"
+            )
+        require_unique(
+            (
+                self.longitude_name,
+                self.latitude_name,
+                self.sine_latitude_name,
+                self.cosine_latitude_name,
+                self.sine_longitude_name,
+                self.cosine_longitude_name,
+                self.north_name,
+                self.east_name,
+            ),
+            "NED basis inputs and local names must be distinct",
+        )
+        return self
+
+
 class ScipyConstantsPolicy(PythonSourceScanPolicy):
     """Advisory SciPy physical and unit-factor catalog for Python source."""
 

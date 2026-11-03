@@ -1,0 +1,1 @@
+"""Pydantic-specific review patterns."""
