@@ -56,7 +56,10 @@ _URL_TOKEN = re.compile(r"(?i)\b(?:https?://|ftp://|www\.)[^\s'\"<>]+")
 _URL_PERCENT_ESCAPE = re.compile(r"%[0-9a-f]{2}", re.IGNORECASE)
 _PRINTF_FORMAT_COMMAND = re.compile(
     r"(?:^[ \t]*|(?:&&|\|\||[;&|()])[ \t]*)"
-    r"(?:(?:command|builtin)[ \t]+)?(?P<command>printf)\b"
+    r"(?:(?:command|builtin)[ \t]+)?"
+    r"(?:[A-Za-z_][A-Za-z0-9_]*=[^ \t]+[ \t]+)*"
+    r"(?:env[ \t]+(?:[A-Za-z_][A-Za-z0-9_]*=[^ \t]+[ \t]+)*)?"
+    r"(?P<command>printf)\b"
 )
 _PRINTF_FORMAT_DIRECTIVE = re.compile(
     r"%(?:%|[-+#0 ']*(?:\d+|\*)?(?:\.(?:\d+|\*))?"
@@ -378,7 +381,9 @@ def _ansi_c_escape(raw: str, index: int) -> tuple[str, int] | None:
         return chr(int(raw[index + 1 : end], 8)), end
     if following == "x":
         end = index + 2
-        while end < len(raw) and raw[end] in "0123456789abcdefABCDEF":
+        while (
+            end < len(raw) and end < index + 4 and raw[end] in "0123456789abcdefABCDEF"
+        ):
             end += 1
         if end == index + 2:
             return None

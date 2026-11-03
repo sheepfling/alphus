@@ -225,6 +225,27 @@ def test_printf_command_prefixes_preserve_formats_and_real_cmd_arguments(
     assert all("cmd syntax" in finding.message for finding in findings)
 
 
+def test_printf_environment_prefixes_preserve_formats_and_real_cmd_arguments(
+    tmp_path: Path,
+) -> None:
+    findings = _check(
+        tmp_path,
+        "```bash\n"
+        'LC_ALL=C printf %s%s "$prefix" "$suffix"\n'
+        'env printf %s%s "$prefix" "$suffix"\n'
+        "```\n"
+        "```bash\n"
+        "LC_ALL=C printf '%s' %PATH%\n"
+        "```\n"
+        "```bash\n"
+        "env printf '%s' %userprofile%\n"
+        "```\n",
+    )
+
+    assert [finding.line for finding in findings] == [6, 9]
+    assert all("cmd syntax" in finding.message for finding in findings)
+
+
 def test_indented_and_sequential_printf_formats_are_not_cmd_evidence(
     tmp_path: Path,
 ) -> None:
@@ -805,6 +826,24 @@ def test_bash_ansi_c_quoted_heredoc_delimiter_closes_correctly(
         f"cat <<{delimiter}\n"
         "$env:APP_HOME = heredoc-data\n"
         f"{terminator}\n"
+        "Get-ChildItem\n"
+        "```\n",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 5
+    assert "PowerShell" in findings[0].message
+
+
+def test_bash_ansi_c_hex_escape_consumes_two_digits_only(
+    tmp_path: Path,
+) -> None:
+    findings = _check(
+        tmp_path,
+        "```bash\n"
+        "cat <<$'\\x45AF'\n"
+        "$env:APP_HOME = heredoc-data\n"
+        "EAF\n"
         "Get-ChildItem\n"
         "```\n",
     )
