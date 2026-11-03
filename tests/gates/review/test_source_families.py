@@ -650,6 +650,79 @@ def test_python_package_init_resolves_relative_submodule_import_candidate(
     ) in message
 
 
+def test_external_explicit_package_submodule_import_is_reported_as_ambiguous(
+    tmp_path: Path,
+) -> None:
+    paths = [
+        _write(tmp_path, f"src/pkg/gateway_{name}.py")
+        for name in ("client", "server", "routes", "auth", "cache")
+    ]
+    init = _write(tmp_path, "src/pkg/__init__.py")
+    (tmp_path / init).write_text("", encoding="utf-8")
+    consumer = _write(tmp_path, "src/app.py")
+    (tmp_path / consumer).write_text(
+        "from pkg import gateway_client\n", encoding="utf-8"
+    )
+
+    findings = source_family_findings(
+        tmp_path,
+        [*paths, init, consumer],
+        SourceFamilyPolicy(
+            min_family_files=5,
+            python_import_evidence=True,
+            python_module_roots=("src",),
+        ),
+    )
+
+    message = next(
+        item.message for item in findings if "Family gateway_*" in item.message
+    )
+    assert (
+        "Potential selected Python submodule imports have unresolved package attribute state"
+        in message
+    )
+    assert "src/app.py:1 may load src/pkg/gateway_client.py" in message
+    assert "No direct external references were observed" not in message
+
+
+@pytest.mark.skipif(
+    any(
+        find_spec(module) is None
+        for module in (
+            "tree_sitter",
+            "tree_sitter_javascript",
+            "tree_sitter_typescript",
+        )
+    ),
+    reason="install the optional alphus[javascript] parser extra",
+)
+def test_javascript_oversized_reads_consume_the_shared_byte_budget(
+    tmp_path: Path,
+) -> None:
+    paths = [
+        _write(tmp_path, f"src/gateway_{name}.js")
+        for name in ("client", "server", "routes", "auth", "cache")
+    ]
+    for path in paths:
+        (tmp_path / path).write_text("// " + "x" * 256, encoding="utf-8")
+
+    findings = source_family_findings(
+        tmp_path,
+        paths,
+        SourceFamilyPolicy(
+            min_family_files=5,
+            javascript_import_evidence=True,
+            max_import_analysis_bytes=64,
+        ),
+    )
+
+    assert any(
+        "configured JavaScript/TypeScript import byte budget was exhausted"
+        in item.message
+        for item in findings
+    )
+
+
 def test_import_evidence_reports_bounded_qualified_protocol_contracts(
     tmp_path: Path,
 ) -> None:

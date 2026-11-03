@@ -838,6 +838,7 @@ def _python_import_evidence(
     typed_dict_uses: list[str] = []
     typed_dict_use_count = 0
     external_references: list[tuple[str, int, str]] = []
+    ambiguous_submodule_imports: list[tuple[str, int, str]] = []
 
     def add_package_namespace_candidate(
         source: Path, node: ast.ImportFrom, alias: ast.alias, target: Path
@@ -968,6 +969,26 @@ def _python_import_evidence(
                                     target_path.as_posix(),
                                 )
                             )
+                        for alias in aliases:
+                            if alias.name == "*" or not target_name:
+                                continue
+                            submodule_name = ".".join(
+                                (target_name, *alias.name.split("."))
+                            )
+                            submodule_targets = modules.get(submodule_name, [])
+                            if (
+                                len(submodule_targets) == 1
+                                and submodule_targets[0] in members
+                                and submodule_targets[0] != target_path
+                            ):
+                                unresolved += 1
+                                ambiguous_submodule_imports.append(
+                                    (
+                                        source.as_posix(),
+                                        node.lineno,
+                                        submodule_targets[0].as_posix(),
+                                    )
+                                )
                         if target_path in members:
                             for alias in aliases:
                                 imported_name = alias.name
@@ -1046,7 +1067,7 @@ def _python_import_evidence(
                 )
                 + "."
             )
-        elif not external_parse_failures:
+        elif not external_parse_failures and not ambiguous_submodule_imports:
             context += (
                 " No direct external references were observed in the parsed selected "
                 "inventory; unselected consumers and dynamic references are not assessed."
@@ -1056,6 +1077,22 @@ def _python_import_evidence(
                 f" {len(external_references) - len(shown_external)} external edge(s) "
                 "omitted by max_import_edges."
             )
+        if ambiguous_submodule_imports:
+            shown_ambiguous = ambiguous_submodule_imports[: policy.max_import_edges]
+            context += (
+                " Potential selected Python submodule imports have unresolved package "
+                "attribute state: "
+                + ", ".join(
+                    f"{source}:{line} may load {target}"
+                    for source, line, target in shown_ambiguous
+                )
+                + "."
+            )
+            if len(shown_ambiguous) < len(ambiguous_submodule_imports):
+                context += (
+                    f" {len(ambiguous_submodule_imports) - len(shown_ambiguous)} "
+                    "ambiguous submodule reference(s) omitted by max_import_edges."
+                )
         if external_parse_failures:
             context += (
                 f" External reference scan incomplete: {external_parse_failures} "
@@ -1343,12 +1380,14 @@ def _javascript_import_evidence(
             failures += 1
             continue
         try:
+            read_limit = min(bytes_left, 1_048_576)
             with source_path.open("rb") as handle:
-                raw = handle.read(min(bytes_left, 1_048_576) + 1)
-            if len(raw) > bytes_left or len(raw) > 1_048_576:
+                raw = handle.read(read_limit)
+                source_size = handle.seek(0, 2)
+            bytes_left = max(0, bytes_left - len(raw))
+            if source_size > read_limit or len(raw) != source_size:
                 failures += 1
                 continue
-            bytes_left -= len(raw)
             tree = parsers[source.suffix.lower()].parse(raw)
         except (OSError, ValueError):
             failures += 1
