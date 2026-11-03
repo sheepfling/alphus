@@ -604,6 +604,71 @@ steps = ["Remove source", "Numeric review"]
     assert check["selected_files"] == []
 
 
+def test_profile_cli_audit_uses_command_inventory_and_argv_at_dispatch(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / "first.py").write_text("first = True\n", encoding="utf-8")
+    (tmp_path / "second.py").write_text("second = True\n", encoding="utf-8")
+    (tmp_path / "quality.toml").write_text(
+        """schema_version = 1
+[files]
+include = ["first.py", "second.py"]
+[orchestration]
+default_profile = "audit"
+[[orchestration.steps]]
+kind = "command"
+name = "Remove second source"
+argv = ["{python}", "-c", "from pathlib import Path; Path('second.py').unlink()"]
+[[orchestration.steps]]
+kind = "command"
+name = "Inspect sources"
+files = { include = ["first.py", "second.py"] }
+argv = ["{python}", "-c", "pass", "{files}"]
+[[orchestration.profiles]]
+name = "audit"
+steps = ["Remove second source", "Inspect sources"]
+""",
+        encoding="utf-8",
+    )
+    subprocess.run(
+        ["git", "-C", str(tmp_path), "add", "first.py", "second.py", "quality.toml"],
+        check=True,
+    )
+    _write_manifest(
+        tmp_path,
+        "audit",
+        [
+            AuditManifestCheck(
+                check_id="inspect-sources",
+                step="Inspect sources",
+                expected_files=("first.py", "second.py"),
+                required_argv=("second.py",),
+            )
+        ],
+    )
+
+    exit_code = main(
+        [
+            "--root",
+            str(tmp_path),
+            "--config",
+            "quality.toml",
+            "--json",
+            "--audit-manifest",
+            "audit.json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 2, json.dumps(payload, indent=2)
+    check = payload["audit_completion"]["checks"][0]
+    assert check["status"] == "scope_mismatch", json.dumps(payload, indent=2)
+    assert check["complete"] is False
+    assert check["selected_files"] == ["first.py"]
+    assert "second.py" not in check["expanded_argv"], json.dumps(payload, indent=2)
+
+
 def test_manifest_retains_native_selector_scope_and_annotation_evidence(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

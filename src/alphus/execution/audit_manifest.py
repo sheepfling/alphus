@@ -128,6 +128,7 @@ class AuditResultStep(TypedDict, total=False):
     status: Required[str]
     findings: list[AuditResultFinding]
     selected_files: list[str] | None
+    expanded_argv: list[str]
 
 
 class AuditResultIntent(TypedDict, total=False):

@@ -1173,6 +1173,8 @@ def _execute_profile(
             observed = execution_steps.get(planned_step["name"])
             if observed is not None and "selected_files" in observed:
                 planned_step["selected_files"] = observed["selected_files"]
+            if observed is not None and "expanded_argv" in observed:
+                planned_step["expanded_argv"] = observed["expanded_argv"]
     assessment = assess_profile_audit(
         audit_manifest,
         audit_plan,
