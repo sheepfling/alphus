@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 
+from markdown_it import MarkdownIt
+
 from alphus.config import DocumentStylePolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
@@ -54,6 +56,24 @@ _LATEX_IGNORED_ENVIRONMENT = re.compile(
 )
 _LATEX_FORMAT_COMMAND = re.compile(r"\\(?:emph|textbf|textit|textrm|textsf)\s*")
 _HTML_IGNORED_TAGS = frozenset({"nav", "script", "style", "template", "code", "pre"})
+_HTML_VOID_TAGS = frozenset(
+    {
+        "area",
+        "base",
+        "br",
+        "col",
+        "embed",
+        "hr",
+        "img",
+        "input",
+        "link",
+        "meta",
+        "param",
+        "source",
+        "track",
+        "wbr",
+    }
+)
 _W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 _P_NS = "http://schemas.openxmlformats.org/presentationml/2006/main"
 _A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
@@ -225,11 +245,18 @@ def extract_pptx_sections(
                     "ctrTitle",
                 }:
                     continue
-                text = " ".join(
-                    "".join(
-                        node.text or "" for node in shape.findall(f".//{{{_A_NS}}}t")
-                    ).split()
-                )
+                text_body = shape.find(f"{{{_P_NS}}}txBody")
+                paragraphs: list[str] = []
+                if text_body is not None:
+                    for paragraph in text_body.findall(f".//{{{_A_NS}}}p"):
+                        parts: list[str] = []
+                        for node in paragraph.iter():
+                            if node.tag == f"{{{_A_NS}}}t":
+                                parts.append(node.text or "")
+                            elif node.tag == f"{{{_A_NS}}}br":
+                                parts.append(" ")
+                        paragraphs.append("".join(parts))
+                text = " ".join(" ".join(paragraphs).split())
                 if text:
                     sections.append(
                         DocumentSection(
@@ -287,7 +314,8 @@ class _HtmlOutlineParser(HTMLParser):
             or tag in _HTML_IGNORED_TAGS
             or hidden
         )
-        self.stack.append((tag, ignored))
+        if tag not in _HTML_VOID_TAGS:
+            self.stack.append((tag, ignored))
         if not ignored and len(tag) == 2 and tag[0] == "h" and tag[1] in "123456":
             self.heading_level = int(tag[1])
             self.heading_line = self.getpos()[0]
@@ -330,6 +358,7 @@ def extract_markdown_sections(
     sections: list[DocumentSection] = []
     in_front_matter = bool(lines and lines[0].strip() == "---")
     in_fence: tuple[str, int] | None = None
+    in_html_comment = False
     in_toc = False
     for index, line in enumerate(lines):
         stripped = line.strip()
@@ -347,6 +376,20 @@ def extract_markdown_sections(
             continue
         if in_fence:
             continue
+        if in_html_comment:
+            closing = line.find("-->")
+            if closing < 0:
+                continue
+            line = line[closing + 3 :]
+            in_html_comment = False
+        while "<!--" in line:
+            opening = line.find("<!--")
+            closing = line.find("-->", opening + 4)
+            if closing < 0:
+                line = line[:opening]
+                in_html_comment = True
+                break
+            line = line[:opening] + line[closing + 3 :]
         atx = re.match(r"^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$", line)
         if _TOC_LABEL.match(line):
             in_toc = True
@@ -360,6 +403,7 @@ def extract_markdown_sections(
                 continue
         if atx:
             heading = re.sub(r"\s+\{[^{}]*\}\s*$", "", atx.group(2).strip())
+            heading = _markdown_visible_inline_text(heading)
             sections.append(
                 DocumentSection(path, heading, len(atx.group(1)), index + 1)
             )
@@ -370,12 +414,32 @@ def extract_markdown_sections(
                 sections.append(
                     DocumentSection(
                         path,
-                        stripped,
+                        _markdown_visible_inline_text(stripped),
                         1 if underline.group(1).startswith("=") else 2,
                         index + 1,
                     )
                 )
     return tuple(sections)
+
+
+def _markdown_visible_inline_text(source: str) -> str:
+    """Return displayed inline text, excluding Markdown formatting syntax."""
+    tokens = MarkdownIt("commonmark").parseInline(source)
+    if not tokens or tokens[0].children is None:
+        return " ".join(source.split())
+    parts: list[str] = []
+    for token in tokens[0].children:
+        if token.type in {"text", "code_inline"}:
+            parts.append(token.content)
+        elif token.type in {"softbreak", "hardbreak"}:
+            parts.append(" ")
+        elif token.type == "image" and token.children:
+            parts.extend(
+                child.content
+                for child in token.children
+                if child.type in {"text", "code_inline"}
+            )
+    return " ".join("".join(parts).split())
 
 
 def _mask_latex_comments_and_verbatim(source: str) -> str:

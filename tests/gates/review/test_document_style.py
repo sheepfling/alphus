@@ -48,6 +48,38 @@ def test_markdown_heading_attributes_and_unicode_keep_visible_title() -> None:
     assert [(section.text, section.line) for section in sections] == [("Δ Geometry", 1)]
 
 
+def test_markdown_inline_markup_and_comments_use_visible_headings() -> None:
+    source = """## **From Inputs to Models**
+## [From Data to Results](./results)
+<!--
+## From hidden comment to outline
+## From commented inputs to results
+-->
+## Methods
+## Findings
+"""
+
+    sections = extract_markdown_sections(source, path="report.md")
+
+    assert [section.text for section in sections] == [
+        "From Inputs to Models",
+        "From Data to Results",
+        "Methods",
+        "Findings",
+    ]
+    policy = DocumentStylePolicy(
+        minimum_headings=4,
+        heading_suppressions=(
+            DocumentHeadingSuppression(
+                path="report.md",
+                heading="From Inputs to Models",
+                reason="The owner has approved this transition heading.",
+            ),
+        ),
+    )
+    assert rhetorical_heading_findings(sections, policy) == []
+
+
 def test_html_extraction_keeps_structural_visible_headings_and_skips_chrome() -> None:
     source = """<nav><h2>From Nav to Noise</h2></nav>
 <main>
@@ -67,6 +99,17 @@ def test_html_extraction_keeps_structural_visible_headings_and_skips_chrome() ->
         ("From Data to Results", 2, 4),
         ("Methods", 3, 5),
     ]
+
+
+def test_html_void_hidden_elements_do_not_hide_later_headings() -> None:
+    source = (
+        '<main><img aria-hidden="true"><h1>From Inputs to Models</h1>'
+        "<input hidden><h2>From Data to Results</h2></main>"
+    )
+
+    assert [
+        section.text for section in extract_html_sections(source, path="report.html")
+    ] == ["From Inputs to Models", "From Data to Results"]
 
 
 def test_html_document_review_reports_density_and_declares_limits(
@@ -298,13 +341,21 @@ def test_pptx_title_placeholders_are_anchored_by_slide(tmp_path: Path) -> None:
         ("From Inputs to Models", "From Data to Results", "Methods", "Limitations"),
         start=1,
     ):
+        title_xml = (
+            f"<a:p><a:r><a:t>{title}</a:t></a:r></a:p>"
+            if index != 1
+            else (
+                "<a:p><a:r><a:t>From Inputs</a:t></a:r></a:p>"
+                "<a:p><a:r><a:t>to Models</a:t></a:r></a:p>"
+            )
+        )
         slides.append(
             (
                 f"ppt/slides/slide{index}.xml",
                 (
                     f'<p:sld xmlns:p="{presentation}" xmlns:a="{drawing}"><p:spTree>'
                     '<p:sp><p:nvSpPr><p:nvPr><p:ph type="title"/></p:nvPr></p:nvSpPr>'
-                    f"<p:txBody><a:p><a:r><a:t>{title}</a:t></a:r></a:p></p:txBody>"
+                    f"<p:txBody>{title_xml}</p:txBody>"
                     "</p:sp></p:spTree></p:sld>"
                 ),
             )
@@ -341,6 +392,7 @@ def test_pptx_title_placeholders_are_anchored_by_slide(tmp_path: Path) -> None:
         if finding.line is None and "rhetorical" in finding.message
     )
     assert "slide 1" in density.message
+    assert '"From Inputs to Models" (slide 1)' in density.message
     assert any(
         "title and centered-title placeholders only" in finding.message
         for finding in findings
