@@ -523,7 +523,16 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                             # Exception aliases bind in the handler suite and
                             # replace any prior rendered value of that name.
                             handler_state.pop(handler.name, None)
-                        paths.append(scan(handler.body, handler_state))
+                        handled_state = scan(handler.body, handler_state)
+                        paths.append(handled_state)
+                        if isinstance(statement, ast.TryStar):
+                            # except* suites run in order for matching portions
+                            # of an exception group. A later clause may see
+                            # either an earlier suite's writes or no match, so
+                            # keep only bindings common to both paths.
+                            handler_dispatch_state = _common_bindings(
+                                [handler_dispatch_state, handled_state]
+                            )
                     if finalbody:
                         # An exception can enter finally before the body completes,
                         # so only bindings common to normal and exceptional paths

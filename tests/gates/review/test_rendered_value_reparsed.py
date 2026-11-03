@@ -608,6 +608,23 @@ def test_exception_group_handler_scans_preserved_rendered_binding() -> None:
     assert _sites(source, ("render",)) == [(2, 6, "rendered")]
 
 
+def test_exception_group_prior_handler_write_invalidates_later_handler_evidence() -> (
+    None
+):
+    source = """\
+def f(text):
+    rendered = render(text)
+    try:
+        raise ExceptionGroup("group", [ValueError(), TypeError()])
+    except* ValueError:
+        rendered = text
+    except* TypeError:
+        if rendered.rstrip().endswith("!"):
+            return True
+"""
+    assert _sites(source, ("render",)) == []
+
+
 @pytest.mark.parametrize("star", ["", "*"])
 def test_exception_alias_invalidates_rendered_binding_in_handler(star: str) -> None:
     source = (
