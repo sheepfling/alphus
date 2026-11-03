@@ -330,6 +330,67 @@ steps = ["Numeric literals"]
     assert payload["audit_completion"]["status"] == "incomplete"
 
 
+def test_profile_cli_applies_test_quality_path_filter_to_audit_scope(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / "src").mkdir()
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "src" / "app.py").write_text("def run(): return 1\n", encoding="utf-8")
+    (tmp_path / "tests" / "test_app.py").write_text(
+        "def test_run(): assert True\n", encoding="utf-8"
+    )
+    (tmp_path / "quality.toml").write_text(
+        """schema_version = 1
+[files]
+include = ["src/*.py", "tests/*.py"]
+[checks.test_quality]
+extensions = [".py"]
+test_paths = ["tests/**"]
+[orchestration]
+default_profile = "audit"
+[[orchestration.steps]]
+kind = "rule"
+name = "Test quality"
+rule = "test-quality"
+[[orchestration.profiles]]
+name = "audit"
+steps = ["Test quality"]
+""",
+        encoding="utf-8",
+    )
+    _write_manifest(
+        tmp_path,
+        "audit",
+        [
+            AuditManifestCheck(
+                check_id="test-quality",
+                step="Test quality",
+                expected_files=("tests/test_app.py",),
+            )
+        ],
+    )
+
+    exit_code = main(
+        [
+            "--root",
+            str(tmp_path),
+            "--config",
+            "quality.toml",
+            "--json",
+            "--audit-manifest",
+            "audit.json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert payload["audit_completion"]["status"] == "complete"
+    assert payload["audit_completion"]["checks"][0]["selected_files"] == [
+        "tests/test_app.py"
+    ]
+
+
 def test_manifest_retains_native_selector_scope_and_annotation_evidence(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

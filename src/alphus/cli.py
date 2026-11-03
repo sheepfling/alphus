@@ -34,6 +34,7 @@ from alphus.config import (
     QualityGateConfig,
     QualityRuleName,
     SourceScanPolicy,
+    TestQualityPolicy,
     load_config,
     load_config_stream,
 )
@@ -1562,12 +1563,19 @@ def _selected_rule_files(
     )
     if policy is None:
         return None
+    test_paths = (
+        cast(TestQualityPolicy, policy).test_paths if rule == "test-quality" else None
+    )
     return [
         relative.as_posix()
         for relative in candidate_files(checkout, config.files)
         if relative.suffix in policy.extensions
         and not any(
             matches_path(relative.as_posix(), pattern) for pattern in policy.exclude
+        )
+        and (
+            test_paths is None
+            or any(matches_path(relative.as_posix(), pattern) for pattern in test_paths)
         )
     ]
 
