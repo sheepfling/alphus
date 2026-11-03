@@ -126,11 +126,18 @@ def test_manifest_rejects_scope_mismatch_and_empty_inventory() -> None:
     manifest = _manifest()
     mismatch = assess_profile_audit(manifest, _plan(files=[]), _result())
     empty = assess_profile_audit(manifest, _plan(), _result(status="not_applicable"))
+    empty_rule_inventory = assess_profile_audit(
+        _manifest(expected_files=()),
+        _plan(files=[]),
+        _result(status="passed"),
+    )
 
     assert _checks(mismatch)[0]["status"] == "scope_mismatch"
     assert mismatch["status"] == "incomplete"
     assert _checks(empty)[0]["status"] == "empty_inventory"
     assert empty["status"] == "incomplete"
+    assert _checks(empty_rule_inventory)[0]["status"] == "empty_inventory"
+    assert empty_rule_inventory["status"] == "incomplete"
 
 
 def test_unstructured_command_result_does_not_claim_zero_findings() -> None:
@@ -163,6 +170,53 @@ def test_operational_failure_findings_remain_incomplete(rule_id: str) -> None:
     assert assessment["status"] == "incomplete"
     assert _checks(assessment)[0]["status"] == "execution_failure"
     assert _checks(assessment)[0]["complete"] is False
+
+
+def test_violation_intent_keeps_command_nonzero_evidence_as_findings() -> None:
+    selectors = AuditPlanIntent(
+        rule_id="alphus/python/none/testing/example",
+        language="python",
+        native_rule="ANN",
+        step="Source review",
+    )
+    manifest = _manifest(
+        rule_id=selectors["rule_id"],
+        language=selectors["language"],
+        native_rule=selectors["native_rule"],
+    )
+    plan = _plan(kind="command")
+    plan["intents"] = [selectors]
+    result = _result(
+        status="failed",
+        findings=(
+            AuditResultFinding(
+                rule_id="alphus/any/none/orchestration/command-exited-nonzero"
+            ),
+        ),
+    )
+    result["intent_bindings"] = [
+        {
+            **selectors,
+            "status": "failed",
+            "failure_kind": "violation",
+        }
+    ]
+
+    assessment = assess_profile_audit(manifest, plan, result)
+
+    assert assessment["status"] == "complete"
+    assert _checks(assessment)[0]["status"] == "executed_with_findings"
+    assert _checks(assessment)[0]["findings_state"] == "with_findings"
+
+    result["steps"][0]["findings"] = [
+        AuditResultFinding(
+            rule_id="alphus/any/none/orchestration/command-launch-failed"
+        )
+    ]
+    operational = assess_profile_audit(manifest, plan, result)
+
+    assert operational["status"] == "incomplete"
+    assert _checks(operational)[0]["status"] == "execution_failure"
 
 
 def test_manifest_checks_required_native_selector_tokens() -> None:

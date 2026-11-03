@@ -195,6 +195,9 @@ class AuditCompletion(TypedDict):
 
 
 _COMPLETE_STATES = frozenset({"executed", "executed_zero", "executed_with_findings"})
+_COMMAND_EXITED_NONZERO_RULE = rule_tag(
+    Scope.ANY, Framework.NONE, Category.ORCHESTRATION, "command-exited-nonzero"
+)
 _OPERATIONAL_FAILURE_RULES = frozenset(
     rule_tag(Scope.ANY, Framework.NONE, Category.ORCHESTRATION, complaint)
     for complaint in (
@@ -345,6 +348,20 @@ def assess_profile_audit(
                     "complete": False,
                     "expected_files": list(check.expected_files),
                     "selected_files": actual_files,
+                }
+            )
+            continue
+
+        if planned_step.get("kind") == "rule" and actual_files == []:
+            checks.append(
+                {
+                    "check_id": check.check_id,
+                    "step": check.step,
+                    "status": "empty_inventory",
+                    "complete": False,
+                    "expected_files": list(check.expected_files or ()),
+                    "selected_files": [],
+                    "reason": "the selected built-in rule has no files to inspect",
                 }
             )
             continue
@@ -531,7 +548,12 @@ def assess_profile_audit(
             and executed_intent.get("failure_kind") == "violation"
         )
         operational_evidence = any(
-            finding["rule_id"] in _OPERATIONAL_FAILURE_RULES for finding in findings
+            finding["rule_id"] in _OPERATIONAL_FAILURE_RULES
+            and not (
+                violation_evidence
+                and finding["rule_id"] == _COMMAND_EXITED_NONZERO_RULE
+            )
+            for finding in findings
         ) or (
             executed_intent is not None
             and executed_intent.get("failure_kind")

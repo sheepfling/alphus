@@ -137,6 +137,62 @@ steps = ["Numeric"]
     assert payload["audit_completion"]["checks"][0]["status"] == "missing_policy"
 
 
+def test_profile_cli_keeps_empty_builtin_rule_inventory_incomplete(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / "src").mkdir()
+    (tmp_path / "quality.toml").write_text(
+        """schema_version = 1
+[files]
+include = ["src/*.py"]
+[checks.numeric_literals]
+extensions = [".py"]
+[orchestration]
+default_profile = "audit"
+[[orchestration.steps]]
+kind = "rule"
+name = "Numeric literals"
+rule = "numeric-literals"
+[[orchestration.profiles]]
+name = "audit"
+steps = ["Numeric literals"]
+""",
+        encoding="utf-8",
+    )
+    _write_manifest(
+        tmp_path,
+        "audit",
+        [
+            AuditManifestCheck(
+                check_id="numeric",
+                step="Numeric literals",
+                expected_files=(),
+            )
+        ],
+    )
+
+    exit_code = main(
+        [
+            "--root",
+            str(tmp_path),
+            "--config",
+            "quality.toml",
+            "--json",
+            "--audit-manifest",
+            "audit.json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 2
+    assert payload["audit_completion"]["status"] == "incomplete"
+    check = payload["audit_completion"]["checks"][0]
+    assert check["status"] == "empty_inventory"
+    assert check["complete"] is False
+    assert check["selected_files"] == []
+
+
 def test_manifest_retains_native_selector_scope_and_annotation_evidence(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
