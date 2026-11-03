@@ -862,7 +862,7 @@ def _python_import_evidence(
             )
 
     def record_ambiguous_module_candidates(
-        source: Path, node: ast.AST, candidates: list[Path]
+        source: Path, line: int, candidates: Iterable[Path]
     ) -> None:
         nonlocal unresolved
         if source in analysis_sources:
@@ -874,7 +874,7 @@ def _python_import_evidence(
             return
         unresolved += 1
         ambiguous_module_imports.extend(
-            (source.as_posix(), node.lineno, candidate.as_posix())
+            (source.as_posix(), line, candidate.as_posix())
             for candidate in family_candidates
         )
 
@@ -901,7 +901,9 @@ def _python_import_evidence(
                         elif source in analysis_sources:
                             unresolved += 1
                         else:
-                            record_ambiguous_module_candidates(source, node, targets)
+                            record_ambiguous_module_candidates(
+                                source, node.lineno, targets
+                            )
                 case ast.ImportFrom(module=module, level=level, names=aliases):
                     if module is None:
                         if level and source_module is not None:
@@ -946,7 +948,7 @@ def _python_import_evidence(
                                         unresolved += 1
                                     else:
                                         record_ambiguous_module_candidates(
-                                            source, node, targets
+                                            source, node.lineno, targets
                                         )
                             continue
                         if source in analysis_sources:
@@ -1002,7 +1004,7 @@ def _python_import_evidence(
                             submodule_targets = modules.get(submodule_name, [])
                             if len(submodule_targets) > 1:
                                 record_ambiguous_module_candidates(
-                                    source, node, submodule_targets
+                                    source, node.lineno, submodule_targets
                                 )
                             if (
                                 len(submodule_targets) == 1
@@ -1060,7 +1062,9 @@ def _python_import_evidence(
                         if source in analysis_sources:
                             unresolved += 1
                         elif target_name and len(targets) > 1:
-                            record_ambiguous_module_candidates(source, node, targets)
+                            record_ambiguous_module_candidates(
+                                source, node.lineno, targets
+                            )
                         elif target_name:
                             # Namespace packages may have no selected __init__.py,
                             # while `from pkg import submodule` still loads a
@@ -1075,7 +1079,7 @@ def _python_import_evidence(
                                 submodule_targets = modules.get(submodule_name, [])
                                 if len(submodule_targets) > 1:
                                     record_ambiguous_module_candidates(
-                                        source, node, submodule_targets
+                                        source, node.lineno, submodule_targets
                                     )
                                 elif (
                                     len(submodule_targets) == 1
