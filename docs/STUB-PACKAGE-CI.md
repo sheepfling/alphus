@@ -185,8 +185,11 @@ Positive examples require exit zero and no errors. Negative contracts require
 an exact set of marked lines, or a configured diagnostic count, plus any
 checker-specific diagnostic fragments. An unrelated failure never establishes
 the configured expected errors. Multiple diagnostics on one marked line are
-allowed unless an explicit count says otherwise. Timeouts and spawn failures
-fail.
+allowed unless an explicit count says otherwise. Each verifier subprocess has a
+900-second timeout. A timeout is recorded as a failed stage with exit code 124 and
+bounded partial output. Spawn failures fail with exit 127. Checker fixture
+commands have their own 180-second limit. Timeouts and spawn failures never count
+as passing lanes.
 
 When Ty reports `assert-type-unspellable-subtype` for a class-object
 `assert_type` assertion, the fixture failure includes checker-specific guidance

@@ -47,6 +47,7 @@ IGNORED_BUILD_PATHS = frozenset(
 
 NonEmptyString = Annotated[str, Field(min_length=1)]
 MAX_RECORDED_OUTPUT = 50_000
+DEFAULT_STAGE_TIMEOUT_SECONDS = 900
 
 
 class VerificationConfig(BaseModel):
@@ -91,6 +92,7 @@ class VerificationStage(BaseModel):
     error: str | None = None
     output: str = ""
     output_truncated: bool = False
+    timeout_seconds: int = DEFAULT_STAGE_TIMEOUT_SECONDS
 
 
 class VerificationLane(BaseModel):
@@ -168,6 +170,13 @@ def expand_path_arguments(
     ]
 
 
+def _captured_text(value: str | bytes | None) -> str:
+    """Decode partial timeout output regardless of subprocess text-mode behavior."""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value or ""
+
+
 def run_step(
     name: str,
     arguments: Sequence[str],
@@ -175,6 +184,7 @@ def run_step(
     env: Mapping[str, str],
     *,
     stages: MutableSequence[VerificationStage] | None = None,
+    timeout_seconds: int = DEFAULT_STAGE_TIMEOUT_SECONDS,
 ) -> float:
     print(f"==> {name}: {list(arguments)!r}", flush=True)
     started = time.monotonic()
@@ -190,6 +200,7 @@ def run_step(
             text=True,
             encoding="utf-8",
             errors="replace",
+            timeout=timeout_seconds,
         )
         exit_code = result.returncode
         stdout = result.stdout or ""
@@ -204,6 +215,22 @@ def run_step(
                 file=sys.stderr,
                 flush=True,
             )
+    except subprocess.TimeoutExpired as error:
+        exit_code = 124
+        error_message = f"timed out after {timeout_seconds} seconds"
+        stdout = _captured_text(error.stdout)
+        stderr = _captured_text(error.stderr)
+        output = "\n".join(part for part in (stdout, stderr) if part)
+        if stdout:
+            print(stdout, end="" if stdout.endswith("\n") else "\n", flush=True)
+        if stderr:
+            print(
+                stderr,
+                end="" if stderr.endswith("\n") else "\n",
+                file=sys.stderr,
+                flush=True,
+            )
+        print(f"{name}: {error_message}", file=sys.stderr, flush=True)
     except OSError as error:
         exit_code = 127
         error_message = str(error)
@@ -220,6 +247,7 @@ def run_step(
                 error=error_message,
                 output=output[-MAX_RECORDED_OUTPUT:],
                 output_truncated=len(output) > MAX_RECORDED_OUTPUT,
+                timeout_seconds=timeout_seconds,
             )
         )
     if exit_code:
