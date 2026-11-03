@@ -67,6 +67,48 @@ def merge(text):
     assert _sites(zero_argument_call, ("render_latex",)) == []
 
 
+@pytest.mark.parametrize(
+    "assignment",
+    [
+        "preview = render_latex(rendered := source)",
+        "preview: str = render_latex(text=(rendered := source))",
+    ],
+)
+def test_renderer_call_walrus_invalidates_rebound_rendered_local(
+    assignment: str,
+) -> None:
+    source = (
+        "def f(text, source):\n"
+        "    rendered = render_latex(text)\n"
+        f"    {assignment}\n"
+        "    if rendered.rstrip().endswith('!'):\n"
+        "        return True\n"
+    )
+
+    assert _sites(source, ("render_latex",)) == []
+
+
+def test_unrelated_renderer_argument_walrus_preserves_rendered_local() -> None:
+    source = """\
+def f(text, source):
+    rendered = render_latex(text)
+    preview = render_latex(other := source)
+    if rendered.rstrip().endswith("!"):
+        return True
+"""
+    assert _sites(source, ("render_latex",)) == [(2, 4, "rendered")]
+
+
+def test_renderer_assignment_rebinds_target_after_argument_walrus() -> None:
+    source = """\
+def f(text, source):
+    rendered = render_latex(rendered := source)
+    if rendered.rstrip().endswith("!"):
+        return True
+"""
+    assert _sites(source, ("render_latex",)) == [(2, 3, "rendered")]
+
+
 def test_rendered_binding_must_precede_predicate_in_same_scope() -> None:
     predicate_first = """\
 def f(text):

@@ -165,6 +165,8 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                     targets=[ast.Name(id=name)],
                     value=ast.Call(func=func, args=args, keywords=keywords),
                 ) if _qualified_name(func) in helpers and (args or keywords):
+                    for rebound in _named_expression_names(statement.value):
+                        current.pop(rebound, None)
                     current.pop(name, None)
                     current[name] = statement.lineno
                 case ast.Assign(targets=targets):
@@ -178,6 +180,8 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                     target=ast.Name(id=name),
                     value=ast.Call(func=func, args=args, keywords=keywords),
                 ) if _qualified_name(func) in helpers and (args or keywords):
+                    for rebound in _named_expression_names(statement.value):
+                        current.pop(rebound, None)
                     current.pop(name, None)
                     current[name] = statement.lineno
                 case ast.AnnAssign(target=target, value=value):
