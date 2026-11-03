@@ -254,6 +254,17 @@ def _has_method_link(text: str, definitions: Mapping[str, tuple[str, bool]]) -> 
     return False
 
 
+def _analyze_heading(
+    heading: str,
+    definitions: Mapping[str, tuple[str, bool]],
+) -> tuple[int, bool, bool]:
+    return (
+        _measurement_count(heading),
+        _BENCHMARK_LANGUAGE.search(heading) is not None,
+        _has_method_link(heading, definitions),
+    )
+
+
 def benchmark_doc_findings(
     root: Path, paths: Iterable[Path], policy: _BenchmarkDocPolicy
 ) -> list[Finding]:
@@ -323,15 +334,30 @@ def benchmark_doc_findings(
         method_definitions = _method_link_definitions(
             body for _, _, body, _ in _sections(lines)
         )
+        heading_titles = {
+            heading
+            for _, _, _, heading_context in _sections(lines)
+            for heading in heading_context
+        }
+        heading_analysis = {
+            heading: _analyze_heading(heading, method_definitions)
+            for heading in heading_titles
+        }
         for section, line, body, heading_context in _sections(lines):
             if (relative_name, section) in exceptions:
                 continue
-            section_text = f"{' > '.join(heading_context)}\n{body}"
-            measurements = _measurement_count(section_text)
+            context_analysis = [
+                heading_analysis[heading] for heading in heading_context
+            ]
+            measurements = _measurement_count(body) + sum(
+                item[0] for item in context_analysis
+            )
             if (
                 measurements < policy.min_measurements
-                or not _BENCHMARK_LANGUAGE.search(section_text)
-                or _has_method_link(section_text, method_definitions)
+                or not _BENCHMARK_LANGUAGE.search(body)
+                and not any(item[1] for item in context_analysis)
+                or _has_method_link(body, method_definitions)
+                or any(item[2] for item in context_analysis)
             ):
                 continue
             if record(

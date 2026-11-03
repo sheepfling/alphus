@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from alphus.config import BenchmarkDocPolicy, load_config_stream
 from alphus.execution.dispatch import run_builtin_rule
 from alphus.execution.results import diagnostics_from_output
+from alphus.gates.review import benchmark_docs
 from alphus.gates.review.benchmark_docs import _sections, benchmark_doc_findings
 
 FIXTURE_BASE = Path("tests/fixtures/benchmark_docs")
@@ -156,6 +157,35 @@ def test_heading_context_is_shared_across_many_subsections() -> None:
     assert isinstance(first[3], tuple)
     assert len(first[3]) == 2
     assert first[3][0] is second[3][0]
+
+
+def test_long_ancestor_heading_is_analyzed_once_for_many_subsections(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    relative = Path("docs/long-heading.md")
+    source = tmp_path / relative
+    source.parent.mkdir(parents=True)
+    text = "# Benchmark " + "context " * 5_000 + "\n"
+    text += "\n".join(f"## Case {index}\nA short section." for index in range(4_000))
+    source.write_text(text, encoding="utf-8")
+
+    analyzed_characters = 0
+    measurement_count = benchmark_docs._measurement_count
+
+    def track_measurements(section_text: str) -> int:
+        nonlocal analyzed_characters
+        analyzed_characters += len(section_text)
+        return measurement_count(section_text)
+
+    monkeypatch.setattr(benchmark_docs, "_measurement_count", track_measurements)
+    findings = benchmark_doc_findings(
+        tmp_path,
+        [relative],
+        BenchmarkDocPolicy(include=("docs/**",)),
+    )
+
+    assert findings == []
+    assert analyzed_characters <= len(text) * 2
 
 
 def test_detects_throughput_and_comparison_sections_deterministically(
