@@ -213,6 +213,8 @@ def _stored_helper_name(node: ast.AST, names: frozenset[str]) -> bool:
                 return True
             case ast.MatchMapping(rest=name) if name in names:
                 return True
+            case ast.ExceptHandler(name=name) if name in names:
+                return True
             case _:
                 continue
     return False

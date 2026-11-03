@@ -200,6 +200,37 @@ def parse_document(repair_id, text):
     assert patch_cascade_sites(source, _policy()) == []
 
 
+def test_exception_alias_shadowing_helper_makes_identity_unknown() -> None:
+    source = """\
+def parse_document(repair_id, text):
+    try:
+        raise RuntimeError()
+    except RuntimeError as normalize_text:
+        if repair_id == "vendor-a":
+            text = normalize_text(text, " ")
+        if repair_id == "vendor-b":
+            text = normalize_text(text, "-")
+    return text
+"""
+    assert patch_cascade_sites(source, _policy()) == []
+
+
+def test_unrelated_exception_alias_preserves_helper_evidence() -> None:
+    source = """\
+def parse_document(repair_id, text):
+    try:
+        raise RuntimeError()
+    except RuntimeError as error:
+        pass
+    if repair_id == "vendor-a":
+        text = normalize_text(text, " ")
+    if repair_id == "vendor-b":
+        text = normalize_text(text, "-")
+    return text
+"""
+    assert len(patch_cascade_sites(source, _policy())) == 1
+
+
 def test_redefinition_of_selected_parser_is_ambiguous() -> None:
     source = """\
 def parse_document(repair_id, text):
