@@ -460,6 +460,30 @@ def test_matrix_invariant_allowlist_does_not_turn_single_job_into_a_matrix() -> 
     )
 
 
+def test_singleton_matrix_does_not_report_one_run_as_repetition() -> None:
+    script = "ruff check src\nmypy src\n"
+    source = """jobs:
+  checks:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.11']
+    steps:
+      - run: |
+          ruff check src
+          mypy src
+"""
+
+    assert (
+        workflow_run_findings(
+            source,
+            ".github/workflows/ci.yml",
+            policy(matrix_invariant_run_blocks=(script,)),
+        )
+        == []
+    )
+
+
 def test_azure_static_scripts_match_only_when_job_context_is_simple() -> None:
     source = """jobs:
 - job: lint
