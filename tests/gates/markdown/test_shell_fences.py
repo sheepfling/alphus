@@ -151,6 +151,25 @@ def test_printf_format_directives_are_not_cmd_environment_evidence(
     assert findings == []
 
 
+def test_long_invalid_printf_format_is_scanned_linearly(
+    tmp_path: Path,
+) -> None:
+    format_word = "%" + ("0" * 8000) + "Y"
+    findings = _check(
+        tmp_path,
+        "\n".join(
+            [
+                chr(96) * 3 + "bash",
+                "printf " + format_word,
+                chr(96) * 3,
+                "",
+            ]
+        ),
+    )
+
+    assert findings == []
+
+
 def test_multiline_printf_quote_with_many_backslashes_is_scanned_linearly(
     tmp_path: Path,
 ) -> None:

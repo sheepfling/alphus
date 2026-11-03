@@ -61,10 +61,6 @@ _PRINTF_FORMAT_COMMAND = re.compile(
     r"(?:env[ \t]+(?:[A-Za-z_][A-Za-z0-9_]*=[^ \t;&|()]+[ \t]+)*)?"
     r"(?P<command>printf)\b"
 )
-_PRINTF_FORMAT_DIRECTIVE = re.compile(
-    r"%(?:%|[-+#0 ']*(?:\d+|\*)?(?:\.(?:\d+|\*))?"
-    r"(?:hh|h|ll|l|L|z|j|t)?[bcdeEfFgGiosuxXq])"
-)
 _FIND_FORMAT_DIRECTIVE = re.compile(
     r"%(?:%|[-]?\d*(?:\.\d+)?[aAbBcCdDfFgGhHkKlLmMnNpPsStTuUwWxXyYZA])"
 )
@@ -710,16 +706,7 @@ def _mask_printf_format_argument(
         format_found = True
         if format_word.startswith(("'", '"')):
             continue
-        directives = list(_PRINTF_FORMAT_DIRECTIVE.finditer(format_word))
-        percent_positions = [i for i, char in enumerate(format_word) if char == "%"]
-        covered = {
-            position
-            for directive in directives
-            for position in range(*directive.span())
-        }
-        if not percent_positions or not all(
-            position in covered for position in percent_positions
-        ):
+        if not _is_printf_format_word(format_word):
             continue
         start = start_in_command + command_start - offset
         end = end_in_command + command_start - offset
@@ -732,6 +719,50 @@ def _mask_printf_format_argument(
     for start, end in spans:
         masked_line[start:end] = " " * (end - start)
     return "".join(masked_line), format_found
+
+
+def _is_printf_format_word(value: str) -> bool:
+    """Validate printf conversions with a single forward-only pass."""
+    index = 0
+    found_directive = False
+    flags = "-+#0 '"
+    conversions = "bcdeEfFgGiosuxXq"
+    lengths = ("hh", "ll", "h", "l", "L", "z", "j", "t")
+    while index < len(value):
+        if value[index] != "%":
+            index += 1
+            continue
+
+        found_directive = True
+        index += 1
+        if index < len(value) and value[index] == "%":
+            index += 1
+            continue
+        while index < len(value) and value[index] in flags:
+            index += 1
+        if index < len(value) and value[index] == "*":
+            index += 1
+        else:
+            while index < len(value) and value[index].isdigit():
+                index += 1
+        if index < len(value) and value[index] == ".":
+            index += 1
+            if index < len(value) and value[index] == "*":
+                index += 1
+            else:
+                precision_start = index
+                while index < len(value) and value[index].isdigit():
+                    index += 1
+                if precision_start == index:
+                    return False
+        for length in lengths:
+            if value.startswith(length, index):
+                index += len(length)
+                break
+        if index >= len(value) or value[index] not in conversions:
+            return False
+        index += 1
+    return found_directive
 
 
 def _shell_words(source: str) -> list[tuple[int, int, str]]:
