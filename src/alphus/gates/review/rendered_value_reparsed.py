@@ -63,6 +63,12 @@ def _named_expression_names(value: ast.expr | None) -> set[str]:
             case ast.NamedExpr(target=target):
                 names.update(_target_names(target))
                 pending.extend(ast.iter_child_nodes(node))
+            case ast.GeneratorExp(generators=generators):
+                # A generator expression evaluates only its outer iterable
+                # when constructed. Its filters, later iterables, and element
+                # remain deferred until iteration begins.
+                if generators:
+                    pending.append(generators[0].iter)
             case ast.Lambda(args=args):
                 # Lambda defaults execute now in the enclosing scope; its body
                 # executes later in the lambda's own local scope.

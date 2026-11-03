@@ -140,8 +140,32 @@ def _comprehension_nodes(root: ast.AST, shadowed: frozenset[str]) -> Iterable[as
     match root:
         case ast.FunctionDef() | ast.AsyncFunctionDef() | ast.ClassDef() | ast.Lambda():
             return
-        case ast.ListComp() | ast.SetComp() | ast.GeneratorExp() | ast.DictComp():
-            yield from _local_nodes(root)
+        case (
+            ast.ListComp(generators=generators, elt=element)
+            | ast.SetComp(generators=generators, elt=element)
+            | ast.GeneratorExp(generators=generators, elt=element)
+        ):
+            local_shadowed = shadowed
+            for generator in generators:
+                yield from _comprehension_nodes(generator.iter, local_shadowed)
+                local_shadowed = local_shadowed | _comprehension_target_names(
+                    generator.target
+                )
+                for condition in generator.ifs:
+                    yield from _comprehension_nodes(condition, local_shadowed)
+            yield from _comprehension_nodes(element, local_shadowed)
+            return
+        case ast.DictComp(generators=generators, key=key, value=value):
+            local_shadowed = shadowed
+            for generator in generators:
+                yield from _comprehension_nodes(generator.iter, local_shadowed)
+                local_shadowed = local_shadowed | _comprehension_target_names(
+                    generator.target
+                )
+                for condition in generator.ifs:
+                    yield from _comprehension_nodes(condition, local_shadowed)
+            yield from _comprehension_nodes(key, local_shadowed)
+            yield from _comprehension_nodes(value, local_shadowed)
             return
         case _:
             pass

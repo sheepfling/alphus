@@ -92,6 +92,38 @@ def merge(text, original, values):
     assert _sites(source, ("render_latex",)) == [(2, 4, "rendered")]
 
 
+@pytest.mark.parametrize(
+    "generator",
+    [
+        "((rendered := original) for _ in range(1))",
+        "(original for _ in range(1) if (rendered := original))",
+        "(item for _ in range(1) for item in (rendered := originals))",
+    ],
+)
+def test_deferred_generator_walrus_preserves_rendered_binding(
+    generator: str,
+) -> None:
+    source = f"""\
+def merge(text, original, originals):
+    rendered = render_latex(text)
+    updates = {generator}
+    if rendered.rstrip().endswith("!"):
+        return True
+"""
+    assert _sites(source, ("render_latex",)) == [(2, 4, "rendered")]
+
+
+def test_generator_outer_iterable_walrus_invalidates_rendered_binding() -> None:
+    source = """\
+def merge(text, originals):
+    rendered = render_latex(text)
+    updates = (item for item in (rendered := originals))
+    if rendered.rstrip().endswith("!"):
+        return True
+"""
+    assert _sites(source, ("render_latex",)) == []
+
+
 def test_ignores_output_only_and_unconfigured_renderers() -> None:
     output_only = """
 def render(cell):
