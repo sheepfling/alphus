@@ -399,7 +399,7 @@ def _regex_helper_root_is_shadowed(
         if (
             isinstance(ancestor, ast.ClassDef)
             and _class_namespace_applies(ancestor, call, parents)
-            and _class_scope_binds_name(ancestor, root)
+            and _class_scope_binds_name(ancestor, root, call, parents)
         ):
             return True
         if isinstance(ancestor, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
@@ -419,11 +419,14 @@ def _class_namespace_applies(
     """Limit class-name lookup to expressions actually evaluated in its body."""
     child = expression
     parent = parents.get(child)
+    comprehensions: list[
+        ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp
+    ] = []
     while parent is not None and parent is not scope:
         if isinstance(
             parent, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
         ):
-            return False
+            comprehensions.append(parent)
         if isinstance(parent, ast.Lambda) and not _is_definition_time_expression(
             parent, expression, parents
         ):
@@ -432,6 +435,12 @@ def _class_namespace_applies(
         parent = parents.get(parent)
     if parent is not scope:
         return False
+    if comprehensions:
+        if len(comprehensions) != 1:
+            return False
+        comprehension = comprehensions[0]
+        if not _is_within(expression, comprehension.generators[0].iter, parents):
+            return False
     if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
         return _is_definition_time_expression(child, expression, parents)
     if isinstance(child, ast.ClassDef):
@@ -454,11 +463,40 @@ def _is_class_definition_expression(
     )
 
 
-def _class_scope_binds_name(scope: ast.ClassDef, name: str) -> bool:
-    """Collect class-body bindings without treating methods as closures."""
+def _class_scope_binds_name(
+    scope: ast.ClassDef,
+    name: str,
+    expression: ast.AST,
+    parents: Mapping[ast.AST, ast.AST],
+) -> bool:
+    """Resolve earlier class-body bindings without treating methods as closures."""
+    child = expression
+    parent = parents.get(child)
+    while parent is not None and parent is not scope:
+        child = parent
+        parent = parents.get(parent)
+    if parent is not scope:
+        return False
+    statement = next((item for item in scope.body if item is child), None)
+    if statement is None:
+        return False
+    if isinstance(
+        statement,
+        (
+            ast.If,
+            ast.For,
+            ast.AsyncFor,
+            ast.While,
+            ast.Try,
+            ast.With,
+            ast.AsyncWith,
+            ast.Match,
+        ),
+    ):
+        return True
     bindings = _FunctionBindingNames()
-    for statement in scope.body:
-        bindings.visit(statement)
+    for previous in scope.body[: scope.body.index(statement)]:
+        bindings.visit(previous)
     return name in bindings.names
 
 

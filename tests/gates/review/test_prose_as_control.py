@@ -128,6 +128,14 @@ class Shadowed:
 
 class Unshadowed:
     cleaned = re.sub(r"\d+", "", "abc123")
+
+class LaterBinding:
+    cleaned = re.sub(r"\d+", "", "abc123")
+    re = adapter
+
+class ComprehensionOuterIterable:
+    re = adapter
+    cleaned = [item for item in re.sub(r"\d+", "", "abc123")]
 """
     configured = _policy(lossy_text_rewrite=True, regex_sub_helpers=("re.sub",))
 
@@ -135,6 +143,7 @@ class Unshadowed:
         (7, r"\d+"),
         (17, r"\d+"),
         (26, r"\d+"),
+        (29, r"\d+"),
     ]
 
 
