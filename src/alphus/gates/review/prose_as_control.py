@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ast
 import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 
 from alphus.config import ProseAsControlPolicy
@@ -369,7 +369,7 @@ def lossy_rewrite_lines(
                 keywords=[],
             ) if (
                 _qualified_name(func) in helpers
-                and not _regex_helper_root_is_parameter(func, node, parents)
+                and not _regex_helper_root_is_shadowed(func, node, parents)
                 and _regex_consumes_digit(pattern)
                 and replacement in {"", " "}
             ):
@@ -382,10 +382,10 @@ def lossy_rewrite_lines(
     return sorted(observations)
 
 
-def _regex_helper_root_is_parameter(
+def _regex_helper_root_is_shadowed(
     function: ast.expr, call: ast.AST, parents: Mapping[ast.AST, ast.AST]
 ) -> bool:
-    """Abstain when a configured dotted helper root is a function parameter."""
+    """Abstain when a configured dotted helper root is locally rebound."""
     qualified_name = _qualified_name(function)
     if qualified_name is None or "." not in qualified_name:
         return False
@@ -393,21 +393,163 @@ def _regex_helper_root_is_parameter(
     ancestor = parents.get(call)
     while ancestor is not None:
         if isinstance(ancestor, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
-            args = ancestor.args
-            parameter_names = {
-                argument.arg
-                for argument in (
-                    *args.posonlyargs,
-                    *args.args,
-                    *args.kwonlyargs,
-                    *((args.vararg,) if args.vararg is not None else ()),
-                    *((args.kwarg,) if args.kwarg is not None else ()),
-                )
-            }
-            if root in parameter_names:
+            if not _is_definition_time_expression(
+                ancestor, call, parents
+            ) and _function_scope_binds_name(ancestor, root):
                 return True
         ancestor = parents.get(ancestor)
     return False
+
+
+def _is_definition_time_expression(
+    function: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda,
+    expression: ast.AST,
+    parents: Mapping[ast.AST, ast.AST],
+) -> bool:
+    """Whether an expression belongs to a function header, not its body."""
+    child = expression
+    parent = parents.get(child)
+    while parent is not None and parent is not function:
+        child = parent
+        parent = parents.get(parent)
+    if parent is not function:
+        return False
+    if isinstance(function, ast.Lambda):
+        return child is function.args
+    return (
+        child is function.args
+        or child is function.returns
+        or child in function.decorator_list
+        or child in getattr(function, "type_params", ())
+    )
+
+
+def _function_scope_binds_name(
+    function: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda, name: str
+) -> bool:
+    """Find parameters and local bindings without entering nested scopes."""
+    if name in {argument.arg for argument in _function_parameters(function)}:
+        return True
+    bindings = _FunctionBindingNames()
+    for statement in function.body if not isinstance(function, ast.Lambda) else ():
+        bindings.visit(statement)
+    return name in bindings.names
+
+
+def _function_parameters(
+    function: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda,
+) -> tuple[ast.arg, ...]:
+    args = function.args
+    return (
+        *args.posonlyargs,
+        *args.args,
+        *args.kwonlyargs,
+        *((args.vararg,) if args.vararg is not None else ()),
+        *((args.kwarg,) if args.kwarg is not None else ()),
+    )
+
+
+class _FunctionBindingNames(ast.NodeVisitor):
+    """Collect bindings in one function body, excluding nested local scopes."""
+
+    def __init__(self) -> None:
+        self.names: set[str] = set()
+
+    def visit_Name(self, node: ast.Name) -> None:
+        if node.ctx.__class__ is ast.Store or node.ctx.__class__ is ast.Del:
+            self.names.add(node.id)
+
+    def visit_Import(self, node: ast.Import) -> None:
+        self.names.update(
+            alias.asname or alias.name.split(".", maxsplit=1)[0] for alias in node.names
+        )
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        self.names.update(alias.asname or alias.name for alias in node.names)
+
+    def visit_Global(self, node: ast.Global) -> None:
+        self.names.update(node.names)
+
+    def visit_Nonlocal(self, node: ast.Nonlocal) -> None:
+        self.names.update(node.names)
+
+    def visit_ExceptHandler(self, node: ast.ExceptHandler) -> None:
+        if node.name is not None:
+            self.names.add(node.name)
+        if node.type is not None:
+            self.visit(node.type)
+        for statement in node.body:
+            self.visit(statement)
+
+    def visit_MatchAs(self, node: ast.MatchAs) -> None:
+        if node.name is not None:
+            self.names.add(node.name)
+        if node.pattern is not None:
+            self.visit(node.pattern)
+
+    def visit_MatchStar(self, node: ast.MatchStar) -> None:
+        if node.name is not None:
+            self.names.add(node.name)
+
+    def visit_MatchMapping(self, node: ast.MatchMapping) -> None:
+        if node.rest is not None:
+            self.names.add(node.rest)
+        self.generic_visit(node)
+
+    def visit_ListComp(self, node: ast.ListComp) -> None:
+        self._visit_comprehension(node.generators, (node.elt,))
+
+    def visit_SetComp(self, node: ast.SetComp) -> None:
+        self._visit_comprehension(node.generators, (node.elt,))
+
+    def visit_GeneratorExp(self, node: ast.GeneratorExp) -> None:
+        self._visit_comprehension(node.generators, (node.elt,))
+
+    def visit_DictComp(self, node: ast.DictComp) -> None:
+        self._visit_comprehension(node.generators, (node.key, node.value))
+
+    def _visit_comprehension(
+        self, generators: Sequence[ast.comprehension], elements: tuple[ast.expr, ...]
+    ) -> None:
+        for generator in generators:
+            self.visit(generator.iter)
+            for condition in generator.ifs:
+                self.visit(condition)
+        for element in elements:
+            self.visit(element)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        self._visit_nested_definition(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        self._visit_nested_definition(node)
+
+    def _visit_nested_definition(
+        self, node: ast.FunctionDef | ast.AsyncFunctionDef
+    ) -> None:
+        self.names.add(node.name)
+        for decorator in node.decorator_list:
+            self.visit(decorator)
+        for expression in (*node.args.defaults, *node.args.kw_defaults):
+            if expression is not None:
+                self.visit(expression)
+        for argument in _function_parameters(node):
+            if argument.annotation is not None:
+                self.visit(argument.annotation)
+        if node.returns is not None:
+            self.visit(node.returns)
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        self.names.add(node.name)
+        for expression in (*node.decorator_list, *node.bases):
+            self.visit(expression)
+        for keyword in node.keywords:
+            self.visit(keyword.value)
+
+    def visit_Lambda(self, node: ast.Lambda) -> None:
+        for expression in (*node.args.defaults, *node.args.kw_defaults):
+            if expression is not None:
+                self.visit(expression)
 
 
 def _qualified_name(node: ast.expr) -> str | None:
