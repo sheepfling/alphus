@@ -54,6 +54,8 @@ class StepExecution:
     stdout: str = ""
     stderr: str = ""
     attempted_command: str | None = None
+    selected_files: tuple[str, ...] | None = None
+    expanded_argv: tuple[str, ...] | None = None
     duration_seconds: float = 0.0
     work_unit_durations: tuple[tuple[str, float], ...] = ()
 
@@ -200,6 +202,7 @@ def run_profile_steps(
     local_rules: set[str] = set()
     skipped: set[str] = set()
     prepared_commands: dict[str, tuple[tuple[str, ...], Path]] = {}
+    prepared_command_files: dict[str, tuple[str, ...] | None] = {}
     planning_errors: dict[str, Exception] = {}
     config_fingerprint = hashlib.sha256(config.model_dump_json().encode()).hexdigest()
     for step in steps:
@@ -207,6 +210,11 @@ def run_profile_steps(
             if isinstance(step, CommandRunStep):
                 selected = (
                     candidate_files(root, step.files) if step.files is not None else []
+                )
+                prepared_command_files[step.name] = (
+                    tuple(path.as_posix() for path in selected)
+                    if step.files is not None
+                    else None
                 )
                 if step.files is not None and not selected:
                     skipped.add(step.name)
@@ -332,18 +340,28 @@ def run_profile_steps(
         if step.name in planning_errors:
             executed[step.name] = StepExecution(error=planning_errors[step.name])
         elif step.name in skipped:
-            executed[step.name] = StepExecution(not_applicable=True)
+            executed[step.name] = StepExecution(
+                not_applicable=True,
+                selected_files=prepared_command_files.get(step.name),
+            )
         elif isinstance(step, CommandRunStep):
             outcome = outcomes[step.name]
             attempted_command = prepared_commands[step.name][0][0]
+            selected_files = prepared_command_files[step.name]
+            expanded_argv = prepared_commands[step.name][0]
             if outcome.error is not None:
                 executed[step.name] = StepExecution(
-                    error=outcome.error, attempted_command=attempted_command
+                    error=outcome.error,
+                    attempted_command=attempted_command,
+                    selected_files=selected_files,
+                    expanded_argv=expanded_argv,
                 )
             else:
                 executed[step.name] = StepExecution(
                     command=cast(subprocess.CompletedProcess[str], outcome.value),
                     attempted_command=attempted_command,
+                    selected_files=selected_files,
+                    expanded_argv=expanded_argv,
                 )
         elif step.name in local_rules:
             outcome = outcomes[step.name]

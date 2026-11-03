@@ -13,6 +13,7 @@ from contextvars import ContextVar
 from functools import partial
 from io import StringIO
 from pathlib import Path
+from types import MappingProxyType
 from typing import (
     Annotated,
     Literal,
@@ -25,7 +26,7 @@ from typing import (
 )
 
 import typer
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 from rich.console import Console
 from rich.text import Text
 
@@ -33,6 +34,7 @@ from alphus.config import (
     QualityGateConfig,
     QualityRuleName,
     SourceScanPolicy,
+    TestQualityPolicy,
     load_config,
     load_config_stream,
 )
@@ -42,10 +44,23 @@ from alphus.contracts.findings import (
 )
 from alphus.contracts.process import ExitCode
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.execution.audit_manifest import (
+    AuditCheckStatus,
+    AuditManifest,
+    AuditPlanIntent,
+    AuditPlanStep,
+    ProfileAuditPlan,
+    ProfileAuditResult,
+    assess_profile_audit,
+)
 from alphus.execution.dispatch import run_builtin_rule
 from alphus.execution.fixes import apply_fixes as apply_configured_fixes
 from alphus.execution.fixes import resolve_fix_plan
-from alphus.execution.orchestration import RuleRunResult, run_orchestration
+from alphus.execution.orchestration import (
+    EXECUTION_SCOPE,
+    RuleRunResult,
+    run_orchestration,
+)
 from alphus.execution.parallel import run_parallel_cyclomatic
 from alphus.execution.profile_analysis import (
     rollup_profile_history,
@@ -62,8 +77,10 @@ from alphus.execution.profile_history import (
 from alphus.execution.results import RuleEvaluation, RuleOutput
 from alphus.execution.scheduler import WorkUnit, run_work_units
 from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
+from alphus.gates.languages.python.script_policy import launcher_files
 from alphus.gates.languages.python.style import StyleFindings
-from alphus.gates.source.cli_policy import CliPolicyReport
+from alphus.gates.review.source_families import bounded_source_family_inventory
+from alphus.gates.source.cli_policy import CliPolicyReport, selected_policy_sources
 from alphus.gates.source.cyclomatic_complexity import (
     CyclomaticReport,
     build_cyclomatic_plan,
@@ -75,8 +92,13 @@ from alphus.policy.base import MissingPolicyError
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
 from alphus.policy.function_shape import plan_function_shape
 from alphus.policy.intents import intent_bindings_for_steps
+from alphus.policy.orchestration import RuleRunStep
 from alphus.policy.recipes import render_recipe
-from alphus.support.data_access import JsonValue
+from alphus.support.data_access import (
+    JsonValue,
+    require_json_object,
+    validate_json_value,
+)
 from alphus.support.inventory import candidate_files, matches_path
 from alphus.support.reporting import (
     emit_execution_failure,
@@ -98,6 +120,27 @@ class _ProfilePlanPayload(TypedDict):
 
 
 _OUTPUT_FORMAT: ContextVar[str] = ContextVar("alphus_output_format", default="auto")
+_PROFILE_AUDIT_RESULT: TypeAdapter[ProfileAuditResult] = TypeAdapter(ProfileAuditResult)
+
+
+def _decode_json_object(source: str) -> dict[str, JsonValue]:
+    """Decode a JSON object with the shared finite-number validation policy."""
+    value = validate_json_value(source)
+    return dict(require_json_object(value, "expected a JSON object"))
+
+
+def _reject_duplicate_json_object_keys(
+    pairs: Sequence[tuple[str, JsonValue]],
+) -> Mapping[str, JsonValue]:
+    """Reject duplicate names at every depth in an audit manifest."""
+    values: dict[str, JsonValue] = {}
+    for key, value in pairs:
+        if key in values:
+            raise ValueError(f"duplicate JSON object member: {key}")
+        values[key] = value
+    return MappingProxyType(values)
+
+
 _SOURCE_SCAN_RULES: frozenset[QualityRuleName] = frozenset(
     {
         "json-structure",
@@ -334,6 +377,30 @@ def _profile_failure(message: str, *, json_output: bool) -> int:
     else:
         _human_error(message)
     return ExitCode.CONFIG_ERROR
+
+
+def _load_audit_manifest(root: Path, path: Path) -> AuditManifest:
+    """Load a bounded caller-supplied JSON manifest for profile execution."""
+    manifest_path = path if path.is_absolute() else root / path
+    try:
+        raw = manifest_path.read_bytes()
+    except OSError as error:
+        raise typer.BadParameter(
+            "audit manifest could not be read", param_hint="--audit-manifest"
+        ) from error
+    if len(raw) > 1_000_000:
+        raise typer.BadParameter(
+            "audit manifest exceeds the 1 MB limit", param_hint="--audit-manifest"
+        )
+    try:
+        json.JSONDecoder(object_pairs_hook=_reject_duplicate_json_object_keys).decode(
+            raw.decode("utf-8")
+        )
+        return AuditManifest.model_validate_json(raw)
+    except (ValidationError, ValueError) as error:
+        raise typer.BadParameter(
+            "audit manifest is invalid", param_hint="--audit-manifest"
+        ) from error
 
 
 def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
@@ -881,25 +948,76 @@ def _execute_profile(
     jobs: int | None = None,
     history_dir: Path | None = None,
     consumer_id: str | None = None,
+    audit_manifest: AuditManifest | None = None,
 ) -> int:
     """Run the configured suite through the Python orchestration layer."""
     checkout = root.resolve(strict=True)
     resolved_config = (
         config_path if config_path.is_absolute() else checkout / config_path
     )
-    config = _load_policy(resolved_config, json_output=json_output)
+
+    def audit_preflight_failure(
+        message: str, *, assessment_status: AuditCheckStatus = "incomplete"
+    ) -> int:
+        if audit_manifest is None:
+            return _profile_failure(message, json_output=json_output)
+        payload = execution_failure_payload(
+            component="alphus-profile",
+            kind="configuration_error",
+            message=message,
+            exit_code=ExitCode.CONFIG_ERROR,
+        )
+        audit = assess_profile_audit(
+            audit_manifest,
+            None,
+            None,
+            unavailable_reason="profile configuration or selection failed before execution",
+            unavailable_status=assessment_status,
+        )
+        encoded = dict(payload)
+        encoded["audit_completion"] = cast(JsonValue, audit)
+        typer.echo(json.dumps(encoded, sort_keys=True))
+        return ExitCode.CONFIG_ERROR
+
+    if audit_manifest is None:
+        config = _load_policy(resolved_config, json_output=json_output)
+    else:
+        failure_output = StringIO()
+        try:
+            with redirect_stdout(failure_output):
+                config = _load_policy(resolved_config, json_output=True)
+        except typer.Exit:
+            try:
+                failure_payload = _decode_json_object(failure_output.getvalue())
+            except (TypeError, ValueError, ValidationError):
+                return audit_preflight_failure(
+                    "Invalid quality policy: the configuration could not be loaded."
+                )
+            failure_payload["audit_completion"] = cast(
+                JsonValue,
+                assess_profile_audit(
+                    audit_manifest,
+                    None,
+                    None,
+                    unavailable_reason="profile configuration failed before execution",
+                ),
+            )
+            typer.echo(json.dumps(failure_payload, sort_keys=True))
+            return ExitCode.CONFIG_ERROR
     policy = config.orchestration
     if policy is None:
-        return _profile_failure(
-            "The selected policy has no [orchestration] section.",
-            json_output=json_output,
+        return audit_preflight_failure(
+            "The selected policy has no [orchestration] section."
         )
     selected_profile = profile_name or policy.default_profile
+    if audit_manifest is not None and audit_manifest.profile != selected_profile:
+        return audit_preflight_failure(
+            "The requested profile does not match the audit manifest profile."
+        )
     plan = policy.resolve_profile(selected_profile)
     if plan is None:
-        return _profile_failure(
-            "The requested orchestration profile is not defined by the policy.",
-            json_output=json_output,
+        return audit_preflight_failure(
+            "The requested orchestration profile is not defined by the policy."
         )
     try:
         for step in policy.steps:
@@ -910,34 +1028,167 @@ def _execute_profile(
                     )
                 config.checks.require_rule(step.rule)
     except MissingPolicyError as error:
-        return _profile_failure(str(error), json_output=json_output)
+        return audit_preflight_failure(str(error), assessment_status="missing_policy")
+
+    audit_plan: ProfileAuditPlan | None = None
+    if audit_manifest is not None:
+        try:
+            entries = resolve_fix_plan(
+                checkout, resolved_config, policy, selected_profile
+            )
+        except (OSError, ValueError) as error:
+            return audit_preflight_failure(
+                f"Cannot resolve profile scope for audit: {error}"
+            )
+        entries_by_name = {entry.name: entry for entry in entries}
+        selected_steps: list[AuditPlanStep] = []
+        for step in policy.steps:
+            if step.name not in plan.steps:
+                continue
+            entry = entries_by_name[step.name]
+            try:
+                selected_files = (
+                    _selected_rule_files(checkout, config, step.rule)
+                    if step.kind == "rule"
+                    else (list(entry.files) if step.files is not None else None)
+                )
+            except (OSError, ValueError) as error:
+                return audit_preflight_failure(
+                    f"Cannot resolve profile scope for audit: {error}"
+                )
+            row: AuditPlanStep = {
+                "name": step.name,
+                "kind": step.kind,
+                "selected_files": selected_files,
+            }
+            if step.kind == "command" and entry.check_argv is not None:
+                row["expanded_argv"] = list(entry.check_argv)
+            selected_steps.append(row)
+        intent_rows = intent_bindings_for_steps(
+            policy.intents,
+            plan.steps,
+            selected_profile,
+            selected_profiles=plan.profiles,
+            default_failure_threshold=policy.failure_threshold,
+        )
+        audit_intents: list[AuditPlanIntent] = [
+            {
+                "rule_id": row.rule_id,
+                "language": row.language,
+                "native_rule": row.native_rule,
+                "step": row.step,
+            }
+            for row in intent_rows
+        ]
+        audit_plan = {
+            "profile": selected_profile,
+            "steps": selected_steps,
+            "intents": audit_intents,
+        }
 
     def run_rule(rule: QualityRule) -> RuleRunResult:
         return run_profile_rule(checkout, resolved_config, rule, verbose, config)
 
-    return run_orchestration(
-        checkout,
-        resolved_config,
-        policy,
-        selected_profile,
-        run_rule,
-        json_output=json_output,
-        jobs=jobs,
-        verbose=verbose,
-        config=config,
-        history_dir=history_dir,
-        consumer_id=consumer_id,
-        stdout=(
-            cast(TextIO, _HumanStream())
-            if _OUTPUT_FORMAT.get() == "rich" and not json_output
-            else sys.stdout
-        ),
-        stderr=(
-            cast(TextIO, _HumanStream(stderr=True))
-            if _OUTPUT_FORMAT.get() == "rich" and not json_output
-            else sys.stderr
-        ),
+    def audit_execution_scope(step: RuleRunStep) -> list[str] | None:
+        if audit_plan is None:
+            return None
+        planned = next(
+            (item for item in audit_plan["steps"] if item["name"] == step.name),
+            None,
+        )
+        if planned is None or planned.get("selected_files") is None:
+            return None
+        try:
+            return _selected_rule_files(checkout, config, step.rule)
+        except (OSError, ValueError):
+            return []
+
+    if audit_manifest is None:
+        return run_orchestration(
+            checkout,
+            resolved_config,
+            policy,
+            selected_profile,
+            run_rule,
+            json_output=json_output,
+            jobs=jobs,
+            verbose=verbose,
+            config=config,
+            history_dir=history_dir,
+            consumer_id=consumer_id,
+            stdout=(
+                cast(TextIO, _HumanStream())
+                if _OUTPUT_FORMAT.get() == "rich" and not json_output
+                else sys.stdout
+            ),
+            stderr=(
+                cast(TextIO, _HumanStream(stderr=True))
+                if _OUTPUT_FORMAT.get() == "rich" and not json_output
+                else sys.stderr
+            ),
+        )
+
+    captured_result = StringIO()
+    scope_token = EXECUTION_SCOPE.set(audit_execution_scope)
+    try:
+        result_exit_code = run_orchestration(
+            checkout,
+            resolved_config,
+            policy,
+            selected_profile,
+            run_rule,
+            json_output=True,
+            jobs=jobs,
+            verbose=verbose,
+            config=config,
+            history_dir=history_dir,
+            consumer_id=consumer_id,
+            stdout=captured_result,
+            stderr=(
+                cast(TextIO, _HumanStream(stderr=True))
+                if _OUTPUT_FORMAT.get() == "rich" and not json_output
+                else sys.stderr
+            ),
+        )
+    finally:
+        EXECUTION_SCOPE.reset(scope_token)
+    audit_result: ProfileAuditResult | None
+    try:
+        result_payload = _decode_json_object(captured_result.getvalue())
+        audit_result = _PROFILE_AUDIT_RESULT.validate_python(result_payload)
+        unavailable_reason = None
+    except (TypeError, ValueError, ValidationError):
+        result_payload = dict(
+            execution_failure_payload(
+                component="alphus-profile",
+                kind="operational_error",
+                message="Profile execution did not produce a structured result.",
+                exit_code=ExitCode.OPERATIONAL_FAILURE,
+            )
+        )
+        audit_result = None
+        unavailable_reason = (
+            "profile execution did not produce a valid structured result"
+        )
+    if audit_plan is not None and audit_result is not None:
+        execution_steps = {step["name"]: step for step in audit_result["steps"]}
+        for planned_step in audit_plan["steps"]:
+            observed = execution_steps.get(planned_step["name"])
+            if observed is not None and "selected_files" in observed:
+                planned_step["selected_files"] = observed["selected_files"]
+            if observed is not None and "expanded_argv" in observed:
+                planned_step["expanded_argv"] = observed["expanded_argv"]
+    assessment = assess_profile_audit(
+        audit_manifest,
+        audit_plan,
+        audit_result,
+        unavailable_reason=unavailable_reason,
     )
+    result_payload["audit_completion"] = cast(JsonValue, assessment)
+    typer.echo(json.dumps(result_payload, sort_keys=True))
+    if assessment["status"] == "incomplete":
+        return ExitCode.OPERATIONAL_FAILURE
+    return result_exit_code
 
 
 def _execute_history(
@@ -1308,8 +1559,68 @@ def _execute_plan_profile(
 def _selected_rule_files(
     checkout: Path, config: QualityGateConfig, rule: QualityRuleName
 ) -> list[str] | None:
-    """Resolve the file scope for source-scanning rules in a profile plan."""
-    if config.files is None or rule not in _SOURCE_SCAN_RULES:
+    """Resolve effective file scopes for rules that inspect repository paths."""
+    if config.files is None:
+        return None
+
+    if rule in {"file-size", "line-length", "comment-markers"}:
+        policy = getattr(config.checks, RULE_SPECS[rule].policy_field)
+        if policy is None:
+            return None
+        candidates = candidate_files(checkout, config.files)
+        selected: list[Path] = []
+        for relative in candidates:
+            name = relative.as_posix()
+            if any(matches_path(name, pattern) for pattern in policy.exclude):
+                continue
+            if rule == "comment-markers":
+                if relative.suffix.lower() not in policy.extensions:
+                    continue
+            elif rule == "line-length":
+                path_limited = any(
+                    matches_path(name, item.pattern)
+                    for item in policy.path_codepoint_limits
+                )
+                if (
+                    not path_limited
+                    and policy.limit_for(relative.suffix.lower()) is None
+                ):
+                    continue
+            selected.append(relative)
+        return [relative.as_posix() for relative in selected]
+
+    if rule == "script-policy":
+        policy = config.checks.script_policy
+        if policy is None:
+            return None
+        return [
+            relative.as_posix()
+            for relative in launcher_files(
+                candidate_files(checkout, config.files), policy
+            )
+        ]
+
+    if rule == "cli":
+        policy = config.checks.cli
+        if policy is None:
+            return None
+        python_sources, node_sources = selected_policy_sources(
+            checkout, candidate_files(checkout, config.files), policy
+        )
+        return list(
+            dict.fromkeys(path.as_posix() for path in (*python_sources, *node_sources))
+        )
+
+    if rule == "source-families":
+        policy = config.checks.source_families
+        if policy is None:
+            return None
+        selected, _ = bounded_source_family_inventory(
+            candidate_files(checkout, config.files), policy
+        )
+        return [path.as_posix() for path in selected]
+
+    if rule not in _SOURCE_SCAN_RULES:
         return None
     policy = cast(
         SourceScanPolicy | None,
@@ -1317,12 +1628,19 @@ def _selected_rule_files(
     )
     if policy is None:
         return None
+    test_paths = (
+        cast(TestQualityPolicy, policy).test_paths if rule == "test-quality" else None
+    )
     return [
         relative.as_posix()
         for relative in candidate_files(checkout, config.files)
-        if relative.suffix in policy.extensions
+        if relative.suffix.lower() in policy.extensions
         and not any(
             matches_path(relative.as_posix(), pattern) for pattern in policy.exclude
+        )
+        and (
+            test_paths is None
+            or any(matches_path(relative.as_posix(), pattern) for pattern in test_paths)
         )
     ]
 
@@ -1355,6 +1673,13 @@ def _command(
     profile: Annotated[
         str | None,
         typer.Option("--profile", help="Choose a configured orchestration profile."),
+    ] = None,
+    audit_manifest_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--audit-manifest",
+            help="Assess profile execution against a versioned JSON audit manifest.",
+        ),
     ] = None,
     plan_function_shape_only: Annotated[
         bool,
@@ -1460,6 +1785,36 @@ def _command(
         raise typer.BadParameter(str(error), param_hint="--output") from error
     if jobs is not None and not 1 <= jobs <= 64:
         raise typer.BadParameter("--jobs must be between 1 and 64")
+    audit_manifest = None
+    if audit_manifest_path is not None:
+        if not json_output:
+            raise typer.BadParameter("--audit-manifest requires --json")
+        if any(
+            (
+                plan_function_shape_only,
+                rule is not None,
+                report,
+                plan,
+                fix_plan,
+                apply_fixes,
+                bool(fix_step),
+                show_history,
+                history_report is not None,
+                init_config is not None,
+            )
+        ):
+            raise typer.BadParameter(
+                "--audit-manifest can only assess a profile execution"
+            )
+        audit_manifest = _load_audit_manifest(
+            root.resolve(strict=True), audit_manifest_path
+        )
+        selected_profile = profile
+        if selected_profile is not None and audit_manifest.profile != selected_profile:
+            raise typer.BadParameter(
+                "--profile must match the audit manifest profile",
+                param_hint="--audit-manifest",
+            )
     if (
         consumer_id is not None
         and history_dir is not None
@@ -1677,6 +2032,7 @@ def _command(
             jobs,
             history_dir,
             consumer_id if history_dir is not None else None,
+            audit_manifest,
         )
     )
 

@@ -6,6 +6,7 @@ import json
 import subprocess
 import sys
 from collections.abc import Callable, Mapping
+from contextvars import ContextVar
 from dataclasses import asdict
 from io import StringIO
 from pathlib import Path
@@ -63,6 +64,11 @@ from alphus.support.data_access import JsonValue, validate_json_value
 from alphus.support.version_control import VersionControlProvider
 
 _ORCHESTRATION_CATEGORY = Category.ORCHESTRATION
+EXECUTION_SCOPE: ContextVar[Callable[[RuleRunStep], list[str] | None] | None] = (
+    ContextVar("alphus_execution_scope", default=None)
+)
+
+
 _RULE_EXECUTION_FAILED = rule_tag(
     Scope.ANY, Framework.NONE, _ORCHESTRATION_CATEGORY, "rule-execution-failed"
 )
@@ -158,6 +164,7 @@ def run_orchestration(
 ) -> int:
     """Run every configured profile step and summarize all outcomes."""
     checkout = root.resolve(strict=True)
+    execution_scope = EXECUTION_SCOPE.get()
     resolved_config = config_path.resolve(strict=True)
     output = stdout if stdout is not None else sys.stdout
     errors = stderr if stderr is not None else sys.stderr
@@ -224,6 +231,8 @@ def run_orchestration(
     all_findings: list[Diagnostic] = []
     output_invalid_steps: set[str] = set()
     operational_error_steps: set[str] = set()
+    execution_scopes: dict[str, list[str] | None] = {}
+    execution_argvs: dict[str, list[str]] = {}
     threshold = policy.failure_threshold
     active_profiles = set(plan.profiles)
     resolved_intents = resolve_intent_bindings(policy.intents, threshold)
@@ -286,6 +295,18 @@ def run_orchestration(
                     ):
                         break
                     block.append(later)
+            if execution_scope is not None:
+                has_command = any(isinstance(item, CommandRunStep) for item in block)
+                for block_step in block:
+                    if not isinstance(block_step, RuleRunStep):
+                        continue
+                    try:
+                        scope = execution_scope(block_step)
+                    except (OSError, ValueError):
+                        scope = []
+                    # A concurrent command can mutate any selected path while
+                    # the rule runs, so do not certify a pre-dispatch snapshot.
+                    execution_scopes[block_step.name] = [] if has_command else scope
             try:
                 parallel_results.update(
                     run_profile_steps(
@@ -303,6 +324,11 @@ def run_orchestration(
                 reporter.error(f"Cannot schedule quality work: {error}")
                 return ExitCode.CONFIG_ERROR
         precomputed = parallel_results.pop(step_name)
+        if execution_scope is not None and isinstance(step, CommandRunStep):
+            if precomputed.selected_files is not None:
+                execution_scopes[step.name] = list(precomputed.selected_files)
+            if precomputed.expanded_argv is not None:
+                execution_argvs[step.name] = list(precomputed.expanded_argv)
         step_durations_seconds[step.name] = precomputed.duration_seconds
         work_unit_durations_seconds.update(precomputed.work_unit_durations)
         step_attempted[step.name] = bool(precomputed.work_unit_durations)
@@ -762,6 +788,10 @@ def run_orchestration(
             ]
             if step_result.report is None:
                 step_payload.pop("report")
+            if step_result.name in execution_scopes:
+                step_payload["selected_files"] = execution_scopes[step_result.name]
+            if step_result.name in execution_argvs:
+                step_payload["expanded_argv"] = execution_argvs[step_result.name]
         if not not_applicable:
             del payload[_STATUS_NOT_APPLICABLE]
         if result.intent_bindings:
