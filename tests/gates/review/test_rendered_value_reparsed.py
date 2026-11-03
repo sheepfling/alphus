@@ -184,6 +184,28 @@ def test_unrelated_nested_definition_time_walrus_preserves_outer_binding() -> No
     assert _sites(source, ("render",)) == [(2, 5, "rendered")]
 
 
+def test_lambda_body_walrus_does_not_invalidate_outer_binding() -> None:
+    source = (
+        "def f(text, original):\n"
+        "    rendered = render(text)\n"
+        "    callback = lambda: (rendered := original)\n"
+        "    if rendered.rstrip().endswith('!'):\n"
+        "        return True\n"
+    )
+    assert _sites(source, ("render",)) == [(2, 4, "rendered")]
+
+
+def test_lambda_default_walrus_invalidates_outer_binding() -> None:
+    source = (
+        "def f(text, original):\n"
+        "    rendered = render(text)\n"
+        "    callback = lambda value=(rendered := original): value\n"
+        "    if rendered.rstrip().endswith('!'):\n"
+        "        return True\n"
+    )
+    assert _sites(source, ("render",)) == []
+
+
 def test_expression_statement_walrus_invalidates_rendered_binding() -> None:
     source = """\
 def f(text, original):
@@ -505,6 +527,34 @@ def f(text, original):
     return False
 """
     assert _sites(source, ("render",)) == []
+
+
+def test_match_capture_invalidates_later_case_after_guard_fallthrough() -> None:
+    source = (
+        "def f(text, original):\n"
+        "    rendered = render(text)\n"
+        "    match original:\n"
+        "        case str() as rendered if len(rendered) > 100:\n"
+        "            pass\n"
+        "        case _:\n"
+        "            if rendered.rstrip().endswith('!'):\n"
+        "                return True\n"
+    )
+    assert _sites(source, ("render",)) == []
+
+
+def test_unrelated_match_capture_preserves_later_case_binding() -> None:
+    source = (
+        "def f(text, original):\n"
+        "    rendered = render(text)\n"
+        "    match original:\n"
+        "        case str() as other if len(other) > 100:\n"
+        "            pass\n"
+        "        case _:\n"
+        "            if rendered.rstrip().endswith('!'):\n"
+        "                return True\n"
+    )
+    assert _sites(source, ("render",)) == [(2, 7, "rendered")]
 
 
 def test_unrelated_match_subject_and_guard_walruses_preserve_rendered_binding() -> None:

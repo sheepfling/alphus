@@ -56,12 +56,20 @@ def _named_expression_names(value: ast.expr | None) -> set[str]:
     names: set[str] = set()
     if value is None:
         return names
-    for node in ast.walk(value):
+    pending: list[ast.AST] = [value]
+    while pending:
+        node = pending.pop()
         match node:
             case ast.NamedExpr(target=target):
                 names.update(_target_names(target))
+                pending.extend(ast.iter_child_nodes(node))
+            case ast.Lambda(args=args):
+                # Lambda defaults execute now in the enclosing scope; its body
+                # executes later in the lambda's own local scope.
+                pending.extend(args.defaults)
+                pending.extend(item for item in args.kw_defaults if item is not None)
             case _:
-                continue
+                pending.extend(ast.iter_child_nodes(node))
     return names
 
 
@@ -313,20 +321,22 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                     for name in _named_expression_names(subject):
                         before.pop(name, None)
                     paths: list[dict[str, int]] = []
-                    possible_guard_writes: set[str] = set()
+                    possible_case_writes: set[str] = set()
                     for case in cases:
                         case_state = before.copy()
-                        # A false guard may fall through to a later case after
-                        # its walrus writes have already replaced local values.
-                        for name in possible_guard_writes:
+                        # A failed pattern/guard may fall through after captures
+                        # or guard walruses have already replaced local values.
+                        for name in possible_case_writes:
                             case_state.pop(name, None)
-                        for name in _pattern_names(case.pattern):
+                        pattern_writes = _pattern_names(case.pattern)
+                        for name in pattern_writes:
                             case_state.pop(name, None)
                         guard_writes = _named_expression_names(case.guard)
                         for name in guard_writes:
                             case_state.pop(name, None)
                         paths.append(scan(case.body, case_state))
-                        possible_guard_writes.update(guard_writes)
+                        possible_case_writes.update(pattern_writes)
+                        possible_case_writes.update(guard_writes)
                     current = {
                         name: line
                         for name, line in before.items()
