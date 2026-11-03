@@ -150,6 +150,19 @@ _SOURCE_SCAN_RULES: frozenset[QualityRuleName] = frozenset(
         "python-style",
         "runtime-types",
         "numeric-literals",
+        "manual-matrix-kernels",
+        "manual-elimination",
+        "array-representation-churn",
+        "cholesky-recurrence",
+        "manual-quaternion-conjugation",
+        "manual-quaternion-products",
+        "manual-quaternion-normalization",
+        "manual-quaternion-inversion",
+        "manual-quaternion-vector-rotation",
+        "manual-quaternion-matrix-conversion",
+        "ecef-enu-transform",
+        "ecef-ned-matrix-transform",
+        "ned-basis-vectors",
         "scipy-constants",
         "test-quality",
         "input-contracts",
@@ -586,1480 +599,207 @@ def _python_style_categories(
         _StyleCategory("main_module_imports", issues["main_module_imports"]),
         _StyleCategory("legacy_pydantic_fields", issues["legacy_pydantic_fields"]),
         _StyleCategory("mutable_module_constants", issues["mutable_module_constants"]),
-        _StyleCategory("literal_rule_ids", issues["literal_rule_ids"]),
-        _StyleCategory("literal_rule_dimensions", issues["literal_rule_dimensions"]),
-        _StyleCategory("raw_reporting_prints", issues["raw_reporting_prints"]),
-        _StyleCategory("magic_exit_codes", issues["magic_exit_codes"]),
-        _StyleCategory("repeated_literals", issues["repeated_literals"]),
-        _StyleCategory("unnamed_tuple_returns", issues["unnamed_tuple_returns"]),
-        _StyleCategory(
-            "undifferentiated_patterns", issues["undifferentiated_patterns"]
-        ),
-        _StyleCategory(
-            "concrete_classmethod_returns", issues["concrete_classmethod_returns"]
-        ),
-        _StyleCategory(
-            "concrete_model_validator_returns",
-            issues["concrete_model_validator_returns"],
-        ),
-        _StyleCategory("direct_text_reads", issues["direct_text_reads"]),
-        _StyleCategory(
-            "duplicate_literal_catalogs", issues["duplicate_literal_catalogs"]
-        ),
-        _StyleCategory("unused_public_constants", issues["unused_public_constants"]),
-        _StyleCategory(
-            "pydantic_collection_contracts", issues["pydantic_collection_contracts"]
-        ),
-    )
+        _StyleCategory("literal_rule_ids", issues["literal_rule_km½×{h‘éì¶»§q«^v\İ˜][Û‹œİ\×WBšÚ[™Hœ[H‚›˜[YHH”Ûİ\˜ÙH˜[Z[Y\È‚œ[HHœÛİ\˜ÙKY˜[Z[Y\È‚–ÖÛÜ˜Ú\İ˜][Û‹œ›Ùš[\×WB›˜[YHH˜]Y]‚œİ\ÈHÈ”Ûİ\˜ÙH˜[Z[Y\È—Bˆˆˆ‹ˆ[˜ÛÙ[™ÏH]‹N‹ˆ
+BˆİÜš]WÛX[šY™\İ
+ˆ\Ü]ˆ˜]Y]‹ˆÂˆ]Y]X[šY™\İÚXÚÊˆÚXÚ×ÚYHœÛİ\˜ÙKY˜[Z[Y\È‹ˆİ\H”Ûİ\˜ÙH˜[Z[Y\È‹ˆ^XİYÙš[\ÏJœÜ˜ËÙØ]]Ø^WØÛY[œH‹
+Kˆ
+BˆKˆ
+B‚ˆ^]ØÛÙHHXZ[ŠˆÂˆ‹K\›Ûİ‹ˆİŠ\Ü]
+Kˆ‹KXÛÛ™šYÈ‹ˆœ]X[]KÛ[‹ˆ‹KZœÛÛˆ‹ˆ‹KX]Y][X[šY™\İ‹ˆ˜]Y]šœÛÛˆ‹ˆBˆ
+Bˆ^[ØYHœÛÛ‹›ØYÊØ\Ş\Ëœ™XYİ]\œŠ
+K›İ]
+B‚ˆ\ÜÙ\^[ØYÈœİ\È—VÌVÈ™š[™[™ÜÈ—KœÛÛ‹™[\Ê^[ØY[™[LŠBˆ\ÜÙ\^]ØÛÙHOH‹œÛÛ‹™[\Ê^[ØY[™[LŠBˆ\ÜÙ\^[ØYÈ˜]Y]ØÛÛ\][Ûˆ—VÈœİ]\È—HOHš[˜ÛÛ\]H‚ˆÚXÚÈH^[ØYÈ˜]Y]ØÛÛ\][Ûˆ—VÈ˜ÚXÚÜÈ—VÌBˆ\ÜÙ\ÚXÚÖÈœİ]\È—HOHš[˜ÛÛ\]H‚ˆ\ÜÙ\ÚXÚÖÈ˜ÛÛ\]H—H\È˜[ÙBˆ\ÜÙ\ÚXÚÖÈ™š[™[™Ü×Üİ]H—HOHÚ]Ùš[™[™ÜÈ‚ˆ\ÜÙ\[Jˆš[™[™ÖÈ›Y\ÜØYÙH—Kœİ\İÚ]
+“^XØ[Ûİ\˜ÙKY˜[Z[HØØ[ˆ[˜ÛÛ\]NˆŠBˆ›Üˆš[™[™È[ˆ^[ØYÈœİ\È—VÌVÈ™š[™[™ÜÈ—Bˆ
+B‚‚™Yˆ\İÜ›Ùš[WØÛWÜ™\ÛÛ™\×Ü™[XZ[š[™×ÜÛİ\˜ÙWÜ[WÚ[™[ÜšY\Êˆ\Ü]ˆ]Ø\Ş\Îˆ]\İØ\\™Qš^\™VÜİ—BŠHOˆ›Û™N‚ˆİXœ›ØÙ\ÜËœ[ŠÈ™Ú]‹š[š]‹‹\H‹İŠ\Ü]
+WKÚXÚÏUYJBˆÛİ\˜ÙHH\Ü]ÈœÜ˜È‚ˆÛİ\˜ÙK›ZÙ\Š
+Bˆ
+Ûİ\˜ÙHÈ˜\œHŠKÜš]Wİ^
+	Û˜[YHH˜\—‰Ë[˜ÛÙ[™ÏH]‹NŠBˆ
+Ûİ\˜ÙHÈœÛİ\˜ÙK”HŠKÜš]Wİ^
+	Û˜[YHH\\ˆ—‰Ë[˜ÛÙ[™ÏH]‹NŠBˆ
+Ûİ\˜ÙHÈ™Ø]]Ø^WØÛY[œHŠKÜš]Wİ^
+	Û˜[YHH˜ÛY[—‰Ë[˜ÛÙ[™ÏH]‹NŠBˆ
+\Ü]Èœ]X[]KÛ[ŠKÜš]Wİ^
+ˆˆˆœØÚ[XWİ™\œÚ[ÛˆHB–Ùš[\×Bš[˜ÛYHHÈœÜ˜ËÊ‹œH‹œÜ˜ËÊ‹”H—B–ØÚXÚÜË›[Y\šX×Û]\˜[×B™^[œÚ[ÛœÈHÈ‹œH—B–ØÚXÚÜË˜ÛKœ]Û—B™^[œÚ[ÛœÈHÈ‹œH—B™^ÛYHH×B\\—ÜXÚØYÙHH\\ˆ‚\\—ØØ[ÈHÈ•\\ˆ—BœšXÚÜXÚØYÙHHœšXÚ‚œšXÚØØ[ÈHÈÛÛœÛÛH—BšœÛÛ—ÛÜ[ÛˆH‹KZœÛÛˆ‚šœÛÛ—ÜÙ\šX[^™\œÈHÈ™[\È—B™\˜›ÜÙWÛÜ[ÛˆH‹K]™\˜›ÜÙH‚–ØÚXÚÜËœØÜš\ÜÛXŞWB™^[œÚ[ÛœÈHÈ‹˜ÛY‹‹œÚ—B™^ÛYHH×B˜ÛYÜ›İ]\—Û[™WÛ[Z]HŒœ]Û—Û[Ù[WÜ™Yš^H˜[\È‚›][˜Ú\—ÛY\ÜØYÙHHœ™]šY]È][˜Ú\ˆ‚˜ÛYÛY\ÜØYÙHHœ™]šY]ÈÛY‚–ØÚXÚÜËœÛİ\˜ÙWÙ˜[Z[Y\×B™^[œÚ[ÛœÈHÈ‹œH—Bš[˜ÛYHHÈœÜ˜ËÊŠ‹Ê‹œH‹œÜ˜ËÊŠ‹Ê‹”H—B™^ÛYHH×B–ÛÜ˜Ú\İ˜][Û—B™Y˜][Ü›Ùš[HH˜]Y]‚–ÖÛÜ˜Ú\İ˜][Û‹œİ\×WBšÚ[™Hœ[H‚›˜[YHHÓH™]šY]È‚œ[HH˜ÛH‚–ÖÛÜ˜Ú\İ˜][Û‹œİ\×WBšÚ[™Hœ[H‚›˜[YHH“][˜Ú\ˆ™]šY]È‚œ[HHœØÜš\\ÛXŞH‚–ÖÛÜ˜Ú\İ˜][Û‹œİ\×WBšÚ[™Hœ[H‚›˜[YHH”Ûİ\˜ÙH˜[Z[H™]šY]È‚œ[HHœÛİ\˜ÙKY˜[Z[Y\È‚–ÖÛÜ˜Ú\İ˜][Û‹œİ\×WBšÚ[™Hœ[H‚›˜[YHH“[Y\šXÈ™]šY]È‚œ[HH›[Y\šXË[]\˜[È‚–ÖÛÜ˜Ú\İ˜][Û‹œ›Ùš[\×WB›˜[YHH˜]Y]‚œİ\ÈHÈÓH™]šY]È‹“][˜Ú\ˆ™]šY]È‹”Ûİ\˜ÙH˜[Z[H™]šY]È‹“[Y\šXÈ™]šY]È—Bˆˆˆ‹ˆ[˜ÛÙ[™ÏH]‹N‹ˆ
+BˆİXœ›ØÙ\ÜËœ[ŠˆÈ™Ú]‹‹PÈ‹İŠ\Ü]
+K˜Y‹œÜ˜È‹œ]X[]KÛ[—KÚXÚÏUYBˆ
+Bˆ[ÜÛİ\˜Ù\ÈH
+œÜ˜ËØ\œH‹œÜ˜ËÙØ]]Ø^WØÛY[œH‹œÜ˜ËÜÛİ\˜ÙK”HŠBˆİÜš]WÛX[šY™\İ
+ˆ\Ü]ˆ˜]Y]‹ˆÂˆ]Y]X[šY™\İÚXÚÊˆÚXÚ×ÚYH˜ÛH‹İ\HÓH™]šY]È‹^XİYÙš[\ÏX[ÜÛİ\˜Ù\Âˆ
+Kˆ]Y]X[šY™\İÚXÚÊˆÚXÚ×ÚYH›][˜Ú\ˆ‹İ\H“][˜Ú\ˆ™]šY]È‹^XİYÙš[\ÏJ
+Bˆ
+Kˆ]Y]X[šY™\İÚXÚÊˆÚXÚ×ÚYH™˜[Z[Y\È‹ˆİ\H”Ûİ\˜ÙH˜[Z[H™]šY]È‹ˆ^XİYÙš[\ÏX[ÜÛİ\˜Ù\Ëˆ
+Kˆ]Y]X[šY™\İÚXÚÊˆÚXÚ×ÚYH›[Y\šXË]\\‹\İY™š^‹ˆİ\H“[Y\šXÈ™]šY]È‹ˆ^XİYÙš[\ÏX[ÜÛİ\˜Ù\Ëˆ
+KˆKˆ
+B‚ˆ^]ØÛÙHHXZ[ŠˆÂˆ‹K\›Ûİ‹ˆİŠ\Ü]
+Kˆ‹KXÛÛ™šYÈ‹ˆœ]X[]KÛ[‹ˆ‹KZœÛÛˆ‹ˆ‹KX]Y][X[šY™\İ‹ˆ˜]Y]šœÛÛˆ‹ˆBˆ
+Bˆ^[ØYHœÛÛ‹›ØYÊØ\Ş\Ëœ™XYİ]\œŠ
+K›İ]
+BˆÚXÚÜÈHÜ›İÖÈ˜ÚXÚ×ÚY—Nˆ›İÈ›Üˆ›İÈ[ˆ^[ØYÈ˜]Y]ØÛÛ\][Ûˆ—VÈ˜ÚXÚÜÈ—_B‚ˆ\ÜÙ\^]ØÛÙHOH‹œÛÛ‹™[\Ê^[ØY[™[LŠBˆ\ÜÙ\ÚXÚÜÖÈ˜ÛH—VÈ˜ÛÛ\]H—H\ÈYBˆ\ÜÙ\ÚXÚÜÖÈ˜ÛH—VÈœÙ[XİYÙš[\È—HOH\İ
+[ÜÛİ\˜Ù\ÊBˆ\ÜÙ\ÚXÚÜÖÈ›][˜Ú\ˆ—VÈœİ]\È—HOH™[\WÚ[™[ÜH‚ˆ\ÜÙ\ÚXÚÜÖÈ›][˜Ú\ˆ—VÈ˜ÛÛ\]H—H\È˜[ÙBˆ\ÜÙ\ÚXÚÜÖÈ™˜[Z[Y\È—VÈ˜ÛÛ\]H—H\ÈYBˆ\ÜÙ\ÚXÚÜÖÈ™˜[Z[Y\È—VÈœÙ[XİYÙš[\È—HOH\İ
+[ÜÛİ\˜Ù\ÊBˆ\ÜÙ\ÚXÚÜÖÈ›[Y\šXË]\\‹\İY™š^—VÈ˜ÛÛ\]H—H\ÈYKœÛÛ‹™[\Êˆ^[ØY[™[L‚ˆ
+Bˆ\ÜÙ\ÚXÚÜÖÈ›[Y\šXË]\\‹\İY™š^—VÈœÙ[XİYÙš[\È—HOH\İ
+[ÜÛİ\˜Ù\ÊB‚‚™Yˆ\İÜ›Ùš[WØÛWÚÙY\×Ú[˜ÛÛ˜Û\Ú]™WØÛWÜ™\Ù[][Û—Ú[˜ÛÛ\]Jˆ\Ü]ˆ]Ø\Ş\Îˆ]\İØ\\™Qš^\™VÜİ—BŠHOˆ›Û™N‚ˆİXœ›ØÙ\ÜËœ[ŠÈ™Ú]‹š[š]‹‹\H‹İŠ\Ü]
+WKÚXÚÏUYJBˆÛİ\˜ÙHH\Ü]ÈœÜ˜È‚ˆÛİ\˜ÙK›ZÙ\Š
+Bˆ
+Ûİ\˜ÙHÈ˜\œHŠKÜš]Wİ^
+ˆš[\ÜœÛÛ—ˆ‚ˆš[\Ü\\—ˆ‚ˆ™œ›ÛHšXÚ˜ÛÛœÛÛH[\ÜÛÛœÛÛWˆ‚ˆ™œ›ÛH^\›˜[œ™[™\™\œÈ[\Ü™[™\—Ü™\Üˆ‚ˆ˜\H\\‹•\\Š
+Wˆ‚ˆ\˜ÛÛ[X[™
 
+Wˆ‚ˆ™Yˆ[ŠœÛÛ—Ûİ]]ˆ›ÛÛH\\‹“Ü[ÛŠ˜[ÙK	ËKZœÛÛ‰ÊK‚ˆ™\˜›ÜÙNˆ›ÛÛH\\‹“Ü[ÛŠ˜[ÙK	ËK]™\˜›ÜÙIÊJHOˆ›Û™N—ˆ‚ˆˆYˆœÛÛ—Ûİ]]—ˆ‚ˆˆ\\‹™XÚÊœÛÛ‹™[\ÊÉÛÚÉÎˆY_JJWˆ‚ˆˆ[ÙN—ˆ‚ˆˆ™[™\—Ü™\Ü
+ÛÛœÛÛJ
+JWˆ‚ˆšYˆ×Û˜[YW×ÈOH	××ÛXZ[—×ÉÎ—ˆ‚ˆˆ\
 
-def _render_script_policy(issues: Sequence[str]) -> None:
-    """Render the launcher-language inventory."""
-    for issue in issues:
-        _human_print(f"{_SCRIPT_POLICY_TAG}: {issue}")
-    _human_print(f"Script policy: {len(issues)} violation(s)")
+Wˆ‹ˆ[˜ÛÙ[™ÏH]‹N‹ˆ
+Bˆ
+\Ü]Èœ]X[]KÛ[ŠKÜš]Wİ^
+ˆˆˆœØÚ[XWİ™\œÚ[ÛˆHB–Ùš[\×Bš[˜ÛYHHÈœÜ˜ËÊ‹œH—B–ØÚXÚÜË˜ÛKœ]Û—B™^[œÚ[ÛœÈHÈ‹œH—B\\—ÜXÚØYÙHH\\ˆ‚\\—ØØ[ÈHÈ•\\ˆ—BœšXÚÜXÚØYÙHHœšXÚ‚œšXÚØØ[ÈHÈÛÛœÛÛH—BšœÛÛ—ÛÜ[ÛˆH‹KZœÛÛˆ‚šœÛÛ—ÜÙ\šX[^™\œÈHÈ™[\È—B™\˜›ÜÙWÛÜ[ÛˆH‹K]™\˜›ÜÙH‚œ™[™\™\—Ù[™›Ü˜Ù[Y[H˜Yš\ÛÜH‚›İ]]Üİ[WÙ[™›Ü˜Ù[Y[H›Ù™ˆ‚–ÛÜ˜Ú\İ˜][Û—B™Y˜][Ü›Ùš[HH˜]Y]‚–ÖÛÜ˜Ú\İ˜][Û‹œİ\×WBšÚ[™Hœ[H‚›˜[YHHÓH™]šY]È‚œ[HH˜ÛH‚–ÖÛÜ˜Ú\İ˜][Û‹œ›Ùš[\×WB›˜[YHH˜]Y]‚œİ\ÈHÈÓH™]šY]È—Bˆˆˆ‹ˆ[˜ÛÙ[™ÏH]‹N‹ˆ
+BˆİXœ›ØÙ\ÜËœ[ŠˆÈ™Ú]‹‹PÈ‹İŠ\Ü]
+K˜Y‹œÜ˜ËØ\œH‹œ]X[]KÛ[—KˆÚXÚÏUYKˆ
+BˆİÜš]WÛX[šY™\İ
+ˆ\Ü]ˆ˜]Y]‹ˆÂˆ]Y]X[šY™\İÚXÚÊˆÚXÚ×ÚYH˜ÛH‹İ\HÓH™]šY]È‹^XİYÙš[\ÏJœÜ˜ËØ\œH‹
+Bˆ
+BˆKˆ
+B‚ˆ^]ØÛÙHHXZ[ŠˆÂˆ‹K\›Ûİ‹ˆİŠ\Ü]
+Kˆ‹KXÛÛ™šYÈ‹ˆœ]X[]KÛ[‹ˆ‹KZœÛÛˆ‹ˆ‹KX]Y][X[šY™\İ‹ˆ˜]Y]šœÛÛˆ‹ˆBˆ
+Bˆ^[ØYHœÛÛ‹›ØYÊØ\Ş\Ëœ™XYİ]\œŠ
+K›İ]
+B‚ˆ\ÜÙ\^]ØÛÙHOH‹œÛÛ‹™[\Ê^[ØY[™[LŠBˆ\ÜÙ\^[ØY™Ù]
+™^]ØÛÙHŠHOHœÛÛ‹™[\Ê^[ØY[™[LŠBˆ\ÜÙ\^[ØYÈ˜]Y]ØÛÛ\][Ûˆ—VÈœİ]\È—HOHš[˜ÛÛ\]H‚ˆÚXÚÈH^[ØYÈ˜]Y]ØÛÛ\][Ûˆ—VÈ˜ÚXÚÜÈ—VÌBˆ\ÜÙ\ÚXÚÖÈœİ]\È—HOHš[˜ÛÛ\]H‚ˆ\ÜÙ\ÚXÚÖÈ˜ÛÛ\]H—H\È˜[ÙBˆ\ÜÙ\[Jˆš[™[™ÖÈ›Y\ÜØYÙH—Kœİ\İÚ]
+–Ü™\Ù[][Ûš[˜ÛÛ˜Û\Ú]™WHŠBˆ›Üˆš[™[™È[ˆ^[ØYÈœİ\È—VÌVÈ™š[™[™ÜÈ—Bˆ
+B‚‚™Yˆ\İÜ›Ùš[WØÛWÙ]Xİ×Ü[WÚ[™[ÜWÜ™[[İ™YØWÜš[Ü—ØÛÛ[X[™
+ˆ\Ü]ˆ]Ø\Ş\Îˆ]\İØ\\™Qš^\™VÜİ—BŠHOˆ›Û™N‚ˆİXœ›ØÙ\ÜËœ[ŠÈ™Ú]‹š[š]‹‹\H‹İŠ\Ü]
+WKÚXÚÏUYJBˆ
+\Ü]ÈœÛİ\˜ÙKœHŠKÜš]Wİ^
+˜[YHHLŒ×ˆ‹[˜ÛÙ[™ÏH]‹NŠBˆ
+\Ü]Èœ]X[]KÛ[ŠKÜš]Wİ^
+ˆˆˆœØÚ[XWİ™\œÚ[ÛˆHB–Ùš[\×Bš[˜ÛYHHÈœÛİ\˜ÙKœH—B–ØÚXÚÜË›[Y\šX×Û]\˜[×B™^[œÚ[ÛœÈHÈ‹œH—B–ÛÜ˜Ú\İ˜][Û—B™Y˜][Ü›Ùš[HH˜]Y]‚–ÖÛÜ˜Ú\İ˜][Û‹œİ\×WBšÚ[™H˜ÛÛ[X[™‚›˜[YHH”™[[İ™HÛİ\˜ÙH‚˜\™İˆHÈÜ]ÛŸH‹‹XÈ‹™œ›ÛH]Xˆ[\Ü]È]
+	ÜÛİ\˜ÙKœIÊK[›[šÊ
+H—B–ÖÛÜ˜Ú\İ˜][Û‹œİ\×WBšÚ[™Hœ[H‚›˜[YHH“[Y\šXÈ™]šY]È‚œ[HH›[Y\šXË[]\˜[È‚–ÖÛÜ˜Ú\İ˜][Û‹œ›Ùš[\×WB›˜[YHH˜]Y]‚œİ\ÈHÈ”™[[İ™HÛİ\˜ÙH‹“[Y\šXÈ™]šY]È—Bˆˆˆ‹ˆ[˜ÛÙ[™ÏH]‹N‹ˆ
+BˆİXœ›ØÙ\ÜËœ[ŠˆÈ™Ú]‹‹PÈ‹İŠ\Ü]
+K˜Y‹œÛİ\˜ÙKœH‹œ]X[]KÛ[—KˆÚXÚÏUYKˆ
+BˆİÜš]WÛX[šY™\İ
+ˆ\Ü]ˆ˜]Y]‹ˆÂˆ]Y]X[šY™\İÚXÚÊˆÚXÚ×ÚYH›[Y\šXÈ‹ˆİ\H“[Y\šXÈ™]šY]È‹ˆ^XİYÙš[\ÏJœÛİ\˜ÙKœH‹
+Kˆ
+BˆKˆ
+B‚ˆ^]ØÛÙHHXZ[ŠˆÂˆ‹K\›Ûİ‹ˆİŠ\Ü]
+Kˆ‹KXÛÛ™šYÈ‹ˆœ]X[]KÛ[‹ˆ‹KZœÛÛˆ‹ˆ‹KX]Y][X[šY™\İ‹ˆ˜]Y]šœÛÛˆ‹ˆBˆ
+Bˆ^[ØYHœÛÛ‹›ØYÊØ\Ş\Ëœ™XYİ]\œŠ
+K›İ]
+B‚ˆ\ÜÙ\^]ØÛÙHOH‹œÛÛ‹™[\Ê^[ØY[™[LŠBˆÚXÚÈH^[ØYÈ˜]Y]ØÛÛ\][Ûˆ—VÈ˜ÚXÚÜÈ—VÌBˆ\ÜÙ\ÚXÚÖÈœİ]\È—HOHœØÛÜWÛZ\ÛX]Ú‚ˆ\ÜÙ\ÚXÚÖÈ˜ÛÛ\]H—H\È˜[ÙBˆ\ÜÙ\ÚXÚÖÈœÙ[XİYÙš[\È—HOH×B‚‚™Yˆ\İÜ›Ùš[WØÛWØ]Y]İ\Ù\×ØÛÛ[X[™Ú[™[ÜWØ[™Ø\™İ—Ø]Ù\Ü]Ú
+ˆ\Ü]ˆ]Ø\Ş\Îˆ]\İØ\\™Qš^\™VÜİ—BŠHOˆ›Û™N‚ˆİXœ›ØÙ\ÜËœ[ŠÈ™Ú]‹š[š]‹‹\H‹İŠ\Ü]
+WKÚXÚÏUYJBˆ
+\Ü]È™š\œİœHŠKÜš]Wİ^
+™š\œİHYWˆ‹[˜ÛÙ[™ÏH]‹NŠBˆ
+\Ü]ÈœÙXÛÛ™œHŠKÜš]Wİ^
+œÙXÛÛ™HYWˆ‹[˜ÛÙ[™ÏH]‹NŠBˆ
+\Ü]Èœ]X[]KÛ[ŠKÜš]Wİ^
+ˆˆˆœØÚ[XWİ™\œÚ[ÛˆHB–Ùš[\×Bš[˜ÛYHHÈ™š\œİœH‹œÙXÛÛ™œH—B–ÛÜ˜Ú\İ˜][Û—B™Y˜][Ü›Ùš[HH˜]Y]‚–ÖÛÜ˜Ú\İ˜][Û‹œİ\×WBšÚ[™H˜ÛÛ[X[™‚›˜[YHH”™[[İ™HÙXÛÛ™Ûİ\˜ÙH‚˜\™İˆHÈÜ]ÛŸH‹‹XÈ‹™œ›ÛH]Xˆ[\Ü]È]
+	ÜÙXÛÛ™œIÊK[›[šÊ
+H—B–ÖÛÜ˜Ú\İ˜][Û‹œİ\×WBšÚ[™H˜ÛÛ[X[™‚›˜[YHH’[œÜXİÛİ\˜Ù\È‚™š[\ÈHÈ[˜ÛYHHÈ™š\œİœH‹œÙXÛÛ™œH—HB˜\™İˆHÈÜ]ÛŸH‹‹XÈ‹œ\ÜÈ‹Ùš[\ßH—B–ÖÛÜ˜Ú\İ˜][Û‹œ›Ùš[\×WB›˜[YHH˜]Y]‚œİ\ÈHÈ”™[[İ™HÙXÛÛ™Ûİ\˜ÙH‹’[œÜXİÛİ\˜Ù\È—Bˆˆˆ‹ˆ[˜ÛÙ[™ÏH]‹N‹ˆ
+BˆİXœ›ØÙ\ÜËœ[ŠˆÈ™Ú]‹‹PÈ‹İŠ\Ü]
+K˜Y‹™š\œİœH‹œÙXÛÛ™œH‹œ]X[]KÛ[—KˆÚXÚÏUYKˆ
+BˆİÜš]WÛX[šY™\İ
+ˆ\Ü]ˆ˜]Y]‹ˆÂˆ]Y]X[šY™\İÚXÚÊˆÚXÚ×ÚYHš[œÜXİ\Ûİ\˜Ù\È‹ˆİ\H’[œÜXİÛİ\˜Ù\È‹ˆ^XİYÙš[\ÏJ™š\œİœH‹œÙXÛÛ™œHŠKˆ™\]Z\™YØ\™İJœÙXÛÛ™œH‹
+Kˆ
+BˆKˆ
+B‚ˆ^]ØÛÙHHXZ[ŠˆÂˆ‹K\›Ûİ‹ˆİŠ\Ü]
+Kˆ‹KXÛÛ™šYÈ‹ˆœ]X[]KÛ[‹ˆ‹KZœÛÛˆ‹ˆ‹KX]Y][X[šY™\İ‹ˆ˜]Y]šœÛÛˆ‹ˆBˆ
+Bˆ^[ØYHœÛÛ‹›ØYÊØ\Ş\Ëœ™XYİ]\œŠ
+K›İ]
+B‚ˆ\ÜÙ\^]ØÛÙHOH‹œÛÛ‹™[\Ê^[ØY[™[LŠBˆÚXÚÈH^[ØYÈ˜]Y]ØÛÛ\][Ûˆ—VÈ˜ÚXÚÜÈ—VÌBˆ\ÜÙ\ÚXÚÖÈœİ]\È—HOHœØÛÜWÛZ\ÛX]Ú‹œÛÛ‹™[\Ê^[ØY[™[LŠBˆ\ÜÙ\ÚXÚÖÈ˜ÛÛ\]H—H\È˜[ÙBˆ\ÜÙ\ÚXÚÖÈœÙ[XİYÙš[\È—HOHÈ™š\œİœH—Bˆ\ÜÙ\œÙXÛÛ™œHˆ›İ[ˆÚXÚÖÈ™^[™YØ\™İˆ—KœÛÛ‹™[\Ê^[ØY[™[LŠB‚‚™Yˆ\İÛX[šY™\İÜ™]Z[œ×Û˜]]™WÜÙ[XİÜ—ÜØÛÜWØ[™Ø[››İ][Û—Ù]šY[˜ÙJˆ\Ü]ˆ]Ø\Ş\Îˆ]\İØ\\™Qš^\™VÜİ—BŠHOˆ›Û™N‚ˆİXœ›ØÙ\ÜËœ[ŠÈ™Ú]‹š[š]‹‹\H‹İŠ\Ü]
+WKÚXÚÏUYJBˆÛİ\˜ÙHH\Ü]ÈœÜ˜È‚ˆÛİ\˜ÙK›ZÙ\Š
+Bˆ
+Ûİ\˜ÙHÈ˜[››İ]YœHŠKÜš]Wİ^
+ˆ™Yˆ[™XYWİ\Y
+˜[YNˆ[
+HOˆ[—ˆ™]\›ˆ˜[YWˆ‹ˆ[˜ÛÙ[™ÏH]‹N‹ˆ
+Bˆ
+Ûİ\˜ÙHÈ[˜[››İ]YœHŠKÜš]Wİ^
+ˆ™Yˆ™YY×İ\\Ê˜[YJN—ˆ™]\›ˆ˜[YWˆ‹ˆ[˜ÛÙ[™ÏH]‹N‹ˆ
+BˆÛÛ™šY×İ^HˆˆœØÚ[XWİ™\œÚ[ÛˆHB–ÛÜ˜Ú\İ˜][Û—B™Y˜][Ü›Ùš[HH˜]Y]‚–ÖÛÜ˜Ú\İ˜][Û‹œİ\×WBšÚ[™H˜ÛÛ[X[™‚›˜[YHH”]Ûˆ[››İ][ÛœÈ‚˜\™İˆHÂˆÜ]ÛŸH‹‹[H‹œY™ˆ‹˜ÚXÚÈ‹‹K\Ù[XİPS“ˆ‹ˆ‹K[İ]]Y›Ü›X]ZœÛÛˆ‹‹KY^]^™\›È‹Ùš[\ßH‚—B™š[\ÈHÈ[˜ÛYHHÈœÜ˜ËÊ‹œH—HB–ÖÛÜ˜Ú\İ˜][Û‹œ›Ùš[\×WB›˜[YHH˜]Y]‚œİ\ÈHÈ”]Ûˆ[››İ][ÛœÈ—Bˆˆˆ‚ˆ
+\Ü]Èœ]X[]KÛ[ŠKÜš]Wİ^
+ÛÛ™šY×İ^[˜ÛÙ[™ÏH]‹NŠBˆ^XİYÙš[\ÈH
+œÜ˜ËØ[››İ]YœH‹œÜ˜Ëİ[˜[››İ]YœHŠBˆİÜš]WÛX[šY™\İ
+ˆ\Ü]ˆ˜]Y]‹ˆÂˆ]Y]X[šY™\İÚXÚÊˆÚXÚ×ÚYH˜[››İ][ÛœÈ‹ˆİ\H”]Ûˆ[››İ][ÛœÈ‹ˆ^XİYÙš[\ÏY^XİYÙš[\Ëˆ™\]Z\™YØ\™İJ‹K\Ù[XİPS“ˆ‹
+Kˆ
+BˆKˆ
+B‚ˆ^]ØÛÙHHXZ[ŠˆÂˆ‹K\›Ûİ‹ˆİŠ\Ü]
+Kˆ‹KXÛÛ™šYÈ‹ˆœ]X[]KÛ[‹ˆ‹KZœÛÛˆ‹ˆ‹KX]Y][X[šY™\İ‹ˆ˜]Y]šœÛÛˆ‹ˆBˆ
+Bˆ^[ØYHœÛÛ‹›ØYÊØ\Ş\Ëœ™XYİ]\œŠ
+K›İ]
+Bˆ\ÜÙ\œİ\Èˆ[ˆ^[ØY^[ØY™Ù]
+™^Xİ][Û—Ù˜Z[\™HŠBˆ\ÜÙ\ÜÛY[H^[ØYÈ˜]Y]ØÛÛ\][Ûˆ—VÈ˜ÚXÚÜÈ—VÌBˆİ\H™^
+›İÈ›Üˆ›İÈ[ˆ^[ØYÈœİ\È—HYˆ›İÖÈ›˜[YH—HOH”]Ûˆ[››İ][ÛœÈŠBˆXYÛ›ÜİXÜÈHœÛÛ‹›ØYÊİ\Èœİİ]—JB‚ˆ\ÜÙ\^]ØÛÙHOHˆ\ÜÙ\^[ØYÈ˜]Y]ØÛÛ\][Ûˆ—VÈœİ]\È—HOH˜ÛÛ\]H‚ˆ\ÜÙ\\ÜÙ\ÜÛY[Èœİ]\È—HOH™^Xİ]Y‚ˆ\ÜÙ\\ÜÙ\ÜÛY[È™^XİYÙš[\È—HOH\İ
+^XİYÙš[\ÊBˆ\ÜÙ\\ÜÙ\ÜÛY[ÈœÙ[XİYÙš[\È—HOH\İ
+^XİYÙš[\ÊBˆ\ÜÙ\‹K\Ù[XİPS“ˆˆ[ˆ\ÜÙ\ÜÛY[È™^[™YØ\™İˆ—Bˆ\ÜÙ\[Jˆ›İÖÈ™š[[˜[YH—K™[™İÚ]
+œÜ˜Ëİ[˜[››İ]YœHŠH[™›İÖÈ˜ÛÙH—HOHS“ŒH‚ˆ›Üˆ›İÈ[ˆXYÛ›ÜİXÜÂˆ
+Bˆ\ÜÙ\[
+›İ›İÖÈ™š[[˜[YH—K™[™İÚ]
+œÜ˜ËØ[››İ]YœHŠH›Üˆ›İÈ[ˆXYÛ›ÜİXÜÊB‚ˆ
+\Ü]Èœ]X[]KÛ[ŠKÜš]Wİ^
+ˆÛÛ™šY×İ^œ™\XÙJ‹K\Ù[XİPS“ˆ‹‹K\Ù[XİQHŠK[˜ÛÙ[™ÏH]‹N‚ˆ
+BˆZ\ÜÚ[™×ÜÙ[XİÜ—Ù^]HXZ[ŠˆÂˆ‹K\›Ûİ‹ˆİŠ\Ü]
+Kˆ‹KXÛÛ™šYÈ‹ˆœ]X[]KÛ[‹ˆ‹KZœÛÛˆ‹ˆ‹KX]Y][X[šY™\İ‹ˆ˜]Y]šœÛÛˆ‹ˆBˆ
+BˆZ\ÜÚ[™×ÜÙ[XİÜˆHœÛÛ‹›ØYÊØ\Ş\Ëœ™XYİ]\œŠ
+K›İ]
+VÈ˜]Y]ØÛÛ\][Ûˆ—B‚ˆ\ÜÙ\Z\ÜÚ[™×ÜÙ[XİÜ—Ù^]OH‚ˆ\ÜÙ\Z\ÜÚ[™×ÜÙ[XİÜ–Èœİ]\È—HOHš[˜ÛÛ\]H‚ˆ\ÜÙ\Z\ÜÚ[™×ÜÙ[XİÜ–È˜ÚXÚÜÈ—VÌVÈœİ]\È—HOHœÙ[XİÜ—ÛZ\ÛX]Ú‚ˆ\ÜÙ\‹K\Ù[XİPS“ˆˆ[ˆZ\ÜÚ[™×ÜÙ[XİÜ–È˜ÚXÚÜÈ—VÌVÈœ™\]Z\™YØ\™İˆ—Bˆ\ÜÙ\‹K\Ù[XİQHˆ[ˆZ\ÜÚ[™×ÜÙ[XİÜ–È˜ÚXÚÜÈ—VÌVÈ™^[™YØ\™İˆ—B‚‚™Yˆ\İÛX[šY™\İÜ›Ùš[WØÛİ™\œ×İ\WÜ™\İ[ØYš\ÛÜWİÚ]Û˜[YYÛ™YØ]]™Jˆ\Ü]ˆ]Ø\Ş\Îˆ]\İØ\\™Qš^\™VÜİ—BŠHOˆ›Û™N‚ˆˆˆH™X[ÛÛœİ[Y\ˆ›Ùš[H™\ÜÈ[›˜[YY\\È[™™\Ù\™\È˜[YY™XÛÜ™Ëˆˆˆ‚ˆİXœ›ØÙ\ÜËœ[ŠÈ™Ú]‹š[š]‹‹\H‹İŠ\Ü]
+WKÚXÚÏUYJBˆÛİ\˜ÙHH\Ü]ÈœÜ˜È‚ˆÛİ\˜ÙK›ZÙ\Š
+Bˆ
+Ûİ\˜ÙHÈœ™\İ[ËœHŠKÜš]Wİ^
+ˆ™œ›ÛH\[™È[\Ü˜[YY\Wˆ‚ˆ˜Û\ÜÈZ\Š˜[YY\JN—ˆYˆ[ˆšYÚˆ[ˆ‚ˆ™YˆÛÛÜ™[˜]\Ê
+HOˆ\VÚ[[Nˆ™]\›ˆK—ˆ‚ˆ™Yˆ˜[YY
 
-
-def _render_package_boundaries(findings: Sequence[Finding]) -> None:
-    """Render the package, layout, registry, and metadata boundary findings."""
-    for finding in findings:
-        _render_finding(finding)
-    _human_print(f"Package boundaries: {len(findings)} violation(s)")
-    _render_severity_totals(findings)
-
-
-def _render_dependency_locks(findings: Sequence[Finding]) -> None:
-    """Render requirement and exact-pin findings."""
-    for finding in findings:
-        _render_finding(finding)
-    _human_print(f"Dependency locks: {len(findings)} violation(s)")
-    _render_severity_totals(findings)
-
-
-def _render_repository_layout(findings: Sequence[Finding]) -> None:
-    """Render configured artifact, path, and instruction-router findings."""
-    for finding in findings:
-        _render_finding(finding)
-    if findings:
-        _human_print(f"Repository layout: {len(findings)} violation(s)")
-    else:
-        _human_print("Tracked-file layout is clean.")
-    _render_severity_totals(findings)
-
-
-def _evaluate_rule(
-    root: Path,
-    config_path: Path,
-    rule: QualityRule,
-    verbose: bool,
-    jobs: int | None = None,
-    loaded_config: QualityGateConfig | None = None,
-    *,
-    already_scheduled: bool = False,
-) -> RuleEvaluation:
-    """Run a rule and retain structured output before any CLI rendering."""
-    checkout = root.resolve(strict=True)
-    resolved_config = (
-        config_path if config_path.is_absolute() else checkout / config_path
-    )
-    config = (
-        loaded_config if loaded_config is not None else _load_policy(resolved_config)
-    )
-    max_jobs = (
-        jobs
-        if jobs is not None
-        else config.orchestration.execution.max_jobs
-        if config.orchestration is not None
-        else 1
-    )
-    if not 1 <= max_jobs <= 64:
-        raise typer.BadParameter("--jobs must be between 1 and 64")
-    if config.files is None and RULE_SPECS[rule].requires_files:
-        raise typer.BadParameter(
-            "a built-in rule requires a top-level [files] inventory in the policy"
-        )
-    threshold = (
-        config.orchestration.failure_threshold
-        if config.orchestration is not None
-        else "error"
-    )
-    try:
-        files = (
-            candidate_files(checkout, config.files) if config.files is not None else []
-        )
-    except OSError as error:
-        raise typer.BadParameter(str(error), param_hint="--root") from error
-    if verbose:
-        _log_verbose(rule, checkout, len(files))
-    try:
-        if rule == "cyclomatic-complexity" and max_jobs > 1:
-            output = run_parallel_cyclomatic(
-                checkout, resolved_config, config, max_jobs
-            )
-        elif already_scheduled:
-            output = run_builtin_rule(rule, checkout, files, config)
-        else:
-            outcome = run_work_units(
-                (
-                    WorkUnit(
-                        key=rule,
-                        run=partial(run_builtin_rule, rule, checkout, files, config),
-                    ),
-                ),
-                1,
-            )[rule]
-            if outcome.error is not None:
-                raise outcome.error
-            if outcome.value is None:
-                raise RuntimeError("built-in rule returned no result")
-            output = cast(RuleOutput, outcome.value)
-    except MissingPolicyError as error:
-        raise typer.BadParameter(str(error)) from error
-    except (OSError, RuntimeError) as error:
-        raise typer.BadParameter(str(error), param_hint="--root") from error
-    return RuleEvaluation.from_output(rule, output, threshold)
-
-
-def _execute(
-    root: Path,
-    config_path: Path,
-    rule: QualityRule,
-    json_output: bool,
-    report: bool,
-    verbose: bool,
-    plan_only: bool = False,
-    jobs: int | None = None,
-) -> int:
-    """Render one structured rule evaluation for the requested CLI mode."""
-    if plan_only:
-        if rule != "cyclomatic-complexity":
-            raise typer.BadParameter(
-                "--plan with --rule requires cyclomatic-complexity"
-            )
-        checkout = root.resolve(strict=True)
-        resolved_config = (
-            config_path if config_path.is_absolute() else checkout / config_path
-        )
-        config = _load_policy(resolved_config)
-        try:
-            policy = config.checks.cyclomatic_complexity
-            if policy is None:
-                raise MissingPolicyError(
-                    "the selected configuration has no "
-                    "[checks.cyclomatic_complexity] policy"
-                )
-            payload = plan_payload(build_cyclomatic_plan(checkout, policy))
-            max_jobs = (
-                jobs
-                if jobs is not None
-                else config.orchestration.execution.max_jobs
-                if config.orchestration is not None
-                else 1
-            )
-            if max_jobs > 1:
-                payload["execution"] = {
-                    "max_jobs": max_jobs,
-                    "units": [
-                        f"cyclomatic-complexity:{backend['language']}"
-                        for backend in cast(
-                            list[dict[str, object]], payload["backends"]
-                        )
-                    ],
-                }
-        except (MissingPolicyError, OSError, ValueError) as error:
-            raise typer.BadParameter(str(error)) from error
-        typer.echo(
-            json.dumps(payload, indent=None if json_output else 2, sort_keys=True)
-        )
-        return 0
-
-    evaluation = _evaluate_rule(root, config_path, rule, verbose, jobs)
-    output = evaluation.output
-    exit_code = int(evaluation.failed and not report)
-    shape = RULE_SPECS[rule].output_shape
-    if shape is RuleOutputShape.CYCLOMATIC_REPORT:
-        complexity_report = cast(CyclomaticReport, output)
-        if json_output:
-            report_data = report_payload(complexity_report)
-            diagnostics = [item.to_wire() for item in complexity_report.diagnostics]
-            typer.echo(
-                json.dumps(
-                    {
-                        "report": report_data,
-                        "diagnostics": diagnostics,
-                        "summary": report_summary(complexity_report),
-                    },
-                    sort_keys=True,
-                )
-            )
-        else:
-            _render_cyclomatic_report(complexity_report)
-        if complexity_report.outcome in {
-            "operational_failure",
-            "incomplete_coverage",
-            "no_matching_files",
-        }:
-            return 2
-        return exit_code
-
-    if shape is RuleOutputShape.FINDINGS:
-        findings = cast(list[Finding], output)
-        if json_output:
-            typer.echo(
-                json.dumps([finding.to_wire() for finding in findings], sort_keys=True)
-            )
-        elif rule == "dependency-locks":
-            _render_dependency_locks(findings)
-        elif rule == "repository-layout":
-            _render_repository_layout(findings)
-        elif rule == "package-boundaries":
-            _render_package_boundaries(findings)
-        else:
-            _render(rule, findings)
-        return exit_code
-
-    if shape is RuleOutputShape.MESSAGES:
-        if rule == "cli":
-            cli_output = cast(CliPolicyReport | list[str], output)
-            if hasattr(cli_output, "legacy_messages"):
-                cli_report = cast(CliPolicyReport, cli_output)
-                if json_output:
-                    typer.echo(json.dumps(cli_report.legacy_messages()))
-                else:
-                    _render_cli_policy(cli_report)
-            elif json_output:
-                typer.echo(json.dumps(cli_output))
-            else:
-                _render_cli_policy(cli_output)
-            return exit_code
-        issues = cast(list[str], output)
-        if json_output:
-            typer.echo(json.dumps(issues))
-        elif rule == "script-policy":
-            _render_script_policy(issues)
-        elif rule == "runtime-types":
-            _render_runtime_types(issues)
-        else:
-            raise ValueError(f"rule {rule!r} has no message renderer")
-        return exit_code
-
-    if shape is RuleOutputShape.PYTHON_STYLE:
-        style_findings = cast(dict[str, StyleFindings], output)
-        if json_output:
-            typer.echo(json.dumps(style_findings, sort_keys=True))
-        else:
-            _render_python_style(style_findings)
-        return exit_code
-
-    shared_report = cast(SharedUtilitiesReport, output)
-    if json_output:
-        typer.echo(
-            json.dumps(
-                {
-                    "direct_git_calls": shared_report.direct_git_calls,
-                    "duplicate_groups": shared_report.duplicate_groups,
-                    "failed": shared_report.failed,
-                    "file_hash_implementations": shared_report.file_hash_implementations,
-                },
-                sort_keys=True,
-            )
-        )
-    else:
-        _render_shared_utilities(shared_report)
-    return exit_code
-
-
-def run_profile_rule(
-    checkout: Path,
-    resolved_config: Path,
-    rule: QualityRule,
-    verbose: bool,
-    config: QualityGateConfig | None = None,
-) -> RuleRunResult:
-    """Normalize one rule for either the profile runner or an isolated worker."""
-    captured_output = StringIO()
-    captured_error = StringIO()
-    try:
-        with redirect_stdout(captured_output), redirect_stderr(captured_error):
-            evaluation = _evaluate_rule(
-                checkout,
-                resolved_config,
-                rule,
-                verbose,
-                1,
-                config,
-                already_scheduled=True,
-            )
-    except typer.BadParameter as error:
-        return RuleRunResult(
-            execution_failure=str(error),
-            exit_code=ExitCode.CONFIG_ERROR,
-            stderr=captured_error.getvalue(),
-        )
-    except typer.Exit as error:
-        return RuleRunResult(
-            execution_failure="Invalid quality policy.",
-            exit_code=error.exit_code,
-            stderr=captured_error.getvalue(),
-        )
-    except (ValidationError, TypeError, ValueError) as error:
-        return RuleRunResult(
-            execution_failure=f"Alphus rule output could not be normalized: {error}",
-            exit_code=ExitCode.OPERATIONAL_FAILURE,
-            stderr=captured_error.getvalue(),
-        )
-    if captured_output.getvalue():
-        return RuleRunResult(
-            execution_failure="Alphus rule printed output instead of returning it.",
-            exit_code=ExitCode.OPERATIONAL_FAILURE,
-            stderr=captured_error.getvalue(),
-        )
-    report = None
-    stdout = ""
-    exit_code = ExitCode.QUALITY_FAILURE if evaluation.failed else ExitCode.SUCCESS
-    match evaluation.output:
-        case CyclomaticReport() as cyclomatic_report:
-            report = report_payload(cyclomatic_report)
-            stdout = report_summary(cyclomatic_report) + "\n"
-            if cyclomatic_report.outcome in {
-                "operational_failure",
-                "incomplete_coverage",
-                "no_matching_files",
-            }:
-                exit_code = ExitCode.OPERATIONAL_FAILURE
-        case _:
-            pass
-    return RuleRunResult(
-        findings=tuple(evaluation.diagnostics),
-        exit_code=exit_code,
-        stderr=captured_error.getvalue(),
-        stdout=stdout,
-        report=report,
-    )
-
-
-def _execute_profile(
-    root: Path,
-    config_path: Path,
-    profile_name: str | None,
-    json_output: bool,
-    verbose: bool,
-    jobs: int | None = None,
-    history_dir: Path | None = None,
-    consumer_id: str | None = None,
-    audit_manifest: AuditManifest | None = None,
-) -> int:
-    """Run the configured suite through the Python orchestration layer."""
-    checkout = root.resolve(strict=True)
-    resolved_config = (
-        config_path if config_path.is_absolute() else checkout / config_path
-    )
-
-    def audit_preflight_failure(
-        message: str, *, assessment_status: AuditCheckStatus = "incomplete"
-    ) -> int:
-        if audit_manifest is None:
-            return _profile_failure(message, json_output=json_output)
-        payload = execution_failure_payload(
-            component="alphus-profile",
-            kind="configuration_error",
-            message=message,
-            exit_code=ExitCode.CONFIG_ERROR,
-        )
-        audit = assess_profile_audit(
-            audit_manifest,
-            None,
-            None,
-            unavailable_reason="profile configuration or selection failed before execution",
-            unavailable_status=assessment_status,
-        )
-        encoded = dict(payload)
-        encoded["audit_completion"] = cast(JsonValue, audit)
-        typer.echo(json.dumps(encoded, sort_keys=True))
-        return ExitCode.CONFIG_ERROR
-
-    if audit_manifest is None:
-        config = _load_policy(resolved_config, json_output=json_output)
-    else:
-        failure_output = StringIO()
-        try:
-            with redirect_stdout(failure_output):
-                config = _load_policy(resolved_config, json_output=True)
-        except typer.Exit:
-            try:
-                failure_payload = _decode_json_object(failure_output.getvalue())
-            except (TypeError, ValueError, ValidationError):
-                return audit_preflight_failure(
-                    "Invalid quality policy: the configuration could not be loaded."
-                )
-            failure_payload["audit_completion"] = cast(
-                JsonValue,
-                assess_profile_audit(
-                    audit_manifest,
-                    None,
-                    None,
-                    unavailable_reason="profile configuration failed before execution",
-                ),
-            )
-            typer.echo(json.dumps(failure_payload, sort_keys=True))
-            return ExitCode.CONFIG_ERROR
-    policy = config.orchestration
-    if policy is None:
-        return audit_preflight_failure(
-            "The selected policy has no [orchestration] section."
-        )
-    selected_profile = profile_name or policy.default_profile
-    if audit_manifest is not None and audit_manifest.profile != selected_profile:
-        return audit_preflight_failure(
-            "The requested profile does not match the audit manifest profile."
-        )
-    plan = policy.resolve_profile(selected_profile)
-    if plan is None:
-        return audit_preflight_failure(
-            "The requested orchestration profile is not defined by the policy."
-        )
-    try:
-        for step in policy.steps:
-            if step.name in plan.steps and step.kind == "rule":
-                if config.files is None and RULE_SPECS[step.rule].requires_files:
-                    raise MissingPolicyError(
-                        "a selected built-in rule requires a top-level [files] inventory"
-                    )
-                config.checks.require_rule(step.rule)
-    except MissingPolicyError as error:
-        return audit_preflight_failure(str(error), assessment_status="missing_policy")
-
-    audit_plan: ProfileAuditPlan | None = None
-    if audit_manifest is not None:
-        try:
-            entries = resolve_fix_plan(
-                checkout, resolved_config, policy, selected_profile
-            )
-        except (OSError, ValueError) as error:
-            return audit_preflight_failure(
-                f"Cannot resolve profile scope for audit: {error}"
-            )
-        entries_by_name = {entry.name: entry for entry in entries}
-        selected_steps: list[AuditPlanStep] = []
-        for step in policy.steps:
-            if step.name not in plan.steps:
-                continue
-            entry = entries_by_name[step.name]
-            try:
-                selected_files = (
-                    _selected_rule_files(checkout, config, step.rule)
-                    if step.kind == "rule"
-                    else (list(entry.files) if step.files is not None else None)
-                )
-            except (OSError, ValueError) as error:
-                return audit_preflight_failure(
-                    f"Cannot resolve profile scope for audit: {error}"
-                )
-            row: AuditPlanStep = {
-                "name": step.name,
-                "kind": step.kind,
-                "selected_files": selected_files,
-            }
-            if step.kind == "command" and entry.check_argv is not None:
-                row["expanded_argv"] = list(entry.check_argv)
-            selected_steps.append(row)
-        intent_rows = intent_bindings_for_steps(
-            policy.intents,
-            plan.steps,
-            selected_profile,
-            selected_profiles=plan.profiles,
-            default_failure_threshold=policy.failure_threshold,
-        )
-        audit_intents: list[AuditPlanIntent] = [
-            {
-                "rule_id": row.rule_id,
-                "language": row.language,
-                "native_rule": row.native_rule,
-                "step": row.step,
-            }
-            for row in intent_rows
-        ]
-        audit_plan = {
-            "profile": selected_profile,
-            "steps": selected_steps,
-            "intents": audit_intents,
-        }
-
-    def run_rule(rule: QualityRule) -> RuleRunResult:
-        return run_profile_rule(checkout, resolved_config, rule, verbose, config)
-
-    def audit_execution_scope(step: RuleRunStep) -> list[str] | None:
-        if audit_plan is None:
-            return None
-        planned = next(
-            (item for item in audit_plan["steps"] if item["name"] == step.name),
-            None,
-        )
-        if planned is None or planned.get("selected_files") is None:
-            return None
-        try:
-            return _selected_rule_files(checkout, config, step.rule)
-        except (OSError, ValueError):
-            return []
-
-    if audit_manifest is None:
-        return run_orchestration(
-            checkout,
-            resolved_config,
-            policy,
-            selected_profile,
-            run_rule,
-            json_output=json_output,
-            jobs=jobs,
-            verbose=verbose,
-            config=config,
-            history_dir=history_dir,
-            consumer_id=consumer_id,
-            stdout=(
-                cast(TextIO, _HumanStream())
-                if _OUTPUT_FORMAT.get() == "rich" and not json_output
-                else sys.stdout
-            ),
-            stderr=(
-                cast(TextIO, _HumanStream(stderr=True))
-                if _OUTPUT_FORMAT.get() == "rich" and not json_output
-                else sys.stderr
-            ),
-        )
-
-    captured_result = StringIO()
-    scope_token = EXECUTION_SCOPE.set(audit_execution_scope)
-    try:
-        result_exit_code = run_orchestration(
-            checkout,
-            resolved_config,
-            policy,
-            selected_profile,
-            run_rule,
-            json_output=True,
-            jobs=jobs,
-            verbose=verbose,
-            config=config,
-            history_dir=history_dir,
-            consumer_id=consumer_id,
-            stdout=captured_result,
-            stderr=(
-                cast(TextIO, _HumanStream(stderr=True))
-                if _OUTPUT_FORMAT.get() == "rich" and not json_output
-                else sys.stderr
-            ),
-        )
-    finally:
-        EXECUTION_SCOPE.reset(scope_token)
-    audit_result: ProfileAuditResult | None
-    try:
-        result_payload = _decode_json_object(captured_result.getvalue())
-        audit_result = _PROFILE_AUDIT_RESULT.validate_python(result_payload)
-        unavailable_reason = None
-    except (TypeError, ValueError, ValidationError):
-        result_payload = dict(
-            execution_failure_payload(
-                component="alphus-profile",
-                kind="operational_error",
-                message="Profile execution did not produce a structured result.",
-                exit_code=ExitCode.OPERATIONAL_FAILURE,
-            )
-        )
-        audit_result = None
-        unavailable_reason = (
-            "profile execution did not produce a valid structured result"
-        )
-    if audit_plan is not None and audit_result is not None:
-        execution_steps = {step["name"]: step for step in audit_result["steps"]}
-        for planned_step in audit_plan["steps"]:
-            observed = execution_steps.get(planned_step["name"])
-            if observed is not None and "selected_files" in observed:
-                planned_step["selected_files"] = observed["selected_files"]
-            if observed is not None and "expanded_argv" in observed:
-                planned_step["expanded_argv"] = observed["expanded_argv"]
-    assessment = assess_profile_audit(
-        audit_manifest,
-        audit_plan,
-        audit_result,
-        unavailable_reason=unavailable_reason,
-    )
-    result_payload["audit_completion"] = cast(JsonValue, assessment)
-    typer.echo(json.dumps(result_payload, sort_keys=True))
-    if assessment["status"] == "incomplete":
-        return ExitCode.OPERATIONAL_FAILURE
-    return result_exit_code
-
-
-def _execute_history(
-    root: Path,
-    config_path: Path,
-    profile_name: str | None,
-    history_dir: Path,
-    json_output: bool,
-    consumer_id: str | None = None,
-) -> int:
-    """Show the latest saved result and its failed steps without rerunning gates."""
-    checkout = root.resolve(strict=True)
-    resolved_config = (
-        config_path if config_path.is_absolute() else checkout / config_path
-    )
-    config = _load_policy(resolved_config)
-    policy = config.orchestration
-    if policy is None:
-        _human_error("The selected policy has no [orchestration] section.")
-        return 2
-    selected_profile = profile_name or policy.default_profile
-    if policy.resolve_profile(selected_profile) is None:
-        _human_error(f"Unknown orchestration profile: {selected_profile}")
-        return 2
-    try:
-        record = latest_profile_record(
-            history_dir, checkout, selected_profile, consumer_id=consumer_id
-        )
-    except (OSError, ValueError) as error:
-        _human_error(f"Cannot read profile history: {error}")
-        return 2
-    record: (
-        ProfileHistoryRecordV1
-        | ProfileHistoryRecord
-        | ProfileHistoryRecordV3
-        | ProfileHistoryRecordV4
-        | None
-    )
-    if record is None:
-        _human_error(
-            f"No saved result for profile {selected_profile!r} in {history_dir}"
-        )
-        return 2
-    if json_output:
-        typer.echo(record.model_dump_json())
-    else:
-        _human_print(
-            f"Latest {selected_profile} result: {record.total_steps} steps, "
-            f"{record.passed} passed, {record.failed} failed, "
-            f"{record.provisional_passed} provisional passed, "
-            f"{record.provisional_failed} provisional failed, "
-            f"{record.not_applicable} not applicable "
-            f"({record.completed_at_utc})"
-        )
-        vcs = (
-            record.vcs
-            if isinstance(record, (ProfileHistoryRecordV3, ProfileHistoryRecordV4))
-            else "git"
-        )
-        _human_print(
-            f"Revision ({vcs or 'unavailable'}): {record.revision or 'unavailable'}"
-        )
-        if record.failed_steps:
-            for name in record.failed_steps:
-                _human_print(f"FAILED {name}")
-        else:
-            _human_print("No failed steps.")
-    return 0
-
-
-def _execute_history_report(
-    history_dir: Path,
-    report: str,
-    profile: str | None,
-    consumer_id: str | None,
-    json_output: bool,
-) -> int:
-    """Index or roll up validated archive records without rerunning checks."""
-    entries = iter_profile_records(
-        history_dir, profile=profile, consumer_id=consumer_id
-    )
-    if report == "runs":
-        try:
-            rows = tuple(summarize_profile_entry(entry) for entry in entries)
-        except (OSError, ValueError) as error:
-            _human_error(f"Cannot read profile history: {error}")
-            return ExitCode.CONFIG_ERROR
-        if json_output:
-            typer.echo(json.dumps([row.model_dump() for row in rows], sort_keys=True))
-        else:
-            for row in rows:
-                _human_print(
-                    f"{row.completed_at_utc} {row.consumer_id or row.source_root} "
-                    f"{row.profile}: {row.passed} passed, {row.failed} failed "
-                    f"in {row.duration_seconds:.3f}s ({row.path})"
-                )
-        return ExitCode.SUCCESS
-    try:
-        rollup = rollup_profile_history(entries)
-    except (OSError, ValueError) as error:
-        _human_error(f"Cannot read profile history: {error}")
-        return ExitCode.CONFIG_ERROR
-    if json_output:
-        typer.echo(rollup.model_dump_json())
-    else:
-        _human_print(
-            f"Profile archive: {rollup.run_count} runs, "
-            f"{rollup.failed_run_count} failed runs, {len(rollup.groups)} groups"
-        )
-        for group in rollup.groups:
-            _human_print(
-                f"{group.consumer_id or group.source_roots[0]} {group.profile} "
-                f"[{group.config_sha256[:12]}]: {group.run_count} runs, "
-                f"{group.failed_run_count} failed, "
-                f"p95 {group.run_timing.p95_seconds:.3f}s"
-            )
-            slowest = sorted(
-                group.step_timings.items(),
-                key=lambda item: (-item[1].p95_seconds, item[0]),
-            )[:5]
-            for name, timing in slowest:
-                _human_print(
-                    f"  {name}: p95 {timing.p95_seconds:.3f}s over {timing.count} runs"
-                )
-    return ExitCode.SUCCESS
-
-
-def _execute_fix_profile(
-    root: Path,
-    config_path: Path,
-    profile_name: str | None,
-    json_output: bool,
-    apply: bool,
-    fix_steps: tuple[str, ...],
-) -> int:
-    """List or explicitly run the selected profile's declared fix commands."""
-    checkout = root.resolve(strict=True)
-    resolved_config = (
-        config_path if config_path.is_absolute() else checkout / config_path
-    )
-    config = _load_policy(resolved_config)
-    policy = config.orchestration
-    if policy is None:
-        _human_error("The selected policy has no [orchestration] section.")
-        return 2
-    selected_profile = profile_name or policy.default_profile
-    try:
-        entries = resolve_fix_plan(checkout, resolved_config, policy, selected_profile)
-        if apply:
-            if json_output:
-                raise ValueError("--json is only available with --fix-plan")
-            return apply_configured_fixes(
-                checkout, entries, fix_steps, sys.stdout, sys.stderr
-            )
-        if fix_steps:
-            raise ValueError("--fix-step requires --apply-fixes")
-    except (OSError, ValueError) as error:
-        _human_error(str(error))
-        return 2
-    if json_output:
-        typer.echo(
-            json.dumps(
-                {
-                    "profile": selected_profile,
-                    "steps": [
-                        {
-                            "name": entry.name,
-                            "kind": entry.kind,
-                            "fixable": entry.fixable,
-                            "fix_argv": entry.fix_argv,
-                            "working_directory": entry.working_directory,
-                            "files": entry.files,
-                        }
-                        for entry in entries
-                    ],
-                },
-                sort_keys=True,
-            )
-        )
-    else:
-        _human_print(f"Fix plan for profile {selected_profile}:")
-        for entry in entries:
-            if entry.fixable:
-                _human_print(
-                    f"FIXABLE {entry.name}: {len(entry.files)} file(s); "
-                    f"argv={json.dumps(entry.fix_argv)}"
-                )
-            else:
-                _human_print(f"NO FIXER {entry.name}")
-    return 0
-
-
-def _execute_plan_profile(
-    root: Path,
-    config_path: Path,
-    profile_name: str | None,
-    json_output: bool,
-    jobs: int | None = None,
-) -> int:
-    """Show resolved profile steps and scopes without running native tools."""
-    checkout = root.resolve(strict=True)
-    resolved_config = (
-        config_path if config_path.is_absolute() else checkout / config_path
-    )
-    config = _load_policy(resolved_config)
-    policy = config.orchestration
-    if policy is None:
-        _human_error("The selected policy has no [orchestration] section.")
-        return 2
-    selected_profile = profile_name or policy.default_profile
-    plan = policy.resolve_profile(selected_profile)
-    if plan is None:
-        _human_error(f"Unknown orchestration profile: {selected_profile}")
-        return 2
-    max_jobs = jobs if jobs is not None else policy.execution.max_jobs
-    if not 1 <= max_jobs <= 64:
-        raise typer.BadParameter("--jobs must be between 1 and 64")
-    try:
-        for step in policy.steps:
-            if step.name in plan.steps and step.kind == "rule":
-                if config.files is None and RULE_SPECS[step.rule].requires_files:
-                    raise MissingPolicyError(
-                        "a selected built-in rule requires a top-level [files] inventory"
-                    )
-                config.checks.require_rule(step.rule)
-        entries = resolve_fix_plan(checkout, resolved_config, policy, selected_profile)
-    except (MissingPolicyError, OSError, ValueError) as error:
-        _human_error(str(error))
-        return 2
-
-    by_name = {step.name: step for step in policy.steps}
-    intent_rows = list(
-        intent_bindings_for_steps(
-            policy.intents,
-            plan.steps,
-            selected_profile,
-            selected_profiles=plan.profiles,
-            default_failure_threshold=policy.failure_threshold,
-        )
-    )
-    entries_by_name = {entry.name: entry for entry in entries}
-    for index, row in enumerate(intent_rows):
-        step_name = row.step
-        if step_name is not None and step_name in entries_by_name:
-            entry = entries_by_name[step_name]
-            step = by_name[step_name]
-            applicable = (
-                step.files is None or bool(entry.files)
-                if step.kind == "command"
-                else None
-            )
-            intent_rows[index] = row.with_execution_plan(
-                selected_files=entry.files,
-                applicable=applicable,
-                expanded_argv=entry.check_argv,
-            )
-
-    if json_output:
-        details: list[JsonValue] = []
-        for entry in entries:
-            step = by_name[entry.name]
-            detail = cast(
-                dict[str, JsonValue],
-                step.model_dump(mode="json", exclude_none=True),
-            )
-            if not step.parallel:
-                for field_name in (
-                    "parallel",
-                    "dispatch_priority",
-                    "slots",
-                    "locks",
-                    "after",
-                ):
-                    detail.pop(field_name, None)
-            detail["fixable"] = entry.fixable
-            if step.kind == "rule":
-                selected = _selected_rule_files(checkout, config, step.rule)
-                if selected is not None:
-                    detail["selected_files"] = selected
-            else:
-                detail["selected_files"] = entry.files
-                detail["applicable"] = step.files is None or bool(entry.files)
-                if entry.check_argv is not None:
-                    detail["expanded_argv"] = entry.check_argv
-            details.append(detail)
-        payload: _ProfilePlanPayload = {
-            "profile": selected_profile,
-            "profiles": plan.profiles,
-            "failure_threshold": policy.failure_threshold,
-            "steps": details,
-        }
-        if max_jobs > 1:
-            payload["execution"] = {"max_jobs": max_jobs}
-        if intent_rows:
-            payload["intents"] = [
-                row.model_dump(mode="json", exclude_none=True) for row in intent_rows
-            ]
-        typer.echo(json.dumps(payload, sort_keys=True))
-        return 0
-
-    _human_print(
-        f"Execution plan for profile {selected_profile} "
-        f"(failure threshold={policy.failure_threshold}):"
-    )
-    if max_jobs > 1:
-        _human_print(f"Worker budget: {max_jobs}")
-    if len(plan.profiles) > 1:
-        _human_print(f"Profiles: {', '.join(plan.profiles)}")
-    for entry in entries:
-        step = by_name[entry.name]
-        if max_jobs > 1:
-            mode = "PARALLEL" if step.parallel else "SERIAL"
-            _human_print(
-                f"  {mode} {step.name}: slots={step.slots}, "
-                f"locks={list(step.locks)}, after={list(step.after)}"
-            )
-        if step.kind == "rule":
-            selected = _selected_rule_files(checkout, config, step.rule)
-            scope = (
-                f"{len(selected)} file(s)"
-                if selected is not None
-                else "repository scope"
-            )
-            _human_print(
-                f"{step.rollout.upper()} RULE {step.name}: {step.rule} ({scope})"
-            )
-            continue
-        scope = "unscoped" if step.files is None else f"{len(entry.files)} file(s)"
-        label = (
-            "NOT APPLICABLE"
-            if step.files is not None and not entry.files
-            else step.rollout.upper()
-        )
-        fixer = ", fixer available" if entry.fixable else ""
-        _human_print(f"{label} COMMAND {step.name}: {scope}{fixer}")
-        _human_print(f"  check={json.dumps(step.argv)}")
-    if intent_rows:
-        _human_print("Shared quality intents:")
-        for row in intent_rows:
-            status = row.status.replace("_", " ").upper()
-            if row.applicable is False:
-                status = "NOT APPLICABLE"
-            metric = f"{row.metric} ({row.unit})"
-            _human_print(
-                f"{status} {row.rule_id} [{row.language}]: "
-                f"{row.backend} {row.native_rule}; {row.mapping} mapping; "
-                f"{metric}; severity={row.severity}, failure threshold="
-                f"{row.failure_threshold}, rollout={row.rollout}"
-            )
-            _human_print(
-                f"  scope={json.dumps(row.files.model_dump(mode='json'), sort_keys=True)}; "
-                "effective config="
-                f"{json.dumps(row.effective_configuration, sort_keys=True)}"
-            )
-            step_name = row.step
-            if step_name is not None:
-                entry = entries_by_name.get(step_name)
-                if entry is not None:
-                    _human_print(
-                        f"  owner={row.ownership}; evidence step={step_name}; "
-                        f"{len(entry.files)} file(s) selected"
-                    )
-            elif row.status == "unsupported":
-                _human_print("  no native command is configured for this capability")
-    return 0
-
-
-def _selected_rule_files(
-    checkout: Path, config: QualityGateConfig, rule: QualityRuleName
-) -> list[str] | None:
-    """Resolve effective file scopes for rules that inspect repository paths."""
-    if config.files is None:
-        return None
-
-    if rule in {"file-size", "line-length", "comment-markers"}:
-        policy = getattr(config.checks, RULE_SPECS[rule].policy_field)
-        if policy is None:
-            return None
-        candidates = candidate_files(checkout, config.files)
-        selected: list[Path] = []
-        for relative in candidates:
-            name = relative.as_posix()
-            if any(matches_path(name, pattern) for pattern in policy.exclude):
-                continue
-            if rule == "comment-markers":
-                if relative.suffix.lower() not in policy.extensions:
-                    continue
-            elif rule == "line-length":
-                path_limited = any(
-                    matches_path(name, item.pattern)
-                    for item in policy.path_codepoint_limits
-                )
-                if (
-                    not path_limited
-                    and policy.limit_for(relative.suffix.lower()) is None
-                ):
-                    continue
-            selected.append(relative)
-        return [relative.as_posix() for relative in selected]
-
-    if rule == "script-policy":
-        policy = config.checks.script_policy
-        if policy is None:
-            return None
-        return [
-            relative.as_posix()
-            for relative in launcher_files(
-                candidate_files(checkout, config.files), policy
-            )
-        ]
-
-    if rule == "cli":
-        policy = config.checks.cli
-        if policy is None:
-            return None
-        python_sources, node_sources = selected_policy_sources(
-            checkout, candidate_files(checkout, config.files), policy
-        )
-        return list(
-            dict.fromkeys(path.as_posix() for path in (*python_sources, *node_sources))
-        )
-
-    if rule == "source-families":
-        policy = config.checks.source_families
-        if policy is None:
-            return None
-        selected, _ = bounded_source_family_inventory(
-            candidate_files(checkout, config.files), policy
-        )
-        return [path.as_posix() for path in selected]
-
-    if rule not in _SOURCE_SCAN_RULES:
-        return None
-    policy = cast(
-        SourceScanPolicy | None,
-        getattr(config.checks, RULE_SPECS[rule].policy_field),
-    )
-    if policy is None:
-        return None
-    test_paths = (
-        cast(TestQualityPolicy, policy).test_paths if rule == "test-quality" else None
-    )
-    return [
-        relative.as_posix()
-        for relative in candidate_files(checkout, config.files)
-        if relative.suffix.lower() in policy.extensions
-        and not any(
-            matches_path(relative.as_posix(), pattern) for pattern in policy.exclude
-        )
-        and (
-            test_paths is None
-            or any(matches_path(relative.as_posix(), pattern) for pattern in test_paths)
-        )
-    ]
-
-
-def _command(
-    root: Annotated[
-        Path,
-        typer.Option(
-            "--root",
-            exists=True,
-            file_okay=False,
-            dir_okay=True,
-            readable=True,
-            resolve_path=True,
-            help="Repository checkout to inspect.",
-        ),
-    ] = Path("."),
-    config: Annotated[
-        Path,
-        typer.Option("--config", help="TOML policy file, relative to --root."),
-    ] = Path("quality-gates.toml"),
-    rule: Annotated[
-        QualityRule | None,
-        typer.Option("--rule", help="Run one quality rule."),
-    ] = None,
-    run: Annotated[
-        bool,
-        typer.Option("--run", help="Run a configured orchestration profile."),
-    ] = False,
-    profile: Annotated[
-        str | None,
-        typer.Option("--profile", help="Choose a configured orchestration profile."),
-    ] = None,
-    audit_manifest_path: Annotated[
-        Path | None,
-        typer.Option(
-            "--audit-manifest",
-            help="Assess profile execution against a versioned JSON audit manifest.",
-        ),
-    ] = None,
-    plan_function_shape_only: Annotated[
-        bool,
-        typer.Option(
-            "--plan-function-shape",
-            help="Print the native function-shape mapping without running a checker.",
-        ),
-    ] = False,
-    jobs: Annotated[
-        int | None,
-        typer.Option("--jobs", help="Maximum concurrent quality work units."),
-    ] = None,
-    history_dir: Annotated[
-        Path | None,
-        typer.Option(
-            "--history-dir",
-            envvar="ALPHUS_PROFILE_HISTORY_DIR",
-            help="Append immutable profile JSON records here.",
-        ),
-    ] = None,
-    show_history: Annotated[
-        bool,
-        typer.Option("--show-history", help="Show the latest saved profile result."),
-    ] = False,
-    history_report: Annotated[
-        str | None,
-        typer.Option(
-            "--history-report",
-            help="Read saved runs or timing rollups: runs, rollup.",
-        ),
-    ] = None,
-    consumer_id: Annotated[
-        str | None,
-        typer.Option(
-            "--consumer-id",
-            envvar="ALPHUS_CONSUMER_ID",
-            help="Stable consumer identity for saved runs or archive filtering.",
-        ),
-    ] = None,
-    json_output: Annotated[
-        bool,
-        typer.Option("--json", help="Emit one plain JSON value on stdout."),
-    ] = False,
-    output_format: Annotated[
-        Literal["auto", "plain", "rich", "json"],
-        typer.Option(
-            "--output",
-            help="Output format: auto, plain, rich, or json.",
-            case_sensitive=False,
-        ),
-    ] = "auto",
-    report: Annotated[
-        bool,
-        typer.Option("--report", help="Report findings without failing."),
-    ] = False,
-    verbose: Annotated[
-        bool,
-        typer.Option("--verbose", help="Write rule diagnostics to stderr."),
-    ] = False,
-    plan: Annotated[
-        bool,
-        typer.Option("--plan", help="Show resolved checks without running them."),
-    ] = False,
-    fix_plan: Annotated[
-        bool,
-        typer.Option("--fix-plan", help="Show fixable steps in a profile."),
-    ] = False,
-    apply_fixes: Annotated[
-        bool,
-        typer.Option("--apply-fixes", help="Apply named, configured fix commands."),
-    ] = False,
-    fix_step: Annotated[
-        list[str] | None,
-        typer.Option("--fix-step", help="Name a step to fix; repeat as needed."),
-    ] = None,
-    init_config: Annotated[
-        str | None,
-        typer.Option("--init-config", help="Write a named starter config recipe."),
-    ] = None,
-    add_language: Annotated[
-        list[str] | None,
-        typer.Option("--add-language", help="Add a language bundle to the recipe."),
-    ] = None,
-    add_tool: Annotated[
-        list[str] | None,
-        typer.Option("--add-tool", help="Add one native tool to the recipe."),
-    ] = None,
-    overwrite_config: Annotated[
-        bool,
-        typer.Option(
-            "--overwrite-config", help="Replace an existing config during init."
-        ),
-    ] = False,
-) -> None:
-    """Run the default profile from this repository, or select a rule/profile."""
-    try:
-        selected_format, json_output = _select_output_format(
-            output_format,
-            json_requested=json_output,
-            stdout_is_terminal=sys.stdout.isatty(),
-        )
-    except ValueError as error:
-        raise typer.BadParameter(str(error), param_hint="--output") from error
-    if jobs is not None and not 1 <= jobs <= 64:
-        raise typer.BadParameter("--jobs must be between 1 and 64")
-    audit_manifest = None
-    if audit_manifest_path is not None:
-        if not json_output:
-            raise typer.BadParameter("--audit-manifest requires --json")
-        if any(
-            (
-                plan_function_shape_only,
-                rule is not None,
-                report,
-                plan,
-                fix_plan,
-                apply_fixes,
-                bool(fix_step),
-                show_history,
-                history_report is not None,
-                init_config is not None,
-            )
-        ):
-            raise typer.BadParameter(
-                "--audit-manifest can only assess a profile execution"
-            )
-        audit_manifest = _load_audit_manifest(
-            root.resolve(strict=True), audit_manifest_path
-        )
-        selected_profile = profile
-        if selected_profile is not None and audit_manifest.profile != selected_profile:
-            raise typer.BadParameter(
-                "--profile must match the audit manifest profile",
-                param_hint="--audit-manifest",
-            )
-    if (
-        consumer_id is not None
-        and history_dir is not None
-        and (not consumer_id or consumer_id != consumer_id.strip())
-    ):
-        raise typer.BadParameter("--consumer-id must be nonempty and trimmed")
-    if history_report is not None and history_report not in {"runs", "rollup"}:
-        raise typer.BadParameter("--history-report must be runs or rollup")
-    _OUTPUT_FORMAT.set(selected_format)
-    if plan_function_shape_only:
-        if any(
-            (
-                run,
-                rule is not None,
-                profile is not None,
-                json_output,
-                report,
-                verbose,
-                plan,
-                fix_plan,
-                apply_fixes,
-                bool(fix_step),
-                init_config is not None,
-                add_language is not None,
-                add_tool is not None,
-                overwrite_config,
-                jobs is not None,
-                history_dir is not None,
-                show_history,
-                history_report is not None,
-                consumer_id is not None,
-            )
-        ):
-            raise typer.BadParameter(
-                "--plan-function-shape cannot be combined with run, rule, report, "
-                "or other plan/fix options"
-            )
-        config_path = config if config.is_absolute() else root / config
-        policy = _load_policy(config_path).checks.function_shape
-        if policy is None:
-            typer.echo(
-                "the selected configuration has no [checks.function_shape] policy",
-                err=True,
-            )
-            raise typer.Exit(2)
-        try:
-            typer.echo(
-                json.dumps(plan_function_shape(policy, root).to_dict(), indent=2)
-            )
-        except ValueError as error:
-            typer.echo(f"Function-shape plan failed: {error}", err=True)
-            raise typer.Exit(2) from error
-        raise typer.Exit(0)
-    if init_config is not None:
-        if any(
-            (
-                run,
-                rule is not None,
-                profile is not None,
-                report,
-                verbose,
-                plan,
-                fix_plan,
-                apply_fixes,
-                bool(fix_step),
-                jobs is not None,
-                history_dir is not None,
-                show_history,
-                history_report is not None,
-            )
-        ):
-            raise typer.BadParameter("--init-config cannot run or plan checks")
-        try:
-            document = render_recipe(
-                init_config,
-                add_languages=tuple(add_language or ()),
-                add_tools=tuple(add_tool or ()),
-            )
-            load_config_stream(StringIO(document))
-        except ValueError as error:
-            raise typer.BadParameter(str(error), param_hint="--init-config") from error
-        checkout = root.resolve(strict=True)
-        destination = (checkout / config).resolve()
-        if not destination.is_relative_to(checkout):
-            raise typer.BadParameter("config destination must stay inside --root")
-        if destination.exists() and not overwrite_config:
-            raise typer.BadParameter(
-                f"config already exists: {destination}; use --overwrite-config"
-            )
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_text(document, encoding="utf-8", newline="\n")
-        if json_output:
-            typer.echo(json.dumps({"path": str(destination)}, sort_keys=True))
-        else:
-            _human_print(f"Wrote {destination}")
-        raise typer.Exit(ExitCode.SUCCESS)
-    if add_language or add_tool or overwrite_config:
-        raise typer.BadParameter(
-            "--add-language, --add-tool, and --overwrite-config require --init-config"
-        )
-    if history_report is not None:
-        if history_dir is None:
-            raise typer.BadParameter("--history-report requires --history-dir")
-        if any(
-            (
-                show_history,
-                run,
-                rule is not None,
-                report,
-                verbose,
-                plan,
-                fix_plan,
-                apply_fixes,
-                bool(fix_step),
-                jobs is not None,
-            )
-        ):
-            raise typer.BadParameter("--history-report cannot run or plan checks")
-        raise typer.Exit(
-            _execute_history_report(
-                history_dir, history_report, profile, consumer_id, json_output
-            )
-        )
-    if show_history:
-        if history_dir is None:
-            raise typer.BadParameter("--show-history requires --history-dir")
-        if any(
-            (
-                run,
-                rule is not None,
-                report,
-                verbose,
-                plan,
-                fix_plan,
-                apply_fixes,
-                bool(fix_step),
-                jobs is not None,
-            )
-        ):
-            raise typer.BadParameter("--show-history cannot run or plan checks")
-        raise typer.Exit(
-            _execute_history(
-                root, config, profile, history_dir, json_output, consumer_id
-            )
-        )
-    if plan and rule == "cyclomatic-complexity":
-        if (
-            fix_plan
-            or apply_fixes
-            or run
-            or profile is not None
-            or report
-            or verbose
-            or fix_step
-            or history_dir is not None
-        ):
-            raise typer.BadParameter(
-                "cyclomatic --plan cannot be combined with run, report, verbose, or fix options"
-            )
-        raise typer.Exit(
-            _execute(root, config, rule, json_output, False, False, True, jobs)
-        )
-    if plan:
-        if (
-            fix_plan
-            or apply_fixes
-            or run
-            or rule is not None
-            or report
-            or verbose
-            or fix_step
-            or history_dir is not None
-        ):
-            raise typer.BadParameter(
-                "--plan cannot be combined with run, rule, report, verbose, or fix options"
-            )
-        raise typer.Exit(
-            _execute_plan_profile(root, config, profile, json_output, jobs)
-        )
-    if fix_plan or apply_fixes:
-        if jobs is not None or history_dir is not None:
-            raise typer.BadParameter(
-                "--jobs and --history-dir cannot be combined with fix operations"
-            )
-        if fix_plan and apply_fixes:
-            raise typer.BadParameter("choose --fix-plan or --apply-fixes")
-        if run or rule is not None or report or verbose:
-            raise typer.BadParameter(
-                "fix operations cannot be combined with --run, --rule, --report, or --verbose"
-            )
-        raise typer.Exit(
-            _execute_fix_profile(
-                root, config, profile, json_output, apply_fixes, tuple(fix_step or ())
-            )
-        )
-    if fix_step:
-        raise typer.BadParameter("--fix-step requires --apply-fixes")
-    if rule is not None:
-        if run or profile is not None or history_dir is not None:
-            raise typer.BadParameter(
-                "--rule cannot be combined with --run, --profile, or --history-dir"
-            )
-        raise typer.Exit(
-            _execute(root, config, rule, json_output, report, verbose, jobs=jobs)
-        )
-    if report:
-        raise typer.BadParameter("--report requires --rule")
-    raise typer.Exit(
-        _execute_profile(
-            root,
-            config,
-            profile,
-            json_output,
-            verbose,
-            jobs,
-            history_dir,
-            consumer_id if history_dir is not None else None,
-            audit_manifest,
-        )
-    )
-
-
-app.callback(invoke_without_command=True)(_command)
-
-
-def main(argv: Sequence[str] | None = None) -> int:
-    """Run the Typer command and return its process exit status."""
-    _OUTPUT_FORMAT.set("auto")
-    try:
-        app(args=list(argv) if argv is not None else None)
-    except SystemExit as error:
-        if error.code is None:
-            return ExitCode.SUCCESS
-        try:
-            return int(error.code)
-        except (TypeError, ValueError):
-            return ExitCode.QUALITY_FAILURE
-    finally:
-        _OUTPUT_FORMAT.set("auto")
-    return ExitCode.SUCCESS
-
-
-def main_for_rule(rule: str) -> int:
-    """Run one fixed rule from a legacy repository command adapter."""
-    return main(["--rule", rule, *sys.argv[1:]])
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+HOˆZ\ˆ™]\›ˆZ\ŠKŠWˆ‹ˆ[˜ÛÙ[™ÏH]‹N‹ˆ
+Bˆ
+\Ü]Èœ]X[]KÛ[ŠKÜš]Wİ^
+ˆˆˆœØÚ[XWİ™\œÚ[ÛˆHB–Ùš[\×Bš[˜ÛYHHÈœÜ˜ËÊ‹œH—B–ØÚXÚÜËœ]Û—Üİ[WB™^[œÚ[ÛœÈHÈ‹œH—B™^ÛYHH×B›Ü\]YWØ›İ[™\WÜ]ÈH×B›Ü\]YWØ›İ[™\WÛX\šÙ\—Ü™Yš^HˆÈÜ\]YKX›İ[™\Nˆ‚›Ü\]YWØ›İ[™\WÛZ[—Ü™X\ÛÛ—ØÚ\œÈHL‚™›Ü˜šY[—ÛXZ[—Ú[\ÜÈH×BœÙ[X[X×Ü™\İ[Ü]ÈHÈœÜ˜ËÊŠˆ—B–ÛÜ˜Ú\İ˜][Û—B™Y˜][Ü›Ùš[HH˜]Y]‚™˜Z[\™Wİ™\ÚÛH™\œ›Üˆ‚–ÖÛÜ˜Ú\İ˜][Û‹œİ\×WBšÚ[™Hœ[H‚›˜[YHH”]Ûˆİ[H‚œ[HHœ]Û‹\İ[H‚–ÖÛÜ˜Ú\İ˜][Û‹œ›Ùš[\×WB›˜[YHH˜]Y]‚œİ\ÈHÈ”]Ûˆİ[H—Bˆˆˆ‹ˆ[˜ÛÙ[™ÏH]‹N‹ˆ
+BˆİÜš]WÛX[šY™\İ
+ˆ\Ü]ˆ˜]Y]‹ˆÂˆ]Y]X[šY™\İÚXÚÊˆÚXÚ×ÚYH\K\™\İ[È‹ˆİ\H”]Ûˆİ[H‹ˆ^XİYÙš[\ÏJœÜ˜ËÜ™\İ[ËœH‹
+Kˆ
+BˆKˆ
+B‚ˆ^]ØÛÙHHXZ[ŠˆÂˆ‹K\›Ûİ‹ˆİŠ\Ü]
+Kˆ‹KXÛÛ™šYÈ‹ˆœ]X[]KÛ[‹ˆ‹KZœÛÛˆ‹ˆ‹KX]Y][X[šY™\İ‹ˆ˜]Y]šœÛÛˆ‹ˆBˆ
+Bˆ^[ØYHœÛÛ‹›ØYÊØ\Ş\Ëœ™XYİ]\œŠ
+K›İ]
+B‚ˆ\ÜÙ\^]ØÛÙHOHˆ\ÜÙ\ÜÛY[H^[ØYÈ˜]Y]ØÛÛ\][Ûˆ—VÈ˜ÚXÚÜÈ—VÌBˆ\ÜÙ\\ÜÙ\ÜÛY[Èœİ]\È—HOH™^Xİ]YİÚ]Ùš[™[™ÜÈ‚ˆ\ÜÙ\\ÜÙ\ÜÛY[È™š[™[™Ü×Üİ]H—HOHÚ]Ùš[™[™ÜÈ‚ˆ\ÜÙ\\ÜÙ\ÜÛY[ÈœÙ[XİYÙš[\È—HOHÈœÜ˜ËÜ™\İ[ËœH—BˆXYÛ›ÜİXÜÈH^[ØYÈœİ\È—VÌVÈ™š[™[™ÜÈ—Bˆ\ÜÙ\[J[›˜[YY]\K\™]\›œÈˆ[ˆ›İÖÈœ[WÚY—H›Üˆ›İÈ[ˆXYÛ›ÜİXÜÊBˆ\ÜÙ\[
+›İÖÈ›Y\ÜØYÙH—HOH[›˜[YY\H™]\›œÈˆ›Üˆ›İÈ[ˆXYÛ›ÜİXÜÊB‚‚™Yˆ\İÛX[šY™\İÜ›Ùš[WØÛİ™\œ×Ü[›™YØ[™İ[œ[›™YØÛÛ\]Xš[]WÙ›ÜØ\™\œÊˆ\Ü]ˆ]Ø\Ş\Îˆ]\İØ\\™Qš^\™VÜİ—BŠHOˆ›Û™N‚ˆˆˆ•HÛÛœİ[Y\‰ÜÈ›ÜØ\™\ˆØ]H\ÜÙ\È[›™YÚ[\È[™˜Z[È[œ[›™YÛ™\Ëˆˆˆ‚ˆİXœ›ØÙ\ÜËœ[ŠÈ™Ú]‹š[š]‹‹\H‹İŠ\Ü]
+WKÚXÚÏUYJBˆXÚØYÙHH\Ü]ÈœÜ˜ÈˆÈœØ[\H‚ˆXÚØYÙK›ZÙ\Š\™[ÏUYJBˆ
+XÚØYÙHÈ—×Ú[š]×ËœHŠKÜš]Wİ^
+ˆ‹[˜ÛÙ[™ÏH]‹NŠBˆ
+XÚØYÙHÈ˜İ\œ™[œHŠKÜš]Wİ^
+˜Û\ÜÈ[™Îˆ\Ü×ˆ‹[˜ÛÙ[™ÏH]‹NŠBˆ
+XÚØYÙHÈ›ÛœHŠKÜš]Wİ^
+ˆ™œ›ÛHØ[\K˜İ\œ™[[\Ü[™×ˆ‹[˜ÛÙ[™ÏH]‹N‚ˆ
+Bˆ
+\Ü]È˜ÛÛ\]Xš[]KÛ[ŠKÜš]Wİ^
+ˆœØÚ[XWİ™\œÚ[ÛˆHW–ÖÙ›ÜØ\™\œ×WWˆ‚ˆ	Û[Ù[HHœØ[\K›Û—œ™\XÙ[Y[HœØ[\K˜İ\œ™[•[™È—‰Âˆ	ÛİÛ™\ˆHœXÚØYÙHXZ[Z[™\œÈ—œ™[[İ™WØHHŒËLKLW‰Ëˆ[˜ÛÙ[™ÏH]‹N‹ˆ
+BˆÛÛ[X[™HÂˆÜ]ÛŸH‹ˆ‹[H‹ˆ˜[\Ë™Ø]\Ëœ]Û‹˜ÛÛ\]Xš[]WØÛH‹ˆ‹K\Ûİ\˜ÙK\›Ûİ‹ˆœÜ˜È‹ˆ‹K\[ˆ‹ˆ˜ÛÛ\]Xš[]KÛ[‹ˆBˆÛÛ™šYÈHˆˆˆœØÚ[XWİ™\œÚ[ÛˆHB–ÛÜ˜Ú\İ˜][Û—B™Y˜][Ü›Ùš[HH˜]Y]‚–ÖÛÜ˜Ú\İ˜][Û‹œİ\×WBšÚ[™H˜ÛÛ[X[™‚›˜[YHHÛÛ\]Xš[]H›ÜØ\™\œÈ‚˜\™İˆHÚœÛÛ‹™[\ÊÛÛ[X[™
+_B–ÖÛÜ˜Ú\İ˜][Û‹œ›Ùš[\×WB›˜[YHH˜]Y]‚œİ\ÈHÈÛÛ\]Xš[]H›ÜØ\™\œÈ—Bˆˆˆ‚ˆ
+\Ü]Èœ]X[]KÛ[ŠKÜš]Wİ^
+ÛÛ™šYË[˜ÛÙ[™ÏH]‹NŠBˆİÜš]WÛX[šY™\İ
+ˆ\Ü]ˆ˜]Y]‹ˆÂˆ]Y]X[šY™\İÚXÚÊˆÚXÚ×ÚYH˜ÛÛ\]Xš[]KY›ÜØ\™\œÈ‹ˆİ\HÛÛ\]Xš[]H›ÜØ\™\œÈ‹ˆ^XİYÙš[\ÏS›Û™Kˆ™\]Z\™YØ\™İJ‹K\Ûİ\˜ÙK\›Ûİ‹œÜ˜È‹‹K\[ˆŠKˆ
+BˆKˆ
+B‚ˆ[›™YÙ^]HXZ[ŠˆÂˆ‹K\›Ûİ‹ˆİŠ\Ü]
+Kˆ‹KXÛÛ™šYÈ‹ˆœ]X[]KÛ[‹ˆ‹KZœÛÛˆ‹ˆ‹KX]Y][X[šY™\İ‹ˆ˜]Y]šœÛÛˆ‹ˆBˆ
+Bˆ[›™YHœÛÛ‹›ØYÊØ\Ş\Ëœ™XYİ]\œŠ
+K›İ]
+Bˆ\ÜÙ\[›™YÙ^]OHˆ\ÜÙ\[›™YÈ˜]Y]ØÛÛ\][Ûˆ—VÈ˜ÚXÚÜÈ—VÌVÈœİ]\È—HOH™^Xİ]Y‚ˆ\ÜÙ\œØ[\K›ÛOˆØ[\K˜İ\œ™[•[™Èˆ[ˆ[›™YÈœİ\È—VÌVÈœİİ]—B‚ˆ
+\Ü]Èœ]X[]KÛ[ŠKÜš]Wİ^
+ˆÛÛ™šYËœ™\XÙJ	È‹K\[ˆ‹˜ÛÛ\]Xš[]KÛ[‰ËˆŠK[˜ÛÙ[™ÏH]‹N‚ˆ
+BˆİÜš]WÛX[šY™\İ
+ˆ\Ü]ˆ˜]Y]‹ˆÂˆ]Y]X[šY™\İÚXÚÊˆÚXÚ×ÚYH˜ÛÛ\]Xš[]KY›ÜØ\™\œÈ‹ˆİ\HÛÛ\]Xš[]H›ÜØ\™\œÈ‹ˆ^XİYÙš[\ÏS›Û™Kˆ™\]Z\™YØ\™İJ‹K\Ûİ\˜ÙK\›Ûİ‹œÜ˜ÈŠKˆ
+BˆKˆ
+Bˆ[œ[›™YÙ^]HXZ[ŠˆÂˆ‹K\›Ûİ‹ˆİŠ\Ü]
+Kˆ‹KXÛÛ™šYÈ‹ˆœ]X[]KÛ[‹ˆ‹KZœÛÛˆ‹ˆ‹KX]Y][X[šY™\İ‹ˆ˜]Y]šœÛÛˆ‹ˆBˆ
+Bˆ[œ[›™YHœÛÛ‹›ØYÊØ\Ş\Ëœ™XYİ]\œŠ
+K›İ]
+Bˆ\ÜÙ\ÜÛY[H[œ[›™YÈ˜]Y]ØÛÛ\][Ûˆ—VÈ˜ÚXÚÜÈ—VÌBˆ\ÜÙ\[œ[›™YÙ^]OH‚ˆ\ÜÙ\\ÜÙ\ÜÛY[Èœİ]\È—HOH™^Xİ][Û—Ù˜Z[\™H‚ˆ\ÜÙ\\ÜÙ\ÜÛY[È˜ÛÛ\]H—H\È˜[ÙBˆ\ÜÙ\š\È›È™[[İ˜[[ˆˆ[ˆ[œ[›™YÈœİ\È—VÌVÈœİİ]—B‚‚]\İ›X\šËœ\˜[Y]š^™Jˆ›X[šY™\İİ^‹ˆÂˆ
+ˆ	ŞÈ™›Ü›X]ˆ˜[\Ë˜]Y][X[šY™\İ‹œØÚ[XWİ™\œÚ[ÛˆŒKœ›Ùš[Hˆ˜]Y]‹	Âˆ	Èœ›Ùš[Hˆ›İ\ˆ‹˜ÚXÚÜÈ–ŞÈ˜ÚXÚ×ÚYˆœ™\]Z\™Y‹œİ\ˆ”™]šY]È‹	Âˆ	È™^XİYÙš[\È›[W_IÂˆ
+Kˆ
+ˆ	ŞÈ™›Ü›X]ˆ˜[\Ë˜]Y][X[šY™\İ‹œØÚ[XWİ™\œÚ[ÛˆŒKœ›Ùš[Hˆ˜]Y]‹	Âˆ	È˜ÚXÚÜÈ–ŞÈ˜ÚXÚ×ÚYˆœ™\]Z\™Y‹œİ\ˆ”™]šY]È‹œİ\ˆ“İ\ˆ‹	Âˆ	È™^XİYÙš[\È›[W_IÂˆ
+KˆKŠB™Yˆ\İØ]Y]ÛX[šY™\İÜ™Z™Xİ×Ù\XØ]WİÜÛ]™[Ø[™Û™\İYÚÙ^\Êˆ\Ü]ˆ]ˆØ\Ş\Îˆ]\İØ\\™Qš^\™VÜİ—KˆX[šY™\İİ^ˆİ‹ŠHOˆ›Û™N‚ˆX[šY™\İÜ]H\Ü]È˜]Y]šœÛÛˆ‚ˆX[šY™\İÜ]Üš]Wİ^
+X[šY™\İİ^[˜ÛÙ[™ÏH]‹NŠB‚ˆ^]ØÛÙHHXZ[ŠˆÂˆ‹K\›Ûİ‹ˆİŠ\Ü]
+Kˆ‹KZœÛÛˆ‹ˆ‹KX]Y][X[šY™\İ‹ˆX[šY™\İÜ]›˜[YKˆBˆ
+B‚ˆ\ÜÙ\^]ØÛÙHOH‚ˆ\ÜÙ\˜]Y]X[šY™\İ\È[˜[Yˆ[ˆØ\Ş\Ëœ™XYİ]\œŠ
+K™\œ‚

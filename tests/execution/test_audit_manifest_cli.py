@@ -6,11 +6,33 @@ import json
 import subprocess
 from collections.abc import Sequence
 from pathlib import Path
+from types import SimpleNamespace
+from typing import cast
 
 import pytest
 
-from alphus.cli import main
+from alphus.cli import _SOURCE_SCAN_RULES, _selected_rule_files, main
+from alphus.config import QualityGateConfig
 from alphus.execution.audit_manifest import AuditManifestCheck
+from alphus.policy.base import QualityRuleName
+from alphus.policy.catalog import RULE_SPECS
+from alphus.policy.sources import FileInventoryPolicy
+
+_NUMERICAL_SOURCE_RULES: tuple[QualityRuleName, ...] = (
+    "manual-matrix-kernels",
+    "manual-elimination",
+    "array-representation-churn",
+    "cholesky-recurrence",
+    "manual-quaternion-conjugation",
+    "manual-quaternion-products",
+    "manual-quaternion-normalization",
+    "manual-quaternion-inversion",
+    "manual-quaternion-vector-rotation",
+    "manual-quaternion-matrix-conversion",
+    "ecef-enu-transform",
+    "ecef-ned-matrix-transform",
+    "ned-basis-vectors",
+)
 
 
 def _write_manifest(
@@ -27,6 +49,104 @@ def _write_manifest(
         ),
         encoding="utf-8",
     )
+
+
+@pytest.mark.parametrize("rule", _NUMERICAL_SOURCE_RULES)
+def test_numerical_rule_audit_inventory_respects_source_paths(
+    tmp_path: Path, rule: QualityRuleName
+) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    for relative in (
+        Path("src/numerical/selected/kernel.py"),
+        Path("src/numerical/selected/generated.py"),
+        Path("src/numerical/selected/types.pyi"),
+        Path("src/other.py"),
+    ):
+        destination = tmp_path / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text("pass\n", encoding="utf-8")
+
+    policy = SimpleNamespace(
+        extensions=(".py",),
+        exclude=("**/generated.py",),
+        source_paths=("src/numerical/selected/**",),
+    )
+    checks = SimpleNamespace(**{RULE_SPECS[rule].policy_field: policy})
+    config = cast(
+        QualityGateConfig,
+        SimpleNamespace(
+            files=FileInventoryPolicy(include=("src/**",)),
+            checks=checks,
+        ),
+    )
+
+    assert rule in _SOURCE_SCAN_RULES
+    assert _selected_rule_files(tmp_path, config, rule) == [
+        "src/numerical/selected/kernel.py"
+    ]
+
+
+def test_audit_manifest_reports_manual_matrix_inventory(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    selected = tmp_path / "src/numerical/selected/kernel.py"
+    excluded = tmp_path / "src/numerical/selected/generated.py"
+    elsewhere = tmp_path / "src/other.py"
+    for source in (selected, excluded, elsewhere):
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_text("pass\n", encoding="utf-8")
+
+    (tmp_path / "quality.toml").write_text(
+        """schema_version = 1
+[files]
+include = ["src/**/*.py"]
+[checks.manual_matrix_kernels]
+extensions = [".py"]
+source_paths = ["src/numerical/selected/**"]
+exclude = ["**/generated.py"]
+[orchestration]
+default_profile = "audit"
+[[orchestration.steps]]
+kind = "rule"
+name = "Matrix kernels"
+rule = "manual-matrix-kernels"
+[[orchestration.profiles]]
+name = "audit"
+steps = ["Matrix kernels"]
+""",
+        encoding="utf-8",
+    )
+    _write_manifest(
+        tmp_path,
+        "audit",
+        [
+            AuditManifestCheck(
+                check_id="matrix-kernels",
+                step="Matrix kernels",
+                expected_files=("src/numerical/selected/kernel.py",),
+            )
+        ],
+    )
+
+    exit_code = main(
+        [
+            "--root",
+            str(tmp_path),
+            "--config",
+            "quality.toml",
+            "--json",
+            "--audit-manifest",
+            "audit.json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert payload["audit_completion"]["status"] == "complete"
+    check = payload["audit_completion"]["checks"][0]
+    assert check["status"] == "executed_zero"
+    assert check["selected_files"] == ["src/numerical/selected/kernel.py"]
 
 
 def test_profile_cli_reports_not_selected_and_does_not_exit_clean(
