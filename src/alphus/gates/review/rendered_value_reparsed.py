@@ -339,8 +339,14 @@ def _class_nonlocal_writes(node: ast.ClassDef) -> set[str]:
         if isinstance(current, ast.Nonlocal)
         for name in current.names
     }
+    nested_class_writes = {
+        name
+        for current in class_body_nodes
+        if isinstance(current, ast.ClassDef)
+        for name in _class_nonlocal_writes(current)
+    }
     if not nonlocal_names:
-        return set()
+        return nested_class_writes
 
     written: set[str] = set()
     for current in class_body_nodes:
@@ -374,7 +380,9 @@ def _class_nonlocal_writes(node: ast.ClassDef) -> set[str]:
                 written.update(_pattern_names(current) & nonlocal_names)
             case _:
                 continue
-    return written
+    # Nested class bodies also execute immediately and their nonlocal names
+    # resolve past class scopes. The walker excludes deferred function bodies.
+    return written | nested_class_writes
 
 
 def _uses_rendered_suffix(test: ast.expr, names: Sequence[str]) -> str | None:

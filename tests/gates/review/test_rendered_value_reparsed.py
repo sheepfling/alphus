@@ -410,6 +410,38 @@ def f(text):
     assert _sites(source, ("render",)) == [(2, 5, "rendered")]
 
 
+def test_nonlocal_assignment_in_nested_class_body_invalidates_rendered_value() -> None:
+    source = """\
+def f(text):
+    rendered = render(text)
+    class Outer:
+        class Inner:
+            nonlocal rendered
+            rendered = text
+    if rendered.rstrip().endswith("!"):
+        return True
+"""
+    compile(source, "<test>", "exec")
+    assert _sites(source, ("render",)) == []
+
+
+def test_nonlocal_assignment_in_deferred_class_method_preserves_rendered_value() -> (
+    None
+):
+    source = """\
+def f(text):
+    rendered = render(text)
+    class Outer:
+        def reset():
+            nonlocal rendered
+            rendered = text
+    if rendered.rstrip().endswith("!"):
+        return True
+"""
+    compile(source, "<test>", "exec")
+    assert _sites(source, ("render",)) == [(2, 7, "rendered")]
+
+
 def test_sibling_nested_function_shadowing_does_not_leak() -> None:
     source = """\
 def merge(text):
