@@ -257,6 +257,35 @@ def f(text):
     assert _sites(source, ("render",)) == []
 
 
+def test_for_iterable_walrus_invalidates_rendered_binding_everywhere() -> None:
+    source = """\
+def f(text, original):
+    rendered = render(text)
+    for char in (rendered := original):
+        if rendered.rstrip().endswith("!"):
+            return True
+    else:
+        if rendered.rstrip().endswith("?"):
+            return True
+    if rendered.rstrip().endswith("."):
+        return True
+    return False
+"""
+    assert _sites(source, ("render",)) == []
+
+
+def test_unrelated_for_iterable_walrus_preserves_rendered_binding() -> None:
+    source = """\
+def f(text, original):
+    rendered = render(text)
+    for char in (other := original):
+        if rendered.rstrip().endswith("!"):
+            return True
+    return False
+"""
+    assert _sites(source, ("render",)) == [(2, 4, "rendered")]
+
+
 def test_for_else_preserves_unmodified_rendered_binding() -> None:
     source = """\
 def f(text):

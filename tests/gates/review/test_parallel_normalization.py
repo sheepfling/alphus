@@ -58,6 +58,10 @@ def test_reports_separator_drift_under_explicit_same_output_contract() -> None:
         _DRIFT.replace("normalize_for_key", "different_function"),
         _DRIFT + "\nnormalize_for_key = lambda text: text\n",
         _DRIFT + "\nclass normalize_for_key:\n    pass\n",
+        _DRIFT + "\nfrom other_module import *\n",
+        _DRIFT + "\ndel normalize_for_key\n",
+        _DRIFT
+        + "\nmatch replacement:\n    case {'callback': normalize_for_key}: pass\n",
         _DRIFT + "\nif enabled:\n    def normalize_for_key(text: str) -> str:\n"
         "        return text\n",
     ],

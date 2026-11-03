@@ -7,7 +7,7 @@ selected against Alphus source.
 
 ## Codex review findings
 
-Most of the 23 inline findings were **functional implementation gaps** in
+Most of the 25 inline findings were **functional implementation gaps** in
 opt-in semantic detectors. The root `review` profile omitted those detectors
 because their contracts describe consumer behavior (rendering, ownership,
 repair order, parsing, or normalization) that is not grounded in Alphus's own
@@ -255,6 +255,31 @@ and are classified individually.
   heuristic total-consumption, semantic-work-presentation, and provenance
   ownership.
 
+### [4449499197](https://github.com/sheepfling/alphus/pull/76#discussion_r4449499197)
+
+**Finding:** Account for ambiguous normalizer bindings from star imports
+
+**Underlying defect:** The parallel-normalization scanner kept a private
+  binding count that treated `from module import *` as a binding named `*`.
+  It now uses the shared module-binding inventory, which marks configured names
+  ambiguous for star imports, deletion, and match captures.
+
+**Coverage now:** Star-import, deletion, and match-capture abstention cases in
+  `test_parallel_normalization.py`.
+
+### [4449499200](https://github.com/sheepfling/alphus/pull/76#discussion_r4449499200)
+
+**Finding:** Invalidate assignment-expression writes in for iterables
+
+**Underlying defect:** The rendered-value loop analysis invalidated loop targets
+  but did not invalidate walrus writes evaluated by the iterable expression.
+  The scanner now invalidates those names before constructing body, `else`, and
+  post-loop states.
+
+**Coverage now:** A for-iterable walrus regression checks the body, `else`, and
+  following code; an unrelated iterable walrus is a preservation control in
+  `test_rendered_value_reparsed.py`.
+
 
 The root profile also omits all consumer-specific semantic rule selectors by
 design. Enabling them for Alphus without a contract would create unsupported
@@ -366,8 +391,8 @@ follow-on candidate.
 ## Validation boundary
 
 The local installed `check` profile completed with 26 passed, 0 failed, and 3
-provisional checks. Its package-test step reported 1370 passed and 23 skipped
-in this local environment, including the module-pattern capture regression;
+provisional checks. Its package-test step reported 1375 passed and 23 skipped
+in this local environment, including the new review regressions;
 its Markdown line-length check passed on this ledger.
 
 Hosted checks for PR head `c567c14d65211162ef0ec9b771ba84ec5123772d` all

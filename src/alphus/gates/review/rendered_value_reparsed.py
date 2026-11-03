@@ -201,16 +201,25 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                             case _:
                                 continue
                 case (
-                    ast.For(target=target, body=body, orelse=orelse)
-                    | ast.AsyncFor(target=target, body=body, orelse=orelse)
+                    ast.For(iter=iterable, target=target, body=body, orelse=orelse)
+                    | ast.AsyncFor(
+                        iter=iterable, target=target, body=body, orelse=orelse
+                    )
                 ):
-                    before = current.copy()
-                    loop_state = current.copy()
+                    # Iterable expressions execute before either the loop body
+                    # or its else suite, even when the iterable is empty.
+                    iteration_state = current.copy()
+                    for name in _named_expression_names(iterable):
+                        iteration_state.pop(name, None)
+                    before = iteration_state.copy()
+                    loop_state = iteration_state.copy()
                     for name in _target_names(target):
                         loop_state.pop(name, None)
                     loop_state = scan(body, loop_state)
-                    else_entry = _common_bindings([current, loop_state])
-                    else_state = scan(orelse, else_entry) if orelse else current.copy()
+                    else_entry = _common_bindings([iteration_state, loop_state])
+                    else_state = (
+                        scan(orelse, else_entry) if orelse else iteration_state.copy()
+                    )
                     current = {
                         name: line
                         for name, line in before.items()

@@ -10,6 +10,7 @@ from pathlib import Path
 from alphus.config import ParallelNormalizationPair, ParallelNormalizationPolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.gates.review._module_bindings import module_binding_counts
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 
@@ -55,40 +56,24 @@ def _module_bindings(
     tree: ast.Module, names: frozenset[str]
 ) -> tuple[_FunctionObservation, ...]:
     functions: dict[str, list[ast.FunctionDef]] = {}
-    bindings: dict[str, int] = {}
 
-    def record(name: str, function: ast.FunctionDef | None = None) -> None:
-        if name not in names:
-            return
-        bindings[name] = bindings.get(name, 0) + 1
-        if function is not None:
-            functions.setdefault(name, []).append(function)
-
-    def scan(node: ast.AST) -> None:
+    def collect_functions(node: ast.AST) -> None:
         match node:
             case ast.FunctionDef(name=name) as function:
-                record(name, function)
-            case ast.AsyncFunctionDef(name=name):
-                record(name)
-            case ast.ClassDef(name=name):
-                record(name)
+                functions.setdefault(name, []).append(function)
+            case ast.AsyncFunctionDef() | ast.ClassDef():
                 return
-            case ast.Name(id=name, ctx=ast.Store()):
-                record(name)
-            case ast.Import(names=aliases):
-                for alias in aliases:
-                    record(alias.asname or alias.name.split(".", maxsplit=1)[0])
-            case ast.ImportFrom(names=aliases):
-                for alias in aliases:
-                    record(alias.asname or alias.name)
             case _:
                 for child in ast.iter_child_nodes(node):
-                    scan(child)
+                    collect_functions(child)
 
     for statement in tree.body:
-        scan(statement)
+        collect_functions(statement)
+    bindings = module_binding_counts(tree, names)
     return tuple(
-        _FunctionObservation(name, bindings[name], _normalization_signature(function))
+        _FunctionObservation(
+            name, bindings.get(name, 0), _normalization_signature(function)
+        )
         for name, definitions in functions.items()
         for function in definitions
     )
