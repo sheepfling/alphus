@@ -57,14 +57,18 @@ _URL_PERCENT_ESCAPE = re.compile(r"%[0-9a-f]{2}", re.IGNORECASE)
 _PRINTF_FORMAT_COMMAND = re.compile(
     r"(?:^[ \t]*|(?:&&|\|\||[;&|()])[ \t]*)"
     r"(?:(?:command|builtin)[ \t]+)?"
-    r"(?:[A-Za-z_][A-Za-z0-9_]*=[^ \t]+[ \t]+)*"
-    r"(?:env[ \t]+(?:[A-Za-z_][A-Za-z0-9_]*=[^ \t]+[ \t]+)*)?"
+    r"(?:[A-Za-z_][A-Za-z0-9_]*=[^ \t;&|()]+[ \t]+)*"
+    r"(?:env[ \t]+(?:[A-Za-z_][A-Za-z0-9_]*=[^ \t;&|()]+[ \t]+)*)?"
     r"(?P<command>printf)\b"
 )
 _PRINTF_FORMAT_DIRECTIVE = re.compile(
     r"%(?:%|[-+#0 ']*(?:\d+|\*)?(?:\.(?:\d+|\*))?"
     r"(?:hh|h|ll|l|L|z|j|t)?[bcdeEfFgGiosuxXq])"
 )
+_FIND_FORMAT_DIRECTIVE = re.compile(
+    r"%(?:%|[-]?\d*(?:\.\d+)?[aAbBcCdDfFgGhHkKlLmMnNpPsStTuUwWxXyYZA])"
+)
+_FIND_COMMAND = re.compile(r"(?:^[ \t]*|(?:&&|\|\||[;&|()])[ \t]*)(?P<command>find)\b")
 _DATE_COMMAND = re.compile(r"(?i)\bdate(?:\s|$)")
 _DATE_FORMAT_DIRECTIVE = r"%(?:[-_0^#]*\d{0,2})?(?:E|O)?[A-Za-z+]"
 _DATE_FORMAT_SEQUENCE = re.compile(
@@ -498,6 +502,7 @@ def _cmd_environment_evidence(lines: Sequence[_SourceLine]) -> _Evidence | None:
         candidate, printf_format_found = _mask_printf_format_argument(
             source.text, raw_line, continued=in_printf_continuation
         )
+        candidate = _mask_find_format_arguments(candidate)
         trailing_backslashes = len(raw_line) - len(raw_line.rstrip("\\"))
         in_printf_continuation = (
             not printf_format_found
@@ -520,6 +525,53 @@ def _cmd_environment_evidence(lines: Sequence[_SourceLine]) -> _Evidence | None:
         if match is not None:
             return _Evidence("cmd", source.number, match.group(0))
     return None
+
+
+def _mask_find_format_arguments(line: str) -> str:
+    """Mask known GNU find format words while retaining other arguments."""
+    visible = list(line)
+    spans: list[tuple[int, int]] = []
+    for command_match in _FIND_COMMAND.finditer(line):
+        command_start = command_match.start("command")
+        command_end = _shell_command_end(line, command_start)
+        words = _shell_words(line[command_start:command_end])
+        index = 1
+        while index < len(words):
+            _, _, option = words[index]
+            if option in {"-printf", "-fprintf"}:
+                format_index = index + (2 if option == "-fprintf" else 1)
+                if format_index < len(words):
+                    format_start, format_end, format_word = words[format_index]
+                    value = format_word
+                    if (
+                        len(value) >= 2
+                        and value[0] == value[-1]
+                        and value[0] in {"'", '"'}
+                    ):
+                        value = value[1:-1]
+                    directives = list(_FIND_FORMAT_DIRECTIVE.finditer(value))
+                    percent_positions = [
+                        offset for offset, char in enumerate(value) if char == "%"
+                    ]
+                    covered = {
+                        offset
+                        for directive in directives
+                        for offset in range(*directive.span())
+                    }
+                    if percent_positions and all(
+                        offset in covered for offset in percent_positions
+                    ):
+                        spans.append(
+                            (
+                                command_start + format_start,
+                                command_start + format_end,
+                            )
+                        )
+                index += 1
+            index += 1
+    for start, end in spans:
+        visible[start:end] = " " * (end - start)
+    return "".join(visible)
 
 
 def _mask_url_percent_escapes(line: str) -> str:

@@ -186,6 +186,41 @@ def test_quoted_printf_format_preserves_cmd_environment_arguments(
     assert "cmd syntax" in findings[0].message
 
 
+def test_assignment_prefix_scanning_stops_at_command_separators(
+    tmp_path: Path,
+) -> None:
+    assignments = "A=a; " * 8000
+    fence = chr(96) * 3
+    findings = _check(
+        tmp_path, "\n".join([fence + "bash", assignments + "echo done", fence, ""])
+    )
+
+    assert findings == []
+
+
+def test_find_format_arguments_are_not_cmd_environment_evidence(
+    tmp_path: Path,
+) -> None:
+    fence = chr(96) * 3
+    findings = _check(
+        tmp_path,
+        "\n".join(
+            [
+                fence + "bash",
+                "find . -type f -printf %f%p",
+                "find . -type f -fprintf output.txt '%f%p'",
+                "find . -type f -printf %f%p %PATH%",
+                fence,
+                "",
+            ]
+        ),
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 4
+    assert 'cmd syntax "%PATH%"' in findings[0].message
+
+
 def test_printf_options_and_backslash_continuation_keep_format_context(
     tmp_path: Path,
 ) -> None:
