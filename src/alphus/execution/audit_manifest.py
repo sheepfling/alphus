@@ -202,10 +202,14 @@ _COMMAND_EXITED_NONZERO_RULE = rule_tag(
 _SOURCE_FAMILY_RULE = rule_tag(
     Scope.ANY, Framework.NONE, Category.MAINTAINABILITY, "flat-source-family"
 )
+_CLI_PRESENTATION_RULE = rule_tag(
+    Scope.PYTHON, Framework.NONE, Category.STYLE, "cli-presentation-policy"
+)
 _INCOMPLETE_SOURCE_FAMILY_MESSAGES = (
     "Lexical source-family scan incomplete:",
     "Lexical source-family output truncated:",
 )
+_INCONCLUSIVE_CLI_PRESENTATION_MESSAGE = "[presentation:inconclusive] "
 _OPERATIONAL_FAILURE_RULES = frozenset(
     rule_tag(Scope.ANY, Framework.NONE, Category.ORCHESTRATION, complaint)
     for complaint in (
@@ -596,6 +600,26 @@ def assess_profile_audit(
                     "findings_state": "with_findings",
                     "structured_finding_count": len(findings),
                     "reason": "the built-in source-family checker reported incomplete coverage",
+                }
+            )
+            continue
+        inconclusive_presentation = any(
+            finding["rule_id"] == _CLI_PRESENTATION_RULE
+            and finding.get("message", "").startswith(
+                _INCONCLUSIVE_CLI_PRESENTATION_MESSAGE
+            )
+            for finding in findings
+        )
+        if inconclusive_presentation:
+            checks.append(
+                {
+                    "check_id": check.check_id,
+                    "step": check.step,
+                    "status": "incomplete",
+                    "complete": False,
+                    "findings_state": "with_findings",
+                    "structured_finding_count": len(findings),
+                    "reason": "the CLI presentation checker reported inconclusive evidence",
                 }
             )
             continue

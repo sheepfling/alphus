@@ -456,6 +456,91 @@ steps = ["Source families"]
     )
 
 
+def test_profile_cli_keeps_inconclusive_cli_presentation_incomplete(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    source = tmp_path / "src"
+    source.mkdir()
+    (source / "app.py").write_text(
+        "import json\n"
+        "import typer\n"
+        "from rich.console import Console\n"
+        "from external.renderers import render_report\n"
+        "app = typer.Typer()\n"
+        "@app.command()\n"
+        "def run(json_output: bool = typer.Option(False, '--json'), "
+        "verbose: bool = typer.Option(False, '--verbose')) -> None:\n"
+        "    if json_output:\n"
+        "        typer.echo(json.dumps({'ok': True}))\n"
+        "    else:\n"
+        "        render_report(Console())\n"
+        "if __name__ == '__main__':\n"
+        "    app()\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "quality.toml").write_text(
+        """schema_version = 1
+[files]
+include = ["src/*.py"]
+[checks.cli.python]
+extensions = [".py"]
+typer_package = "typer"
+typer_calls = ["Typer"]
+rich_package = "rich"
+rich_calls = ["Console"]
+json_option = "--json"
+json_serializers = ["dumps"]
+verbose_option = "--verbose"
+renderer_enforcement = "advisory"
+output_style_enforcement = "off"
+[orchestration]
+default_profile = "audit"
+[[orchestration.steps]]
+kind = "rule"
+name = "CLI review"
+rule = "cli"
+[[orchestration.profiles]]
+name = "audit"
+steps = ["CLI review"]
+""",
+        encoding="utf-8",
+    )
+    subprocess.run(
+        ["git", "-C", str(tmp_path), "add", "src/app.py", "quality.toml"],
+        check=True,
+    )
+    _write_manifest(
+        tmp_path,
+        "audit",
+        [AuditManifestCheck(check_id="cli", step="CLI review", expected_files=None)],
+    )
+
+    exit_code = main(
+        [
+            "--root",
+            str(tmp_path),
+            "--config",
+            "quality.toml",
+            "--json",
+            "--audit-manifest",
+            "audit.json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 2, json.dumps(payload, indent=2)
+    assert payload.get("exit_code") == 0, json.dumps(payload, indent=2)
+    assert payload["audit_completion"]["status"] == "incomplete"
+    check = payload["audit_completion"]["checks"][0]
+    assert check["status"] == "incomplete"
+    assert check["complete"] is False
+    assert any(
+        finding["message"].startswith("[presentation:inconclusive]")
+        for finding in payload["steps"][0]["findings"]
+    )
+
+
 def test_manifest_retains_native_selector_scope_and_annotation_evidence(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

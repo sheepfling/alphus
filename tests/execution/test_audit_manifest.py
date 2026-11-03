@@ -243,6 +243,31 @@ def test_source_family_coverage_warning_keeps_audit_incomplete() -> None:
     assert _checks(assessment)[0]["findings_state"] == "with_findings"
 
 
+def test_inconclusive_cli_presentation_finding_keeps_audit_incomplete() -> None:
+    plan = _plan()
+    plan["steps"][0]["kind"] = "rule"
+    plan["steps"][0]["selected_files"] = None
+    assessment = assess_profile_audit(
+        _manifest(expected_files=None),
+        plan,
+        _result(
+            findings=(
+                AuditResultFinding(
+                    rule_id="alphus/python/none/style/cli-presentation-policy",
+                    message=(
+                        "[presentation:inconclusive] Could not verify the renderer."
+                    ),
+                ),
+            )
+        ),
+    )
+
+    assert assessment["status"] == "incomplete"
+    assert _checks(assessment)[0]["status"] == "incomplete"
+    assert _checks(assessment)[0]["complete"] is False
+    assert _checks(assessment)[0]["findings_state"] == "with_findings"
+
+
 def test_ordinary_source_family_finding_keeps_completed_audit() -> None:
     plan = _plan()
     plan["steps"][0]["selected_files"] = None
