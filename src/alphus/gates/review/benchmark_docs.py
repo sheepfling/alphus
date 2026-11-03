@@ -38,7 +38,7 @@ _BENCHMARK_LANGUAGE = re.compile(
 )
 _METHOD_LINK = re.compile(r"\[([^\]]+)\]\(([^)]+)\)", re.IGNORECASE)
 _REFERENCE_DEFINITION = re.compile(
-    r"^\s{0,3}\[([^\]]+)\]:\s*(?:<([^>]+)>|([^\s]+))",
+    r"^[ \t]{0,3}\[([^\]]+)\]:[ \t]*(?:<([^>]+)>|([^\s]+))",
     re.IGNORECASE | re.MULTILINE,
 )
 _REFERENCE_LINK = re.compile(r"\[([^\]]+)\](?:\[([^\]]*)\])?(?!\s*\()")
@@ -120,6 +120,7 @@ def _method_link_definitions(text: str) -> dict[str, str]:
 
 
 def _has_method_link(text: str, definitions: Mapping[str, str]) -> bool:
+    text = _REFERENCE_DEFINITION.sub("", text)
     if any(
         _METHOD_TERMS.search(f"{label} {target}")
         for label, target in _METHOD_LINK.findall(text)

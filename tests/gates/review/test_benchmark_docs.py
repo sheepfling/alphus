@@ -125,6 +125,25 @@ def test_reference_style_method_link_resolves_across_document(tmp_path: Path) ->
     assert findings == []
 
 
+def test_reference_definition_alone_does_not_suppress_benchmark_section(
+    tmp_path: Path,
+) -> None:
+    root, paths = _copy_fixtures(
+        tmp_path,
+        "reference-definition-without-use.md",
+    )
+
+    findings = benchmark_doc_findings(
+        root,
+        paths,
+        BenchmarkDocPolicy(include=("docs/**",)),
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 5
+    assert "2 timing, throughput, or comparison expressions" in findings[0].message
+
+
 def test_exact_reasoned_exception_suppresses_only_its_section(
     tmp_path: Path,
 ) -> None:
