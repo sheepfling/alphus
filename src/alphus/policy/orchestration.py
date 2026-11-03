@@ -29,6 +29,7 @@ from alphus.policy.intents import (
     SharedQualityIntent,
     resolve_intent_bindings,
 )
+from alphus.policy.markdown import MarkdownShellFencesPolicy
 from alphus.policy.metrics import CyclomaticComplexityPolicy
 from alphus.policy.repository import (
     DependencyLockPolicy,
@@ -92,6 +93,7 @@ class CheckPolicies(StrictModel):
     architecture_graph: ArchitectureGraphCheckPolicy | None = None
     repository_layout: RepositoryLayoutPolicy | None = None
     documentation_config: DocumentationConfigPolicy | None = None
+    markdown_shell_fences: MarkdownShellFencesPolicy | None = None
     version_sync: VersionSyncPolicy | None = None
     callable_registry: CallableRegistryPolicy | None = None
     dependency_locks: DependencyLockPolicy | None = None

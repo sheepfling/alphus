@@ -6,7 +6,9 @@ import re
 from collections.abc import Hashable, Sequence
 from collections.abc import Set as AbstractSet
 from pathlib import PurePosixPath
-from typing import Literal, TypeAlias, TypeVar
+from typing import Annotated, Literal, TypeAlias, TypeVar
+
+from pydantic import AfterValidator
 
 from alphus.contracts.model import StrictModel as _StrictModel
 
@@ -32,6 +34,7 @@ QualityRuleName: TypeAlias = Literal[
     "dependency-locks",
     "repository-layout",
     "documentation-config",
+    "markdown-shell-fences",
     "git-ignores",
     "git-attributes",
     "git-history",
@@ -126,6 +129,19 @@ def validate_one_line_message(message: str) -> str:
     if not message or "\n" in message or "\r" in message:
         raise ValueError("policy messages must be non-empty single lines")
     return message
+
+
+def validate_suppression_reason(reason: str) -> str:
+    """Validate the minimum useful text for a documented policy exception."""
+    text = validate_one_line_message(reason)
+    if len(text) < 20:
+        raise ValueError("suppression reasons must be at least 20 characters")
+    return text
+
+
+SuppressionReason: TypeAlias = Annotated[
+    str, AfterValidator(validate_suppression_reason)
+]
 
 
 def validate_template(message: str, allowed_fields: AbstractSet[str]) -> str:

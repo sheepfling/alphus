@@ -49,6 +49,9 @@ RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
         "documentation-config": RuleSpec(
             "documentation_config", RuleOutputShape.FINDINGS, requires_files=False
         ),
+        "markdown-shell-fences": RuleSpec(
+            "markdown_shell_fences", RuleOutputShape.FINDINGS, requires_files=False
+        ),
         "git-ignores": RuleSpec("git", RuleOutputShape.FINDINGS, requires_files=False),
         "git-attributes": RuleSpec(
             "git", RuleOutputShape.FINDINGS, requires_files=False
