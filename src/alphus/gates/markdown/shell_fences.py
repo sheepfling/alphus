@@ -284,13 +284,22 @@ def _heredoc_word(raw: str, start: int) -> str | None:
     """Read one here-document word with shell quote removal, without expansion."""
     result: list[str] = []
     quote: str | None = None
+    ansi_c_quote = False
     word_started = False
     index = start
     while index < len(raw):
         character = raw[index]
         if quote is not None:
+            if ansi_c_quote and character == "\\":
+                escape = _ansi_c_escape(raw, index)
+                if escape is None:
+                    return None
+                value, index = escape
+                result.append(value)
+                continue
             if character == quote:
                 quote = None
+                ansi_c_quote = False
                 index += 1
                 continue
             if character == "\\" and quote == '"' and index + 1 < len(raw):
@@ -311,6 +320,12 @@ def _heredoc_word(raw: str, start: int) -> str | None:
             quote = character
             index += 1
             continue
+        if raw.startswith("$'", index):
+            word_started = True
+            quote = "'"
+            ansi_c_quote = True
+            index += 2
+            continue
         if character == "\\":
             if index + 1 >= len(raw):
                 return None
@@ -327,6 +342,62 @@ def _heredoc_word(raw: str, start: int) -> str | None:
     if quote is not None or not word_started:
         return None
     return "".join(result)
+
+
+def _ansi_c_escape(raw: str, index: int) -> tuple[str, int] | None:
+    """Decode one Bash ANSI-C escape, returning its value and next offset."""
+    if index + 1 >= len(raw):
+        return None
+    following = raw[index + 1]
+    simple = {
+        "a": "\a",
+        "b": "\b",
+        "e": "\x1b",
+        "E": "\x1b",
+        "f": "\f",
+        "n": "\n",
+        "r": "\r",
+        "t": "\t",
+        "v": "\v",
+        "\\": "\\",
+        "'": "'",
+        '"': '"',
+        "?": "?",
+    }
+    if following in simple:
+        return simple[following], index + 2
+    if following == "\n":
+        return "", index + 2
+    if following == "c" and index + 2 < len(raw):
+        return chr(ord(raw[index + 2]) & 0x1F), index + 3
+    if following in "01234567":
+        end = index + 1
+        while end < len(raw) and end < index + 4 and raw[end] in "01234567":
+            end += 1
+        return chr(int(raw[index + 1 : end], 8)), end
+    if following == "x":
+        end = index + 2
+        while end < len(raw) and raw[end] in "0123456789abcdefABCDEF":
+            end += 1
+        if end == index + 2:
+            return None
+        value = int(raw[index + 2 : end], 16)
+        if value > 0x10FFFF:
+            return None
+        return chr(value), end
+    if following in "uU":
+        width = 4 if following == "u" else 8
+        end = index + 2 + width
+        digits = raw[index + 2 : end]
+        if len(digits) != width or any(
+            character not in "0123456789abcdefABCDEF" for character in digits
+        ):
+            return None
+        value = int(digits, 16)
+        if value > 0x10FFFF:
+            return None
+        return chr(value), end
+    return "\\" + following, index + 2
 
 
 def _mask_arithmetic_shifts(line: str, state: _ArithmeticState) -> str:

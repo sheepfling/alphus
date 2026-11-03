@@ -792,6 +792,28 @@ def test_bash_double_quoted_heredoc_preserves_nonspecial_backslashes(
     assert "PowerShell" in findings[0].message
 
 
+@pytest.mark.parametrize(
+    ("delimiter", "terminator"),
+    (("$'EOF'", "EOF"), ("$'\\x45OF'", "EOF")),
+)
+def test_bash_ansi_c_quoted_heredoc_delimiter_closes_correctly(
+    tmp_path: Path, delimiter: str, terminator: str
+) -> None:
+    findings = _check(
+        tmp_path,
+        "```bash\n"
+        f"cat <<{delimiter}\n"
+        "$env:APP_HOME = heredoc-data\n"
+        f"{terminator}\n"
+        "Get-ChildItem\n"
+        "```\n",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 5
+    assert "PowerShell" in findings[0].message
+
+
 def test_indented_powershell_command_is_detected_in_bash_fence(
     tmp_path: Path,
 ) -> None:
