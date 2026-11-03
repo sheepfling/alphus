@@ -143,6 +143,18 @@ def _path_set_assignments(
         mutated = False
         for node in nodes:
             match node:
+                case ast.Import(names=aliases):
+                    if any(
+                        (alias.asname or alias.name.split(".")[0]) == name
+                        for alias in aliases
+                    ):
+                        store_count += 1
+                case ast.ImportFrom(names=aliases):
+                    if any(alias.name == "*" for alias in aliases):
+                        # A wildcard import may replace any selected local.
+                        declarations = True
+                    elif any((alias.asname or alias.name) == name for alias in aliases):
+                        store_count += 1
                 case ast.Name(id=bound, ctx=ast.Store() | ast.Del()) if bound == name:
                     store_count += 1
                 case ast.Name(id=bound, ctx=ast.Load()) if bound == name:
