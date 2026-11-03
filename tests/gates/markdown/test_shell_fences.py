@@ -748,6 +748,50 @@ def test_quoted_empty_bash_heredoc_delimiter_hides_body(
     assert "PowerShell" in findings[0].message
 
 
+def test_bash_comment_after_command_separator_hides_percent_text(
+    tmp_path: Path,
+) -> None:
+    findings = _check(
+        tmp_path,
+        "```bash\necho ok;# echo %PATH%\n$env:APP_HOME = visible-command\n```\n",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 3
+    assert "PowerShell" in findings[0].message
+
+
+def test_bash_comment_after_command_separator_does_not_open_quote_state(
+    tmp_path: Path,
+) -> None:
+    findings = _check(
+        tmp_path,
+        "```bash\necho ok;# don't change this\n$env:APP_HOME = visible-command\n```\n",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 3
+    assert "PowerShell" in findings[0].message
+
+
+def test_bash_double_quoted_heredoc_preserves_nonspecial_backslashes(
+    tmp_path: Path,
+) -> None:
+    findings = _check(
+        tmp_path,
+        "```bash\n"
+        'cat <<"END\\MARKER"\n'
+        "$env:APP_HOME = heredoc-data\n"
+        "END\\MARKER\n"
+        "Get-ChildItem\n"
+        "```\n",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 5
+    assert "PowerShell" in findings[0].message
+
+
 def test_indented_powershell_command_is_detected_in_bash_fence(
     tmp_path: Path,
 ) -> None:

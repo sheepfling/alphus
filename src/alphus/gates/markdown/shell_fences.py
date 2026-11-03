@@ -246,7 +246,9 @@ def _mask_shell_line(line: str, shell: str, state: _LexState) -> str:
         if character == "#" and (
             shell == "powershell"
             or shell == "bash"
-            and (index == 0 or line[index - 1].isspace())
+            and (
+                index == 0 or line[index - 1].isspace() or line[index - 1] in ";|&()<>"
+            )
         ):
             for offset in range(index, len(line)):
                 visible[offset] = " "
@@ -292,8 +294,13 @@ def _heredoc_word(raw: str, start: int) -> str | None:
                 index += 1
                 continue
             if character == "\\" and quote == '"' and index + 1 < len(raw):
-                result.append(raw[index + 1])
-                index += 2
+                following = raw[index + 1]
+                if following in '$`"\\':
+                    result.append(following)
+                    index += 2
+                    continue
+                result.append("\\")
+                index += 1
                 continue
             result.append(character)
             index += 1
