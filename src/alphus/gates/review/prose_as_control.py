@@ -515,10 +515,31 @@ def _class_statement_binds_name_before(
     return any(
         isinstance(node, ast.NamedExpr)
         and name in _target_names(node.target)
-        and (node.lineno, node.col_offset) < position
         and not _is_within(expression, node.value, parents)
+        and (
+            (node.lineno, node.col_offset) < position
+            or _conditional_test_binds_before(node, expression, parents)
+        )
         for node in ast.walk(statement)
     )
+
+
+def _conditional_test_binds_before(
+    binding: ast.NamedExpr,
+    expression: ast.Call,
+    parents: Mapping[ast.AST, ast.AST],
+) -> bool:
+    """Account for conditional-expression tests running before either branch."""
+    ancestor = parents.get(expression)
+    while ancestor is not None:
+        if isinstance(ancestor, ast.IfExp) and _is_within(
+            binding, ancestor.test, parents
+        ):
+            return _is_within(expression, ancestor.body, parents) or _is_within(
+                expression, ancestor.orelse, parents
+            )
+        ancestor = parents.get(ancestor)
+    return False
 
 
 def _comprehension_binds_name(

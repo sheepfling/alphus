@@ -143,6 +143,9 @@ class SameStatementWalrus:
 class WalrusValueCall:
     cleaned = (re := re.sub(r"\d+", "", "abc123"))
 
+class ConditionalWalrus:
+    cleaned = re.sub(r"\d+", "", "abc123") if (re := adapter) else ""
+
 class AnnotationOnly:
     re: object
     cleaned = re.sub(r"\d+", "", "abc123")
@@ -159,7 +162,7 @@ def function_annotation_only():
         (26, r"\d+"),
         (29, r"\d+"),
         (40, r"\d+"),
-        (44, r"\d+"),
+        (47, r"\d+"),
     ]
 
 
