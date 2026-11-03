@@ -146,6 +146,9 @@ class WalrusValueCall:
 class ConditionalWalrus:
     cleaned = re.sub(r"\d+", "", "abc123") if (re := adapter) else ""
 
+class LambdaDeferred:
+    cleaned = ((lambda: (re := None)), re.sub(r"\d+", "", "abc123"))[1]
+
 class AnnotationOnly:
     re: object
     cleaned = re.sub(r"\d+", "", "abc123")
@@ -162,7 +165,8 @@ def function_annotation_only():
         (26, r"\d+"),
         (29, r"\d+"),
         (40, r"\d+"),
-        (47, r"\d+"),
+        (46, r"\d+"),
+        (50, r"\d+"),
     ]
 
 

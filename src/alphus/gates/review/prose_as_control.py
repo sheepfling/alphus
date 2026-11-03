@@ -516,12 +516,29 @@ def _class_statement_binds_name_before(
         isinstance(node, ast.NamedExpr)
         and name in _target_names(node.target)
         and not _is_within(expression, node.value, parents)
+        and _class_named_expression_executes_now(node, expression, parents)
         and (
             (node.lineno, node.col_offset) < position
             or _conditional_test_binds_before(node, expression, parents)
         )
         for node in ast.walk(statement)
     )
+
+
+def _class_named_expression_executes_now(
+    binding: ast.NamedExpr,
+    expression: ast.Call,
+    parents: Mapping[ast.AST, ast.AST],
+) -> bool:
+    """Ignore walrus writes inside deferred lambda bodies."""
+    ancestor = parents.get(binding)
+    while ancestor is not None and ancestor is not expression:
+        if isinstance(ancestor, ast.Lambda) and not _is_definition_time_expression(
+            ancestor, binding, parents
+        ):
+            return False
+        ancestor = parents.get(ancestor)
+    return True
 
 
 def _conditional_test_binds_before(
