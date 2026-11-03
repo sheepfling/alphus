@@ -1144,6 +1144,27 @@ def _execute_profile(
         unavailable_reason = (
             "profile execution did not produce a valid structured result"
         )
+    if audit_plan is not None:
+        # A preceding command may have changed the working-tree inventory after
+        # preflight. Re-resolve scoped built-in rules after execution so the
+        # manifest cannot certify files that were no longer available to scan.
+        policy_steps = {step.name: step for step in policy.steps}
+        for planned_step in audit_plan["steps"]:
+            step = policy_steps.get(planned_step["name"])
+            if (
+                step is None
+                or step.kind != "rule"
+                or planned_step.get("selected_files") is None
+            ):
+                continue
+            try:
+                planned_step["selected_files"] = _selected_rule_files(
+                    checkout, config, step.rule
+                )
+            except (OSError, ValueError):
+                # An unresolved post-execution inventory must fail closed. An
+                # empty selected inventory is always incomplete for a rule.
+                planned_step["selected_files"] = []
     assessment = assess_profile_audit(
         audit_manifest,
         audit_plan,

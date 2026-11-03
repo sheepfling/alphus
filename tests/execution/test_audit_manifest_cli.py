@@ -541,6 +541,69 @@ steps = ["CLI review"]
     )
 
 
+def test_profile_cli_detects_rule_inventory_removed_by_prior_command(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / "source.py").write_text("value = 123\n", encoding="utf-8")
+    (tmp_path / "quality.toml").write_text(
+        """schema_version = 1
+[files]
+include = ["source.py"]
+[checks.numeric_literals]
+extensions = [".py"]
+[orchestration]
+default_profile = "audit"
+[[orchestration.steps]]
+kind = "command"
+name = "Remove source"
+argv = ["{python}", "-c", "from pathlib import Path; Path('source.py').unlink()"]
+[[orchestration.steps]]
+kind = "rule"
+name = "Numeric review"
+rule = "numeric-literals"
+[[orchestration.profiles]]
+name = "audit"
+steps = ["Remove source", "Numeric review"]
+""",
+        encoding="utf-8",
+    )
+    subprocess.run(
+        ["git", "-C", str(tmp_path), "add", "source.py", "quality.toml"],
+        check=True,
+    )
+    _write_manifest(
+        tmp_path,
+        "audit",
+        [
+            AuditManifestCheck(
+                check_id="numeric",
+                step="Numeric review",
+                expected_files=("source.py",),
+            )
+        ],
+    )
+
+    exit_code = main(
+        [
+            "--root",
+            str(tmp_path),
+            "--config",
+            "quality.toml",
+            "--json",
+            "--audit-manifest",
+            "audit.json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 2, json.dumps(payload, indent=2)
+    check = payload["audit_completion"]["checks"][0]
+    assert check["status"] == "scope_mismatch"
+    assert check["complete"] is False
+    assert check["selected_files"] == []
+
+
 def test_manifest_retains_native_selector_scope_and_annotation_evidence(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
