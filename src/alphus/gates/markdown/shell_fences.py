@@ -155,7 +155,7 @@ def _markdown_fences(text: str) -> tuple[_Fence, ...]:
 def _mask_shell_line(line: str, shell: str, state: _LexState) -> str:
     """Blank comments and quoted data while preserving source columns."""
     visible = list(line)
-    escaped_shell_characters = "'\"`" if shell == "bash" else "'\""
+    escaped_shell_characters = "'\"`\\" if shell == "bash" else "'\""
     index = 0
     while index < len(line):
         if state.here_string is not None:

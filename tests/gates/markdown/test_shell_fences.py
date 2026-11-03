@@ -486,6 +486,26 @@ def test_multiline_quoted_pwsh_command_is_not_scanned_as_bash(
     assert "cmd syntax" in findings[0].message
 
 
+@pytest.mark.parametrize(
+    "command",
+    [
+        "echo " + "\\" * 2 + '"some text"',
+        "echo " + "\\" + '"some text' + "\\" + '"',
+    ],
+)
+def test_bash_backslash_pairs_do_not_hide_later_evidence(
+    tmp_path: Path, command: str
+) -> None:
+    findings = _check(
+        tmp_path,
+        f"```bash\n{command}\n$env:APP_HOME = value\n```\n",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 3
+    assert "PowerShell" in findings[0].message
+
+
 @pytest.mark.parametrize("quote", ["'", '"'])
 def test_quoted_pwsh_command_with_opener_content_keeps_bash_lexing(
     tmp_path: Path, quote: str
