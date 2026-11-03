@@ -286,6 +286,39 @@ def f(text, original):
     assert _sites(source, ("render",)) == [(2, 4, "rendered")]
 
 
+def test_with_context_walrus_invalidates_rendered_binding_in_body_and_after() -> None:
+    source = """\
+def f(text, original):
+    rendered = render(text)
+    with manager(rendered := original):
+        if rendered.rstrip().endswith("!"):
+            return True
+    if rendered.rstrip().endswith("?"):
+        return True
+    return False
+
+async def async_f(text, original):
+    rendered = render(text)
+    async with manager(rendered := original):
+        if rendered.rstrip().endswith("!"):
+            return True
+    return False
+"""
+    assert _sites(source, ("render",)) == []
+
+
+def test_unrelated_with_context_walrus_preserves_rendered_binding() -> None:
+    source = """\
+def f(text, original):
+    rendered = render(text)
+    with manager(other := original):
+        if rendered.rstrip().endswith("!"):
+            return True
+    return False
+"""
+    assert _sites(source, ("render",)) == [(2, 4, "rendered")]
+
+
 def test_for_else_preserves_unmodified_rendered_binding() -> None:
     source = """\
 def f(text):

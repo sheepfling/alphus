@@ -252,6 +252,8 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                     before = current.copy()
                     body_state = current.copy()
                     for item in items:
+                        for name in _named_expression_names(item.context_expr):
+                            body_state.pop(name, None)
                         if item.optional_vars is not None:
                             for name in _target_names(item.optional_vars):
                                 body_state.pop(name, None)

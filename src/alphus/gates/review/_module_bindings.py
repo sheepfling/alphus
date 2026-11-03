@@ -46,6 +46,11 @@ class _ModuleBindings(ast.NodeVisitor):
             else:
                 self._count(alias.asname or alias.name)
 
+    def visit_ExceptHandler(self, node: ast.ExceptHandler) -> None:
+        # Exception aliases are stored as strings and deleted after the handler.
+        self._count(node.name)
+        self.generic_visit(node)
+
     def visit_MatchAs(self, node: ast.MatchAs) -> None:
         # Capture names are stored as strings in pattern AST nodes, not as
         # ast.Name(Store) nodes, so count them explicitly.

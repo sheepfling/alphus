@@ -41,3 +41,15 @@ def test_module_star_and_mapping_rest_captures_are_module_bindings() -> None:
     )
 
     assert module_binding_counts(tree, ("preserve",)) == {"preserve": 3}
+
+
+def test_exception_handler_alias_is_a_module_binding() -> None:
+    tree = ast.parse(
+        "def preserve(text): return find_tokens(text)\n"
+        "try:\n"
+        "    consume()\n"
+        "except ValueError as preserve:\n"
+        "    consume(preserve)\n"
+    )
+
+    assert module_binding_counts(tree, ("preserve",)) == {"preserve": 2}
