@@ -220,6 +220,33 @@ def test_overlapping_duplicate_families_keep_disjoint_regions_separate() -> None
     assert [family["window_group_count"] for family in families] == [1, 1]
 
 
+def test_disjoint_duplicate_inventory_avoids_pairwise_candidate_scan() -> None:
+    groups = [
+        {
+            "digest": f"digest-{index}",
+            "window_lines": 3,
+            "file_count": 2,
+            "hit_count": 2,
+            "sample": "sample",
+            "locations": [
+                {
+                    "path": path,
+                    "line": index * 4 + 1,
+                    "end_line": index * 4 + 3,
+                    "normalized_line": index * 4,
+                }
+                for path in ("a.cpp", "b.cpp")
+            ],
+        }
+        for index in range(1000)
+    ]
+
+    families = advisory._overlapping_duplicate_families(groups, window_lines=3)
+
+    assert len(families) == 1000
+    assert all(family["window_group_count"] == 1 for family in families)
+
+
 def test_duplicate_family_metrics_reflect_global_finding_cap(tmp_path: Path) -> None:
     source = """int calculate(int value) {
   int adjusted = value + 3;

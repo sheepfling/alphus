@@ -14,6 +14,7 @@ import math
 import os
 import re
 import sys
+from bisect import bisect_left, bisect_right
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
@@ -251,42 +252,66 @@ def _overlapping_duplicate_families(
     groups: Sequence[DuplicateGroup], *, window_lines: int
 ) -> list[DuplicateFamily]:
     """Join repeated normalized windows that overlap at the same file sites."""
-    families: list[list[DuplicateGroup]] = []
+    # Groups can only overlap when they cover exactly the same files. Index
+    # starts on the least-populated shared path to avoid comparing unrelated
+    # windows pairwise (which made disjoint inventories quadratic).
+    by_paths: dict[tuple[str, ...], list[int]] = defaultdict(list)
+    locations_by_group: list[dict[str, list[int]]] = []
+    for index, group in enumerate(groups):
+        locations: dict[str, list[int]] = defaultdict(list)
+        for location in group["locations"]:
+            locations[location["path"]].append(location["normalized_line"])
+        locations_by_group.append(locations)
+        by_paths[tuple(sorted(locations))].append(index)
 
-    def paths(group: DuplicateGroup) -> set[str]:
-        return {location["path"] for location in group["locations"]}
+    parent = list(range(len(groups)))
 
-    def overlaps_on_every_path(left: DuplicateGroup, right: DuplicateGroup) -> bool:
-        left_locations: dict[str, list[int]] = defaultdict(list)
-        right_locations: dict[str, list[int]] = defaultdict(list)
-        for location in left["locations"]:
-            left_locations[location["path"]].append(location["normalized_line"])
-        for location in right["locations"]:
-            right_locations[location["path"]].append(location["normalized_line"])
-        common_paths = paths(left)
-        return common_paths == paths(right) and all(
+    def find(index: int) -> int:
+        while parent[index] != index:
+            parent[index] = parent[parent[index]]
+            index = parent[index]
+        return index
+
+    def union(left: int, right: int) -> None:
+        left_root, right_root = find(left), find(right)
+        if left_root != right_root:
+            parent[right_root] = left_root
+
+    def overlaps_on_every_path(left: int, right: int) -> bool:
+        left_locations = locations_by_group[left]
+        right_locations = locations_by_group[right]
+        return all(
             any(
                 abs(a - b) < window_lines
                 for a in left_locations[path]
                 for b in right_locations[path]
             )
-            for path in common_paths
+            for path in left_locations
         )
 
-    for group in groups:
-        matching = [
-            family
-            for family in families
-            if any(overlaps_on_every_path(existing, group) for existing in family)
-        ]
-        if not matching:
-            families.append([group])
+    for path_set, indices in by_paths.items():
+        if len(indices) < 2 or not path_set:
             continue
-        target = matching[0]
-        target.append(group)
-        for other in matching[1:]:
-            target.extend(other)
-            families.remove(other)
+        anchor = min(
+            path_set,
+            key=lambda path: sum(len(locations_by_group[i][path]) for i in indices),
+        )
+        starts = sorted(
+            (line, index)
+            for index in indices
+            for line in locations_by_group[index][anchor]
+        )
+        for position, (line, index) in enumerate(starts):
+            lo = bisect_left(starts, (line - window_lines + 1, -1), position + 1)
+            hi = bisect_right(starts, (line + window_lines - 1, len(groups)), lo)
+            for _, candidate in starts[lo:hi]:
+                if candidate != index and overlaps_on_every_path(index, candidate):
+                    union(index, candidate)
+
+    components: dict[int, list[DuplicateGroup]] = defaultdict(list)
+    for index, group in enumerate(groups):
+        components[find(index)].append(group)
+    families = list(components.values())
 
     result: list[DuplicateFamily] = []
     for family in families:
