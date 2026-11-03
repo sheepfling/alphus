@@ -460,7 +460,21 @@ def validate_signature(
 ) -> None:
     expected = ast_parameters(stub_node)
     actual = runtime_parameters(runtime_value)
-    if expected != actual:
+    # In a stub, ``...`` hides a concrete default value, but it does not hide
+    # whether the runtime parameter is optional. Preserve that callability
+    # contract while allowing the actual default value to differ.
+    compatible = len(expected) == len(actual) and all(
+        stub_parameter[:2] == runtime_parameter[:2]
+        and (
+            stub_parameter[2] == runtime_parameter[2]
+            or (
+                stub_parameter[2] in {"...", "Ellipsis"}
+                and runtime_parameter[2] is not None
+            )
+        )
+        for stub_parameter, runtime_parameter in zip(expected, actual)
+    )
+    if not compatible:
         fail(
             f"signature/default mismatch for {label}: stub {expected!r}; runtime {actual!r}"
         )
