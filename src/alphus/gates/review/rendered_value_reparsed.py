@@ -279,8 +279,19 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                         for name, line in before.items()
                         if body_state.get(name) == line
                     }
-                case ast.Try(
-                    body=body, handlers=handlers, orelse=orelse, finalbody=finalbody
+                case (
+                    ast.Try(
+                        body=body,
+                        handlers=handlers,
+                        orelse=orelse,
+                        finalbody=finalbody,
+                    )
+                    | ast.TryStar(
+                        body=body,
+                        handlers=handlers,
+                        orelse=orelse,
+                        finalbody=finalbody,
+                    )
                 ):
                     body_state = scan(body, current)
                     normal_state = scan(orelse, body_state) if orelse else body_state

@@ -134,6 +134,9 @@ verbose_comment = re.sub(r"""(?x)# \d is only a comment
 combined_verbose_comment = re.sub(r"(?ix)foo # \d\nbar", "", text)
 actual_digit_consumer = re.sub(r"""(?x)# \d is a comment
 \d+""", "", text)
+omitted_lower_zero_count = re.sub(r"\d{,0}", "", text)
+omitted_lower_class_zero_count = re.sub(r"[\d]{,0}", "", text)
+omitted_lower_group_zero_count = re.sub(r"(?:\d){,0}", "", text)
 '''
 
     assert lossy_rewrite_lines(
@@ -152,6 +155,9 @@ actual_digit_consumer = re.sub(r"""(?x)# \d is a comment
     assert re.sub(r"(?x)(?:\d) {0}", "", "123") == "123"
     assert re.sub(r"(?ix)\d {0}", "", "123") == "123"
     assert re.sub(r"(?ix:\d {0})", "", "123") == "123"
+    assert re.sub(r"\d{,0}", "", "123") == "123"
+    assert re.sub(r"[\d]{,0}", "", "123") == "123"
+    assert re.sub(r"(?:\d){,0}", "", "123") == "123"
 
 
 def test_lossy_text_rewrite_detects_literal_semantic_token_deletion() -> None:

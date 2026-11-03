@@ -275,6 +275,34 @@ def f(text):
     assert _sites(source, ("render",)) == [(2, 6, "rendered")]
 
 
+def test_exception_group_assignment_invalidates_rendered_binding() -> None:
+    source = (
+        "def f(text, original):\n"
+        "    rendered = render(text)\n"
+        "    try:\n"
+        "        rendered = original\n"
+        "    except* ValueError:\n"
+        "        if rendered.rstrip().endswith('!'):\n"
+        "            return True\n"
+        "    if rendered.rstrip().endswith('?'):\n"
+        "        return True\n"
+    )
+    assert _sites(source, ("render",)) == []
+
+
+def test_exception_group_handler_scans_preserved_rendered_binding() -> None:
+    source = (
+        "def f(text):\n"
+        "    rendered = render(text)\n"
+        "    try:\n"
+        "        consume()\n"
+        "    except* ValueError:\n"
+        "        if rendered.rstrip().endswith('!'):\n"
+        "            return True\n"
+    )
+    assert _sites(source, ("render",)) == [(2, 6, "rendered")]
+
+
 def test_match_capture_invalidates_prior_rendered_binding_within_case() -> None:
     source = """\
 def f(text):

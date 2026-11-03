@@ -311,7 +311,11 @@ def _zero_repetition_follows(pattern: str, index: int, *, verbose: bool) -> bool
     count = pattern[index + 1 : closing]
     if "," in count:
         lower, upper = count.split(",", maxsplit=1)
-        return lower.isdecimal() and upper.isdecimal() and int(lower) == int(upper) == 0
+        return (
+            upper.isdecimal()
+            and int(upper) == 0
+            and (lower == "" or (lower.isdecimal() and int(lower) == 0))
+        )
     return count.isdecimal() and int(count) == 0
 
 
