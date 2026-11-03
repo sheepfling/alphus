@@ -1,0 +1,3 @@
+"""A source-tree-only stub used to detect checker path leakage."""
+
+def checkout_only() -> str: ...
