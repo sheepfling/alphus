@@ -351,10 +351,18 @@ follow-on candidate.
 
 ## Validation boundary
 
-The repository `check` profile is the self-review entry point. At this audit it
-completed with 26 passed, 0 failed, and 3 provisional checks; its package test
-step reported 1365 passed and 23 skipped. Its Markdown line-length check also
-passes on this ledger. These results show the selected
-policy and regression suite pass. They do not establish that opt-in semantic
-detectors were run against Alphus source, nor that static analysis can decide
-human questions such as intended registry semantics or documentation quality.
+The local installed `check` profile completed with 26 passed, 0 failed, and 3
+provisional checks. Its package-test step reported 1365 passed and 23 skipped
+in this local environment; its Markdown line-length check passed on this ledger.
+
+Hosted checks for PR head `c567c14d65211162ef0ec9b771ba84ec5123772d` all
+passed, except `history-audit`, which was skipped. The hosted Python 3.11 log
+reported 1376 passed and 12 skipped, and the hosted profile reported 26 passed,
+0 failed, and 3 provisional checks. See the [exact-head hosted log][hosted-log].
+
+[hosted-log]: https://github.com/sheepfling/alphus/actions/runs/41536409507/job/125589246807
+
+These results show the selected policy and regression suite pass. They do not
+establish that opt-in semantic detectors were run against Alphus source, nor
+that static analysis can decide human questions such as intended registry
+semantics or documentation quality.
