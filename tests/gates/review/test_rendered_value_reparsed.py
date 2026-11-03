@@ -512,6 +512,32 @@ async def async_f(text, original):
     assert _sites(source, ("render",)) == []
 
 
+def test_walrus_in_with_target_invalidates_rendered_binding_in_and_after_suite() -> (
+    None
+):
+    source = """\
+def merge(text, original, values):
+    rendered = render(text)
+    with manager() as values[(rendered := original)]:
+        if rendered.rstrip().endswith('!'):
+            return True
+    if rendered.rstrip().endswith('?'):
+        return True
+"""
+    assert _sites(source, ("render",)) == []
+
+
+def test_walrus_in_async_with_target_invalidates_rendered_binding_in_suite() -> None:
+    source = """\
+async def merge(text, original, values):
+    rendered = render(text)
+    async with manager() as values[(rendered := original)]:
+        if rendered.rstrip().endswith('!'):
+            return True
+"""
+    assert _sites(source, ("render",)) == []
+
+
 def test_unrelated_with_context_walrus_preserves_rendered_binding() -> None:
     source = """\
 def f(text, original):

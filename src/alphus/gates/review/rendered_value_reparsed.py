@@ -290,6 +290,8 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                         if item.optional_vars is not None:
                             for name in _target_names(item.optional_vars):
                                 body_state.pop(name, None)
+                        for name in _named_expression_names(item.optional_vars):
+                            body_state.pop(name, None)
                     body_state = scan(body, body_state)
                     current = {
                         name: line
