@@ -56,6 +56,22 @@ def test_comprehension_local_target_does_not_rebind_owner_path_set() -> None:
     assert len(provenance_ownership_sites(source, _policy())) == 1
 
 
+def test_annotation_only_statement_preserves_owner_path_set() -> None:
+    source = _PATH_ONLY.replace(
+        "return [",
+        "table_paths: set[str]\n    return [",
+    )
+    assert len(provenance_ownership_sites(source, _policy())) == 1
+
+
+def test_annotated_assignment_with_value_rebinds_owner_path_set() -> None:
+    source = _PATH_ONLY.replace(
+        "return [",
+        "table_paths: set[str] = set()\n    return [",
+    )
+    assert provenance_ownership_sites(source, _policy()) == []
+
+
 @pytest.mark.parametrize(
     "source",
     [

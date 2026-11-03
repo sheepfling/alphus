@@ -109,6 +109,11 @@ def _local_nodes(root: ast.AST) -> Iterable[ast.AST]:
                 yield from _comprehension_nodes(key, shadowed)
                 yield from _comprehension_nodes(value, shadowed)
                 continue
+            case ast.AnnAssign(target=ast.Name(), value=None):
+                # A local annotation without a value has no runtime target
+                # store and does not replace the owner-path set.
+                yield child
+                continue
             case _:
                 yield from _local_nodes(child)
 
