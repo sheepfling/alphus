@@ -45,6 +45,28 @@ def test_synthetic_quatops_style_prose_is_one_candidate(tmp_path: Path) -> None:
     assert "were not assessed" in findings[0].message
 
 
+def test_benchmark_heading_provides_context_for_measurements(tmp_path: Path) -> None:
+    root = tmp_path
+    relative = Path("docs/benchmark-heading.md")
+    source = root / relative
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "# Benchmarks\n\nScalar: 0.42 ms; vector: 0.13 ms.\n",
+        encoding="utf-8",
+    )
+
+    findings = benchmark_doc_findings(
+        root,
+        [relative],
+        BenchmarkDocPolicy(include=("docs/**",)),
+    )
+
+    assert len(findings) == 1
+    assert findings[0].path == "docs/benchmark-heading.md"
+    assert findings[0].line == 1
+    assert "2 timing, throughput, or comparison expressions" in findings[0].message
+
+
 def test_detects_throughput_and_comparison_sections_deterministically(
     tmp_path: Path,
 ) -> None:

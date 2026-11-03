@@ -178,11 +178,12 @@ def benchmark_doc_findings(
         for section, line, body in _sections(text.splitlines()):
             if (relative_name, section) in exceptions:
                 continue
-            measurements = _measurement_count(body)
+            section_text = f"{section}\n{body}"
+            measurements = _measurement_count(section_text)
             if (
                 measurements < policy.min_measurements
-                or not _BENCHMARK_LANGUAGE.search(body)
-                or _has_method_link(body)
+                or not _BENCHMARK_LANGUAGE.search(section_text)
+                or _has_method_link(section_text)
             ):
                 continue
             if record(
