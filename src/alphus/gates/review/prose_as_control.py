@@ -392,6 +392,10 @@ def _regex_helper_root_is_shadowed(
     root = qualified_name.split(".", maxsplit=1)[0]
     ancestor = parents.get(call)
     while ancestor is not None:
+        if isinstance(
+            ancestor, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
+        ) and _comprehension_binds_name(ancestor, root, call, parents):
+            return True
         if isinstance(ancestor, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
             if not _is_definition_time_expression(
                 ancestor, call, parents
@@ -399,6 +403,53 @@ def _regex_helper_root_is_shadowed(
                 return True
         ancestor = parents.get(ancestor)
     return False
+
+
+def _comprehension_binds_name(
+    comprehension: ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp,
+    name: str,
+    expression: ast.AST,
+    parents: Mapping[ast.AST, ast.AST],
+) -> bool:
+    """Check comprehension targets bound before a helper call is evaluated."""
+    bound_names: set[str] = set()
+    for generator in comprehension.generators:
+        if _is_within(expression, generator.iter, parents):
+            return name in bound_names
+        bound_names.update(_target_names(generator.target))
+        if any(
+            _is_within(expression, condition, parents) for condition in generator.ifs
+        ):
+            return name in bound_names
+    if isinstance(comprehension, ast.DictComp):
+        result_expressions = (comprehension.key, comprehension.value)
+    else:
+        result_expressions = (comprehension.elt,)
+    return name in bound_names and any(
+        _is_within(expression, result, parents) for result in result_expressions
+    )
+
+
+def _target_names(target: ast.expr) -> set[str]:
+    return {
+        node.id
+        for node in ast.walk(target)
+        if isinstance(node, ast.Name)
+        and (node.ctx.__class__ is ast.Store or node.ctx.__class__ is ast.Del)
+    }
+
+
+def _is_within(
+    expression: ast.AST, scope: ast.AST, parents: Mapping[ast.AST, ast.AST]
+) -> bool:
+    node = expression
+    while True:
+        if node is scope:
+            return True
+        parent = parents.get(node)
+        if parent is None:
+            return False
+        node = parent
 
 
 def _is_definition_time_expression(

@@ -114,10 +114,18 @@ def outer(re):
     def nested(text):
         return re.sub(r"\d+", "", text)
     return nested
+
+def comprehension(text, adapters):
+    return [re.sub(r"\d+", "", text) for re in adapters]
+
+items = [item for item in re.sub(r"\d+", "", text) for re in adapters]
 """
     configured = _policy(lossy_text_rewrite=True, regex_sub_helpers=("re.sub",))
 
-    assert lossy_rewrite_lines(source, configured) == [(7, r"\d+")]
+    assert lossy_rewrite_lines(source, configured) == [
+        (7, r"\d+"),
+        (17, r"\d+"),
+    ]
 
 
 def test_lossy_regex_rewrite_checks_default_calls_in_the_enclosing_scope() -> None:
