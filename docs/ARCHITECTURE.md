@@ -76,6 +76,8 @@ language neutral.
 - `alphus.gates.repository` owns architecture, package, dependency-lock, and
   repository-layout checks. Its runner mapping also adds graph, version, and
   callable-registry findings to the package-boundary selector.
+- `alphus.gates.markdown` owns opt-in checks that inspect Markdown code fences
+  and return reviewable findings.
 - `alphus.gates.vcs` owns Git ignore, attribute, history, and worktree checks.
   Fast working-tree checks and infrequent history checks use separate profiles.
 - `alphus.gates.hygiene` owns file-size, line-length, comment-marker, and
