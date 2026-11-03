@@ -743,6 +743,49 @@ def test_static_mutable_default_factory_respects_prior_class_binding() -> None:
     assert findings == []
 
 
+@pytest.mark.parametrize(
+    ("builtin", "annotation"),
+    [("list", "list[str]"), ("dict", "dict[str, int]")],
+)
+def test_static_mutable_default_factory_ignores_later_module_rebinding(
+    builtin: str, annotation: str
+) -> None:
+    source = (
+        "from pydantic import BaseModel, Field\n"
+        "class Item(BaseModel):\n"
+        f"    value: {annotation} = Field(default_factory={builtin})\n"
+        f"{builtin} = custom_factory\n"
+    )
+
+    findings = pydantic_practice_findings(
+        source, _policy(prefer_static_mutable_defaults=True), path="src/item.py"
+    )
+
+    assert [item.line for item in findings] == [3]
+
+
+@pytest.mark.parametrize(
+    ("builtin", "annotation"),
+    [("list", "list[str]"), ("dict", "dict[str, int]")],
+)
+def test_static_mutable_default_factory_ignores_comprehension_targets(
+    builtin: str, annotation: str
+) -> None:
+    source = (
+        "from pydantic import BaseModel, Field\n"
+        f"[None for {builtin} in values]\n"
+        "class Item(BaseModel):\n"
+        f"    [None for {builtin} in values]\n"
+        f"    value: {annotation} = Field(default_factory={builtin})\n"
+    )
+
+    findings = pydantic_practice_findings(
+        source, _policy(prefer_static_mutable_defaults=True), path="src/item.py"
+    )
+
+    assert [item.line for item in findings] == [5]
+
+
 def test_pydantic_copies_static_unhashable_defaults_per_instance() -> None:
     class Defaults(BaseModel):
         tags: list[str] = []

@@ -540,10 +540,7 @@ def _static_mutable_default_factory_lines(
 ) -> list[int]:
     """Find Pydantic fields whose factory is exactly built-in list or dict."""
     lines: set[int] = set()
-    module_shadowed_builtins = {
-        name for name in ("list", "dict") if _scope_binds_name(module.body, name)
-    }
-    for statement in module.body:
+    for module_index, statement in enumerate(module.body):
         match statement:
             case ast.ClassDef(name=name, body=body) if name in models:
                 pass
@@ -578,7 +575,7 @@ def _static_mutable_default_factory_lines(
                     match factory:
                         case ast.Name(id=name) if (
                             name in {"list", "dict"}
-                            and name not in module_shadowed_builtins
+                            and not _scope_binds_name(module.body[:module_index], name)
                             and not _scope_binds_name(body[:field_index], name)
                         ):
                             lines.add(field.lineno)
@@ -638,6 +635,31 @@ class _ScopeBindings(ast.NodeVisitor):
         for expression in (*node.args.defaults, *node.args.kw_defaults):
             if expression is not None:
                 self.visit(expression)
+
+    def _visit_comprehension_generators(
+        self, generators: Sequence[ast.comprehension]
+    ) -> None:
+        for generator in generators:
+            self.visit(generator.iter)
+            for condition in generator.ifs:
+                self.visit(condition)
+
+    def visit_ListComp(self, node: ast.ListComp) -> None:
+        self._visit_comprehension_generators(node.generators)
+        self.visit(node.elt)
+
+    def visit_SetComp(self, node: ast.SetComp) -> None:
+        self._visit_comprehension_generators(node.generators)
+        self.visit(node.elt)
+
+    def visit_GeneratorExp(self, node: ast.GeneratorExp) -> None:
+        self._visit_comprehension_generators(node.generators)
+        self.visit(node.elt)
+
+    def visit_DictComp(self, node: ast.DictComp) -> None:
+        self._visit_comprehension_generators(node.generators)
+        self.visit(node.key)
+        self.visit(node.value)
 
 
 def _scope_binds_name(statements: Sequence[ast.stmt], name: str) -> bool:
