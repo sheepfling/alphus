@@ -391,6 +391,71 @@ steps = ["Test quality"]
     ]
 
 
+def test_profile_cli_keeps_truncated_source_family_coverage_incomplete(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    source = tmp_path / "src"
+    source.mkdir()
+    (source / "gateway_client.py").write_text("value = 1\n", encoding="utf-8")
+    (source / "gateway_service.py").write_text("value = 2\n", encoding="utf-8")
+    (tmp_path / "quality.toml").write_text(
+        """schema_version = 1
+[files]
+include = ["src/*.py"]
+[checks.source_families]
+max_files = 1
+[orchestration]
+default_profile = "audit"
+failure_threshold = "error"
+[[orchestration.steps]]
+kind = "rule"
+name = "Source families"
+rule = "source-families"
+[[orchestration.profiles]]
+name = "audit"
+steps = ["Source families"]
+""",
+        encoding="utf-8",
+    )
+    _write_manifest(
+        tmp_path,
+        "audit",
+        [
+            AuditManifestCheck(
+                check_id="source-families",
+                step="Source families",
+                expected_files=None,
+            )
+        ],
+    )
+
+    exit_code = main(
+        [
+            "--root",
+            str(tmp_path),
+            "--config",
+            "quality.toml",
+            "--json",
+            "--audit-manifest",
+            "audit.json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["steps"][0]["findings"], json.dumps(payload, indent=2)
+    assert exit_code == 2, json.dumps(payload, indent=2)
+    assert payload["audit_completion"]["status"] == "incomplete"
+    check = payload["audit_completion"]["checks"][0]
+    assert check["status"] == "incomplete"
+    assert check["complete"] is False
+    assert check["findings_state"] == "with_findings"
+    assert any(
+        finding["message"].startswith("Lexical source-family scan incomplete:")
+        for finding in payload["steps"][0]["findings"]
+    )
+
+
 def test_manifest_retains_native_selector_scope_and_annotation_evidence(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

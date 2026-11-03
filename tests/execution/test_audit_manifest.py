@@ -219,6 +219,50 @@ def test_violation_intent_keeps_command_nonzero_evidence_as_findings() -> None:
     assert _checks(operational)[0]["status"] == "execution_failure"
 
 
+def test_source_family_coverage_warning_keeps_audit_incomplete() -> None:
+    finding = AuditResultFinding(
+        rule_id="alphus/any/none/maintainability/flat-source-family",
+        message=(
+            "Lexical source-family scan incomplete: more than 1 selected files "
+            "were available and the inventory was limited; no clean result can "
+            "be inferred from the partial evidence."
+        ),
+    )
+
+    plan = _plan()
+    plan["steps"][0]["selected_files"] = None
+    assessment = assess_profile_audit(
+        _manifest(expected_files=None),
+        plan,
+        _result(findings=(finding,)),
+    )
+
+    assert assessment["status"] == "incomplete"
+    assert _checks(assessment)[0]["status"] == "incomplete"
+    assert _checks(assessment)[0]["complete"] is False
+    assert _checks(assessment)[0]["findings_state"] == "with_findings"
+
+
+def test_ordinary_source_family_finding_keeps_completed_audit() -> None:
+    plan = _plan()
+    plan["steps"][0]["selected_files"] = None
+    assessment = assess_profile_audit(
+        _manifest(expected_files=None),
+        plan,
+        _result(
+            findings=(
+                AuditResultFinding(
+                    rule_id="alphus/any/none/maintainability/flat-source-family",
+                    message="Sibling source names share a prefix.",
+                ),
+            )
+        ),
+    )
+
+    assert assessment["status"] == "complete"
+    assert _checks(assessment)[0]["status"] == "executed_with_findings"
+
+
 def test_manifest_checks_required_native_selector_tokens() -> None:
     manifest = _manifest(required_argv=("--select=ANN",))
     plan = _plan(kind="command")

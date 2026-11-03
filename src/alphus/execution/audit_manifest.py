@@ -106,10 +106,11 @@ class AuditPlanIntent(TypedDict):
     step: str | None
 
 
-class AuditResultFinding(TypedDict):
+class AuditResultFinding(TypedDict, total=False):
     """Stable finding identity used to distinguish tool failures from findings."""
 
-    rule_id: str
+    rule_id: Required[str]
+    message: str
 
 
 class ProfileAuditPlan(TypedDict):
@@ -197,6 +198,13 @@ class AuditCompletion(TypedDict):
 _COMPLETE_STATES = frozenset({"executed", "executed_zero", "executed_with_findings"})
 _COMMAND_EXITED_NONZERO_RULE = rule_tag(
     Scope.ANY, Framework.NONE, Category.ORCHESTRATION, "command-exited-nonzero"
+)
+_SOURCE_FAMILY_RULE = rule_tag(
+    Scope.ANY, Framework.NONE, Category.MAINTAINABILITY, "flat-source-family"
+)
+_INCOMPLETE_SOURCE_FAMILY_MESSAGES = (
+    "Lexical source-family scan incomplete:",
+    "Lexical source-family output truncated:",
 )
 _OPERATIONAL_FAILURE_RULES = frozenset(
     rule_tag(Scope.ANY, Framework.NONE, Category.ORCHESTRATION, complaint)
@@ -568,6 +576,26 @@ def assess_profile_audit(
                     "complete": False,
                     "findings_state": "unknown",
                     "structured_finding_count": len(findings),
+                }
+            )
+            continue
+        incomplete_coverage = any(
+            finding["rule_id"] == _SOURCE_FAMILY_RULE
+            and finding.get("message", "").startswith(
+                _INCOMPLETE_SOURCE_FAMILY_MESSAGES
+            )
+            for finding in findings
+        )
+        if incomplete_coverage:
+            checks.append(
+                {
+                    "check_id": check.check_id,
+                    "step": check.step,
+                    "status": "incomplete",
+                    "complete": False,
+                    "findings_state": "with_findings",
+                    "structured_finding_count": len(findings),
+                    "reason": "the built-in source-family checker reported incomplete coverage",
                 }
             )
             continue
