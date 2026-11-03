@@ -55,6 +55,31 @@ def parse_document(repair_id, text, callbacks):
     assert len(patch_cascade_sites(source, _policy())) == 1
 
 
+def test_comprehension_local_callback_is_not_configured_helper_evidence() -> None:
+    source = """\
+def parse_document(repair_id, text, callbacks):
+    if repair_id == "vendor-a":
+        previews = [normalize_text(text) for normalize_text in callbacks]
+    if repair_id == "vendor-b":
+        previews = [normalize_text(text) for normalize_text in callbacks]
+    return text
+"""
+    assert patch_cascade_sites(source, _policy()) == []
+
+
+def test_unrelated_comprehension_target_preserves_helper_call_evidence() -> None:
+    source = """\
+def parse_document(repair_id, text, callbacks):
+    if repair_id == "vendor-a":
+        text = normalize_text(text, " ")
+        previews = [normalize_text(item, " ") for item in callbacks]
+    if repair_id == "vendor-b":
+        text = normalize_text(text, "-")
+    return text
+"""
+    assert len(patch_cascade_sites(source, _policy())) == 1
+
+
 def test_single_repair_branch_is_below_cluster_threshold() -> None:
     source = """\
 def parse_document(repair_id, text):

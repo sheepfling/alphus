@@ -38,14 +38,6 @@ def _call_name(node: ast.expr) -> str | None:
             return None
 
 
-def _call(node: ast.AST) -> ast.Call | None:
-    match node:
-        case ast.Call() as call:
-            return call
-        case _:
-            return None
-
-
 def _comprehension_target_names(target: ast.expr) -> frozenset[str]:
     match target:
         case ast.Name(id=name):
@@ -143,6 +135,55 @@ def _helper_binding_nodes(
             children = list(ast.iter_child_nodes(root))
     for child in children:
         yield from _helper_binding_nodes(child, shadowed)
+
+
+def _configured_calls(
+    root: ast.AST,
+    helpers: frozenset[str],
+    shadowed: frozenset[str] = frozenset(),
+) -> Iterable[str]:
+    """Yield configured calls while respecting comprehension-local names."""
+    if isinstance(root, ast.Name) and root.id in shadowed:
+        return
+    match root:
+        case ast.FunctionDef() | ast.AsyncFunctionDef() | ast.ClassDef() | ast.Lambda():
+            return
+        case (
+            ast.ListComp(generators=generators, elt=element)
+            | ast.SetComp(generators=generators, elt=element)
+            | ast.GeneratorExp(generators=generators, elt=element)
+        ):
+            local_names = shadowed
+            for generator in generators:
+                yield from _configured_calls(generator.iter, helpers, local_names)
+                local_names = local_names | _comprehension_target_names(
+                    generator.target
+                )
+                for condition in generator.ifs:
+                    yield from _configured_calls(condition, helpers, local_names)
+            yield from _configured_calls(element, helpers, local_names)
+            return
+        case ast.DictComp(generators=generators, key=key, value=value):
+            local_names = shadowed
+            for generator in generators:
+                yield from _configured_calls(generator.iter, helpers, local_names)
+                local_names = local_names | _comprehension_target_names(
+                    generator.target
+                )
+                for condition in generator.ifs:
+                    yield from _configured_calls(condition, helpers, local_names)
+            yield from _configured_calls(key, helpers, local_names)
+            yield from _configured_calls(value, helpers, local_names)
+            return
+        case ast.Call() as call:
+            name = _call_name(call.func)
+            root_name = name.split(".", maxsplit=1)[0] if name else None
+            if name in helpers and root_name not in shadowed:
+                yield name
+        case _:
+            pass
+    for child in ast.iter_child_nodes(root):
+        yield from _configured_calls(child, helpers, shadowed)
 
 
 def _stored_helper_name(node: ast.AST, names: frozenset[str]) -> bool:
@@ -277,10 +318,9 @@ def patch_cascade_sites(
             calls = {
                 call_name
                 for statement in branch.body
-                for candidate in _walk_function_body(statement)
-                if (call := _call(candidate)) is not None
-                if (call_name := _call_name(call.func)) is not None
-                and call_name in configured.normalization_helpers
+                for call_name in _configured_calls(
+                    statement, frozenset(configured.normalization_helpers)
+                )
             }
             if calls:
                 matched[repair_id] = (branch.lineno, calls)
