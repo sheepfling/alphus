@@ -331,6 +331,24 @@ def test_folded_yaml_script_counts_physical_nonblank_source_lines() -> None:
     assert "21 nonblank lines" in findings[0].message
 
 
+def test_github_script_without_trailing_newline_counts_its_last_line() -> None:
+    commands = [f"echo step-{index}" for index in range(1, 21)]
+    source = (
+        "jobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n"
+    )
+    source += "\n".join(f"          {command}" for command in commands)
+
+    findings = workflow_run_findings(
+        source,
+        ".github/workflows/ci.yml",
+        policy(minimum_run_lines=50, maximum_inline_run_lines=20),
+    )
+
+    assert len(findings) == 1
+    assert findings[0].rule_id.endswith("/long-inline-workflow-script")
+    assert "20 nonblank lines" in findings[0].message
+
+
 def test_long_script_review_skips_contextual_and_unallowlisted_matrix_commands() -> (
     None
 ):
@@ -383,6 +401,26 @@ def test_long_azure_inline_script_uses_the_same_threshold() -> None:
     assert len(findings) == 1
     assert findings[0].rule_id.endswith("/long-inline-workflow-script")
     assert "4 nonblank lines" in findings[0].message
+
+
+def test_azure_script_without_trailing_newline_counts_its_last_line() -> None:
+    commands = [f"echo step-{index}" for index in range(1, 21)]
+    source = "jobs:\n- job: checks\n  pool: ubuntu-latest\n  steps:\n  - bash: |\n"
+    source += "\n".join(f"      {command}" for command in commands)
+
+    findings = workflow_run_findings(
+        source,
+        "azure-pipelines.yml",
+        policy(
+            azure_workflow_paths=("azure-pipelines.yml",),
+            minimum_run_lines=50,
+            maximum_inline_run_lines=20,
+        ),
+    )
+
+    assert len(findings) == 1
+    assert findings[0].rule_id.endswith("/long-inline-workflow-script")
+    assert "20 nonblank lines" in findings[0].message
 
 
 def test_malformed_yaml_is_an_explicit_error() -> None:

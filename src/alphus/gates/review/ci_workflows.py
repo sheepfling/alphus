@@ -192,18 +192,22 @@ def _literal_matrix_values(node: Node) -> bool:
             return False
 
 
-def _matrix_has_multiple_literal_legs(matrix: dict[str, Node]) -> bool:
+def _matrix_has_multiple_literal_legs(axes: Iterable[Node]) -> bool:
     """Return whether a supported literal matrix has more than one leg."""
-    return any(
-        isinstance(axis, SequenceNode) and len(axis.value) > 1
-        for axis in matrix.values()
-    )
+    for axis in axes:
+        match axis:
+            case SequenceNode(value=values) if len(values) > 1:
+                return True
+            case _:
+                continue
+    return False
 
 
 def _block_scalar_nonblank_lines(node: ScalarNode, source: str, script: str) -> int:
     """Count physical nonblank body lines, including folded YAML block scalars."""
     source_lines = source.splitlines()
-    body = source_lines[node.start_mark.line + 1 : node.end_mark.line]
+    end_line = node.end_mark.line + int(node.end_mark.column > 0)
+    body = source_lines[node.start_mark.line + 1 : end_line]
     if node.style in {"|", ">"} and body:
         return sum(bool(line.strip()) for line in body)
     return sum(bool(line.strip()) for line in script.splitlines())
@@ -250,7 +254,7 @@ def _run_blocks(
             and matrix is not None
             and bool(matrix)
             and all(_literal_matrix_values(value) for value in matrix.values())
-            and _matrix_has_multiple_literal_legs(matrix)
+            and _matrix_has_multiple_literal_legs(matrix.values())
         )
         steps = job.get("steps")
         if runner is None:
