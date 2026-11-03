@@ -1037,11 +1037,16 @@ def _execute_profile(
             if step.name not in plan.steps:
                 continue
             entry = entries_by_name[step.name]
-            selected_files = (
-                _selected_rule_files(checkout, config, step.rule)
-                if step.kind == "rule"
-                else (list(entry.files) if step.files is not None else None)
-            )
+            try:
+                selected_files = (
+                    _selected_rule_files(checkout, config, step.rule)
+                    if step.kind == "rule"
+                    else (list(entry.files) if step.files is not None else None)
+                )
+            except (OSError, ValueError) as error:
+                return audit_preflight_failure(
+                    f"Cannot resolve profile scope for audit: {error}"
+                )
             row: AuditPlanStep = {
                 "name": step.name,
                 "kind": step.kind,

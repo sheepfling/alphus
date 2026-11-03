@@ -278,6 +278,58 @@ steps = ["File size", "Line length", "Comment markers"]
     }
 
 
+def test_audit_manifest_reports_inventory_resolution_failure_as_incomplete(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "quality.toml").write_text(
+        """schema_version = 1
+[files]
+include = ["src/*.py"]
+[checks.numeric_literals]
+extensions = [".py"]
+[orchestration]
+default_profile = "audit"
+[[orchestration.steps]]
+kind = "rule"
+name = "Numeric literals"
+rule = "numeric-literals"
+[[orchestration.profiles]]
+name = "audit"
+steps = ["Numeric literals"]
+""",
+        encoding="utf-8",
+    )
+    _write_manifest(
+        tmp_path,
+        "audit",
+        [
+            AuditManifestCheck(
+                check_id="numeric",
+                step="Numeric literals",
+                expected_files=("src/sample.py",),
+            )
+        ],
+    )
+
+    exit_code = main(
+        [
+            "--root",
+            str(tmp_path),
+            "--config",
+            "quality.toml",
+            "--json",
+            "--audit-manifest",
+            "audit.json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 2
+    assert payload["schema"] == "alphus.execution-failure"
+    assert payload["evidence_complete"] is False
+    assert payload["audit_completion"]["status"] == "incomplete"
+
+
 def test_manifest_retains_native_selector_scope_and_annotation_evidence(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
