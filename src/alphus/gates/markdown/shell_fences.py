@@ -465,7 +465,8 @@ def _mask_printf_format_argument(
         command_start = command_match.start("command")
         if command_start + offset > len(raw_command):
             continue
-        command_text = raw_command[command_start:]
+        command_end = _shell_command_end(raw_command, command_start)
+        command_text = raw_command[command_start:command_end]
         words = _shell_words(command_text)
         if not words:
             continue
@@ -551,6 +552,29 @@ def _shell_words(source: str) -> list[tuple[int, int, str]]:
         while index < len(source) and source[index].isspace():
             index += 1
     return words
+
+
+def _shell_command_end(source: str, start: int) -> int:
+    """Find the next unquoted shell command separator from ``start``."""
+    quote: str | None = None
+    index = start
+    while index < len(source):
+        char = source[index]
+        if quote is not None:
+            if quote == '"' and char == "\\" and index + 1 < len(source):
+                index += 2
+                continue
+            if char == quote:
+                quote = None
+        elif char in "'\"":
+            quote = char
+        elif char == "\\" and index + 1 < len(source):
+            index += 2
+            continue
+        elif char in ";|&":
+            return index
+        index += 1
+    return len(source)
 
 
 def _bash_loop_evidence(lines: Sequence[_SourceLine]) -> _Evidence | None:

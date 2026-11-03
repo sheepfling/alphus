@@ -15,6 +15,7 @@ from alphus.config import (
 )
 from alphus.contracts.findings import Finding
 from alphus.execution.dispatch import run_builtin_rule
+from alphus.gates.markdown import shell_fences
 from alphus.gates.markdown.shell_fences import check_markdown_shell_fences
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
 
@@ -269,6 +270,26 @@ def test_bash_ansi_c_quoted_loop_text_is_not_shell_evidence(
     )
 
     assert findings == []
+
+
+def test_many_printf_commands_tokenize_only_their_own_segments(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    command = "printf %s%s a b"
+    source = "; ".join([command] * 1_000)
+    total_tokenized_chars = 0
+    original = shell_fences._shell_words
+
+    def count_tokenized_chars(value: str) -> list[tuple[int, int, str]]:
+        nonlocal total_tokenized_chars
+        total_tokenized_chars += len(value)
+        return original(value)
+
+    monkeypatch.setattr(shell_fences, "_shell_words", count_tokenized_chars)
+    findings = _check(tmp_path, f"```bash\n{source}\n```\n")
+
+    assert findings == []
+    assert total_tokenized_chars <= len(source) * 2
 
 
 def test_escaped_bash_backtick_does_not_hide_later_evidence(
