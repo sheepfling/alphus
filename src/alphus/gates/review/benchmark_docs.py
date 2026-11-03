@@ -187,8 +187,8 @@ def _has_method_link(text: str, definitions: Mapping[str, tuple[str, bool]]) -> 
                 continue
             else:
                 definition = definitions.get(_reference_key(pending_label[0]))
-                if _METHOD_TERMS.search(pending_label[0]) or (
-                    definition is not None and definition[1]
+                if definition is not None and (
+                    _METHOD_TERMS.search(pending_label[0]) or definition[1]
                 ):
                     return True
             pending_label = None
@@ -204,10 +204,10 @@ def _has_method_link(text: str, definitions: Mapping[str, tuple[str, bool]]) -> 
                 if reference_primary is not None:
                     reference = label or reference_primary
                     definition = definitions.get(_reference_key(reference))
-                    if (
+                    if definition is not None and (
                         _METHOD_TERMS.search(reference_primary)
                         or _METHOD_TERMS.search(label)
-                        or (definition is not None and definition[1])
+                        or definition[1]
                     ):
                         return True
                     reference_primary = None
@@ -217,8 +217,8 @@ def _has_method_link(text: str, definitions: Mapping[str, tuple[str, bool]]) -> 
             reference_primary = None
     if pending_label is not None:
         definition = definitions.get(_reference_key(pending_label[0]))
-        if _METHOD_TERMS.search(pending_label[0]) or (
-            definition is not None and definition[1]
+        if definition is not None and (
+            _METHOD_TERMS.search(pending_label[0]) or definition[1]
         ):
             return True
     return False

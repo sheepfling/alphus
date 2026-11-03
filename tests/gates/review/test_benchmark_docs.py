@@ -166,6 +166,29 @@ def test_many_unmatched_open_brackets_do_not_hide_benchmark_candidate(
     assert findings[0].line == 1
 
 
+@pytest.mark.parametrize("link", ("[methodology][missing]", "[method]"))
+def test_undefined_method_reference_does_not_suppress_benchmark_candidate(
+    link: str, tmp_path: Path
+) -> None:
+    root = tmp_path
+    relative = Path("docs/undefined-method-reference.md")
+    source = root / relative
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        f"# Benchmarks\n\nSee {link}.\n\nScalar: 0.42 ms; vector: 0.13 ms.\n",
+        encoding="utf-8",
+    )
+
+    findings = benchmark_doc_findings(
+        root,
+        [relative],
+        BenchmarkDocPolicy(include=("docs/**",)),
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 1
+
+
 def test_exact_reasoned_exception_suppresses_only_its_section(
     tmp_path: Path,
 ) -> None:
