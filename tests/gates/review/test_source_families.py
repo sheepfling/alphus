@@ -2,6 +2,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from alphus.config import SourceFamilyPolicy
 from alphus.gates.review import source_families
@@ -465,5 +466,5 @@ def test_unreadable_source_remains_in_lexical_candidate_and_marks_scan_incomplet
 def test_rejects_invalid_source_family_policy(
     invalid_policy: Callable[[], SourceFamilyPolicy],
 ) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValidationError):
         invalid_policy()

@@ -126,11 +126,9 @@ def test_public_size_rules_require_policy_before_iterating_empty_inventory(
 ) -> None:
     config = load_config(repository(tmp_path))
     # The public functions also guard callers that do not use the CLI.
+    check = check_file_size if rule == "file-size" else check_line_length
     with pytest.raises(MissingPolicyError):
-        if rule == "file-size":
-            check_file_size(tmp_path, (), config)
-        else:
-            check_line_length(tmp_path, (), config)
+        check(tmp_path, (), config)
 
 
 def test_selected_missing_policy_is_rejected_before_native_side_effect(
