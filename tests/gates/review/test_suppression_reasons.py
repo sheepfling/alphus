@@ -788,6 +788,71 @@ def test_per_file_code_prefix_matches_native_ruff(
     assert "E402" in findings[0].message
 
 
+def test_legacy_tch_noqa_redirect_matches_native_ruff() -> None:
+    policy = SuppressionReasonPolicy(extensions=(".py",), rule_codes=("TC001",))
+    missing_reason = suppression_reason_findings(
+        "from myapp import Model  # noqa: TCH001\n", policy
+    )
+    documented = suppression_reason_findings(
+        "from myapp import Model  # noqa: TCH001 -- typing-only import\n", policy
+    )
+    unrelated_code = suppression_reason_findings(
+        "from myapp import Model  # noqa: TCH001\n",
+        SuppressionReasonPolicy(extensions=(".py",), rule_codes=("TC002",)),
+    )
+
+    assert len(missing_reason) == 1
+    assert "TC001" in missing_reason[0].message
+    assert documented == []
+    assert unrelated_code == []
+
+
+@pytest.mark.parametrize("with_reason", [False, True])
+def test_legacy_tch_per_file_ignore_redirect_matches_native_ruff(
+    tmp_path: Path, with_reason: bool
+) -> None:
+    ruff = shutil.which("ruff")
+    if ruff is None:
+        pytest.skip("Ruff executable is not installed in this test environment")
+    (tmp_path / "myapp.py").write_text("class Model: ...\n", encoding="utf-8")
+    (tmp_path / "app.py").write_text(
+        "from __future__ import annotations\n"
+        "from myapp import Model\n\n"
+        "def use(value: Model) -> None:\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+    rationale = " # -- typing-only import" if with_reason else ""
+    (tmp_path / "ruff.toml").write_text(
+        '[lint]\nselect = ["TC001"]\n'
+        '[lint.isort]\nknown-first-party = ["myapp"]\n'
+        '[lint.per-file-ignores]\n"app.py" = ["TCH001"]'
+        f"{rationale}\n",
+        encoding="utf-8",
+    )
+    native = subprocess.run(
+        [ruff, "check", "--config", "ruff.toml", "app.py"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    findings = check_suppression_reasons(
+        tmp_path,
+        [Path("app.py")],
+        SuppressionReasonPolicy(extensions=(".py",), rule_codes=("TC001",)),
+    )
+
+    assert native.returncode == 0, native.stdout + native.stderr
+    if with_reason:
+        assert findings == []
+    else:
+        assert len(findings) == 1
+        assert findings[0].path == "ruff.toml"
+        assert "TC001" in findings[0].message
+
+
 @pytest.mark.parametrize(
     ("pattern", "path", "suppressed"),
     [

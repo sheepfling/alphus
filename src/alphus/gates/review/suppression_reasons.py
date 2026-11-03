@@ -32,13 +32,29 @@ _FILE_IGNORE_DIRECTIVE = re.compile(
     r"^#\s*ruff\s*:\s*file-ignore\s*\[(?P<codes>[^]]*)\](?P<tail>.*)$"
 )
 _CODE = re.compile(r"\b[A-Z]+[0-9]{3,4}\b")
+_RUFF_RULE_REDIRECTS = {
+    "TCH": "TC",
+    "TCH001": "TC001",
+    "TCH002": "TC002",
+    "TCH003": "TC003",
+    "TCH004": "TC004",
+    "TCH005": "TC005",
+    "TCH006": "TC010",
+    "TCH010": "TC010",
+}
+
+
+def _canonical_ruff_selector(selector: str) -> str:
+    """Apply the explicitly supported legacy Flake8-type-checking redirects."""
+    normalized = selector.upper()
+    return _RUFF_RULE_REDIRECTS.get(normalized, normalized)
 
 
 def _ruff_code_selections(
     selectors: Iterable[str], required_codes: Collection[str]
 ) -> list[str]:
     """Return selected codes matched by Ruff's exact or prefix selectors."""
-    normalized = {selector.upper() for selector in selectors}
+    normalized = {_canonical_ruff_selector(selector) for selector in selectors}
     return sorted(
         code
         for code in required_codes
@@ -172,7 +188,7 @@ def suppression_reason_findings(
                 continue
             selected = sorted(
                 required_codes.intersection(
-                    code.upper() for code in _CODE.findall(code_list)
+                    _canonical_ruff_selector(code) for code in _CODE.findall(code_list)
                 )
             )
             if not selected:

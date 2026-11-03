@@ -37,7 +37,10 @@ Per-file patterns use repository-relative and basename matching, including
 Ruff's leading `!` negation and comma-separated brace alternatives such as
 `{src,tests}/**`. Configured rule codes use Ruff's exact or prefix selectors,
 so `E4` selects a configured `E402` code. Unsupported TOML values are reported
-as not evaluated. A matching exact path/code/line exception can
+as not evaluated. The audit also recognizes Ruff's legacy Flake8-type-checking
+redirects for `TCH001`–`TCH005`, `TCH006` → `TC010`, and `TCH010` → `TC010`.
+It does not implement Ruff's full rule-redirect table, so other renamed
+selectors are outside this audit. A matching exact path/code/line exception can
 approve a configuration entry:
 
 ```toml
