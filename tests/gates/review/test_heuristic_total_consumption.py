@@ -95,6 +95,16 @@ def test_module_comprehension_walrus_still_counts_as_rebinding() -> None:
     assert heuristic_total_consumption_sites(source, _policy()) == []
 
 
+def test_module_match_capture_rebinding_abstains() -> None:
+    source = (
+        _DIRECT
+        + "\nmatch replacement:\n"
+        + "    case {'callback': preserve_text}: pass\n"
+    )
+
+    assert heuristic_total_consumption_sites(source, _policy()) == []
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [

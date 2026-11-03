@@ -153,6 +153,16 @@ def test_ambiguous_function_suppresses_only_its_own_candidate() -> None:
     ]
 
 
+def test_module_match_capture_rebinding_abstains() -> None:
+    source = (
+        _PATH_ONLY
+        + "\nmatch replacement:\n"
+        + "    case {'callback': remaining_paragraphs}: pass\n"
+    )
+
+    assert provenance_ownership_sites(source, _policy()) == []
+
+
 def test_policy_requires_explicit_basis_and_scoped_names() -> None:
     with pytest.raises(ValidationError):
         _policy(ownership_basis="unknown")

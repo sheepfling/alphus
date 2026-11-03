@@ -7,7 +7,7 @@ selected against Alphus source.
 
 ## Codex review findings
 
-Most of the 22 inline findings were **functional implementation gaps** in
+Most of the 23 inline findings were **functional implementation gaps** in
 opt-in semantic detectors. The root `review` profile omitted those detectors
 because their contracts describe consumer behavior (rendering, ownership,
 repair order, parsing, or normalization) that is not grounded in Alphus's own
@@ -241,6 +241,20 @@ and are classified individually.
 **Coverage now:** Assignment-value walrus mutation regressions in
   `test_rendered_value_reparsed.py`.
 
+### [4449445416](https://github.com/sheepfling/alphus/pull/76#discussion_r4449445416)
+
+**Finding:** Count module-level pattern captures as rebindings
+
+**Underlying defect:** MatchAs, MatchStar, and MatchMapping capture names are
+  strings in the AST rather than `ast.Name(Store)` nodes, so the shared module
+  binding inventory missed them. The affected semantic detectors are not
+  selected by the default root review profile because their function identities
+  are consumer-configured.
+
+**Coverage now:** Pattern capture binding tests and abstention regressions for
+  heuristic total-consumption, semantic-work-presentation, and provenance
+  ownership.
+
 
 The root profile also omits all consumer-specific semantic rule selectors by
 design. Enabling them for Alphus without a contract would create unsupported
@@ -352,8 +366,9 @@ follow-on candidate.
 ## Validation boundary
 
 The local installed `check` profile completed with 26 passed, 0 failed, and 3
-provisional checks. Its package-test step reported 1365 passed and 23 skipped
-in this local environment; its Markdown line-length check passed on this ledger.
+provisional checks. Its package-test step reported 1370 passed and 23 skipped
+in this local environment, including the module-pattern capture regression;
+its Markdown line-length check passed on this ledger.
 
 Hosted checks for PR head `c567c14d65211162ef0ec9b771ba84ec5123772d` all
 passed, except `history-audit`, which was skipped. The hosted Python 3.11 log

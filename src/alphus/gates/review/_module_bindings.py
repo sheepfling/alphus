@@ -12,8 +12,8 @@ class _ModuleBindings(ast.NodeVisitor):
         self.selected = selected
         self.counts: Counter[str] = Counter()
 
-    def _count(self, name: str) -> None:
-        if name in self.selected:
+    def _count(self, name: str | None) -> None:
+        if name is not None and name in self.selected:
             self.counts[name] += 1
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
@@ -45,6 +45,20 @@ class _ModuleBindings(ast.NodeVisitor):
                     self.counts[name] += 2
             else:
                 self._count(alias.asname or alias.name)
+
+    def visit_MatchAs(self, node: ast.MatchAs) -> None:
+        # Capture names are stored as strings in pattern AST nodes, not as
+        # ast.Name(Store) nodes, so count them explicitly.
+        self._count(node.name)
+        self.generic_visit(node)
+
+    def visit_MatchStar(self, node: ast.MatchStar) -> None:
+        self._count(node.name)
+        self.generic_visit(node)
+
+    def visit_MatchMapping(self, node: ast.MatchMapping) -> None:
+        self._count(node.rest)
+        self.generic_visit(node)
 
     def visit_Lambda(self, node: ast.Lambda) -> None:
         # Defaults execute in the module scope; the lambda body does not.

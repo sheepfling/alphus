@@ -65,6 +65,8 @@ def test_reports_all_consumer_declared_roles_in_selected_function() -> None:
         _COMPOSITE + "\nfrom other_module import render_document\n",
         _COMPOSITE + "\nfrom other_module import *\n",
         _COMPOSITE
+        + "\nmatch replacement:\n    case {'callback': render_document}: pass\n",
+        _COMPOSITE
         + "\nif condition:\n    def render_document(source):\n        return source\n",
     ],
 )
