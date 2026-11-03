@@ -209,6 +209,7 @@ def test_find_format_arguments_are_not_cmd_environment_evidence(
                 fence + "bash",
                 "find . -type f -printf %f%p",
                 "find . -type f -fprintf output.txt '%f%p'",
+                'find . -type f -fprintf "output file.txt" %f%p',
                 "find . -type f -printf %f%p %PATH%",
                 fence,
                 "",
@@ -217,7 +218,7 @@ def test_find_format_arguments_are_not_cmd_environment_evidence(
     )
 
     assert len(findings) == 1
-    assert findings[0].line == 4
+    assert findings[0].line == 5
     assert 'cmd syntax "%PATH%"' in findings[0].message
 
 

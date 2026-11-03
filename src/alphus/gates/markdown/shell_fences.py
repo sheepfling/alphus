@@ -504,7 +504,10 @@ def _cmd_environment_evidence(lines: Sequence[_SourceLine]) -> _Evidence | None:
         candidate, printf_format_found = _mask_printf_format_argument(
             source.text, raw_line, continued=in_printf_continuation
         )
-        candidate = _mask_find_format_arguments(candidate)
+        candidate = _mask_find_format_arguments(
+            candidate,
+            raw_line,
+        )
         trailing_backslashes = len(raw_line) - len(raw_line.rstrip("\\"))
         in_printf_continuation = (
             not printf_format_found
@@ -529,14 +532,15 @@ def _cmd_environment_evidence(lines: Sequence[_SourceLine]) -> _Evidence | None:
     return None
 
 
-def _mask_find_format_arguments(line: str) -> str:
+def _mask_find_format_arguments(line: str, raw_line: str | None = None) -> str:
     """Mask known GNU find format words while retaining other arguments."""
     visible = list(line)
+    source = raw_line if raw_line is not None else line
     spans: list[tuple[int, int]] = []
-    for command_match in _FIND_COMMAND.finditer(line):
+    for command_match in _FIND_COMMAND.finditer(source):
         command_start = command_match.start("command")
-        command_end = _shell_command_end(line, command_start)
-        words = _shell_words(line[command_start:command_end])
+        command_end = _shell_command_end(source, command_start)
+        words = _shell_words(source[command_start:command_end])
         index = 1
         while index < len(words):
             _, _, option = words[index]
