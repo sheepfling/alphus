@@ -49,12 +49,48 @@ RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
         "documentation-config": RuleSpec(
             "documentation_config", RuleOutputShape.FINDINGS, requires_files=False
         ),
+        "markdown-shell-fences": RuleSpec(
+            "markdown_shell_fences", RuleOutputShape.FINDINGS, requires_files=False
+        ),
         "git-ignores": RuleSpec("git", RuleOutputShape.FINDINGS, requires_files=False),
         "git-attributes": RuleSpec(
             "git", RuleOutputShape.FINDINGS, requires_files=False
         ),
         "git-history": RuleSpec("git", RuleOutputShape.FINDINGS, requires_files=False),
         "numeric-literals": RuleSpec("numeric_literals", RuleOutputShape.FINDINGS),
+        "manual-matrix-kernels": RuleSpec(
+            "manual_matrix_kernels", RuleOutputShape.FINDINGS
+        ),
+        "manual-elimination": RuleSpec("manual_elimination", RuleOutputShape.FINDINGS),
+        "array-representation-churn": RuleSpec(
+            "array_representation_churn", RuleOutputShape.FINDINGS
+        ),
+        "cholesky-recurrence": RuleSpec(
+            "cholesky_recurrence", RuleOutputShape.FINDINGS
+        ),
+        "manual-quaternion-products": RuleSpec(
+            "manual_quaternion_products", RuleOutputShape.FINDINGS
+        ),
+        "manual-quaternion-conjugation": RuleSpec(
+            "manual_quaternion_conjugation", RuleOutputShape.FINDINGS
+        ),
+        "manual-quaternion-normalization": RuleSpec(
+            "manual_quaternion_normalization", RuleOutputShape.FINDINGS
+        ),
+        "manual-quaternion-inversion": RuleSpec(
+            "manual_quaternion_inversion", RuleOutputShape.FINDINGS
+        ),
+        "manual-quaternion-vector-rotation": RuleSpec(
+            "manual_quaternion_vector_rotation", RuleOutputShape.FINDINGS
+        ),
+        "manual-quaternion-matrix-conversion": RuleSpec(
+            "manual_quaternion_matrix_conversion", RuleOutputShape.FINDINGS
+        ),
+        "ecef-enu-transform": RuleSpec("ecef_enu_transform", RuleOutputShape.FINDINGS),
+        "ecef-ned-matrix-transform": RuleSpec(
+            "ecef_ned_matrix_transform", RuleOutputShape.FINDINGS
+        ),
+        "ned-basis-vectors": RuleSpec("ned_basis_vectors", RuleOutputShape.FINDINGS),
         "scipy-constants": RuleSpec("scipy_constants", RuleOutputShape.FINDINGS),
         "test-quality": RuleSpec("test_quality", RuleOutputShape.FINDINGS),
         "input-contracts": RuleSpec("input_contracts", RuleOutputShape.FINDINGS),

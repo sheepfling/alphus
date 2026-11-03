@@ -29,6 +29,7 @@ from alphus.policy.intents import (
     SharedQualityIntent,
     resolve_intent_bindings,
 )
+from alphus.policy.markdown import MarkdownShellFencesPolicy
 from alphus.policy.metrics import CyclomaticComplexityPolicy
 from alphus.policy.repository import (
     DependencyLockPolicy,
@@ -38,12 +39,25 @@ from alphus.policy.repository import (
     VersionSyncPolicy,
 )
 from alphus.policy.review import (
+    ArrayRepresentationPolicy,
     BenchmarkDocPolicy,
+    CholeskyRecurrencePolicy,
+    EcefEnuTransformPolicy,
+    EcefNedMatrixTransformPolicy,
     FastApiPracticePolicy,
     InputContractPolicy,
+    ManualEliminationPolicy,
+    ManualMatrixKernelPolicy,
+    NedBasisVectorsPolicy,
     NumericLiteralPolicy,
     PositionalInterfacePolicy,
     PydanticPracticePolicy,
+    QuaternionConjugationPolicy,
+    QuaternionInversionPolicy,
+    QuaternionMatrixConversionPolicy,
+    QuaternionNormalizationPolicy,
+    QuaternionProductPolicy,
+    QuaternionVectorRotationPolicy,
     ScipyConstantsPolicy,
     SourceFamilyPolicy,
     SqlAlchemyPracticePolicy,
@@ -75,6 +89,19 @@ class CheckPolicies(StrictModel):
     output_escaping: SourceScanPolicy | None = None
     path_discovery: PathDiscoveryPolicy | None = None
     numeric_literals: NumericLiteralPolicy | None = None
+    manual_matrix_kernels: ManualMatrixKernelPolicy | None = None
+    manual_elimination: ManualEliminationPolicy | None = None
+    array_representation_churn: ArrayRepresentationPolicy | None = None
+    cholesky_recurrence: CholeskyRecurrencePolicy | None = None
+    manual_quaternion_conjugation: QuaternionConjugationPolicy | None = None
+    manual_quaternion_products: QuaternionProductPolicy | None = None
+    manual_quaternion_normalization: QuaternionNormalizationPolicy | None = None
+    manual_quaternion_inversion: QuaternionInversionPolicy | None = None
+    manual_quaternion_vector_rotation: QuaternionVectorRotationPolicy | None = None
+    manual_quaternion_matrix_conversion: QuaternionMatrixConversionPolicy | None = None
+    ecef_enu_transform: EcefEnuTransformPolicy | None = None
+    ecef_ned_matrix_transform: EcefNedMatrixTransformPolicy | None = None
+    ned_basis_vectors: NedBasisVectorsPolicy | None = None
     scipy_constants: ScipyConstantsPolicy | None = None
     test_quality: TestQualityPolicy | None = None
     input_contracts: InputContractPolicy | None = None
@@ -94,6 +121,7 @@ class CheckPolicies(StrictModel):
     architecture_graph: ArchitectureGraphCheckPolicy | None = None
     repository_layout: RepositoryLayoutPolicy | None = None
     documentation_config: DocumentationConfigPolicy | None = None
+    markdown_shell_fences: MarkdownShellFencesPolicy | None = None
     version_sync: VersionSyncPolicy | None = None
     callable_registry: CallableRegistryPolicy | None = None
     dependency_locks: DependencyLockPolicy | None = None
