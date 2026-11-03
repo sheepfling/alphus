@@ -151,6 +151,28 @@ def test_declared_finite_state_contract_reports_complete_raw_string_chain() -> N
     assert "does not infer a domain from repeated literals" in findings[0].message
 
 
+def test_finite_state_contract_does_not_collect_nested_compound_comparisons() -> None:
+    source = (
+        "def dispatch(action: str, enabled: bool):\n"
+        "    if enabled and action == 'approve':\n"
+        "        return accept()\n"
+        "    elif enabled and action == 'reject':\n"
+        "        return deny()\n"
+    )
+    policy = _policy(
+        finite_state_contracts=(
+            {
+                "path": "src/actions.py",
+                "function": "dispatch",
+                "parameter": "action",
+                "values": ["approve", "reject"],
+            },
+        )
+    )
+
+    assert pydantic_practice_findings(source, policy, path="src/actions.py") == []
+
+
 def test_finite_state_contract_skips_typed_partial_rebound_and_unselected_inputs() -> (
     None
 ):
@@ -659,6 +681,28 @@ def test_static_mutable_default_factory_is_opt_in_and_narrow() -> None:
         ),
     ]
     assert all("not required for isolation" in item.message for item in findings)
+
+
+@pytest.mark.parametrize(
+    ("builtin", "annotation"),
+    [("list", "list[str]"), ("dict", "dict[str, int]")],
+)
+def test_static_mutable_default_factory_skips_shadowed_builtins(
+    builtin: str, annotation: str
+) -> None:
+    source = (
+        "from pydantic import BaseModel, Field\n"
+        "def custom_factory(): return None\n"
+        f"{builtin} = custom_factory\n"
+        "class Item(BaseModel):\n"
+        f"    value: {annotation} = Field(default_factory={builtin})\n"
+    )
+
+    findings = pydantic_practice_findings(
+        source, _policy(prefer_static_mutable_defaults=True), path="src/item.py"
+    )
+
+    assert findings == []
 
 
 def test_pydantic_copies_static_unhashable_defaults_per_instance() -> None:

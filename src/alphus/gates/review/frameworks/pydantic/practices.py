@@ -540,6 +540,11 @@ def _static_mutable_default_factory_lines(
 ) -> list[int]:
     """Find Pydantic fields whose factory is exactly built-in list or dict."""
     lines: set[int] = set()
+    shadowed_builtins = {
+        name
+        for name in ("list", "dict")
+        if any(_binds_name(node, name) for node in ast.walk(module))
+    }
     for statement in module.body:
         match statement:
             case ast.ClassDef(name=name, body=body) if name in models:
@@ -573,7 +578,9 @@ def _static_mutable_default_factory_lines(
                         None,
                     )
                     match factory:
-                        case ast.Name(id=name) if name in {"list", "dict"}:
+                        case ast.Name(id=name) if (
+                            name in {"list", "dict"} and name not in shadowed_builtins
+                        ):
                             lines.add(field.lineno)
                         case ast.Name() | ast.Attribute() if canonical_expression_name(
                             factory, aliases
@@ -1103,24 +1110,23 @@ def _finite_state_selector_lines(
     lines: set[int] = set()
 
     def comparisons(test: ast.expr) -> set[str]:
-        values: set[str] = set()
-        for node in ast.walk(test):
-            match node:
-                case ast.Compare(
-                    left=ast.Name(id=name),
-                    ops=[ast.Eq()],
-                    comparators=[ast.Constant(value=str() as value)],
-                ) if name == contract.parameter:
-                    values.add(value)
-                case ast.Compare(
-                    left=ast.Constant(value=str() as value),
-                    ops=[ast.Eq()],
-                    comparators=[ast.Name(id=name)],
-                ) if name == contract.parameter:
-                    values.add(value)
-                case _:
-                    pass
-        return values
+        match test:
+            case ast.Compare(
+                left=ast.Name(id=name),
+                ops=[ast.Eq()],
+                comparators=[ast.Constant(value=str() as value)],
+            ) if name == contract.parameter:
+                return {value}
+            case ast.Compare(
+                left=ast.Constant(value=str() as value),
+                ops=[ast.Eq()],
+                comparators=[ast.Name(id=name)],
+            ) if name == contract.parameter:
+                return {value}
+            case _:
+                # Do not collect a nested equality from a compound guard: its
+                # other conditions can make the configured values non-exhaustive.
+                return set()
 
     for function in selected:
         parameters = [
