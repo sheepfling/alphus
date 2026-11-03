@@ -23,7 +23,33 @@ __all__ = [
     "policy_issues",
     "python_cli_findings",
     "python_cli_issues",
+    "selected_policy_sources",
 ]
+
+
+def selected_policy_sources(
+    root: Path, paths: Iterable[Path], policy: CliPolicy
+) -> tuple[list[Path], list[Path]]:
+    """Resolve Python and Node source files actually inspected by CLI policy."""
+    checkout = root.resolve(strict=True)
+    authored = [path for path in paths if (checkout / path).is_file()]
+    python_sources = [
+        relative
+        for relative in authored
+        if relative.suffix.lower() in policy.python.extensions
+        and not any(
+            matches_path(relative.as_posix(), exclusion)
+            for exclusion in policy.python.exclude
+        )
+    ]
+    node_sources = (
+        sorted(
+            node_cli_files(checkout, authored, policy.node), key=lambda p: p.as_posix()
+        )
+        if policy.node is not None
+        else []
+    )
+    return python_sources, node_sources
 
 
 def policy_findings(
@@ -31,15 +57,9 @@ def policy_findings(
 ) -> CliPolicyReport:
     """Inventory authored endpoints while retaining contract/style classification."""
     checkout = root.resolve(strict=True)
-    authored = [path for path in paths if (checkout / path).is_file()]
+    python_sources, node_sources = selected_policy_sources(checkout, paths, policy)
     sources = {
-        relative: read_python_source(checkout / relative)
-        for relative in authored
-        if relative.suffix.lower() in policy.python.extensions
-        and not any(
-            matches_path(relative.as_posix(), exclusion)
-            for exclusion in policy.python.exclude
-        )
+        relative: read_python_source(checkout / relative) for relative in python_sources
     }
     findings = list(python_cli_findings_for_sources(sources, policy.python))
     if policy.node is not None:
@@ -48,7 +68,7 @@ def policy_findings(
                 policy.node_endpoint_message,
                 endpoint=relative.as_posix(),
             )
-            for relative in sorted(node_cli_files(checkout, authored, policy.node))
+            for relative in node_sources
         )
     return CliPolicyReport(tuple(findings))
 

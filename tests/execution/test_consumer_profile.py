@@ -24,6 +24,74 @@ def test_starter_policy_has_one_scoped_command_and_no_global_inventory() -> None
     assert step.fix_argv == ("rumdl", "fmt", "{files}")
 
 
+def test_manual_matrix_kernel_example_is_scoped_and_provisional() -> None:
+    config = load_config(Path("examples/numerics/manual-matrix-kernels.toml"))
+    assert config.files is not None
+    assert config.files.include == ("src/numerics/*.py", "src/geometry/*.py")
+    policy = config.checks.manual_matrix_kernels
+    assert policy is not None
+    assert policy.source_paths == ("src/numerics/*.py",)
+    elimination_policy = config.checks.manual_elimination
+    assert elimination_policy is not None
+    assert elimination_policy.function_names == ("invert_matrix",)
+    assert elimination_policy.matrix_name == "matrix"
+    churn_policy = config.checks.array_representation_churn
+    assert churn_policy is not None
+    assert churn_policy.loop_contracts[0].path == "src/numerics/kernels.py"
+    assert churn_policy.loop_contracts[0].function == "process_batches"
+    assert churn_policy.loop_contracts[0].array_variable == "batch"
+    normalization_policy = config.checks.manual_quaternion_normalization
+    assert normalization_policy is not None
+    assert normalization_policy.components == ("w", "x", "y", "z")
+    assert normalization_policy.rotation_consumer_helpers == ("Rotation.from_quat",)
+    inversion_policy = config.checks.manual_quaternion_inversion
+    assert inversion_policy is not None
+    assert inversion_policy.components == ("w", "x", "y", "z")
+    vector_rotation_policy = config.checks.manual_quaternion_vector_rotation
+    assert vector_rotation_policy is not None
+    assert vector_rotation_policy.vector_components == ("vx", "vy", "vz")
+    assert vector_rotation_policy.multiplication_helpers == ("multiply",)
+    matrix_policy = config.checks.manual_quaternion_matrix_conversion
+    assert matrix_policy is not None
+    assert matrix_policy.convention == "active-column-scalar-first"
+    frame_policy = config.checks.ecef_enu_transform
+    assert frame_policy is not None
+    assert frame_policy.source_frame == "ECEF"
+    assert frame_policy.destination_frame == "ENU"
+    assert frame_policy.operation == "displacement-vector"
+    assert frame_policy.reference_ellipsoid == "WGS84"
+    assert "pyproj.Transformer.from_pipeline" in frame_policy.preferred_helpers[0]
+    ned_matrix_policy = config.checks.ecef_ned_matrix_transform
+    assert ned_matrix_policy is not None
+    assert ned_matrix_policy.destination_frame == "NED"
+    assert ned_matrix_policy.axis_order == "north-east-down"
+    assert ned_matrix_policy.vector_orientation == "column"
+    assert ned_matrix_policy.output_shape == "matrix3x3"
+    assert "pyproj.Transformer.from_pipeline" in ned_matrix_policy.preferred_helpers[0]
+    ned_basis_policy = config.checks.ned_basis_vectors
+    assert ned_basis_policy is not None
+    assert ned_basis_policy.latitude_type == "geodetic"
+    assert ned_basis_policy.output_representation == "basis3"
+    assert ned_basis_policy.destination_frame == "GEODETIC_HORIZON"
+    assert "pyproj.Transformer.from_pipeline" in ned_basis_policy.preferred_helpers[0]
+    orchestration = config.orchestration
+    assert orchestration is not None
+    plan = orchestration.resolve_profile("numerical-review")
+    assert plan is not None
+    step = orchestration.steps[0]
+    assert isinstance(step, RuleRunStep)
+    assert step.rule == "manual-matrix-kernels"
+    assert step.rollout == "provisional"
+    assert "Quaternion product review" in plan.steps
+    assert "Quaternion normalization review" in plan.steps
+    assert "Quaternion inversion review" in plan.steps
+    assert "Quaternion vector rotation review" in plan.steps
+    assert "Quaternion matrix conversion review" in plan.steps
+    assert "ECEF to ENU transform review" in plan.steps
+    assert "ECEF to NED matrix review" in plan.steps
+    assert "Manual elimination review" in plan.steps
+
+
 def test_markdown_example_pairs_two_fixers_without_duplicate_missing_links() -> None:
     config = load_config(Path("examples/markdown/quality-gates.toml"))
     assert config.files is None

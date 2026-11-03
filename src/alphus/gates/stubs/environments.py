@@ -19,6 +19,10 @@ class PythonRuntime(BaseModel):
     version: tuple[int, int, int]
     prefix: str
     tool_versions: tuple[tuple[str, str], ...]
+    platform: str = "unknown"
+    architecture: str = "unknown"
+    distribution_versions: tuple[tuple[str, str], ...] = ()
+    missing_distributions: tuple[str, ...] = ()
 
     @property
     def minor(self) -> str:
@@ -27,28 +31,41 @@ class PythonRuntime(BaseModel):
 
 _PROBE = """
 import importlib.metadata as metadata
-import json, sys
+import json, platform, sys
 versions = []
 for name in ('alphus', 'pip', 'build', 'setuptools', 'setuptools-scm', 'wheel',
-             'mypy', 'pyright', 'twine', 'typing_extensions', 'snakemd', 'mdutils',
+             'mypy', 'pyright', 'ty', 'twine', 'typing_extensions', 'snakemd', 'mdutils',
              'snakemd-stubs', 'mdutils-stubs'):
     try:
         versions.append((name, metadata.version(name)))
     except metadata.PackageNotFoundError:
         pass
+requested = sys.argv[1:]
+distribution_versions = []
+missing_distributions = []
+for name in requested:
+    try:
+        distribution_versions.append((name, metadata.version(name)))
+    except metadata.PackageNotFoundError:
+        missing_distributions.append(name)
 print(json.dumps(dict(executable=sys.executable, version=list(sys.version_info[:3]),
-                     prefix=sys.prefix, tool_versions=versions)))
+                     prefix=sys.prefix, tool_versions=versions,
+                     platform=sys.platform, architecture=platform.machine(),
+                     distribution_versions=distribution_versions,
+                     missing_distributions=missing_distributions)))
 """
 
 
-def probe_python(executable: str) -> PythonRuntime:
+def probe_python(
+    executable: str, *, requested_distributions: tuple[str, ...] = ()
+) -> PythonRuntime:
     """Preserve virtualenv executable paths; resolving symlinks loses the venv."""
     command = probe_command(executable).resolved
     if command is None:
         raise ValueError(f"Python executable not found: {executable}")
     try:
         result = subprocess.run(
-            [command, "-I", "-c", _PROBE],
+            [command, "-I", "-c", _PROBE, *requested_distributions],
             capture_output=True,
             text=True,
             check=True,

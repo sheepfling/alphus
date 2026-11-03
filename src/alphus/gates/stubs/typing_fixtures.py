@@ -159,9 +159,24 @@ def _report_failure(
     print(f"  command: {command!r}", file=sys.stderr)
     if returncode is not None:
         print(f"  exit code: {returncode}", file=sys.stderr)
+    guidance = _checker_diagnostic_guidance(checker, output)
+    if guidance is not None:
+        print(f"  fixture guidance: {guidance}", file=sys.stderr)
     if output:
         print("  output:", file=sys.stderr)
         print(output.rstrip(), file=sys.stderr)
+
+
+def _checker_diagnostic_guidance(checker: Checker, output: str) -> str | None:
+    """Explain a known checker-specific fixture limitation without suppressing it."""
+    if checker.name == "ty" and "assert-type-unspellable-subtype" in output:
+        return (
+            "ty cannot compare some class-object expressions with assert_type(..., "
+            "type[Model]); keep this failure visible and consider an explicit "
+            "assignment such as model_class: type[Model] = Model instead. "
+            "This does not replace independent assert_type coverage of ordinary values."
+        )
+    return None
 
 
 def run_case(
@@ -248,6 +263,12 @@ def run_case(
         print(
             f"PASS {checker.name} {actual_fixture.name}: {expectation} ({elapsed:.2f}s)"
         )
+        if expect_errors:
+            lines = sorted(observed_error_lines(output, actual_fixture.name))
+            print(f"  matched diagnostic lines: {lines}")
+            if output.strip():
+                print("  native diagnostics:")
+                print(output.rstrip())
         return True
 
     def run_with_cache(actual_fixture: Path) -> bool:
