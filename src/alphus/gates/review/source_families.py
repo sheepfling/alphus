@@ -839,6 +839,7 @@ def _python_import_evidence(
     typed_dict_use_count = 0
     external_references: list[tuple[str, int, str]] = []
     ambiguous_submodule_imports: list[tuple[str, int, str]] = []
+    ambiguous_module_imports: list[tuple[str, int, str]] = []
 
     def add_package_namespace_candidate(
         source: Path, node: ast.ImportFrom, alias: ast.alias, target: Path
@@ -859,6 +860,23 @@ def _python_import_evidence(
                 f"{source.as_posix()}:{node.lineno} imports {alias.name} from "
                 f"{target.as_posix()} as package name {local_name}"
             )
+
+    def record_ambiguous_module_candidates(
+        source: Path, node: ast.AST, candidates: list[Path]
+    ) -> None:
+        nonlocal unresolved
+        if source in analysis_sources:
+            return
+        family_candidates = sorted(
+            {candidate for candidate in candidates if candidate in members}
+        )
+        if not family_candidates:
+            return
+        unresolved += 1
+        ambiguous_module_imports.extend(
+            (source.as_posix(), node.lineno, candidate.as_posix())
+            for candidate in family_candidates
+        )
 
     for source, tree in trees.items():
         source_module = source_modules[source]
@@ -882,6 +900,8 @@ def _python_import_evidence(
                                 )
                         elif source in analysis_sources:
                             unresolved += 1
+                        else:
+                            record_ambiguous_module_candidates(source, node, targets)
                 case ast.ImportFrom(module=module, level=level, names=aliases):
                     if module is None:
                         if level and source_module is not None:
@@ -924,6 +944,10 @@ def _python_import_evidence(
                                 else:
                                     if source in analysis_sources:
                                         unresolved += 1
+                                    else:
+                                        record_ambiguous_module_candidates(
+                                            source, node, targets
+                                        )
                             continue
                         if source in analysis_sources:
                             unresolved += 1
@@ -976,6 +1000,10 @@ def _python_import_evidence(
                                 (target_name, *alias.name.split("."))
                             )
                             submodule_targets = modules.get(submodule_name, [])
+                            if len(submodule_targets) > 1:
+                                record_ambiguous_module_candidates(
+                                    source, node, submodule_targets
+                                )
                             if (
                                 len(submodule_targets) == 1
                                 and submodule_targets[0] in members
@@ -1031,6 +1059,8 @@ def _python_import_evidence(
                     else:
                         if source in analysis_sources:
                             unresolved += 1
+                        elif target_name and len(targets) > 1:
+                            record_ambiguous_module_candidates(source, node, targets)
                         elif target_name:
                             # Namespace packages may have no selected __init__.py,
                             # while `from pkg import submodule` still loads a
@@ -1043,7 +1073,11 @@ def _python_import_evidence(
                                     (target_name, *alias.name.split("."))
                                 )
                                 submodule_targets = modules.get(submodule_name, [])
-                                if (
+                                if len(submodule_targets) > 1:
+                                    record_ambiguous_module_candidates(
+                                        source, node, submodule_targets
+                                    )
+                                elif (
                                     len(submodule_targets) == 1
                                     and submodule_targets[0] in members
                                 ):
@@ -1091,7 +1125,11 @@ def _python_import_evidence(
                 )
                 + "."
             )
-        elif not external_parse_failures and not ambiguous_submodule_imports:
+        elif (
+            not external_parse_failures
+            and not ambiguous_submodule_imports
+            and not ambiguous_module_imports
+        ):
             context += (
                 " No direct external references were observed in the parsed selected "
                 "inventory; unselected consumers and dynamic references are not assessed."
@@ -1116,6 +1154,24 @@ def _python_import_evidence(
                 context += (
                     f" {len(ambiguous_submodule_imports) - len(shown_ambiguous)} "
                     "ambiguous submodule reference(s) omitted by max_import_edges."
+                )
+        if ambiguous_module_imports:
+            shown_ambiguous_modules = ambiguous_module_imports[
+                : policy.max_import_edges
+            ]
+            context += (
+                " Potential selected Python imports have ambiguous module-root "
+                "candidates: "
+                + ", ".join(
+                    f"{source}:{line} may resolve to {target}"
+                    for source, line, target in shown_ambiguous_modules
+                )
+                + "."
+            )
+            if len(shown_ambiguous_modules) < len(ambiguous_module_imports):
+                context += (
+                    f" {len(ambiguous_module_imports) - len(shown_ambiguous_modules)} "
+                    "ambiguous module reference(s) omitted by max_import_edges."
                 )
         if external_parse_failures:
             context += (

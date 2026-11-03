@@ -718,6 +718,48 @@ def test_external_namespace_package_submodule_import_is_reported_as_ambiguous(
     assert "No direct external references were observed" not in message
 
 
+@pytest.mark.parametrize(
+    "import_statement",
+    (
+        "import pkg.gateway_client",
+        "from pkg.gateway_client import Client",
+        "from pkg import gateway_client",
+        "from . import gateway_client",
+    ),
+)
+def test_external_imports_with_duplicate_module_roots_are_ambiguous(
+    tmp_path: Path, import_statement: str
+) -> None:
+    paths = [
+        _write(tmp_path, f"src/pkg/gateway_{name}.py")
+        for name in ("client", "server", "routes", "auth", "cache")
+    ]
+    duplicate = _write(tmp_path, "vendor/pkg/gateway_client.py")
+    consumer = _write(tmp_path, "src/pkg/app.py")
+    (tmp_path / consumer).write_text(f"{import_statement}\n", encoding="utf-8")
+
+    findings = source_family_findings(
+        tmp_path,
+        [*paths, duplicate, consumer],
+        SourceFamilyPolicy(
+            min_family_files=5,
+            exclude=(),
+            python_import_evidence=True,
+            python_module_roots=("src", "vendor"),
+        ),
+    )
+
+    message = next(
+        item.message for item in findings if "Family gateway_*" in item.message
+    )
+    assert (
+        "Potential selected Python imports have ambiguous module-root candidates"
+        in message
+    )
+    assert "src/pkg/app.py:1 may resolve to src/pkg/gateway_client.py" in message
+    assert "No direct external references were observed" not in message
+
+
 @pytest.mark.skipif(
     any(
         find_spec(module) is None
