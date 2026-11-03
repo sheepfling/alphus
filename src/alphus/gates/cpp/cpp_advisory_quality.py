@@ -14,6 +14,7 @@ import math
 import os
 import re
 import sys
+from bisect import bisect_left, bisect_right
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
@@ -62,6 +63,8 @@ _CPP_SUFFIXES = frozenset(
 _DEFAULT_INCLUDE = tuple(f"**/*{suffix}" for suffix in sorted(_CPP_SUFFIXES))
 _DEFAULT_EXCLUDE = (
     "**/.git/**",
+    ".cache/**",
+    "**/.cache/**",
     "build/**",
     "**/build/**",
     "out/**",
@@ -217,6 +220,8 @@ _TREND_METRICS = (
 class DuplicateLocation(TypedDict):
     path: str
     line: int
+    end_line: int
+    normalized_line: int
 
 
 class DuplicateGroup(TypedDict):
@@ -226,6 +231,129 @@ class DuplicateGroup(TypedDict):
     hit_count: int
     sample: str
     locations: list[DuplicateLocation]
+
+
+class DuplicateFamilyLocation(TypedDict):
+    path: str
+    line: int
+    end_line: int
+    overlapping_window_count: int
+
+
+class DuplicateFamily(TypedDict):
+    file_count: int
+    window_group_count: int
+    raw_window_occurrence_count: int
+    digests: list[str]
+    locations: list[DuplicateFamilyLocation]
+
+
+def _overlapping_duplicate_families(
+    groups: Sequence[DuplicateGroup], *, window_lines: int
+) -> list[DuplicateFamily]:
+    """Join repeated normalized windows that overlap at the same file sites."""
+    # Groups can only overlap when they cover exactly the same files. Index
+    # starts on the least-populated shared path to avoid comparing unrelated
+    # windows pairwise (which made disjoint inventories quadratic).
+    by_paths: dict[tuple[str, ...], list[int]] = defaultdict(list)
+    locations_by_group: list[dict[str, list[int]]] = []
+    for index, group in enumerate(groups):
+        locations: dict[str, list[int]] = defaultdict(list)
+        for location in group["locations"]:
+            locations[location["path"]].append(location["normalized_line"])
+        locations_by_group.append(locations)
+        by_paths[tuple(sorted(locations))].append(index)
+
+    parent = list(range(len(groups)))
+
+    def find(index: int) -> int:
+        while parent[index] != index:
+            parent[index] = parent[parent[index]]
+            index = parent[index]
+        return index
+
+    def union(left: int, right: int) -> None:
+        left_root, right_root = find(left), find(right)
+        if left_root != right_root:
+            parent[right_root] = left_root
+
+    def overlaps_on_every_path(left: int, right: int) -> bool:
+        left_locations = locations_by_group[left]
+        right_locations = locations_by_group[right]
+        return all(
+            any(
+                abs(a - b) < window_lines
+                for a in left_locations[path]
+                for b in right_locations[path]
+            )
+            for path in left_locations
+        )
+
+    for path_set, indices in by_paths.items():
+        if len(indices) < 2 or not path_set:
+            continue
+        anchor = min(
+            path_set,
+            key=lambda path: sum(len(locations_by_group[i][path]) for i in indices),
+        )
+        starts = sorted(
+            (line, index)
+            for index in indices
+            for line in locations_by_group[index][anchor]
+        )
+        for position, (line, index) in enumerate(starts):
+            lo = bisect_left(starts, (line - window_lines + 1, -1), position + 1)
+            hi = bisect_right(starts, (line + window_lines - 1, len(groups)), lo)
+            for _, candidate in starts[lo:hi]:
+                if candidate != index and overlaps_on_every_path(index, candidate):
+                    union(index, candidate)
+
+    components: dict[int, list[DuplicateGroup]] = defaultdict(list)
+    for index, group in enumerate(groups):
+        components[find(index)].append(group)
+    families = list(components.values())
+
+    result: list[DuplicateFamily] = []
+    for family in families:
+        by_location: dict[tuple[str, int, int], int] = defaultdict(int)
+        for group in family:
+            for location in group["locations"]:
+                by_location[
+                    (
+                        location["path"],
+                        location["line"],
+                        location["end_line"],
+                    )
+                ] += 1
+        ordered_locations = sorted(by_location.items())
+        result.append(
+            {
+                "file_count": max(group["file_count"] for group in family),
+                "window_group_count": len(family),
+                "raw_window_occurrence_count": sum(
+                    group["hit_count"] for group in family
+                ),
+                "digests": sorted(group["digest"] for group in family),
+                "locations": [
+                    {
+                        "path": path,
+                        "line": line,
+                        "end_line": end_line,
+                        "overlapping_window_count": count,
+                    }
+                    for (path, line, end_line), count in ordered_locations
+                ],
+            }
+        )
+    result.sort(
+        key=lambda family: (
+            int(family["file_count"]),
+            int(family["window_group_count"]),
+            str(family["digests"][0]),
+        ),
+        reverse=True,
+    )
+    return result
 
 
 class ComplexityRow(TypedDict):
@@ -391,7 +519,7 @@ def _duplicate_groups(
     window_lines: int,
     min_text_chars: int,
 ) -> list[DuplicateGroup]:
-    occurrences: dict[str, list[tuple[str, int, str]]] = defaultdict(list)
+    occurrences: dict[str, list[tuple[str, int, int, int, str]]] = defaultdict(list)
     for path in files:
         relative = path.relative_to(root).as_posix()
         if "tests/deps/" in relative:
@@ -406,11 +534,13 @@ def _duplicate_groups(
             if len(sample) < min_text_chars:
                 continue
             digest = hashlib.sha256(sample.encode("utf-8")).hexdigest()[:16]
-            occurrences[digest].append((relative, chunk[0][0], sample))
+            occurrences[digest].append(
+                (relative, chunk[0][0], chunk[-1][0], start, sample)
+            )
 
     groups: list[DuplicateGroup] = []
     for digest, hits in occurrences.items():
-        paths = sorted({path for path, _, _ in hits})
+        paths = sorted({path for path, _, _, _, _ in hits})
         if len(paths) < 2:
             continue
         groups.append(
@@ -419,9 +549,15 @@ def _duplicate_groups(
                 "window_lines": window_lines,
                 "file_count": len(paths),
                 "hit_count": len(hits),
-                "sample": hits[0][2].split("\n", 1)[0][:120],
+                "sample": hits[0][4].split("\n", 1)[0][:120],
                 "locations": [
-                    {"path": path, "line": line} for path, line, _ in hits[:12]
+                    {
+                        "path": path,
+                        "line": line,
+                        "end_line": end_line,
+                        "normalized_line": normalized_line,
+                    }
+                    for path, line, end_line, normalized_line, _ in hits
                 ],
             }
         )
@@ -456,12 +592,14 @@ def _style_report(args: argparse.Namespace) -> dict[str, JsonValue]:
         "high_complexity_count": 0,
     }
 
-    def add(finding: Mapping[str, JsonValue]) -> None:
+    def add(finding: Mapping[str, JsonValue]) -> bool:
         nonlocal truncated
         if len(findings) < args.max_findings:
             findings.append(dict(finding))
+            return True
         else:
             truncated += 1
+            return False
 
     complexity_rows: list[ComplexityRow] = []
     include_count = 0
@@ -540,29 +678,49 @@ def _style_report(args: argparse.Namespace) -> dict[str, JsonValue]:
         window_lines=args.window_lines,
         min_text_chars=args.min_text_chars,
     )
-    reported_duplicate_groups = duplicate_groups[: args.max_groups]
+    duplicate_families = _overlapping_duplicate_families(
+        duplicate_groups, window_lines=args.window_lines
+    )
+    reported_duplicate_families = duplicate_families[: args.max_groups]
     counts["duplicate_code_group_count"] = len(duplicate_groups)
-    for group in reported_duplicate_groups:
-        first_location = group["locations"][0]
+    duplicate_families_displayed = 0
+    duplicate_groups_displayed = 0
+    for family in reported_duplicate_families:
+        family_locations = family["locations"]
         locations: list[dict[str, JsonValue]] = [
-            {"path": location["path"], "line": location["line"]}
-            for location in group["locations"]
+            {
+                "path": location["path"],
+                "line": location["line"],
+                "end_line": location["end_line"],
+                "overlapping_window_count": location["overlapping_window_count"],
+            }
+            for location in family_locations
         ]
-        add(
+        first_location = family_locations[0]
+        displayed = add(
             _candidate(
                 "possible-duplicate-code",
                 first_location["path"],
-                f"Normalized {args.window_lines}-line window also appears in "
-                f"{group['file_count'] - 1} other file(s); review ownership and behavior.",
+                f"{family['window_group_count']} overlapping normalized window group(s) "
+                f"appear across {family['file_count']} files; review ownership and behavior.",
                 line=first_location["line"],
                 evidence={
-                    "digest": group["digest"],
-                    "file_count": group["file_count"],
-                    "hit_count": group["hit_count"],
-                    "locations": locations,
+                    "window_group_count": family["window_group_count"],
+                    "raw_window_occurrence_count": family[
+                        "raw_window_occurrence_count"
+                    ],
+                    "unique_site_count": len(family_locations),
+                    "digest_count": len(family["digests"]),
+                    "digests": family["digests"][:12],
+                    "digests_truncated": max(0, len(family["digests"]) - 12),
+                    "locations": locations[:12],
+                    "locations_truncated": max(0, len(family_locations) - 12),
                 },
             )
         )
+        if displayed:
+            duplicate_families_displayed += 1
+            duplicate_groups_displayed += int(family["window_group_count"])
 
     complexity_rows.sort(
         key=lambda row: (
@@ -586,9 +744,13 @@ def _style_report(args: argparse.Namespace) -> dict[str, JsonValue]:
         "finding_count": len(findings),
         "findings_truncated": truncated,
         "duplicate_window_lines": args.window_lines,
-        "duplicate_code_groups_reported": len(reported_duplicate_groups),
+        "duplicate_code_groups_reported": duplicate_groups_displayed,
         "duplicate_code_groups_truncated": len(duplicate_groups)
-        - len(reported_duplicate_groups),
+        - duplicate_groups_displayed,
+        "duplicate_code_families_total": len(duplicate_families),
+        "duplicate_code_families_reported": duplicate_families_displayed,
+        "duplicate_code_families_truncated": len(duplicate_families)
+        - duplicate_families_displayed,
         "top_complexity_files": top_complexity_files,
     }
     return {
@@ -599,6 +761,10 @@ def _style_report(args: argparse.Namespace) -> dict[str, JsonValue]:
         "blocking": False,
         "root": str(root),
         "generated_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
+        "scope": {
+            "include_patterns": list(includes),
+            "exclude_patterns": list(excludes),
+        },
         "metrics": report_metrics,
         "findings": findings,
     }

@@ -40,6 +40,11 @@ scripts. `alphus --help` shows every option.
 For explicitly reviewed independent checks, [parallel execution](PARALLEL-EXECUTION.md)
 adds a bounded `--jobs` option while preserving the declared report order.
 
+When an agent is asked to audit a declared set of optional checks, use the
+[profile audit workflow](PROFILE-AUDIT-WORKFLOW.md) to keep the requested
+selectors, resolved plan, file scope, and execution outcomes reviewable. A
+passing default profile does not establish optional-rule coverage.
+
 For common multi-language setups, select bundles instead of remembering each
 native tool name:
 

@@ -10,6 +10,9 @@ from pathlib import Path
 from alphus.config import PydanticPracticePolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.gates.review.frameworks.pydantic.manual_validation import (
+    manual_model_validation_lines,
+)
 from alphus.support.inventory import matches_path
 from alphus.support.source_scanning import (
     ImportAliases,
@@ -920,17 +923,6 @@ def _public_any_lines(
     return sorted(lines)
 
 
-def _custom_init_lines(module: ast.Module, models: AbstractSet[str]) -> list[int]:
-    return sorted(
-        statement.lineno
-        for node in module.body
-        if isinstance(node, ast.ClassDef) and node.name in models
-        for statement in node.body
-        if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef))
-        and statement.name == "__init__"
-    )
-
-
 def pydantic_practice_findings(
     source: str, policy: PydanticPracticePolicy, *, path: str = "<source>"
 ) -> list[Finding]:
@@ -1014,7 +1006,7 @@ def pydantic_practice_findings(
             policy.report_custom_init,
             Category.VALIDATION,
             "custom-init",
-            _custom_init_lines(module, models),
+            manual_model_validation_lines(module, models),
             (
                 "review this custom Pydantic initializer; use a validator or "
                 "model_post_init when possible"
