@@ -710,7 +710,7 @@ def test_multiline_ruff_per_file_ignore_matches_native_ruff(
         [Path("app.py")],
         SuppressionReasonPolicy(extensions=(".py",), rule_codes=("E402",)),
     )
-    if with_reason:
+    if with_reason and form != "multiline-map":
         assert findings == []
     else:
         assert len(findings) == 1
@@ -757,6 +757,76 @@ def test_per_file_globs_match_native_ruff_negation_and_basenames(
     assert bool(findings) is applies
 
 
+def test_per_file_code_prefix_matches_native_ruff(
+    tmp_path: Path,
+) -> None:
+    ruff = shutil.which("ruff")
+    if ruff is None:
+        pytest.skip("Ruff executable is not installed in this test environment")
+    (tmp_path / "app.py").write_text("value = 1\nimport os\n", encoding="utf-8")
+    (tmp_path / "ruff.toml").write_text(
+        '[lint.per-file-ignores]\n"app.py" = ["E4"]\n', encoding="utf-8"
+    )
+    native = subprocess.run(
+        [ruff, "check", "--select", "E402", "--config", "ruff.toml", "app.py"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+
+    findings = check_suppression_reasons(
+        tmp_path,
+        [Path("app.py")],
+        SuppressionReasonPolicy(extensions=(".py",), rule_codes=("E402",)),
+    )
+
+    assert native.returncode == 0, native.stdout + native.stderr
+    assert len(findings) == 1
+    assert findings[0].path == "ruff.toml"
+    assert "E402" in findings[0].message
+
+
+@pytest.mark.parametrize(
+    ("pattern", "path", "suppressed"),
+    [
+        ("{src,tests}/**", "src/app.py", True),
+        ("{src,tests}/**", "tests/app.py", True),
+        ("{src,tests}/**", "docs/app.py", False),
+        ("{src,{tests,docs}}/**", "docs/app.py", True),
+    ],
+)
+def test_per_file_brace_alternation_matches_native_ruff(
+    tmp_path: Path, pattern: str, path: str, suppressed: bool
+) -> None:
+    ruff = shutil.which("ruff")
+    if ruff is None:
+        pytest.skip("Ruff executable is not installed in this test environment")
+    source = tmp_path / path
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text("value = 1\nimport os\n", encoding="utf-8")
+    (tmp_path / "ruff.toml").write_text(
+        f'[lint.per-file-ignores]\n"{pattern}" = ["E402"]\n', encoding="utf-8"
+    )
+    native = subprocess.run(
+        [ruff, "check", "--select", "E402", "--config", "ruff.toml", path],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    findings = check_suppression_reasons(
+        tmp_path,
+        [Path(path)],
+        SuppressionReasonPolicy(extensions=(".py",), rule_codes=("E402",)),
+    )
+
+    assert (native.returncode == 0) is suppressed, native.stdout + native.stderr
+    assert bool(findings) is suppressed
+
+
 def test_multiline_inline_map_comments_are_attributed_to_their_entry(
     tmp_path: Path,
 ) -> None:
@@ -800,6 +870,49 @@ def test_multiline_inline_map_comments_are_attributed_to_their_entry(
     assert findings[0].path == "ruff.toml"
     assert "app.py" in findings[0].message
     assert "other.py" not in findings[0].message
+
+
+def test_multiline_inline_map_trailing_comment_is_not_attributed_to_entries(
+    tmp_path: Path,
+) -> None:
+    ruff = shutil.which("ruff")
+    if ruff is None:
+        pytest.skip("Ruff executable is not installed in this test environment")
+    for name in ("app.py", "other.py"):
+        (tmp_path / name).write_text("value = 1\nimport os\n", encoding="utf-8")
+    (tmp_path / "ruff.toml").write_text(
+        "[lint]\nper-file-ignores = {\n"
+        ' "app.py" = ["E402"],\n'
+        ' "other.py" = ["E402"]\n'
+        "} # -- broad rationale not attached to either entry\n",
+        encoding="utf-8",
+    )
+    native = subprocess.run(
+        [
+            ruff,
+            "check",
+            "--select",
+            "E402",
+            "--config",
+            "ruff.toml",
+            "app.py",
+            "other.py",
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    findings = check_suppression_reasons(
+        tmp_path,
+        [Path("app.py"), Path("other.py")],
+        SuppressionReasonPolicy(extensions=(".py",), rule_codes=("E402",)),
+    )
+
+    assert native.returncode == 0, native.stdout + native.stderr
+    assert len(findings) == 2
+    assert all("no rationale" in finding.message for finding in findings)
 
 
 def test_non_string_per_file_codes_are_reported_as_not_evaluated(

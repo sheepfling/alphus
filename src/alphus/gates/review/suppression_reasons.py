@@ -34,11 +34,81 @@ _FILE_IGNORE_DIRECTIVE = re.compile(
 _CODE = re.compile(r"\b[A-Z]+[0-9]{3,4}\b")
 
 
-def _ruff_per_file_matches(path: str, pattern: str) -> bool:
-    """Match Ruff per-file globs by repository path or basename, including !."""
+def _ruff_code_selections(
+    selectors: Iterable[str], required_codes: Collection[str]
+) -> list[str]:
+    """Return selected codes matched by Ruff's exact or prefix selectors."""
+    normalized = {selector.upper() for selector in selectors}
+    return sorted(
+        code
+        for code in required_codes
+        if "ALL" in normalized
+        or any(code.startswith(selector) for selector in normalized)
+    )
+
+
+def _brace_alternatives(pattern: str, *, limit: int = 128) -> tuple[str, ...] | None:
+    """Expand Ruff-style comma brace alternatives, returning None if unsupported."""
+    opening = pattern.find("{")
+    if opening < 0:
+        return (pattern,) if "}" not in pattern else None
+    depth = 0
+    closing = -1
+    for index in range(opening, len(pattern)):
+        if pattern[index] == "{":
+            depth += 1
+        elif pattern[index] == "}":
+            depth -= 1
+            if depth == 0:
+                closing = index
+                break
+            if depth < 0:
+                return None
+    if closing < 0:
+        return None
+    body = pattern[opening + 1 : closing]
+    parts: list[str] = []
+    part_start = 0
+    depth = 0
+    for index, char in enumerate(body):
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+        elif char == "," and depth == 0:
+            parts.append(body[part_start:index])
+            part_start = index + 1
+    if not parts:
+        return None
+    parts.append(body[part_start:])
+    expanded: list[str] = []
+    for part in parts:
+        part_variants = _brace_alternatives(part, limit=limit)
+        if part_variants is None:
+            return None
+        for suffix in _brace_alternatives(pattern[closing + 1 :], limit=limit) or ():
+            for part_variant in part_variants:
+                expanded.append(pattern[:opening] + part_variant + suffix)
+                if len(expanded) > limit:
+                    return None
+    return tuple(expanded)
+
+
+def _ruff_per_file_matches(path: str, pattern: str) -> bool | None:
+    """Match Ruff per-file globs by path or basename, including ! and braces.
+
+    ``None`` means the pattern uses brace syntax this bounded matcher cannot
+    safely evaluate, so callers must report the entry as not evaluated.
+    """
     negated = pattern.startswith("!")
     glob = pattern[1:] if negated else pattern
-    matched = matches_path(path, glob) or fnmatchcase(PurePosixPath(path).name, glob)
+    alternatives = _brace_alternatives(glob)
+    if alternatives is None:
+        return None
+    matched = any(
+        matches_path(path, item) or fnmatchcase(PurePosixPath(path).name, item)
+        for item in alternatives
+    )
     return not matched if negated else matched
 
 
@@ -436,12 +506,13 @@ def _normalize_multiline_inline_map(
 
 def _normalize_multiline_per_file_values(
     source: str,
-) -> tuple[str, dict[tuple[int, str], str]]:
+) -> tuple[str, dict[tuple[int, str], str], set[int]]:
     """Collapse valid multiline per-file-ignore arrays without losing line numbers."""
     lines = source.splitlines()
     table = ""
     index = 0
     entry_comments: dict[tuple[int, str], str] = {}
+    inline_map_lines: set[int] = set()
     while index < len(lines):
         line = lines[index]
         section = re.fullmatch(r"\s*\[([^]]+)\]\s*", line)
@@ -475,6 +546,7 @@ def _normalize_multiline_per_file_values(
                     map_entry_comments,
                     map_comment,
                 ) = normalized
+                inline_map_lines.add(index + 1)
                 for pattern, entry_comment in map_entry_comments.items():
                     entry_comments[(index + 1, pattern)] = entry_comment
                 setting_comments = [value for value in (comment, map_comment) if value]
@@ -533,7 +605,7 @@ def _normalize_multiline_per_file_values(
             index = end_index + 1
         else:
             index += 1
-    return "\n".join(lines), entry_comments
+    return "\n".join(lines), entry_comments, inline_map_lines
 
 
 def _unsupported_per_file_value_finding(
@@ -547,6 +619,21 @@ def _unsupported_per_file_value_finding(
         message=(
             "A Ruff per-file-ignore entry contains unsupported TOML values; "
             "its suppression reasons were not evaluated."
+        ),
+    )
+
+
+def _unsupported_per_file_pattern_finding(
+    config_name: str, line: int, pattern: str, severity: Severity
+) -> Finding:
+    return Finding(
+        rule_id=_RULE_ID,
+        path=config_name,
+        line=line,
+        severity=severity,
+        message=(
+            f"Ruff per-file-ignore pattern {pattern!r} uses unsupported glob syntax; "
+            "its applicability and suppression reasons were not evaluated."
         ),
     )
 
@@ -609,9 +696,14 @@ def _ruff_config_suppression_findings(
     config_error: str | None = None
     unsupported_multiline_map = False
     per_file_entry_comments: dict[tuple[int, str], str] = {}
+    multiline_inline_map_lines: set[int] = set()
     try:
         source = read_utf8_text(config_path)
-        source, per_file_entry_comments = _normalize_multiline_per_file_values(source)
+        (
+            source,
+            per_file_entry_comments,
+            multiline_inline_map_lines,
+        ) = _normalize_multiline_per_file_values(source)
         tomllib.loads(source)
     except tomllib.TOMLDecodeError:
         unsupported_multiline_map = bool(
@@ -688,16 +780,34 @@ def _ruff_config_suppression_findings(
                 if skip_inherited_normal_per_file and normal_inline:
                     continue
                 for pattern, code_values in entries.items():
-                    selected_codes = sorted(
-                        set(policy.rule_codes).intersection(code_values)
+                    selected_codes = _ruff_code_selections(
+                        code_values, policy.rule_codes
                     )
+                    if not selected_codes:
+                        continue
+                    applicability = [
+                        _ruff_per_file_matches(path, pattern) for path in selected_files
+                    ]
+                    if any(result is None for result in applicability):
+                        findings.append(
+                            _unsupported_per_file_pattern_finding(
+                                config_name, line_number, pattern, policy.severity
+                            )
+                        )
+                        continue
                     applicable = [
                         path
-                        for path in selected_files
-                        if _ruff_per_file_matches(path, pattern)
+                        for path, result in zip(selected_files, applicability)
+                        if result
                     ]
                     entry_comment = per_file_entry_comments.get((line_number, pattern))
-                    reason_comment = entry_comment or inline_comment
+                    reason_comment = (
+                        entry_comment
+                        if entry_comment is not None
+                        else ""
+                        if line_number in multiline_inline_map_lines
+                        else inline_comment
+                    )
                     _, _, reason = reason_comment.partition(policy.reason_delimiter)
                     if not selected_codes or not applicable:
                         continue
@@ -798,9 +908,7 @@ def _ruff_config_suppression_findings(
                     selected_candidates.append(code)
                 case _:
                     unsupported_code_value = True
-        selected_codes = sorted(
-            set(policy.rule_codes).intersection(selected_candidates)
-        )
+        selected_codes = _ruff_code_selections(selected_candidates, policy.rule_codes)
         if unsupported_code_value:
             if selected_codes:
                 findings.append(
@@ -820,8 +928,19 @@ def _ruff_config_suppression_findings(
                         )
                     )
                 continue
+        applicability = [
+            _ruff_per_file_matches(path, pattern) for path in selected_files
+        ]
+        if any(result is None for result in applicability):
+            if selected_codes:
+                findings.append(
+                    _unsupported_per_file_pattern_finding(
+                        config_name, line_number, pattern, policy.severity
+                    )
+                )
+            continue
         applicable = [
-            path for path in selected_files if _ruff_per_file_matches(path, pattern)
+            path for path, result in zip(selected_files, applicability) if result
         ]
         if not selected_codes or not applicable:
             continue

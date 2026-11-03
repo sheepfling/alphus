@@ -32,9 +32,12 @@ form before validating TOML, including on Python versions whose standard
 library parser does not accept multiline inline tables. A comment attached to a
 multiline inline-map value applies only to that entry; a reason on a different
 entry does not satisfy it. TOML comments outside an entry are not attributed to
-individual entries. Per-file patterns use repository-relative and basename
-matching, including Ruff's leading `!` negation. Unsupported TOML values are
-reported as not evaluated. A matching exact path/code/line exception can
+individual entries; a comment after the closing map applies to none of them.
+Per-file patterns use repository-relative and basename matching, including
+Ruff's leading `!` negation and comma-separated brace alternatives such as
+`{src,tests}/**`. Configured rule codes use Ruff's exact or prefix selectors,
+so `E4` selects a configured `E402` code. Unsupported TOML values are reported
+as not evaluated. A matching exact path/code/line exception can
 approve a configuration entry:
 
 ```toml
