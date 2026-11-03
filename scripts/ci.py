@@ -15,8 +15,18 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Literal
 
-from packaging.utils import canonicalize_name
-from packaging.version import Version
+
+def _normalized_name(name: str) -> str:
+    """Apply the dependency-name normalization needed for duplicate detection."""
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def _floor_key(version: str) -> tuple[int, ...]:
+    """Compare the numeric release floors accepted by dependency_floors."""
+    parts = [int(part) for part in version.split(".")]
+    while len(parts) > 1 and parts[-1] == 0:
+        parts.pop()
+    return tuple(parts)
 
 
 def dependency_floors(pyproject: Path) -> tuple[str, ...]:
@@ -26,7 +36,7 @@ def dependency_floors(pyproject: Path) -> tuple[str, ...]:
         *project["dependencies"],
         *project["optional-dependencies"]["python"],
     ]
-    floors: dict[str, tuple[str, Version]] = {}
+    floors: dict[str, tuple[str, str, tuple[int, ...]]] = {}
     for declaration in declarations:
         match = re.fullmatch(
             r"([A-Za-z0-9_-]+)>=(\d+(?:\.\d+)*),<\d+(?:\.\d+)*",
@@ -37,14 +47,14 @@ def dependency_floors(pyproject: Path) -> tuple[str, ...]:
                 f"expected a bounded dependency with one floor: {declaration}"
             )
         name, floor_text = match.groups()
-        normalized_name = canonicalize_name(name)
-        floor = Version(floor_text)
+        normalized_name = _normalized_name(name)
+        floor = _floor_key(floor_text)
         previous = floors.get(normalized_name)
         if previous is None:
-            floors[normalized_name] = (name, floor)
-        elif floor > previous[1]:
-            floors[normalized_name] = (previous[0], floor)
-    return tuple(f"{name}=={floor}" for name, floor in floors.values())
+            floors[normalized_name] = (name, floor_text, floor)
+        elif floor > previous[2]:
+            floors[normalized_name] = (previous[0], floor_text, floor)
+    return tuple(f"{name}=={floor}" for name, floor, _key in floors.values())
 
 
 OutputMode = Literal["plain", "json"]
