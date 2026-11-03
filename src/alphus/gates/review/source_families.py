@@ -1031,6 +1031,30 @@ def _python_import_evidence(
                     else:
                         if source in analysis_sources:
                             unresolved += 1
+                        elif target_name:
+                            # Namespace packages may have no selected __init__.py,
+                            # while `from pkg import submodule` still loads a
+                            # selected child module. Preserve that possibility as
+                            # ambiguous evidence instead of reporting zero refs.
+                            for alias in aliases:
+                                if alias.name == "*":
+                                    continue
+                                submodule_name = ".".join(
+                                    (target_name, *alias.name.split("."))
+                                )
+                                submodule_targets = modules.get(submodule_name, [])
+                                if (
+                                    len(submodule_targets) == 1
+                                    and submodule_targets[0] in members
+                                ):
+                                    unresolved += 1
+                                    ambiguous_submodule_imports.append(
+                                        (
+                                            source.as_posix(),
+                                            node.lineno,
+                                            submodule_targets[0].as_posix(),
+                                        )
+                                    )
                 case _:
                     continue
     member_paths = {path.as_posix() for path in members}

@@ -685,6 +685,39 @@ def test_external_explicit_package_submodule_import_is_reported_as_ambiguous(
     assert "No direct external references were observed" not in message
 
 
+def test_external_namespace_package_submodule_import_is_reported_as_ambiguous(
+    tmp_path: Path,
+) -> None:
+    paths = [
+        _write(tmp_path, f"src/pkg/gateway_{name}.py")
+        for name in ("client", "server", "routes", "auth", "cache")
+    ]
+    consumer = _write(tmp_path, "src/app.py")
+    (tmp_path / consumer).write_text(
+        "from pkg import gateway_client\n", encoding="utf-8"
+    )
+
+    findings = source_family_findings(
+        tmp_path,
+        [*paths, consumer],
+        SourceFamilyPolicy(
+            min_family_files=5,
+            python_import_evidence=True,
+            python_module_roots=("src",),
+        ),
+    )
+
+    message = next(
+        item.message for item in findings if "Family gateway_*" in item.message
+    )
+    assert (
+        "Potential selected Python submodule imports have unresolved package attribute state"
+        in message
+    )
+    assert "src/app.py:1 may load src/pkg/gateway_client.py" in message
+    assert "No direct external references were observed" not in message
+
+
 @pytest.mark.skipif(
     any(
         find_spec(module) is None
