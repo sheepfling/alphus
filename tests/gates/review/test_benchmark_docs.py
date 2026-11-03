@@ -144,6 +144,28 @@ def test_reference_definition_alone_does_not_suppress_benchmark_section(
     assert "2 timing, throughput, or comparison expressions" in findings[0].message
 
 
+def test_many_unmatched_open_brackets_do_not_hide_benchmark_candidate(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path
+    relative = Path("docs/unmatched-brackets.md")
+    source = root / relative
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "# Benchmarks\n\nScalar: 0.42 ms; vector: 0.13 ms.\n" + "[" * 32_000,
+        encoding="utf-8",
+    )
+
+    findings = benchmark_doc_findings(
+        root,
+        [relative],
+        BenchmarkDocPolicy(include=("docs/**",)),
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 1
+
+
 def test_exact_reasoned_exception_suppresses_only_its_section(
     tmp_path: Path,
 ) -> None:

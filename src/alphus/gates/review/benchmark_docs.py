@@ -36,12 +36,6 @@ _BENCHMARK_LANGUAGE = re.compile(
     r"measured performance|performance test|microbenchmarks?)\b",
     re.IGNORECASE,
 )
-_METHOD_LINK = re.compile(r"\[([^\]]+)\]\(([^)]+)\)", re.IGNORECASE)
-_REFERENCE_DEFINITION = re.compile(
-    r"^[ \t]{0,3}\[([^\]]+)\]:[ \t]*(?:<([^>]+)>|([^\s]+))",
-    re.IGNORECASE | re.MULTILINE,
-)
-_REFERENCE_LINK = re.compile(r"\[([^\]]+)\](?:\[([^\]]*)\])?(?!\s*\()")
 _METHOD_TERMS = re.compile(
     r"\b(?:method(?:ology)?|protocol|reproduc(?:e|ible|ibility)|command)\b",
     re.IGNORECASE,
@@ -112,24 +106,120 @@ def _reference_key(label: str) -> str:
     return " ".join(label.split()).casefold()
 
 
-def _method_link_definitions(text: str) -> dict[str, str]:
-    return {
-        _reference_key(label): target or bare_target
-        for label, target, bare_target in _REFERENCE_DEFINITION.findall(text)
-    }
+def _reference_definition(line: str) -> tuple[str, str, bool] | None:
+    indentation = len(line) - len(line.lstrip(" \t"))
+    if indentation > 3:
+        return None
+    content = line[indentation:]
+    if not content.startswith("["):
+        return None
+    label_end = content.find("]", 1)
+    if label_end <= 1 or label_end + 1 >= len(content) or content[label_end + 1] != ":":
+        return None
+    destination = content[label_end + 2 :].lstrip(" \t")
+    if destination.startswith("<"):
+        target_end = destination.find(">", 1)
+        if target_end <= 1:
+            return None
+        target = destination[1:target_end]
+    else:
+        target = destination.split(None, 1)[0] if destination else ""
+    if not target:
+        return None
+    return content[1:label_end], target, bool(_METHOD_TERMS.search(target))
 
 
-def _has_method_link(text: str, definitions: Mapping[str, str]) -> bool:
-    text = _REFERENCE_DEFINITION.sub("", text)
-    if any(
-        _METHOD_TERMS.search(f"{label} {target}")
-        for label, target in _METHOD_LINK.findall(text)
-    ):
-        return True
-    for label, reference in _REFERENCE_LINK.findall(text):
-        resolved_reference = reference or label
-        target = definitions.get(_reference_key(resolved_reference))
-        if target and _METHOD_TERMS.search(f"{label} {target}"):
+def _method_link_definitions(text: str) -> dict[str, tuple[str, bool]]:
+    definitions: dict[str, tuple[str, bool]] = {}
+    for line in text.splitlines():
+        definition = _reference_definition(line)
+        if definition is not None:
+            label, target, has_method_term = definition
+            definitions[_reference_key(label)] = (target, has_method_term)
+    return definitions
+
+
+def _has_method_link(text: str, definitions: Mapping[str, tuple[str, bool]]) -> bool:
+    lines = text.splitlines()
+    text = "\n".join(line for line in lines if _reference_definition(line) is None)
+    label_start: int | None = None
+    reference_primary: str | None = None
+    pending_label: tuple[str, int] | None = None
+    inline_link: tuple[str, int, int] | None = None
+    escaped = False
+
+    for index, character in enumerate(text):
+        escaped_character = escaped
+        if character == "\\":
+            escaped = not escaped
+            continue
+        escaped = False
+        if character in "\r\n":
+            escaped_character = False
+
+        if inline_link is not None:
+            label, target_start, depth = inline_link
+            if escaped_character:
+                continue
+            if character == "(":
+                inline_link = (label, target_start, depth + 1)
+            elif character == ")":
+                depth -= 1
+                if depth == 0:
+                    if _METHOD_TERMS.search(label) or _METHOD_TERMS.search(
+                        text[target_start:index]
+                    ):
+                        return True
+                    inline_link = None
+                else:
+                    inline_link = (label, target_start, depth)
+            continue
+
+        if pending_label is not None and pending_label[1] + 1 == index:
+            if character == "[" and not escaped_character:
+                reference_primary = pending_label[0]
+                label_start = index + 1
+                pending_label = None
+                continue
+            elif character == "(" and not escaped_character:
+                inline_link = (pending_label[0], index + 1, 1)
+                pending_label = None
+                continue
+            else:
+                definition = definitions.get(_reference_key(pending_label[0]))
+                if _METHOD_TERMS.search(pending_label[0]) or (
+                    definition is not None and definition[1]
+                ):
+                    return True
+            pending_label = None
+
+        if escaped_character:
+            continue
+        if character == "[":
+            label_start = index + 1
+        elif character == "]":
+            if label_start is not None:
+                label = text[label_start:index]
+                label_start = None
+                if reference_primary is not None:
+                    reference = label or reference_primary
+                    definition = definitions.get(_reference_key(reference))
+                    if (
+                        _METHOD_TERMS.search(reference_primary)
+                        or _METHOD_TERMS.search(label)
+                        or (definition is not None and definition[1])
+                    ):
+                        return True
+                    reference_primary = None
+                else:
+                    pending_label = (label, index)
+        elif label_start is None and character not in " \t\r\n":
+            reference_primary = None
+    if pending_label is not None:
+        definition = definitions.get(_reference_key(pending_label[0]))
+        if _METHOD_TERMS.search(pending_label[0]) or (
+            definition is not None and definition[1]
+        ):
             return True
     return False
 
