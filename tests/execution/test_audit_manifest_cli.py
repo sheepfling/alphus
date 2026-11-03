@@ -18,22 +18,6 @@ from alphus.policy.base import QualityRuleName
 from alphus.policy.catalog import RULE_SPECS
 from alphus.policy.sources import FileInventoryPolicy
 
-_NUMERICAL_SOURCE_RULES: tuple[QualityRuleName, ...] = (
-    "manual-matrix-kernels",
-    "manual-elimination",
-    "array-representation-churn",
-    "cholesky-recurrence",
-    "manual-quaternion-conjugation",
-    "manual-quaternion-products",
-    "manual-quaternion-normalization",
-    "manual-quaternion-inversion",
-    "manual-quaternion-vector-rotation",
-    "manual-quaternion-matrix-conversion",
-    "ecef-enu-transform",
-    "ecef-ned-matrix-transform",
-    "ned-basis-vectors",
-)
-
 
 def _write_manifest(
     root: Path, profile: str, checks: Sequence[AuditManifestCheck]
@@ -49,6 +33,23 @@ def _write_manifest(
         ),
         encoding="utf-8",
     )
+
+
+_NUMERICAL_SOURCE_RULES: tuple[QualityRuleName, ...] = (
+    "manual-matrix-kernels",
+    "manual-elimination",
+    "array-representation-churn",
+    "cholesky-recurrence",
+    "manual-quaternion-conjugation",
+    "manual-quaternion-products",
+    "manual-quaternion-normalization",
+    "manual-quaternion-inversion",
+    "manual-quaternion-vector-rotation",
+    "manual-quaternion-matrix-conversion",
+    "ecef-enu-transform",
+    "ecef-ned-matrix-transform",
+    "ned-basis-vectors",
+)
 
 
 @pytest.mark.parametrize("rule", _NUMERICAL_SOURCE_RULES)
