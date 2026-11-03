@@ -286,6 +286,30 @@ def test_flags_bash_loop_in_indented_blockquote_pwsh_fence(tmp_path: Path) -> No
     assert "Git Bash or WSL" in findings[0].message
 
 
+def test_flags_bash_while_loop_with_separate_do_line_in_powershell_fence(
+    tmp_path: Path,
+) -> None:
+    findings = _check(
+        tmp_path,
+        "```powershell\nwhile true\ndo\n  echo ok\ndone\n```\n",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 2
+    assert "Bash loop syntax" in findings[0].message
+
+
+def test_accepts_bash_while_loop_with_separate_do_line_in_bash_fence(
+    tmp_path: Path,
+) -> None:
+    findings = _check(
+        tmp_path,
+        "```bash\nwhile true\ndo\n  echo ok\ndone\n```\n",
+    )
+
+    assert findings == []
+
+
 def test_ignores_correct_labels_shell_neutral_and_quoted_windows_data(
     tmp_path: Path,
 ) -> None:

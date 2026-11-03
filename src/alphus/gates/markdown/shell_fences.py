@@ -82,7 +82,7 @@ _CMD_COMMAND = re.compile(
     r"for\s+%%?[A-Za-z]\s+in\b.*\bdo\b)"
 )
 _BASH_LOOP = re.compile(r"(?i)^\s*(?:for|select)\s+\$?[A-Za-z_][A-Za-z0-9_]*\s+in\b")
-_BASH_WHILE_LOOP = re.compile(r"(?i)^\s*while\b.*\bdo\b")
+_BASH_WHILE_LOOP = re.compile(r"(?i)^\s*while\b")
 _TRANSCRIPT_PROMPT = re.compile(
     r"^[ \t]*(?:\$[ \t]+|PS(?:[ \t]+[^>\r\n]*)?>[ \t]+|"
     r"[A-Za-z]:\\[^>\r\n]*>[ \t]+|>>>[ \t]+)"
