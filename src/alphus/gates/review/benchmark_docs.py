@@ -170,37 +170,48 @@ def _method_link_definitions(sections: Iterable[str]) -> dict[str, tuple[str, bo
 
 
 def _mask_inline_code_spans(text: str) -> str:
-    runs: dict[int, list[tuple[int, int]]] = {}
+    runs: list[tuple[int, int, int, bool]] = []
     index = 0
+    backslashes = 0
     while index < len(text):
-        if text[index] != "`":
+        character = text[index]
+        if character == "\\":
+            backslashes += 1
+            index += 1
+            continue
+        if character != "`":
+            backslashes = 0
             index += 1
             continue
         end = index + 1
         while end < len(text) and text[end] == "`":
             end += 1
-        runs.setdefault(end - index, []).append((index, end))
+        runs.append((index, end, end - index, backslashes % 2 == 1))
+        backslashes = 0
         index = end
 
+    next_run_by_length: dict[int, int] = {}
+    next_run: list[int] = [-1] * len(runs)
+    for run_index in range(len(runs) - 1, -1, -1):
+        length = runs[run_index][2]
+        next_run[run_index] = next_run_by_length.get(length, -1)
+        next_run_by_length[length] = run_index
+
     spans: list[tuple[int, int]] = []
-    for occurrences in runs.values():
-        spans.extend(
-            (occurrences[offset][0], occurrences[offset + 1][1])
-            for offset in range(0, len(occurrences) - 1, 2)
-        )
+    run_index = 0
+    while run_index < len(runs):
+        start, _, _, escaped = runs[run_index]
+        closing_run = next_run[run_index]
+        if escaped or closing_run < 0:
+            run_index += 1
+            continue
+        spans.append((start, runs[closing_run][1]))
+        run_index = closing_run + 1
     if not spans:
         return text
 
-    spans.sort()
-    merged: list[tuple[int, int]] = []
-    for start, end in spans:
-        if merged and start <= merged[-1][1]:
-            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
-        else:
-            merged.append((start, end))
-
     characters = list(text)
-    for start, end in merged:
+    for start, end in spans:
         characters[start:end] = [
             " " if char not in "\r\n" else char for char in text[start:end]
         ]

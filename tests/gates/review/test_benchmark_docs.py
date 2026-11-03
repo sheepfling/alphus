@@ -270,6 +270,27 @@ def test_inline_code_method_link_does_not_suppress_benchmark_candidate(
     assert findings[0].line == 1
 
 
+def test_escaped_backticks_do_not_hide_a_real_method_link(tmp_path: Path) -> None:
+    root = tmp_path
+    relative = Path("docs/escaped-inline-code-method-link.md")
+    source = root / relative
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "# Benchmarks\n\n"
+        "Scalar: 0.42 ms; vector: 0.13 ms.\n\n"
+        "Literal delimiters: \\`[benchmark methodology](benchmark-method.md)\\`.\n",
+        encoding="utf-8",
+    )
+
+    findings = benchmark_doc_findings(
+        root,
+        [relative],
+        BenchmarkDocPolicy(include=("docs/**",)),
+    )
+
+    assert findings == []
+
+
 def test_reference_definition_alone_does_not_suppress_benchmark_section(
     tmp_path: Path,
 ) -> None:
