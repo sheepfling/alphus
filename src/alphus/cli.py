@@ -77,8 +77,10 @@ from alphus.execution.profile_history import (
 from alphus.execution.results import RuleEvaluation, RuleOutput
 from alphus.execution.scheduler import WorkUnit, run_work_units
 from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
+from alphus.gates.languages.python.script_policy import launcher_files
 from alphus.gates.languages.python.style import StyleFindings
-from alphus.gates.source.cli_policy import CliPolicyReport
+from alphus.gates.review.source_families import bounded_source_family_inventory
+from alphus.gates.source.cli_policy import CliPolicyReport, selected_policy_sources
 from alphus.gates.source.cyclomatic_complexity import (
     CyclomaticReport,
     build_cyclomatic_plan,
@@ -1586,6 +1588,37 @@ def _selected_rule_files(
             selected.append(relative)
         return [relative.as_posix() for relative in selected]
 
+    if rule == "script-policy":
+        policy = config.checks.script_policy
+        if policy is None:
+            return None
+        return [
+            relative.as_posix()
+            for relative in launcher_files(
+                candidate_files(checkout, config.files), policy
+            )
+        ]
+
+    if rule == "cli":
+        policy = config.checks.cli
+        if policy is None:
+            return None
+        python_sources, node_sources = selected_policy_sources(
+            checkout, candidate_files(checkout, config.files), policy
+        )
+        return list(
+            dict.fromkeys(path.as_posix() for path in (*python_sources, *node_sources))
+        )
+
+    if rule == "source-families":
+        policy = config.checks.source_families
+        if policy is None:
+            return None
+        selected, _ = bounded_source_family_inventory(
+            candidate_files(checkout, config.files), policy
+        )
+        return [path.as_posix() for path in selected]
+
     if rule not in _SOURCE_SCAN_RULES:
         return None
     policy = cast(
@@ -1600,7 +1633,7 @@ def _selected_rule_files(
     return [
         relative.as_posix()
         for relative in candidate_files(checkout, config.files)
-        if relative.suffix in policy.extensions
+        if relative.suffix.lower() in policy.extensions
         and not any(
             matches_path(relative.as_posix(), pattern) for pattern in policy.exclude
         )

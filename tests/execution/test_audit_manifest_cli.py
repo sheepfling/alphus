@@ -425,7 +425,7 @@ steps = ["Source families"]
             AuditManifestCheck(
                 check_id="source-families",
                 step="Source families",
-                expected_files=None,
+                expected_files=("src/gateway_client.py",),
             )
         ],
     )
@@ -454,6 +454,120 @@ steps = ["Source families"]
         finding["message"].startswith("Lexical source-family scan incomplete:")
         for finding in payload["steps"][0]["findings"]
     )
+
+
+def test_profile_cli_resolves_remaining_source_rule_inventories(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    source = tmp_path / "src"
+    source.mkdir()
+    (source / "app.py").write_text('name = "app"\n', encoding="utf-8")
+    (source / "source.PY").write_text('name = "upper"\n', encoding="utf-8")
+    (source / "gateway_client.py").write_text('name = "client"\n', encoding="utf-8")
+    (tmp_path / "quality.toml").write_text(
+        """schema_version = 1
+[files]
+include = ["src/*.py", "src/*.PY"]
+[checks.numeric_literals]
+extensions = [".py"]
+[checks.cli.python]
+extensions = [".py"]
+exclude = []
+typer_package = "typer"
+typer_calls = ["Typer"]
+rich_package = "rich"
+rich_calls = ["Console"]
+json_option = "--json"
+json_serializers = ["dumps"]
+verbose_option = "--verbose"
+[checks.script_policy]
+extensions = [".cmd", ".sh"]
+exclude = []
+cmd_router_line_limit = 20
+python_module_prefix = "alphus"
+launcher_message = "review launcher"
+cmd_message = "review cmd"
+[checks.source_families]
+extensions = [".py"]
+include = ["src/**/*.py", "src/**/*.PY"]
+exclude = []
+[orchestration]
+default_profile = "audit"
+[[orchestration.steps]]
+kind = "rule"
+name = "CLI review"
+rule = "cli"
+[[orchestration.steps]]
+kind = "rule"
+name = "Launcher review"
+rule = "script-policy"
+[[orchestration.steps]]
+kind = "rule"
+name = "Source family review"
+rule = "source-families"
+[[orchestration.steps]]
+kind = "rule"
+name = "Numeric review"
+rule = "numeric-literals"
+[[orchestration.profiles]]
+name = "audit"
+steps = ["CLI review", "Launcher review", "Source family review", "Numeric review"]
+""",
+        encoding="utf-8",
+    )
+    subprocess.run(
+        ["git", "-C", str(tmp_path), "add", "src", "quality.toml"], check=True
+    )
+    all_sources = ("src/app.py", "src/gateway_client.py", "src/source.PY")
+    _write_manifest(
+        tmp_path,
+        "audit",
+        [
+            AuditManifestCheck(
+                check_id="cli", step="CLI review", expected_files=all_sources
+            ),
+            AuditManifestCheck(
+                check_id="launcher", step="Launcher review", expected_files=()
+            ),
+            AuditManifestCheck(
+                check_id="families",
+                step="Source family review",
+                expected_files=all_sources,
+            ),
+            AuditManifestCheck(
+                check_id="numeric-upper-suffix",
+                step="Numeric review",
+                expected_files=all_sources,
+            ),
+        ],
+    )
+
+    exit_code = main(
+        [
+            "--root",
+            str(tmp_path),
+            "--config",
+            "quality.toml",
+            "--json",
+            "--audit-manifest",
+            "audit.json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    checks = {row["check_id"]: row for row in payload["audit_completion"]["checks"]}
+
+    assert exit_code == 2, json.dumps(payload, indent=2)
+    assert checks["cli"]["complete"] is True
+    assert checks["cli"]["selected_files"] == list(all_sources)
+    assert checks["launcher"]["status"] == "empty_inventory"
+    assert checks["launcher"]["complete"] is False
+    assert checks["families"]["complete"] is True
+    assert checks["families"]["selected_files"] == list(all_sources)
+    assert checks["numeric-upper-suffix"]["complete"] is True, json.dumps(
+        payload, indent=2
+    )
+    assert checks["numeric-upper-suffix"]["selected_files"] == list(all_sources)
 
 
 def test_profile_cli_keeps_inconclusive_cli_presentation_incomplete(
@@ -513,7 +627,11 @@ steps = ["CLI review"]
     _write_manifest(
         tmp_path,
         "audit",
-        [AuditManifestCheck(check_id="cli", step="CLI review", expected_files=None)],
+        [
+            AuditManifestCheck(
+                check_id="cli", step="CLI review", expected_files=("src/app.py",)
+            )
+        ],
     )
 
     exit_code = main(
