@@ -511,9 +511,14 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                     body_state = scan(body, current)
                     normal_state = scan(orelse, body_state) if orelse else body_state
                     paths = [normal_state]
-                    exception_state = _common_bindings([current, body_state])
+                    handler_dispatch_state = _common_bindings([current, body_state])
                     for handler in handlers:
-                        handler_state = exception_state.copy()
+                        handler_state = handler_dispatch_state.copy()
+                        # Handler types are evaluated in order while Python
+                        # searches for a match, before entering each suite.
+                        for name in _named_expression_names(handler.type):
+                            handler_state.pop(name, None)
+                        handler_dispatch_state = handler_state.copy()
                         if handler.name is not None:
                             # Exception aliases bind in the handler suite and
                             # replace any prior rendered value of that name.

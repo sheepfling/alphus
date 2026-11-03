@@ -622,6 +622,32 @@ def test_exception_alias_invalidates_rendered_binding_in_handler(star: str) -> N
     assert _sites(source, ("render",)) == []
 
 
+def test_exception_type_walrus_invalidates_rendered_binding() -> None:
+    source = """\
+def f(text, original):
+    rendered = render(text)
+    try:
+        raise ValueError()
+    except ((rendered := original), ValueError)[1]:
+        if rendered.rstrip().endswith("!"):
+            return True
+"""
+    assert _sites(source, ("render",)) == []
+
+
+def test_unrelated_exception_type_walrus_preserves_rendered_binding() -> None:
+    source = """\
+def f(text, original):
+    rendered = render(text)
+    try:
+        raise ValueError()
+    except ((other := original), ValueError)[1]:
+        if rendered.rstrip().endswith("!"):
+            return True
+"""
+    assert _sites(source, ("render",)) == [(2, 6, "rendered")]
+
+
 def test_match_capture_invalidates_prior_rendered_binding_within_case() -> None:
     source = """\
 def f(text):
