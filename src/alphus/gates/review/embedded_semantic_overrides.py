@@ -121,10 +121,16 @@ def _current_scope_nodes(
             # A local annotation without a value does not replace an existing
             # value in the enclosing function's local namespace.
             return
+        case ast.GeneratorExp(generators=generators):
+            # A generator is lazy: only its first iterable runs when it is
+            # constructed. Targets, later iterables, filters, and its element
+            # do not write to the enclosing scope until iteration.
+            if generators:
+                yield from _current_scope_nodes(generators[0].iter, shadowed)
+            return
         case (
             ast.ListComp(generators=generators, elt=element)
             | ast.SetComp(generators=generators, elt=element)
-            | ast.GeneratorExp(generators=generators, elt=element)
         ):
             local_names = shadowed
             for generator in generators:

@@ -130,6 +130,32 @@ def render(cell, callbacks):
     assert embedded_override_sites(source, _policy()) == []
 
 
+def test_lazy_generator_body_walrus_preserves_mapped_replacement() -> None:
+    source = """\
+def render(cell, original):
+    replacement = fixed_paragraphs.get(cell.attribute)
+    updates = ((replacement := original) for _ in range(1))
+    if replacement is not None:
+        return source_anchor(cell.id) + replacement
+    return cell.text
+"""
+    assert embedded_override_sites(source, _policy()) == [
+        ("render", 2, 4, "replacement")
+    ]
+
+
+def test_generator_outer_iterable_walrus_invalidates_mapped_replacement() -> None:
+    source = """\
+def render(cell, originals):
+    replacement = fixed_paragraphs.get(cell.attribute)
+    updates = (item for item in (replacement := originals))
+    if replacement is not None:
+        return source_anchor(cell.id) + replacement
+    return cell.text
+"""
+    assert embedded_override_sites(source, _policy()) == []
+
+
 def test_definition_time_walrus_invalidates_replacement() -> None:
     source = """\
 def render(cell):
