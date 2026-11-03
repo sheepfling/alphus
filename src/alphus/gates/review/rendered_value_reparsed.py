@@ -406,6 +406,18 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                     # A passing assertion evaluates its test before later code.
                     for name in _named_expression_names(test):
                         current.pop(name, None)
+                case ast.Return(value=value):
+                    # Return values are evaluated before a surrounding finally
+                    # suite runs, so their walrus writes change that state.
+                    for name in _named_expression_names(value):
+                        current.pop(name, None)
+                case ast.Raise(exc=exception, cause=cause):
+                    # Both the raised expression and its explicit cause are
+                    # evaluated before control enters an enclosing finally.
+                    for name in _named_expression_names(exception):
+                        current.pop(name, None)
+                    for name in _named_expression_names(cause):
+                        current.pop(name, None)
                 case ast.Import(names=aliases):
                     # An import binds its alias (or the top-level package name)
                     # in the local scope, replacing any previously rendered value.

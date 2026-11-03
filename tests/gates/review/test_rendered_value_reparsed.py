@@ -459,6 +459,28 @@ def f(text, other):
     assert _sites(source, ("render",)) == []
 
 
+@pytest.mark.parametrize(
+    "exit_statement",
+    [
+        "return (rendered := original)",
+        "raise (rendered := original)",
+    ],
+)
+def test_return_and_raise_walruses_invalidate_finally_rendered_binding(
+    exit_statement: str,
+) -> None:
+    source = f"""\
+def f(text, original):
+    rendered = render(text)
+    try:
+        {exit_statement}
+    finally:
+        if rendered.rstrip().endswith("!"):
+            return True
+"""
+    assert _sites(source, ("render",)) == []
+
+
 def test_finally_predicate_accepts_a_binding_preserved_on_all_paths() -> None:
     source = """\
 def f(text):
