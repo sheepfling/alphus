@@ -197,13 +197,12 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                 case ast.Expr(value=value):
                     # Walrus targets in evaluated expression statements can
                     # replace a previously rendered value before later tests.
-                    for node in ast.walk(value):
-                        match node:
-                            case ast.NamedExpr(target=target):
-                                for name in _target_names(target):
-                                    current.pop(name, None)
-                            case _:
-                                continue
+                    for name in _named_expression_names(value):
+                        current.pop(name, None)
+                case ast.Assert(test=test):
+                    # A passing assertion evaluates its test before later code.
+                    for name in _named_expression_names(test):
+                        current.pop(name, None)
                 case ast.Import(names=aliases):
                     # An import binds its alias (or the top-level package name)
                     # in the local scope, replacing any previously rendered value.

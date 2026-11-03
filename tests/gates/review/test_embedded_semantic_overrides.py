@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from alphus.config import EmbeddedSemanticOverridePolicy
 from alphus.gates.review.embedded_semantic_overrides import (
     check_embedded_semantic_overrides,
@@ -62,6 +64,40 @@ def render(cell):
         return source_anchor(cell.id) + replacement
 """
     assert embedded_override_sites(source, _policy()) == []
+
+
+@pytest.mark.parametrize(
+    "import_statement",
+    [
+        "from constants import ORIGINAL_TEXT as replacement",
+        "import constants as replacement",
+    ],
+)
+def test_import_rebinding_invalidates_mapped_replacement(
+    import_statement: str,
+) -> None:
+    source = (
+        "def render(cell):\n"
+        "    replacement = fixed_paragraphs.get(cell.attribute)\n"
+        f"    {import_statement}\n"
+        "    if replacement is not None:\n"
+        "        return source_anchor(cell.id) + replacement\n"
+    )
+
+    assert embedded_override_sites(source, _policy()) == []
+
+
+def test_unrelated_import_does_not_invalidate_mapped_replacement() -> None:
+    source = (
+        "def render(cell):\n"
+        "    replacement = fixed_paragraphs.get(cell.attribute)\n"
+        "    from constants import RAW_TEXT as original_text\n"
+        "    if replacement is not None:\n"
+        "        return source_anchor(cell.id) + replacement\n"
+    )
+    assert embedded_override_sites(source, _policy()) == [
+        ("render", 2, 4, "replacement")
+    ]
 
 
 def test_reports_only_configured_scope_and_honors_exclusions(tmp_path: Path) -> None:

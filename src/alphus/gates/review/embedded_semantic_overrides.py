@@ -71,6 +71,15 @@ def _replacement_return(
 def _stores_name(statement: ast.AST, name: str) -> bool:
     for node in ast.walk(statement):
         match node:
+            case ast.Import(names=aliases) if any(
+                (alias.asname or alias.name.split(".")[0]) == name for alias in aliases
+            ):
+                return True
+            case ast.ImportFrom(names=aliases) if any(
+                alias.name == "*" or (alias.asname or alias.name) == name
+                for alias in aliases
+            ):
+                return True
             case ast.Name(id=stored, ctx=ast.Store() | ast.Del()) if stored == name:
                 return True
             case _:

@@ -206,6 +206,28 @@ def f(text, original):
     assert _sites(source, ("render",)) == [(2, 4, "rendered")]
 
 
+def test_assertion_walrus_invalidates_rendered_binding() -> None:
+    source = (
+        "def f(text, original):\n"
+        "    rendered = render(text)\n"
+        "    assert (rendered := original)\n"
+        "    if rendered.rstrip().endswith('!'):\n"
+        "        return True\n"
+    )
+    assert _sites(source, ("render",)) == []
+
+
+def test_unrelated_assertion_walrus_preserves_rendered_binding() -> None:
+    source = (
+        "def f(text, original):\n"
+        "    rendered = render(text)\n"
+        "    assert (other := original)\n"
+        "    if rendered.rstrip().endswith('!'):\n"
+        "        return True\n"
+    )
+    assert _sites(source, ("render",)) == [(2, 4, "rendered")]
+
+
 @pytest.mark.parametrize(
     "statement",
     [
