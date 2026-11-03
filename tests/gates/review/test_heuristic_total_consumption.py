@@ -54,6 +54,21 @@ def test_annotation_only_name_preserves_selected_function_evidence() -> None:
 
 
 @pytest.mark.parametrize(
+    "signature",
+    [
+        "def preserve_text(text: str, re: object) -> list[str]:",
+        "def preserve_text(text: str, *re: object) -> list[str]:",
+        "def preserve_text(text: str, **re: object) -> list[str]:",
+    ],
+)
+def test_parameter_shadowing_configured_helper_root_abstains(
+    signature: str,
+) -> None:
+    source = _DIRECT.replace("def preserve_text(text: str) -> list[str]:", signature)
+    assert heuristic_total_consumption_sites(source, _policy()) == []
+
+
+@pytest.mark.parametrize(
     "source",
     [
         _DIRECT.replace("re.findall", "re.finditer"),

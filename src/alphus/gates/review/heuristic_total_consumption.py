@@ -59,16 +59,21 @@ def _scope_nodes(root: ast.AST) -> Iterable[ast.AST]:
 
 
 def _input_name(function: ast.FunctionDef, configured: tuple[str, ...]) -> str | None:
-    arguments = {
+    matched = _parameter_names(function) & set(configured)
+    return next(iter(matched)) if len(matched) == 1 else None
+
+
+def _parameter_names(function: ast.FunctionDef) -> set[str]:
+    return {
         argument.arg
         for argument in (
             *function.args.posonlyargs,
             *function.args.args,
             *function.args.kwonlyargs,
+            *((function.args.vararg,) if function.args.vararg is not None else ()),
+            *((function.args.kwarg,) if function.args.kwarg is not None else ()),
         )
     }
-    matched = arguments & set(configured)
-    return next(iter(matched)) if len(matched) == 1 else None
 
 
 def _matched_input(
@@ -78,6 +83,9 @@ def _matched_input(
 ) -> tuple[str, str] | None:
     helper = _qualified_name(call.func)
     if helper not in policy.token_match_helpers:
+        return None
+    helper_root = helper.split(".", 1)[0]
+    if helper_root in _parameter_names(function):
         return None
     input_name = _input_name(function, policy.input_names)
     if input_name is None:
