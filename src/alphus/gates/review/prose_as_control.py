@@ -200,6 +200,7 @@ def _regex_consumes_digit(pattern: str) -> bool:
     assertion_depth = 0
     in_character_class = False
     class_is_negated = False
+    class_first_position = False
     class_has_digit = False
     verbose = False
     index = 0
@@ -226,6 +227,8 @@ def _regex_consumes_digit(pattern: str) -> bool:
             continue
         if character == "\\" and index + 1 < len(pattern):
             escaped = pattern[index + 1]
+            if in_character_class:
+                class_first_position = False
             if escaped == "d" and assertion_depth == 0:
                 if in_character_class:
                     if not class_is_negated:
@@ -239,9 +242,22 @@ def _regex_consumes_digit(pattern: str) -> bool:
             index += 2
             continue
         if in_character_class:
+            if class_first_position:
+                if character == "^" and not class_is_negated:
+                    class_is_negated = True
+                    index += 1
+                    continue
+                if character == "]":
+                    # In Python regex syntax, a leading closing bracket is a
+                    # literal member, including just after a class negator.
+                    class_first_position = False
+                    index += 1
+                    continue
+                class_first_position = False
             if character == "]":
                 in_character_class = False
                 class_is_negated = False
+                class_first_position = False
                 if class_has_digit and not _zero_repetition_follows(
                     pattern, index + 1, verbose=verbose
                 ):
@@ -261,7 +277,8 @@ def _regex_consumes_digit(pattern: str) -> bool:
             continue
         if character == "[":
             in_character_class = True
-            class_is_negated = pattern.startswith("[^", index)
+            class_is_negated = False
+            class_first_position = True
             class_has_digit = False
             index += 1
             continue

@@ -115,6 +115,20 @@ consuming = re.sub(r"(?=\d)\d+", "", text)
     ) == [(6, r"(?=\d)\d+")]
 
 
+def test_lossy_regex_rewrite_tracks_leading_literal_close_brackets() -> None:
+    source = r"""\
+negated_class = re.sub(r"[^]\d]+", "", text)
+zero_count = re.sub(r"[]\d]{0}", "", text)
+positive_class = re.sub(r"[]\d]+", "", text)
+"""
+
+    assert lossy_rewrite_lines(
+        source, _policy(lossy_text_rewrite=True, regex_sub_helpers=("re.sub",))
+    ) == [(4, r"[]\d]+")]
+    assert re.sub(r"[^]\d]+", "", "abc123]def") == "123]"
+    assert re.sub(r"[]\d]{0}", "", "123") == "123"
+
+
 def test_lossy_regex_rewrite_preserves_verbose_brace_semantics() -> None:
     source = r'''\
 zero_count = re.sub(r"\d{0}", "", text)
