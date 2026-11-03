@@ -52,6 +52,8 @@ _QUOTED_POWERSHELL_DELEGATION = re.compile(
     r"-Command[ \t]+(?P<quote>['\"])"
 )
 _CMD_ENV = re.compile(r"%[A-Za-z_][A-Za-z0-9_]*%")
+_URL_TOKEN = re.compile(r"(?i)\b(?:https?://|ftp://|www\.)[^\s'\"<>]+")
+_URL_PERCENT_ESCAPE = re.compile(r"%[0-9a-f]{2}", re.IGNORECASE)
 _PRINTF_FORMAT_COMMAND = re.compile(
     r"(?:^[ \t]*|(?:&&|\|\||[;&|()])[ \t]*)"
     r"(?:(?:command|builtin)[ \t]+)?(?P<command>printf)\b"
@@ -400,7 +402,7 @@ def _first_match(
 
 
 def _cmd_environment_evidence(lines: Sequence[_SourceLine]) -> _Evidence | None:
-    """Find cmd expansion without mistaking date and printf format directives."""
+    """Find cmd expansion without mistaking common percent-encoded text."""
     in_date_continuation = False
     in_printf_continuation = False
     for source in lines:
@@ -425,10 +427,22 @@ def _cmd_environment_evidence(lines: Sequence[_SourceLine]) -> _Evidence | None:
             in_date_continuation = trailing_backslashes % 2 == 1
         else:
             in_date_continuation = False
+        candidate = _mask_url_percent_escapes(candidate)
         match = _CMD_ENV.search(candidate)
         if match is not None:
             return _Evidence("cmd", source.number, match.group(0))
     return None
+
+
+def _mask_url_percent_escapes(line: str) -> str:
+    """Ignore percent-encoded bytes inside URL-like tokens."""
+    visible = list(line)
+    for match in _URL_TOKEN.finditer(line):
+        url = match.group()
+        for escape in _URL_PERCENT_ESCAPE.finditer(url):
+            start = match.start() + escape.start()
+            visible[start : start + len(escape.group())] = " " * len(escape.group())
+    return "".join(visible)
 
 
 def _mask_printf_format_argument(

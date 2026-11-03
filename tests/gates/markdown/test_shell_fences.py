@@ -97,6 +97,20 @@ def test_date_format_percent_tokens_are_not_cmd_environment_evidence(
     assert "cmd syntax" in findings[0].message
 
 
+def test_url_percent_escapes_are_not_cmd_environment_evidence(
+    tmp_path: Path,
+) -> None:
+    findings = _check(
+        tmp_path,
+        "```bash\ncurl https://example.com/%E2%82%AC\necho %PATH%\n````\n",
+    )
+
+    assert [finding.line for finding in findings] == [3]
+    assert findings[0].message.endswith(
+        'cmd syntax "%PATH%"; verify the intended shell with the author'
+    )
+
+
 @pytest.mark.parametrize(
     "date_command",
     [
