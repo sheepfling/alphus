@@ -298,6 +298,67 @@ class SourceFamilyPolicy(StrictModel):
         return tuple(values)
 
 
+class BenchmarkDocException(StrictModel):
+    """One exact document section exempted with a reviewable reason."""
+
+    path: str
+    section: str
+    reason: str
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, value: str) -> str:
+        return validate_single_path(value, "benchmark documentation exception paths")
+
+    @field_validator("section", "reason")
+    @classmethod
+    def validate_text(cls, value: str) -> str:
+        return validate_one_line_message(value)
+
+    @field_validator("reason")
+    @classmethod
+    def require_reason(cls, value: str) -> str:
+        if len(value.strip()) < 20:
+            raise ValueError(
+                "benchmark documentation exception reasons need 20 characters"
+            )
+        return value
+
+
+class BenchmarkDocPolicy(StrictModel):
+    """Opt-in bounded review of benchmark prose in selected Markdown files."""
+
+    include: Annotated[tuple[str, ...], Field(min_length=1)]
+    exclude: tuple[str, ...] = ()
+    historical_report_patterns: tuple[str, ...] = (
+        "**/benchmarks/**",
+        "**/benchmark-reports/**",
+        "**/*benchmark-report*.md",
+    )
+    exceptions: tuple[BenchmarkDocException, ...] = ()
+    min_measurements: Annotated[int, Field(ge=2, le=20)] = 2
+    max_files: Annotated[int, Field(ge=1, le=20_000)] = 200
+    max_file_bytes: Annotated[int, Field(ge=1_024, le=5_000_000)] = 1_000_000
+    max_findings: Annotated[int, Field(ge=1, le=200)] = 20
+
+    @field_validator("include", "exclude", "historical_report_patterns")
+    @classmethod
+    def validate_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("exceptions")
+    @classmethod
+    def validate_exceptions(
+        cls, values: Sequence[BenchmarkDocException]
+    ) -> tuple[BenchmarkDocException, ...]:
+        exceptions = tuple(values)
+        require_unique(
+            tuple((item.path, item.section) for item in exceptions),
+            "benchmark documentation exceptions must have unique path and section pairs",
+        )
+        return exceptions
+
+
 class PositionalInterfacePolicy(PythonSourceScanPolicy):
     """Opt-in advisory for directly annotated, same-type positional parameters."""
 

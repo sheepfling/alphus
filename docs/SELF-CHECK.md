@@ -73,7 +73,7 @@ and file-backed module loading remains rejected.
 `docs/**/*.md`, and all repository TOML and JSON files. The profile retains
 the eight original portable rules, the target-audit isolation rule, and Python
 lint/package tests, then adds
-TOML syntax, Python formatting, strict Pyright, and five review checks.
+TOML syntax, Python formatting, strict Pyright, and six review checks.
 The separate `json` profile is available when JSON documents are
 added to this repository. The global
 `[files].exclude` is empty.

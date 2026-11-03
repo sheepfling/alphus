@@ -68,6 +68,8 @@ from alphus.policy.repository import (
     VersionSyncPolicy,
 )
 from alphus.policy.review import (
+    BenchmarkDocException,
+    BenchmarkDocPolicy,
     ErrorCodeCallSpec,
     FastApiFindingOverride,
     FastApiPracticePolicy,
@@ -107,6 +109,8 @@ from alphus.support.source_text import read_utf8_text
 __all__ = [
     "ArchitectureGraphCheckPolicy",
     "ArchitectureGraphPolicy",
+    "BenchmarkDocException",
+    "BenchmarkDocPolicy",
     "CallableRegistryPolicy",
     "CheckPolicies",
     "CliPolicy",

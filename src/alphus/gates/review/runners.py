@@ -9,6 +9,7 @@ from typing import TypeAlias
 
 from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.execution.results import RuleOutput
+from alphus.gates.review.benchmark_docs import check_benchmark_docs
 from alphus.gates.review.frameworks.fastapi_practices import check_fastapi_practices
 from alphus.gates.review.frameworks.pydantic_practices import check_pydantic_practices
 from alphus.gates.review.frameworks.sqlalchemy_practices import (
@@ -52,6 +53,11 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
             root,
             files,
             require_policy(config.checks.source_families, "source_families"),
+        ),
+        "benchmark-docs": lambda root, files, config: check_benchmark_docs(
+            root,
+            files,
+            require_policy(config.checks.benchmark_docs, "benchmark_docs"),
         ),
         "positional-interfaces": lambda root, files, config: (
             check_positional_interfaces(

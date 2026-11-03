@@ -696,3 +696,55 @@ hygiene control: splitting files below a limit does not demonstrate improved
 cohesion. Dependency, responsibility, public-surface, and history analysis are
 not part of this first slice. Fewer files, renamed prefixes, or a new directory
 do not by themselves demonstrate better boundaries.
+
+## Durable benchmark prose review
+
+Selector: `benchmark-docs`. This opt-in Markdown review finds section-level
+candidates when benchmark language appears with a cluster of duration,
+throughput, or comparative measurements. It reports a source path and heading
+and asks for human review. It does not decide whether a result is stale, wrong,
+or unsuitable, and it does not infer that context is missing from nearby prose.
+Links to methodology, protocol, reproducibility, or benchmark commands suppress
+that section because relevant context may live elsewhere.
+
+The rule scans only Markdown files selected by the consumer's `include` globs.
+Use `exclude` for local scope decisions. Historical report directories and
+filenames matching `historical_report_patterns` are skipped by default; set the
+list to `[]` only when those reports should also be reviewed. Exact
+path-and-heading exceptions require a reason of at least twenty characters.
+`max_files`, `max_file_bytes`, and `max_findings` bound work and output. If the
+file inventory is truncated or a selected file cannot be read, the rule reports
+an incomplete-scope status instead of implying that every selected document was
+analyzed. A successful scan with no finding means no candidate matched within
+the configured, readable scope; it is not a semantic cleanliness claim.
+
+```toml
+[checks.benchmark_docs]
+include = ["README.md", "docs/performance/**"]
+exclude = ["docs/generated/**"]
+historical_report_patterns = [
+  "**/benchmarks/**",
+  "**/benchmark-reports/**",
+  "**/*benchmark-report*.md",
+]
+max_files = 100
+max_file_bytes = 1000000
+max_findings = 20
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Durable benchmark prose review"
+rule = "benchmark-docs"
+rollout = "provisional"
+```
+
+Keep a concise workload description and reproducible benchmark command in
+current-facing documentation when useful. When detailed, machine-specific
+measurements need to be retained, consider a dated report that is explicitly
+maintained. The checker never runs benchmarks or asks consumers to check in
+machine-specific benchmark JSON. Labeled positive, negative, and boundary
+examples in the scanner tests cover duration prose, throughput, speedup ratios,
+routine timeout/install waits, software versions, fenced examples, linked
+methods, historical report paths, and exact scoped exceptions. These examples
+exercise candidate generation; they do not establish precision or enforcement
+performance.

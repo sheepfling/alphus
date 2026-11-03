@@ -40,6 +40,7 @@ QualityRuleName: TypeAlias = Literal[
     "test-quality",
     "input-contracts",
     "source-families",
+    "benchmark-docs",
     "positional-interfaces",
     "pydantic-practices",
     "fastapi-practices",
