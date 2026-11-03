@@ -82,6 +82,12 @@ def _stores_name(statement: ast.AST, name: str) -> bool:
                 return True
             case ast.Name(id=stored, ctx=ast.Store() | ast.Del()) if stored == name:
                 return True
+            case ast.MatchAs(name=stored) | ast.MatchStar(name=stored) if (
+                stored == name
+            ):
+                return True
+            case ast.MatchMapping(rest=stored) if stored == name:
+                return True
             case _:
                 continue
     return False

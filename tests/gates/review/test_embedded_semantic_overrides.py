@@ -66,6 +66,19 @@ def render(cell):
     assert embedded_override_sites(source, _policy()) == []
 
 
+def test_pattern_capture_rebinding_invalidates_mapped_replacement() -> None:
+    source = """\
+def render(cell):
+    replacement = fixed_paragraphs.get(cell.attribute)
+    match cell.text:
+        case str() as replacement:
+            pass
+    if replacement is not None:
+        return source_anchor(cell.id) + replacement
+"""
+    assert embedded_override_sites(source, _policy()) == []
+
+
 @pytest.mark.parametrize(
     "import_statement",
     [
