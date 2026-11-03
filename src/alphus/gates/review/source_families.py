@@ -1422,6 +1422,18 @@ def _javascript_import_evidence(
     return context, notes
 
 
+def bounded_source_family_inventory(
+    paths: Iterable[Path], policy: _SourceFamilyPolicy
+) -> tuple[list[Path], bool]:
+    """Return the exact bounded inventory consumed by the source-family scan."""
+    bounded = nsmallest(
+        policy.max_files + 1,
+        _selected_paths(paths, policy),
+        key=lambda path: path.as_posix(),
+    )
+    return bounded[: policy.max_files], len(bounded) > policy.max_files
+
+
 def source_family_findings(
     root: Path, paths: Iterable[Path], policy: _SourceFamilyPolicy
 ) -> list[Finding]:
@@ -1429,13 +1441,7 @@ def source_family_findings(
     checkout = root.resolve(strict=True)
     # Keep at most one sentinel beyond the configured inventory bound. Sorting the
     # bounded selection makes both processing and truncation deterministic.
-    bounded = nsmallest(
-        policy.max_files + 1,
-        _selected_paths(paths, policy),
-        key=lambda path: path.as_posix(),
-    )
-    inventory_truncated = len(bounded) > policy.max_files
-    selected = bounded[: policy.max_files]
+    selected, inventory_truncated = bounded_source_family_inventory(paths, policy)
     incomplete_notes: list[str] = []
     rule_id = rule_tag(
         Scope.ANY, Framework.NONE, Category.MAINTAINABILITY, "flat-source-family"
