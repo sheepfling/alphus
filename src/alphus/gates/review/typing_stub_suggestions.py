@@ -18,6 +18,7 @@ from packaging.version import Version
 from alphus.config import TypingStubCandidate, TypingStubSuggestionPolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_utf8_text
 
 _RULE_ID = rule_tag(
@@ -199,6 +200,9 @@ def check_typing_stub_suggestions(
     input_findings: list[Finding] = []
     for relative in sorted(paths):
         if relative.suffix != ".py" or not (checkout / relative).is_file():
+            continue
+        relative_name = relative.as_posix()
+        if any(matches_path(relative_name, pattern) for pattern in policy.exclude):
             continue
         try:
             source = read_utf8_text(checkout / relative)
@@ -389,7 +393,7 @@ def check_typing_stub_suggestions(
             )
             continue
         package_path = PurePosixPath(
-            candidate.package_path or candidate.import_name.split(".")[0]
+            candidate.package_path or candidate.import_name.replace(".", "/")
         )
         package_parts = package_path.parts
         runtime_files = runtime.files

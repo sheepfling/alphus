@@ -374,6 +374,66 @@ def test_unparseable_source_is_not_reported_as_executed_zero(
     assert "syntax could not be parsed" in findings[0].message
 
 
+def test_excluded_python_paths_are_not_read_or_used_for_recommendations(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    _checkout(tmp_path)
+    excluded = tmp_path / "tests" / "fixture.py"
+    excluded.parent.mkdir()
+    excluded.write_text("import yaml\nif\n", encoding="utf-8")
+    policy = _policy().model_copy(update={"exclude": ("**/tests/**",)})
+
+    def unexpected_parse(source: str) -> None:
+        raise AssertionError("excluded sources must not be parsed")
+
+    monkeypatch.setattr(gate, "_imports", unexpected_parse)
+    findings = gate.check_typing_stub_suggestions(
+        tmp_path, (Path("tests/fixture.py"),), policy
+    )
+
+    assert findings == []
+
+
+def test_dotted_custom_import_defaults_to_full_package_path(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    _checkout(tmp_path)
+    (tmp_path / "app.py").write_text("import google.cloud.storage\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\ndependencies = ["PyYAML>=6,<7"]\n'
+        "[project.optional-dependencies]\ntyping = []\n",
+        encoding="utf-8",
+    )
+    candidate = TypingStubCandidate(
+        import_name="google.cloud.storage",
+        runtime_distribution="PyYAML",
+        stub_distribution="types-example",
+        supported_runtime_versions=">=6,<7",
+        supported_python_versions=">=3.11,<4",
+        checkers=("mypy",),
+        stub_version_specifier=">=1",
+    )
+    policy = _policy().model_copy(update={"candidates": (candidate,)})
+    monkeypatch.setattr(
+        gate.metadata,
+        "distribution",
+        lambda _: type(
+            "TypedDottedDistribution",
+            (),
+            {
+                "version": "6.0.2",
+                "files": (Path("google/cloud/storage/py.typed"),),
+            },
+        )(),
+    )
+    monkeypatch.setattr(gate, "_checker_installation", lambda checkers: "mypy 2.3")
+
+    assert (
+        gate.check_typing_stub_suggestions(tmp_path, _python_sources(tmp_path), policy)
+        == []
+    )
+
+
 @pytest.mark.parametrize(
     ("source", "expected"),
     [
