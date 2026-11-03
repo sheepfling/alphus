@@ -68,6 +68,153 @@ def _parameter_names(
     )
 
 
+def _local_helper_bindings(
+    function: ast.FunctionDef | ast.AsyncFunctionDef, roots: frozenset[str]
+) -> frozenset[str]:
+    class Bindings(ast.NodeVisitor):
+        def __init__(self) -> None:
+            self.names: set[str] = set()
+
+        def _add(self, name: str | None) -> None:
+            if name in roots:
+                self.names.add(name)
+
+        def visit_Name(self, node: ast.Name) -> None:
+            match node.ctx:
+                case ast.Store() | ast.Del():
+                    self._add(node.id)
+                case _:
+                    return
+
+        def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
+            if isinstance(node.target, ast.Name):
+                self._add(node.target.id)
+            else:
+                self.visit(node.target)
+            self.visit(node.annotation)
+            if node.value is not None:
+                self.visit(node.value)
+
+        def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+            self._add(node.name)
+            self._visit_definition_time(node)
+
+        def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+            self._add(node.name)
+            self._visit_definition_time(node)
+
+        def _visit_definition_time(
+            self, node: ast.FunctionDef | ast.AsyncFunctionDef
+        ) -> None:
+            arguments = node.args
+            for expression in (
+                *node.decorator_list,
+                *arguments.defaults,
+                *(item for item in arguments.kw_defaults if item is not None),
+                *(
+                    argument.annotation
+                    for argument in (
+                        *arguments.posonlyargs,
+                        *arguments.args,
+                        *arguments.kwonlyargs,
+                    )
+                    if argument.annotation is not None
+                ),
+                *(
+                    [arguments.vararg.annotation]
+                    if arguments.vararg is not None
+                    and arguments.vararg.annotation is not None
+                    else []
+                ),
+                *(
+                    [arguments.kwarg.annotation]
+                    if arguments.kwarg is not None
+                    and arguments.kwarg.annotation is not None
+                    else []
+                ),
+                *([node.returns] if node.returns is not None else []),
+            ):
+                self.visit(expression)
+
+        def visit_ClassDef(self, node: ast.ClassDef) -> None:
+            self._add(node.name)
+            for expression in (*node.decorator_list, *node.bases):
+                self.visit(expression)
+            for keyword in node.keywords:
+                self.visit(keyword.value)
+
+        def visit_Lambda(self, node: ast.Lambda) -> None:
+            for expression in (
+                *node.args.defaults,
+                *(item for item in node.args.kw_defaults if item is not None),
+            ):
+                self.visit(expression)
+
+        def _visit_comprehension(
+            self,
+            generators: Sequence[ast.comprehension],
+            values: Sequence[ast.expr],
+        ) -> None:
+            for generator in generators:
+                self.visit(generator.iter)
+                for condition in generator.ifs:
+                    self.visit(condition)
+            for value in values:
+                self.visit(value)
+
+        def visit_ListComp(self, node: ast.ListComp) -> None:
+            self._visit_comprehension(node.generators, (node.elt,))
+
+        def visit_SetComp(self, node: ast.SetComp) -> None:
+            self._visit_comprehension(node.generators, (node.elt,))
+
+        def visit_GeneratorExp(self, node: ast.GeneratorExp) -> None:
+            self._visit_comprehension(node.generators, (node.elt,))
+
+        def visit_DictComp(self, node: ast.DictComp) -> None:
+            self._visit_comprehension(node.generators, (node.key, node.value))
+
+        def visit_Import(self, node: ast.Import) -> None:
+            for alias in node.names:
+                self._add(alias.asname or alias.name.split(".", 1)[0])
+
+        def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+            for alias in node.names:
+                self._add(alias.asname or alias.name if alias.name != "*" else None)
+                if alias.name == "*":
+                    self.names.update(roots)
+
+        def visit_ExceptHandler(self, node: ast.ExceptHandler) -> None:
+            self._add(node.name)
+            if node.type is not None:
+                self.visit(node.type)
+            for statement in node.body:
+                self.visit(statement)
+
+        def visit_Global(self, node: ast.Global) -> None:
+            self.names.update(set(node.names) & set(roots))
+
+        def visit_Nonlocal(self, node: ast.Nonlocal) -> None:
+            self.names.update(set(node.names) & set(roots))
+
+        def visit_MatchAs(self, node: ast.MatchAs) -> None:
+            self._add(node.name)
+            if node.pattern is not None:
+                self.visit(node.pattern)
+
+        def visit_MatchStar(self, node: ast.MatchStar) -> None:
+            self._add(node.name)
+
+        def visit_MatchMapping(self, node: ast.MatchMapping) -> None:
+            self._add(node.rest)
+            self.generic_visit(node)
+
+    visitor = Bindings()
+    for statement in function.body:
+        visitor.visit(statement)
+    return frozenset(visitor.names)
+
+
 def _is_configured_renderer(
     function: ast.expr, helpers: tuple[str, ...], shadowed_roots: frozenset[str]
 ) -> bool:
@@ -445,10 +592,10 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
     for node in ast.walk(tree):
         match node:
             case ast.FunctionDef() | ast.AsyncFunctionDef() as function:
-                shadowed_helper_roots = frozenset(
-                    helper.split(".", 1)[0]
-                    for helper in helpers
-                    if helper.split(".", 1)[0] in _parameter_names(function)
+                helper_roots = frozenset(helper.split(".", 1)[0] for helper in helpers)
+                shadowed_helper_roots = helper_roots & (
+                    _parameter_names(function)
+                    | _local_helper_bindings(function, helper_roots)
                 )
                 scan(function.body, {})
             case _:

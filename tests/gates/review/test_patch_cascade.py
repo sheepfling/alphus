@@ -147,6 +147,37 @@ def parse_document(repair_id, text, normalize_text):
     assert patch_cascade_sites(source, _policy()) == []
 
 
+@pytest.mark.parametrize("variadic", ["*normalize_text", "**normalize_text"])
+def test_variadic_parameter_shadowing_of_dotted_helper_abstains(
+    variadic: str,
+) -> None:
+    policy = PatchCascadePolicy.model_validate(
+        {
+            "extensions": [".py"],
+            "exclude": [],
+            "source_paths": ["src/*.py"],
+            "functions": [
+                {
+                    "function_name": "parse_document",
+                    "selector_names": ["repair_id"],
+                    "repair_ids": ["vendor-a", "vendor-b"],
+                    "normalization_helpers": ["normalize_text.get"],
+                    "function_contract": "general-parser",
+                }
+            ],
+        }
+    )
+    source = f"""\
+def parse_document(text, repair_id, {variadic}):
+    if repair_id == "vendor-a":
+        return normalize_text.get(text)
+    if repair_id == "vendor-b":
+        return normalize_text.get(text)
+    return text
+"""
+    assert patch_cascade_sites(source, policy) == []
+
+
 @pytest.mark.parametrize(
     "shadowing",
     [

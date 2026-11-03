@@ -295,6 +295,8 @@ def patch_cascade_sites(
                 *function.args.posonlyargs,
                 *function.args.args,
                 *function.args.kwonlyargs,
+                *((function.args.vararg,) if function.args.vararg is not None else ()),
+                *((function.args.kwarg,) if function.args.kwarg is not None else ()),
             )
         }
         if parameters & helper_roots or any(

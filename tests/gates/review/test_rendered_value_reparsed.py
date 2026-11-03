@@ -47,6 +47,27 @@ def merge({signature}):
     assert _sites(source, (helper,)) == []
 
 
+@pytest.mark.parametrize(
+    ("binding", "helper", "call"),
+    [
+        ("render_latex = str", "render_latex", "render_latex(text)"),
+        ("render_latex: object = str", "render_latex", "render_latex(text)"),
+        ("renderer = object()", "renderer.render", "renderer.render(text)"),
+    ],
+)
+def test_locally_rebound_renderer_is_not_rendered_evidence(
+    binding: str, helper: str, call: str
+) -> None:
+    source = f"""\
+def merge(text):
+    {binding}
+    rendered = {call}
+    if rendered.rstrip().endswith("!"):
+        return True
+"""
+    assert _sites(source, (helper,)) == []
+
+
 def test_annotation_only_statement_preserves_rendered_binding() -> None:
     source = """\
 def merge(text):
