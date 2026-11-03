@@ -612,16 +612,19 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
         nonlocal shadowed_helper_roots
         match node:
             case ast.FunctionDef() | ast.AsyncFunctionDef() as function:
-                shadowed_helper_roots = enclosing_roots | (
+                function_shadowed_roots = enclosing_roots | (
                     helper_roots
                     & (
                         _parameter_names(function)
                         | _local_helper_bindings(function, helper_roots)
                     )
                 )
+                shadowed_helper_roots = function_shadowed_roots
                 scan(function.body, {})
                 for statement in function.body:
-                    analyze_nested(statement, shadowed_helper_roots)
+                    # Child definitions share this enclosing lexical scope,
+                    # but sibling-local bindings must not leak between them.
+                    analyze_nested(statement, function_shadowed_roots)
                 return
             case ast.ClassDef(body=body):
                 # Class bindings do not become lexical closures for methods,

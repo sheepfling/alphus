@@ -384,6 +384,30 @@ def f(text):
     assert _sites(source, ("render",)) == [(2, 6, "rendered")]
 
 
+def test_sibling_nested_function_shadowing_does_not_leak() -> None:
+    source = """\
+def merge(text):
+    def unrelated(render_latex):
+        return None
+    def nested():
+        rendered = render_latex(text)
+        if rendered.rstrip().endswith("!"):
+            return True
+"""
+    assert _sites(source, ("render_latex",)) == [(5, 6, "rendered")]
+
+
+def test_nested_function_renderer_shadowing_stays_scoped() -> None:
+    source = """\
+def merge(text):
+    def unrelated(render_latex):
+        rendered = render_latex(text)
+        if rendered.rstrip().endswith("!"):
+            return True
+"""
+    assert _sites(source, ("render_latex",)) == []
+
+
 def test_lambda_body_walrus_does_not_invalidate_outer_binding() -> None:
     source = (
         "def f(text, original):\n"
