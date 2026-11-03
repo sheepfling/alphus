@@ -500,6 +500,8 @@ def _cmd_environment_evidence(lines: Sequence[_SourceLine]) -> _Evidence | None:
     """Find cmd expansion without mistaking common percent-encoded text."""
     in_date_continuation = False
     in_printf_continuation = False
+    find_continuation_visible = ""
+    find_continuation_raw = ""
     for source in lines:
         raw_line = source.raw_text if source.raw_text is not None else source.text
         if _shell_command_scan_over_budget(source.text):
@@ -508,15 +510,48 @@ def _cmd_environment_evidence(lines: Sequence[_SourceLine]) -> _Evidence | None:
             # for every candidate command.
             in_printf_continuation = False
             in_date_continuation = False
+            find_continuation_visible = ""
+            find_continuation_raw = ""
             continue
         candidate, printf_format_found = _mask_printf_format_argument(
             source.text, raw_line, continued=in_printf_continuation
         )
-        candidate = _mask_find_format_arguments(
-            candidate,
-            raw_line,
-        )
         trailing_backslashes = len(raw_line) - len(raw_line.rstrip("\\"))
+        continues_line = trailing_backslashes % 2 == 1
+        find_candidate_line = candidate[:-1] if continues_line else candidate
+        find_raw_line = raw_line[:-1] if continues_line else raw_line
+        find_command_present = _FIND_COMMAND.search(find_candidate_line) is not None
+        if find_continuation_visible or find_command_present:
+            if find_continuation_visible:
+                logical_visible = find_continuation_visible + " " + find_candidate_line
+                logical_raw = find_continuation_raw + " " + find_raw_line
+                current_offset = len(find_continuation_visible) + 1
+            else:
+                logical_visible = find_candidate_line
+                logical_raw = find_raw_line
+                current_offset = 0
+            if _shell_command_scan_over_budget(logical_visible):
+                find_continuation_visible = ""
+                find_continuation_raw = ""
+                in_printf_continuation = False
+                in_date_continuation = False
+                continue
+            masked_logical = _mask_find_format_arguments(
+                logical_visible,
+                logical_raw,
+            )
+            candidate = masked_logical[current_offset:] + (
+                "\\" if continues_line else ""
+            )
+            if continues_line:
+                find_continuation_visible = logical_visible
+                find_continuation_raw = logical_raw
+            else:
+                find_continuation_visible = ""
+                find_continuation_raw = ""
+        else:
+            find_continuation_visible = ""
+            find_continuation_raw = ""
         in_printf_continuation = (
             not printf_format_found
             and trailing_backslashes % 2 == 1

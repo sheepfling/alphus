@@ -268,6 +268,29 @@ def test_find_format_arguments_are_not_cmd_environment_evidence(
     assert 'cmd syntax "%PATH%"' in findings[0].message
 
 
+def test_find_format_is_masked_across_bash_line_continuation(
+    tmp_path: Path,
+) -> None:
+    fence = chr(96) * 3
+    findings = _check(
+        tmp_path,
+        "\n".join(
+            [
+                fence + "bash",
+                "find . -type f \\",
+                "  -printf %f%p",
+                "echo %PATH%",
+                fence,
+                "",
+            ]
+        ),
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 4
+    assert 'cmd syntax "%PATH%"' in findings[0].message
+
+
 def test_quoted_find_text_is_not_repeatedly_scanned_as_commands(
     tmp_path: Path,
 ) -> None:
