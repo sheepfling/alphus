@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ast
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 from alphus.config import ProseAsControlPolicy
@@ -351,6 +351,11 @@ def lossy_rewrite_lines(
     except SyntaxError:
         return []
     helpers = set(policy.regex_sub_helpers)
+    parents = {
+        child: parent
+        for parent in ast.walk(tree)
+        for child in ast.iter_child_nodes(parent)
+    }
     observations: set[tuple[int, str]] = set()
     for node in ast.walk(tree):
         match node:
@@ -364,6 +369,7 @@ def lossy_rewrite_lines(
                 keywords=[],
             ) if (
                 _qualified_name(func) in helpers
+                and not _regex_helper_root_is_parameter(func, node, parents)
                 and _regex_consumes_digit(pattern)
                 and replacement in {"", " "}
             ):
@@ -374,6 +380,34 @@ def lossy_rewrite_lines(
             case _:
                 continue
     return sorted(observations)
+
+
+def _regex_helper_root_is_parameter(
+    function: ast.expr, call: ast.AST, parents: Mapping[ast.AST, ast.AST]
+) -> bool:
+    """Abstain when a configured dotted helper root is a function parameter."""
+    qualified_name = _qualified_name(function)
+    if qualified_name is None or "." not in qualified_name:
+        return False
+    root = qualified_name.split(".", maxsplit=1)[0]
+    ancestor = parents.get(call)
+    while ancestor is not None:
+        if isinstance(ancestor, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            args = ancestor.args
+            parameter_names = {
+                argument.arg
+                for argument in (
+                    *args.posonlyargs,
+                    *args.args,
+                    *args.kwonlyargs,
+                    *((args.vararg,) if args.vararg is not None else ()),
+                    *((args.kwarg,) if args.kwarg is not None else ()),
+                )
+            }
+            if root in parameter_names:
+                return True
+        ancestor = parents.get(ancestor)
+    return False
 
 
 def _qualified_name(node: ast.expr) -> str | None:

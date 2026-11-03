@@ -101,6 +101,23 @@ kept = re.sub(r"\\s+", " ", prose)
     )
 
 
+def test_lossy_regex_rewrite_ignores_shadowed_helper_parameter() -> None:
+    source = r"""\
+def clean(text, re):
+    return re.sub(r"\d+", "", text)
+
+def normalize(text):
+    return re.sub(r"\d+", "", text)
+def outer(re):
+    def nested(text):
+        return re.sub(r"\d+", "", text)
+    return nested
+"""
+    configured = _policy(lossy_text_rewrite=True, regex_sub_helpers=("re.sub",))
+
+    assert lossy_rewrite_lines(source, configured) == [(6, r"\d+")]
+
+
 def test_lossy_regex_rewrite_ignores_zero_width_digit_assertions() -> None:
     source = r"""\
 zero_width = re.sub(r"(?=\d)", "", text)
