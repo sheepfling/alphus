@@ -54,6 +54,7 @@ QualityRuleName: TypeAlias = Literal[
     "ned-basis-vectors",
     "scipy-constants",
     "run-artifacts",
+    "ci-workflows",
     "test-quality",
     "input-contracts",
     "source-families",

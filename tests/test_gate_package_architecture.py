@@ -95,6 +95,7 @@ def test_gate_themes_own_their_runner_mappings() -> None:
                 "fastapi-practices",
                 "sqlalchemy-practices",
                 "run-artifacts",
+                "ci-workflows",
             },
         ),
         (
