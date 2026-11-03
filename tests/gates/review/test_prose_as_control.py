@@ -140,6 +140,9 @@ class ComprehensionOuterIterable:
 class SameStatementWalrus:
     cleaned = ((re := adapter), re.sub(r"\d+", "", "abc123"))[1]
 
+class WalrusValueCall:
+    cleaned = (re := re.sub(r"\d+", "", "abc123"))
+
 class AnnotationOnly:
     re: object
     cleaned = re.sub(r"\d+", "", "abc123")
@@ -155,7 +158,8 @@ def function_annotation_only():
         (17, r"\d+"),
         (26, r"\d+"),
         (29, r"\d+"),
-        (41, r"\d+"),
+        (40, r"\d+"),
+        (44, r"\d+"),
     ]
 
 

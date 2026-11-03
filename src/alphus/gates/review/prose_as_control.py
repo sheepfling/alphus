@@ -500,12 +500,15 @@ def _class_scope_binds_name(
     for previous in scope.body[: scope.body.index(statement)]:
         bindings.visit(previous)
     return name in bindings.names or _class_statement_binds_name_before(
-        statement, name, expression
+        statement, name, expression, parents
     )
 
 
 def _class_statement_binds_name_before(
-    statement: ast.stmt, name: str, expression: ast.Call
+    statement: ast.stmt,
+    name: str,
+    expression: ast.Call,
+    parents: Mapping[ast.AST, ast.AST],
 ) -> bool:
     """Find walrus writes earlier in the current class-body statement."""
     position = (expression.lineno, expression.col_offset)
@@ -513,6 +516,7 @@ def _class_statement_binds_name_before(
         isinstance(node, ast.NamedExpr)
         and name in _target_names(node.target)
         and (node.lineno, node.col_offset) < position
+        and not _is_within(expression, node.value, parents)
         for node in ast.walk(statement)
     )
 
