@@ -26,6 +26,97 @@ from alphus.policy.base import (
 from alphus.policy.sources import PythonSourceScanPolicy, SourceScanPolicy
 
 
+class DocumentHeadingSuppression(StrictModel):
+    """One exact visible heading exempted from document-level density review."""
+
+    path: str
+    heading: str
+    reason: str
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, value: str) -> str:
+        return validate_single_path(value, "document heading suppression paths")
+
+    @field_validator("heading")
+    @classmethod
+    def validate_heading(cls, value: str) -> str:
+        heading = validate_one_line_message(value)
+        if not heading:
+            raise ValueError("document heading suppressions require a heading")
+        return heading
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, value: str) -> str:
+        reason = validate_one_line_message(value)
+        if len(reason) < 20:
+            raise ValueError("document heading suppression reasons need 20 characters")
+        return reason
+
+
+class DocumentStylePolicy(StrictModel):
+    """Opt-in Markdown, LaTeX, and source HTML heading pattern review."""
+
+    extensions: tuple[str, ...] = (".md", ".mdx")
+    exclude: tuple[str, ...] = ()
+    required_paths: tuple[str, ...] = ()
+    heading_suppressions: tuple[DocumentHeadingSuppression, ...] = ()
+    minimum_headings: Annotated[int, Field(ge=3)] = 8
+    minimum_family_matches: Annotated[int, Field(ge=2)] = 2
+    minimum_family_density: Annotated[float, Field(gt=0, le=1)] = 0.25
+    severity: Severity = "info"
+
+    @field_validator("extensions")
+    @classmethod
+    def validate_document_extensions(cls, values: Sequence[str]) -> tuple[str, ...]:
+        checked = validate_extensions(
+            values,
+            "document style extensions must be lowercase suffixes",
+            require_one=True,
+        )
+        if any(
+            value not in {".md", ".mdx", ".tex", ".html", ".docx", ".pptx"}
+            for value in checked
+        ):
+            raise ValueError(
+                "document style supports .md, .mdx, .tex, .html, .docx, and .pptx"
+            )
+        return checked
+
+    @field_validator("exclude")
+    @classmethod
+    def validate_document_exclusions(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("required_paths")
+    @classmethod
+    def validate_required_document_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        checked = tuple(
+            validate_single_path(value, "required document paths") for value in values
+        )
+        require_unique(checked, "required document paths must be unique")
+        return checked
+
+    @model_validator(mode="after")
+    def validate_required_document_extensions(self) -> Self:
+        if any(
+            PurePosixPath(path).suffix.lower() not in self.extensions
+            for path in self.required_paths
+        ):
+            raise ValueError("required document paths must use a selected extension")
+        if any(
+            PurePosixPath(suppression.path).suffix.lower() not in self.extensions
+            for suppression in self.heading_suppressions
+        ):
+            raise ValueError("heading suppression paths must use a selected extension")
+        require_unique(
+            tuple((item.path, item.heading) for item in self.heading_suppressions),
+            "document heading suppressions must be unique by path and heading",
+        )
+        return self
+
+
 class NumericLiteralSpec(StrictModel):
     """An explicit catalog of possible constants or unit conversion factors."""
 

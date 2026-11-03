@@ -14,6 +14,7 @@ from typing import TypeAlias
 from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.execution.results import RuleOutput
 from alphus.gates.review.ci_workflows import check_ci_workflows
+from alphus.gates.review.document_style import check_document_style
 from alphus.gates.review.embedded_semantic_overrides import (
     check_embedded_semantic_overrides,
 )
@@ -353,6 +354,9 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
             root,
             files,
             require_policy(config.checks.sqlalchemy_practices, "sqlalchemy_practices"),
+        ),
+        "document-style": lambda root, files, config: check_document_style(
+            root, files, require_policy(config.checks.document_style, "document_style")
         ),
     }
 )
