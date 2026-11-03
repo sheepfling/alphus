@@ -280,6 +280,103 @@ def _pattern_names(pattern: ast.pattern) -> set[str]:
     return names
 
 
+def _class_nonlocal_writes(node: ast.ClassDef) -> set[str]:
+    """Find enclosing bindings replaced by an executing class body."""
+    pending: list[ast.AST] = list(reversed(node.body))
+    class_body_nodes: list[ast.AST] = []
+    while pending:
+        current = pending.pop()
+        class_body_nodes.append(current)
+        children: Sequence[ast.AST]
+        match current:
+            case ast.FunctionDef() | ast.AsyncFunctionDef() as definition:
+                expressions = [
+                    *definition.decorator_list,
+                    *definition.args.defaults,
+                    *(item for item in definition.args.kw_defaults if item is not None),
+                    *(
+                        argument.annotation
+                        for argument in (
+                            *definition.args.posonlyargs,
+                            *definition.args.args,
+                            *definition.args.kwonlyargs,
+                            *(
+                                item
+                                for item in (
+                                    definition.args.vararg,
+                                    definition.args.kwarg,
+                                )
+                                if item is not None
+                            ),
+                        )
+                        if argument.annotation is not None
+                    ),
+                    *([definition.returns] if definition.returns is not None else []),
+                ]
+                children = expressions
+            case ast.ClassDef() as definition:
+                children = [
+                    *definition.decorator_list,
+                    *definition.bases,
+                    *(keyword.value for keyword in definition.keywords),
+                ]
+            case ast.Lambda() as expression:
+                children = [
+                    *expression.args.defaults,
+                    *(item for item in expression.args.kw_defaults if item is not None),
+                ]
+            case ast.ListComp() | ast.SetComp() | ast.DictComp() | ast.GeneratorExp():
+                # Comprehension targets belong to their own scope. Assignment
+                # expressions in class-body comprehensions are rejected by Python.
+                children = []
+            case _:
+                children = list(ast.iter_child_nodes(current))
+        pending.extend(reversed(children))
+
+    nonlocal_names = {
+        name
+        for current in class_body_nodes
+        if isinstance(current, ast.Nonlocal)
+        for name in current.names
+    }
+    if not nonlocal_names:
+        return set()
+
+    written: set[str] = set()
+    for current in class_body_nodes:
+        match current:
+            case ast.Name(id=name, ctx=ast.Store() | ast.Del()) if (
+                name in nonlocal_names
+            ):
+                written.add(name)
+            case (
+                ast.FunctionDef(name=name)
+                | ast.AsyncFunctionDef(name=name)
+                | ast.ClassDef(name=name)
+            ) if name in nonlocal_names:
+                written.add(name)
+            case ast.Import(names=aliases):
+                written.update(
+                    bound
+                    for alias in aliases
+                    if (bound := alias.asname or alias.name.split(".", 1)[0])
+                    in nonlocal_names
+                )
+            case ast.ImportFrom(names=aliases):
+                written.update(
+                    bound
+                    for alias in aliases
+                    if (bound := alias.asname or alias.name) in nonlocal_names
+                )
+            case ast.ExceptHandler(name=name) if name in nonlocal_names:
+                written.add(name)
+            case ast.MatchAs() | ast.MatchStar() | ast.MatchMapping():
+                written.update(_pattern_names(current) & nonlocal_names)
+            case _:
+                continue
+    return written
+
+
 def _uses_rendered_suffix(test: ast.expr, names: Sequence[str]) -> str | None:
     match test:
         case ast.Call(
@@ -687,6 +784,11 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                     for keyword in keys:
                         for name in _named_expression_names(keyword.value):
                             current.pop(name, None)
+                    # Class bodies execute immediately. A `nonlocal` assignment
+                    # in the class can therefore replace an enclosing rendered
+                    # binding even though ordinary class locals stay separate.
+                    for name in _class_nonlocal_writes(statement):
+                        current.pop(name, None)
                     # The class name is likewise bound after its header runs.
                     current.pop(statement.name, None)
                     continue

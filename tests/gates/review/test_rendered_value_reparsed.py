@@ -384,6 +384,32 @@ def f(text):
     assert _sites(source, ("render",)) == [(2, 6, "rendered")]
 
 
+def test_nonlocal_assignment_in_class_body_invalidates_rendered_value() -> None:
+    source = """\
+def f(text):
+    rendered = render(text)
+    class Reset:
+        nonlocal rendered
+        rendered = text
+    if rendered.rstrip().endswith("!"):
+        return True
+"""
+    compile(source, "<test>", "exec")
+    assert _sites(source, ("render",)) == []
+
+
+def test_class_local_assignment_preserves_enclosing_rendered_value() -> None:
+    source = """\
+def f(text):
+    rendered = render(text)
+    class Reset:
+        rendered = text
+    if rendered.rstrip().endswith("!"):
+        return True
+"""
+    assert _sites(source, ("render",)) == [(2, 5, "rendered")]
+
+
 def test_sibling_nested_function_shadowing_does_not_leak() -> None:
     source = """\
 def merge(text):
