@@ -192,6 +192,10 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                         current.pop(rebound, None)
                     current.pop(name, None)
                     current[name] = statement.lineno
+                case ast.AnnAssign(value=None):
+                    # A local annotation without a value leaves the runtime
+                    # binding untouched; it does not replace the rendered value.
+                    continue
                 case ast.AnnAssign(target=target, value=value):
                     names = _target_names(target)
                     names.update(_named_expression_names(value))

@@ -27,6 +27,17 @@ def merge(cell):
     assert _sites(source, ("render_latex",)) == [(3, 4, "rendered")]
 
 
+def test_annotation_only_statement_preserves_rendered_binding() -> None:
+    source = """\
+def merge(text):
+    rendered = render_latex(text)
+    rendered: str
+    if rendered.rstrip().endswith("!"):
+        return True
+"""
+    assert _sites(source, ("render_latex",)) == [(2, 4, "rendered")]
+
+
 def test_ignores_output_only_and_unconfigured_renderers() -> None:
     output_only = """
 def render(cell):

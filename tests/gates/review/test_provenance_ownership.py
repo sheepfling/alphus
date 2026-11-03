@@ -59,6 +59,10 @@ def test_reports_filter_capture_returned_immediately() -> None:
         _PATH_ONLY.replace("return [", "table_paths = set()\n    return ["),
         _PATH_ONLY.replace(
             "return [",
+            "match excluded:\n        case {'paths': table_paths}: pass\n    return [",
+        ),
+        _PATH_ONLY.replace(
+            "return [",
             "from settings import EXCLUDED_PATHS as table_paths\n    return [",
         ),
         _PATH_ONLY.replace("return [", "import settings as table_paths\n    return ["),

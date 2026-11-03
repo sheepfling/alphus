@@ -157,6 +157,12 @@ def _path_set_assignments(
                         store_count += 1
                 case ast.Name(id=bound, ctx=ast.Store() | ast.Del()) if bound == name:
                     store_count += 1
+                case ast.MatchAs(name=bound) if bound == name:
+                    store_count += 1
+                case ast.MatchStar(name=bound) if bound == name:
+                    store_count += 1
+                case ast.MatchMapping(rest=bound) if bound == name:
+                    store_count += 1
                 case ast.Name(id=bound, ctx=ast.Load()) if bound == name:
                     load_count += 1
                 case ast.Global(names=names) | ast.Nonlocal(names=names) if (
