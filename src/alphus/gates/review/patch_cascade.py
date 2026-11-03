@@ -10,6 +10,7 @@ from pathlib import Path
 from alphus.config import PatchCascadePolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.gates.review._module_bindings import module_binding_counts
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 
@@ -123,39 +124,11 @@ def patch_cascade_sites(
                     definitions.append(node)
                 case _:
                     continue
-        # Only one top-level definition is accepted. Rebinding in module-level
-        # control flow or assignment makes the configured function ambiguous.
-        bindings = 0
-        for statement in tree.body:
-            for node in _walk_function_body(statement):
-                match node:
-                    case (
-                        ast.FunctionDef(name=name) | ast.AsyncFunctionDef(name=name)
-                    ) if name == configured.function_name:
-                        bindings += 1
-                    case ast.ClassDef(name=name) if name == configured.function_name:
-                        bindings += 1
-                    case ast.Name(id=name, ctx=ast.Store() | ast.Del()) if (
-                        name == configured.function_name
-                    ):
-                        bindings += 1
-                    case ast.Import(names=aliases):
-                        if any(
-                            (alias.asname or alias.name.split(".", maxsplit=1)[0])
-                            == configured.function_name
-                            for alias in aliases
-                        ):
-                            bindings += 1
-                    case ast.ImportFrom(names=aliases):
-                        if any(
-                            alias.name == "*"
-                            or (alias.asname or alias.name) == configured.function_name
-                            for alias in aliases
-                        ):
-                            bindings += 1
-                    case _:
-                        continue
-        if len(definitions) != 1 or bindings != 1:
+        # Reuse the shared module inventory so definition-time expressions and
+        # string-valued pattern captures also make the selected binding
+        # ambiguous.
+        bindings = module_binding_counts(tree, (configured.function_name,))
+        if len(definitions) != 1 or bindings.get(configured.function_name, 0) != 1:
             continue
         function = definitions[0]
         helper_roots = frozenset(

@@ -181,6 +181,7 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                     names: set[str] = set()
                     for target in targets:
                         names.update(_target_names(target))
+                        names.update(_named_expression_names(target))
                     names.update(_named_expression_names(statement.value))
                     for name in names:
                         current.pop(name, None)
@@ -198,11 +199,13 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                     continue
                 case ast.AnnAssign(target=target, value=value):
                     names = _target_names(target)
+                    names.update(_named_expression_names(target))
                     names.update(_named_expression_names(value))
                     for name in names:
                         current.pop(name, None)
                 case ast.AugAssign(target=target, value=value):
                     names = _target_names(target)
+                    names.update(_named_expression_names(target))
                     names.update(_named_expression_names(value))
                     for name in names:
                         current.pop(name, None)

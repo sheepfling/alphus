@@ -127,6 +127,20 @@ parse_document = replacement
     assert patch_cascade_sites(source, _policy()) == []
 
 
+def test_definition_time_walrus_rebinding_makes_parser_ambiguous() -> None:
+    source = """\
+def parse_document(repair_id, text):
+    if repair_id == "vendor-a":
+        text = normalize_text(text, " ")
+    if repair_id == "vendor-b":
+        text = normalize_text(text, "-")
+    return text
+def wrapper(default=(parse_document := replacement)):
+    pass
+"""
+    assert patch_cascade_sites(source, _policy()) == []
+
+
 @pytest.mark.parametrize(
     "rebind",
     [

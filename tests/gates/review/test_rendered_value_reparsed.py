@@ -38,6 +38,38 @@ def merge(text):
     assert _sites(source, ("render_latex",)) == [(2, 4, "rendered")]
 
 
+@pytest.mark.parametrize(
+    "assignment",
+    [
+        "values[(rendered := original)] = 1",
+        "values[(rendered := original)]: int = 1",
+        "values[(rendered := original)] += 1",
+    ],
+)
+def test_walrus_in_evaluated_assignment_target_invalidates_rendered_binding(
+    assignment: str,
+) -> None:
+    source = f"""\
+def merge(text, original, values):
+    rendered = render_latex(text)
+    {assignment}
+    if rendered.rstrip().endswith('!'):
+        return True
+"""
+    assert _sites(source, ("render_latex",)) == []
+
+
+def test_unrelated_walrus_in_assignment_target_preserves_rendered_binding() -> None:
+    source = """\
+def merge(text, original, values):
+    rendered = render_latex(text)
+    values[(other := original)] = 1
+    if rendered.rstrip().endswith('!'):
+        return True
+"""
+    assert _sites(source, ("render_latex",)) == [(2, 4, "rendered")]
+
+
 def test_ignores_output_only_and_unconfigured_renderers() -> None:
     output_only = """
 def render(cell):
