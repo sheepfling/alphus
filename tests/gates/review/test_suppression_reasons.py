@@ -76,6 +76,82 @@ def test_named_file_level_ruff_directives_are_audited_and_blankets_are_unknown()
     assert "unknown to this audit" in findings[1].message
 
 
+def test_file_suppression_prefix_case_and_flake8_forms_match_ruff() -> None:
+    source = (
+        "# RUFF: noqa: E402\n"
+        "# ruff: NOQA: E402\n"
+        "# Flake8: noqa: E402\n"
+        "# flake8: noqa: E402\n"
+        "# ruff: file-ignore[E402]\n"
+        "# RUFF: file-ignore[E402]\n"
+    )
+    findings = suppression_reason_findings(
+        source,
+        SuppressionReasonPolicy(extensions=(".py",), rule_codes=("E402",)),
+        path="src/package.py",
+    )
+
+    assert [finding.line for finding in findings] == [2, 4, 5]
+
+
+def test_file_level_flake8_blanket_is_reported_as_unknown() -> None:
+    findings = suppression_reason_findings(
+        "# RUFF: noqa\n# ruff: NOQA\n# flake8: noqa\n",
+        SuppressionReasonPolicy(extensions=(".py",), rule_codes=("E402",)),
+    )
+
+    assert [finding.line for finding in findings] == [2, 3]
+    assert all("unknown to this audit" in finding.message for finding in findings)
+
+
+def test_file_ignore_reason_is_scoped_to_selected_codes() -> None:
+    policy = SuppressionReasonPolicy(extensions=(".py",), rule_codes=("E402", "F401"))
+    missing = suppression_reason_findings("# ruff: file-ignore[E402, F401]\n", policy)
+    documented = suppression_reason_findings(
+        "# ruff: file-ignore[E402, F401] -- plugin bootstrap\n", policy
+    )
+
+    assert len(missing) == 1
+    assert "E402, F401" in missing[0].message
+    assert documented == []
+
+
+@pytest.mark.parametrize(
+    ("directive", "suppresses"),
+    [
+        ("# ruff: file-ignore[E402]", True),
+        ("# RUFF: file-ignore[E402]", False),
+        ("# flake8: noqa: E402", True),
+        ("# ruff: noqa: E402", True),
+        ("# RUFF: noqa: E402", False),
+    ],
+)
+def test_file_directives_match_native_ruff(
+    tmp_path: Path, directive: str, suppresses: bool
+) -> None:
+    ruff = shutil.which("ruff")
+    if ruff is None:
+        pytest.skip("Ruff executable is not installed in this test environment")
+    source = f"{directive}\nvalue = 1\nimport os\n"
+    (tmp_path / "app.py").write_text(source, encoding="utf-8")
+    native = subprocess.run(
+        [ruff, "check", "--isolated", "--select", "E402", "app.py"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    findings = suppression_reason_findings(
+        source,
+        SuppressionReasonPolicy(extensions=(".py",), rule_codes=("E402",)),
+        path="app.py",
+    )
+
+    assert (native.returncode == 0) is suppresses
+    assert bool(findings) is suppresses
+
+
 def test_scoped_exception_satisfies_reason_and_stale_site_is_reported() -> None:
     exception = SuppressionReasonException(
         path="src/package.py",
@@ -641,6 +717,109 @@ def test_multiline_ruff_per_file_ignore_matches_native_ruff(
         assert findings[0].path == "ruff.toml"
         assert findings[0].line == (1 if form == "flat-map" else 2)
         assert "no rationale" in findings[0].message
+
+
+@pytest.mark.parametrize(
+    ("pattern", "path", "applies"),
+    [
+        ("!src/**/*.py", "tests/app.py", True),
+        ("!src/**/*.py", "src/app.py", False),
+        ("__init__.py", "pkg/__init__.py", True),
+    ],
+)
+def test_per_file_globs_match_native_ruff_negation_and_basenames(
+    tmp_path: Path, pattern: str, path: str, applies: bool
+) -> None:
+    ruff = shutil.which("ruff")
+    if ruff is None:
+        pytest.skip("Ruff executable is not installed in this test environment")
+    source = tmp_path / path
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text("value = 1\nimport os\n", encoding="utf-8")
+    (tmp_path / "ruff.toml").write_text(
+        f'[lint.per-file-ignores]\n"{pattern}" = ["E402"]\n', encoding="utf-8"
+    )
+    native = subprocess.run(
+        [ruff, "check", "--select", "E402", "--config", "ruff.toml", path],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    findings = check_suppression_reasons(
+        tmp_path,
+        [Path(path)],
+        SuppressionReasonPolicy(extensions=(".py",), rule_codes=("E402",)),
+    )
+
+    assert (native.returncode == 0) is applies
+    assert bool(findings) is applies
+
+
+def test_multiline_inline_map_comments_are_attributed_to_their_entry(
+    tmp_path: Path,
+) -> None:
+    ruff = shutil.which("ruff")
+    if ruff is None:
+        pytest.skip("Ruff executable is not installed in this test environment")
+    for name in ("app.py", "other.py"):
+        (tmp_path / name).write_text("value = 1\nimport os\n", encoding="utf-8")
+    (tmp_path / "ruff.toml").write_text(
+        "[lint]\nper-file-ignores = {\n"
+        ' "app.py" = ["E402"],\n'
+        ' "other.py" = ["E402"] # -- rationale for other.py only\n'
+        "}\n",
+        encoding="utf-8",
+    )
+    native = subprocess.run(
+        [
+            ruff,
+            "check",
+            "--select",
+            "E402",
+            "--config",
+            "ruff.toml",
+            "app.py",
+            "other.py",
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    findings = check_suppression_reasons(
+        tmp_path,
+        [Path("app.py"), Path("other.py")],
+        SuppressionReasonPolicy(extensions=(".py",), rule_codes=("E402",)),
+    )
+
+    assert native.returncode == 0, native.stdout + native.stderr
+    assert len(findings) == 1
+    assert findings[0].path == "ruff.toml"
+    assert "app.py" in findings[0].message
+    assert "other.py" not in findings[0].message
+
+
+def test_non_string_per_file_codes_are_reported_as_not_evaluated(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "app.py").write_text("value = 1\n", encoding="utf-8")
+    (tmp_path / "ruff.toml").write_text(
+        '[lint.per-file-ignores]\n"app.py" = ["E402", 7]\n',
+        encoding="utf-8",
+    )
+
+    findings = check_suppression_reasons(
+        tmp_path,
+        [Path("app.py")],
+        SuppressionReasonPolicy(extensions=(".py",), rule_codes=("E402",)),
+    )
+
+    assert len(findings) == 1
+    assert "not evaluated" in findings[0].message
+    assert "unsupported" in findings[0].message
 
 
 def test_moved_config_exception_is_reported_stale(tmp_path: Path) -> None:

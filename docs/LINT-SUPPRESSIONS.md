@@ -2,12 +2,19 @@
 
 The opt-in `suppression-reasons` rule checks configured Ruff `# noqa: CODE`
 comments for a consumer-required explanation, including targeted file-level
-`# ruff: noqa: CODE` directives. An inline reason after `--` satisfies the
+`# ruff: noqa: CODE`, `# flake8: noqa: CODE`, and `# ruff: file-ignore[CODE]`
+directives. Prefixes follow Ruff's case rules (`ruff` and `flake8` are
+case-sensitive; `noqa` is case-insensitive). A reason after `--` satisfies the
 requirement:
 
 ```python
 from optional_runtime import plugin  # noqa: E402 -- initialize the plugin registry first
 ```
+
+File-level directives are recognized on their own line. `# ruff: file-ignore`
+is accepted only at global module scope. Blanket `# noqa`, `# ruff: noqa`, and
+`# flake8: noqa` directives produce an unknown/not-evaluated advisory because
+they do not name a selected rule code.
 
 It also checks Ruff's TOML `per-file-ignores` and
 `extend-per-file-ignores` tables in `pyproject.toml`,
@@ -22,8 +29,12 @@ selected code needs a comment containing the configured delimiter and a reason:
 The rule evaluates table entries, inline maps, and multiline arrays in per-file
 ignore settings. It normalizes Ruff's string-to-code-list multiline inline map
 form before validating TOML, including on Python versions whose standard
-library parser does not accept multiline inline tables. Unsupported map values
-are reported as not evaluated. A matching exact path/code/line exception can
+library parser does not accept multiline inline tables. A comment attached to a
+multiline inline-map value applies only to that entry; a reason on a different
+entry does not satisfy it. TOML comments outside an entry are not attributed to
+individual entries. Per-file patterns use repository-relative and basename
+matching, including Ruff's leading `!` negation. Unsupported TOML values are
+reported as not evaluated. A matching exact path/code/line exception can
 approve a configuration entry:
 
 ```toml
@@ -50,6 +61,9 @@ for the effective lint configuration and whether a suppression is valid or used.
 Consumers select the codes, file scope, exclusion patterns, severity, and reason
 delimiter in `[checks.suppression_reasons]`; see
 [`examples/consumer/lint-suppressions.toml`](../examples/consumer/lint-suppressions.toml).
+Alphus CI runs that example's `suppression-review` profile against `src/**/*.py`
+as a self-audit. This dedicated CI invocation does not add the opt-in rule to
+the default consumer profile.
 Exceptions can approve one exact path, rule code, and line. Each exception
 requires a reason. Moved line/code sites are stale when their file is selected;
 exceptions pointing to a missing Python or TOML file are stale even though that
@@ -70,9 +84,10 @@ This checker verifies only that the selected suppression has a non-empty
 documented reason. It does not decide whether the import is misplaced or the
 reason is true. Blanket directives without selected codes produce an
 "unknown / not evaluated" advisory; Ruff remains responsible for unused,
-invalid, blanket, and foreign-tool suppression diagnostics. Non-Ruff
-directives are outside this rule's selected Ruff syntax. If no selected Python
-source remains after scope and exclusions, the rule emits an informational
+invalid, blanket, and foreign-tool suppression diagnostics. This rule
+recognizes Ruff directives and Ruff's documented Flake8 `noqa` file directives;
+other foreign-tool directives remain outside its selected syntax. If no selected
+Python source remains after scope and exclusions, the rule emits an informational
 not-evaluated finding at repository scope; it still audits any configured Ruff
 TOML suppression entries. A rule that does run over selected Python files and
 finds no missing reasons returns no findings, while policy absence remains a

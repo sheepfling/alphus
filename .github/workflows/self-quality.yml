@@ -55,6 +55,14 @@ jobs:
           python scripts/ci.py --root . --wheel
           --history-dir "${{ runner.temp }}/alphus-history"
           --consumer-id sheepfling/alphus
+      - name: Install Python development tools for the suppression self-scan
+        if: matrix.python-version == '3.11'
+        run: python -m pip install --disable-pip-version-check -e '.[python]'
+      - name: Audit Alphus source suppression reasons
+        if: matrix.python-version == '3.11'
+        run: >-
+          alphus --root . --config examples/consumer/lint-suppressions.toml
+          --profile suppression-review
       - name: Retain verified profile history
         if: always()
         uses: actions/upload-artifact@v7

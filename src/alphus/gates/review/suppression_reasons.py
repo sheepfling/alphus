@@ -9,11 +9,12 @@ import tokenize
 import tomllib
 from collections.abc import Collection, Iterable, MutableSequence, MutableSet
 from collections.abc import Set as AbstractSet
-from pathlib import Path
+from fnmatch import fnmatchcase
+from pathlib import Path, PurePosixPath
 from typing import cast
 
 from alphus.config import SuppressionReasonPolicy
-from alphus.contracts.findings import Finding
+from alphus.contracts.findings import Finding, Severity
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source, read_utf8_text
@@ -22,9 +23,23 @@ _RULE_ID = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.STYLE, "missing-suppression-reason"
 )
 _DIRECTIVE = re.compile(r"^#\s*noqa\s*:\s*(?P<body>.*)$", re.IGNORECASE)
-_FILE_DIRECTIVE = re.compile(r"^#\s*ruff\s*:\s*noqa\s*:\s*(?P<body>.*)$", re.IGNORECASE)
-_BLANKET_DIRECTIVE = re.compile(r"^#\s*(?:ruff\s*:\s*)?noqa\s*$", re.IGNORECASE)
+_FILE_DIRECTIVE = re.compile(
+    r"^#\s*(?:ruff|flake8)\s*:\s*(?i:noqa)\s*:\s*(?P<body>.*)$"
+)
+_FILE_BLANKET_DIRECTIVE = re.compile(r"^#\s*(?:ruff|flake8)\s*:\s*(?i:noqa)\s*$")
+_BLANKET_DIRECTIVE = re.compile(r"^#\s*(?i:noqa)\s*$")
+_FILE_IGNORE_DIRECTIVE = re.compile(
+    r"^#\s*ruff\s*:\s*file-ignore\s*\[(?P<codes>[^]]*)\](?P<tail>.*)$"
+)
 _CODE = re.compile(r"\b[A-Z]+[0-9]{3,4}\b")
+
+
+def _ruff_per_file_matches(path: str, pattern: str) -> bool:
+    """Match Ruff per-file globs by repository path or basename, including !."""
+    negated = pattern.startswith("!")
+    glob = pattern[1:] if negated else pattern
+    matched = matches_path(path, glob) or fnmatchcase(PurePosixPath(path).name, glob)
+    return not matched if negated else matched
 
 
 def suppression_reason_findings(
@@ -44,7 +59,9 @@ def suppression_reason_findings(
         comments = (token for token in tokens if token.type == tokenize.COMMENT)
         for token in comments:
             comment = token.string.strip()
-            if _BLANKET_DIRECTIVE.fullmatch(comment):
+            if _BLANKET_DIRECTIVE.fullmatch(
+                comment
+            ) or _FILE_BLANKET_DIRECTIVE.fullmatch(comment):
                 findings.append(
                     Finding(
                         rule_id=_RULE_ID,
@@ -66,10 +83,23 @@ def suppression_reason_findings(
                 if inline
                 else _FILE_DIRECTIVE.fullmatch(comment)
             )
-            if directive is None:
+            file_ignore = (
+                _FILE_IGNORE_DIRECTIVE.fullmatch(comment)
+                if not inline and token.start[1] == 0
+                else None
+            )
+            if directive is None and file_ignore is None:
                 continue
-            body = directive.group("body")
-            code_list, separator, reason = body.partition(policy.reason_delimiter)
+            if file_ignore is not None:
+                code_list = file_ignore.group("codes")
+                _, separator, reason = file_ignore.group("tail").partition(
+                    policy.reason_delimiter
+                )
+            elif directive is not None:
+                body = directive.group("body")
+                code_list, separator, reason = body.partition(policy.reason_delimiter)
+            else:
+                continue
             selected = sorted(
                 required_codes.intersection(
                     code.upper() for code in _CODE.findall(code_list)
@@ -341,15 +371,13 @@ def _toml_per_file_map(value: object) -> dict[str, list[str]] | None:
 
 def _normalize_multiline_inline_map(
     lines: MutableSequence[str], start: int
-) -> tuple[str, int, list[str]] | None:
+) -> tuple[str, int, dict[str, str], str] | None:
     """Normalize Ruff's multiline inline map using its string/list subset."""
     entries: dict[str, list[str]] = {}
-    comments: list[str] = []
+    entry_comments: dict[str, str] = {}
     index = start + 1
     while index < len(lines):
-        value_text, comment = _split_toml_comment(lines[index])
-        if comment:
-            comments.append(comment)
+        value_text, line_comment = _split_toml_comment(lines[index])
         stripped = value_text.strip()
         if stripped in {"", ","}:
             index += 1
@@ -363,7 +391,7 @@ def _normalize_multiline_inline_map(
                 )
                 + " }"
             )
-            return rendered, index, comments
+            return rendered, index, entry_comments, line_comment
         assignment = re.match(r"(?P<key>[^=]+?)\s*=\s*(?P<value>.*)$", stripped)
         if assignment is None:
             return None
@@ -377,6 +405,7 @@ def _normalize_multiline_inline_map(
             case _:
                 return None
         fragments: list[str] = []
+        comments = [line_comment] if line_comment else []
         code_end = index
         while True:
             code_text = assignment.group("value") if not fragments else lines[code_end]
@@ -398,16 +427,21 @@ def _normalize_multiline_inline_map(
             if codes is None:
                 return None
             entries[pattern_text] = codes
+            if comments:
+                entry_comments[pattern_text] = " ".join(comments)
             index = code_end + 1
             break
     return None
 
 
-def _normalize_multiline_per_file_values(source: str) -> str:
+def _normalize_multiline_per_file_values(
+    source: str,
+) -> tuple[str, dict[tuple[int, str], str]]:
     """Collapse valid multiline per-file-ignore arrays without losing line numbers."""
     lines = source.splitlines()
     table = ""
     index = 0
+    entry_comments: dict[tuple[int, str], str] = {}
     while index < len(lines):
         line = lines[index]
         section = re.fullmatch(r"\s*\[([^]]+)\]\s*", line)
@@ -435,11 +469,17 @@ def _normalize_multiline_per_file_values(source: str) -> str:
         if inline_map and value_text.strip() == "{":
             normalized = _normalize_multiline_inline_map(lines, index)
             if normalized is not None:
-                normalized_value, end_index, map_comments = normalized
-                if comment:
-                    map_comments.insert(0, comment)
-                if map_comments:
-                    normalized_value += " # " + " ".join(map_comments)
+                (
+                    normalized_value,
+                    end_index,
+                    map_entry_comments,
+                    map_comment,
+                ) = normalized
+                for pattern, entry_comment in map_entry_comments.items():
+                    entry_comments[(index + 1, pattern)] = entry_comment
+                setting_comments = [value for value in (comment, map_comment) if value]
+                if setting_comments:
+                    normalized_value += " # " + " ".join(setting_comments)
                 lines[index] = f"{assignment.group('key')} = {normalized_value}"
                 for skipped in range(index + 1, end_index + 1):
                     lines[skipped] = ""
@@ -493,7 +533,22 @@ def _normalize_multiline_per_file_values(source: str) -> str:
             index = end_index + 1
         else:
             index += 1
-    return "\n".join(lines)
+    return "\n".join(lines), entry_comments
+
+
+def _unsupported_per_file_value_finding(
+    config_name: str, line: int, severity: Severity
+) -> Finding:
+    return Finding(
+        rule_id=_RULE_ID,
+        path=config_name,
+        line=line,
+        severity=severity,
+        message=(
+            "A Ruff per-file-ignore entry contains unsupported TOML values; "
+            "its suppression reasons were not evaluated."
+        ),
+    )
 
 
 def _ruff_config_suppression_findings(
@@ -553,9 +608,10 @@ def _ruff_config_suppression_findings(
     source = ""
     config_error: str | None = None
     unsupported_multiline_map = False
+    per_file_entry_comments: dict[tuple[int, str], str] = {}
     try:
         source = read_utf8_text(config_path)
-        source = _normalize_multiline_per_file_values(source)
+        source, per_file_entry_comments = _normalize_multiline_per_file_values(source)
         tomllib.loads(source)
     except tomllib.TOMLDecodeError:
         unsupported_multiline_map = bool(
@@ -636,9 +692,13 @@ def _ruff_config_suppression_findings(
                         set(policy.rule_codes).intersection(code_values)
                     )
                     applicable = [
-                        path for path in selected_files if matches_path(path, pattern)
+                        path
+                        for path in selected_files
+                        if _ruff_per_file_matches(path, pattern)
                     ]
-                    _, _, reason = inline_comment.partition(policy.reason_delimiter)
+                    entry_comment = per_file_entry_comments.get((line_number, pattern))
+                    reason_comment = entry_comment or inline_comment
+                    _, _, reason = reason_comment.partition(policy.reason_delimiter)
                     if not selected_codes or not applicable:
                         continue
                     exception_keys = {
@@ -719,28 +779,50 @@ def _ruff_config_suppression_findings(
                 )
             )
             continue
-        match parsed_key:
-            case str() as pattern:
-                pass
-            case _:
-                continue
         match parsed_codes:
             case list():
                 # opaque-boundary: TOML arrays are heterogeneous until policy filtering.
                 codes = cast(list[object], parsed_codes)
             case _:
+                findings.append(
+                    _unsupported_per_file_value_finding(
+                        config_name, line_number, policy.severity
+                    )
+                )
                 continue
         selected_candidates: list[str] = []
+        unsupported_code_value = False
         for value in codes:
             match value:
                 case str() as code:
                     selected_candidates.append(code)
                 case _:
-                    continue
+                    unsupported_code_value = True
         selected_codes = sorted(
             set(policy.rule_codes).intersection(selected_candidates)
         )
-        applicable = [path for path in selected_files if matches_path(path, pattern)]
+        if unsupported_code_value:
+            if selected_codes:
+                findings.append(
+                    _unsupported_per_file_value_finding(
+                        config_name, line_number, policy.severity
+                    )
+                )
+            continue
+        match parsed_key:
+            case str() as pattern:
+                pass
+            case _:
+                if selected_codes:
+                    findings.append(
+                        _unsupported_per_file_value_finding(
+                            config_name, line_number, policy.severity
+                        )
+                    )
+                continue
+        applicable = [
+            path for path in selected_files if _ruff_per_file_matches(path, pattern)
+        ]
         if not selected_codes or not applicable:
             continue
         _, _, reason = comment.partition(policy.reason_delimiter)
