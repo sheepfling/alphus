@@ -90,3 +90,8 @@ incomplete.
 When blocked by missing policy, unavailable tools, or unresolved scope, name
 the exact requirement and work completed. Do not silently add tools, persist
 the temporary policy, change consumer CI, or invent severity thresholds.
+
+Profile audits always use fresh rule execution. The separate opt-in direct
+`output-escaping` cache is limited to a file-local rule run; see
+[the local rule cache guide](LOCAL-RULE-CACHE.md) for its invalidation boundary
+and force-fresh option.

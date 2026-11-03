@@ -18,6 +18,32 @@ from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_utf8_sig_text
 
 
+def output_escaping_findings_for_source(relative: Path, source: str) -> list[Finding]:
+    """Analyze one selected source file without reading or importing it."""
+    name = relative.as_posix()
+    suffix = relative.suffix.lower()
+    source_findings = (
+        python_escape_findings(source)
+        if suffix == ".py"
+        else js_escape_findings(source)
+    )
+    scope = Scope.PYTHON if suffix == ".py" else Scope.JAVASCRIPT
+    return [
+        Finding(
+            rule_id=rule_tag(
+                scope,
+                Framework.NONE,
+                Category.SECURITY,
+                "manual-output-escaping",
+            ),
+            path=name,
+            line=line,
+            message=f"{message}; use a library or tested shared utility",
+        )
+        for line, message in source_findings
+    ]
+
+
 def check_output_escaping(
     root: Path, paths: Iterable[Path], policy: SourceScanPolicy
 ) -> list[Finding]:
@@ -28,31 +54,11 @@ def check_output_escaping(
         name = relative.as_posix()
         if any(matches_path(name, pattern) for pattern in policy.exclude):
             continue
-        suffix = relative.suffix.lower()
-        if suffix not in policy.extensions:
+        if relative.suffix.lower() not in policy.extensions:
             continue
         path = checkout / relative
         if not path.is_file():
             continue
         source = read_utf8_sig_text(path)
-        source_findings = (
-            python_escape_findings(source)
-            if suffix == ".py"
-            else js_escape_findings(source)
-        )
-        scope = Scope.PYTHON if suffix == ".py" else Scope.JAVASCRIPT
-        findings.extend(
-            Finding(
-                rule_id=rule_tag(
-                    scope,
-                    Framework.NONE,
-                    Category.SECURITY,
-                    "manual-output-escaping",
-                ),
-                path=name,
-                line=line,
-                message=f"{message}; use a library or tested shared utility",
-            )
-            for line, message in source_findings
-        )
+        findings.extend(output_escaping_findings_for_source(relative, source))
     return findings

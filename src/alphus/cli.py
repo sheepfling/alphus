@@ -7,11 +7,12 @@ import logging
 import sys
 import tomllib
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping, MutableSequence, Sequence
 from contextlib import redirect_stderr, redirect_stdout
 from contextvars import ContextVar
 from functools import partial
 from io import StringIO
+from os import PathLike
 from pathlib import Path
 from types import MappingProxyType
 from typing import (
@@ -87,6 +88,10 @@ from alphus.gates.source.cyclomatic_complexity import (
     plan_payload,
     report_payload,
     report_summary,
+)
+from alphus.gates.source.output_escaping_cache import (
+    OutputEscapingCacheSummary,
+    check_output_escaping_cached,
 )
 from alphus.policy.base import MissingPolicyError
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
@@ -656,6 +661,9 @@ def _evaluate_rule(
     loaded_config: QualityGateConfig | None = None,
     *,
     already_scheduled: bool = False,
+    local_cache: PathLike[str] | str | None = None,
+    force_fresh: bool = False,
+    cache_summaries: MutableSequence[OutputEscapingCacheSummary] | None = None,
 ) -> RuleEvaluation:
     """Run a rule and retain structured output before any CLI rendering."""
     checkout = root.resolve(strict=True)
@@ -692,7 +700,38 @@ def _evaluate_rule(
     if verbose:
         _log_verbose(rule, checkout, len(files))
     try:
-        if rule == "cyclomatic-complexity" and max_jobs > 1:
+        if local_cache is not None:
+            if rule != "output-escaping":
+                raise ValueError("--local-cache supports only output-escaping")
+            policy = config.checks.output_escaping
+            if policy is None:
+                raise MissingPolicyError(
+                    "the selected configuration has no [checks.output_escaping] policy"
+                )
+            cache_option = Path(local_cache)
+            cache_path = (
+                cache_option if cache_option.is_absolute() else checkout / cache_option
+            ).resolve(strict=False)
+            if cache_path == resolved_config.resolve(strict=False):
+                raise ValueError("local cache path must not replace the policy file")
+            selected_paths = {
+                (checkout / relative).resolve(strict=False) for relative in files
+            }
+            if cache_path in selected_paths:
+                raise ValueError("local cache path must not replace a selected source")
+            if (
+                cache_path.is_relative_to(checkout)
+                and cache_path.suffix.lower() in policy.extensions
+            ):
+                raise ValueError(
+                    "cache file under --root must not use a scanned source extension"
+                )
+            output, summary = check_output_escaping_cached(
+                checkout, files, policy, cache_path, force_fresh=force_fresh
+            )
+            if cache_summaries is not None:
+                cache_summaries.append(summary)
+        elif rule == "cyclomatic-complexity" and max_jobs > 1:
             output = run_parallel_cyclomatic(
                 checkout, resolved_config, config, max_jobs
             )
@@ -715,6 +754,8 @@ def _evaluate_rule(
             output = cast(RuleOutput, outcome.value)
     except MissingPolicyError as error:
         raise typer.BadParameter(str(error)) from error
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
     except (OSError, RuntimeError) as error:
         raise typer.BadParameter(str(error), param_hint="--root") from error
     return RuleEvaluation.from_output(rule, output, threshold)
@@ -729,6 +770,8 @@ def _execute(
     verbose: bool,
     plan_only: bool = False,
     jobs: int | None = None,
+    local_cache: Path | None = None,
+    force_fresh: bool = False,
 ) -> int:
     """Render one structured rule evaluation for the requested CLI mode."""
     if plan_only:
@@ -773,7 +816,19 @@ def _execute(
         )
         return 0
 
-    evaluation = _evaluate_rule(root, config_path, rule, verbose, jobs)
+    cache_summaries: list[OutputEscapingCacheSummary] = []
+    evaluation = _evaluate_rule(
+        root,
+        config_path,
+        rule,
+        verbose,
+        jobs,
+        local_cache=local_cache,
+        force_fresh=force_fresh,
+        cache_summaries=cache_summaries,
+    )
+    for summary in cache_summaries:
+        typer.echo(f"Local cache (output-escaping): {summary.describe()}", err=True)
     output = evaluation.output
     exit_code = int(evaluation.failed and not report)
     shape = RULE_SPECS[rule].output_shape
@@ -1673,6 +1728,20 @@ def _command(
         str | None,
         typer.Option("--profile", help="Choose a configured orchestration profile."),
     ] = None,
+    local_cache: Annotated[
+        Path | None,
+        typer.Option(
+            "--local-cache",
+            help="Persistent cache file for direct --rule output-escaping runs.",
+        ),
+    ] = None,
+    force_fresh: Annotated[
+        bool,
+        typer.Option(
+            "--force-fresh",
+            help="Ignore cached output-escaping results and rescan every selected file.",
+        ),
+    ] = False,
     audit_manifest_path: Annotated[
         Path | None,
         typer.Option(
@@ -1784,6 +1853,26 @@ def _command(
         raise typer.BadParameter(str(error), param_hint="--output") from error
     if jobs is not None and not 1 <= jobs <= 64:
         raise typer.BadParameter("--jobs must be between 1 and 64")
+    if force_fresh and local_cache is None:
+        raise typer.BadParameter("--force-fresh requires --local-cache")
+    if local_cache is not None and (
+        rule != "output-escaping"
+        or run
+        or profile is not None
+        or plan
+        or fix_plan
+        or apply_fixes
+        or bool(fix_step)
+        or history_dir is not None
+        or show_history
+        or history_report is not None
+        or audit_manifest_path is not None
+        or plan_function_shape_only
+        or init_config is not None
+    ):
+        raise typer.BadParameter(
+            "--local-cache is limited to a direct --rule output-escaping run"
+        )
     audit_manifest = None
     if audit_manifest_path is not None:
         if not json_output:
@@ -2017,7 +2106,17 @@ def _command(
                 "--rule cannot be combined with --run, --profile, or --history-dir"
             )
         raise typer.Exit(
-            _execute(root, config, rule, json_output, report, verbose, jobs=jobs)
+            _execute(
+                root,
+                config,
+                rule,
+                json_output,
+                report,
+                verbose,
+                jobs=jobs,
+                local_cache=local_cache,
+                force_fresh=force_fresh,
+            )
         )
     if report:
         raise typer.BadParameter("--report requires --rule")
