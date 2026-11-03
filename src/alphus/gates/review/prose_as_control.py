@@ -359,21 +359,23 @@ def lossy_rewrite_lines(
     observations: set[tuple[int, str]] = set()
     for node in ast.walk(tree):
         match node:
-            case ast.Call(
-                func=func,
-                args=[
-                    ast.Constant(value=str(pattern)),
-                    ast.Constant(value=str(replacement)),
-                    _,
-                ],
-                keywords=[],
+            case (
+                ast.Call(
+                    func=func,
+                    args=[
+                        ast.Constant(value=str(pattern)),
+                        ast.Constant(value=str(replacement)),
+                        _,
+                    ],
+                    keywords=[],
+                ) as call
             ) if (
                 _qualified_name(func) in helpers
-                and not _regex_helper_root_is_shadowed(func, node, parents)
+                and not _regex_helper_root_is_shadowed(func, call, parents)
                 and _regex_consumes_digit(pattern)
                 and replacement in {"", " "}
             ):
-                observations.add((node.lineno, pattern))
+                observations.add((call.lineno, pattern))
             case ast.Call() as call:
                 if (expression := _literal_replace_expression(call)) is not None:
                     observations.add((node.lineno, expression))
@@ -383,7 +385,7 @@ def lossy_rewrite_lines(
 
 
 def _regex_helper_root_is_shadowed(
-    function: ast.expr, call: ast.AST, parents: Mapping[ast.AST, ast.AST]
+    function: ast.expr, call: ast.Call, parents: Mapping[ast.AST, ast.AST]
 ) -> bool:
     """Abstain when a configured helper root is locally rebound."""
     qualified_name = _qualified_name(function)
@@ -466,7 +468,7 @@ def _is_class_definition_expression(
 def _class_scope_binds_name(
     scope: ast.ClassDef,
     name: str,
-    expression: ast.AST,
+    expression: ast.Call,
     parents: Mapping[ast.AST, ast.AST],
 ) -> bool:
     """Resolve earlier class-body bindings without treating methods as closures."""
@@ -494,10 +496,25 @@ def _class_scope_binds_name(
         ),
     ):
         return True
-    bindings = _FunctionBindingNames()
+    bindings = _ClassBindingNames()
     for previous in scope.body[: scope.body.index(statement)]:
         bindings.visit(previous)
-    return name in bindings.names
+    return name in bindings.names or _class_statement_binds_name_before(
+        statement, name, expression
+    )
+
+
+def _class_statement_binds_name_before(
+    statement: ast.stmt, name: str, expression: ast.Call
+) -> bool:
+    """Find walrus writes earlier in the current class-body statement."""
+    position = (expression.lineno, expression.col_offset)
+    return any(
+        isinstance(node, ast.NamedExpr)
+        and name in _target_names(node.target)
+        and (node.lineno, node.col_offset) < position
+        for node in ast.walk(statement)
+    )
 
 
 def _comprehension_binds_name(
@@ -697,6 +714,16 @@ class _FunctionBindingNames(ast.NodeVisitor):
         for expression in (*node.args.defaults, *node.args.kw_defaults):
             if expression is not None:
                 self.visit(expression)
+
+
+class _ClassBindingNames(_FunctionBindingNames):
+    """Collect runtime class bindings; bare annotations do not bind names."""
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
+        if node.value is not None:
+            self.visit(node.target)
+            self.visit(node.value)
+        self.visit(node.annotation)
 
 
 def _qualified_name(node: ast.expr) -> str | None:

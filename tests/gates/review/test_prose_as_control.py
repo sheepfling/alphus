@@ -136,6 +136,17 @@ class LaterBinding:
 class ComprehensionOuterIterable:
     re = adapter
     cleaned = [item for item in re.sub(r"\d+", "", "abc123")]
+
+class SameStatementWalrus:
+    cleaned = ((re := adapter), re.sub(r"\d+", "", "abc123"))[1]
+
+class AnnotationOnly:
+    re: object
+    cleaned = re.sub(r"\d+", "", "abc123")
+
+def function_annotation_only():
+    re: object
+    return re.sub(r"\d+", "", "abc123")
 """
     configured = _policy(lossy_text_rewrite=True, regex_sub_helpers=("re.sub",))
 
@@ -144,6 +155,7 @@ class ComprehensionOuterIterable:
         (17, r"\d+"),
         (26, r"\d+"),
         (29, r"\d+"),
+        (41, r"\d+"),
     ]
 
 
