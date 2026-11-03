@@ -15,15 +15,18 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Literal
 
+from packaging.utils import canonicalize_name
+from packaging.version import Version
+
 
 def dependency_floors(pyproject: Path) -> tuple[str, ...]:
-    """Read each declared >= floor without duplicating pins in workflow YAML."""
+    """Read the strongest declared floor for each normalized package name."""
     project = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]
     declarations = [
         *project["dependencies"],
         *project["optional-dependencies"]["python"],
     ]
-    floors: list[str] = []
+    floors: dict[str, tuple[str, Version]] = {}
     for declaration in declarations:
         match = re.fullmatch(
             r"([A-Za-z0-9_-]+)>=(\d+(?:\.\d+)*),<\d+(?:\.\d+)*",
@@ -33,8 +36,15 @@ def dependency_floors(pyproject: Path) -> tuple[str, ...]:
             raise ValueError(
                 f"expected a bounded dependency with one floor: {declaration}"
             )
-        floors.append(f"{match.group(1)}=={match.group(2)}")
-    return tuple(floors)
+        name, floor_text = match.groups()
+        normalized_name = canonicalize_name(name)
+        floor = Version(floor_text)
+        previous = floors.get(normalized_name)
+        if previous is None:
+            floors[normalized_name] = (name, floor)
+        elif floor > previous[1]:
+            floors[normalized_name] = (previous[0], floor)
+    return tuple(f"{name}=={floor}" for name, floor in floors.values())
 
 
 OutputMode = Literal["plain", "json"]

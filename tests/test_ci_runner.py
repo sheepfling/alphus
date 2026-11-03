@@ -1,5 +1,6 @@
 import json
 import subprocess
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -9,16 +10,48 @@ from scripts.ci import dependency_floors
 
 
 def test_ci_dependency_floors_follow_package_metadata() -> None:
+    project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))[
+        "project"
+    ]
+    extra_declares_markdown_floor = any(
+        declaration.split(">", 1)[0].lower().replace("_", "-") == "markdown-it-py"
+        for declaration in project["optional-dependencies"]["python"]
+    )
+    markdown_floor = (
+        "markdown-it-py==4.2" if extra_declares_markdown_floor else "markdown-it-py==4"
+    )
     assert dependency_floors(Path("pyproject.toml")) == (
-        "markdown-it-py==4",
+        markdown_floor,
         "packaging==23",
         "pydantic==2.7",
+        "PyYAML==6",
         "rich==15.0.0",
         "SQLAlchemy==2.0.52",
         "typer==0.27.3",
         "pyright==1.1.414",
         "pytest==8",
         "ruff==0.16",
+        "types-PyYAML==6",
+    )
+
+
+def test_ci_dependency_floors_merge_duplicate_normalized_names(
+    tmp_path: Path,
+) -> None:
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        """
+[project]
+dependencies = ["markdown-it-py>=4,<5", "PyYAML>=6,<7"]
+[project.optional-dependencies]
+python = ["Markdown_It_Py>=4.2,<5", "pyyaml>=6.1,<7"]
+""",
+        encoding="utf-8",
+    )
+
+    assert dependency_floors(pyproject) == (
+        "markdown-it-py==4.2",
+        "PyYAML==6.1",
     )
 
 
