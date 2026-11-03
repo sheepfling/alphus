@@ -1519,8 +1519,37 @@ def _execute_plan_profile(
 def _selected_rule_files(
     checkout: Path, config: QualityGateConfig, rule: QualityRuleName
 ) -> list[str] | None:
-    """Resolve the file scope for source-scanning rules in a profile plan."""
-    if config.files is None or rule not in _SOURCE_SCAN_RULES:
+    """Resolve effective file scopes for rules that inspect repository paths."""
+    if config.files is None:
+        return None
+
+    if rule in {"file-size", "line-length", "comment-markers"}:
+        policy = getattr(config.checks, RULE_SPECS[rule].policy_field)
+        if policy is None:
+            return None
+        candidates = candidate_files(checkout, config.files)
+        selected: list[Path] = []
+        for relative in candidates:
+            name = relative.as_posix()
+            if any(matches_path(name, pattern) for pattern in policy.exclude):
+                continue
+            if rule == "comment-markers":
+                if relative.suffix.lower() not in policy.extensions:
+                    continue
+            elif rule == "line-length":
+                path_limited = any(
+                    matches_path(name, item.pattern)
+                    for item in policy.path_codepoint_limits
+                )
+                if (
+                    not path_limited
+                    and policy.limit_for(relative.suffix.lower()) is None
+                ):
+                    continue
+            selected.append(relative)
+        return [relative.as_posix() for relative in selected]
+
+    if rule not in _SOURCE_SCAN_RULES:
         return None
     policy = cast(
         SourceScanPolicy | None,

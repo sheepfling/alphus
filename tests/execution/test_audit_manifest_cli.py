@@ -193,6 +193,91 @@ steps = ["Numeric literals"]
     assert check["selected_files"] == []
 
 
+def test_profile_cli_resolves_hygiene_rule_inventories_with_filters(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / "src").mkdir()
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "src" / "sample.py").write_text("value = 1\n", encoding="utf-8")
+    (tmp_path / "docs" / "sample.md").write_text("short\n", encoding="utf-8")
+    (tmp_path / "quality.toml").write_text(
+        """schema_version = 1
+[files]
+include = ["src/*.py", "docs/*.md"]
+[checks.file_size]
+code_extensions = [".py"]
+code_limit = 3000
+hard_limit = 5000
+initializer_name = "__init__.py"
+initializer_limit = 100
+exclude = ["docs/**"]
+[checks.line_length]
+exclude = ["docs/**"]
+[checks.line_length.limits]
+".py" = 100
+[checks.comment_markers]
+extensions = [".py"]
+markers = ["TODO"]
+exclude = []
+[orchestration]
+default_profile = "audit"
+[[orchestration.steps]]
+kind = "rule"
+name = "File size"
+rule = "file-size"
+[[orchestration.steps]]
+kind = "rule"
+name = "Line length"
+rule = "line-length"
+[[orchestration.steps]]
+kind = "rule"
+name = "Comment markers"
+rule = "comment-markers"
+[[orchestration.profiles]]
+name = "audit"
+steps = ["File size", "Line length", "Comment markers"]
+""",
+        encoding="utf-8",
+    )
+    _write_manifest(
+        tmp_path,
+        "audit",
+        [
+            AuditManifestCheck(
+                check_id=name.lower().replace(" ", "-"),
+                step=name,
+                expected_files=("src/sample.py",),
+            )
+            for name in ("File size", "Line length", "Comment markers")
+        ],
+    )
+
+    exit_code = main(
+        [
+            "--root",
+            str(tmp_path),
+            "--config",
+            "quality.toml",
+            "--json",
+            "--audit-manifest",
+            "audit.json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert payload["audit_completion"]["status"] == "complete"
+    assert {
+        check["check_id"]: check["selected_files"]
+        for check in payload["audit_completion"]["checks"]
+    } == {
+        "file-size": ["src/sample.py"],
+        "line-length": ["src/sample.py"],
+        "comment-markers": ["src/sample.py"],
+    }
+
+
 def test_manifest_retains_native_selector_scope_and_annotation_evidence(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
