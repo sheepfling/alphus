@@ -571,7 +571,7 @@ def _shell_command_end(source: str, start: int) -> int:
         elif char == "\\" and index + 1 < len(source):
             index += 2
             continue
-        elif char in ";|&":
+        elif char in ";|&)":
             return index
         index += 1
     return len(source)

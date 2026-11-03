@@ -292,6 +292,26 @@ def test_many_printf_commands_tokenize_only_their_own_segments(
     assert total_tokenized_chars <= len(source) * 2
 
 
+def test_printf_substitutions_tokenize_only_their_own_segments(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    substitution = "$(printf %s%s a b)"
+    source = "echo " + " ".join([substitution] * 1_000)
+    total_tokenized_chars = 0
+    original = shell_fences._shell_words
+
+    def count_tokenized_chars(value: str) -> list[tuple[int, int, str]]:
+        nonlocal total_tokenized_chars
+        total_tokenized_chars += len(value)
+        return original(value)
+
+    monkeypatch.setattr(shell_fences, "_shell_words", count_tokenized_chars)
+    findings = _check(tmp_path, f"```bash\n{source}\n```\n")
+
+    assert findings == []
+    assert total_tokenized_chars <= len(source) * 2
+
+
 def test_escaped_bash_backtick_does_not_hide_later_evidence(
     tmp_path: Path,
 ) -> None:
