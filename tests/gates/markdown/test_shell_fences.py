@@ -245,6 +245,29 @@ def test_quoted_find_text_is_not_repeatedly_scanned_as_commands(
     assert 'cmd syntax "%PATH%"' in findings[0].message
 
 
+def test_escaped_find_separators_are_not_command_boundaries(
+    tmp_path: Path,
+) -> None:
+    fence = chr(96) * 3
+    escaped = "\\(find " * 4000
+    findings = _check(
+        tmp_path,
+        "\n".join(
+            [
+                fence + "bash",
+                "echo " + escaped,
+                "echo %PATH%",
+                fence,
+                "",
+            ]
+        ),
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 3
+    assert 'cmd syntax "%PATH%"' in findings[0].message
+
+
 def test_printf_options_and_backslash_continuation_keep_format_context(
     tmp_path: Path,
 ) -> None:

@@ -537,7 +537,8 @@ def _mask_find_format_arguments(line: str, raw_line: str | None = None) -> str:
     visible = list(line)
     source = raw_line if raw_line is not None else line
     spans: list[tuple[int, int]] = []
-    for command_match in _FIND_COMMAND.finditer(line):
+    command_candidates = _mask_escaped_command_operators(line)
+    for command_match in _FIND_COMMAND.finditer(command_candidates):
         command_start = command_match.start("command")
         command_end = _shell_command_end(source, command_start)
         words = _shell_words(source[command_start:command_end])
@@ -577,6 +578,22 @@ def _mask_find_format_arguments(line: str, raw_line: str | None = None) -> str:
             index += 1
     for start, end in spans:
         visible[start:end] = " " * (end - start)
+    return "".join(visible)
+
+
+def _mask_escaped_command_operators(line: str) -> str:
+    """Hide separators escaped by an odd run of Bash backslashes."""
+    visible = list(line)
+    index = 0
+    while index < len(line):
+        if line[index] != "\\":
+            index += 1
+            continue
+        start = index
+        while index < len(line) and line[index] == "\\":
+            index += 1
+        if index < len(line) and line[index] in ";|&()" and (index - start) % 2 == 1:
+            visible[index] = " "
     return "".join(visible)
 
 
