@@ -320,16 +320,34 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
         return []
     found: set[_RenderedValueSite] = set()
     shadowed_helper_roots: frozenset[str] = frozenset()
+    state_only_cache: dict[
+        tuple[tuple[int, ...], tuple[tuple[str, int], ...]], dict[str, int]
+    ] = {}
 
     def scan(
-        statements: Sequence[ast.stmt], rendered: Mapping[str, int]
+        statements: Sequence[ast.stmt],
+        rendered: Mapping[str, int],
+        *,
+        collect_findings: bool = True,
     ) -> dict[str, int]:
-        """Track rendered local names to assignment lines in source order."""
+        """Track bindings and optionally collect rendered-predicate evidence."""
+        cache_key = None
+        if not collect_findings:
+            cache_key = (
+                tuple(id(statement) for statement in statements),
+                tuple(sorted(rendered.items())),
+            )
+            if cache_key in state_only_cache:
+                return state_only_cache[cache_key].copy()
         current = dict(rendered)
         for statement in statements:
             match statement:
                 case ast.If(test=test, body=body, orelse=orelse) as conditional:
-                    name = _uses_rendered_suffix(test, tuple(current))
+                    name = (
+                        _uses_rendered_suffix(test, tuple(current))
+                        if collect_findings
+                        else None
+                    )
                     if name is not None:
                         found.add(
                             _RenderedValueSite(current[name], conditional.lineno, name)
@@ -337,9 +355,13 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                     branch_state = current.copy()
                     for name in _named_expression_names(test):
                         branch_state.pop(name, None)
-                    then_state = scan(body, branch_state)
+                    then_state = scan(
+                        body, branch_state, collect_findings=collect_findings
+                    )
                     else_state = (
-                        scan(orelse, branch_state) if orelse else branch_state.copy()
+                        scan(orelse, branch_state, collect_findings=collect_findings)
+                        if orelse
+                        else branch_state.copy()
                     )
                     current = {
                         name: line
@@ -452,16 +474,20 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                         loop_state.pop(name, None)
                     for name in _named_expression_names(target):
                         loop_state.pop(name, None)
-                    probe_state = scan_without_findings(body, loop_state)
+                    probe_state = scan(body, loop_state, collect_findings=False)
                     repeated_entry = _common_bindings([iteration_state, probe_state])
                     for name in _target_names(target):
                         repeated_entry.pop(name, None)
                     for name in _named_expression_names(target):
                         repeated_entry.pop(name, None)
-                    loop_state = scan(body, repeated_entry)
+                    loop_state = scan(
+                        body, repeated_entry, collect_findings=collect_findings
+                    )
                     else_entry = _common_bindings([iteration_state, loop_state])
                     else_state = (
-                        scan(orelse, else_entry) if orelse else iteration_state.copy()
+                        scan(orelse, else_entry, collect_findings=collect_findings)
+                        if orelse
+                        else iteration_state.copy()
                     )
                     current = {
                         name: line
@@ -473,11 +499,17 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                     loop_state = current.copy()
                     for name in _named_expression_names(test):
                         loop_state.pop(name, None)
-                    probe_state = scan_without_findings(body, loop_state)
+                    probe_state = scan(body, loop_state, collect_findings=False)
                     repeated_entry = _common_bindings([loop_state, probe_state])
-                    body_state = scan(body, repeated_entry)
+                    body_state = scan(
+                        body, repeated_entry, collect_findings=collect_findings
+                    )
                     else_state = (
-                        scan(orelse, _common_bindings([loop_state, body_state]))
+                        scan(
+                            orelse,
+                            _common_bindings([loop_state, body_state]),
+                            collect_findings=collect_findings,
+                        )
                         if orelse
                         else loop_state.copy()
                     )
@@ -500,7 +532,9 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                                 body_state.pop(name, None)
                         for name in _named_expression_names(item.optional_vars):
                             body_state.pop(name, None)
-                    body_state = scan(body, body_state)
+                    body_state = scan(
+                        body, body_state, collect_findings=collect_findings
+                    )
                     current = {
                         name: line
                         for name, line in before.items()
@@ -520,8 +554,12 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                         finalbody=finalbody,
                     )
                 ):
-                    body_state = scan(body, current)
-                    normal_state = scan(orelse, body_state) if orelse else body_state
+                    body_state = scan(body, current, collect_findings=collect_findings)
+                    normal_state = (
+                        scan(orelse, body_state, collect_findings=collect_findings)
+                        if orelse
+                        else body_state
+                    )
                     paths = [normal_state]
                     handler_dispatch_state = _common_bindings([current, body_state])
                     for handler in handlers:
@@ -535,7 +573,11 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                             # Exception aliases bind in the handler suite and
                             # replace any prior rendered value of that name.
                             handler_state.pop(handler.name, None)
-                        handled_state = scan(handler.body, handler_state)
+                        handled_state = scan(
+                            handler.body,
+                            handler_state,
+                            collect_findings=collect_findings,
+                        )
                         paths.append(handled_state)
                         if isinstance(statement, ast.TryStar):
                             # except* suites run in order for matching portions
@@ -552,7 +594,9 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                         paths.append(current.copy())
                     current = _common_bindings(paths)
                     if finalbody:
-                        current = scan(finalbody, current)
+                        current = scan(
+                            finalbody, current, collect_findings=collect_findings
+                        )
                 case ast.Match(subject=subject, cases=cases):
                     before = current.copy()
                     for name in _named_expression_names(subject):
@@ -571,7 +615,13 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                         guard_writes = _named_expression_names(case.guard)
                         for name in guard_writes:
                             case_state.pop(name, None)
-                        paths.append(scan(case.body, case_state))
+                        paths.append(
+                            scan(
+                                case.body,
+                                case_state,
+                                collect_findings=collect_findings,
+                            )
+                        )
                         possible_case_writes.update(pattern_writes)
                         possible_case_writes.update(guard_writes)
                     current = {
@@ -634,17 +684,9 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                     continue
                 case _:
                     continue
+        if cache_key is not None:
+            state_only_cache[cache_key] = current.copy()
         return current
-
-    def scan_without_findings(
-        statements: Sequence[ast.stmt], rendered: Mapping[str, int]
-    ) -> dict[str, int]:
-        """Compute a loop back-edge without keeping speculative findings."""
-        prior_findings = found.copy()
-        state = scan(statements, rendered)
-        found.clear()
-        found.update(prior_findings)
-        return state
 
     helper_roots = frozenset(helper.split(".", 1)[0] for helper in helpers)
 

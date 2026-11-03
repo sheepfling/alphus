@@ -799,6 +799,21 @@ def f(text, values):
     assert _sites(source, ("render",)) == [(2, 4, "rendered")]
 
 
+def test_deeply_nested_loops_use_cached_state_only_scans() -> None:
+    lines = ["def f(text):", "    rendered = render(text)"]
+    for depth in range(18):
+        indent = "    " * (depth + 1)
+        lines.append(f"{indent}for index_{depth} in range(1):")
+    indent = "    " * 19
+    lines.extend(
+        [
+            f'{indent}if rendered.rstrip().endswith("!"):',
+            f"{indent}    return True",
+        ]
+    )
+    assert _sites("\n".join(lines) + "\n", ("render",)) == [(2, 21, "rendered")]
+
+
 def test_for_target_invalidation_reaches_else_suite() -> None:
     source = """\
 def f(text):
