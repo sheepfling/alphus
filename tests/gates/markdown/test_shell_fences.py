@@ -198,6 +198,28 @@ def test_assignment_prefix_scanning_stops_at_command_separators(
     assert findings == []
 
 
+def test_escaped_printf_separators_are_not_command_boundaries(
+    tmp_path: Path,
+) -> None:
+    fence = chr(96) * 3
+    escaped = "\\(printf a " * 2000
+    findings = _check(
+        tmp_path,
+        "\n".join(
+            [
+                fence + "bash",
+                "echo " + escaped + "%PATH%",
+                fence,
+                "",
+            ]
+        ),
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 2
+    assert 'cmd syntax "%PATH%"' in findings[0].message
+
+
 def test_find_format_arguments_are_not_cmd_environment_evidence(
     tmp_path: Path,
 ) -> None:

@@ -624,7 +624,8 @@ def _mask_printf_format_argument(
 
     spans: list[tuple[int, int]] = []
     format_found = False
-    for command_match in _PRINTF_FORMAT_COMMAND.finditer(visible_command):
+    candidate_command = _mask_escaped_command_operators(visible_command)
+    for command_match in _PRINTF_FORMAT_COMMAND.finditer(candidate_command):
         command_start = command_match.start("command")
         if command_start + offset > len(raw_command):
             continue
