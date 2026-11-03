@@ -48,6 +48,11 @@ def test_reports_only_configured_token_match_results(source: str) -> None:
     ]
 
 
+def test_annotation_only_name_preserves_selected_function_evidence() -> None:
+    source = _DIRECT + "\npreserve_text: object\n"
+    assert len(heuristic_total_consumption_sites(source, _policy())) == 1
+
+
 @pytest.mark.parametrize(
     "source",
     [

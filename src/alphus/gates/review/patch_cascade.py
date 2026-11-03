@@ -46,32 +46,135 @@ def _call(node: ast.AST) -> ast.Call | None:
             return None
 
 
-def _stored_helper_name(node: ast.AST, names: frozenset[str]) -> bool:
-    match node:
-        case ast.Name(id=name, ctx=ast.Store()) if name in names:
-            return True
-        case (
-            ast.FunctionDef(name=name)
-            | ast.AsyncFunctionDef(name=name)
-            | ast.ClassDef(name=name)
-        ) if name in names:
-            return True
-        case ast.Import(names=aliases):
-            return any(
-                (alias.asname or alias.name.split(".", maxsplit=1)[0]) in names
-                for alias in aliases
-            )
-        case ast.ImportFrom(names=aliases):
-            return any(
-                alias.name == "*" or (alias.asname or alias.name) in names
-                for alias in aliases
-            )
-        case ast.MatchAs(name=name) | ast.MatchStar(name=name) if name in names:
-            return True
-        case ast.MatchMapping(rest=name) if name in names:
-            return True
+def _comprehension_target_names(target: ast.expr) -> frozenset[str]:
+    match target:
+        case ast.Name(id=name):
+            return frozenset((name,))
+        case ast.Tuple(elts=items) | ast.List(elts=items):
+            names: set[str] = set()
+            for item in items:
+                names.update(_comprehension_target_names(item))
+            return frozenset(names)
+        case ast.Starred(value=value):
+            return _comprehension_target_names(value)
         case _:
-            return False
+            return frozenset()
+
+
+def _helper_binding_nodes(
+    root: ast.AST, shadowed: frozenset[str] = frozenset()
+) -> Iterable[ast.AST]:
+    """Walk local bindings and definition-time expressions, not nested bodies."""
+    if isinstance(root, ast.Name) and root.id in shadowed:
+        return
+    yield root
+    match root:
+        case ast.FunctionDef() | ast.AsyncFunctionDef():
+            arguments = root.args
+            children = [
+                *root.decorator_list,
+                *arguments.defaults,
+                *(item for item in arguments.kw_defaults if item is not None),
+                *(
+                    argument.annotation
+                    for argument in (
+                        *arguments.posonlyargs,
+                        *arguments.args,
+                        *arguments.kwonlyargs,
+                    )
+                    if argument.annotation is not None
+                ),
+                *(
+                    [arguments.vararg.annotation]
+                    if arguments.vararg is not None
+                    and arguments.vararg.annotation is not None
+                    else []
+                ),
+                *(
+                    [arguments.kwarg.annotation]
+                    if arguments.kwarg is not None
+                    and arguments.kwarg.annotation is not None
+                    else []
+                ),
+                *([root.returns] if root.returns is not None else []),
+            ]
+        case ast.ClassDef():
+            children = [
+                *root.decorator_list,
+                *root.bases,
+                *(keyword.value for keyword in root.keywords),
+            ]
+        case ast.Lambda():
+            children = [
+                *root.args.defaults,
+                *(item for item in root.args.kw_defaults if item is not None),
+            ]
+        case (
+            ast.ListComp(generators=generators, elt=element)
+            | ast.SetComp(generators=generators, elt=element)
+            | ast.GeneratorExp(generators=generators, elt=element)
+        ):
+            local_names = shadowed
+            for generator in generators:
+                yield from _helper_binding_nodes(generator.iter, local_names)
+                local_names = local_names | _comprehension_target_names(
+                    generator.target
+                )
+                for condition in generator.ifs:
+                    yield from _helper_binding_nodes(condition, local_names)
+            yield from _helper_binding_nodes(element, local_names)
+            return
+        case ast.DictComp(generators=generators, key=key, value=value):
+            local_names = shadowed
+            for generator in generators:
+                yield from _helper_binding_nodes(generator.iter, local_names)
+                local_names = local_names | _comprehension_target_names(
+                    generator.target
+                )
+                for condition in generator.ifs:
+                    yield from _helper_binding_nodes(condition, local_names)
+            yield from _helper_binding_nodes(key, local_names)
+            yield from _helper_binding_nodes(value, local_names)
+            return
+        case ast.AnnAssign(target=ast.Name(), value=None, annotation=annotation):
+            yield from _helper_binding_nodes(annotation, shadowed)
+            return
+        case _:
+            children = list(ast.iter_child_nodes(root))
+    for child in children:
+        yield from _helper_binding_nodes(child, shadowed)
+
+
+def _stored_helper_name(node: ast.AST, names: frozenset[str]) -> bool:
+    for child in _helper_binding_nodes(node):
+        match child:
+            case ast.Name(id=name, ctx=ast.Store()) if name in names:
+                return True
+            case (
+                ast.FunctionDef(name=name)
+                | ast.AsyncFunctionDef(name=name)
+                | ast.ClassDef(name=name)
+            ) if name in names:
+                return True
+            case ast.Import(names=aliases):
+                if any(
+                    (alias.asname or alias.name.split(".", maxsplit=1)[0]) in names
+                    for alias in aliases
+                ):
+                    return True
+            case ast.ImportFrom(names=aliases):
+                if any(
+                    alias.name == "*" or (alias.asname or alias.name) in names
+                    for alias in aliases
+                ):
+                    return True
+            case ast.MatchAs(name=name) | ast.MatchStar(name=name) if name in names:
+                return True
+            case ast.MatchMapping(rest=name) if name in names:
+                return True
+            case _:
+                continue
+    return False
 
 
 def _walk_function_body(node: ast.AST) -> Iterable[ast.AST]:
@@ -154,7 +257,7 @@ def patch_cascade_sites(
             )
         }
         if parameters & helper_roots or any(
-            _stored_helper_name(node, helper_roots) for node in body_nodes
+            _stored_helper_name(statement, helper_roots) for statement in function.body
         ):
             continue
         matched: dict[str, tuple[int, set[str]]] = {}

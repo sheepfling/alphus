@@ -62,6 +62,14 @@ class _ModuleBindings(ast.NodeVisitor):
             case _:
                 return
 
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
+        # A name-only annotation records metadata but does not bind or replace
+        # the runtime value. Its annotation expression is still evaluated.
+        if node.value is None and isinstance(node.target, ast.Name):
+            self.visit(node.annotation)
+            return
+        self.generic_visit(node)
+
     def visit_Import(self, node: ast.Import) -> None:
         for alias in node.names:
             self._count(alias.asname or alias.name.split(".", maxsplit=1)[0])

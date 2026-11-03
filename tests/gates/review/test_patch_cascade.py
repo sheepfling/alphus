@@ -42,6 +42,19 @@ def parse_document(repair_id, text):
     assert sites[0].helpers == ("normalize_text",)
 
 
+def test_comprehension_local_target_does_not_shadow_normalization_helper() -> None:
+    source = """\
+def parse_document(repair_id, text, callbacks):
+    if repair_id == "vendor-a":
+        text = normalize_text(text, " ")
+    if repair_id == "vendor-b":
+        text = normalize_text(text, "-")
+    previews = [normalize_text for normalize_text in callbacks]
+    return text
+"""
+    assert len(patch_cascade_sites(source, _policy())) == 1
+
+
 def test_single_repair_branch_is_below_cluster_threshold() -> None:
     source = """\
 def parse_document(repair_id, text):

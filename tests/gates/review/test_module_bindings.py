@@ -21,6 +21,12 @@ def test_comprehension_assignment_expression_is_a_module_binding() -> None:
     assert module_binding_counts(tree, ("preserve",)) == {"preserve": 2}
 
 
+def test_annotation_only_target_does_not_rebind_module_function() -> None:
+    tree = ast.parse("def preserve(text): return find_tokens(text)\npreserve: object\n")
+
+    assert module_binding_counts(tree, ("preserve",)) == {"preserve": 1}
+
+
 def test_module_pattern_capture_is_a_module_binding() -> None:
     tree = ast.parse(
         "def preserve(text): return find_tokens(text)\n"
