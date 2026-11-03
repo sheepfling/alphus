@@ -52,6 +52,33 @@ def _target_names(target: ast.expr) -> set[str]:
     return names
 
 
+def _parameter_names(
+    function: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> frozenset[str]:
+    arguments = function.args
+    return frozenset(
+        argument.arg
+        for argument in (
+            *arguments.posonlyargs,
+            *arguments.args,
+            *arguments.kwonlyargs,
+            *((arguments.vararg,) if arguments.vararg is not None else ()),
+            *((arguments.kwarg,) if arguments.kwarg is not None else ()),
+        )
+    )
+
+
+def _is_configured_renderer(
+    function: ast.expr, helpers: tuple[str, ...], shadowed_roots: frozenset[str]
+) -> bool:
+    helper = _qualified_name(function)
+    return (
+        helper is not None
+        and helper in helpers
+        and helper.split(".", 1)[0] not in shadowed_roots
+    )
+
+
 def _named_expression_names(value: ast.expr | None) -> set[str]:
     names: set[str] = set()
     if value is None:
@@ -145,6 +172,7 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
     except SyntaxError:
         return []
     found: set[_RenderedValueSite] = set()
+    shadowed_helper_roots: frozenset[str] = frozenset()
 
     def scan(
         statements: Sequence[ast.stmt], rendered: Mapping[str, int]
@@ -174,7 +202,9 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                 case ast.Assign(
                     targets=[ast.Name(id=name)],
                     value=ast.Call(func=func, args=args, keywords=keywords),
-                ) if _qualified_name(func) in helpers and (args or keywords):
+                ) if _is_configured_renderer(func, helpers, shadowed_helper_roots) and (
+                    args or keywords
+                ):
                     for rebound in _named_expression_names(statement.value):
                         current.pop(rebound, None)
                     current.pop(name, None)
@@ -190,7 +220,9 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                 case ast.AnnAssign(
                     target=ast.Name(id=name),
                     value=ast.Call(func=func, args=args, keywords=keywords),
-                ) if _qualified_name(func) in helpers and (args or keywords):
+                ) if _is_configured_renderer(func, helpers, shadowed_helper_roots) and (
+                    args or keywords
+                ):
                     for rebound in _named_expression_names(statement.value):
                         current.pop(rebound, None)
                     current.pop(name, None)
@@ -413,6 +445,11 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
     for node in ast.walk(tree):
         match node:
             case ast.FunctionDef() | ast.AsyncFunctionDef() as function:
+                shadowed_helper_roots = frozenset(
+                    helper.split(".", 1)[0]
+                    for helper in helpers
+                    if helper.split(".", 1)[0] in _parameter_names(function)
+                )
                 scan(function.body, {})
             case _:
                 continue

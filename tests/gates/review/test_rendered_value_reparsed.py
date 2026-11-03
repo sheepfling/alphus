@@ -27,6 +27,26 @@ def merge(cell):
     assert _sites(source, ("render_latex",)) == [(3, 4, "rendered")]
 
 
+@pytest.mark.parametrize(
+    ("signature", "helper", "call"),
+    [
+        ("text, render_latex", "render_latex", "render_latex(text)"),
+        ("text, renderer", "renderer.render", "renderer.render(text)"),
+    ],
+)
+@pytest.mark.parametrize("annotation", ["", ": str"])
+def test_parameter_shadowed_renderer_is_not_rendered_evidence(
+    signature: str, helper: str, call: str, annotation: str
+) -> None:
+    source = f"""\
+def merge({signature}):
+    rendered{annotation} = {call}
+    if rendered.rstrip().endswith("!"):
+        return True
+"""
+    assert _sites(source, (helper,)) == []
+
+
 def test_annotation_only_statement_preserves_rendered_binding() -> None:
     source = """\
 def merge(text):
