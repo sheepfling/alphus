@@ -67,6 +67,27 @@ def test_benchmark_heading_provides_context_for_measurements(tmp_path: Path) -> 
     assert "2 timing, throughput, or comparison expressions" in findings[0].message
 
 
+def test_benchmark_context_is_inherited_by_subsections(tmp_path: Path) -> None:
+    root = tmp_path
+    relative = Path("docs/benchmark-subsection.md")
+    source = root / relative
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "# Benchmarks\n\n## Small input\n\nScalar: 0.42 ms; vector: 0.13 ms.\n",
+        encoding="utf-8",
+    )
+
+    findings = benchmark_doc_findings(
+        root,
+        [relative],
+        BenchmarkDocPolicy(include=("docs/**",)),
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 3
+    assert "Small input" in findings[0].message
+
+
 def test_detects_throughput_and_comparison_sections_deterministically(
     tmp_path: Path,
 ) -> None:

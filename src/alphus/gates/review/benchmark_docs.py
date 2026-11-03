@@ -60,10 +60,11 @@ def _selected_paths(paths: Iterable[Path], policy: _BenchmarkDocPolicy) -> list[
     return nsmallest(policy.max_files + 1, selected, key=Path.as_posix)
 
 
-def _sections(lines: Sequence[str]) -> Iterable[tuple[str, int, str]]:
+def _sections(lines: Sequence[str]) -> Iterable[tuple[str, int, str, str]]:
     title = "(document introduction)"
     start_line = 1
     body: list[str] = []
+    heading_path: list[tuple[int, str]] = []
     fence: str | None = None
     fence_length = 0
     for line_number, line in enumerate(lines, start=1):
@@ -84,14 +85,20 @@ def _sections(lines: Sequence[str]) -> Iterable[tuple[str, int, str]]:
         heading = _HEADING.match(line)
         if heading:
             if body:
-                yield title, start_line, "\n".join(body)
+                context = " > ".join(part for _, part in heading_path) or title
+                yield title, start_line, "\n".join(body), context
+            level = len(heading.group(1))
             title = heading.group(2).strip()
+            while heading_path and heading_path[-1][0] >= level:
+                heading_path.pop()
+            heading_path.append((level, title))
             start_line = line_number
             body = []
         else:
             body.append(line)
     if body:
-        yield title, start_line, "\n".join(body)
+        context = " > ".join(part for _, part in heading_path) or title
+        yield title, start_line, "\n".join(body), context
 
 
 def _measurement_count(text: str) -> int:
@@ -290,12 +297,12 @@ def benchmark_doc_findings(
             continue
 
         sections = list(_sections(text.splitlines()))
-        visible_document = "\n".join(body for _, _, body in sections)
+        visible_document = "\n".join(body for _, _, body, _ in sections)
         method_definitions = _method_link_definitions(visible_document)
-        for section, line, body in sections:
+        for section, line, body, heading_context in sections:
             if (relative_name, section) in exceptions:
                 continue
-            section_text = f"{section}\n{body}"
+            section_text = f"{heading_context}\n{body}"
             measurements = _measurement_count(section_text)
             if (
                 measurements < policy.min_measurements
