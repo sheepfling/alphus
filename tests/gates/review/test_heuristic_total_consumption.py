@@ -59,6 +59,7 @@ def test_reports_only_configured_token_match_results(source: str) -> None:
         _DIRECT + "\npreserve_text = lambda text: text\n",
         _DIRECT + "\nfrom other_module import preserve_text\n",
         _DIRECT + "\nclass preserve_text: pass\n",
+        _DIRECT + "\ndef wrapper(default=(preserve_text := replacement)): pass\n",
     ],
 )
 def test_other_helpers_preserving_shapes_and_rebindings_abstain(source: str) -> None:

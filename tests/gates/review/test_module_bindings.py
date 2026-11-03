@@ -53,3 +53,13 @@ def test_exception_handler_alias_is_a_module_binding() -> None:
     )
 
     assert module_binding_counts(tree, ("preserve",)) == {"preserve": 2}
+
+
+def test_function_definition_time_expressions_bind_in_module_scope() -> None:
+    tree = ast.parse(
+        "def preserve(text): return find_tokens(text)\n"
+        "@decorate((preserve := replacement))\n"
+        "def wrapper(value=(preserve := replacement)): pass\n"
+    )
+
+    assert module_binding_counts(tree, ("preserve",)) == {"preserve": 3}

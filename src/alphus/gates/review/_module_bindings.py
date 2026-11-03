@@ -18,12 +18,42 @@ class _ModuleBindings(ast.NodeVisitor):
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         self._count(node.name)
+        self._visit_definition_time_expressions(node)
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
         self._count(node.name)
+        self._visit_definition_time_expressions(node)
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         self._count(node.name)
+        for expression in (*node.decorator_list, *node.bases):
+            self.visit(expression)
+        for keyword in node.keywords:
+            self.visit(keyword.value)
+
+    def _visit_definition_time_expressions(
+        self, node: ast.FunctionDef | ast.AsyncFunctionDef
+    ) -> None:
+        """Visit expressions evaluated in the module when the function is defined."""
+        for expression in node.decorator_list:
+            self.visit(expression)
+        arguments = node.args
+        for expression in (*arguments.defaults, *arguments.kw_defaults):
+            if expression is not None:
+                self.visit(expression)
+        for argument in (
+            *arguments.posonlyargs,
+            *arguments.args,
+            *arguments.kwonlyargs,
+        ):
+            if argument.annotation is not None:
+                self.visit(argument.annotation)
+        if arguments.vararg is not None and arguments.vararg.annotation is not None:
+            self.visit(arguments.vararg.annotation)
+        if arguments.kwarg is not None and arguments.kwarg.annotation is not None:
+            self.visit(arguments.kwarg.annotation)
+        if node.returns is not None:
+            self.visit(node.returns)
 
     def visit_Name(self, node: ast.Name) -> None:
         match node.ctx:
