@@ -742,9 +742,14 @@ Keep a concise workload description and reproducible benchmark command in
 current-facing documentation when useful. When detailed, machine-specific
 measurements need to be retained, consider a dated report that is explicitly
 maintained. The checker never runs benchmarks or asks consumers to check in
-machine-specific benchmark JSON. Labeled positive, negative, and boundary
-examples in the scanner tests cover duration prose, throughput, speedup ratios,
-routine timeout/install waits, software versions, fenced examples, linked
-methods, historical report paths, and exact scoped exceptions. These examples
-exercise candidate generation; they do not establish precision or enforcement
-performance.
+machine-specific benchmark JSON. The positive timing, throughput, and speedup
+fixtures are synthetic and their values are invented solely to exercise lexical
+matches; they are not benchmark evidence. A real negative fixture excerpts the
+QuatOps `experiments/README.md` procedure for saving run artifacts and keeping
+medians out of durable docs. The checked QuatOps documentation and available
+history contained no durable numeric comparison to use as a real positive
+calibration example. Tests also cover routine timeout/install waits, software
+versions, fenced examples, linked methods, historical report paths, and exact
+scoped exceptions. This sample does not measure precision or enforcement
+performance; collect multiple human-labeled real positives and negatives before
+making those claims.

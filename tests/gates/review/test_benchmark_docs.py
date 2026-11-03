@@ -27,7 +27,7 @@ def _copy_fixtures(tmp_path: Path, *names: str) -> tuple[Path, list[Path]]:
     return tmp_path, selected
 
 
-def test_quatops_style_prose_is_one_section_level_candidate(tmp_path: Path) -> None:
+def test_synthetic_quatops_style_prose_is_one_candidate(tmp_path: Path) -> None:
     root, paths = _copy_fixtures(tmp_path, "quatops-style.md")
     findings = benchmark_doc_findings(
         root,
@@ -77,6 +77,7 @@ def test_detects_throughput_and_comparison_sections_deterministically(
         "fenced-example.md",
         "linked-method.md",
         "benchmark-reports/dated-benchmark-report.md",
+        "quatops-real-procedure.md",
     ),
 )
 def test_false_positive_boundaries_are_suppressed(name: str, tmp_path: Path) -> None:
@@ -99,7 +100,7 @@ def test_exact_reasoned_exception_suppresses_only_its_section(
         exceptions=(
             {
                 "path": "docs/quatops-style.md",
-                "section": "Quaternion operations",
+                "section": "Synthetic QuatOps-style example (invented values)",
                 "reason": "This dated section is retained for the release archive.",
             },
         ),
