@@ -512,9 +512,13 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                     normal_state = scan(orelse, body_state) if orelse else body_state
                     paths = [normal_state]
                     exception_state = _common_bindings([current, body_state])
-                    paths.extend(
-                        scan(handler.body, exception_state) for handler in handlers
-                    )
+                    for handler in handlers:
+                        handler_state = exception_state.copy()
+                        if handler.name is not None:
+                            # Exception aliases bind in the handler suite and
+                            # replace any prior rendered value of that name.
+                            handler_state.pop(handler.name, None)
+                        paths.append(scan(handler.body, handler_state))
                     if finalbody:
                         # An exception can enter finally before the body completes,
                         # so only bindings common to normal and exceptional paths

@@ -608,6 +608,20 @@ def test_exception_group_handler_scans_preserved_rendered_binding() -> None:
     assert _sites(source, ("render",)) == [(2, 6, "rendered")]
 
 
+@pytest.mark.parametrize("star", ["", "*"])
+def test_exception_alias_invalidates_rendered_binding_in_handler(star: str) -> None:
+    source = (
+        "def f(text):\n"
+        "    rendered = render(text)\n"
+        "    try:\n"
+        "        raise SourceError(text)\n"
+        f"    except{star} SourceError as rendered:\n"
+        '        if rendered.rstrip().endswith("!"):\n'
+        "            return True\n"
+    )
+    assert _sites(source, ("render",)) == []
+
+
 def test_match_capture_invalidates_prior_rendered_binding_within_case() -> None:
     source = """\
 def f(text):
