@@ -271,6 +271,43 @@ def test_lambda_default_walrus_invalidates_outer_binding() -> None:
     assert _sites(source, ("render",)) == []
 
 
+@pytest.mark.parametrize(
+    ("condition", "line"),
+    [
+        ("if consume(lambda: (rendered := original)): pass", 4),
+        (
+            "while consume(lambda: (rendered := original)) and False: pass",
+            4,
+        ),
+    ],
+)
+def test_lambda_body_walrus_in_conditional_does_not_invalidate_outer_binding(
+    condition: str, line: int
+) -> None:
+    source = (
+        "def f(text, original):\n"
+        "    rendered = render(text)\n"
+        f"    {condition}\n"
+        '    if rendered.rstrip().endswith("!"):\n'
+        "        return True\n"
+        "    return False\n"
+    )
+    assert _sites(source, ("render",)) == [(2, line, "rendered")]
+
+
+def test_lambda_default_walrus_in_conditional_invalidates_outer_binding() -> None:
+    source = (
+        "def f(text, original):\n"
+        "    rendered = render(text)\n"
+        "    if consume(lambda value=(rendered := original): value):\n"
+        "        pass\n"
+        '    if rendered.rstrip().endswith("!"):\n'
+        "        return True\n"
+        "    return False\n"
+    )
+    assert _sites(source, ("render",)) == []
+
+
 def test_expression_statement_walrus_invalidates_rendered_binding() -> None:
     source = """\
 def f(text, original):

@@ -154,12 +154,8 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                             _RenderedValueSite(current[name], conditional.lineno, name)
                         )
                     branch_state = current.copy()
-                    for node in ast.walk(test):
-                        match node:
-                            case ast.NamedExpr(target=ast.Name(id=name)):
-                                branch_state.pop(name, None)
-                            case _:
-                                continue
+                    for name in _named_expression_names(test):
+                        branch_state.pop(name, None)
                     then_state = scan(body, branch_state)
                     else_state = (
                         scan(orelse, branch_state) if orelse else branch_state.copy()
@@ -268,12 +264,8 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                 case ast.While(test=test, body=body, orelse=orelse):
                     before = current.copy()
                     loop_state = current.copy()
-                    for node in ast.walk(test):
-                        match node:
-                            case ast.NamedExpr(target=ast.Name(id=name)):
-                                loop_state.pop(name, None)
-                            case _:
-                                continue
+                    for name in _named_expression_names(test):
+                        loop_state.pop(name, None)
                     body_state = scan(body, loop_state)
                     else_state = (
                         scan(orelse, _common_bindings([loop_state, body_state]))
