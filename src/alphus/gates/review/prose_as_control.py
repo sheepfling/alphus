@@ -396,6 +396,12 @@ def _regex_helper_root_is_shadowed(
             ancestor, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
         ) and _comprehension_binds_name(ancestor, root, call, parents):
             return True
+        if (
+            isinstance(ancestor, ast.ClassDef)
+            and _class_namespace_applies(ancestor, call, parents)
+            and _class_scope_binds_name(ancestor, root)
+        ):
+            return True
         if isinstance(ancestor, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
             if not _is_definition_time_expression(
                 ancestor, call, parents
@@ -403,6 +409,57 @@ def _regex_helper_root_is_shadowed(
                 return True
         ancestor = parents.get(ancestor)
     return False
+
+
+def _class_namespace_applies(
+    scope: ast.ClassDef,
+    expression: ast.AST,
+    parents: Mapping[ast.AST, ast.AST],
+) -> bool:
+    """Limit class-name lookup to expressions actually evaluated in its body."""
+    child = expression
+    parent = parents.get(child)
+    while parent is not None and parent is not scope:
+        if isinstance(
+            parent, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
+        ):
+            return False
+        if isinstance(parent, ast.Lambda) and not _is_definition_time_expression(
+            parent, expression, parents
+        ):
+            return False
+        child = parent
+        parent = parents.get(parent)
+    if parent is not scope:
+        return False
+    if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        return _is_definition_time_expression(child, expression, parents)
+    if isinstance(child, ast.ClassDef):
+        return _is_class_definition_expression(child, expression, parents)
+    return True
+
+
+def _is_class_definition_expression(
+    scope: ast.ClassDef,
+    expression: ast.AST,
+    parents: Mapping[ast.AST, ast.AST],
+) -> bool:
+    child = expression
+    parent = parents.get(child)
+    while parent is not None and parent is not scope:
+        child = parent
+        parent = parents.get(parent)
+    return parent is scope and (
+        child in scope.decorator_list or child in scope.bases or child in scope.keywords
+    )
+
+
+def _class_scope_binds_name(scope: ast.ClassDef, name: str) -> bool:
+    """Collect class-body bindings without treating methods as closures."""
+    bindings = _FunctionBindingNames()
+    for statement in scope.body:
+        bindings.visit(statement)
+    return name in bindings.names
 
 
 def _comprehension_binds_name(
@@ -482,7 +539,8 @@ def _function_scope_binds_name(
     if name in {argument.arg for argument in _function_parameters(function)}:
         return True
     bindings = _FunctionBindingNames()
-    for statement in function.body if not isinstance(function, ast.Lambda) else ():
+    body = (function.body,) if isinstance(function, ast.Lambda) else function.body
+    for statement in body:
         bindings.visit(statement)
     return name in bindings.names
 

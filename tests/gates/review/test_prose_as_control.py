@@ -119,12 +119,22 @@ def comprehension(text, adapters):
     return [re.sub(r"\d+", "", text) for re in adapters]
 
 items = [item for item in re.sub(r"\d+", "", text) for re in adapters]
+
+clean_lambda = lambda text, adapter: ((re := adapter), re.sub(r"\d+", "", text))[1]
+
+class Shadowed:
+    re = adapter
+    cleaned = re.sub(r"\d+", "", "abc123")
+
+class Unshadowed:
+    cleaned = re.sub(r"\d+", "", "abc123")
 """
     configured = _policy(lossy_text_rewrite=True, regex_sub_helpers=("re.sub",))
 
     assert lossy_rewrite_lines(source, configured) == [
         (7, r"\d+"),
         (17, r"\d+"),
+        (26, r"\d+"),
     ]
 
 
