@@ -150,6 +150,19 @@ _SOURCE_SCAN_RULES: frozenset[QualityRuleName] = frozenset(
         "python-style",
         "runtime-types",
         "numeric-literals",
+        "manual-matrix-kernels",
+        "manual-elimination",
+        "array-representation-churn",
+        "cholesky-recurrence",
+        "manual-quaternion-conjugation",
+        "manual-quaternion-products",
+        "manual-quaternion-normalization",
+        "manual-quaternion-inversion",
+        "manual-quaternion-vector-rotation",
+        "manual-quaternion-matrix-conversion",
+        "ecef-enu-transform",
+        "ecef-ned-matrix-transform",
+        "ned-basis-vectors",
         "scipy-constants",
         "test-quality",
         "input-contracts",
@@ -1627,6 +1640,7 @@ def _selected_rule_files(
     )
     if policy is None:
         return None
+    source_paths = cast(tuple[str, ...] | None, getattr(policy, "source_paths", None))
     test_paths = (
         cast(TestQualityPolicy, policy).test_paths if rule == "test-quality" else None
     )
@@ -1636,6 +1650,12 @@ def _selected_rule_files(
         if relative.suffix.lower() in policy.extensions
         and not any(
             matches_path(relative.as_posix(), pattern) for pattern in policy.exclude
+        )
+        and (
+            source_paths is None
+            or any(
+                matches_path(relative.as_posix(), pattern) for pattern in source_paths
+            )
         )
         and (
             test_paths is None

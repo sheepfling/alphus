@@ -1,0 +1,31 @@
+schema_version = 1
+
+[files]
+include = [".github/workflows/**/*.yml", ".github/workflows/**/*.yaml"]
+exclude = []
+
+[checks.ci_workflows]
+extensions = [".yml", ".yaml"]
+exclude = []
+workflow_paths = [".github/workflows/**"]
+azure_workflow_paths = []
+ignore_run_blocks = []
+ignore_setup_actions = []
+matrix_invariant_run_blocks = []
+minimum_run_lines = 2
+maximum_inline_run_lines = 20
+severity = "info"
+
+[orchestration]
+default_profile = "self-ci-workflows"
+failure_threshold = "warning"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Alphus CI workflow review"
+rule = "ci-workflows"
+rollout = "provisional"
+
+[[orchestration.profiles]]
+name = "self-ci-workflows"
+steps = ["Alphus CI workflow review"]

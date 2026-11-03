@@ -113,6 +113,7 @@ def test_gate_themes_own_their_runner_mappings() -> None:
                 "pydantic-practices",
                 "fastapi-practices",
                 "sqlalchemy-practices",
+                "ci-workflows",
             },
         ),
         (
