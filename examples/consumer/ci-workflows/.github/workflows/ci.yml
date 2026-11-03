@@ -1,0 +1,19 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  lint:
+    name: Static checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run lint
+        run: |
+          ruff check src
+          mypy src
+  audit:
+    name: Type audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run lint
+        run: |
+          ruff check src
+          mypy src

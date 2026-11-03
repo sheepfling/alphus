@@ -41,6 +41,7 @@ from alphus.policy.repository import (
 from alphus.policy.review import (
     ArrayRepresentationPolicy,
     CholeskyRecurrencePolicy,
+    CiWorkflowPolicy,
     DocumentStylePolicy,
     EcefEnuTransformPolicy,
     EcefNedMatrixTransformPolicy,
@@ -103,6 +104,7 @@ class CheckPolicies(StrictModel):
     ecef_ned_matrix_transform: EcefNedMatrixTransformPolicy | None = None
     ned_basis_vectors: NedBasisVectorsPolicy | None = None
     scipy_constants: ScipyConstantsPolicy | None = None
+    ci_workflows: CiWorkflowPolicy | None = None
     test_quality: TestQualityPolicy | None = None
     input_contracts: InputContractPolicy | None = None
     source_families: SourceFamilyPolicy | None = None
