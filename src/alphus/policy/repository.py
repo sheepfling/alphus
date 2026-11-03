@@ -10,6 +10,7 @@ from pydantic import Field, field_validator, model_validator
 
 from alphus.policy.base import (
     StrictModel,
+    SuppressionReason,
     require_unique,
     validate_one_line_message,
     validate_patterns,
@@ -391,7 +392,7 @@ class DocumentationConfigSuppression(StrictModel):
 
     path: str
     symbol: str
-    reason: str
+    reason: SuppressionReason
 
     @field_validator("path")
     @classmethod
@@ -404,14 +405,6 @@ class DocumentationConfigSuppression(StrictModel):
         if not symbol or any(not part.isidentifier() for part in symbol.split(".")):
             raise ValueError("suppression symbols must be dotted Python identifiers")
         return symbol
-
-    @field_validator("reason")
-    @classmethod
-    def validate_reason(cls, reason: str) -> str:
-        text = validate_one_line_message(reason)
-        if len(text) < 20:
-            raise ValueError("suppression reasons must be at least 20 characters")
-        return text
 
 
 class DocumentationConfigPolicy(StrictModel):

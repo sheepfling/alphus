@@ -30,6 +30,10 @@ from alphus.policy.intents import (
     NativeCapabilityBinding,
     SharedQualityIntent,
 )
+from alphus.policy.markdown import (
+    MarkdownShellFencesPolicy,
+    MarkdownShellFenceSuppression,
+)
 from alphus.policy.metrics import (
     CyclomaticBackendBinding,
     CyclomaticComplexityPolicy,
@@ -159,6 +163,8 @@ __all__ = [
     "LockfilePair",
     "ManualEliminationPolicy",
     "ManualMatrixKernelPolicy",
+    "MarkdownShellFenceSuppression",
+    "MarkdownShellFencesPolicy",
     "ModuleRolePolicy",
     "ModuleRoleRule",
     "NativeCapabilityBinding",
