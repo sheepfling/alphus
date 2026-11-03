@@ -1,0 +1,33 @@
+schema_version = 1
+
+[files]
+include = ["src/alphus/**/*.py"]
+exclude = []
+
+[checks.source_families]
+extensions = [".py"]
+include = ["src/alphus/**/*.py"]
+exclude = []
+min_family_files = 5
+min_prefix_characters = 4
+max_files = 20000
+max_findings = 100
+max_reported_members = 40
+max_scope_patterns = 64
+python_import_evidence = true
+python_module_roots = ["src"]
+max_import_analysis_bytes = 8388608
+
+[orchestration]
+default_profile = "self-source-family-imports"
+failure_threshold = "warning"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Alphus source family import review"
+rule = "source-families"
+rollout = "provisional"
+
+[[orchestration.profiles]]
+name = "self-source-family-imports"
+steps = ["Alphus source family import review"]
