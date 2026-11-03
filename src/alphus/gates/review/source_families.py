@@ -509,7 +509,7 @@ class _PythonImportParseCache:
                 self.trees[source] = None
                 return None
             tree = ast.parse(raw.decode("utf-8"), filename=source.as_posix())
-        except (OSError, UnicodeError, SyntaxError, ValueError):
+        except (OSError, RecursionError, UnicodeError, SyntaxError, ValueError):
             self.trees[source] = None
             return None
         self.trees[source] = tree

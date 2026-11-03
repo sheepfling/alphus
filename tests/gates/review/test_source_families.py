@@ -1281,6 +1281,47 @@ def test_import_parse_failure_is_reported_as_incomplete(tmp_path: Path) -> None:
     )
 
 
+def test_external_python_recursion_error_is_reported_as_incomplete(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = [
+        _write(tmp_path, f"src/gateway_{name}.py")
+        for name in ("client", "server", "routes", "auth", "cache")
+    ]
+    consumer = _write(tmp_path, "src/app.py")
+    terms = " + ".join("1" for _ in range(4000))
+    (tmp_path / consumer).write_text(f"value = {terms}\n", encoding="utf-8")
+    original_parse = ast.parse
+
+    def parse_with_recursion_failure(
+        source: str | bytes,
+        filename: str = "<unknown>",
+        mode: str = "exec",
+        **kwargs: object,
+    ) -> ast.Module:
+        if filename == consumer.as_posix():
+            raise RecursionError("simulated AST recursion limit")
+        return original_parse(source, filename=filename, mode=mode, **kwargs)
+
+    monkeypatch.setattr(source_families.ast, "parse", parse_with_recursion_failure)
+    findings = source_family_findings(
+        tmp_path,
+        [*paths, consumer],
+        SourceFamilyPolicy(
+            min_family_files=5,
+            python_import_evidence=True,
+            python_module_roots=("src",),
+        ),
+    )
+
+    message = next(
+        item.message for item in findings if "Family gateway_*" in item.message
+    )
+    assert "External reference scan incomplete: 1" in message
+    assert "missing references are unknown" in message
+    assert "No direct external references were observed" not in message
+
+
 def test_scope_exclusions_extensions_and_language_override_precedence(
     tmp_path: Path,
 ) -> None:
