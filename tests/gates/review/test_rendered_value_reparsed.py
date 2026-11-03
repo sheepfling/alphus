@@ -451,6 +451,17 @@ def f(text):
     assert _sites(source, ("render",)) == []
 
 
+def test_walrus_in_loop_target_invalidates_rendered_binding_in_body() -> None:
+    source = """\
+def merge(text, original, values):
+    rendered = render_latex(text)
+    for values[(rendered := original)] in [1]:
+        if rendered.rstrip().endswith('!'):
+            return True
+"""
+    assert _sites(source, ("render_latex",)) == []
+
+
 def test_for_iterable_walrus_invalidates_rendered_binding_everywhere() -> None:
     source = """\
 def f(text, original):

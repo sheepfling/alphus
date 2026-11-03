@@ -79,6 +79,19 @@ def render(cell):
     assert embedded_override_sites(source, _policy()) == []
 
 
+def test_annotation_only_statement_preserves_mapped_replacement() -> None:
+    source = """\
+def render(cell):
+    replacement = fixed_paragraphs.get(cell.attribute)
+    replacement: str | None
+    if replacement is not None:
+        return source_anchor(cell.id) + replacement
+"""
+    assert embedded_override_sites(source, _policy()) == [
+        ("render", 2, 4, "replacement")
+    ]
+
+
 def test_nested_function_body_write_does_not_invalidate_replacement() -> None:
     source = """\
 def render(cell):

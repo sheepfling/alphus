@@ -246,6 +246,8 @@ def _sites(source: str, helpers: tuple[str, ...]) -> list[_RenderedValueSite]:
                     loop_state = iteration_state.copy()
                     for name in _target_names(target):
                         loop_state.pop(name, None)
+                    for name in _named_expression_names(target):
+                        loop_state.pop(name, None)
                     loop_state = scan(body, loop_state)
                     else_entry = _common_bindings([iteration_state, loop_state])
                     else_state = (

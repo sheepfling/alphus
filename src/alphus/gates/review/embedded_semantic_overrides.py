@@ -117,6 +117,10 @@ def _current_scope_nodes(
                 *root.args.defaults,
                 *(item for item in root.args.kw_defaults if item is not None),
             ]
+        case ast.AnnAssign(target=ast.Name(), value=None):
+            # A local annotation without a value does not replace an existing
+            # value in the enclosing function's local namespace.
+            return
         case (
             ast.ListComp(generators=generators, elt=element)
             | ast.SetComp(generators=generators, elt=element)
