@@ -1,0 +1,248 @@
+schema_version = 1
+
+[files]
+include = ["src/numerics/*.py", "src/geometry/*.py"]
+exclude = []
+
+[checks.manual_matrix_kernels]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/numerics/*.py"]
+
+[checks.manual_elimination]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/numerics/*.py"]
+function_names = ["invert_matrix"]
+matrix_name = "matrix"
+
+[checks.array_representation_churn]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/numerics/*.py"]
+array_constructors = ["numpy.asarray", "np.asarray"]
+list_conversion_methods = ["tolist"]
+
+[[checks.array_representation_churn.loop_contracts]]
+path = "src/numerics/kernels.py"
+function = "process_batches"
+array_variable = "batch"
+
+[checks.cholesky_recurrence]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/numerics/*.py"]
+square_root_helpers = ["math.sqrt"]
+
+[checks.manual_quaternion_products]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/geometry/*.py"]
+function_names = ["multiply_quaternions"]
+left_components = ["lw", "lx", "ly", "lz"]
+right_components = ["rw", "rx", "ry", "rz"]
+result_components = ["ow", "ox", "oy", "oz"]
+
+[checks.manual_quaternion_conjugation]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/geometry/*.py"]
+function_names = ["conjugate_quaternion"]
+components = ["w", "x", "y", "z"]
+
+[checks.manual_quaternion_normalization]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/geometry/*.py"]
+function_names = ["normalize_attitude"]
+components = ["w", "x", "y", "z"]
+square_root_helpers = ["math.sqrt"]
+rotation_consumer_helpers = ["Rotation.from_quat"]
+
+[checks.manual_quaternion_inversion]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/geometry/*.py"]
+function_names = ["inverse_quaternion"]
+components = ["w", "x", "y", "z"]
+
+[checks.manual_quaternion_vector_rotation]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/geometry/*.py"]
+function_names = ["rotate_vector"]
+components = ["w", "x", "y", "z"]
+vector_components = ["vx", "vy", "vz"]
+multiplication_helpers = ["multiply"]
+conjugation_helpers = ["conjugate"]
+
+[checks.manual_quaternion_matrix_conversion]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/geometry/*.py"]
+function_names = ["quaternion_to_matrix"]
+components = ["w", "x", "y", "z"]
+convention = "active-column-scalar-first"
+
+[checks.ecef_enu_transform]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/geometry/*.py"]
+function_names = ["ecef_delta_to_enu"]
+components = ["dx", "dy", "dz"]
+latitude_name = "latitude"
+longitude_name = "longitude"
+preferred_helpers = ["pyproj.Transformer.from_pipeline"]
+source_frame = "ECEF"
+destination_frame = "ENU"
+direction = "ecef-to-enu"
+latitude_type = "geodetic"
+origin = "anchor-point"
+reference_ellipsoid = "WGS84"
+angle_units = "radians"
+length_units = "meters"
+axis_order = "east-north-up"
+handedness = "right-handed"
+operation = "displacement-vector"
+output_shape = "tuple3"
+
+[checks.ecef_ned_matrix_transform]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/geometry/*.py"]
+function_names = ["ecef_to_ned_matrix"]
+latitude_name = "lat_rad"
+longitude_name = "lon_rad"
+sin_latitude_name = "slat"
+cos_latitude_name = "clat"
+sin_longitude_name = "slon"
+cos_longitude_name = "clon"
+preferred_helpers = ["pyproj.Transformer.from_pipeline"]
+array_constructor = "np.array"
+math_module = "math"
+source_frame = "ECEF"
+destination_frame = "NED"
+direction = "ecef-to-ned"
+latitude_type = "geodetic"
+origin = "anchor-point"
+reference_ellipsoid = "WGS84"
+angle_units = "radians"
+length_units = "meters"
+axis_order = "north-east-down"
+handedness = "right-handed"
+operation = "displacement-vector"
+vector_orientation = "column"
+matrix_layout = "row-major"
+output_shape = "matrix3x3"
+
+[checks.ned_basis_vectors]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/geometry/*.py"]
+function_names = ["geodetic_unit_vectors"]
+preferred_helpers = ["pyproj.Transformer.from_pipeline"]
+latitude_type = "geodetic"
+output_representation = "basis3"
+longitude_name = "longitude"
+latitude_name = "latitude"
+sine_latitude_name = "sine_latitude"
+cosine_latitude_name = "cosine_latitude"
+sine_longitude_name = "sine_longitude"
+cosine_longitude_name = "cosine_longitude"
+north_name = "first"
+east_name = "second"
+vector_constructor = "Vector3"
+basis_constructor = "Basis3"
+frame_type = "Frame"
+source_frame = "ECFC"
+destination_frame = "GEODETIC_HORIZON"
+direction = "ecfc-to-local-ned"
+angle_units = "radians"
+axis_order = "north-east-down"
+handedness = "right-handed"
+operation = "basis-vectors"
+
+[orchestration]
+default_profile = "numerical-review"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Manual matrix kernels"
+rule = "manual-matrix-kernels"
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Manual elimination review"
+rule = "manual-elimination"
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Array representation churn"
+rule = "array-representation-churn"
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Cholesky recurrence review"
+rule = "cholesky-recurrence"
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Quaternion product review"
+rule = "manual-quaternion-products"
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Quaternion conjugation review"
+rule = "manual-quaternion-conjugation"
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Quaternion normalization review"
+rule = "manual-quaternion-normalization"
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Quaternion inversion review"
+rule = "manual-quaternion-inversion"
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Quaternion vector rotation review"
+rule = "manual-quaternion-vector-rotation"
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Quaternion matrix conversion review"
+rule = "manual-quaternion-matrix-conversion"
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "ECEF to ENU transform review"
+rule = "ecef-enu-transform"
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "ECEF to NED matrix review"
+rule = "ecef-ned-matrix-transform"
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "NED basis vector review"
+rule = "ned-basis-vectors"
+rollout = "provisional"
+
+[[orchestration.profiles]]
+name = "numerical-review"
+steps = ["Manual matrix kernels", "Manual elimination review", "Array representation churn", "Cholesky recurrence review", "Quaternion product review", "Quaternion conjugation review", "Quaternion normalization review", "Quaternion inversion review", "Quaternion vector rotation review", "Quaternion matrix conversion review", "ECEF to ENU transform review", "ECEF to NED matrix review", "NED basis vector review"]

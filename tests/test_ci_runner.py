@@ -10,6 +10,7 @@ from scripts.ci import dependency_floors
 
 def test_ci_dependency_floors_follow_package_metadata() -> None:
     assert dependency_floors(Path("pyproject.toml")) == (
+        "markdown-it-py==4",
         "packaging==23",
         "pydantic==2.7",
         "rich==15.0.0",
@@ -55,6 +56,27 @@ def test_ci_stage_success_is_readable(
     assert "==> Import:" in output
     assert "ok\n" in output
     assert "PASS Import (exit 0" in output
+
+
+def test_self_ci_runs_markdown_shell_review_as_a_separate_opt_in_profile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, tuple[str, ...]]] = []
+
+    def record_run(
+        _root: Path, *arguments: str, stage: str, output: ci.OutputMode
+    ) -> None:
+        calls.append((stage, arguments))
+
+    monkeypatch.setattr(ci, "run", record_run)
+    ci.python_profile(Path("."), minimum=False, wheel=False, output="plain")
+
+    assert calls[-1] == (
+        "Run Alphus Markdown shell review",
+        (ci.sys.executable, "-m", "alphus", "--profile", "markdown-shell-review"),
+    )
+    assert calls[-2][0] == "Run Alphus self profile"
+    assert calls[-2][1] == (ci.sys.executable, "-m", "alphus")
 
 
 def test_json_ci_failure_bounds_captured_logs(

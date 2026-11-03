@@ -5,12 +5,21 @@ Alphus checkout. `examples/**/quality-gates.toml` files show consumer
 profiles, and some are loaded by focused tests as fixtures.
 
 The `check` profile validates the package against its own repository policy. It
-runs Alphus portable rules, shared-utility analysis, the comment-marker and review rules, TOML syntax, installed-package
-import smoke and compatibility-import removal checks, native Ruff lint and
-format checks, strict Pyright, and the package tests.
-The repository's GitHub Actions quality workflow runs this profile on Python
-3.11 through 3.15 for pull requests and main-branch pushes. It checks editable
-installation, builds and installs a wheel, then invokes the installed package.
+runs Alphus portable rules, shared-utility analysis, the comment-marker and
+review rules, TOML syntax, installed-package import smoke and compatibility-
+import removal checks, native Ruff lint and format checks, strict Pyright, and
+the package tests. The opt-in `markdown-shell-review` profile stays separate
+from `check` so consumer defaults do not change. The repository CI runner
+invokes it as a separate stage after the self-check, including after installing
+the built wheel. To run it explicitly when reviewing Markdown fences:
+
+```sh
+alphus --run --profile markdown-shell-review
+```
+The repository's GitHub Actions quality workflow runs the `check` profile on
+Python 3.11 through 3.15 for pull requests and main-branch pushes. It checks
+editable installation, builds and installs a wheel, then invokes the installed
+package.
 An additional Python 3.11 job runs the profile with every direct runtime and
 `python` extra dependency at its declared minimum version. The
 `python scripts/ci.py --root .` runner derives those floors from `pyproject.toml`,
@@ -71,9 +80,9 @@ and file-backed module loading remains rejected.
 
 `quality-gates.toml` inventories `src/**/*.py`, `tests/**/*.py`, `README.md`,
 `docs/**/*.md`, and all repository TOML and JSON files. The profile retains
-the eight original portable rules, the target-audit isolation rule, and Python
-lint/package tests, then adds
-TOML syntax, Python formatting, strict Pyright, and five review checks.
+the eight original portable rules, the target-audit isolation rule, the opt-in
+Markdown shell-fence check, and Python lint/package tests, then adds TOML
+syntax, Python formatting, strict Pyright, and five review checks.
 The separate `json` profile is available when JSON documents are
 added to this repository. The global
 `[files].exclude` is empty.
