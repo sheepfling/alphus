@@ -76,7 +76,7 @@ _POWERSHELL_PIPE_COMMAND = re.compile(
 )
 _CMD_COMMAND = re.compile(
     r"(?i)^\s*(?:@?set\s+[A-Za-z_][A-Za-z0-9_]*\s*=|if\s+errorlevel\b|"
-    r"cd\s+/d\b|call\s+\S+\.bat\b|echo\s+(?:off|on)\b|"
+    r"cd\s+/d\b|call\s+\S+\.bat\b|@echo\s+(?:off|on)\b|"
     r"for\s+%%?[A-Za-z]\s+in\b.*\bdo\b)"
 )
 _BASH_LOOP = re.compile(r"(?i)^\s*(?:for|select)\s+\$?[A-Za-z_][A-Za-z0-9_]*\s+in\b")
@@ -153,6 +153,7 @@ def _markdown_fences(text: str) -> tuple[_Fence, ...]:
 def _mask_shell_line(line: str, shell: str, state: _LexState) -> str:
     """Blank comments and quoted data while preserving source columns."""
     visible = list(line)
+    escaped_shell_characters = "'\"`" if shell == "bash" else "'\""
     index = 0
     while index < len(line):
         if state.here_string is not None:
@@ -248,7 +249,11 @@ def _mask_shell_line(line: str, shell: str, state: _LexState) -> str:
             for offset in range(index, len(line)):
                 visible[offset] = " "
             break
-        if character == "\\" and index + 1 < len(line) and line[index + 1] in "'\"":
+        if (
+            character == "\\"
+            and index + 1 < len(line)
+            and line[index + 1] in escaped_shell_characters
+        ):
             visible[index] = visible[index + 1] = " "
             index += 2
             continue

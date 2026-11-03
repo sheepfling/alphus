@@ -70,6 +70,20 @@ def test_flags_power_shell_and_cmd_syntax_in_bash_aliases(tmp_path: Path) -> Non
     assert "cmd syntax" in findings[1].message
 
 
+def test_plain_bash_echo_on_off_is_not_cmd_syntax(tmp_path: Path) -> None:
+    findings = _check(tmp_path, "```bash\necho on\necho off\n````\n")
+
+    assert findings == []
+
+
+def test_cmd_at_echo_off_remains_strong_evidence(tmp_path: Path) -> None:
+    findings = _check(tmp_path, "```bash\n@echo off\n````\n")
+
+    assert len(findings) == 1
+    assert findings[0].line == 2
+    assert "cmd syntax" in findings[0].message
+
+
 def test_date_format_percent_tokens_are_not_cmd_environment_evidence(
     tmp_path: Path,
 ) -> None:
@@ -226,6 +240,19 @@ def test_bash_ansi_c_quoted_loop_text_is_not_shell_evidence(
     )
 
     assert findings == []
+
+
+def test_escaped_bash_backtick_does_not_hide_later_evidence(
+    tmp_path: Path,
+) -> None:
+    findings = _check(
+        tmp_path,
+        "```bash\necho " + chr(92) + "`\n$env:APP_HOME = value\n````\n",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 3
+    assert "PowerShell" in findings[0].message
 
 
 def test_flags_bash_loop_in_indented_blockquote_pwsh_fence(tmp_path: Path) -> None:
