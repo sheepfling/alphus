@@ -104,6 +104,11 @@ def test_git_history_failure_is_explicit_and_not_a_clean_zero(tmp_path: Path) ->
 
     assert "Git co-change evidence incomplete" in findings[0].message
     assert "bounded read-only Git history query failed" in findings[0].message
+    assert any(
+        finding.message.startswith("Lexical source-family scan incomplete:")
+        and "Git co-change evidence incomplete" in finding.message
+        for finding in findings
+    )
 
 
 def test_groups_flat_python_family_as_lexical_only(tmp_path: Path) -> None:

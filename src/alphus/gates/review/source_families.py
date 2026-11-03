@@ -103,13 +103,21 @@ class _TypeScriptGrammar(Protocol):
 
 def _git_cochange_evidence(
     checkout: Path, members: AbstractSet[Path], max_commits: int
-) -> str:
+) -> tuple[str, list[str]]:
     """Report bounded path co-changes as correlation, never as responsibility."""
+
+    def incomplete(message: str) -> tuple[str, list[str]]:
+        return message, [message]
+
     paths = sorted(path.as_posix() for path in members)
     if any("\n" in path or "\r" in path or "\x00" in path for path in paths):
-        return "Git co-change evidence incomplete: member paths contain control separators."
+        return incomplete(
+            "Git co-change evidence incomplete: member paths contain control separators."
+        )
     if len(paths) > 100 or sum(len(path.encode("utf-8")) + 1 for path in paths) > 8192:
-        return "Git co-change evidence incomplete: family pathspec budget exceeded."
+        return incomplete(
+            "Git co-change evidence incomplete: family pathspec budget exceeded."
+        )
     try:
         shallow = (
             git_output(checkout, "rev-parse", "--is-shallow-repository", timeout=5)
@@ -132,7 +140,9 @@ def _git_cochange_evidence(
             timeout=10,
         )
     except (OSError, subprocess.SubprocessError, UnicodeError):
-        return "Git co-change evidence incomplete: bounded read-only Git history query failed."
+        return incomplete(
+            "Git co-change evidence incomplete: bounded read-only Git history query failed."
+        )
 
     tokens = history.split(b"\0")
     records: list[tuple[str, set[str]]] = []
@@ -143,7 +153,7 @@ def _git_cochange_evidence(
             index += 1
             continue
         if not _GIT_SHA.fullmatch(token):
-            return (
+            return incomplete(
                 "Git co-change evidence incomplete: history output could not be "
                 "parsed safely."
             )
@@ -159,7 +169,7 @@ def _git_cochange_evidence(
                 try:
                     touched.add(name.decode("utf-8"))
                 except UnicodeError:
-                    return (
+                    return incomplete(
                         "Git co-change evidence incomplete: non-UTF-8 history "
                         "paths are unsupported."
                     )
@@ -189,7 +199,7 @@ def _git_cochange_evidence(
         caveats.append("the checkout is shallow, so earlier history is unavailable")
     if len(records) == max_commits:
         caveats.append("the configured history window may be truncated")
-    return summary + " " + "; ".join(caveats) + "."
+    return summary + " " + "; ".join(caveats) + ".", []
 
 
 def _tokens(stem: str) -> tuple[str, ...]:
@@ -1696,9 +1706,11 @@ def source_family_findings(
     if policy.git_cochange_evidence:
         for _, _, members in retained:
             key = tuple(sorted(path.as_posix() for path in members))
-            history_contexts[key] = _git_cochange_evidence(
+            context, notes = _git_cochange_evidence(
                 checkout, members, policy.max_git_history_commits
             )
+            history_contexts[key] = context
+            incomplete_notes.extend(notes)
     incomplete_notes = list(dict.fromkeys(incomplete_notes))
     incomplete_finding = (
         Finding(
