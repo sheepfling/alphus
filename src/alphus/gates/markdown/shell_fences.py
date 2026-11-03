@@ -537,7 +537,7 @@ def _mask_find_format_arguments(line: str, raw_line: str | None = None) -> str:
     visible = list(line)
     source = raw_line if raw_line is not None else line
     spans: list[tuple[int, int]] = []
-    for command_match in _FIND_COMMAND.finditer(source):
+    for command_match in _FIND_COMMAND.finditer(line):
         command_start = command_match.start("command")
         command_end = _shell_command_end(source, command_start)
         words = _shell_words(source[command_start:command_end])

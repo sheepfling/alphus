@@ -222,6 +222,29 @@ def test_find_format_arguments_are_not_cmd_environment_evidence(
     assert 'cmd syntax "%PATH%"' in findings[0].message
 
 
+def test_quoted_find_text_is_not_repeatedly_scanned_as_commands(
+    tmp_path: Path,
+) -> None:
+    fence = chr(96) * 3
+    quoted = " (find . -printf %f%p)" * 4000
+    findings = _check(
+        tmp_path,
+        "\n".join(
+            [
+                fence + "bash",
+                'echo "' + quoted + '"',
+                "echo %PATH%",
+                fence,
+                "",
+            ]
+        ),
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 3
+    assert 'cmd syntax "%PATH%"' in findings[0].message
+
+
 def test_printf_options_and_backslash_continuation_keep_format_context(
     tmp_path: Path,
 ) -> None:
