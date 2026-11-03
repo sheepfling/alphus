@@ -1213,7 +1213,9 @@ def _known_non_utc_zone(expression: ast.expr, aliases: ImportAliases) -> bool:
 
 def _is_known_utc_zone(expression: ast.expr, aliases: ImportAliases) -> bool:
     match expression:
-        case ast.Attribute() if canonical_expression_name(expression, aliases) in {
+        case ast.Name() | ast.Attribute() if canonical_expression_name(
+            expression, aliases
+        ) in {
             "datetime.timezone.utc",
             "datetime.UTC",
         }:
@@ -1250,27 +1252,26 @@ def _is_known_utc_zone(expression: ast.expr, aliases: ImportAliases) -> bool:
 def _contains_utc_astimezone(
     expression: ast.expr, aliases: ImportAliases, target: ast.Call
 ) -> bool:
-    """Recognize explicit UTC conversion, not any call to ``astimezone``."""
-    for child in ast.walk(expression):
-        match child:
-            case ast.Call(
-                func=ast.Attribute(value=receiver, attr="astimezone"), args=[zone]
-            ):
-                if _is_known_utc_zone(zone, aliases) and any(
-                    item is target for item in ast.walk(receiver)
-                ):
-                    return True
-            case ast.Call(
-                func=ast.Attribute(value=receiver, attr="astimezone"),
-                keywords=[ast.keyword(arg="tz", value=zone)],
-            ):
-                if _is_known_utc_zone(zone, aliases) and any(
-                    item is target for item in ast.walk(receiver)
-                ):
-                    return True
-            case _:
-                pass
-    return False
+    """Recognize UTC only when it is the final explicit timezone conversion."""
+    match expression:
+        case ast.Call(
+            func=ast.Attribute(value=receiver, attr="astimezone"),
+            args=args,
+            keywords=keywords,
+        ):
+            zone = (
+                args[0]
+                if args
+                else next((item.value for item in keywords if item.arg == "tz"), None)
+            )
+            if zone is None:
+                return False
+            reaches_target = receiver is target or _contains_utc_astimezone(
+                receiver, aliases, target
+            )
+            return reaches_target and _is_known_utc_zone(zone, aliases)
+        case _:
+            return False
 
 
 class _SelectedFunctionCallCollector(ast.NodeVisitor):
