@@ -705,6 +705,44 @@ def test_static_mutable_default_factory_skips_shadowed_builtins(
     assert findings == []
 
 
+@pytest.mark.parametrize(
+    ("builtin", "annotation"),
+    [("list", "list[str]"), ("dict", "dict[str, int]")],
+)
+def test_static_mutable_default_factory_ignores_unrelated_function_locals(
+    builtin: str, annotation: str
+) -> None:
+    source = (
+        "from pydantic import BaseModel, Field\n"
+        "def helper():\n"
+        f"    {builtin} = custom_factory\n"
+        "    return None\n"
+        "class Item(BaseModel):\n"
+        f"    value: {annotation} = Field(default_factory={builtin})\n"
+    )
+
+    findings = pydantic_practice_findings(
+        source, _policy(prefer_static_mutable_defaults=True), path="src/item.py"
+    )
+
+    assert [item.line for item in findings] == [6]
+
+
+def test_static_mutable_default_factory_respects_prior_class_binding() -> None:
+    source = (
+        "from pydantic import BaseModel, Field\n"
+        "class Item(BaseModel):\n"
+        "    list = custom_factory\n"
+        "    value: list[str] = Field(default_factory=list)\n"
+    )
+
+    findings = pydantic_practice_findings(
+        source, _policy(prefer_static_mutable_defaults=True), path="src/item.py"
+    )
+
+    assert findings == []
+
+
 def test_pydantic_copies_static_unhashable_defaults_per_instance() -> None:
     class Defaults(BaseModel):
         tags: list[str] = []

@@ -540,10 +540,8 @@ def _static_mutable_default_factory_lines(
 ) -> list[int]:
     """Find Pydantic fields whose factory is exactly built-in list or dict."""
     lines: set[int] = set()
-    shadowed_builtins = {
-        name
-        for name in ("list", "dict")
-        if any(_binds_name(node, name) for node in ast.walk(module))
+    module_shadowed_builtins = {
+        name for name in ("list", "dict") if _scope_binds_name(module.body, name)
     }
     for statement in module.body:
         match statement:
@@ -551,7 +549,7 @@ def _static_mutable_default_factory_lines(
                 pass
             case _:
                 continue
-        for field in body:
+        for field_index, field in enumerate(body):
             match field:
                 case ast.AnnAssign(annotation=annotation, value=value):
                     expressions = [annotation]
@@ -579,7 +577,9 @@ def _static_mutable_default_factory_lines(
                     )
                     match factory:
                         case ast.Name(id=name) if (
-                            name in {"list", "dict"} and name not in shadowed_builtins
+                            name in {"list", "dict"}
+                            and name not in module_shadowed_builtins
+                            and not _scope_binds_name(body[:field_index], name)
                         ):
                             lines.add(field.lineno)
                         case ast.Name() | ast.Attribute() if canonical_expression_name(
@@ -589,6 +589,63 @@ def _static_mutable_default_factory_lines(
                         case _:
                             pass
     return sorted(lines)
+
+
+class _ScopeBindings(ast.NodeVisitor):
+    """Collect bindings in one execution scope, excluding nested scopes."""
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.bound = False
+
+    def visit_Name(self, node: ast.Name) -> None:
+        match node:
+            case ast.Name(id=name, ctx=ast.Store() | ast.Del()) if name == self.name:
+                self.bound = True
+            case _:
+                pass
+
+    def visit_Import(self, node: ast.Import) -> None:
+        self.bound |= _binds_name(node, self.name)
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        self.bound |= _binds_name(node, self.name)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        self.bound |= node.name == self.name
+        # These expressions execute in the containing scope; the function body
+        # executes later in a separate local scope.
+        for expression in (
+            *node.decorator_list,
+            *node.args.defaults,
+            *node.args.kw_defaults,
+        ):
+            if expression is not None:
+                self.visit(expression)
+
+    visit_AsyncFunctionDef = visit_FunctionDef
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        self.bound |= node.name == self.name
+        for expression in (
+            *node.decorator_list,
+            *node.bases,
+            *(item.value for item in node.keywords),
+        ):
+            self.visit(expression)
+
+    def visit_Lambda(self, node: ast.Lambda) -> None:
+        for expression in (*node.args.defaults, *node.args.kw_defaults):
+            if expression is not None:
+                self.visit(expression)
+
+
+def _scope_binds_name(statements: Sequence[ast.stmt], name: str) -> bool:
+    """Check bindings in a scope without mistaking nested locals for globals."""
+    visitor = _ScopeBindings(name)
+    for statement in statements:
+        visitor.visit(statement)
+    return visitor.bound
 
 
 def _validator_can_fallthrough(statements: Sequence[ast.stmt]) -> bool:
