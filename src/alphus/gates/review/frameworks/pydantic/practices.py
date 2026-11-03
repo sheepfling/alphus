@@ -7,7 +7,12 @@ from collections.abc import Iterable, Sequence
 from collections.abc import Set as AbstractSet
 from pathlib import Path
 
-from alphus.config import PydanticPracticePolicy
+from alphus.config import (
+    FiniteStateContract,
+    PydanticDomainReturnContract,
+    PydanticPracticePolicy,
+    UtcPersistenceContract,
+)
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.gates.review.frameworks.pydantic.manual_validation import (
@@ -530,6 +535,141 @@ def _field_positional_lines(
     return sorted(lines)
 
 
+def _static_mutable_default_factory_lines(
+    module: ast.Module, aliases: ImportAliases, models: AbstractSet[str]
+) -> list[int]:
+    """Find Pydantic fields whose factory is exactly built-in list or dict."""
+    lines: set[int] = set()
+    for module_index, statement in enumerate(module.body):
+        match statement:
+            case ast.ClassDef(name=name, body=body) if name in models:
+                pass
+            case _:
+                continue
+        for field_index, field in enumerate(body):
+            match field:
+                case ast.AnnAssign(annotation=annotation, value=value):
+                    expressions = [annotation]
+                    if value is not None:
+                        expressions.append(value)
+                case _:
+                    continue
+            for expression in expressions:
+                for node in ast.walk(expression):
+                    match node:
+                        case ast.Call(func=function, keywords=keywords) if (
+                            canonical_expression_name(function, aliases)
+                            in {"pydantic.Field", "pydantic.fields.Field"}
+                        ):
+                            pass
+                        case _:
+                            continue
+                    factory = next(
+                        (
+                            keyword.value
+                            for keyword in keywords
+                            if keyword.arg == "default_factory"
+                        ),
+                        None,
+                    )
+                    match factory:
+                        case ast.Name(id=name) if (
+                            name in {"list", "dict"}
+                            and not _scope_binds_name(module.body[:module_index], name)
+                            and not _scope_binds_name(body[:field_index], name)
+                        ):
+                            lines.add(field.lineno)
+                        case ast.Name() | ast.Attribute() if canonical_expression_name(
+                            factory, aliases
+                        ) in {"builtins.list", "builtins.dict"}:
+                            lines.add(field.lineno)
+                        case _:
+                            pass
+    return sorted(lines)
+
+
+class _ScopeBindings(ast.NodeVisitor):
+    """Collect bindings in one execution scope, excluding nested scopes."""
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.bound = False
+
+    def visit_Name(self, node: ast.Name) -> None:
+        match node:
+            case ast.Name(id=name, ctx=ast.Store() | ast.Del()) if name == self.name:
+                self.bound = True
+            case _:
+                pass
+
+    def visit_Import(self, node: ast.Import) -> None:
+        self.bound |= _binds_name(node, self.name)
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        self.bound |= _binds_name(node, self.name)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        self.bound |= node.name == self.name
+        # These expressions execute in the containing scope; the function body
+        # executes later in a separate local scope.
+        for expression in (
+            *node.decorator_list,
+            *node.args.defaults,
+            *node.args.kw_defaults,
+        ):
+            if expression is not None:
+                self.visit(expression)
+
+    visit_AsyncFunctionDef = visit_FunctionDef
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        self.bound |= node.name == self.name
+        for expression in (
+            *node.decorator_list,
+            *node.bases,
+            *(item.value for item in node.keywords),
+        ):
+            self.visit(expression)
+
+    def visit_Lambda(self, node: ast.Lambda) -> None:
+        for expression in (*node.args.defaults, *node.args.kw_defaults):
+            if expression is not None:
+                self.visit(expression)
+
+    def _visit_comprehension_generators(
+        self, generators: Sequence[ast.comprehension]
+    ) -> None:
+        for generator in generators:
+            self.visit(generator.iter)
+            for condition in generator.ifs:
+                self.visit(condition)
+
+    def visit_ListComp(self, node: ast.ListComp) -> None:
+        self._visit_comprehension_generators(node.generators)
+        self.visit(node.elt)
+
+    def visit_SetComp(self, node: ast.SetComp) -> None:
+        self._visit_comprehension_generators(node.generators)
+        self.visit(node.elt)
+
+    def visit_GeneratorExp(self, node: ast.GeneratorExp) -> None:
+        self._visit_comprehension_generators(node.generators)
+        self.visit(node.elt)
+
+    def visit_DictComp(self, node: ast.DictComp) -> None:
+        self._visit_comprehension_generators(node.generators)
+        self.visit(node.key)
+        self.visit(node.value)
+
+
+def _scope_binds_name(statements: Sequence[ast.stmt], name: str) -> bool:
+    """Check bindings in a scope without mistaking nested locals for globals."""
+    visitor = _ScopeBindings(name)
+    for statement in statements:
+        visitor.visit(statement)
+    return visitor.bound
+
+
 def _validator_can_fallthrough(statements: Sequence[ast.stmt]) -> bool:
     """Return true only for simple suites with a reachable implicit exit."""
     for statement in statements:
@@ -923,6 +1063,387 @@ def _public_any_lines(
     return sorted(lines)
 
 
+class _FunctionReturnCollector(ast.NodeVisitor):
+    """Collect returns from one function body without entering nested scopes."""
+
+    def __init__(self, function: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        self.function = function
+        self.returns: list[ast.Return] = []
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        if node is self.function:
+            for statement in node.body:
+                self.visit(statement)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        if node is self.function:
+            for statement in node.body:
+                self.visit(statement)
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        return
+
+    def visit_Lambda(self, node: ast.Lambda) -> None:
+        return
+
+    def visit_Return(self, node: ast.Return) -> None:
+        self.returns.append(node)
+        self.generic_visit(node)
+
+
+def _declared_domain_return_dump_lines(
+    module: ast.Module,
+    contract: PydanticDomainReturnContract,
+    aliases: ImportAliases,
+) -> list[tuple[int, str]]:
+    """Find selected functions returning a dump from their declared model input."""
+    selected: dict[str, list[ast.FunctionDef | ast.AsyncFunctionDef]] = {}
+
+    def visit(statements: Sequence[ast.stmt], scope: tuple[str, ...]) -> None:
+        for statement in statements:
+            match statement:
+                case ast.ClassDef(name=name, body=body):
+                    visit(body, (*scope, name))
+                case ast.FunctionDef(name=name) | ast.AsyncFunctionDef(name=name):
+                    key = ".".join((*scope, name))
+                    selected.setdefault(key, []).append(statement)
+                case _:
+                    pass
+
+    visit(module.body, ())
+    evidence: set[tuple[int, str]] = set()
+    for function in selected.get(contract.function, []):
+        if (
+            function.returns is None
+            or canonical_expression_name(function.returns, aliases) != contract.model
+        ):
+            continue
+        parameters = [
+            *function.args.posonlyargs,
+            *function.args.args,
+            *function.args.kwonlyargs,
+        ]
+        parameters.extend(
+            parameter
+            for parameter in (function.args.vararg, function.args.kwarg)
+            if parameter is not None
+        )
+        model_parameters = {
+            parameter.arg
+            for parameter in parameters
+            if parameter.annotation is not None
+            and canonical_expression_name(parameter.annotation, aliases)
+            == contract.model
+        }
+        if not model_parameters:
+            continue
+        returns = _FunctionReturnCollector(function)
+        returns.visit(function)
+        for returned in returns.returns:
+            match returned.value:
+                case ast.Call(
+                    func=ast.Attribute(value=ast.Name(id=parameter), attr=method)
+                ) if parameter in model_parameters and method in _DUMP_METHODS:
+                    evidence.add((returned.lineno, parameter))
+                case _:
+                    pass
+    return sorted(evidence)
+
+
+def _binds_name(node: ast.AST, name: str) -> bool:
+    match node:
+        case ast.Name(id=bound, ctx=ast.Store() | ast.Del()):
+            return bound == name
+        case ast.Import(names=items) | ast.ImportFrom(names=items):
+            return any(
+                item.name == "*" or (item.asname or item.name.split(".")[0]) == name
+                for item in items
+            )
+        case ast.FunctionDef(name=bound) | ast.AsyncFunctionDef(name=bound):
+            return bound == name
+        case ast.ClassDef(name=bound):
+            return bound == name
+        case _:
+            return False
+
+
+def _finite_state_selector_lines(
+    module: ast.Module, contract: FiniteStateContract, aliases: ImportAliases
+) -> list[int]:
+    """Find complete raw string decision chains under an explicit closed-set contract."""
+    selected: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
+
+    def find_functions(statements: Sequence[ast.stmt], scope: tuple[str, ...]) -> None:
+        for statement in statements:
+            match statement:
+                case ast.ClassDef(name=name, body=body):
+                    find_functions(body, (*scope, name))
+                case ast.FunctionDef(name=name) | ast.AsyncFunctionDef(name=name):
+                    if ".".join((*scope, name)) == contract.function:
+                        selected.append(statement)
+                case _:
+                    pass
+
+    find_functions(module.body, ())
+    expected = set(contract.values)
+    lines: set[int] = set()
+
+    def comparisons(test: ast.expr) -> set[str]:
+        match test:
+            case ast.Compare(
+                left=ast.Name(id=name),
+                ops=[ast.Eq()],
+                comparators=[ast.Constant(value=str() as value)],
+            ) if name == contract.parameter:
+                return {value}
+            case ast.Compare(
+                left=ast.Constant(value=str() as value),
+                ops=[ast.Eq()],
+                comparators=[ast.Name(id=name)],
+            ) if name == contract.parameter:
+                return {value}
+            case _:
+                # Do not collect a nested equality from a compound guard: its
+                # other conditions can make the configured values non-exhaustive.
+                return set()
+
+    for function in selected:
+        parameters = [
+            *function.args.posonlyargs,
+            *function.args.args,
+            *function.args.kwonlyargs,
+        ]
+        parameter = next(
+            (item for item in parameters if item.arg == contract.parameter), None
+        )
+        if parameter is None or parameter.annotation is None:
+            continue
+        annotation_name = canonical_expression_name(parameter.annotation, aliases)
+        match parameter.annotation:
+            case ast.Name(id="str"):
+                is_unshadowed_builtin_str = not any(
+                    _binds_name(node, "str") for node in ast.walk(module)
+                )
+            case _:
+                is_unshadowed_builtin_str = False
+        if annotation_name != "builtins.str" and not is_unshadowed_builtin_str:
+            continue
+        if any(
+            _binds_name(node, contract.parameter)
+            for statement in function.body
+            for node in ast.walk(statement)
+        ):
+            continue
+
+        def visit_statements(statements: Sequence[ast.stmt]) -> None:
+            for statement in statements:
+                match statement:
+                    case ast.If():
+                        pass
+                    case _:
+                        continue
+                chain = [statement]
+                while len(chain[-1].orelse) == 1:
+                    match chain[-1].orelse[0]:
+                        case ast.If() as elif_statement:
+                            chain.append(elif_statement)
+                        case _:
+                            break
+                observed: set[str] = set()
+                for item in chain:
+                    observed.update(comparisons(item.test))
+                if observed == expected:
+                    lines.add(chain[-1].lineno)
+                for item in chain:
+                    visit_statements(item.body)
+                    if item is chain[-1]:
+                        visit_statements(item.orelse)
+
+        visit_statements(function.body)
+    return sorted(lines)
+
+
+def _known_non_utc_zone(expression: ast.expr, aliases: ImportAliases) -> bool:
+    """Recognize only explicit ZoneInfo literals that are plainly non-UTC."""
+    match expression:
+        case ast.Call(func=func, args=[ast.Constant(value=str() as zone)], keywords=[]):
+            name = canonical_expression_name(func, aliases)
+            return name in {
+                "zoneinfo.ZoneInfo",
+                "backports.zoneinfo.ZoneInfo",
+            } and zone.upper() not in {
+                "UTC",
+                "ETC/UTC",
+                "GMT",
+                "ETC/GMT",
+                "ETC/GMT0",
+                "ETC/GMT-0",
+                "ETC/GMT+0",
+                "ETC/UCT",
+                "ETC/GREENWICH",
+                "GMT0",
+                "GMT+0",
+                "GMT-0",
+                "GREENWICH",
+                "UCT",
+                "UNIVERSAL",
+                "ETC/UNIVERSAL",
+                "ZULU",
+                "ETC/ZULU",
+                "Z",
+            }
+        case _:
+            return False
+
+
+def _is_known_utc_zone(expression: ast.expr, aliases: ImportAliases) -> bool:
+    match expression:
+        case ast.Name() | ast.Attribute() if canonical_expression_name(
+            expression, aliases
+        ) in {
+            "datetime.timezone.utc",
+            "datetime.UTC",
+        }:
+            return True
+        case ast.Call(func=function, args=[ast.Constant(value=str() as zone)]) if (
+            canonical_expression_name(function, aliases)
+            in {"zoneinfo.ZoneInfo", "backports.zoneinfo.ZoneInfo"}
+        ):
+            return zone.upper() in {
+                "UTC",
+                "ETC/UTC",
+                "GMT",
+                "ETC/GMT",
+                "ETC/GMT0",
+                "ETC/GMT-0",
+                "ETC/GMT+0",
+                "ETC/UCT",
+                "ETC/GREENWICH",
+                "GMT0",
+                "GMT+0",
+                "GMT-0",
+                "GREENWICH",
+                "UCT",
+                "UNIVERSAL",
+                "ETC/UNIVERSAL",
+                "ZULU",
+                "ETC/ZULU",
+                "Z",
+            }
+        case _:
+            return False
+
+
+def _contains_utc_astimezone(
+    expression: ast.expr, aliases: ImportAliases, target: ast.Call
+) -> bool:
+    """Recognize UTC only when it is the final explicit timezone conversion."""
+    match expression:
+        case ast.Call(
+            func=ast.Attribute(value=receiver, attr="astimezone"),
+            args=args,
+            keywords=keywords,
+        ):
+            zone = (
+                args[0]
+                if args
+                else next((item.value for item in keywords if item.arg == "tz"), None)
+            )
+            if zone is None:
+                return False
+            reaches_target = receiver is target or _contains_utc_astimezone(
+                receiver, aliases, target
+            )
+            return reaches_target and _is_known_utc_zone(zone, aliases)
+        case _:
+            return False
+
+
+class _SelectedFunctionCallCollector(ast.NodeVisitor):
+    """Collect calls in one selected function, skipping nested lexical scopes."""
+
+    def __init__(self, function: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        self.function = function
+        self.calls: list[ast.Call] = []
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        if node is self.function:
+            for statement in node.body:
+                self.visit(statement)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        if node is self.function:
+            for statement in node.body:
+                self.visit(statement)
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        return
+
+    def visit_Lambda(self, node: ast.Lambda) -> None:
+        return
+
+    def visit_Call(self, node: ast.Call) -> None:
+        self.calls.append(node)
+        self.generic_visit(node)
+
+
+def _utc_persistence_lines(
+    module: ast.Module, contract: UtcPersistenceContract, aliases: ImportAliases
+) -> list[int]:
+    selected: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
+
+    def visit(statements: Sequence[ast.stmt], scope: tuple[str, ...]) -> None:
+        for statement in statements:
+            match statement:
+                case ast.ClassDef(name=name, body=body):
+                    visit(body, (*scope, name))
+                case ast.FunctionDef(name=name) | ast.AsyncFunctionDef(name=name):
+                    if ".".join((*scope, name)) == contract.function:
+                        selected.append(statement)
+                case _:
+                    pass
+
+    visit(module.body, ())
+    lines: set[int] = set()
+    for function in selected:
+        calls = _SelectedFunctionCallCollector(function)
+        calls.visit(function)
+        for call in calls.calls:
+            if (
+                canonical_expression_name(call.func, aliases) != contract.call
+                and ast.unparse(call.func) != contract.call
+            ):
+                continue
+            argument = next(
+                (item.value for item in call.keywords if item.arg == contract.keyword),
+                None,
+            )
+            if argument is None:
+                continue
+            for capture in ast.walk(argument):
+                match capture:
+                    case ast.Call(func=function):
+                        pass
+                    case _:
+                        continue
+                if canonical_expression_name(function, aliases) not in {
+                    "datetime.datetime.now",
+                    "datetime.now",
+                }:
+                    continue
+                zone = next(
+                    (item.value for item in capture.keywords if item.arg == "tz"),
+                    capture.args[0] if capture.args else None,
+                )
+                if (
+                    zone is not None
+                    and _known_non_utc_zone(zone, aliases)
+                    and not _contains_utc_astimezone(argument, aliases, capture)
+                ):
+                    lines.add(call.lineno)
+    return sorted(lines)
+
+
 def pydantic_practice_findings(
     source: str, policy: PydanticPracticePolicy, *, path: str = "<source>"
 ) -> list[Finding]:
@@ -931,6 +1452,85 @@ def pydantic_practice_findings(
     aliases = import_aliases(module)
     models = _model_names(module, aliases)
     findings: list[Finding] = []
+    for contract in policy.domain_return_contracts:
+        if contract.path != path:
+            continue
+        model_is_declared = contract.model in models or (
+            contract.model.rsplit(".", maxsplit=1)[-1] in policy.external_model_names
+        )
+        if not model_is_declared:
+            continue
+        for line, parameter in _declared_domain_return_dump_lines(
+            module, contract, aliases
+        ):
+            findings.append(
+                Finding(
+                    rule_id=rule_tag(
+                        Scope.PYTHON,
+                        Framework.PYDANTIC,
+                        Category.CORRECTNESS,
+                        "model-dump-domain-return",
+                    ),
+                    path=path,
+                    line=line,
+                    severity=policy.domain_return_severity,
+                    message=(
+                        f"Selected domain-return contract {contract.function} "
+                        f"declares {contract.model}, but returns a dump of the "
+                        f"declared model parameter {parameter}. Review whether "
+                        "serialization belongs at an I/O boundary; this advisory "
+                        "does not prove the conversion is unsafe."
+                    ),
+                )
+            )
+    for contract in policy.finite_state_contracts:
+        if contract.path != path:
+            continue
+        for line in _finite_state_selector_lines(module, contract, aliases):
+            findings.append(
+                Finding(
+                    rule_id=rule_tag(
+                        Scope.PYTHON,
+                        Framework.PYDANTIC,
+                        Category.STYLE,
+                        "finite-state-string-selector",
+                    ),
+                    path=path,
+                    line=line,
+                    severity="info",
+                    message=(
+                        f"Selected finite-state contract for {contract.function}"
+                        f".{contract.parameter} declares {contract.values!r}, but a"
+                        " complete branch chain compares raw strings; consider a"
+                        " Literal, Enum/StrEnum, or validated finite type. This"
+                        " advisory uses only the declared values and does not infer"
+                        " a domain from repeated literals."
+                    ),
+                )
+            )
+    for contract in policy.utc_persistence_contracts:
+        if contract.path != path:
+            continue
+        for line in _utc_persistence_lines(module, contract, aliases):
+            findings.append(
+                Finding(
+                    rule_id=rule_tag(
+                        Scope.PYTHON,
+                        Framework.PYDANTIC,
+                        Category.CORRECTNESS,
+                        "non-utc-persistence",
+                    ),
+                    path=path,
+                    line=line,
+                    severity="warning",
+                    message=(
+                        f"Declared UTC persistence call {contract.call} receives a "
+                        "timestamp captured in a known non-UTC zone; normalize the "
+                        "aware value with astimezone(timezone.utc) or configure its "
+                        "validated boundary."
+                    ),
+                )
+            )
     if policy.report_dump_revalidation:
         findings.extend(
             Finding(
@@ -1003,6 +1603,17 @@ def pydantic_practice_findings(
             "use Field(default=...) to make the field default explicit",
         ),
         (
+            policy.prefer_static_mutable_defaults,
+            Category.STYLE,
+            "static-mutable-default-factory",
+            _static_mutable_default_factory_lines(module, aliases, models),
+            (
+                "prefer a direct static list or dict default here; Pydantic copies "
+                "unhashable defaults per model instance, so a factory is not required "
+                "for isolation"
+            ),
+        ),
+        (
             policy.report_custom_init,
             Category.VALIDATION,
             "custom-init",
@@ -1021,7 +1632,12 @@ def pydantic_practice_findings(
                     path=path,
                     line=line,
                     severity="info"
-                    if name in {"field-positional-default", "custom-init"}
+                    if name
+                    in {
+                        "field-positional-default",
+                        "static-mutable-default-factory",
+                        "custom-init",
+                    }
                     else "warning",
                     message=message,
                 )

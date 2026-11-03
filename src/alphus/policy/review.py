@@ -1459,6 +1459,90 @@ class PositionalInterfacePolicy(PythonSourceScanPolicy):
     report_same_type_primitives: bool = True
 
 
+class PydanticDomainReturnContract(StrictModel):
+    """One selected function that promises to return a declared domain model."""
+
+    path: str
+    function: str
+    model: str
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, value: str) -> str:
+        return validate_single_path(value, "Pydantic domain return path")
+
+    @field_validator("function", "model")
+    @classmethod
+    def validate_dotted_identifiers(cls, value: str) -> str:
+        if any(not part.isidentifier() for part in value.split(".")):
+            raise ValueError("Pydantic domain return names must be dotted identifiers")
+        return value
+
+
+class UtcPersistenceContract(StrictModel):
+    """Exact persistence call whose selected argument must be normalized to UTC."""
+
+    path: str
+    function: str
+    call: str
+    keyword: str
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, value: str) -> str:
+        return validate_single_path(value, "UTC persistence path")
+
+    @field_validator("function", "call")
+    @classmethod
+    def validate_dotted_names(cls, value: str) -> str:
+        if any(not part.isidentifier() for part in value.split(".")):
+            raise ValueError("UTC persistence names must be dotted identifiers")
+        return value
+
+    @field_validator("keyword")
+    @classmethod
+    def validate_keyword(cls, value: str) -> str:
+        if not value.isidentifier():
+            raise ValueError("UTC persistence keyword must be an identifier")
+        return value
+
+
+class FiniteStateContract(StrictModel):
+    """Consumer-declared closed string domain at one selected function input."""
+
+    path: str
+    function: str
+    parameter: str
+    values: Annotated[tuple[str, ...], Field(min_length=2)]
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, value: str) -> str:
+        return validate_single_path(value, "finite-state contract path")
+
+    @field_validator("function")
+    @classmethod
+    def validate_function(cls, value: str) -> str:
+        if any(not part.isidentifier() for part in value.split(".")):
+            raise ValueError("finite-state function must be a dotted identifier")
+        return value
+
+    @field_validator("parameter")
+    @classmethod
+    def validate_parameter(cls, value: str) -> str:
+        if not value.isidentifier():
+            raise ValueError("finite-state parameter must be an identifier")
+        return value
+
+    @field_validator("values")
+    @classmethod
+    def validate_values(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value for value in values):
+            raise ValueError("finite-state values must not be empty")
+        require_unique(values, "finite-state values must be unique")
+        return tuple(values)
+
+
 class PydanticPracticePolicy(PythonSourceScanPolicy):
     """Opt-in review of Pydantic model validation and declaration practices."""
 
@@ -1469,11 +1553,16 @@ class PydanticPracticePolicy(PythonSourceScanPolicy):
     report_unvalidated_copy_update: bool = False
     report_validator_fallthrough: bool = False
     report_field_positional_default: bool = False
+    prefer_static_mutable_defaults: bool = False
     report_external_model_docs: bool = False
     report_custom_init: bool = False
     report_unconstrained_any: bool = False
     external_model_names: tuple[str, ...] = ()
     public_model_paths: tuple[str, ...] = ()
+    domain_return_contracts: tuple[PydanticDomainReturnContract, ...] = ()
+    utc_persistence_contracts: tuple[UtcPersistenceContract, ...] = ()
+    finite_state_contracts: tuple[FiniteStateContract, ...] = ()
+    domain_return_severity: Severity = "info"
 
     @field_validator("external_model_names")
     @classmethod
@@ -1489,6 +1578,38 @@ class PydanticPracticePolicy(PythonSourceScanPolicy):
         normalized = validate_patterns(paths)
         require_unique(normalized, "public model paths must be unique")
         return normalized
+
+    @field_validator("domain_return_contracts")
+    @classmethod
+    def validate_domain_return_contracts(
+        cls, contracts: Sequence[PydanticDomainReturnContract]
+    ) -> tuple[PydanticDomainReturnContract, ...]:
+        values = tuple(contracts)
+        selectors = tuple((item.path, item.function, item.model) for item in values)
+        require_unique(selectors, "Pydantic domain return selectors must be unique")
+        return values
+
+    @field_validator("utc_persistence_contracts")
+    @classmethod
+    def validate_utc_persistence_contracts(
+        cls, contracts: Sequence[UtcPersistenceContract]
+    ) -> tuple[UtcPersistenceContract, ...]:
+        values = tuple(contracts)
+        selectors = tuple(
+            (item.path, item.function, item.call, item.keyword) for item in values
+        )
+        require_unique(selectors, "UTC persistence selectors must be unique")
+        return values
+
+    @field_validator("finite_state_contracts")
+    @classmethod
+    def validate_finite_state_contracts(
+        cls, contracts: Sequence[FiniteStateContract]
+    ) -> tuple[FiniteStateContract, ...]:
+        values = tuple(contracts)
+        selectors = tuple((item.path, item.function, item.parameter) for item in values)
+        require_unique(selectors, "finite-state selectors must be unique")
+        return values
 
     @model_validator(mode="after")
     def validate_public_any_scope(self) -> Self:
