@@ -67,6 +67,7 @@ QualityRuleName: TypeAlias = Literal[
     "scipy-constants",
     "run-artifacts",
     "ci-workflows",
+    "source-test-coverage",
     "test-quality",
     "input-contracts",
     "source-families",

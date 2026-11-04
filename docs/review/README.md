@@ -222,6 +222,15 @@ SciPy's `lambda2nu`/`nu2lambda` function equivalents. The gate is provisional
 in Alphus's own `review` profile, so its findings are visible without
 blocking the profile.
 
+## Declared source-to-test coverage
+
+The separate, opt-in `source-test-coverage` rule checks only the source/test
+relationships a consumer declares and reports unknown when those declarations
+or execution evidence are unavailable. It never matches basenames or infers
+pytest-style conventions. See the [coverage-contract guide](SOURCE-TEST-COVERAGE.md)
+for the evidence format, status meanings, and a runnable example. This audit is
+separate from the test-content and oracle-independence checks below.
+
 ## Test quality
 
 Selector: `test-quality`. IDs: `alphus/python/none/testing/large-prose-assertion`,

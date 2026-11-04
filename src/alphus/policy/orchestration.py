@@ -80,6 +80,7 @@ from alphus.policy.review import (
     TypingStubSuggestionPolicy,
     UnexplainedEmptyResultPolicy,
 )
+from alphus.policy.source_test_coverage import SourceTestCoveragePolicy
 from alphus.policy.sources import (
     CliPolicy,
     CommentMarkerPolicy,
@@ -133,6 +134,7 @@ class CheckPolicies(StrictModel):
     scipy_constants: ScipyConstantsPolicy | None = None
     run_artifacts: RunArtifactPolicy | None = None
     ci_workflows: CiWorkflowPolicy | None = None
+    source_test_coverage: SourceTestCoveragePolicy | None = None
     test_quality: TestQualityPolicy | None = None
     input_contracts: InputContractPolicy | None = None
     source_families: SourceFamilyPolicy | None = None

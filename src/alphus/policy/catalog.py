@@ -203,6 +203,15 @@ RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
                 "physical-units",
             ),
         ),
+        "source-test-coverage": RuleSpec(
+            "source_test_coverage",
+            RuleOutputShape.FINDINGS,
+            "Audits caller-declared source-to-test relationships against "
+            "revision-matched execution evidence; it does not infer relationships "
+            "from filenames or assess test correctness.",
+            ("repository",),
+            requires_files=False,
+        ),
         "test-quality": RuleSpec(
             "test_quality",
             RuleOutputShape.FINDINGS,
