@@ -1,6 +1,6 @@
 .alphus-quality:
   image: python:3.12-slim
-  before_script:
+  script:
     - |
       set -eu
       if ! command -v git >/dev/null 2>&1; then
@@ -21,9 +21,6 @@
       fi
       git --version
       git -C "$CI_PROJECT_DIR" ls-files --cached --others --exclude-standard -z >/dev/null
-  script:
-    - |
-      set -eu
       : "${ALPHUS_REF:?Set ALPHUS_REF to the pinned Alphus commit}"
       : "${ALPHUS_REQUIREMENTS_FILE:?Set ALPHUS_REQUIREMENTS_FILE to consumer tool requirements}"
       requirements_file="$ALPHUS_REQUIREMENTS_FILE"
