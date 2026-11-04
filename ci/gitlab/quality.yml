@@ -3,6 +3,27 @@
   script:
     - |
       set -eu
+      if ! command -v git >/dev/null 2>&1; then
+        case "${CI_JOB_IMAGE:-}" in
+          python:3.12-slim|python:3.12-slim@sha256:*) ;;
+          *)
+            printf '%s\n' \
+              "Git is missing from custom GitLab image '${CI_JOB_IMAGE:-unknown}'." \
+              "Install Git in the image or use the default python:3.12-slim image." >&2
+            exit 1
+            ;;
+        esac
+        if ! command -v apt-get >/dev/null 2>&1; then
+          printf '%s\n' \
+            "The default python:3.12-slim image should provide apt-get to install Git." >&2
+          exit 1
+        fi
+        apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git
+        rm -rf /var/lib/apt/lists/*
+      fi
+      git --version
+      git -C "$CI_PROJECT_DIR" ls-files --cached --others --exclude-standard -z >/dev/null
       : "${ALPHUS_REF:?Set ALPHUS_REF to the pinned Alphus commit}"
       : "${ALPHUS_REQUIREMENTS_FILE:?Set ALPHUS_REQUIREMENTS_FILE to consumer tool requirements}"
       requirements_file="$ALPHUS_REQUIREMENTS_FILE"
@@ -21,6 +42,26 @@
         set -- "$@" -r "$runtime_file"
       fi
       python -m pip install --disable-pip-version-check "$@"
+      if ! command -v git >/dev/null 2>&1; then
+        printf '%s\n' \
+          "Git is required by Alphus file-scoped checks. Install Git in a custom" \
+          "GitLab image before running this job." >&2
+        exit 1
+      fi
+      python - <<'PY'
+      import os
+      from pathlib import Path
+
+      from alphus.support.inventory import git_files
+
+      root = Path(os.environ["CI_PROJECT_DIR"])
+      paths = git_files(root)
+      if not paths:
+          raise SystemExit(
+              f"Alphus Git-backed inventory returned no files for {root}"
+          )
+      print(f"Alphus Git-backed inventory smoke check found {len(paths)} files.")
+      PY
       python -m alphus --root "$CI_PROJECT_DIR" \
         --config "${ALPHUS_CONFIG_FILE:-quality-gates.toml}" \
         --run --profile "${ALPHUS_PROFILE:-check}" --output plain
