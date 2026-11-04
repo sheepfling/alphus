@@ -1014,7 +1014,7 @@ def test_manifest_profile_covers_tuple_result_advisory_with_named_negative(
     (source / "results.py").write_text(
         "from typing import NamedTuple\n"
         "class Pair(NamedTuple):\n    left: int\n    right: int\n"
-        "def coordinates() -> tuple[int, int]: return 1, 2\n"
+        "def result() -> tuple[int, int]: return 1, 2\n"
         "def named() -> Pair: return Pair(1, 2)\n",
         encoding="utf-8",
     )
@@ -1030,6 +1030,7 @@ opaque_boundary_marker_prefix = "# opaque-boundary: "
 opaque_boundary_min_reason_chars = 12
 forbidden_main_imports = []
 semantic_result_paths = ["src/**"]
+semantic_result_apis = ["results.result"]
 [orchestration]
 default_profile = "audit"
 failure_threshold = "error"

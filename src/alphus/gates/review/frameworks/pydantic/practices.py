@@ -88,9 +88,17 @@ def _literal_bool(value: ast.expr) -> bool:
 class _DumpFlow(ast.NodeVisitor):
     """Follow visible local assignments in one function, without nested scopes."""
 
-    def __init__(self) -> None:
-        self.dumped: set[str] = set()
+    def __init__(self, dumped: AbstractSet[str] = frozenset()) -> None:
+        self.dumped: set[str] = set(dumped)
         self.lines: set[int] = set()
+        self.reachable = True
+
+    def visit_statements(self, statements: Sequence[ast.stmt]) -> None:
+        """Visit a suite only until its path terminates."""
+        for statement in statements:
+            if not self.reachable:
+                break
+            self.visit(statement)
 
     def visit_FunctionDef(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
         """Nested functions have their own local assignment state."""
@@ -118,6 +126,84 @@ class _DumpFlow(ast.NodeVisitor):
         else:
             self.dumped.difference_update(targets)
 
+    def visit_If(self, node: ast.If) -> None:
+        """Analyze exclusive arms independently, retaining only common state."""
+        if not self.reachable:
+            return
+        self.visit(node.test)
+        incoming = self.dumped.copy()
+        body_flow = _DumpFlow(incoming.copy())
+        body_flow.visit_statements(node.body)
+        self.lines.update(body_flow.lines)
+
+        if node.orelse:
+            else_flow = _DumpFlow(incoming.copy())
+            else_flow.visit_statements(node.orelse)
+            self.lines.update(else_flow.lines)
+            if body_flow.reachable and else_flow.reachable:
+                self.dumped = body_flow.dumped & else_flow.dumped
+            elif body_flow.reachable:
+                self.dumped = body_flow.dumped
+            elif else_flow.reachable:
+                self.dumped = else_flow.dumped
+            else:
+                # No path reaches statements after this conditional.
+                self.dumped = set()
+                self.reachable = False
+        else:
+            # The path where the condition is false preserves the incoming state.
+            self.dumped = (
+                body_flow.dumped & incoming if body_flow.reachable else incoming
+            )
+
+    def visit_Try(self, node: ast.Try) -> None:
+        """Keep handler termination local and merge reachable try paths."""
+        if not self.reachable:
+            return
+        incoming = self.dumped.copy()
+        body_flow = _DumpFlow(incoming.copy())
+        body_flow.visit_statements(node.body)
+        self.lines.update(body_flow.lines)
+
+        paths: list[_DumpFlow] = []
+        if body_flow.reachable:
+            else_flow = _DumpFlow(body_flow.dumped.copy())
+            else_flow.visit_statements(node.orelse)
+            self.lines.update(else_flow.lines)
+            if else_flow.reachable:
+                paths.append(else_flow)
+
+        for handler in node.handlers:
+            handler_flow = _DumpFlow(incoming.copy())
+            handler_flow.visit_statements(handler.body)
+            self.lines.update(handler_flow.lines)
+            if handler_flow.reachable:
+                paths.append(handler_flow)
+
+        if not paths:
+            self.dumped = set()
+            self.reachable = False
+            return
+
+        common_dumped = paths[0].dumped.copy()
+        for path in paths[1:]:
+            common_dumped.intersection_update(path.dumped)
+        self.dumped = common_dumped
+        if node.finalbody:
+            final_flow = _DumpFlow(self.dumped.copy())
+            final_flow.visit_statements(node.finalbody)
+            self.lines.update(final_flow.lines)
+            self.dumped = final_flow.dumped
+            self.reachable = final_flow.reachable
+
+    def visit_Return(self, node: ast.Return) -> None:
+        self.generic_visit(node)
+        self.reachable = False
+
+    def visit_Raise(self, node: ast.Raise) -> None:
+        self.generic_visit(node)
+        self.reachable = False
+
     def visit_Call(self, node: ast.Call) -> None:
         match node.func:
             case ast.Attribute(attr=method) if method in _VALIDATION_METHODS:
@@ -135,8 +221,7 @@ def _dump_revalidation_lines(module: ast.Module) -> list[int]:
         match node:
             case ast.FunctionDef() | ast.AsyncFunctionDef():
                 flow = _DumpFlow()
-                for statement in node.body:
-                    flow.visit(statement)
+                flow.visit_statements(node.body)
                 lines.update(flow.lines)
             case _:
                 pass

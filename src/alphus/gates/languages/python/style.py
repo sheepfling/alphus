@@ -229,13 +229,27 @@ def has_undifferentiated_pattern_name(name: str, value: ast.expr) -> bool:
     return False
 
 
-def has_unnamed_tuple_result(annotation: ast.expr) -> bool:
+def has_unnamed_tuple_result(
+    annotation: ast.expr,
+    tuple_names: AbstractSet[str] = frozenset({"tuple", "Tuple"}),
+    container_modules: AbstractSet[str] = frozenset({"typing"}),
+) -> bool:
     """Require a named record for fixed-position tuple results."""
     if isinstance(annotation, ast.BinOp) and isinstance(annotation.op, ast.BitOr):
-        return has_unnamed_tuple_result(annotation.left) or has_unnamed_tuple_result(
-            annotation.right
-        )
-    if isinstance(annotation, ast.Subscript) and type_name(annotation.value) == "tuple":
+        return has_unnamed_tuple_result(
+            annotation.left, tuple_names, container_modules
+        ) or has_unnamed_tuple_result(annotation.right, tuple_names, container_modules)
+    tuple_type = (
+        type_name(annotation.value) if isinstance(annotation, ast.Subscript) else ""
+    )
+    is_tuple = tuple_type in tuple_names or (
+        isinstance(annotation, ast.Subscript)
+        and isinstance(annotation.value, ast.Attribute)
+        and annotation.value.attr == "Tuple"
+        and isinstance(annotation.value.value, ast.Name)
+        and annotation.value.value.id in container_modules
+    )
+    if isinstance(annotation, ast.Subscript) and is_tuple:
         if not isinstance(annotation.slice, ast.Tuple):
             return False
         items = annotation.slice.elts
@@ -243,7 +257,9 @@ def has_unnamed_tuple_result(annotation: ast.expr) -> bool:
             isinstance(item, ast.Constant) and item.value is Ellipsis for item in items
         )
     if isinstance(annotation, ast.Subscript):
-        return has_unnamed_tuple_result(annotation.slice)
+        return has_unnamed_tuple_result(
+            annotation.slice, tuple_names, container_modules
+        )
     return False
 
 
@@ -260,6 +276,38 @@ def literal_string_values(items: Sequence[ast.expr]) -> frozenset[str] | None:
             return None
         values.append(item.value)
     return frozenset(values)
+
+
+def _module_path(relative: Path) -> str:
+    """Map an inventory path to its import-style name, stripping a src root."""
+    parts = relative.with_suffix("").parts
+    if parts and parts[0] in {"src", "lib"}:
+        parts = parts[1:]
+    if parts and parts[-1] == "__init__":
+        parts = parts[:-1]
+    return ".".join(parts)
+
+
+def _relative_import_module(
+    current_module: str, relative: Path, node: ast.ImportFrom
+) -> str:
+    """Resolve only syntactically local relative imports."""
+    package = current_module.split(".")
+    if relative.stem != "__init__":
+        package = package[:-1]
+    keep = max(0, len(package) - node.level + 1)
+    parts = [*package[:keep], *(node.module.split(".") if node.module else [])]
+    return ".".join(parts)
+
+
+def _dotted_name(node: ast.expr) -> str | None:
+    """Read a simple dotted name without evaluating source expressions."""
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        parent = _dotted_name(node.value)
+        return f"{parent}.{node.attr}" if parent else None
+    return None
 
 
 class StyleFindings(TypedDict):
@@ -380,6 +428,7 @@ class StyleVisitor(ast.NodeVisitor):
         self_returns: bool = False,
         shared_text_readers: bool = False,
         public_constants: bool = False,
+        public_result_apis: AbstractSet[str] | None = None,
         module_name: str = "",
         imported_symbols: AbstractSet[str] = frozenset(),
     ) -> None:
@@ -417,6 +466,7 @@ class StyleVisitor(ast.NodeVisitor):
         self.structured_reporting = structured_reporting
         self.check_repeated_literals = repeated_literals
         self.semantic_results = semantic_results
+        self.public_result_apis = public_result_apis
         self.pattern_kinds = pattern_kinds
         self.self_returns = self_returns
         self.shared_text_readers = shared_text_readers
@@ -427,7 +477,9 @@ class StyleVisitor(ast.NodeVisitor):
         self.boundary_min_reason_chars = policy.opaque_boundary_min_reason_chars
         self.forbidden_main_imports = set(policy.forbidden_main_imports)
         self.function_depth = 0
-        self.tuple_result_functions: list[tuple[int, bool]] = []
+        self.tuple_result_functions: list[tuple[int, bool, bool]] = []
+        self.private_result_scope = 0
+        self.result_class_stack: list[str] = []
         self.type_checking_depth = 0
         self.type_checking_names = {"TYPE_CHECKING"}
         self.typing_names = {"typing"}
@@ -567,6 +619,7 @@ class StyleVisitor(ast.NodeVisitor):
                     and target.id.isupper()
                     and not target.id.startswith("_")
                     and f"{self.module_name}.{target.id}" not in self.imported_symbols
+                    and f"{self.module_name}.*" not in self.imported_symbols
                 )
             if (
                 self.pattern_kinds
@@ -644,12 +697,50 @@ class StyleVisitor(ast.NodeVisitor):
             ):
                 self.findings["bare_containers"].append(arg.lineno)
             self.check_opaque(arg.annotation, declaration_line)
-        has_tuple_result = (
-            self.semantic_results
-            and node.returns is not None
-            and has_unnamed_tuple_result(node.returns)
+        conventional_pair = node.name.casefold() in {
+            "coordinate",
+            "coordinates",
+            "range",
+            "range_bounds",
+            "bounds",
+            "interval",
+            "to_wire",
+            "from_wire",
+            "serialize",
+            "deserialize",
+            "to_legacy",
+            "from_legacy",
+        }
+        qualified_result_name = ".".join(
+            part
+            for part in (
+                self.module_name,
+                *self.result_class_stack,
+                node.name,
+            )
+            if part
         )
-        self.tuple_result_functions.append((node.lineno, has_tuple_result))
+        public_result_api = (
+            self.semantic_results
+            and self.function_depth == 0
+            and self.private_result_scope == 0
+            and not node.name.startswith("_")
+            and not conventional_pair
+            and (
+                self.public_result_apis is None
+                or qualified_result_name in self.public_result_apis
+            )
+        )
+        has_tuple_result = (
+            public_result_api
+            and node.returns is not None
+            and has_unnamed_tuple_result(
+                node.returns, self.tuple_names, self.container_modules
+            )
+        )
+        self.tuple_result_functions.append(
+            (node.lineno, public_result_api, has_tuple_result)
+        )
         if node.returns is not None and has_quoted_type(node.returns):
             self.findings["quoted_types"].append(node.lineno)
         if node.returns is not None:
@@ -663,9 +754,15 @@ class StyleVisitor(ast.NodeVisitor):
                 self.findings["bare_containers"].append(node.lineno)
             self.check_opaque(node.returns, declaration_line)
         self.function_depth += 1
+        outer_type_checking_names = self.type_checking_names
+        outer_typing_names = self.typing_names
+        self.type_checking_names = set(outer_type_checking_names)
+        self.typing_names = set(outer_typing_names)
         for statement in node.body:
             self.visit(statement)
-        tuple_result_line, has_tuple_result = self.tuple_result_functions.pop()
+        self.type_checking_names = outer_type_checking_names
+        self.typing_names = outer_typing_names
+        tuple_result_line, _, has_tuple_result = self.tuple_result_functions.pop()
         if has_tuple_result:
             self.findings["unnamed_tuple_returns"].append(tuple_result_line)
             self.findings["unnamed_tuple_returns"].sort()
@@ -678,10 +775,15 @@ class StyleVisitor(ast.NodeVisitor):
         if (
             self.semantic_results
             and self.tuple_result_functions
+            and self.tuple_result_functions[-1][1]
             and is_unnamed_tuple_value(node.value)
         ):
-            function_line, _ = self.tuple_result_functions[-1]
-            self.tuple_result_functions[-1] = (function_line, True)
+            function_line, public_result_api, _ = self.tuple_result_functions[-1]
+            self.tuple_result_functions[-1] = (
+                function_line,
+                public_result_api,
+                True,
+            )
         self.generic_visit(node)
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
@@ -829,7 +931,13 @@ class StyleVisitor(ast.NodeVisitor):
             )
             if not slotted:
                 self.findings["unslotted_dataclasses"].append(node.lineno)
+        if node.name.startswith("_"):
+            self.private_result_scope += 1
+        self.result_class_stack.append(node.name)
         self.generic_visit(node)
+        self.result_class_stack.pop()
+        if node.name.startswith("_"):
+            self.private_result_scope -= 1
         self.frozen_model_stack.pop()
         self.pydantic_model_stack.pop()
 
@@ -982,14 +1090,63 @@ def findings_for(
             if relative.suffix != ".py" or not path.is_file():
                 continue
             tree = ast.parse(read_python_source(path), filename=str(relative))
-            imported_symbols.update(
-                f"{node.module}.{alias.name}"
-                for node in ast.walk(tree)
-                if isinstance(node, ast.ImportFrom)
-                and node.level == 0
-                and node.module is not None
-                for alias in node.names
-            )
+            current_module = _module_path(relative)
+            import_aliases: dict[str, str] = {}
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom):
+                    target_module = (
+                        node.module
+                        if node.level == 0 and node.module is not None
+                        else _relative_import_module(current_module, relative, node)
+                    )
+                    for alias in node.names:
+                        if alias.name == "*":
+                            imported_symbols.add(f"{target_module}.*")
+                        else:
+                            imported_symbols.add(f"{target_module}.{alias.name}")
+                elif isinstance(node, ast.Import):
+                    for alias in node.names:
+                        if alias.asname is not None:
+                            import_aliases[alias.asname] = alias.name
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Attribute):
+                    continue
+                dotted = _dotted_name(node)
+                if not dotted:
+                    continue
+                head, separator, tail = dotted.partition(".")
+                target = import_aliases.get(head, head)
+                qualified = f"{target}.{tail}" if separator else target
+                imported_symbols.add(qualified)
+            # A statically declared __all__ is direct evidence that the module
+            # intends to expose these names, even when no in-repository import
+            # references them. Dynamic export expressions remain unknown.
+            for node in tree.body:
+                if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+                    continue
+                targets = (
+                    node.targets if isinstance(node, ast.Assign) else [node.target]
+                )
+                if not any(
+                    isinstance(target, ast.Name) and target.id == "__all__"
+                    for target in targets
+                ):
+                    continue
+                value = node.value
+                if not isinstance(value, (ast.List, ast.Tuple)):
+                    imported_symbols.add(f"{current_module}.*")
+                    continue
+                imported_symbols.update(
+                    f"{current_module}.{item.value}"
+                    for item in value.elts
+                    if isinstance(item, ast.Constant) and isinstance(item.value, str)
+                )
+            if any(
+                isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and statement.name == "__getattr__"
+                for statement in tree.body
+            ):
+                imported_symbols.add(f"{current_module}.*")
     for relative in paths:
         if relative.suffix.lower() not in policy.extensions or any(
             matches_path(relative.as_posix(), pattern) for pattern in policy.exclude
@@ -1019,6 +1176,7 @@ def findings_for(
                 matches_path(relative.as_posix(), pattern)
                 for pattern in policy.semantic_result_paths
             ),
+            public_result_apis=frozenset(policy.semantic_result_apis),
             pattern_kinds=any(
                 matches_path(relative.as_posix(), pattern)
                 for pattern in policy.pattern_kind_paths
@@ -1035,7 +1193,7 @@ def findings_for(
                 matches_path(relative.as_posix(), pattern)
                 for pattern in policy.public_constant_paths
             ),
-            module_name=".".join(relative.with_suffix("").parts[1:]),
+            module_name=_module_path(relative),
             imported_symbols=frozenset(imported_symbols),
         )
         visitor.visit(ast.parse(source, filename=str(relative)))

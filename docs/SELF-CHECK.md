@@ -202,6 +202,13 @@ the shared-utilities rule, which flags duplicate helpers, extra file hash
 implementations, and direct Git subprocess calls outside `alphus.support.git`. The path rule flags
 raw `os.name` checks so code uses the shared platform probe.
 
+Duplicate-helper matching compares exact AST bodies across selected non-test
+files after removing a leading docstring. It excludes the conventional
+one-call `main()` wrapper that raises `SystemExit(cli())`; this narrow shape
+does not classify arbitrary similar functions as wrappers. Configure test or
+mirrored fixture exclusions explicitly. A duplicate group is a review lead:
+identical syntax does not prove shared ownership or equivalent behavior.
+
 The JavaScript CI job checks formatting of `docs/cpp/**/*.md` with the
 locally installed Prettier package. Run `npm run format:markdown` to fix those
 files, then `npm run format:markdown:check` to verify. Formatting is an

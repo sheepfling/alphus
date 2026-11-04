@@ -74,49 +74,24 @@ def test_self_check_scopes_semantic_result_rules_to_review_detectors() -> None:
     }.issubset(policy.semantic_result_paths)
 
 
-def test_self_profile_python_style_runner_catches_historical_tuple_shapes(
+def test_self_profile_python_style_requires_exact_result_api_scope(
     tmp_path: Path, pytestconfig: pytest.Config
 ) -> None:
     config = load_config(Path("quality-gates.toml"))
-    files = [
-        Path("src/alphus/gates/review/provenance_ownership.py"),
-        Path("src/alphus/gates/review/rendered_value_reparsed.py"),
-        Path("src/alphus/gates/review/unexplained_empty_results.py"),
-    ]
-    historical_sources = {
-        files[0]: (
-            "def candidate() -> tuple[str, str, int] | None:\n"
-            "    return 'path', 'owner', 1\n"
-            "def candidates() -> list[tuple[int, str, str]]:\n"
-            "    return [(1, 'path', 'owner')]\n"
-        ),
-        files[1]: (
-            "def sites() -> list[tuple[int, int, str]]:\n"
-            "    return [(1, 2, 'suffix')]\n"
-            "def site() -> tuple[int, int, str]:\n"
-            "    return 1, 2, 'suffix'\n"
-        ),
-        files[2]: (
-            "def evidence() -> tuple[str, str, int] | None:\n"
-            "    return 'file', 'rule', 1\n"
-            "def sites() -> list[tuple[int, str, str]]:\n"
-            "    return [(1, 'file', 'rule')]\n"
-        ),
-    }
-    for relative, source in historical_sources.items():
-        target = tmp_path / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(source, encoding="utf-8")
-
-    runner = SOURCE_RULE_RUNNERS["python-style"]
-    historical_findings = runner(tmp_path, files, config)
-    assert set(historical_findings) == {path.as_posix() for path in files}
-    assert all(
-        findings["unnamed_tuple_returns"] for findings in historical_findings.values()
+    files = [Path("src/alphus/gates/review/provenance_ownership.py")]
+    target = tmp_path / files[0]
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
+        "def candidate() -> tuple[str, str, int]:\n    return 'path', 'owner', 1\n",
+        encoding="utf-8",
     )
 
-    current_findings = runner(Path(pytestconfig.rootpath), files, config)
-    assert current_findings == {}
+    policy = config.checks.python_style
+    assert policy is not None
+    assert not policy.semantic_result_apis
+    runner = SOURCE_RULE_RUNNERS["python-style"]
+    assert runner(tmp_path, files, config) == {}
+    assert runner(Path(pytestconfig.rootpath), files, config) == {}
 
 
 def test_declared_script_entry_points_resolve_to_callables() -> None:

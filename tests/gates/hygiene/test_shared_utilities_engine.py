@@ -14,6 +14,7 @@ from alphus.gates.hygiene.shared_utilities import (
     duplicate_helpers,
     file_sha256_helpers,
 )
+from alphus.gates.languages.python.runtime_types import type_check_findings
 
 POLICY = SharedUtilitiesPolicy(
     extensions=[".py"],
@@ -153,6 +154,64 @@ def test_duplicate_helpers_find_class_methods_with_qualified_names(
     assert list(groups.values()) == [
         ["src/first.py:FirstStore.digest", "src/second.py:SecondStore.encode"]
     ]
+
+
+def test_duplicate_helpers_exclude_only_conventional_cli_wrappers(
+    tmp_path: Path,
+) -> None:
+    first = (
+        "def main():\n    raise SystemExit(cli())\n"
+        "def normalize(value):\n"
+        "    cleaned = value.strip()\n"
+        "    if not cleaned:\n        raise ValueError('empty')\n"
+        "    return cleaned\n"
+    )
+    second = first.replace("normalize", "clean_name")
+    _write(tmp_path, "src/first.py", first)
+    _write(tmp_path, "src/second.py", second)
+    policy = POLICY.model_copy(
+        update={"minimum_body_statements": 1, "minimum_ast_nodes": 1}
+    )
+    groups = duplicate_helpers(
+        tmp_path, [Path("src/first.py"), Path("src/second.py")], policy
+    )
+    assert list(groups.values()) == [
+        ["src/first.py:normalize", "src/second.py:clean_name"]
+    ]
+
+
+def test_intentionally_mirrored_test_fixtures_remain_excluded(tmp_path: Path) -> None:
+    mirrored = (
+        "def assert_fixture_contract(value):\n"
+        "    parsed = parse(value)\n"
+        "    if parsed is None:\n"
+        "        raise AssertionError('fixture rejected')\n"
+        "    return parsed\n"
+    )
+    first = Path("tests/fixtures/positive_contract.py")
+    second = Path("tests/fixtures/negative_control.py")
+    _write(tmp_path, first.as_posix(), mirrored)
+    _write(tmp_path, second.as_posix(), mirrored)
+
+    assert duplicate_helpers(tmp_path, [first, second], POLICY) == {}
+
+
+def test_cli_wrapper_ast_shape_does_not_look_like_runtime_input_narrowing() -> None:
+    source = """import ast
+def is_cli_wrapper(body):
+    match body[0]:
+        case ast.Raise(
+            exc=ast.Call(
+                func=ast.Name(id="SystemExit"),
+                args=[ast.Call(keywords=[])],
+                keywords=[],
+            )
+        ):
+            return True
+        case _:
+            return False
+"""
+    assert type_check_findings(source) == []
 
 
 def test_file_hash_scan_skips_configured_canonical_and_non_file_hashes(

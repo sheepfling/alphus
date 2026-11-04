@@ -38,6 +38,29 @@ def analyze(source: str, policy: InputContractPolicy = POLICY) -> list[Finding]:
     return input_contract_findings(dedent(source).lstrip("\n"), policy)
 
 
+MANUAL_SCHEMA_BOUNDARY = MappingProxyType(
+    {
+        "path": "src/decode.py",
+        "function": "parse_options",
+        "parameter": "payload",
+        "authoritative_schema": "app.models.Options",
+    }
+)
+
+
+def manual_schema_findings(source: str, **contract_updates: object) -> list[Finding]:
+    policy = InputContractPolicy(
+        extensions=[".py"],
+        exclude=[],
+        manual_schema_validation_boundaries=[
+            {**MANUAL_SCHEMA_BOUNDARY, **contract_updates}
+        ],
+    )
+    return input_contract_findings(
+        dedent(source).lstrip("\n"), policy, path="src/decode.py"
+    )
+
+
 @pytest.mark.parametrize(
     ("body", "interface"),
     [
@@ -1526,3 +1549,252 @@ def test_rebinding_a_scalar_read_from_a_mapping_is_not_a_caller_write() -> None:
     """)
         == []
     )
+
+
+def test_manual_schema_advisory_groups_repeated_selected_boundary_checks() -> None:
+    findings = manual_schema_findings("""
+        def parse_options(payload):
+            if "kind" not in payload:
+                raise ValueError("missing kind")
+            if not isinstance(payload.get("kind"), str):
+                raise ValueError("invalid kind")
+            if not isinstance(payload.get("limit"), int):
+                raise ValueError("invalid limit")
+            if payload.get("limit") < 0:
+                raise ValueError("negative limit")
+            return payload
+    """)
+
+    assert len(findings) == 1
+    assert (
+        findings[0].rule_id == "alphus/python/none/correctness/manual-schema-validation"
+    )
+    assert findings[0].line == 1
+    assert findings[0].severity == "info"
+    assert "app.models.Options" in findings[0].message
+    assert "fixed-key checks" in findings[0].message
+    assert "kind is str" in findings[0].message
+    assert "limit is int" in findings[0].message
+    assert "numeric range" in findings[0].message
+    assert "does not prove a validation defect" in findings[0].message
+
+
+def test_manual_schema_selector_does_not_treat_a_global_as_an_input_parameter() -> None:
+    findings = manual_schema_findings("""
+        def parse_options():
+            if "kind" not in payload:
+                raise ValueError("missing kind")
+            if not isinstance(payload.get("kind"), str):
+                raise ValueError("invalid kind")
+            if not isinstance(payload.get("limit"), int):
+                raise ValueError("invalid limit")
+            if payload.get("limit") < 0:
+                raise ValueError("negative limit")
+            return payload
+    """)
+
+    assert len(findings) == 1
+    assert "not evaluated" in findings[0].message
+    assert "does not declare 'payload' as an input parameter" in findings[0].message
+    assert "fixed-key checks" not in findings[0].message
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        """
+        def parse_options(payload):
+            if not isinstance(payload.get("kind"), str):
+                raise ValueError("invalid kind")
+        """,
+        """
+        def parse_options(payload):
+            for key, value in payload.items():
+                if not isinstance(key, str):
+                    raise ValueError("invalid JSON key")
+            return payload
+        """,
+        """
+        def parse_options(payload):
+            return Options.model_validate(payload)
+        """,
+        """
+        def parse_options(payload):
+            parsed = TypeAdapter(Options).validate_python(payload)
+            return parsed
+        """,
+        """
+        def parse_options(payload):
+            raw = payload
+            if "kind" not in raw:
+                raise ValueError("missing kind")
+            if not isinstance(raw.get("kind"), str):
+                raise ValueError("invalid kind")
+            if not isinstance(raw.get("limit"), int):
+                raise ValueError("invalid limit")
+            if raw.get("limit") < 0:
+                raise ValueError("negative limit")
+            return raw
+        """,
+        """
+        def parse_options(payload):
+            payload = {"kind": "open"}
+            if "kind" not in payload:
+                raise ValueError("missing kind")
+            if not isinstance(payload.get("kind"), str):
+                raise ValueError("invalid kind")
+            if not isinstance(payload.get("limit"), int):
+                raise ValueError("invalid limit")
+            if payload.get("limit") < 0:
+                raise ValueError("negative limit")
+            return payload
+        """,
+        """
+        def parse_options(payload):
+            def inspect(payload):
+                if "kind" not in payload:
+                    raise ValueError("missing kind")
+                if not isinstance(payload.get("kind"), str):
+                    raise ValueError("invalid kind")
+                if not isinstance(payload.get("limit"), int):
+                    raise ValueError("invalid limit")
+                if payload.get("limit") < 0:
+                    raise ValueError("negative limit")
+            return payload
+        """,
+        """
+        def parse_options(payload):
+            extensions = payload.get("extensions", {})
+            return {key: value for key, value in extensions.items()}
+        """,
+    ],
+)
+def test_manual_schema_advisory_accepts_guards_walkers_validators_and_alias_limits(
+    source: str,
+) -> None:
+    assert manual_schema_findings(source) == []
+
+
+def test_manual_schema_advisory_records_unknown_helpers_as_uncertainty() -> None:
+    findings = manual_schema_findings("""
+        def parse_options(payload):
+            if "kind" not in payload:
+                raise ValueError("missing kind")
+            if not isinstance(payload.get("kind"), str):
+                raise ValueError("invalid kind")
+            if not isinstance(payload.get("limit"), int):
+                raise ValueError("invalid limit")
+            if payload.get("limit") < 0:
+                raise ValueError("negative limit")
+            return inspect_unknown_schema(payload)
+    """)
+
+    assert len(findings) == 1
+    assert "unresolved" in findings[0].message
+    assert "does not prove a validation defect" in findings[0].message
+
+
+def test_manual_schema_advisory_accepts_declared_custom_validator_flow() -> None:
+    findings = manual_schema_findings(
+        """
+        def parse_options(payload):
+            parsed = app.validate_payload(payload)
+            return parsed
+        """,
+        validator="app.validate_payload",
+    )
+
+    assert findings == []
+
+
+@pytest.mark.parametrize(
+    ("validator", "call"),
+    [
+        (
+            "TypeAdapter.validate_python",
+            "TypeAdapter(Options).validate_python(payload)",
+        ),
+        ("Options.model_validate", "Options.model_validate(payload)"),
+        ("app.validate_payload", "app.validate_payload(payload=payload)"),
+    ],
+)
+def test_manual_schema_advisory_accepts_configured_and_factory_validators(
+    validator: str, call: str
+) -> None:
+    findings = manual_schema_findings(
+        f"""
+        def parse_options(payload):
+            if "kind" not in payload:
+                raise ValueError("missing kind")
+            if not isinstance(payload.get("kind"), str):
+                raise ValueError("invalid kind")
+            if not isinstance(payload.get("limit"), int):
+                raise ValueError("invalid limit")
+            if payload.get("limit") < 0:
+                raise ValueError("negative limit")
+            parsed = {call}
+            return parsed
+        """,
+        validator=validator,
+    )
+
+    assert findings == []
+
+
+def test_manual_schema_advisory_keeps_branch_completeness_unknown() -> None:
+    findings = manual_schema_findings("""
+        def parse_options(payload):
+            if payload.get("enabled"):
+                if "kind" not in payload:
+                    raise ValueError("missing kind")
+                if not isinstance(payload.get("kind"), str):
+                    raise ValueError("invalid kind")
+                if not isinstance(payload.get("limit"), int):
+                    raise ValueError("invalid limit")
+                if payload.get("limit") < 0:
+                    raise ValueError("negative limit")
+            return payload
+    """)
+
+    assert len(findings) == 1
+    assert "branch completeness remain unresolved" in findings[0].message
+
+
+def test_manual_schema_advisory_is_opt_in_and_respects_excluded_paths(
+    tmp_path: Path,
+) -> None:
+    relative = Path("src/decode.py")
+    source = (
+        "def parse_options(payload):\n"
+        "    if 'kind' not in payload: raise ValueError()\n"
+        "    if not isinstance(payload.get('kind'), str): raise ValueError()\n"
+        "    if not isinstance(payload.get('limit'), int): raise ValueError()\n"
+        "    if payload.get('limit') < 0: raise ValueError()\n"
+    )
+    target = tmp_path / relative
+    target.parent.mkdir(parents=True)
+    target.write_text(source, encoding="utf-8")
+    policy = InputContractPolicy(
+        extensions=[".py"],
+        exclude=["src/decode.py"],
+        manual_schema_validation_boundaries=[MANUAL_SCHEMA_BOUNDARY],
+    )
+
+    assert input_contract_findings(source, POLICY, path=relative.as_posix()) == []
+    assert check_input_contracts(tmp_path, [relative], policy) == []
+
+
+def test_manual_schema_contracts_validate_identity_and_custom_review_reasons() -> None:
+    with pytest.raises(ValueError, match="must be unique"):
+        InputContractPolicy(
+            extensions=[".py"],
+            exclude=[],
+            manual_schema_validation_boundaries=[
+                MANUAL_SCHEMA_BOUNDARY,
+                MANUAL_SCHEMA_BOUNDARY,
+            ],
+        )
+    with pytest.raises(ValueError, match="must explain the contract"):
+        manual_schema_findings(
+            "def parse_options(payload): pass", justification="custom"
+        )

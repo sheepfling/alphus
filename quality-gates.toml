@@ -107,7 +107,13 @@ pattern_kind_paths = [
 ]
 self_return_paths = ["src/alphus/**"]
 shared_text_reader_paths = ["src/alphus/config.py", "src/alphus/gates/**"]
-public_constant_paths = ["src/alphus/gates/cpp/**"]
+public_constant_paths = [
+  "src/alphus/gates/cpp/**",
+  "src/alphus/__init__.py",
+  "src/alphus/config.py",
+  "src/alphus/gates/source/cli_policy.py",
+  "src/alphus/gates/languages/javascript/path_discovery.py",
+]
 
 [checks.runtime_types]
 extensions = [".py"]

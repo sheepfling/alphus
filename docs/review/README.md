@@ -25,6 +25,42 @@ Other consumers retain the default error threshold unless they explicitly set
 `orchestration.failure_threshold = "warning"` or a rule step's `severity`.
 Native command failures still fail.
 
+The opt-in public-constant inventory follows selected in-repository absolute
+and relative imports, simple module-qualified references, and literal
+module-level `__all__` exports. Dynamic `__all__`, module `__getattr__`, and
+star imports make the module's exported surface unknown, so the inventory
+suppresses unused-constant advice for that module. References from consumers
+outside the selected inventory cannot be proven; treat any remaining result as
+review guidance, not authorization to rename or remove an API.
+
+The local-import review recognizes direct and aliased `TYPE_CHECKING` guards.
+It also reports imports inside functions, including optional-dependency loads
+and imports used to avoid a dependency cycle. This is source classification
+only: it does not establish that a cycle exists, that an optional dependency is
+packaged incorrectly, or that moving an import is safe. Preserve and review
+lazy boundaries in their application context.
+
+The opt-in `python-style.semantic_result_paths` check limits scanning to chosen
+files; a file selection alone does not prove that every callable in the file
+is public. Pair it with exact, fully qualified `semantic_result_apis` entries
+such as `my_package.api.load_pair` or `my_package.api.Factory.create` to declare
+the public contracts under review. Private names, methods on private classes,
+unselected callables, homogeneous variadic tuples, named records, and
+conventional coordinate/range or wire conversion APIs are accepted.
+`typing.Tuple` and its imported aliases are followed in nested result
+annotations. The rule uses configured symbol identity and local syntax only:
+it cannot resolve arbitrary imported type aliases or determine
+external/dynamic consumers. Give wire and compatibility contracts explicit
+names, and review each finding; the check never rewrites APIs or callers.
+
+For example, a consumer can select the source inventory and declare only the
+public callable whose result contract is under review:
+
+```toml
+[checks.python_style]
+semantic_result_paths = ["src/my_package/api.py"]
+semantic_result_apis = ["my_package.api.load_pair"]
+```
 ## Third-party typing stubs
 
 Selector: `typing-stub-suggestions`. This opt-in informational rule reads
@@ -401,6 +437,50 @@ uses uncertain; writes inside those regions may be missed. Loop-element
 aliases are not tracked as caller-reachable values. It does not prove that an
 unreported parameter is immutable or free of side effects, and it makes no
 automatic source changes.
+
+### Manual schema validation review
+
+`manual_schema_validation_boundaries` independently opts exact admission
+functions/parameters into `manual-schema-validation` review. A finding requires
+locally visible fixed string-key checks plus repeated scalar type or numeric
+range guards that raise or return. It groups the boundary, guard locations,
+recognized constraints, and an optional consumer-declared authoritative schema
+into one informational finding:
+
+```toml
+[[checks.input_contracts.manual_schema_validation_boundaries]]
+path = "src/app/decode.py"
+function = "load_options"
+parameter = "payload"
+authoritative_schema = "app.models.Options"
+```
+
+The selector declares a review scope; it does not assert that manual checks are
+wrong. A result from a recognized `model_validate`, `validate_python`, or
+`parse_obj` call suppresses the candidate only when it is returned or its
+assigned result is used later. Consumers can name an equivalent validator or
+record a substantive one-line justification for a deliberate custom protocol
+contract. A single guard, generic key/value walker, open extension mapping, or
+unselected function is not a candidate.
+
+The check does not import consumer schemas or execute validators. Aliases,
+shadowing, arbitrary helpers, imported schema identity, and branch completeness
+remain unknown; helper locations and this uncertainty are included in the
+finding where visible. The rule does not decide required-versus-nullable fields,
+coercion, bool/int policy, finite numbers, duplicate keys, serialization, or
+wire compatibility. Keep it advisory and compare each result with an
+independent boundary contract before remediation.
+
+For remediation review, lower finding counts alone are not completion evidence.
+A cast, copied recursive `JsonValue` alias, pattern matching used only to evade
+the warning, widening a domain parameter to model-or-mapping, moving the same
+guards into an opaque helper, or adding a second handwritten validator without
+showing why the existing schema is inadequate does not establish safer
+validation. `JsonValue` describes generic JSON shape; a `TypedDict` annotation
+alone performs no runtime check. Any separately authorized boundary migration
+needs behavioral tests for required versus explicit-null fields, unknown keys,
+bool/int handling, finite values, coercion, nested shapes, discriminators,
+defaults, errors, and wire compatibility.
 
 ## Pydantic practices
 

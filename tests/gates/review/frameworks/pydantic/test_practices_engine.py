@@ -435,6 +435,90 @@ def test_rebinding_and_nested_functions_do_not_carry_dump_state() -> None:
     assert pydantic_practice_findings(source, _policy()) == []
 
 
+def test_dump_revalidation_does_not_cross_mutually_exclusive_arms() -> None:
+    source = (
+        "def parse(model_input):\n"
+        "    if isinstance(model_input, OuterModel):\n"
+        "        model_input = model_input.model_dump(mode='json')\n"
+        "    else:\n"
+        "        model_input = InnerModel.model_validate(model_input)\n"
+        "    return model_input\n"
+    )
+    assert pydantic_practice_findings(source, _policy()) == []
+
+
+def test_dump_revalidation_in_same_branch_is_still_reported() -> None:
+    source = (
+        "def parse(model_input, raw_input):\n"
+        "    if isinstance(model_input, OuterModel):\n"
+        "        model_input = model_input.model_dump(mode='json')\n"
+        "        return OuterModel.model_validate(model_input)\n"
+        "    return InnerModel.model_validate(raw_input)\n"
+    )
+    findings = pydantic_practice_findings(source, _policy())
+    assert [(item.line, item.rule_id) for item in findings] == [
+        (4, "alphus/python/pydantic/validation/dump-revalidation")
+    ]
+
+
+def test_dump_revalidation_survives_opposite_raise_or_return_arm() -> None:
+    for terminal in ("raise ValueError('wrong type')", "return None"):
+        source = (
+            "def parse(model_input):\n"
+            "    if isinstance(model_input, OuterModel):\n"
+            "        model_input = model_input.model_dump(mode='json')\n"
+            f"    else:\n        {terminal}\n"
+            "    return OuterModel.model_validate(model_input)\n"
+        )
+        findings = pydantic_practice_findings(source, _policy())
+        assert [(item.line, item.rule_id) for item in findings] == [
+            (6, "alphus/python/pydantic/validation/dump-revalidation")
+        ]
+
+
+def test_dump_revalidation_keeps_intersection_when_both_if_arms_continue() -> None:
+    source = (
+        "def parse(model_input, raw_input):\n"
+        "    if isinstance(model_input, OuterModel):\n"
+        "        model_input = model_input.model_dump(mode='json')\n"
+        "    else:\n"
+        "        model_input = raw_input\n"
+        "    return OuterModel.model_validate(model_input)\n"
+    )
+
+    assert pydantic_practice_findings(source, _policy()) == []
+
+
+def test_dump_revalidation_skips_unreachable_code_after_both_arms_terminate() -> None:
+    source = (
+        "def parse(model_input):\n"
+        "    if isinstance(model_input, OuterModel):\n"
+        "        model_input = model_input.model_dump(mode='json')\n"
+        "        return None\n"
+        "    else:\n"
+        "        raise ValueError('wrong type')\n"
+        "    return OuterModel.model_validate(model_input)\n"
+    )
+
+    assert pydantic_practice_findings(source, _policy()) == []
+
+
+def test_dump_revalidation_does_not_visit_unreachable_assignments_after_terminal_if() -> (
+    None
+):
+    source = (
+        "def parse(model_input):\n"
+        "    if isinstance(model_input, OuterModel):\n"
+        "        return None\n"
+        "    else:\n"
+        "        raise ValueError('wrong type')\n"
+        "    payload = model_input.model_dump(mode='json')\n"
+        "    return OuterModel.model_validate(payload)\n"
+    )
+
+    assert pydantic_practice_findings(source, _policy()) == []
+
+
 def test_explicit_mutability_is_opt_in_and_handles_pydantic_aliases() -> None:
     source = (
         "from pydantic import BaseModel as Model, ConfigDict as Config\n"
@@ -453,6 +537,25 @@ def test_explicit_mutability_is_opt_in_and_handles_pydantic_aliases() -> None:
     findings = pydantic_practice_findings(source, _policy(require_explicit_frozen=True))
     assert [(item.rule_id, item.line) for item in findings] == [
         ("alphus/python/pydantic/correctness/implicit-mutability", 4)
+    ]
+
+
+@pytest.mark.parametrize("terminal", ["return None", "raise RuntimeError()"])
+def test_terminal_exception_handlers_do_not_hide_normal_dump_flow(
+    terminal: str,
+) -> None:
+    source = (
+        "def output(model):\n"
+        "    try:\n"
+        "        prepare()\n"
+        "    except ValueError:\n"
+        f"        {terminal}\n"
+        "    payload = model.model_dump()\n"
+        "    return Adapter.model_validate(payload)\n"
+    )
+    findings = pydantic_practice_findings(source, _policy())
+    assert [(item.line, item.rule_id) for item in findings] == [
+        (7, "alphus/python/pydantic/validation/dump-revalidation")
     ]
 
 

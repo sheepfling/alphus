@@ -1553,6 +1553,50 @@ class TestQualityPolicy(PythonSourceScanPolicy):
         return self
 
 
+class ManualSchemaBoundary(StrictModel):
+    """One consumer-declared admission boundary for a local validation review."""
+
+    path: str
+    function: str
+    parameter: str
+    authoritative_schema: str | None = None
+    validator: str | None = None
+    justification: str | None = None
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, value: str) -> str:
+        return validate_single_path(value, "manual schema boundary path")
+
+    @field_validator("function", "authoritative_schema", "validator")
+    @classmethod
+    def validate_dotted_names(cls, value: str | None) -> str | None:
+        if value is not None and (
+            not value or any(not part.isidentifier() for part in value.split("."))
+        ):
+            raise ValueError("manual schema names must be dotted identifiers")
+        return value
+
+    @field_validator("parameter")
+    @classmethod
+    def validate_parameter(cls, value: str) -> str:
+        if not value.isidentifier():
+            raise ValueError("manual schema parameter must be an identifier")
+        return value
+
+    @field_validator("justification")
+    @classmethod
+    def validate_justification(cls, value: str | None) -> str | None:
+        if value is not None:
+            clean = validate_one_line_message(value)
+            if len(clean) < 12:
+                raise ValueError(
+                    "manual schema justification must explain the contract"
+                )
+            return clean
+        return None
+
+
 class DomainMappingContract(StrictModel):
     """Consumer-declared domain boundary used for narrow mapping/object advice."""
 
@@ -1610,6 +1654,8 @@ class InputContractPolicy(PythonSourceScanPolicy):
     report_mutation: bool = True
     suggest_read_only: bool = True
     sequence_narrowing_paths: tuple[str, ...] = ()
+    manual_schema_validation_boundaries: tuple[ManualSchemaBoundary, ...] = ()
+    manual_schema_validation_severity: Severity = "info"
     domain_mapping_types: tuple[str, ...] = ()
     domain_mapping_value_types: tuple[str, ...] = ("JsonValue",)
     domain_mapping_contracts: tuple[DomainMappingContract, ...] = ()
@@ -1622,6 +1668,16 @@ class InputContractPolicy(PythonSourceScanPolicy):
         cls, patterns: Sequence[str]
     ) -> tuple[str, ...]:
         return validate_patterns(patterns)
+
+    @field_validator("manual_schema_validation_boundaries")
+    @classmethod
+    def validate_manual_schema_boundaries(
+        cls, contracts: Sequence[ManualSchemaBoundary]
+    ) -> tuple[ManualSchemaBoundary, ...]:
+        values = tuple(contracts)
+        selectors = tuple((item.path, item.function, item.parameter) for item in values)
+        require_unique(selectors, "manual schema boundary selectors must be unique")
+        return values
 
     @field_validator("domain_mapping_types", "domain_mapping_value_types")
     @classmethod

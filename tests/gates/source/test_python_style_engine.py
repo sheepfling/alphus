@@ -1,7 +1,12 @@
 """Protect the Python structure gate against false positives and bypasses."""
 
 import ast
+import os
+import subprocess
+import sys
 from pathlib import Path
+
+import pytest
 
 from alphus.config import PythonStylePolicy
 from alphus.gates.languages.python.style import (
@@ -154,12 +159,111 @@ def test_pathlib_is_preferred_over_os_path() -> None:
 
 def test_function_local_and_type_checking_imports_are_detected() -> None:
     assert findings("def f():\n import os") == {"local_imports"}
+    assert findings(
+        "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n import os"
+    ) == {
+        "type_checking_imports",
+    }
     assert findings("from typing import TYPE_CHECKING as TC\nif TC:\n import os") == {
         "type_checking_imports",
     }
     assert findings("import typing as t\nif t.TYPE_CHECKING:\n import os") == {
         "type_checking_imports",
     }
+
+
+def test_function_local_type_checking_alias_does_not_leak_to_other_functions() -> None:
+    source = (
+        "def typing_only():\n"
+        "    from typing import TYPE_CHECKING as TC\n"
+        "    if TC:\n"
+        "        import typing_only_dependency\n"
+        "def runtime_flag(TC):\n"
+        "    if TC:\n"
+        "        import runtime_dependency\n"
+    )
+
+    visitor = StyleVisitor(POLICY, source=source)
+    visitor.visit(ast.parse(source))
+
+    assert visitor.findings["type_checking_imports"] == [4]
+    assert visitor.findings["local_imports"] == [2, 7]
+
+
+def test_function_local_typing_module_alias_does_not_leak_to_other_functions() -> None:
+    source = (
+        "def typing_only():\n"
+        "    import typing as t\n"
+        "    if t.TYPE_CHECKING:\n"
+        "        import typing_only_dependency\n"
+        "def runtime_flag(t):\n"
+        "    if t.TYPE_CHECKING:\n"
+        "        import runtime_dependency\n"
+    )
+
+    visitor = StyleVisitor(POLICY, source=source)
+    visitor.visit(ast.parse(source))
+
+    assert visitor.findings["type_checking_imports"] == [4]
+    assert visitor.findings["local_imports"] == [2, 7]
+
+
+def test_import_review_classifies_optional_loads_and_cycle_avoiding_imports() -> None:
+    assert findings(
+        "def render():\n"
+        "    try:\n"
+        "        import optional_plot_backend\n"
+        "    except ImportError:\n"
+        "        return None\n"
+        "    return optional_plot_backend.draw()\n"
+        "def load_service():\n"
+        "    from . import service\n"
+        "    return service.load()\n"
+    ) == {"local_imports"}
+
+
+def test_type_only_and_lazy_imports_break_a_real_module_cycle(tmp_path: Path) -> None:
+    package = tmp_path / "cycle_example"
+    package.mkdir()
+    (package / "__init__.py").write_text("\n", encoding="utf-8")
+    module_a = Path("cycle_example/a.py")
+    module_b = Path("cycle_example/b.py")
+    (tmp_path / module_a).write_text(
+        "from __future__ import annotations\n"
+        "from typing import TYPE_CHECKING\n"
+        "if TYPE_CHECKING:\n"
+        "    from .b import B\n"
+        "def create() -> B:\n"
+        "    from .b import B\n"
+        "    return B()\n",
+        encoding="utf-8",
+    )
+    (tmp_path / module_b).write_text(
+        "from __future__ import annotations\n"
+        "from .a import create\n"
+        "class B:\n"
+        "    def create_other(self) -> B:\n"
+        "        return create()\n",
+        encoding="utf-8",
+    )
+
+    observed = findings_for(tmp_path, [module_a], POLICY)
+    assert observed[module_a.as_posix()]
+    assert "type_checking_imports" in observed[module_a.as_posix()]
+    assert "local_imports" in observed[module_a.as_posix()]
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from cycle_example.a import create; assert type(create()).__name__ == 'B'",
+        ],
+        check=False,
+        env={**os.environ, "PYTHONPATH": str(tmp_path)},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_configured_application_entrypoint_imports_are_reported() -> None:
@@ -455,7 +559,26 @@ def test_scoped_semantic_results_check_raw_tuple_return_values() -> None:
     )
     visitor = StyleVisitor(POLICY, semantic_results=True)
     visitor.visit(ast.parse(source))
-    assert visitor.findings["unnamed_tuple_returns"] == [1, 5]
+    assert visitor.findings["unnamed_tuple_returns"] == [1]
+
+
+def test_semantic_results_respect_public_named_and_wire_contracts() -> None:
+    source = (
+        "from typing import NamedTuple, Tuple as Pair\n"
+        "import typing as t\n"
+        "class Record(NamedTuple):\n    x: int\n    y: str\n"
+        "def public_pair() -> Pair[int, str]: ...\n"
+        "def nested() -> list[t.Tuple[int, str]]: ...\n"
+        "def _private() -> tuple[int, str]: ...\n"
+        "def coordinates() -> tuple[float, float]: return 1.0, 2.0\n"
+        "def range_bounds() -> tuple[int, int]: ...\n"
+        "def to_wire(): return 'x', 1\n"
+        "def tags() -> tuple[str, ...]: ...\n"
+        "def named() -> Record: ...\n"
+    )
+    visitor = StyleVisitor(POLICY, semantic_results=True)
+    visitor.visit(ast.parse(source))
+    assert visitor.findings["unnamed_tuple_returns"] == [6, 7]
 
 
 def test_typed_and_raw_tuple_result_is_reported_once() -> None:
@@ -500,10 +623,51 @@ def test_semantic_result_paths_are_opt_in_and_respect_exclusions(
 
     enabled = POLICY.model_copy(update={"semantic_result_paths": ["src/**"]})
     selected = findings_for(tmp_path, [relative], enabled)
+    assert selected.get(relative.as_posix(), {}).get("unnamed_tuple_returns") is None
+
+    public = enabled.model_copy(
+        update={"semantic_result_apis": ["results.load", "results.pair"]}
+    )
+    selected = findings_for(tmp_path, [relative], public)
     assert selected[relative.as_posix()]["unnamed_tuple_returns"] == [1, 2]
+
+    private = public.model_copy(update={"semantic_result_apis": ["results.pair"]})
+    selected = findings_for(tmp_path, [relative], private)
+    assert selected[relative.as_posix()]["unnamed_tuple_returns"] == [2]
 
     excluded = enabled.model_copy(update={"exclude": ["src/**"]})
     assert findings_for(tmp_path, [relative], excluded) == {}
+
+
+def test_semantic_result_api_contracts_are_validated_and_unique() -> None:
+    config = {
+        "extensions": [".py"],
+        "exclude": [],
+        "opaque_boundary_paths": [],
+        "opaque_boundary_marker_prefix": "# opaque-boundary: ",
+        "opaque_boundary_min_reason_chars": 12,
+        "forbidden_main_imports": [],
+        "semantic_rule_id_paths": [],
+        "structured_reporting_paths": [],
+        "repeated_literal_paths": [],
+        "semantic_result_paths": [],
+        "semantic_result_apis": [],
+        "pattern_kind_paths": [],
+        "self_return_paths": [],
+        "shared_text_reader_paths": [],
+        "public_constant_paths": [],
+    }
+    with pytest.raises(ValueError, match="dotted module/callable identifiers"):
+        PythonStylePolicy.model_validate(
+            {**config, "semantic_result_apis": ["src/*.py::load"]}
+        )
+    with pytest.raises(ValueError, match="must be unique"):
+        PythonStylePolicy.model_validate(
+            {
+                **config,
+                "semantic_result_apis": ["results.load", "results.load"],
+            }
+        )
 
 
 def test_scoped_text_reader_check_detects_direct_path_reads() -> None:
@@ -550,3 +714,77 @@ def test_public_constant_import_index_only_flags_unconsumed_symbols(
     )
     result = findings_for(tmp_path, [source, consumer], policy)
     assert result[source.as_posix()]["unused_public_constants"] == [2]
+
+
+def test_public_constant_index_respects_static_all_exports(tmp_path: Path) -> None:
+    source = Path("src/alphus/gates/cpp/sample.py")
+    (tmp_path / source).parent.mkdir(parents=True)
+    (tmp_path / source).write_text(
+        "EXPORTED = 1\nINTERNAL = 2\n__all__ = ['EXPORTED']\n", encoding="utf-8"
+    )
+    policy = POLICY.model_copy(
+        update={"public_constant_paths": ("src/alphus/gates/cpp/**",)}
+    )
+    result = findings_for(tmp_path, [source], policy)
+    assert result[source.as_posix()]["unused_public_constants"] == [2]
+
+
+def test_public_constant_index_follows_relative_and_module_qualified_imports(
+    tmp_path: Path,
+) -> None:
+    source = Path("src/alphus/gates/cpp/sample.py")
+    consumer = Path("src/alphus/gates/cpp/consumer.py")
+    (tmp_path / source).parent.mkdir(parents=True)
+    (tmp_path / source).write_text(
+        "EXPORTED = 1\nMODULE_USED = 2\nRELATIVE_USED = 3\nINTERNAL = 4\n",
+        encoding="utf-8",
+    )
+    (tmp_path / consumer).write_text(
+        "from .sample import EXPORTED\n"
+        "import alphus.gates.cpp.sample as public_sample\n"
+        "print(public_sample.MODULE_USED)\n"
+        "import alphus.gates.cpp.sample\n"
+        "print(alphus.gates.cpp.sample.RELATIVE_USED)\n",
+        encoding="utf-8",
+    )
+    policy = POLICY.model_copy(
+        update={"public_constant_paths": ("src/alphus/gates/cpp/**",)}
+    )
+    result = findings_for(tmp_path, [source, consumer], policy)
+    assert result[source.as_posix()]["unused_public_constants"] == [4]
+
+
+@pytest.mark.parametrize(
+    "source_text",
+    [
+        "DYNAMIC = 1\n__all__ = make_exports()\n",
+        "DYNAMIC = 1\ndef __getattr__(name): return lookup(name)\n",
+    ],
+)
+def test_public_constant_index_preserves_unknown_dynamic_exports(
+    tmp_path: Path, source_text: str
+) -> None:
+    source = Path("src/alphus/gates/cpp/dynamic_api.py")
+    (tmp_path / source).parent.mkdir(parents=True)
+    (tmp_path / source).write_text(source_text, encoding="utf-8")
+    policy = POLICY.model_copy(
+        update={"public_constant_paths": ("src/alphus/gates/cpp/**",)}
+    )
+    result = findings_for(tmp_path, [source], policy)
+    assert result == {}
+
+
+def test_public_constant_index_treats_external_star_imports_as_unknown(
+    tmp_path: Path,
+) -> None:
+    source = Path("src/alphus/gates/cpp/sample.py")
+    consumer = Path("src/alphus/gates/cpp/consumer.py")
+    (tmp_path / source).parent.mkdir(parents=True)
+    (tmp_path / source).write_text("EXPORTED = 1\nINTERNAL = 2\n", encoding="utf-8")
+    (tmp_path / consumer).write_text(
+        "from alphus.gates.cpp.sample import *\n", encoding="utf-8"
+    )
+    policy = POLICY.model_copy(
+        update={"public_constant_paths": ("src/alphus/gates/cpp/**",)}
+    )
+    assert findings_for(tmp_path, [source, consumer], policy) == {}
