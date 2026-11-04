@@ -138,9 +138,13 @@ Selector: `repeated-numeric-limits`. ID:
 This opt-in review-only rule compares explicit numeric literals in `if` and
 conditional-expression guards across selected Python paths. A consumer must
 select `source_paths` and declare named roles with exact boundary identifiers;
-only comparisons against those names (or `len(name)`) can match. Values below
-2, booleans, loop bounds, assertions, test paths, generated paths, and references
-to named constants are ignored. Findings report every matching file and line,
+only `<`, `<=`, `>`, and `>=` comparisons against those names (or `len(name)`)
+can match. Reversed operands are normalized, while opposite directions and
+strict/inclusive bounds remain separate. Attribute expressions are ignored to
+avoid conflating receivers such as `tree.node_count` and `graph.node_count`.
+Values below 2, booleans, equality/membership/identity comparisons, loop bounds,
+assertions, test paths, generated paths, and references to named constants are
+ignored. Findings report every matching file and line,
 the literal, declared role, and uncertainty. They do not suggest or perform
 constant extraction.
 
@@ -160,14 +164,16 @@ Evaluate Ruff's maintained
 [`PLR2004` (`magic-value-comparison`)](https://docs.astral.sh/ruff/rules/magic-value-comparison/)
 first for unnamed comparison values in selected Python files. It identifies
 individual magic-value comparisons and common scalar exemptions; it does not
-establish that equal values across files implement one policy. This rule adds only the
-declared cross-site comparison, and remains an advisory.
+establish that equal values across files implement one policy. This rule groups
+only matches with explicitly declared roles and remains an advisory.
 
 The initial calibration uses synthetic cases: 1/1 positive case for an equal
-cap at the same declared boundary and 4/4 negative categories for independent
-roles, common scalar values and loop bounds, named constants/unselected paths,
-and test/generated files. No production repository sample has been scored, so
-real-world precision is unknown and enforcement is unsupported. The AST check
+cap at the same declared boundary (including reversed comparison operands) and
+6/6 negative categories for independent roles, common scalar values and loop
+bounds, named constants/unselected paths, test/generated files, unsupported or
+opposite-direction comparisons, and distinct attribute receivers. No production
+repository sample has been scored, so real-world precision is unknown and
+enforcement is unsupported. The AST check
 does not follow aliases, assignments, imported constants, arbitrary call
 expressions, dynamic configuration, nested boolean meaning, or equivalent
 thresholds written with different numeric values. It also cannot prove that

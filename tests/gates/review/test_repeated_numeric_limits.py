@@ -27,7 +27,7 @@ def test_repeated_cap_on_one_declared_analysis_boundary_reports_all_spans(
         "if node_count > 512:\n    stop()\n", encoding="utf-8"
     )
     (tmp_path / "src/analysis/visit.py").write_text(
-        "if len(ast_nodes) > 512:\n    stop()\n", encoding="utf-8"
+        "if 512 < len(ast_nodes):\n    stop()\n", encoding="utf-8"
     )
 
     findings = check_repeated_numeric_limits(
@@ -100,6 +100,52 @@ def test_named_shared_constant_is_not_a_literal_and_selection_is_required(
         roles=_policy().roles,
     )
     assert check_repeated_numeric_limits(tmp_path, paths, unselected) == []
+
+
+def test_opposite_bound_directions_and_unsupported_operators_are_not_grouped(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "src/analysis").mkdir(parents=True)
+    (tmp_path / "src/analysis/guards.py").write_text(
+        "if node_count > 512:\n    stop()\n"
+        "if len(ast_nodes) < 512:\n    stop()\n"
+        "if node_count > 1024:\n    stop()\n"
+        "if len(ast_nodes) >= 1024:\n    stop()\n"
+        "if node_count == 512:\n    stop()\n"
+        "if len(ast_nodes) == 512:\n    stop()\n"
+        "if node_count != 512:\n    stop()\n"
+        "if len(ast_nodes) != 512:\n    stop()\n"
+        "if node_count is 512:\n    stop()\n"
+        "if len(ast_nodes) is 512:\n    stop()\n"
+        "if 512 in node_count:\n    stop()\n"
+        "if 512 in ast_nodes:\n    stop()\n"
+        "if 512 not in node_count:\n    stop()\n"
+        "if 512 not in ast_nodes:\n    stop()\n",
+        encoding="utf-8",
+    )
+
+    assert (
+        check_repeated_numeric_limits(
+            tmp_path, (Path("src/analysis/guards.py"),), _policy()
+        )
+        == []
+    )
+
+
+def test_attribute_leaf_names_do_not_merge_distinct_receivers(tmp_path: Path) -> None:
+    (tmp_path / "src/analysis").mkdir(parents=True)
+    (tmp_path / "src/analysis/guards.py").write_text(
+        "if tree.node_count > 512:\n    stop()\n"
+        "if graph.node_count > 512:\n    stop()\n",
+        encoding="utf-8",
+    )
+
+    assert (
+        check_repeated_numeric_limits(
+            tmp_path, (Path("src/analysis/guards.py"),), _policy()
+        )
+        == []
+    )
 
 
 def test_test_and_generated_paths_are_always_skipped(tmp_path: Path) -> None:
