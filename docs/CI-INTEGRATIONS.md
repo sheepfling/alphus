@@ -86,12 +86,20 @@ alphus-quality:
     ALPHUS_PROFILE: check
 ```
 
-The included job uses `python:3.12-slim`; override `image` on the extending job
-to select another supported Python image. Set
-`ALPHUS_RUNTIME_REQUIREMENTS_FILE` when needed. The included template contributes
-only the hidden job, so the consumer keeps its own stage, job name, rules, and
-pipeline triggers. Add a consumer `before_script` or override the image when the
-selected profile needs other native tools.
+The default job image is `python:3.12-slim`, which is Debian-based and does not
+include Git. The template installs Git in that default image, checks
+`git ls-files`, then runs an Alphus Git-backed inventory smoke check before the
+selected profile. No consumer CI changes are needed for this fix.
+
+You can override the image to use another supported Python image, and keep
+using `ALPHUS_REQUIREMENTS_FILE` and `ALPHUS_RUNTIME_REQUIREMENTS_FILE` for
+consumer tools and test dependencies. A custom image must include Git; if it
+does not, the template stops with an actionable setup error instead of silently
+running a file-scoped profile without repository inventory. The included
+template contributes only the hidden job, so the consumer keeps its own stage,
+job name, rules, and pipeline triggers. Add a consumer `before_script` or
+choose an image that provides other native tools required by the selected
+profile.
 
 ## Azure Pipelines
 
