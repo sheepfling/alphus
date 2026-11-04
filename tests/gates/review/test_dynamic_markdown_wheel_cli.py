@@ -120,7 +120,7 @@ def test_built_wheel_cli_uses_git_inventory_and_respects_scope(
         .resolve()
         .is_relative_to((site_packages / "alphus").resolve())
     )
-    assert identity["version"] == "0.0.1"
+    assert identity["version"] == "0.0.2"
     wheel_sha256 = hashlib.sha256(wheel.read_bytes()).hexdigest()
     identity_record = {
         "wheel": wheel.name,
