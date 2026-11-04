@@ -186,7 +186,7 @@ def test_source_family_self_review_propagates_pipeline_errors_without_blocking_a
         ["bash", "-e", "-c", failing_command],
         check=False,
         capture_output=True,
-        cwd=Path.cwd(),
+        cwd=tmp_path,
         env=environment,
         text=True,
     )
