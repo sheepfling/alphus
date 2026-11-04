@@ -138,5 +138,7 @@ remote-document GoTo actions, and launch actions while allowing declared URI
 schemes. A `bundle` contract can permit relative companion targets only when
 they resolve to files inside the declared bundle root; traversal and symlink
 escapes are rejected. Unsupported action kinds are returned as unknown and are
-never executed or fetched. This check cannot determine whether an allowed web
-URI is reachable, nor whether a companion is the intended document.
+never executed or fetched. Action chains stored in `/Next` are also reported as
+unknown; the checker does not follow them.
+This check cannot determine whether an allowed web URI is reachable, nor whether
+a companion is the intended document.

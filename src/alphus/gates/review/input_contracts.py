@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import ast
+from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
@@ -12,6 +14,10 @@ from typing import Literal
 from alphus.config import InputContractPolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.support.ast_visitors import (
+    visit_class_definition_header,
+    visit_exception_handler_bindings,
+)
 from alphus.support.inventory import matches_path
 from alphus.support.source_scanning import (
     ImportAliases,
@@ -644,6 +650,8 @@ def _function_findings(
     aliases: ImportAliases,
     policy: InputContractPolicy,
     path: str,
+    function_name: str,
+    module: ast.Module,
 ) -> list[Finding]:
     arguments = [
         *function.args.posonlyargs,
@@ -761,6 +769,1060 @@ def _function_findings(
                     ),
                 )
             )
+    findings.extend(
+        _domain_mapping_findings(
+            function,
+            aliases,
+            policy,
+            path,
+            function_name=function_name,
+            module=module,
+        )
+    )
+    return findings
+
+
+def _union_alternatives(node: ast.expr, aliases: ImportAliases) -> tuple[ast.expr, ...]:
+    """Flatten only PEP 604 and typing.Union forms with resolvable imports."""
+    match node:
+        case ast.BinOp(left=left, op=ast.BitOr(), right=right):
+            return (
+                *_union_alternatives(left, aliases),
+                *_union_alternatives(right, aliases),
+            )
+        case ast.Subscript(value=value, slice=ast.Tuple(elts=members)) if (
+            canonical_expression_name(value, aliases)
+            in {
+                "typing.Union",
+                "typing_extensions.Union",
+            }
+        ):
+            return tuple(member for member in members if not _is_starred(member))
+        case ast.Subscript(value=value, slice=member) if canonical_expression_name(
+            value, aliases
+        ) in {
+            "typing.Union",
+            "typing_extensions.Union",
+        }:
+            return _union_alternatives(member, aliases)
+        case _:
+            return (node,)
+
+
+def _domain_mapping_alternative(
+    annotation: ast.expr, aliases: ImportAliases, policy: InputContractPolicy
+) -> tuple[str, str] | None:
+    """Return configured model and JSON mapping names in one union annotation."""
+    members = _union_alternatives(annotation, aliases)
+    domain_types = policy.domain_mapping_types
+    value_types = frozenset(policy.domain_mapping_value_types)
+    model = next(
+        (
+            name
+            for member in members
+            if (name := canonical_expression_name(member, aliases)) in domain_types
+        ),
+        None,
+    )
+    if model is None:
+        return None
+    for member in members:
+        mapping = _json_mapping_type(member, aliases, value_types)
+        if mapping is not None:
+            return model, mapping
+    return None
+
+
+def _json_mapping_type(
+    annotation: ast.expr, aliases: ImportAliases, value_types: AbstractSet[str]
+) -> str | None:
+    """Recognize only explicitly supported string-keyed generic JSON mappings."""
+    match annotation:
+        case ast.Subscript(value=container, slice=ast.Tuple(elts=arguments)):
+            pass
+        case ast.Subscript(value=container, slice=argument):
+            arguments = [argument]
+        case _:
+            return None
+    name = canonical_expression_name(container, aliases)
+    if name not in {
+        "dict",
+        "builtins.dict",
+        "typing.Dict",
+        "typing.Mapping",
+        "typing_extensions.Dict",
+        "typing_extensions.Mapping",
+        "collections.abc.Mapping",
+    }:
+        return None
+    if len(arguments) != 2:
+        return None
+    key_type = canonical_expression_name(arguments[0], aliases)
+    value_type = canonical_expression_name(arguments[1], aliases)
+    if (
+        key_type not in {"str", "builtins.str"}
+        or value_type is None
+        or not (
+            value_type in value_types
+            or value_type.rsplit(".", maxsplit=1)[-1] in value_types
+        )
+    ):
+        return None
+    return name
+
+
+def _is_starred(node: ast.expr) -> bool:
+    match node:
+        case ast.Starred():
+            return True
+        case _:
+            return False
+
+
+class _FunctionLocalNodes(ast.NodeVisitor):
+    """Collect nodes for one function without treating nested scopes as local."""
+
+    def __init__(self, root: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        self.root = root
+        self.nodes: list[ast.AST] = []
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        if node is self.root:
+            for statement in node.body:
+                self.visit(statement)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        if node is self.root:
+            for statement in node.body:
+                self.visit(statement)
+
+    def visit_Lambda(self, node: ast.Lambda) -> None:
+        return
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        return
+
+    def generic_visit(self, node: ast.AST) -> None:
+        self.nodes.append(node)
+        super().generic_visit(node)
+
+
+class _ComprehensionCallScopes(ast.NodeVisitor):
+    """Record comprehension targets that shadow names at each call site."""
+
+    def __init__(self, root: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        self.root = root
+        self.bound_names: set[str] = set()
+        self.shadowed_at_call: dict[int, frozenset[str]] = {}
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        if node is self.root:
+            for statement in node.body:
+                self.visit(statement)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        if node is self.root:
+            for statement in node.body:
+                self.visit(statement)
+
+    def visit_Lambda(self, node: ast.Lambda) -> None:
+        return
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        return
+
+    def visit_Call(self, node: ast.Call) -> None:
+        self.shadowed_at_call[id(node)] = frozenset(self.bound_names)
+        self.generic_visit(node)
+
+    def _visit_comprehension(
+        self,
+        generators: Sequence[ast.comprehension],
+        values: Sequence[ast.AST],
+    ) -> None:
+        original = set(self.bound_names)
+        for generator in generators:
+            self.visit(generator.iter)
+            for target in ast.walk(generator.target):
+                match target:
+                    case ast.Name(id=name, ctx=ast.Store()):
+                        self.bound_names.add(name)
+                    case _:
+                        pass
+            for condition in generator.ifs:
+                self.visit(condition)
+        for value in values:
+            self.visit(value)
+        self.bound_names = original
+
+    def visit_ListComp(self, node: ast.ListComp) -> None:
+        self._visit_comprehension(node.generators, [node.elt])
+
+    def visit_SetComp(self, node: ast.SetComp) -> None:
+        self._visit_comprehension(node.generators, [node.elt])
+
+    def visit_GeneratorExp(self, node: ast.GeneratorExp) -> None:
+        self._visit_comprehension(node.generators, [node.elt])
+
+    def visit_DictComp(self, node: ast.DictComp) -> None:
+        self._visit_comprehension(node.generators, [node.key, node.value])
+
+
+def _resolved_cast_call(
+    function: ast.expr, imports: ImportAliases, local_names: AbstractSet[str]
+) -> bool:
+    """Return whether a cast spelling still resolves to the imported typing API."""
+    if canonical_expression_name(function, imports) not in {
+        "typing.cast",
+        "typing_extensions.cast",
+    }:
+        return False
+    root: ast.expr = function
+    while True:
+        match root:
+            case ast.Attribute(value=value):
+                root = value
+            case _:
+                break
+    match root:
+        case ast.Name(id=name):
+            return name not in local_names
+        case _:
+            return True
+
+
+class _FunctionScopeBindings(ast.NodeVisitor):
+    """Collect local names and write sites within one function scope."""
+
+    def __init__(
+        self,
+        root: ast.FunctionDef | ast.AsyncFunctionDef,
+        imports: ImportAliases | None = None,
+    ) -> None:
+        self.root = root
+        self.imports = imports
+        self.names: set[str] = set()
+        self.rebindings: dict[str, list[int]] = defaultdict(list)
+        self._identity_cast_candidates: list[tuple[str, int, str]] = []
+        arguments = (
+            *root.args.posonlyargs,
+            *root.args.args,
+            *root.args.kwonlyargs,
+        )
+        for argument in arguments:
+            self._bind(argument.arg)
+        if root.args.vararg is not None:
+            self._bind(root.args.vararg.arg)
+        if root.args.kwarg is not None:
+            self._bind(root.args.kwarg.arg)
+        for statement in root.body:
+            self.visit(statement)
+        for name, line, cast_name in self._identity_cast_candidates:
+            # A function-local binding shadows module imports throughout the
+            # function, including bindings textually after this assignment.
+            if cast_name in self.names:
+                self.rebindings[name].append(line)
+
+    def _identity_cast_name(self, value: ast.expr, parameter: str) -> str | None:
+        if self.imports is None:
+            return None
+        match value:
+            case ast.Call(func=func, args=[_, ast.Name(id=source)], keywords=[]):
+                if source != parameter or canonical_expression_name(
+                    func, self.imports
+                ) not in {"typing.cast", "typing_extensions.cast"}:
+                    return None
+                match func:
+                    case ast.Name(id=name):
+                        return name
+                    case ast.Attribute(value=ast.Name(id=name)):
+                        return name
+                    case _:
+                        return None
+            case _:
+                return None
+
+    def visit_Assign(self, node: ast.Assign) -> None:
+        if len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            target = node.targets[0].id
+            cast_name = self._identity_cast_name(node.value, target)
+            if target in self.names and cast_name is not None:
+                self._identity_cast_candidates.append((target, node.lineno, cast_name))
+                self.visit(node.value)
+                return
+        self.generic_visit(node)
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
+        if isinstance(node.target, ast.Name) and node.value is not None:
+            target = node.target.id
+            cast_name = self._identity_cast_name(node.value, target)
+            if target in self.names and cast_name is not None:
+                self._identity_cast_candidates.append((target, node.lineno, cast_name))
+                self.visit(node.annotation)
+                self.visit(node.value)
+                return
+        self.generic_visit(node)
+
+    def _bind(self, name: str, line: int | None = None) -> None:
+        self.names.add(name)
+        if line is not None:
+            self.rebindings[name].append(line)
+
+    def _visit_definition_expressions(
+        self, node: ast.FunctionDef | ast.AsyncFunctionDef
+    ) -> None:
+        for expression in [
+            *node.decorator_list,
+            *node.args.defaults,
+            *(value for value in node.args.kw_defaults if value is not None),
+            *(
+                argument.annotation
+                for argument in (
+                    *node.args.posonlyargs,
+                    *node.args.args,
+                    *node.args.kwonlyargs,
+                )
+                if argument.annotation is not None
+            ),
+        ]:
+            self.visit(expression)
+        if node.returns is not None:
+            self.visit(node.returns)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        if node is self.root:
+            for statement in node.body:
+                self.visit(statement)
+        else:
+            self._bind(node.name, node.lineno)
+            self._visit_definition_expressions(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        if node is self.root:
+            for statement in node.body:
+                self.visit(statement)
+        else:
+            self._bind(node.name, node.lineno)
+            self._visit_definition_expressions(node)
+
+    def visit_Lambda(self, node: ast.Lambda) -> None:
+        for expression in (
+            *node.args.defaults,
+            *(value for value in node.args.kw_defaults if value is not None),
+        ):
+            self.visit(expression)
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        self._bind(node.name, node.lineno)
+        for expression in (*node.decorator_list, *node.bases):
+            self.visit(expression)
+        for keyword in node.keywords:
+            self.visit(keyword.value)
+
+    def visit_Name(self, node: ast.Name) -> None:
+        match node.ctx:
+            case ast.Store() | ast.Del():
+                self._bind(node.id, node.lineno)
+            case _:
+                pass
+
+    def visit_Import(self, node: ast.Import) -> None:
+        for alias in node.names:
+            self._bind(alias.asname or alias.name.split(".")[0], node.lineno)
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        for alias in node.names:
+            if alias.name != "*":
+                self._bind(alias.asname or alias.name, node.lineno)
+
+    def visit_ExceptHandler(self, node: ast.ExceptHandler) -> None:
+        if node.name is not None:
+            self._bind(node.name, node.lineno)
+        if node.type is not None:
+            self.visit(node.type)
+        for statement in node.body:
+            self.visit(statement)
+
+    def visit_Global(self, node: ast.Global) -> None:
+        for name in node.names:
+            self._bind(name, node.lineno)
+
+    def visit_Nonlocal(self, node: ast.Nonlocal) -> None:
+        for name in node.names:
+            self._bind(name, node.lineno)
+
+    def _visit_comprehension(
+        self,
+        generators: Sequence[ast.comprehension],
+        values: Sequence[ast.AST],
+    ) -> None:
+        for generator in generators:
+            self.visit(generator.iter)
+            for condition in generator.ifs:
+                self.visit(condition)
+        for value in values:
+            self.visit(value)
+
+    def visit_ListComp(self, node: ast.ListComp) -> None:
+        self._visit_comprehension(node.generators, [node.elt])
+
+    def visit_SetComp(self, node: ast.SetComp) -> None:
+        self._visit_comprehension(node.generators, [node.elt])
+
+    def visit_GeneratorExp(self, node: ast.GeneratorExp) -> None:
+        self._visit_comprehension(node.generators, [node.elt])
+
+    def visit_DictComp(self, node: ast.DictComp) -> None:
+        self._visit_comprehension(node.generators, [node.key, node.value])
+
+    def visit_MatchAs(self, node: ast.MatchAs) -> None:
+        if node.name is not None:
+            self._bind(node.name, node.lineno)
+        self.generic_visit(node)
+
+    def visit_MatchStar(self, node: ast.MatchStar) -> None:
+        if node.name is not None:
+            self._bind(node.name, node.lineno)
+        self.generic_visit(node)
+
+    def visit_MatchMapping(self, node: ast.MatchMapping) -> None:
+        if node.rest is not None:
+            self._bind(node.rest, node.lineno)
+        self.generic_visit(node)
+
+
+class _ModuleScopeBindings(ast.NodeVisitor):
+    """Collect module-level names that can replace a candidate helper."""
+
+    def __init__(self, module: ast.Module) -> None:
+        self.direct_functions: set[int] = set()
+        for statement in module.body:
+            match statement:
+                case ast.FunctionDef() | ast.AsyncFunctionDef():
+                    self.direct_functions.add(id(statement))
+                case _:
+                    pass
+        self.names: set[str] = set()
+        for statement in module.body:
+            self.visit(statement)
+
+    def _visit_definition_expressions(
+        self, node: ast.FunctionDef | ast.AsyncFunctionDef
+    ) -> None:
+        for expression in [
+            *node.decorator_list,
+            *node.args.defaults,
+            *(value for value in node.args.kw_defaults if value is not None),
+            *(
+                argument.annotation
+                for argument in (
+                    *node.args.posonlyargs,
+                    *node.args.args,
+                    *node.args.kwonlyargs,
+                )
+                if argument.annotation is not None
+            ),
+        ]:
+            self.visit(expression)
+        if node.returns is not None:
+            self.visit(node.returns)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        if id(node) not in self.direct_functions:
+            self.names.add(node.name)
+        self._visit_definition_expressions(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        if id(node) not in self.direct_functions:
+            self.names.add(node.name)
+        self._visit_definition_expressions(node)
+
+    def visit_Lambda(self, node: ast.Lambda) -> None:
+        for expression in (
+            *node.args.defaults,
+            *(value for value in node.args.kw_defaults if value is not None),
+        ):
+            self.visit(expression)
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        self.names.update(visit_class_definition_header(self, node))
+
+    def visit_Name(self, node: ast.Name) -> None:
+        match node.ctx:
+            case ast.Store() | ast.Del():
+                self.names.add(node.id)
+            case _:
+                pass
+
+    def visit_Import(self, node: ast.Import) -> None:
+        self.names.update(
+            alias.asname or alias.name.split(".")[0] for alias in node.names
+        )
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        self.names.update(
+            alias.asname or alias.name for alias in node.names if alias.name != "*"
+        )
+
+    def visit_ExceptHandler(self, node: ast.ExceptHandler) -> None:
+        self.names.update(visit_exception_handler_bindings(self, node))
+
+    def visit_MatchAs(self, node: ast.MatchAs) -> None:
+        if node.name is not None:
+            self.names.add(node.name)
+        self.generic_visit(node)
+
+    def visit_MatchStar(self, node: ast.MatchStar) -> None:
+        if node.name is not None:
+            self.names.add(node.name)
+        self.generic_visit(node)
+
+    def visit_MatchMapping(self, node: ast.MatchMapping) -> None:
+        if node.rest is not None:
+            self.names.add(node.rest)
+        self.generic_visit(node)
+
+
+class _FunctionNameIndex(ast.NodeVisitor):
+    """Index functions by lexical class/function name for exact policy selectors."""
+
+    def __init__(self) -> None:
+        self.parts: list[str] = []
+        self.names: dict[int, str] = {}
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        self.parts.append(node.name)
+        self.generic_visit(node)
+        self.parts.pop()
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        self._visit_function(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        self._visit_function(node)
+
+    def _visit_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        self.names[id(node)] = ".".join((*self.parts, node.name))
+        self.parts.append(node.name)
+        self.generic_visit(node)
+        self.parts.pop()
+
+
+def _scoped_expression_reads(
+    expression: ast.AST, available_names: AbstractSet[str]
+) -> tuple[set[int], set[tuple[str, int]]]:
+    """Collect direct mapping and attribute reads without crossing nested scopes."""
+    mapping_lines: set[int] = set()
+    attribute_reads: set[tuple[str, int]] = set()
+
+    class ReadVisitor(ast.NodeVisitor):
+        def __init__(self) -> None:
+            self.available = set(available_names)
+
+        def visit_Lambda(self, node: ast.Lambda) -> None:
+            # Deferred bodies can shadow the selected function's input.
+            return
+
+        def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+            return
+
+        def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+            return
+
+        def visit_ClassDef(self, node: ast.ClassDef) -> None:
+            return
+
+        def _visit_comprehension(
+            self,
+            generators: Sequence[ast.comprehension],
+            values: Sequence[ast.AST],
+        ) -> None:
+            original = self.available
+            available = set(original)
+            for generator in generators:
+                self.available = available
+                self.visit(generator.iter)
+                bound: set[str] = set()
+                for target in ast.walk(generator.target):
+                    match target:
+                        case ast.Name(id=name, ctx=ast.Store()):
+                            bound.add(name)
+                        case _:
+                            pass
+                available.difference_update(bound)
+                self.available = available
+                for condition in generator.ifs:
+                    self.visit(condition)
+            self.available = available
+            for value in values:
+                self.visit(value)
+            self.available = original
+
+        def visit_ListComp(self, node: ast.ListComp) -> None:
+            self._visit_comprehension(node.generators, [node.elt])
+
+        def visit_SetComp(self, node: ast.SetComp) -> None:
+            self._visit_comprehension(node.generators, [node.elt])
+
+        def visit_GeneratorExp(self, node: ast.GeneratorExp) -> None:
+            self._visit_comprehension(node.generators, [node.elt])
+
+        def visit_DictComp(self, node: ast.DictComp) -> None:
+            self._visit_comprehension(node.generators, [node.key, node.value])
+
+        def visit_NamedExpr(self, node: ast.NamedExpr) -> None:
+            self.visit(node.value)
+            self.available.discard(node.target.id)
+
+        def visit_Subscript(self, node: ast.Subscript) -> None:
+            match node:
+                case ast.Subscript(
+                    value=ast.Name(id=name), slice=ast.Constant(value=str())
+                ) if name in self.available:
+                    mapping_lines.add(node.lineno)
+                case _:
+                    pass
+            self.generic_visit(node)
+
+        def visit_Call(self, node: ast.Call) -> None:
+            match node:
+                case ast.Call(
+                    func=ast.Attribute(value=ast.Name(id=name), attr="get"),
+                    args=[ast.Constant(value=str()), *_],
+                ) if name in self.available:
+                    mapping_lines.add(node.lineno)
+                case _:
+                    pass
+            self.generic_visit(node)
+
+        def visit_Attribute(self, node: ast.Attribute) -> None:
+            match node:
+                case ast.Attribute(
+                    attr=attribute, ctx=ast.Load(), value=ast.Name(id=name)
+                ) if name in self.available:
+                    attribute_reads.add((attribute, node.lineno))
+                case _:
+                    pass
+            self.generic_visit(node)
+
+    ReadVisitor().visit(expression)
+    return mapping_lines, attribute_reads
+
+
+def _direct_mapping_reads(
+    parameter: str,
+    nodes: Sequence[ast.AST],
+    bindings: _FunctionScopeBindings,
+) -> list[int]:
+    """Find literal string-key indexing and ``.get`` reads on the parameter."""
+    lines = {
+        line
+        for node in nodes
+        for line in _scoped_expression_reads(node, {parameter})[0]
+    }
+    first_rebinding = min(bindings.rebindings.get(parameter, []), default=None)
+    return sorted(
+        line for line in lines if first_rebinding is None or line < first_rebinding
+    )
+
+
+def _linear_aliases_before(
+    function: ast.FunctionDef | ast.AsyncFunctionDef,
+    parameter: str,
+    line: int,
+) -> frozenset[str]:
+    """Follow straight-line simple-name aliases up to one source location."""
+    aliases = {parameter}
+    for statement in function.body:
+        if statement.lineno >= line:
+            break
+        match statement:
+            case ast.Assign(targets=[ast.Name(id=target)], value=ast.Name(id=source)):
+                aliases.discard(target)
+                if source in aliases:
+                    aliases.add(target)
+            case ast.AnnAssign(target=ast.Name(id=target), value=ast.Name(id=source)):
+                aliases.discard(target)
+                if source in aliases:
+                    aliases.add(target)
+            case (
+                ast.Assign(targets=[ast.Name(id=target)])
+                | ast.AnnAssign(target=ast.Name(id=target))
+            ):
+                aliases.discard(target)
+            case (
+                ast.If()
+                | ast.For()
+                | ast.AsyncFor()
+                | ast.While()
+                | ast.Try()
+                | ast.Match()
+            ):
+                # Branch-dependent assignments make local alias state uncertain.
+                return frozenset({parameter})
+            case _:
+                pass
+    return frozenset(aliases)
+
+
+def _direct_mapping_reads_with_aliases(
+    function: ast.FunctionDef | ast.AsyncFunctionDef,
+    parameter: str,
+    imports: ImportAliases,
+    bindings: _FunctionScopeBindings,
+) -> list[int]:
+    """Recognize reads through straight-line aliases and resolved typing casts."""
+    tracked_names = {parameter}
+    lines: set[int] = set()
+
+    def record_reads(expression: ast.AST, available: AbstractSet[str]) -> None:
+        lines.update(_scoped_expression_reads(expression, available)[0])
+
+    for statement in function.body:
+        # Track each alias independently: rebinding the original parameter
+        # must not invalidate an earlier alias that still points to its value.
+        # Control-flow statements remain an explicit boundary below.
+        match statement:
+            case ast.Assign(targets=[ast.Name(id=target)], value=value):
+                record_reads(value, tracked_names)
+                match value:
+                    case ast.Name(id=source) if source in tracked_names:
+                        tracked_names.add(target)
+                    case ast.Call(
+                        func=func,
+                        args=[_, ast.Name(id=source)],
+                        keywords=[],
+                    ) if source in tracked_names and _resolved_cast_call(
+                        func, imports, bindings.names
+                    ):
+                        # typing.cast returns its value unchanged; it is not
+                        # runtime validation or normalization evidence.
+                        tracked_names.add(target)
+                    case _:
+                        tracked_names.discard(target)
+                for child in ast.walk(value):
+                    match child:
+                        case ast.NamedExpr(target=ast.Name(id=name)):
+                            tracked_names.discard(name)
+                        case _:
+                            pass
+            case ast.AnnAssign(target=ast.Name(id=target), value=value):
+                if value is not None:
+                    record_reads(value, tracked_names)
+                match value:
+                    case ast.Name(id=source) if source in tracked_names:
+                        tracked_names.add(target)
+                    case ast.Call(
+                        func=func,
+                        args=[_, ast.Name(id=source)],
+                        keywords=[],
+                    ) if source in tracked_names and _resolved_cast_call(
+                        func, imports, bindings.names
+                    ):
+                        tracked_names.add(target)
+                    case _:
+                        tracked_names.discard(target)
+                if value is not None:
+                    for child in ast.walk(value):
+                        match child:
+                            case ast.NamedExpr(target=ast.Name(id=name)):
+                                tracked_names.discard(name)
+                            case _:
+                                pass
+            case ast.Return(value=value) | ast.Expr(value=value):
+                if value is not None:
+                    record_reads(value, tracked_names)
+                    for child in ast.walk(value):
+                        match child:
+                            case ast.NamedExpr(target=ast.Name(id=name)):
+                                tracked_names.discard(name)
+                            case _:
+                                pass
+            case (
+                ast.If()
+                | ast.For()
+                | ast.AsyncFor()
+                | ast.While()
+                | ast.Try()
+                | ast.Match()
+            ):
+                break
+            case _:
+                break
+    return sorted(lines)
+
+
+def _mapping_read_evidence(
+    function: ast.FunctionDef | ast.AsyncFunctionDef,
+    parameter: str,
+    nodes: Sequence[ast.AST],
+    imports: ImportAliases,
+    bindings: _FunctionScopeBindings,
+) -> list[int]:
+    """Combine direct reads with straight-line aliases, preserving branch evidence."""
+    return sorted(
+        set(_direct_mapping_reads(parameter, nodes, bindings))
+        | set(
+            _direct_mapping_reads_with_aliases(function, parameter, imports, bindings)
+        )
+    )
+
+
+def _direct_attribute_reads(
+    parameter: str,
+    nodes: Sequence[ast.AST],
+    bindings: _FunctionScopeBindings,
+) -> list[tuple[str, int]]:
+    """Find direct attribute reads without inferring values through helpers."""
+    first_rebinding = min(bindings.rebindings.get(parameter, []), default=None)
+    reads = {
+        read
+        for node in nodes
+        for read in _scoped_expression_reads(node, {parameter})[1]
+        if first_rebinding is None or read[1] < first_rebinding
+    }
+    return sorted(reads, key=lambda read: (read[1], read[0]))
+
+
+def _direct_forwarded_mapping_reads(
+    function: ast.FunctionDef | ast.AsyncFunctionDef,
+    parameter: str,
+    module: ast.Module,
+    aliases: ImportAliases,
+    bindings: _FunctionScopeBindings,
+) -> list[tuple[str, int, tuple[int, ...]]]:
+    """Follow one exact parameter pass into a unique module-level helper."""
+    helpers: dict[str, list[ast.FunctionDef | ast.AsyncFunctionDef]] = defaultdict(list)
+    for statement in module.body:
+        match statement:
+            case ast.FunctionDef(name=name) | ast.AsyncFunctionDef(name=name):
+                helpers[name].append(statement)
+            case _:
+                pass
+    local = _FunctionLocalNodes(function)
+    local.visit(function)
+    comprehension_scopes = _ComprehensionCallScopes(function)
+    comprehension_scopes.visit(function)
+    module_bound_names = _ModuleScopeBindings(module).names
+    rebinding = min(bindings.rebindings.get(parameter, []), default=None)
+    evidence: set[tuple[str, int, tuple[int, ...]]] = set()
+    for node in local.nodes:
+        match node:
+            case ast.Call(func=ast.Name(id=call_name), args=args, keywords=keywords):
+                pass
+            case _:
+                continue
+        if rebinding is not None and node.lineno >= rebinding:
+            continue
+        shadowed_names = comprehension_scopes.shadowed_at_call.get(
+            id(node), frozenset()
+        )
+        passed_names = _linear_aliases_before(function, parameter, node.lineno)
+
+        def passes_outer_mapping(
+            argument: ast.AST,
+            shadowed_names: frozenset[str] = shadowed_names,
+            passed_names: frozenset[str] = passed_names,
+        ) -> bool:
+            match argument:
+                case ast.Name(id=name) if name not in shadowed_names:
+                    return name in passed_names
+                case _:
+                    return False
+
+        candidates = helpers.get(call_name, [])
+        if (
+            call_name in bindings.names
+            or call_name in module_bound_names
+            or len(candidates) != 1
+            or candidates[0] is function
+        ):
+            continue
+        helper = candidates[0]
+        helper_args = [*helper.args.posonlyargs, *helper.args.args]
+        helper_all_args = [*helper_args, *helper.args.kwonlyargs]
+        helper_parameter: str | None = None
+        for index, argument in enumerate(args):
+            if index < len(helper_args) and passes_outer_mapping(argument):
+                helper_parameter = helper_args[index].arg
+                break
+        if helper_parameter is None:
+            for keyword in keywords:
+                if keyword.arg is None or not passes_outer_mapping(keyword.value):
+                    continue
+                if any(argument.arg == keyword.arg for argument in helper_all_args):
+                    helper_parameter = keyword.arg
+                    break
+        if helper_parameter is None:
+            continue
+        reads = _direct_mapping_reads_with_aliases(
+            helper,
+            helper_parameter,
+            aliases,
+            _FunctionScopeBindings(helper, aliases),
+        )
+        if reads:
+            evidence.add((helper.name, node.lineno, tuple(reads)))
+    return sorted(evidence)
+
+
+def _domain_mapping_findings(
+    function: ast.FunctionDef | ast.AsyncFunctionDef,
+    aliases: ImportAliases,
+    policy: InputContractPolicy,
+    path: str,
+    *,
+    function_name: str,
+    module: ast.Module,
+) -> list[Finding]:
+    if not policy.domain_mapping_types and not policy.domain_mapping_contracts:
+        return []
+    local = _FunctionLocalNodes(function)
+    local.visit(function)
+    bindings = _FunctionScopeBindings(function, aliases)
+    findings: list[Finding] = []
+    arguments = [
+        *function.args.posonlyargs,
+        *function.args.args,
+        *function.args.kwonlyargs,
+    ]
+    configured_contracts = {
+        contract.parameter: contract
+        for contract in policy.domain_mapping_contracts
+        if contract.path == path and contract.function == function_name
+    }
+    for argument in arguments:
+        if argument.annotation is None:
+            continue
+        alternative = _domain_mapping_alternative(argument.annotation, aliases, policy)
+        if alternative is not None:
+            model, mapping = alternative
+            domain_models = {
+                name
+                for member in _union_alternatives(argument.annotation, aliases)
+                if (name := canonical_expression_name(member, aliases))
+                in policy.domain_mapping_types
+            }
+            if len(domain_models) == 1 and any(
+                exception.path == path
+                and exception.function == function_name
+                and exception.parameter == argument.arg
+                and exception.domain_type == model
+                for exception in policy.domain_mapping_exceptions
+            ):
+                continue
+            reads = _mapping_read_evidence(
+                function, argument.arg, function.body, aliases, bindings
+            )
+            forwarded_reads = _direct_forwarded_mapping_reads(
+                function, argument.arg, module, aliases, bindings
+            )
+            if not reads and forwarded_reads:
+                reads = sorted(
+                    {line for _, _, lines in forwarded_reads for line in lines}
+                )
+            # A validator elsewhere in the function does not establish that
+            # the mapping branch converges on the model. Literal-key reads
+            # are direct evidence that the original input remains in use, so
+            # retain the review candidate even when a normalized value is
+            # also assigned, returned, or passed to a helper.
+            if not reads:
+                continue
+            evidence = f"literal-key reads at line(s) {', '.join(map(str, reads))}"
+            if forwarded_reads:
+                evidence += "; direct helper pass-through at " + ", ".join(
+                    f"line {call_line} to {helper} (reads {', '.join(map(str, lines))})"
+                    for helper, call_line, lines in forwarded_reads
+                )
+            findings.append(
+                Finding(
+                    rule_id=rule_tag(
+                        Scope.PYTHON,
+                        Framework.NONE,
+                        Category.CORRECTNESS,
+                        "generic-mapping-domain-escape",
+                    ),
+                    path=path,
+                    line=argument.lineno,
+                    severity=policy.domain_mapping_severity,
+                    message=(
+                        f"Parameter {argument.arg!r} at line {argument.lineno} accepts "
+                        f"configured domain type {model} or generic {mapping}, "
+                        f"with {evidence}. Review whether "
+                        "normalization belongs at the boundary before internal computation. "
+                        "This is a review candidate; it does not prove validation is absent "
+                        "or that the wider interface is incorrect."
+                    ),
+                )
+            )
+            continue
+
+        contract = configured_contracts.get(argument.arg)
+        if contract is None:
+            continue
+        if any(
+            exception.path == path
+            and exception.function == function_name
+            and exception.parameter == argument.arg
+            and exception.domain_type == contract.domain_type
+            for exception in policy.domain_mapping_exceptions
+        ):
+            continue
+        annotation_name = canonical_expression_name(argument.annotation, aliases)
+        mapping = _json_mapping_type(
+            argument.annotation, aliases, set(policy.domain_mapping_value_types)
+        )
+        if mapping is not None:
+            reads = _mapping_read_evidence(
+                function, argument.arg, function.body, aliases, bindings
+            )
+            forwarded_reads = _direct_forwarded_mapping_reads(
+                function, argument.arg, module, aliases, bindings
+            )
+            if not reads and forwarded_reads:
+                reads = sorted(
+                    {line for _, _, lines in forwarded_reads for line in lines}
+                )
+            if not reads:
+                continue
+            kind = "mapping"
+            evidence = f"literal-key reads at line(s) {', '.join(map(str, reads))}"
+            if forwarded_reads:
+                evidence += "; direct helper pass-through at " + ", ".join(
+                    f"line {call_line} to {helper} (reads {', '.join(map(str, lines))})"
+                    for helper, call_line, lines in forwarded_reads
+                )
+            rule_id = "generic-mapping-domain-escape"
+        elif annotation_name in {"object", "builtins.object"}:
+            attributes = _direct_attribute_reads(argument.arg, function.body, bindings)
+            if not attributes:
+                continue
+            kind = "object"
+            evidence = ", ".join(f".{name} at line {line}" for name, line in attributes)
+            rule_id = "broad-object-domain-input"
+        else:
+            continue
+        findings.append(
+            Finding(
+                rule_id=rule_tag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.CORRECTNESS,
+                    rule_id,
+                ),
+                path=path,
+                line=argument.lineno,
+                severity=policy.domain_mapping_severity,
+                message=(
+                    f"Configured domain boundary {function_name}.{argument.arg} "
+                    f"expects {contract.domain_type}, but accepts generic {kind} "
+                    f"with {evidence}. Review whether validation belongs at the "
+                    "admission boundary and the internal interface should preserve "
+                    "the declared domain contract. This review candidate does not "
+                    "prove missing validation or an incorrect interface."
+                ),
+            )
+        )
     return findings
 
 
@@ -770,11 +1832,22 @@ def input_contract_findings(
     """Report observed writes and conservative collection-interface suggestions."""
     module = ast.parse(source, filename=path)
     aliases = _scope_imports(module.body)
+    function_names = _FunctionNameIndex()
+    function_names.visit(module)
     findings: list[Finding] = []
     for node in ast.walk(module):
         match node:
             case ast.FunctionDef() | ast.AsyncFunctionDef():
-                findings.extend(_function_findings(node, aliases, policy, path))
+                findings.extend(
+                    _function_findings(
+                        node,
+                        aliases,
+                        policy,
+                        path,
+                        function_names.names.get(id(node), node.name),
+                        module,
+                    )
+                )
             case _:
                 pass
     return sorted(

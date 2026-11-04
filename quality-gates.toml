@@ -42,7 +42,9 @@ exclude = ["tests/**"]
 
 [checks.output_escaping]
 extensions = [".py"]
-exclude = []
+# The synthetic fixture owns a tiny serializer solely so markdown-it-py can
+# inspect its output; the render assertions independently verify these escapes.
+exclude = ["tests/gates/review/test_dynamic_markdown_rendering.py"]
 
 [checks.path_discovery]
 extensions = [".py"]
@@ -73,6 +75,7 @@ opaque_boundary_paths = [
   "src/alphus/execution/step_results.py",
   "src/alphus/execution/worker_protocol.py",
   "src/alphus/gates/source/cyclomatic_complexity.py",
+  "src/alphus/gates/review/typing_stub_suggestions.py",
   "src/alphus/policy/sources.py",
   "tests/execution/test_shared_quality_intent_execution.py",
   "tests/execution/test_history_index.py",
@@ -89,6 +92,9 @@ repeated_literal_paths = [
 ]
 semantic_result_paths = [
   "src/alphus/gates/review/positional_interfaces.py",
+  "src/alphus/gates/review/provenance_ownership.py",
+  "src/alphus/gates/review/rendered_value_reparsed.py",
+  "src/alphus/gates/review/unexplained_empty_results.py",
   "src/alphus/gates/repository/**",
   "src/alphus/gates/hygiene/comment_markers.py",
   "src/alphus/gates/hygiene/rules.py",
@@ -136,6 +142,14 @@ extensions = [".py"]
 exclude = []
 sequence_narrowing_paths = ["src/alphus/gates/review/positional_interfaces.py"]
 
+[checks.typing_stub_suggestions]
+extensions = [".py"]
+exclude = ["tests/**", "scripts/**"]
+dependency_file = "pyproject.toml"
+typing_groups = ["python"]
+checkers = ["pyright"]
+builtin_catalog = true
+
 [checks.source_families]
 extensions = [
   ".py", ".pyi", ".c", ".h", ".cc", ".hh", ".cpp", ".hpp",
@@ -159,6 +173,11 @@ max_files = 20000
 max_findings = 100
 max_reported_members = 40
 max_scope_patterns = 64
+
+[checks.benchmark_docs]
+include = ["README.md", "docs/README.md"]
+max_files = 20
+max_findings = 10
 
 [checks.pydantic_practices]
 extensions = [".py"]
@@ -498,8 +517,19 @@ rule = "input-contracts"
 
 [[orchestration.steps]]
 kind = "rule"
+name = "Typing stub suggestions"
+rule = "typing-stub-suggestions"
+
+[[orchestration.steps]]
+kind = "rule"
 name = "Source family review"
 rule = "source-families"
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Durable benchmark prose review"
+rule = "benchmark-docs"
 rollout = "provisional"
 
 [[orchestration.steps]]
@@ -522,6 +552,7 @@ rollout = "provisional"
 name = "review"
 steps = [
   "Numeric review", "SciPy constants review", "Test review", "Input contract review",
+  "Typing stub suggestions",
   "Source family review", "Pydantic practice review", "FastAPI practice review",
-  "SQLAlchemy practices review",
+  "SQLAlchemy practices review", "Durable benchmark prose review",
 ]

@@ -17,6 +17,7 @@ from alphus.policy.architecture import (
 )
 from alphus.policy.base import (
     QualityRuleName,
+    RuleSelector,
     StrictModel,
     require_policy,
     require_unique,
@@ -40,17 +41,27 @@ from alphus.policy.repository import (
 )
 from alphus.policy.review import (
     ArrayRepresentationPolicy,
+    BenchmarkDocPolicy,
     CholeskyRecurrencePolicy,
     CiWorkflowPolicy,
+    DocumentStylePolicy,
+    DynamicMarkdownPolicy,
     EcefEnuTransformPolicy,
     EcefNedMatrixTransformPolicy,
+    EmbeddedSemanticOverridePolicy,
     FastApiPracticePolicy,
+    HeuristicTotalConsumptionPolicy,
     InputContractPolicy,
     ManualEliminationPolicy,
     ManualMatrixKernelPolicy,
     NedBasisVectorsPolicy,
     NumericLiteralPolicy,
+    ParallelNormalizationPolicy,
+    PatchCascadePolicy,
     PositionalInterfacePolicy,
+    PositionalSemanticOverridePolicy,
+    ProseAsControlPolicy,
+    ProvenanceOwnershipPolicy,
     PydanticPracticePolicy,
     QuaternionConjugationPolicy,
     QuaternionInversionPolicy,
@@ -58,10 +69,15 @@ from alphus.policy.review import (
     QuaternionNormalizationPolicy,
     QuaternionProductPolicy,
     QuaternionVectorRotationPolicy,
+    RunArtifactPolicy,
     ScipyConstantsPolicy,
+    SemanticWorkPresentationPolicy,
     SourceFamilyPolicy,
     SqlAlchemyPracticePolicy,
+    SuppressionReasonPolicy,
     TestQualityPolicy,
+    TypingStubSuggestionPolicy,
+    UnexplainedEmptyResultPolicy,
 )
 from alphus.policy.sources import (
     CliPolicy,
@@ -89,6 +105,16 @@ class CheckPolicies(StrictModel):
     output_escaping: SourceScanPolicy | None = None
     path_discovery: PathDiscoveryPolicy | None = None
     numeric_literals: NumericLiteralPolicy | None = None
+    typing_stub_suggestions: TypingStubSuggestionPolicy | None = None
+    prose_as_control: ProseAsControlPolicy | None = None
+    positional_semantic_overrides: PositionalSemanticOverridePolicy | None = None
+    unexplained_empty_results: UnexplainedEmptyResultPolicy | None = None
+    embedded_semantic_overrides: EmbeddedSemanticOverridePolicy | None = None
+    heuristic_total_consumption: HeuristicTotalConsumptionPolicy | None = None
+    provenance_ownership: ProvenanceOwnershipPolicy | None = None
+    semantic_work_presentation: SemanticWorkPresentationPolicy | None = None
+    parallel_normalization: ParallelNormalizationPolicy | None = None
+    patch_cascade: PatchCascadePolicy | None = None
     manual_matrix_kernels: ManualMatrixKernelPolicy | None = None
     manual_elimination: ManualEliminationPolicy | None = None
     array_representation_churn: ArrayRepresentationPolicy | None = None
@@ -103,14 +129,19 @@ class CheckPolicies(StrictModel):
     ecef_ned_matrix_transform: EcefNedMatrixTransformPolicy | None = None
     ned_basis_vectors: NedBasisVectorsPolicy | None = None
     scipy_constants: ScipyConstantsPolicy | None = None
+    run_artifacts: RunArtifactPolicy | None = None
     ci_workflows: CiWorkflowPolicy | None = None
     test_quality: TestQualityPolicy | None = None
     input_contracts: InputContractPolicy | None = None
     source_families: SourceFamilyPolicy | None = None
+    benchmark_docs: BenchmarkDocPolicy | None = None
     positional_interfaces: PositionalInterfacePolicy | None = None
     pydantic_practices: PydanticPracticePolicy | None = None
     fastapi_practices: FastApiPracticePolicy | None = None
     sqlalchemy_practices: SqlAlchemyPracticePolicy | None = None
+    dynamic_markdown: DynamicMarkdownPolicy | None = None
+    document_style: DocumentStylePolicy | None = None
+    suppression_reasons: SuppressionReasonPolicy | None = None
     shared_utilities: SharedUtilitiesPolicy | None = None
     python_style: PythonStylePolicy | None = None
     runtime_types: RuntimeTypePolicy | None = None
@@ -141,7 +172,7 @@ class RuleRunStep(StrictModel):
 
     kind: Literal["rule"]
     name: str
-    rule: QualityRuleName
+    rule: RuleSelector
     severity: Severity | None = None
     priority: RemediationPriority | None = None
     rollout: Literal["mainline", "provisional"] = "mainline"
@@ -158,6 +189,21 @@ class RuleRunStep(StrictModel):
         if "\x00" in name:
             raise ValueError("orchestration step names cannot contain NUL")
         return validate_one_line_message(name)
+
+    @field_validator("rule")
+    @classmethod
+    def validate_rule_selector(cls, rule: RuleSelector) -> RuleSelector:
+        if (
+            re.fullmatch(
+                r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?::[a-z][a-z0-9]*(?:-[a-z0-9]+)*)?",
+                rule,
+            )
+            is None
+        ):
+            raise ValueError(
+                "rule selectors must be lowercase slugs, optionally namespaced"
+            )
+        return rule
 
     @field_validator("locks", "after")
     @classmethod

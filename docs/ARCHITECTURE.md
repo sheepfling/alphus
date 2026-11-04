@@ -60,10 +60,11 @@ language neutral.
 - `alphus.support` owns shared file inventory, contained-file/JSON access,
   AST name resolution, and platform probes. These utilities do not emit
   findings or register rules.
-- `alphus.gates.review` owns numeric-literal, test-quality, and input-contract
-  checkers. `review.frameworks` contains the Pydantic and FastAPI practice
-  modules so each framework can grow independently. The theme's `runners.py`
-  binds their selectors to validated policies.
+- `alphus.gates.review` owns numeric-literal, test-quality, input-contract,
+  source-family, and durable benchmark-prose checkers. `review.frameworks`
+  contains Pydantic and FastAPI practice modules so each framework can grow
+  independently. It also owns the dynamic Markdown assembly advisory. The
+  theme's `runners.py` binds selectors to validated policies.
 - `alphus.gates.source` owns shared source inventory, dispatch, and policy
   binding for portable source checks. `alphus.gates.languages.python` and
   `alphus.gates.languages.javascript` own language-specific analysis engines.
@@ -97,6 +98,9 @@ language neutral.
   catalog. It does not import execution or gate implementations.
 - `alphus.execution` owns rule dispatch, normalized results, profile planning,
   native command execution, explicit fix plans, and exit status.
+- `alphus.plugins` publishes the versioned third-party rule contract and loads
+  selected entry points. `alphus.policy.plugins` stores the explicit plugin
+  allowlist and JSON-valued rule settings; disabled plugins are not imported.
 - `alphus.config` and `alphus.cli` are the stable public configuration and
   command boundaries at the package root.
 - `alphus_stub_quality` contains only the audit helpers copied into the Python
@@ -150,12 +154,21 @@ Policy models are grouped under `alphus.policy` by source scanning,
 architecture, repository metadata, and orchestration. `alphus.config`
 re-exports the public models and TOML loader.
 `alphus.policy.catalog` records each built-in rule's required policy field and
-JSON output shape. Policy validation and profile diagnostic decoding share
-that catalog. Theme packages own their runner mappings;
-`alphus.execution.dispatch` composes the built-in checker dispatch, and
-`alphus.execution.results` validates each result against its declared shape
-while normalizing diagnostics. The package tests require
-both registries to cover every public rule selector. The CLI retains rendering
+JSON output shape, summary, supported surfaces, and advisory domain tags.
+`alphus --catalog` exposes this metadata for people and agent tooling without
+enabling checks. Policy validation and profile diagnostic decoding share that
+catalog. Direct gate theme packages own their runner mappings, named
+`<THEME>_RULE_RUNNERS` in each theme's `runners.py`. Run
+`python scripts/generate_runner_manifest.py --root .` to parse those literal mappings,
+reject duplicate selectors, verify exact `QualityRuleName` coverage, and emit
+the sorted static imports in `execution/_generated_dispatch.py`. The package
+tests run the generator in check mode and fail if the checked-in manifest is
+stale. Runtime built-in dispatch uses literal imports; it does not scan
+packages. The separately immutable plugin registry contains only allowlisted
+entry points. Plugin rules return the shared normalized diagnostic contract
+directly. `alphus.execution.results` validates built-in outputs against their
+declared shape while normalizing diagnostics. The package tests require both
+registries to cover every public rule selector. The CLI retains rendering
 adapters because some older rules have distinct direct-command output formats.
 `RuleEvaluation` keeps the checker output, normalized diagnostics, and threshold
 decision together before rendering. Direct CLI modes serialize that result to
@@ -199,9 +212,9 @@ tools, see [consumer quality profiles](CONSUMER-PROFILES.md).
 This keeps upstream rule ownership intact while Alphus aggregates profile
 status.
 
-The [extension and diagnostics proposal](EXTENSIBILITY.md) records how
-categories, findings, and future third-party hooks could evolve while current
-selectors remain stable.
+The [extension and diagnostics guide](EXTENSIBILITY.md) describes current rule
+discovery and third-party packages alongside the remaining category and
+finding migration work.
 
 The default profile runs when `alphus` is invoked in a repository with
 `quality-gates.toml`; `--profile` selects a different profile. Review command

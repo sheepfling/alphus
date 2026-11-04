@@ -1,0 +1,434 @@
+"""Review path-only record exclusion under configured span ownership contracts."""
+
+from __future__ import annotations
+
+import ast
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
+from pathlib import Path
+from typing import NamedTuple
+
+from alphus.config import ProvenanceOwnershipPolicy
+from alphus.contracts.findings import Finding
+from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.gates.review._module_bindings import module_binding_counts
+from alphus.support.inventory import matches_path
+from alphus.support.source_text import read_python_source
+
+_RULE_ID = rule_tag(
+    Scope.PYTHON,
+    Framework.NONE,
+    Category.ARCHITECTURE,
+    "provenance-as-ownership",
+)
+_MAX_AST_NODES = 10_000
+_MUTATING_PATH_SET_METHODS = frozenset(
+    {"add", "clear", "discard", "pop", "remove", "update"}
+)
+
+
+class _AttributeParts(NamedTuple):
+    """A simple attribute chain as its root name and dotted suffix."""
+
+    root: str
+    suffix: str
+
+
+class _CandidateEvidence(NamedTuple):
+    """The owner collection and comparison line supporting a filter match."""
+
+    owner_collection: str
+    condition_line: int
+
+
+@dataclass(frozen=True, slots=True)
+class _OwnershipSite:
+    function: str
+    owner_collection: str
+    candidate_collection: str
+    line: int
+
+
+@dataclass(frozen=True, slots=True)
+class _OwnerPathSet:
+    collection: str
+    line: int
+
+
+def _attribute_parts(node: ast.expr) -> _AttributeParts | None:
+    match node:
+        case ast.Name(id=name):
+            return _AttributeParts(name, "")
+        case ast.Attribute(value=parent, attr=attribute):
+            parent_parts = _attribute_parts(parent)
+            if parent_parts is None:
+                return None
+            return _AttributeParts(
+                parent_parts.root,
+                f"{parent_parts.suffix}.{attribute}"
+                if parent_parts.suffix
+                else attribute,
+            )
+        case _:
+            return None
+
+
+def _local_nodes(root: ast.AST) -> Iterable[ast.AST]:
+    yield root
+    for child in ast.iter_child_nodes(root):
+        match child:
+            case (
+                ast.FunctionDef()
+                | ast.AsyncFunctionDef()
+                | ast.ClassDef()
+                | ast.Lambda()
+            ):
+                continue
+            case (
+                ast.ListComp(generators=generators, elt=element)
+                | ast.SetComp(generators=generators, elt=element)
+                | ast.GeneratorExp(generators=generators, elt=element)
+            ):
+                yield child
+                shadowed: frozenset[str] = frozenset()
+                for generator in generators:
+                    yield from _comprehension_nodes(generator.iter, shadowed)
+                    shadowed = shadowed | _comprehension_target_names(generator.target)
+                    for condition in generator.ifs:
+                        yield from _comprehension_nodes(condition, shadowed)
+                yield from _comprehension_nodes(element, shadowed)
+                continue
+            case ast.DictComp(generators=generators, key=key, value=value):
+                yield child
+                shadowed = frozenset()
+                for generator in generators:
+                    yield from _comprehension_nodes(generator.iter, shadowed)
+                    shadowed = shadowed | _comprehension_target_names(generator.target)
+                    for condition in generator.ifs:
+                        yield from _comprehension_nodes(condition, shadowed)
+                yield from _comprehension_nodes(key, shadowed)
+                yield from _comprehension_nodes(value, shadowed)
+                continue
+            case ast.AnnAssign(target=ast.Name(), value=None):
+                # A local annotation without a value has no runtime target
+                # store and does not replace the owner-path set.
+                yield child
+                continue
+            case _:
+                yield from _local_nodes(child)
+
+
+def _comprehension_target_names(target: ast.expr) -> frozenset[str]:
+    match target:
+        case ast.Name(id=name):
+            return frozenset((name,))
+        case ast.Tuple(elts=items) | ast.List(elts=items):
+            names: set[str] = set()
+            for item in items:
+                names.update(_comprehension_target_names(item))
+            return frozenset(names)
+        case ast.Starred(value=value):
+            return _comprehension_target_names(value)
+        case _:
+            return frozenset()
+
+
+def _comprehension_nodes(root: ast.AST, shadowed: frozenset[str]) -> Iterable[ast.AST]:
+    if isinstance(root, ast.Name) and root.id in shadowed:
+        return
+    yield root
+    match root:
+        case ast.FunctionDef() | ast.AsyncFunctionDef() | ast.ClassDef() | ast.Lambda():
+            return
+        case (
+            ast.ListComp(generators=generators, elt=element)
+            | ast.SetComp(generators=generators, elt=element)
+            | ast.GeneratorExp(generators=generators, elt=element)
+        ):
+            local_shadowed = shadowed
+            for generator in generators:
+                yield from _comprehension_nodes(generator.iter, local_shadowed)
+                local_shadowed = local_shadowed | _comprehension_target_names(
+                    generator.target
+                )
+                for condition in generator.ifs:
+                    yield from _comprehension_nodes(condition, local_shadowed)
+            yield from _comprehension_nodes(element, local_shadowed)
+            return
+        case ast.DictComp(generators=generators, key=key, value=value):
+            local_shadowed = shadowed
+            for generator in generators:
+                yield from _comprehension_nodes(generator.iter, local_shadowed)
+                local_shadowed = local_shadowed | _comprehension_target_names(
+                    generator.target
+                )
+                for condition in generator.ifs:
+                    yield from _comprehension_nodes(condition, local_shadowed)
+            yield from _comprehension_nodes(key, local_shadowed)
+            yield from _comprehension_nodes(value, local_shadowed)
+            return
+        case _:
+            pass
+    for child in ast.iter_child_nodes(root):
+        yield from _comprehension_nodes(child, shadowed)
+
+
+def _path_set_assignments(
+    function: ast.FunctionDef, policy: ProvenanceOwnershipPolicy
+) -> dict[str, _OwnerPathSet]:
+    """Map each local set variable name to its proven owner-path set evidence."""
+    nodes = tuple(_local_nodes(function))
+    # A nested closure may mutate a captured set and be called before the
+    # comprehension. Without call-order and escape analysis, its effect is
+    # unknown; abstain rather than treating the original set as intact.
+    has_nested_scope = False
+    for statement in function.body:
+        for node in ast.walk(statement):
+            match node:
+                case ast.FunctionDef() | ast.AsyncFunctionDef() | ast.Lambda() if (
+                    node is not function
+                ):
+                    has_nested_scope = True
+                case _:
+                    continue
+    if has_nested_scope:
+        return {}
+    assignments: dict[str, list[_OwnerPathSet]] = {}
+    for node in nodes:
+        match node:
+            case ast.Assign(
+                targets=[ast.Name(id=target_name)],
+                value=ast.SetComp(
+                    elt=element,
+                    generators=[
+                        ast.comprehension(
+                            target=ast.Name(id=owner_target),
+                            iter=ast.Name(id=owner_name),
+                            ifs=[],
+                        )
+                    ],
+                ),
+            ) if owner_name in policy.owner_collection_names:
+                parts = _attribute_parts(element)
+                if (
+                    parts is not None
+                    and parts.root == owner_target
+                    and parts.suffix == policy.source_path_suffix
+                ):
+                    assignments.setdefault(target_name, []).append(
+                        _OwnerPathSet(owner_name, node.lineno)
+                    )
+            case _:
+                continue
+    result: dict[str, _OwnerPathSet] = {}
+    for name, values in assignments.items():
+        store_count = 0
+        load_count = 0
+        declarations = False
+        mutated = False
+        for node in nodes:
+            match node:
+                case ast.Import(names=aliases):
+                    if any(
+                        (alias.asname or alias.name.split(".")[0]) == name
+                        for alias in aliases
+                    ):
+                        store_count += 1
+                case ast.ImportFrom(names=aliases):
+                    if any(alias.name == "*" for alias in aliases):
+                        # A wildcard import may replace any selected local.
+                        declarations = True
+                    elif any((alias.asname or alias.name) == name for alias in aliases):
+                        store_count += 1
+                case ast.Name(id=bound, ctx=ast.Store() | ast.Del()) if bound == name:
+                    store_count += 1
+                case ast.MatchAs(name=bound) if bound == name:
+                    store_count += 1
+                case ast.MatchStar(name=bound) if bound == name:
+                    store_count += 1
+                case ast.MatchMapping(rest=bound) if bound == name:
+                    store_count += 1
+                case ast.Name(id=bound, ctx=ast.Load()) if bound == name:
+                    load_count += 1
+                case ast.Global(names=names) | ast.Nonlocal(names=names) if (
+                    name in names
+                ):
+                    declarations = True
+                case ast.Call(
+                    func=ast.Attribute(value=ast.Name(id=bound), attr=method)
+                ) if bound == name and method in _MUTATING_PATH_SET_METHODS:
+                    mutated = True
+                case _:
+                    continue
+        if (
+            len(values) == 1
+            and store_count == 1
+            and load_count == 1
+            and not declarations
+            and not mutated
+        ):
+            result[name] = values[0]
+    return result
+
+
+def _candidate_filter(
+    node: ast.AST,
+    path_sets: Mapping[str, _OwnerPathSet],
+    policy: ProvenanceOwnershipPolicy,
+) -> _CandidateEvidence | None:
+    match node:
+        case ast.ListComp(
+            lineno=site_line,
+            elt=ast.Name(id=candidate),
+            generators=[
+                ast.comprehension(
+                    target=ast.Name(id=candidate_target),
+                    iter=ast.Name(id=candidate_collection),
+                    ifs=conditions,
+                )
+            ],
+        ) if (
+            candidate_target == candidate
+            and candidate_collection in policy.candidate_collection_names
+        ):
+            for condition in conditions:
+                match condition:
+                    case ast.Compare(
+                        left=left,
+                        ops=[ast.NotIn()],
+                        comparators=[ast.Name(id=path_set_name)],
+                    ) if path_set_name in path_sets:
+                        parts = _attribute_parts(left)
+                        if (
+                            parts is None
+                            or parts.root != candidate
+                            or parts.suffix != policy.source_path_suffix
+                        ):
+                            continue
+                        owner_path_set = path_sets[path_set_name]
+                        if owner_path_set.line < site_line:
+                            return _CandidateEvidence(
+                                owner_path_set.collection, condition.lineno
+                            )
+                    case _:
+                        continue
+        case _:
+            return None
+    return None
+
+
+def _returned_filter_line(
+    function: ast.FunctionDef, candidate_filter: ast.ListComp
+) -> int | None:
+    """Require the filtered comprehension to reach a direct returned value."""
+    body = function.body[1:] if ast.get_docstring(function) else function.body
+    for index, statement in enumerate(body):
+        match statement:
+            case ast.Return(value=ast.ListComp() as returned) as return_statement if (
+                returned is candidate_filter
+            ):
+                return return_statement.lineno
+            case ast.Assign(
+                targets=[ast.Name(id=result_name)],
+                value=ast.ListComp() as assigned,
+            ) if assigned is candidate_filter and index + 1 < len(body):
+                match body[index + 1]:
+                    case ast.Return(value=ast.Name(id=name)) as return_statement if (
+                        name == result_name
+                    ):
+                        return return_statement.lineno
+                    case _:
+                        continue
+            case _:
+                continue
+    return None
+
+
+def provenance_ownership_sites(
+    source: str, policy: ProvenanceOwnershipPolicy
+) -> list[_OwnershipSite]:
+    """Find configured path-only exclusion when policy requires exact-span ownership."""
+    if policy.ownership_basis != "exact-source-span":
+        return []
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return []
+    if len(list(ast.walk(tree))) > _MAX_AST_NODES:
+        return []
+    functions: list[ast.FunctionDef] = []
+    for statement in tree.body:
+        match statement:
+            case ast.FunctionDef(name=name) if name in policy.function_names:
+                functions.append(statement)
+            case _:
+                continue
+    binding_counts = module_binding_counts(tree, policy.function_names)
+    sites: set[_OwnershipSite] = set()
+    for function in functions:
+        if binding_counts[function.name] != 1:
+            continue
+        path_sets = _path_set_assignments(function, policy)
+        for node in _local_nodes(function):
+            match node:
+                case ast.ListComp() as candidate_filter:
+                    evidence = _candidate_filter(candidate_filter, path_sets, policy)
+                    if evidence is None:
+                        continue
+                    return_line = _returned_filter_line(function, candidate_filter)
+                    if return_line is None:
+                        continue
+                    owner_collection = evidence.owner_collection
+                    match candidate_filter.generators:
+                        case [
+                            ast.comprehension(iter=ast.Name(id=candidate_collection))
+                        ]:
+                            sites.add(
+                                _OwnershipSite(
+                                    function.name,
+                                    owner_collection,
+                                    candidate_collection,
+                                    return_line,
+                                )
+                            )
+                        case _:
+                            continue
+                case _:
+                    continue
+    return sorted(sites, key=lambda site: (site.function, site.line))
+
+
+def check_provenance_ownership(
+    root: Path,
+    paths: Iterable[Path],
+    policy: ProvenanceOwnershipPolicy,
+) -> list[Finding]:
+    """Report path equality used where consumer policy requires span ownership."""
+    checkout = root.resolve(strict=True)
+    findings: list[Finding] = []
+    for relative in sorted(paths):
+        name = relative.as_posix()
+        if (
+            relative.suffix != ".py"
+            or any(matches_path(name, pattern) for pattern in policy.exclude)
+            or not any(matches_path(name, pattern) for pattern in policy.source_paths)
+        ):
+            continue
+        path = checkout / relative
+        if not path.is_file():
+            continue
+        for site in provenance_ownership_sites(read_python_source(path), policy):
+            findings.append(
+                Finding(
+                    _RULE_ID,
+                    name,
+                    f"Configured exact-source-span ownership function {site.function!r} "
+                    f"returns {site.candidate_collection} filtered using paths from "
+                    f"{site.owner_collection}; path-only equality may omit distinct "
+                    "same-file spans. Review whether span containment is required. "
+                    "This candidate does not establish record ownership or a defect.",
+                    site.line,
+                    policy.severity,
+                )
+            )
+    return findings

@@ -124,6 +124,12 @@ def _flatten_outline(items: _OutlineItem) -> list[_Destination]:
 
 
 def _page_for_destination(reader: _Reader, destination: _PdfDestination) -> int | None:
+    getter = getattr(destination, "get_object", None)
+    if callable(getter):
+        try:
+            destination = cast(_PdfDestination, getter())
+        except Exception:  # noqa: BLE001 - malformed references are unresolved
+            return None
     named = reader.named_destinations.get(str(destination).lstrip("/"))
     if named is not None:
         try:

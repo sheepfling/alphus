@@ -55,6 +55,14 @@ jobs:
           python scripts/ci.py --root . --wheel
           --history-dir "${{ runner.temp }}/alphus-history"
           --consumer-id sheepfling/alphus
+      - name: Install Python development tools for the suppression self-scan
+        if: matrix.python-version == '3.11'
+        run: python -m pip install --disable-pip-version-check -e '.[python]'
+      - name: Audit Alphus source suppression reasons
+        if: matrix.python-version == '3.11'
+        run: >-
+          alphus --root . --config examples/consumer/lint-suppressions.toml
+          --profile suppression-review
       - name: Retain verified profile history
         if: always()
         uses: actions/upload-artifact@v7
@@ -93,7 +101,7 @@ jobs:
         run: |
           "${{ steps.checker-python.outputs.python-path }}" -m venv "$RUNNER_TEMP/alphus-checker"
           "${{ steps.target-python.outputs.python-path }}" -m venv "$RUNNER_TEMP/alphus-target"
-          "$RUNNER_TEMP/alphus-checker/bin/python" -m pip install --disable-pip-version-check -e '.[python,mypy,ty]'
+          "$RUNNER_TEMP/alphus-checker/bin/python" -m pip install --disable-pip-version-check -e '.[python,mypy,ty,javascript]'
           "$RUNNER_TEMP/alphus-target/bin/python" -m pip install --disable-pip-version-check 'snakemd==2.4.1' 'mdutils==1.8.1'
       - name: Verify optional typing checker extras
         run: |
@@ -305,7 +313,6 @@ jobs:
             ${{ runner.temp }}/mdutils-stub-unmodified-ty.log
           if-no-files-found: ignore
           retention-days: 90
-
   pdf-native-toolchain-smoke:
     runs-on: ubuntu-latest
     steps:

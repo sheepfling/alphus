@@ -126,12 +126,17 @@ def validate_portability(
             try:
                 action = _dictionary(action_value)
                 kind = str(action.get("/S"))
+                has_next = action.get("/Next") is not None
             except Exception as error:  # noqa: BLE001 - malformed PDF objects are unknown evidence
                 unknown.append(
                     f"page {page_number} link {index}: malformed action ({error})"
                 )
                 continue
             prefix = f"page {page_number} link {index} {kind}"
+            if has_next:
+                unknown.append(
+                    f"{prefix}: chained /Next actions are unsupported and were not inspected"
+                )
             if kind == "/GoTo":
                 continue
             if kind == "/URI":

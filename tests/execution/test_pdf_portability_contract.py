@@ -9,7 +9,7 @@ import pytest
 pytest.importorskip("pypdf")
 
 from pypdf import PdfWriter
-from pypdf.generic import DictionaryObject, NameObject, TextStringObject
+from pypdf.generic import ArrayObject, DictionaryObject, NameObject, TextStringObject
 
 from scripts.check_pdf_portability import validate_portability
 
@@ -180,3 +180,95 @@ def test_bundle_contract_requires_root_and_rejects_unknown_fields(
     _contract(contract, mode="self_contained", follow_links=True)
     with pytest.raises(ValueError):
         validate_portability(pdf, contract)
+
+
+def _pdf_with_next_action(
+    path: Path, *, next_kind: str | None, primary_kind: str = "/GoTo"
+) -> None:
+    writer = PdfWriter()
+    writer.add_blank_page(width=100, height=100)
+    next_action = DictionaryObject(
+        {
+            NameObject("/S"): NameObject("/Launch"),
+            NameObject("/F"): TextStringObject("open-me.sh"),
+        }
+    )
+    if next_kind == "dictionary":
+        next_value = next_action
+    elif next_kind == "array":
+        next_value = ArrayObject([next_action])
+    elif next_kind == "indirect":
+        next_value = writer._add_object(next_action)
+    elif next_kind == "cyclic":
+        cyclic_action = DictionaryObject({NameObject("/S"): NameObject("/GoTo")})
+        cyclic_reference = writer._add_object(cyclic_action)
+        cyclic_action[NameObject("/Next")] = cyclic_reference
+        next_value = cyclic_reference
+    elif next_kind is None:
+        next_value = None
+    else:
+        raise AssertionError(f"unsupported fixture kind: {next_kind}")
+
+    action = DictionaryObject({NameObject("/S"): NameObject(primary_kind)})
+    if next_value is not None:
+        action[NameObject("/Next")] = next_value
+    if primary_kind == "/GoTo":
+        action[NameObject("/D")] = ArrayObject(
+            [writer.pages[0].indirect_reference, NameObject("/Fit")]
+        )
+    elif primary_kind == "/Launch":
+        action[NameObject("/F")] = TextStringObject("primary-launch.sh")
+    writer.add_annotation(
+        0,
+        {
+            "/Type": "/Annot",
+            "/Subtype": "/Link",
+            "/Rect": [0, 0, 10, 10],
+            "/A": action,
+        },
+    )
+    writer.write(path)
+
+
+@pytest.mark.parametrize("next_kind", ["dictionary", "array", "indirect", "cyclic"])
+def test_permitted_action_with_any_next_form_is_unknown_not_certified(
+    tmp_path: Path, next_kind: str
+) -> None:
+    pdf = tmp_path / "report.pdf"
+    contract = tmp_path / "delivery.json"
+    _pdf_with_next_action(pdf, next_kind=next_kind)
+    _contract(contract, mode="self_contained")
+
+    failures, unknown = validate_portability(pdf, contract)
+
+    assert failures == []
+    assert len(unknown) == 1
+    assert "chained /Next actions are unsupported" in unknown[0]
+
+
+def test_primary_launch_remains_failure_when_it_has_a_next_action(
+    tmp_path: Path,
+) -> None:
+    pdf = tmp_path / "report.pdf"
+    contract = tmp_path / "delivery.json"
+    _pdf_with_next_action(pdf, next_kind="dictionary", primary_kind="/Launch")
+    _contract(contract, mode="self_contained")
+
+    failures, unknown = validate_portability(pdf, contract)
+
+    assert any(
+        "launch/file actions violate delivery policy" in item for item in failures
+    )
+    assert any("chained /Next actions are unsupported" in item for item in unknown)
+
+
+def test_unchained_allowed_goto_remains_fully_supported(tmp_path: Path) -> None:
+    pdf = tmp_path / "report.pdf"
+    contract = tmp_path / "delivery.json"
+    _pdf_with_next_action(pdf, next_kind=None)
+    _contract(contract, mode="self_contained")
+
+    failures, unknown = validate_portability(pdf, contract)
+
+    assert failures == []
+    assert unknown == []

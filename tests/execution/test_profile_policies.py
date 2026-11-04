@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 from typing import get_args
@@ -11,7 +12,7 @@ from pydantic import ValidationError
 
 from alphus.cli import main
 from alphus.config import CheckPolicies, QualityRuleName, load_config
-from alphus.execution.dispatch import RULE_RUNNERS
+from alphus.execution.dispatch import BUILTIN_RULES, RULE_RUNNERS
 from alphus.gates.hygiene.rules import check_file_size, check_line_length
 from alphus.policy.base import MissingPolicyError
 from alphus.policy.catalog import RULE_SPECS
@@ -97,6 +98,35 @@ def test_missing_global_files_for_rule_is_rejected_before_commands(
     assert "top-level [files]" in capsys.readouterr().err
 
 
+def test_typing_stub_rule_requires_source_inventory(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = tmp_path / "quality-gates.toml"
+    path.write_text(
+        "schema_version = 1\n"
+        "[checks.typing_stub_suggestions]\n"
+        'extensions = [".py"]\n'
+        'typing_groups = ["dev"]\n',
+        encoding="utf-8",
+    )
+
+    assert RULE_SPECS["typing-stub-suggestions"].requires_files
+    assert (
+        main(
+            [
+                "--root",
+                str(tmp_path),
+                "--config",
+                str(path),
+                "--rule",
+                "typing-stub-suggestions",
+            ]
+        )
+        == 2
+    )
+    assert "top-level [files]" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize("rule", get_args(QualityRuleName))
 def test_each_selected_portable_rule_requires_its_policy(rule: QualityRuleName) -> None:
     with pytest.raises(MissingPolicyError, match=RULE_SPECS[rule].policy_field):
@@ -106,9 +136,29 @@ def test_each_selected_portable_rule_requires_its_policy(rule: QualityRuleName) 
 def test_rule_catalog_covers_every_public_selector_and_policy_field() -> None:
     assert set(RULE_SPECS) == set(get_args(QualityRuleName))
     assert set(RULE_RUNNERS) == set(RULE_SPECS)
+    assert set(BUILTIN_RULES) == set(RULE_SPECS)
+    assert all(
+        BUILTIN_RULES[selector].spec is spec
+        and BUILTIN_RULES[selector].runner is RULE_RUNNERS[selector]
+        for selector, spec in RULE_SPECS.items()
+    )
     assert all(
         spec.policy_field in CheckPolicies.model_fields for spec in RULE_SPECS.values()
     )
+
+
+def test_cli_catalog_exposes_domain_recommendation_metadata(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["--root", str(tmp_path), "--catalog", "--json"]) == 0
+    catalog = json.loads(capsys.readouterr().out)
+    assert catalog["domain_tags_are_advisory"] is True
+    rules = {entry["selector"]: entry for entry in catalog["rules"]}
+    assert rules["numeric-literals"]["policy_section"] == "checks.numeric_literals"
+    assert "trajectory-analysis" in rules["numeric-literals"]["domains"]
+    assert "earth-science" in rules["scipy-constants"]["domains"]
+    assert "coordinate systems" in rules["scipy-constants"]["summary"]
+    assert "documentation-generation" in rules["dynamic-markdown"]["domains"]
 
 
 @pytest.mark.parametrize("rule", get_args(QualityRuleName))
@@ -126,11 +176,9 @@ def test_public_size_rules_require_policy_before_iterating_empty_inventory(
 ) -> None:
     config = load_config(repository(tmp_path))
     # The public functions also guard callers that do not use the CLI.
+    check = check_file_size if rule == "file-size" else check_line_length
     with pytest.raises(MissingPolicyError):
-        if rule == "file-size":
-            check_file_size(tmp_path, (), config)
-        else:
-            check_line_length(tmp_path, (), config)
+        check(tmp_path, (), config)
 
 
 def test_selected_missing_policy_is_rejected_before_native_side_effect(

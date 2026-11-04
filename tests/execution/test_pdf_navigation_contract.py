@@ -129,6 +129,8 @@ def _pdf_with_unconfigured_links(
     action_kind: str = "/GoTo",
     direct_destination: bool = False,
     direct_page_destination: bool = False,
+    indirect_destination: bool = False,
+    indirect_named_destination: bool = False,
 ) -> None:
     writer = PdfWriter()
     writer.add_blank_page(width=100, height=100)
@@ -139,38 +141,51 @@ def _pdf_with_unconfigured_links(
         writer.add_named_destination(destination_name, 1)
     for _ in range(link_count):
         if direct_page_destination:
+            destination = ArrayObject(
+                [writer.pages[1].indirect_reference, NameObject("/Fit")]
+            )
+            if indirect_destination:
+                destination = writer._add_object(destination)
             writer.add_annotation(
                 0,
                 {
                     "/Type": "/Annot",
                     "/Subtype": "/Link",
                     "/Rect": [10, 10, 20, 20],
-                    "/Dest": ArrayObject(
-                        [writer.pages[1].indirect_reference, NameObject("/Fit")]
-                    ),
+                    "/Dest": destination,
                 },
             )
         elif direct_destination:
+            destination = NameObject(f"/{destination_name}")
+            if indirect_named_destination:
+                destination = writer._add_object(destination)
             writer.add_annotation(
                 0,
                 {
                     "/Type": "/Annot",
                     "/Subtype": "/Link",
                     "/Rect": [10, 10, 20, 20],
-                    "/Dest": NameObject(f"/{destination_name}"),
+                    "/Dest": destination,
                 },
             )
         elif action_kind == "/GoTo":
+            if indirect_destination:
+                destination = writer._add_object(
+                    ArrayObject(
+                        [writer.pages[1].indirect_reference, NameObject("/Fit")]
+                    )
+                )
+            elif indirect_named_destination:
+                destination = writer._add_object(NameObject(f"/{destination_name}"))
+            else:
+                destination = NameObject(f"/{destination_name}")
             writer.add_annotation(
                 0,
                 {
                     "/Type": "/Annot",
                     "/Subtype": "/Link",
                     "/Rect": [10, 10, 20, 20],
-                    "/A": {
-                        "/S": "/GoTo",
-                        "/D": NameObject(f"/{destination_name}"),
-                    },
+                    "/A": {"/S": "/GoTo", "/D": destination},
                 },
             )
         else:
@@ -302,7 +317,11 @@ def test_unresolved_named_goto_is_reported_once_with_all_references(
     pdf = tmp_path / "report.pdf"
     contract = tmp_path / "targets.json"
     _pdf_with_unconfigured_links(
-        pdf, "MissingTarget", link_count=2, direct_destination=True
+        pdf,
+        "MissingTarget",
+        link_count=2,
+        direct_destination=True,
+        indirect_named_destination=True,
     )
     _destination_contract(contract)
 
@@ -338,6 +357,41 @@ def test_external_uri_is_classified_separately_from_internal_goto(
     pdf = tmp_path / "report.pdf"
     contract = tmp_path / "targets.json"
     _pdf_with_unconfigured_links(pdf, "unused", action_kind="/URI")
+    _destination_contract(contract)
+
+    assert validate_navigation(pdf, contract) == ([], [])
+
+
+@pytest.mark.parametrize("through_action", [False, True])
+def test_indirect_destination_array_resolves_for_link_dest_and_goto_action(
+    tmp_path: Path, through_action: bool
+) -> None:
+    pdf = tmp_path / "report.pdf"
+    contract = tmp_path / "targets.json"
+    _pdf_with_unconfigured_links(
+        pdf,
+        "unused",
+        direct_page_destination=not through_action,
+        indirect_destination=True,
+    )
+    _destination_contract(contract)
+
+    assert validate_navigation(pdf, contract) == ([], [])
+
+
+@pytest.mark.parametrize("through_action", [False, True])
+def test_indirect_named_destinations_resolve(
+    tmp_path: Path, through_action: bool
+) -> None:
+    pdf = tmp_path / "report.pdf"
+    contract = tmp_path / "targets.json"
+    _pdf_with_unconfigured_links(
+        pdf,
+        "OverviewTarget",
+        include_named_destination=True,
+        direct_destination=not through_action,
+        indirect_named_destination=True,
+    )
     _destination_contract(contract)
 
     assert validate_navigation(pdf, contract) == ([], [])
