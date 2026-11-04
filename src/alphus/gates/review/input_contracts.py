@@ -1619,7 +1619,11 @@ def _direct_forwarded_mapping_reads(
         )
         passed_names = _linear_aliases_before(function, parameter, node.lineno)
 
-        def passes_outer_mapping(argument: ast.AST) -> bool:
+        def passes_outer_mapping(
+            argument: ast.AST,
+            shadowed_names: frozenset[str] = shadowed_names,
+            passed_names: frozenset[str] = passed_names,
+        ) -> bool:
             match argument:
                 case ast.Name(id=name) if name not in shadowed_names:
                     return name in passed_names

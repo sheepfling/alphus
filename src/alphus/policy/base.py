@@ -74,10 +74,12 @@ QualityRuleName: TypeAlias = Literal[
     "pydantic-practices",
     "fastapi-practices",
     "sqlalchemy-practices",
+    "dynamic-markdown",
     "document-style",
     "suppression-reasons",
     "cyclomatic-complexity",
 ]
+RuleSelector: TypeAlias = str
 
 PolicyT = TypeVar("PolicyT")
 

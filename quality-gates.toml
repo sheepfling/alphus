@@ -42,7 +42,9 @@ exclude = ["tests/**"]
 
 [checks.output_escaping]
 extensions = [".py"]
-exclude = []
+# The synthetic fixture owns a tiny serializer solely so markdown-it-py can
+# inspect its output; the render assertions independently verify these escapes.
+exclude = ["tests/gates/review/test_dynamic_markdown_rendering.py"]
 
 [checks.path_discovery]
 extensions = [".py"]

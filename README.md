@@ -78,7 +78,9 @@ For the installed-wheel version of this check, including the current self-profil
 scope and exclusions, see [Self-checking Alphus](docs/SELF-CHECK.md). The
 `review` profile also selects [the review checks](docs/review/README.md) alone.
 Those include opt-in Pydantic and FastAPI source sniffers with consumer-owned
-scope and error-code vocabulary.
+scope and error-code vocabulary. A separate dynamic Markdown assembly
+advisory is available when consumers declare producer paths and add its rule
+to a profile.
 See [version support](docs/VERSION-SUPPORT.md) for the checker Python range,
 dependency bounds, stub targets, and native tool ownership.
 
@@ -206,8 +208,9 @@ PEP 561 build, checker, and runtime-compatibility gates without adding an
 Alphus dependency to published stub packages. The
 [C++ quality gates](docs/CPP-QUALITY.md) provide reusable source, build,
 test, package, artifact, and worktree checks through Alphus profiles. The
-[extension and diagnostics proposal](docs/EXTENSIBILITY.md) records a staged
-design for categories, shared findings, and future third-party rules. The
+[extension and diagnostics guide](docs/EXTENSIBILITY.md) documents rule
+discovery, domain recommendations, the versioned third-party rule API, and the
+remaining migration work for shared findings. The
 [cyclomatic complexity guide](docs/CYCLOMATIC-COMPLEXITY.md) documents the
 opt-in native Python, C/C++, and JavaScript metric gates and their distinct
 counting limits. The
@@ -247,7 +250,9 @@ import ast
 
 from alphus.support.source_scanning import qualified_reference_lines
 
-tree = ast.parse("from datetime import datetime as Clock\nparse = Clock.fromisoformat\n")
+tree = ast.parse(
+    "from datetime import datetime as Clock\nparse = Clock.fromisoformat\n"
+)
 assert qualified_reference_lines(tree, "datetime.datetime.fromisoformat") == [2]
 ```
 

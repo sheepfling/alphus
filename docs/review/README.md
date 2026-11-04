@@ -748,6 +748,111 @@ does not infer that any call is wrong. Native parameter-count and call-order
 diagnostics remain separate. See the [positional interface guide](../POSITIONAL-INTERFACES.md)
 for the Python boundaries, native capability matrix, and runnable consumer example.
 
+## Dynamic Markdown assembly
+
+Selector: `dynamic-markdown`. ID:
+`alphus/python/none/maintainability/dynamic-markdown-assembly`.
+
+This opt-in Python advisory looks for dynamic values placed into Markdown
+structure in consumer-selected producer files. Configure narrow paths so
+ordinary application strings and unrelated templates are not treated as
+Markdown output:
+
+```toml
+[checks.dynamic_markdown]
+extensions = [".py"]
+producer_paths = ["src/my_app/markdown/**"]
+exclude = []
+severity = "warning"
+declared_safe_helpers = ["my_app.markdown_cells.escape_table_cell"]
+
+[[checks.dynamic_markdown.exceptions]]
+paths = ["src/my_app/markdown/legacy_serializer.py"]
+reason = "Reviewed low-level serializer preserves the declared Markdown dialect."
+```
+
+Add `dynamic-markdown` as a rule step in a consumer-owned profile to run it.
+`producer_paths` is required; the checker never treats punctuation or an
+f-string alone as evidence that a file produces Markdown. The optional
+`exceptions` entries suppress matching paths and require a review reason.
+`exclude` remains available for ordinary path exclusions. A producer path must
+also be present in the root `[files]` inventory; this rule does not expand the
+repository-wide file scope.
+
+`declared_safe_helpers` is an exact, opt-in project contract for context-specific
+value helpers. An entry is recognized only when the selected source imports that
+qualified helper and uses it through the imported name; import aliases are
+followed, while parameters and local reassignments that shadow the imported name
+remain untrusted. Configuring a helper records the consumer's assertion that the
+helper handles the relevant Markdown context. Alphus does not inspect or certify
+the helper body, and importing a Markdown package alone never suppresses other
+manual assembly findings. Dynamic values passed to undeclared or unresolved
+helpers remain review candidates when the surrounding Markdown structure is
+visible.
+
+The synthetic regression suite separately renders representative table, link,
+code-span, and code-fence builders with `markdown-it-py` and inspects their HTML
+structure. These fixtures validate the chosen table dialect and builder
+examples; they do not certify arbitrary consumer output or imply that a static
+finding proves rendered Markdown is malformed.
+
+### Real-generator source checks
+
+At SnakeMD [commit `21256ece8c73edfe13e255218374dda54da3eb51`][snakemd-revision],
+the selected [`readme.py`][snakemd-readme] (281 Python lines) is the project's
+checked-in README generator. It builds content through `snakemd.Document`
+methods and structured `Inline`, `Table`, and `Code` objects. Running the
+source advisory from Alphus commit
+`7f923bd4b7767a8629c8c256703a5f95aa20e339` with Python 3.11.16 on that file
+produced zero findings. This is one accepted-builder example and one zero-
+candidate result; it is not a precision estimate or evidence that SnakeMD's
+output is safe. The consumer source was not executed and its rendered README
+was not parsed in this check. Positive real-generator evidence remains the
+mdutils table-builder example recorded in PR #81; these small samples do not
+establish broad calibration or justify enforcement.
+
+[snakemd-revision]: https://github.com/TheRenegadeCoder/SnakeMD/tree/21256ece8c73edfe13e255218374dda54da3eb51
+[snakemd-readme]: https://github.com/TheRenegadeCoder/SnakeMD/blob/21256ece8c73edfe13e255218374dda54da3eb51/readme.py
+
+```toml
+[[orchestration.steps]]
+kind = "rule"
+name = "Dynamic Markdown review"
+rule = "dynamic-markdown"
+
+[[orchestration.profiles]]
+name = "markdown-review"
+steps = ["Dynamic Markdown review"]
+```
+
+Run that consumer-owned profile with `alphus --run --profile markdown-review`.
+
+The first supported patterns are f-strings, string concatenation, literal
+`.format()` templates, direct local aliases, and straight-line list
+`append`/`join` assembly, including a list initialized before a loop and
+appended to with a recognizable one-iteration row pattern. For that loop case,
+the analyzer treats the loop body as a representative row; it does not infer
+iteration counts or execute the producer. It reports values in pipe-delimited
+table rows, common unordered and ordered list items (up to eight leading
+spaces), block quotes, simple Markdown link labels or destinations, and
+matched backtick spans or fences. List and block-quote matching is skipped
+inside recognized fenced code blocks. Findings include the dynamic expression
+and observed source construction. They ask for context-specific review, such
+as table-cell escaping and row boundaries, list-marker indentation, block
+boundaries, or link destination encoding; they do not claim that rendered
+output is malformed or prescribe one universal escaping call.
+
+The analyzer does not execute or import consumer modules. It follows local
+bindings only when their value remains unambiguous; assignments that differ
+across branches are left unresolved. Unknown helpers, interprocedural flow,
+computed templates, raw-fragment provenance, and library APIs are not
+recognized as safe. Importing a Markdown package does not suppress a separate
+manual construction. This first pass does not analyze general block composition
+or certify renderer output. Calibrate it against sanitized real generator
+examples and independently check representative rendered structure before
+considering broader rollout. Prefer a dialect-aware library or tested shared
+builder for document production.
+
 ## SQLAlchemy 2.x practices
 
 Selector: `sqlalchemy-practices`. IDs:
