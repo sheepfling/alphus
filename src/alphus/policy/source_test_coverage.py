@@ -67,7 +67,9 @@ class SourceTestCoveragePolicy(StrictModel):
     @field_validator("evidence_file")
     @classmethod
     def validate_evidence_file(cls, value: str | None) -> str | None:
-        return _repository_file_path(value, "evidence_file") if value is not None else None
+        return (
+            _repository_file_path(value, "evidence_file") if value is not None else None
+        )
 
     @model_validator(mode="after")
     def validate_relationships(self) -> Self:
