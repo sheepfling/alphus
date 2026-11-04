@@ -168,6 +168,29 @@ def test_scipy_direct_rule_uses_its_own_label(
     assert "File size:" not in output
 
 
+def test_repeated_numeric_limit_direct_rule_reports_each_span(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    arguments = repository(
+        tmp_path,
+        "source.py",
+        "if node_count > 512:\n    stop()\nif len(ast_nodes) > 512:\n    stop()\n",
+        "[checks.repeated_numeric_limits]\n"
+        'extensions = [".py"]\n'
+        'source_paths = ["*.py"]\n'
+        'severity = "warning"\n'
+        "[[checks.repeated_numeric_limits.roles]]\n"
+        'name = "AST traversal ceiling"\n'
+        'identifiers = ["node_count", "ast_nodes"]\n',
+    )
+
+    assert main([*arguments, "--rule", "repeated-numeric-limits", "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert [item["line"] for item in payload] == [1, 3]
+    assert all(item["severity"] == "warning" for item in payload)
+    assert all("AST traversal ceiling" in item["message"] for item in payload)
+
+
 def test_missing_required_document_artifact_fails_opt_in_profile(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -214,6 +237,7 @@ def test_missing_required_document_artifact_fails_opt_in_profile(
     "selector",
     [
         "numeric-literals",
+        "repeated-numeric-limits",
         "test-quality",
         "input-contracts",
         "pydantic-practices",
@@ -372,6 +396,7 @@ def test_older_configs_leave_review_checks_opt_in(tmp_path: Path) -> None:
     checks = load_config(tmp_path / "quality.toml").checks
 
     assert checks.numeric_literals is None
+    assert checks.repeated_numeric_limits is None
     assert checks.test_quality is None
     assert checks.input_contracts is None
     assert checks.positional_interfaces is None

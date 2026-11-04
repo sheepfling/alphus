@@ -69,6 +69,7 @@ from alphus.policy.review import (
     QuaternionNormalizationPolicy,
     QuaternionProductPolicy,
     QuaternionVectorRotationPolicy,
+    RepeatedNumericLimitPolicy,
     RunArtifactPolicy,
     ScipyConstantsPolicy,
     SemanticWorkPresentationPolicy,
@@ -105,6 +106,7 @@ class CheckPolicies(StrictModel):
     output_escaping: SourceScanPolicy | None = None
     path_discovery: PathDiscoveryPolicy | None = None
     numeric_literals: NumericLiteralPolicy | None = None
+    repeated_numeric_limits: RepeatedNumericLimitPolicy | None = None
     typing_stub_suggestions: TypingStubSuggestionPolicy | None = None
     prose_as_control: ProseAsControlPolicy | None = None
     positional_semantic_overrides: PositionalSemanticOverridePolicy | None = None

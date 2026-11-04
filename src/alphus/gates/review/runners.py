@@ -83,6 +83,9 @@ from alphus.gates.review.provenance_ownership import check_provenance_ownership
 from alphus.gates.review.rendered_value_reparsed import (
     check_rendered_value_reparsed,
 )
+from alphus.gates.review.repeated_numeric_limits import (
+    check_repeated_numeric_limits,
+)
 from alphus.gates.review.run_artifacts import check_run_artifacts
 from alphus.gates.review.scipy_constants import check_scipy_constants
 from alphus.gates.review.semantic_work_presentation import (
@@ -109,6 +112,16 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
             root,
             files,
             require_policy(config.checks.numeric_literals, "numeric_literals"),
+        ),
+        "repeated-numeric-limits": lambda root, files, config: (
+            check_repeated_numeric_limits(
+                root,
+                files,
+                require_policy(
+                    config.checks.repeated_numeric_limits,
+                    "repeated_numeric_limits",
+                ),
+            )
         ),
         "typing-stub-suggestions": lambda root, files, config: (
             check_typing_stub_suggestions(
