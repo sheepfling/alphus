@@ -1,14 +1,19 @@
+"""Guard the reusable GitLab job's Git inventory bootstrap."""
+
+from __future__ import annotations
+
 from pathlib import Path
 
+import pytest
 import yaml
 
 
-ROOT = Path(__file__).resolve().parents[1]
-
-
-def test_gitlab_template_provisions_and_smokes_default_git_inventory() -> None:
+def test_gitlab_template_provisions_and_smokes_default_git_inventory(
+    pytestconfig: pytest.Config,
+) -> None:
+    root = Path(pytestconfig.rootpath)
     template = yaml.safe_load(
-        (ROOT / "ci/gitlab/quality.yml").read_text(encoding="utf-8")
+        (root / "ci/gitlab/quality.yml").read_text(encoding="utf-8")
     )
     job = template[".alphus-quality"]
 
@@ -17,7 +22,7 @@ def test_gitlab_template_provisions_and_smokes_default_git_inventory() -> None:
     assert "CI_JOB_IMAGE" in script
     assert "apt-get install -y --no-install-recommends git" in script
     assert "Git is missing from custom GitLab image" in script
-    assert "git -C \"$CI_PROJECT_DIR\" ls-files" in script
+    assert 'git -C "$CI_PROJECT_DIR" ls-files' in script
     assert "ALPHUS_REQUIREMENTS_FILE" in script
     assert "ALPHUS_RUNTIME_REQUIREMENTS_FILE" in script
     assert "Git is required by Alphus file-scoped checks" in script
