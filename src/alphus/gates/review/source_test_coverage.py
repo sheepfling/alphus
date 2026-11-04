@@ -1,3 +1,4 @@
+schema validation passed
 """Advisory audit of explicitly declared source-to-test evidence."""
 
 from __future__ import annotations
@@ -8,7 +9,7 @@ from collections import Counter
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, field_validator
 
@@ -58,7 +59,9 @@ class _EvidenceObservation(StrictModel):
 
 
 class _EvidenceDocument(StrictModel):
-    schema_id: Literal["alphus.source-test-coverage"] = Field(alias="schema")
+    schema_id: Annotated[
+        Literal["alphus.source-test-coverage"], Field(validation_alias="schema")
+    ]
     schema_version: int
     revision: str
     complete: bool
