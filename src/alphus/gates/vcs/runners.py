@@ -16,9 +16,7 @@ VcsRunner: TypeAlias = Callable[[Path, Sequence[Path], QualityGateConfig], RuleO
 
 VCS_RULE_RUNNERS: Mapping[QualityRuleName, VcsRunner] = MappingProxyType(
     {
-        "git-ignores": lambda root, _files, config: check_ignores(
-            root, require_policy(config.checks.git, "git").languages
-        ),
+        "git-ignores": lambda root, _files, config: _check_ignores(root, config),
         "git-attributes": lambda root, _files, config: check_attributes(
             root, require_policy(config.checks.git, "git").attributes
         ),
@@ -27,3 +25,13 @@ VCS_RULE_RUNNERS: Mapping[QualityRuleName, VcsRunner] = MappingProxyType(
         ),
     }
 )
+
+
+def _check_ignores(root: Path, config: QualityGateConfig) -> RuleOutput:
+    policy = require_policy(config.checks.git, "git")
+    return check_ignores(
+        root,
+        policy.languages,
+        policy.generated_outputs,
+        policy.generated_provenance,
+    )

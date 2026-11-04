@@ -1,0 +1,140 @@
+schema_version = 1
+
+[files]
+include = ["src/render/*.py"]
+exclude = []
+
+[checks.prose_as_control]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/render/*.py"]
+minimum_characters = 60
+minimum_words = 8
+allowed_literals = ["The remote peer reports a state transition that this client does not handle."]
+lossy_text_rewrite = true
+regex_sub_helpers = ["re.sub"]
+rendered_value_helpers = ["render_latex"]
+
+[checks.positional_semantic_overrides]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/render/*.py"]
+position_variables = ["row_number", "page_number"]
+semantic_fields = ["Interpretation", "Content"]
+minimum_override_characters = 40
+
+[checks.unexplained_empty_results]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/render/*.py"]
+nonempty_inputs = ["records"]
+unavailable_flags = ["inferred_schema"]
+
+[checks.embedded_semantic_overrides]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/render/*.py"]
+replacement_maps = ["fixed_paragraphs"]
+source_anchor_helpers = ["source_anchor"]
+
+[checks.heuristic_total_consumption]
+extensions = [".py"]
+exclude = ["**/generated/**", "**/vendor/**"]
+source_paths = ["src/render/*.py"]
+function_names = ["preserve_text"]
+input_names = ["text"]
+token_match_helpers = ["re.findall"]
+output_contract = "preserve-unmatched-spans"
+
+[checks.provenance_ownership]
+extensions = [".py"]
+exclude = ["**/generated/**", "**/vendor/**"]
+source_paths = ["src/render/*.py"]
+function_names = ["remaining_paragraphs"]
+owner_collection_names = ["tables"]
+candidate_collection_names = ["paragraphs"]
+ownership_basis = "exact-source-span"
+source_path_suffix = "source.path"
+
+[checks.semantic_work_presentation]
+extensions = [".py"]
+exclude = ["**/generated/**", "**/vendor/**"]
+source_paths = ["src/render/*.py"]
+function_names = ["render_document"]
+source_layout_helpers = ["reconstruct_layout"]
+content_correction_helpers = ["apply_content_correction"]
+semantic_ownership_helpers = ["decide_semantic_ownership"]
+serialization_helpers = ["serialize_output"]
+module_role = "presentation"
+
+[checks.parallel_normalization]
+extensions = [".py"]
+exclude = ["**/generated/**", "**/vendor/**"]
+source_paths = ["src/render/*.py"]
+
+[[checks.parallel_normalization.pairs]]
+concept = "canonical display text"
+first_function = "normalize_for_display"
+second_function = "normalize_for_key"
+output_contract = "same-output-for-same-input"
+
+[orchestration]
+default_profile = "semantic-review"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Prose branch review"
+rule = "prose-as-control"
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Rendered value feedback review"
+rule = "rendered-value-reparsed"
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Positional semantic override review"
+rule = "positional-semantic-overrides"
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Unknown inference empty-result review"
+rule = "unexplained-empty-results"
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Embedded semantic replacement review"
+rule = "embedded-semantic-overrides"
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Heuristic text consumption review"
+rule = "heuristic-total-consumption"
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Provenance ownership review"
+rule = "provenance-as-ownership"
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Presentation responsibility boundary review"
+rule = "semantic-work-in-presentation"
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Parallel normalization review"
+rule = "parallel-normalization"
+rollout = "provisional"
+
+[[orchestration.profiles]]
+name = "semantic-review"
+steps = ["Prose branch review", "Rendered value feedback review", "Positional semantic override review", "Unknown inference empty-result review", "Embedded semantic replacement review", "Heuristic text consumption review", "Provenance ownership review", "Presentation responsibility boundary review", "Parallel normalization review"]

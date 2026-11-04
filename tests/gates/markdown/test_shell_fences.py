@@ -1161,18 +1161,30 @@ def test_rule_runner_uses_git_inventory_without_a_files_policy(tmp_path: Path) -
 
 
 @pytest.mark.parametrize(
-    "policy",
+    ("policy", "expected_error"),
     [
-        {"include": ["../private.md"]},
-        {
-            "suppressions": [
-                {"path": "guide.md", "line": 0, "reason": "Long enough reason text."}
-            ]
-        },
+        pytest.param(
+            {"include": ["../private.md"]},
+            "cannot traverse parent directories",
+            id="unsafe-include",
+        ),
+        pytest.param(
+            {
+                "suppressions": [
+                    {
+                        "path": "guide.md",
+                        "line": 0,
+                        "reason": "Long enough reason text.",
+                    }
+                ]
+            },
+            "greater than or equal to 1",
+            id="invalid-suppression-line",
+        ),
     ],
 )
 def test_rejects_unsafe_patterns_and_suppression_lines(
-    policy: object,
+    policy: object, expected_error: str
 ) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=expected_error):
         MarkdownShellFencesPolicy.model_validate(policy)

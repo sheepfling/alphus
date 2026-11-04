@@ -240,7 +240,7 @@ def project(values, rows):
 
 
 def test_loop_contract_validates_exact_selectors() -> None:
-    try:
+    with pytest.raises(ValueError, match="selectors must be unique"):
         _policy(
             loop_contracts=(
                 {
@@ -255,11 +255,6 @@ def test_loop_contract_validates_exact_selectors() -> None:
                 },
             )
         )
-    except ValueError as error:
-        assert "selectors must be unique" in str(error)
-    else:
-        raise AssertionError("duplicate array loop contract must be rejected")
-
     with pytest.raises(ValueError, match="relative POSIX path"):
         _policy(
             loop_contracts=(
@@ -283,9 +278,5 @@ def test_loop_contract_validates_exact_selectors() -> None:
 
 
 def test_invalid_helper_configuration_is_rejected() -> None:
-    try:
+    with pytest.raises(ValueError, match="dotted identifiers"):
         _policy(array_constructors=("np.asarray; malicious()",))
-    except ValueError as error:
-        assert "dotted identifiers" in str(error)
-    else:
-        raise AssertionError("invalid constructor helper must be rejected")

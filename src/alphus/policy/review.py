@@ -26,6 +26,97 @@ from alphus.policy.base import (
 from alphus.policy.sources import PythonSourceScanPolicy, SourceScanPolicy
 
 
+class DocumentHeadingSuppression(StrictModel):
+    """One exact visible heading exempted from document-level density review."""
+
+    path: str
+    heading: str
+    reason: str
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, value: str) -> str:
+        return validate_single_path(value, "document heading suppression paths")
+
+    @field_validator("heading")
+    @classmethod
+    def validate_heading(cls, value: str) -> str:
+        heading = validate_one_line_message(value)
+        if not heading:
+            raise ValueError("document heading suppressions require a heading")
+        return heading
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, value: str) -> str:
+        reason = validate_one_line_message(value)
+        if len(reason) < 20:
+            raise ValueError("document heading suppression reasons need 20 characters")
+        return reason
+
+
+class DocumentStylePolicy(StrictModel):
+    """Opt-in Markdown, LaTeX, and source HTML heading pattern review."""
+
+    extensions: tuple[str, ...] = (".md", ".mdx")
+    exclude: tuple[str, ...] = ()
+    required_paths: tuple[str, ...] = ()
+    heading_suppressions: tuple[DocumentHeadingSuppression, ...] = ()
+    minimum_headings: Annotated[int, Field(ge=3)] = 8
+    minimum_family_matches: Annotated[int, Field(ge=2)] = 2
+    minimum_family_density: Annotated[float, Field(gt=0, le=1)] = 0.25
+    severity: Severity = "info"
+
+    @field_validator("extensions")
+    @classmethod
+    def validate_document_extensions(cls, values: Sequence[str]) -> tuple[str, ...]:
+        checked = validate_extensions(
+            values,
+            "document style extensions must be lowercase suffixes",
+            require_one=True,
+        )
+        if any(
+            value not in {".md", ".mdx", ".tex", ".html", ".docx", ".pptx"}
+            for value in checked
+        ):
+            raise ValueError(
+                "document style supports .md, .mdx, .tex, .html, .docx, and .pptx"
+            )
+        return checked
+
+    @field_validator("exclude")
+    @classmethod
+    def validate_document_exclusions(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("required_paths")
+    @classmethod
+    def validate_required_document_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        checked = tuple(
+            validate_single_path(value, "required document paths") for value in values
+        )
+        require_unique(checked, "required document paths must be unique")
+        return checked
+
+    @model_validator(mode="after")
+    def validate_required_document_extensions(self) -> Self:
+        if any(
+            PurePosixPath(path).suffix.lower() not in self.extensions
+            for path in self.required_paths
+        ):
+            raise ValueError("required document paths must use a selected extension")
+        if any(
+            PurePosixPath(suppression.path).suffix.lower() not in self.extensions
+            for suppression in self.heading_suppressions
+        ):
+            raise ValueError("heading suppression paths must use a selected extension")
+        require_unique(
+            tuple((item.path, item.heading) for item in self.heading_suppressions),
+            "document heading suppressions must be unique by path and heading",
+        )
+        return self
+
+
 class NumericLiteralSpec(StrictModel):
     """An explicit catalog of possible constants or unit conversion factors."""
 
@@ -708,6 +799,411 @@ class NedBasisVectorsPolicy(PythonSourceScanPolicy):
         return self
 
 
+class LiteralRewriteAllowance(StrictModel):
+    """Consumer-reviewed exception for one exact literal rewrite shape."""
+
+    path: str
+    expression: str
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, value: str) -> str:
+        return validate_patterns((value,))[0]
+
+    @field_validator("expression")
+    @classmethod
+    def validate_expression(cls, value: str) -> str:
+        return validate_one_line_message(value)
+
+
+class ProseAsControlPolicy(PythonSourceScanPolicy):
+    """Scope and thresholds for advisory sentence-literal branch checks."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    allowed_literals: tuple[str, ...] = ()
+    minimum_characters: Annotated[int, Field(gt=0)] = 60
+    minimum_words: Annotated[int, Field(gt=0)] = 8
+    severity: Severity = "info"
+    lossy_text_rewrite: bool = False
+    regex_sub_helpers: tuple[str, ...] = ()
+    allowed_literal_rewrites: tuple[LiteralRewriteAllowance, ...] = ()
+    rendered_value_helpers: tuple[str, ...] = ()
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("allowed_literals")
+    @classmethod
+    def validate_allowed_literals(cls, values: Sequence[str]) -> tuple[str, ...]:
+        literals = tuple(values)
+        if any(not value for value in literals):
+            raise ValueError("allowed prose literals must be non-empty")
+        require_unique(literals, "allowed prose literals must be unique")
+        return literals
+
+    @field_validator("regex_sub_helpers")
+    @classmethod
+    def validate_regex_helpers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not value or any(not part.isidentifier() for part in value.split("."))
+            for value in values
+        ):
+            raise ValueError("regex helper names must be dotted identifiers")
+        require_unique(values, "regex helper names must be unique")
+        return tuple(values)
+
+    @field_validator("allowed_literal_rewrites")
+    @classmethod
+    def validate_allowed_literal_rewrites(
+        cls, values: Sequence[LiteralRewriteAllowance]
+    ) -> tuple[LiteralRewriteAllowance, ...]:
+        keys = tuple((value.path, value.expression) for value in values)
+        require_unique(keys, "allowed literal rewrite scopes must be unique")
+        return tuple(values)
+
+    @field_validator("rendered_value_helpers")
+    @classmethod
+    def validate_rendered_value_helpers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not value or any(not part.isidentifier() for part in value.split("."))
+            for value in values
+        ):
+            raise ValueError("rendered value helper names must be dotted identifiers")
+        require_unique(values, "rendered value helper names must be unique")
+        return tuple(values)
+
+
+class PositionalSemanticOverridePolicy(PythonSourceScanPolicy):
+    """Consumer-declared row-position and semantic-field overrides."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    position_variables: Annotated[tuple[str, ...], Field(min_length=1)]
+    semantic_fields: Annotated[tuple[str, ...], Field(min_length=1)]
+    minimum_override_characters: Annotated[int, Field(ge=20)] = 40
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("position_variables")
+    @classmethod
+    def validate_position_variables(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("position variables must be identifiers")
+        require_unique(values, "position variables must be unique")
+        return tuple(values)
+
+    @field_validator("semantic_fields")
+    @classmethod
+    def validate_semantic_fields(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value for value in values):
+            raise ValueError("semantic fields must be non-empty")
+        require_unique(values, "semantic fields must be unique")
+        return tuple(values)
+
+
+class UnexplainedEmptyResultPolicy(PythonSourceScanPolicy):
+    """Configured collection and inference names for one empty-result shape."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    nonempty_inputs: Annotated[tuple[str, ...], Field(min_length=1)]
+    unavailable_flags: Annotated[tuple[str, ...], Field(min_length=1)]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("nonempty_inputs", "unavailable_flags")
+    @classmethod
+    def validate_names(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("input and inference names must be identifiers")
+        require_unique(values, "input and inference names must be unique")
+        return tuple(values)
+
+
+class EmbeddedSemanticOverridePolicy(PythonSourceScanPolicy):
+    """Names of consumer replacement maps and source-anchor helpers."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    replacement_maps: Annotated[tuple[str, ...], Field(min_length=1)]
+    source_anchor_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("replacement_maps", "source_anchor_helpers")
+    @classmethod
+    def validate_helpers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not value or any(not part.isidentifier() for part in value.split("."))
+            for value in values
+        ):
+            raise ValueError("replacement maps and anchor helpers must be dotted names")
+        require_unique(values, "configured map/helper names must be unique")
+        return tuple(values)
+
+
+class HeuristicTotalConsumptionPolicy(PythonSourceScanPolicy):
+    """Consumer contract for text-preserving functions that call token matchers."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    function_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    input_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    token_match_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    output_contract: Literal["preserve-unmatched-spans"]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("function_names", "input_names")
+    @classmethod
+    def validate_identifiers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("configured function and input names must be identifiers")
+        require_unique(values, "configured function and input names must be unique")
+        return tuple(values)
+
+    @field_validator("token_match_helpers")
+    @classmethod
+    def validate_helpers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not value or any(not part.isidentifier() for part in value.split("."))
+            for value in values
+        ):
+            raise ValueError("token-match helpers must be dotted identifiers")
+        require_unique(values, "token-match helpers must be unique")
+        return tuple(values)
+
+
+class ProvenanceOwnershipPolicy(PythonSourceScanPolicy):
+    """Scope checks for path-only exclusion under an exact-span ownership contract."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    function_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    owner_collection_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    candidate_collection_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    ownership_basis: Literal["exact-source-span", "file-scope"]
+    source_path_suffix: str = "source.path"
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator(
+        "function_names", "owner_collection_names", "candidate_collection_names"
+    )
+    @classmethod
+    def validate_identifiers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError(
+                "configured function and collection names must be identifiers"
+            )
+        require_unique(values, "configured names must be unique")
+        return tuple(values)
+
+    @field_validator("source_path_suffix")
+    @classmethod
+    def validate_source_path_suffix(cls, value: str) -> str:
+        if not value or any(not part.isidentifier() for part in value.split(".")):
+            raise ValueError("source path suffix must be a dotted identifier")
+        return value
+
+
+class SemanticWorkPresentationPolicy(PythonSourceScanPolicy):
+    """Consumer-declared presentation boundary roles to review when co-located."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    function_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    source_layout_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    content_correction_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    semantic_ownership_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    serialization_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    module_role: Literal["presentation"]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("function_names")
+    @classmethod
+    def validate_function_names(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("configured function names must be identifiers")
+        require_unique(values, "configured function names must be unique")
+        return tuple(values)
+
+    @field_validator(
+        "source_layout_helpers",
+        "content_correction_helpers",
+        "semantic_ownership_helpers",
+        "serialization_helpers",
+    )
+    @classmethod
+    def validate_role_helpers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not value or any(not part.isidentifier() for part in value.split("."))
+            for value in values
+        ):
+            raise ValueError("configured role helpers must be dotted identifiers")
+        require_unique(values, "configured role helpers must be unique")
+        return tuple(values)
+
+    @model_validator(mode="after")
+    def validate_disjoint_roles(self) -> Self:
+        groups = (
+            set(self.source_layout_helpers),
+            set(self.content_correction_helpers),
+            set(self.semantic_ownership_helpers),
+            set(self.serialization_helpers),
+        )
+        for index, group in enumerate(groups):
+            if any(group & other for other in groups[index + 1 :]):
+                raise ValueError("a helper cannot stand for multiple boundary roles")
+        return self
+
+
+class ParallelNormalizationPair(StrictModel):
+    """Two consumer-declared equivalent string canonicalizers to compare."""
+
+    concept: str
+    first_function: str
+    second_function: str
+    output_contract: Literal["same-output-for-same-input"]
+
+    @field_validator("concept")
+    @classmethod
+    def validate_concept(cls, value: str) -> str:
+        concept = validate_one_line_message(value)
+        if not concept:
+            raise ValueError("normalization concepts must be non-empty")
+        return concept
+
+    @field_validator("first_function", "second_function")
+    @classmethod
+    def validate_function_name(cls, value: str) -> str:
+        if not value.isidentifier():
+            raise ValueError("normalizer function names must be identifiers")
+        return value
+
+    @model_validator(mode="after")
+    def require_distinct_functions(self) -> Self:
+        if self.first_function == self.second_function:
+            raise ValueError("normalization pairs require two distinct functions")
+        return self
+
+
+class ParallelNormalizationPolicy(PythonSourceScanPolicy):
+    """Opt-in same-output contract for direct split/join string normalizers."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    pairs: Annotated[tuple[ParallelNormalizationPair, ...], Field(min_length=1)]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @model_validator(mode="after")
+    def validate_pair_names(self) -> Self:
+        require_unique(
+            tuple(pair.concept for pair in self.pairs),
+            "normalization concept labels must be unique",
+        )
+        functions = tuple(
+            name
+            for pair in self.pairs
+            for name in (pair.first_function, pair.second_function)
+        )
+        require_unique(
+            functions, "a function cannot appear in multiple normalization pairs"
+        )
+        return self
+
+
+class PatchCascadeFunctionPolicy(StrictModel):
+    """Declared repair sites inside one consumer-identified general parser."""
+
+    function_name: str
+    selector_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    repair_ids: Annotated[tuple[str, ...], Field(min_length=2)]
+    normalization_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    function_contract: Literal["general-parser"]
+
+    @field_validator("function_name")
+    @classmethod
+    def validate_function_name(cls, value: str) -> str:
+        if not value.isidentifier():
+            raise ValueError("patch-cascade function names must be identifiers")
+        return value
+
+    @field_validator("selector_names")
+    @classmethod
+    def validate_selectors(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("patch-cascade selectors must be identifiers")
+        require_unique(values, "patch-cascade selectors must be unique")
+        return tuple(values)
+
+    @field_validator("repair_ids")
+    @classmethod
+    def validate_repair_ids(cls, values: Sequence[str]) -> tuple[str, ...]:
+        result = tuple(validate_one_line_message(value) for value in values)
+        if any(not value for value in result):
+            raise ValueError("patch-cascade repair IDs must be non-empty")
+        require_unique(result, "patch-cascade repair IDs must be unique")
+        return result
+
+    @field_validator("normalization_helpers")
+    @classmethod
+    def validate_helpers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not value or any(not part.isidentifier() for part in value.split("."))
+            for value in values
+        ):
+            raise ValueError("normalization helpers must be dotted identifiers")
+        require_unique(values, "normalization helpers must be unique")
+        return tuple(values)
+
+
+class PatchCascadePolicy(PythonSourceScanPolicy):
+    """Opt-in advisory for multiple declared source-specific repair branches."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    functions: Annotated[tuple[PatchCascadeFunctionPolicy, ...], Field(min_length=1)]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @model_validator(mode="after")
+    def validate_function_names(self) -> Self:
+        require_unique(
+            tuple(function.function_name for function in self.functions),
+            "patch-cascade function names must be unique",
+        )
+        return self
+
+
 class ScipyConstantsPolicy(PythonSourceScanPolicy):
     """Advisory SciPy physical and unit-factor catalog for Python source."""
 
@@ -1003,7 +1499,7 @@ class InputContractPolicy(PythonSourceScanPolicy):
 
 
 class SourceFamilyPolicy(StrictModel):
-    """Bounded, lexical-only review of similarly named source siblings."""
+    """Bounded review of similarly named source siblings."""
 
     extensions: tuple[str, ...] = (
         ".py",
@@ -1034,6 +1530,16 @@ class SourceFamilyPolicy(StrictModel):
     max_reported_members: int = 40
     max_scope_patterns: int = 64
     file_length_limits: tuple[tuple[str, int], ...] = ()
+    python_import_evidence: bool = False
+    python_module_roots: tuple[str, ...] = ()
+    javascript_import_evidence: bool = False
+    cpp_include_evidence: bool = False
+    git_cochange_evidence: bool = False
+    max_git_history_commits: int = 100
+    max_import_edges: int = 12
+    max_public_api_names: int = 20
+    max_contract_declarations: int = 12
+    max_import_analysis_bytes: int = 8 * 1024 * 1024
 
     @model_validator(mode="after")
     def validate_limits(self) -> Self:
@@ -1045,15 +1551,29 @@ class SourceFamilyPolicy(StrictModel):
                 self.max_findings,
                 self.max_reported_members,
                 self.max_scope_patterns,
+                self.max_import_edges,
+                self.max_public_api_names,
+                self.max_contract_declarations,
+                self.max_import_analysis_bytes,
+                self.max_git_history_commits,
             )
             < 1
         ):
             raise ValueError("source-family thresholds and bounds must be positive")
         if (
-            len(self.include) + len(self.exclude) + len(self.path_language_overrides)
+            len(self.include)
+            + len(self.exclude)
+            + len(self.path_language_overrides)
+            + len(self.python_module_roots)
             > self.max_scope_patterns
         ):
             raise ValueError("source-family scope exceeds max_scope_patterns")
+        if self.python_import_evidence and not self.python_module_roots:
+            raise ValueError(
+                "Python import evidence requires explicit python_module_roots"
+            )
+        if self.max_git_history_commits > 500:
+            raise ValueError("max_git_history_commits must not exceed 500")
         return self
 
     @field_validator("extensions")
@@ -1067,6 +1587,16 @@ class SourceFamilyPolicy(StrictModel):
     @classmethod
     def validate_source_patterns(cls, values: Sequence[str]) -> tuple[str, ...]:
         return validate_patterns(values)
+
+    @field_validator("python_module_roots")
+    @classmethod
+    def validate_python_module_roots(cls, values: Sequence[str]) -> tuple[str, ...]:
+        roots = tuple(
+            validate_single_path(value, "source-family Python module roots")
+            for value in values
+        )
+        require_unique(roots, "source-family Python module roots must be unique")
+        return roots
 
     @field_validator("language_overrides")
     @classmethod
@@ -1117,6 +1647,90 @@ class PositionalInterfacePolicy(PythonSourceScanPolicy):
     report_same_type_primitives: bool = True
 
 
+class PydanticDomainReturnContract(StrictModel):
+    """One selected function that promises to return a declared domain model."""
+
+    path: str
+    function: str
+    model: str
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, value: str) -> str:
+        return validate_single_path(value, "Pydantic domain return path")
+
+    @field_validator("function", "model")
+    @classmethod
+    def validate_dotted_identifiers(cls, value: str) -> str:
+        if any(not part.isidentifier() for part in value.split(".")):
+            raise ValueError("Pydantic domain return names must be dotted identifiers")
+        return value
+
+
+class UtcPersistenceContract(StrictModel):
+    """Exact persistence call whose selected argument must be normalized to UTC."""
+
+    path: str
+    function: str
+    call: str
+    keyword: str
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, value: str) -> str:
+        return validate_single_path(value, "UTC persistence path")
+
+    @field_validator("function", "call")
+    @classmethod
+    def validate_dotted_names(cls, value: str) -> str:
+        if any(not part.isidentifier() for part in value.split(".")):
+            raise ValueError("UTC persistence names must be dotted identifiers")
+        return value
+
+    @field_validator("keyword")
+    @classmethod
+    def validate_keyword(cls, value: str) -> str:
+        if not value.isidentifier():
+            raise ValueError("UTC persistence keyword must be an identifier")
+        return value
+
+
+class FiniteStateContract(StrictModel):
+    """Consumer-declared closed string domain at one selected function input."""
+
+    path: str
+    function: str
+    parameter: str
+    values: Annotated[tuple[str, ...], Field(min_length=2)]
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, value: str) -> str:
+        return validate_single_path(value, "finite-state contract path")
+
+    @field_validator("function")
+    @classmethod
+    def validate_function(cls, value: str) -> str:
+        if any(not part.isidentifier() for part in value.split(".")):
+            raise ValueError("finite-state function must be a dotted identifier")
+        return value
+
+    @field_validator("parameter")
+    @classmethod
+    def validate_parameter(cls, value: str) -> str:
+        if not value.isidentifier():
+            raise ValueError("finite-state parameter must be an identifier")
+        return value
+
+    @field_validator("values")
+    @classmethod
+    def validate_values(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value for value in values):
+            raise ValueError("finite-state values must not be empty")
+        require_unique(values, "finite-state values must be unique")
+        return tuple(values)
+
+
 class PydanticPracticePolicy(PythonSourceScanPolicy):
     """Opt-in review of Pydantic model validation and declaration practices."""
 
@@ -1127,11 +1741,16 @@ class PydanticPracticePolicy(PythonSourceScanPolicy):
     report_unvalidated_copy_update: bool = False
     report_validator_fallthrough: bool = False
     report_field_positional_default: bool = False
+    prefer_static_mutable_defaults: bool = False
     report_external_model_docs: bool = False
     report_custom_init: bool = False
     report_unconstrained_any: bool = False
     external_model_names: tuple[str, ...] = ()
     public_model_paths: tuple[str, ...] = ()
+    domain_return_contracts: tuple[PydanticDomainReturnContract, ...] = ()
+    utc_persistence_contracts: tuple[UtcPersistenceContract, ...] = ()
+    finite_state_contracts: tuple[FiniteStateContract, ...] = ()
+    domain_return_severity: Severity = "info"
 
     @field_validator("external_model_names")
     @classmethod
@@ -1147,6 +1766,38 @@ class PydanticPracticePolicy(PythonSourceScanPolicy):
         normalized = validate_patterns(paths)
         require_unique(normalized, "public model paths must be unique")
         return normalized
+
+    @field_validator("domain_return_contracts")
+    @classmethod
+    def validate_domain_return_contracts(
+        cls, contracts: Sequence[PydanticDomainReturnContract]
+    ) -> tuple[PydanticDomainReturnContract, ...]:
+        values = tuple(contracts)
+        selectors = tuple((item.path, item.function, item.model) for item in values)
+        require_unique(selectors, "Pydantic domain return selectors must be unique")
+        return values
+
+    @field_validator("utc_persistence_contracts")
+    @classmethod
+    def validate_utc_persistence_contracts(
+        cls, contracts: Sequence[UtcPersistenceContract]
+    ) -> tuple[UtcPersistenceContract, ...]:
+        values = tuple(contracts)
+        selectors = tuple(
+            (item.path, item.function, item.call, item.keyword) for item in values
+        )
+        require_unique(selectors, "UTC persistence selectors must be unique")
+        return values
+
+    @field_validator("finite_state_contracts")
+    @classmethod
+    def validate_finite_state_contracts(
+        cls, contracts: Sequence[FiniteStateContract]
+    ) -> tuple[FiniteStateContract, ...]:
+        values = tuple(contracts)
+        selectors = tuple((item.path, item.function, item.parameter) for item in values)
+        require_unique(selectors, "finite-state selectors must be unique")
+        return values
 
     @model_validator(mode="after")
     def validate_public_any_scope(self) -> Self:

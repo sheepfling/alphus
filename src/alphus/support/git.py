@@ -8,7 +8,10 @@ from pathlib import Path
 
 
 def run_git(
-    root: Path, *arguments: str, input_data: bytes | None = None
+    root: Path,
+    *arguments: str,
+    input_data: bytes | None = None,
+    timeout: float | None = None,
 ) -> subprocess.CompletedProcess[bytes]:
     """Run Git without a shell and preserve the exit code for callers."""
     try:
@@ -18,14 +21,20 @@ def run_git(
             input=input_data,
             capture_output=True,
             check=False,
+            timeout=timeout,
         )
     except FileNotFoundError as error:
         raise OSError("Git is required for this quality gate") from error
 
 
-def git_output(root: Path, *arguments: str, input_data: bytes | None = None) -> bytes:
+def git_output(
+    root: Path,
+    *arguments: str,
+    input_data: bytes | None = None,
+    timeout: float | None = None,
+) -> bytes:
     """Return Git output or raise a useful error from a failed command."""
-    result = run_git(root, *arguments, input_data=input_data)
+    result = run_git(root, *arguments, input_data=input_data, timeout=timeout)
     if result.returncode:
         detail = result.stderr.decode("utf-8", errors="replace").strip()
         raise OSError(f"git {' '.join(arguments)} failed: {detail}")
