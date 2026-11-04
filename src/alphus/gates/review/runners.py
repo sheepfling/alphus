@@ -339,9 +339,7 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
         "source-test-coverage": lambda root, files, config: check_source_test_coverage(
             root,
             files,
-            require_policy(
-                config.checks.source_test_coverage, "source_test_coverage"
-            ),
+            require_policy(config.checks.source_test_coverage, "source_test_coverage"),
         ),
         "test-quality": lambda root, files, config: check_test_quality(
             root,
