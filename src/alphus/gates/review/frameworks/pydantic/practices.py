@@ -185,7 +185,10 @@ class _DumpFlow(ast.NodeVisitor):
             self.reachable = False
             return
 
-        self.dumped = set.intersection(*(path.dumped for path in paths))
+        common_dumped = paths[0].dumped.copy()
+        for path in paths[1:]:
+            common_dumped.intersection_update(path.dumped)
+        self.dumped = common_dumped
         if node.finalbody:
             final_flow = _DumpFlow(self.dumped.copy())
             final_flow.visit_statements(node.finalbody)
@@ -1167,43 +1170,6 @@ class _FunctionReturnCollector(ast.NodeVisitor):
 
     def visit_Lambda(self, node: ast.Lambda) -> None:
         return
-
-    def visit_Try(self, node: ast.Try) -> None:
-        """Keep handler termination local and merge reachable try paths."""
-        if not self.reachable:
-            return
-        incoming = self.dumped.copy()
-        body_flow = _DumpFlow(incoming.copy())
-        body_flow.visit_statements(node.body)
-        self.lines.update(body_flow.lines)
-
-        paths: list[_DumpFlow] = []
-        if body_flow.reachable:
-            else_flow = _DumpFlow(body_flow.dumped.copy())
-            else_flow.visit_statements(node.orelse)
-            self.lines.update(else_flow.lines)
-            if else_flow.reachable:
-                paths.append(else_flow)
-
-        for handler in node.handlers:
-            handler_flow = _DumpFlow(incoming.copy())
-            handler_flow.visit_statements(handler.body)
-            self.lines.update(handler_flow.lines)
-            if handler_flow.reachable:
-                paths.append(handler_flow)
-
-        if not paths:
-            self.dumped = set()
-            self.reachable = False
-            return
-
-        self.dumped = set.intersection(*(path.dumped for path in paths))
-        if node.finalbody:
-            final_flow = _DumpFlow(self.dumped.copy())
-            final_flow.visit_statements(node.finalbody)
-            self.lines.update(final_flow.lines)
-            self.dumped = final_flow.dumped
-            self.reachable = final_flow.reachable
 
     def visit_Return(self, node: ast.Return) -> None:
         self.returns.append(node)
