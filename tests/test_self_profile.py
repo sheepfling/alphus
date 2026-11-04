@@ -82,8 +82,7 @@ def test_self_profile_python_style_requires_exact_result_api_scope(
     target = tmp_path / files[0]
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(
-        "def candidate() -> tuple[str, str, int]:\n"
-        "    return 'path', 'owner', 1\n",
+        "def candidate() -> tuple[str, str, int]:\n    return 'path', 'owner', 1\n",
         encoding="utf-8",
     )
 

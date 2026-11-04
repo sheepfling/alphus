@@ -1590,7 +1590,9 @@ class ManualSchemaBoundary(StrictModel):
         if value is not None:
             clean = validate_one_line_message(value)
             if len(clean) < 12:
-                raise ValueError("manual schema justification must explain the contract")
+                raise ValueError(
+                    "manual schema justification must explain the contract"
+                )
             return clean
         return None
 
