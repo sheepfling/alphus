@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import tomllib
 from collections.abc import Sequence
 from pathlib import Path
@@ -345,3 +346,73 @@ def test_consumer_policy_path_is_independent_of_working_directory(
         load_config(examples_root / "consumer" / "quality-gates.toml").orchestration
         is not None
     )
+
+
+def test_pdf_example_checks_one_explicit_artifact_provisionally() -> None:
+    navigation_contract = Path("examples/documents/pdf-navigation-contract.json")
+    source_map = Path("examples/documents/pdf-navigation-source-map.json")
+    assert navigation_contract.is_file()
+    assert source_map.is_file()
+    contract = json.loads(navigation_contract.read_text(encoding="utf-8"))
+    assert contract["source_evidence"] == str(source_map)
+    assert r"\section{Overview}\label{sec:overview}" in Path(
+        "examples/documents/report.tex"
+    ).read_text(encoding="utf-8")
+
+    config = load_config(Path("examples/documents/pdf-structural-check.toml"))
+    orchestration = config.orchestration
+    assert orchestration is not None
+    plan = orchestration.resolve_profile("pdf-structure")
+    assert plan is not None
+    assert plan.steps == (
+        "LaTeX report build",
+        "LaTeX final log evidence",
+        "PDF structural check",
+        "PDF navigation contract",
+        "PDF delivery portability",
+    )
+    build, final_log, structure, portability, navigation = orchestration.steps
+    assert isinstance(build, CommandRunStep)
+    assert build.argv == (
+        "latexmk",
+        "-pdf",
+        "-g",
+        "-Werror",
+        "-outdir=build",
+        "-interaction=nonstopmode",
+        "-halt-on-error",
+        "-file-line-error",
+        "examples/documents/report.tex",
+    )
+    assert build.timeout_seconds == 600
+    assert Path("examples/documents/report.tex").is_file()
+    assert isinstance(final_log, CommandRunStep)
+    assert final_log.argv == (
+        "{python}",
+        "scripts/check_latex_final_log.py",
+        "build/report.log",
+        "build/report.pdf",
+    )
+    assert isinstance(structure, CommandRunStep)
+    step = structure
+    assert isinstance(step, CommandRunStep)
+    assert step.argv == ("qpdf", "--check", "build/report.pdf")
+    assert step.files is None
+    assert step.rollout == "provisional"
+    assert step.timeout_seconds == 60
+    assert isinstance(portability, CommandRunStep)
+    assert portability.argv == (
+        "{python}",
+        "scripts/check_pdf_portability.py",
+        "build/report.pdf",
+        "examples/documents/pdf-delivery-contract.json",
+    )
+    assert portability.rollout == "provisional"
+    assert isinstance(navigation, CommandRunStep)
+    assert navigation.argv == (
+        "{python}",
+        "scripts/check_pdf_navigation.py",
+        "build/report.pdf",
+        "examples/documents/pdf-navigation-contract.json",
+    )
+    assert navigation.rollout == "provisional"

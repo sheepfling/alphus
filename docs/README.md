@@ -15,6 +15,7 @@ path that matches the repository being checked.
 | Suggest explicitly mapped third-party typing stubs        | [Typing stub suggestions](TYPING-STUB-SUGGESTIONS.md) |
 | Reuse CI integrations across providers                    | [CI integrations](CI-INTEGRATIONS.md)       |
 | Check C++ source, builds, and artifacts                   | [C++ quality](CPP-QUALITY.md)               |
+| Check one generated PDF's structure                        | [PDF structural check](PDF-QUALITY.md)       |
 | Check Git ignores or historical repository artifacts      | [Repository hygiene](REPOSITORY-HYGIENE.md) |
 | Understand shared text and file-size measurements          | [Source hygiene](SOURCE-HYGIENE.md)         |
 | Review Python source and framework checks                | [Review guides](review/README.md)            |

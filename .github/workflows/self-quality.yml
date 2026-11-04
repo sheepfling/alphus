@@ -111,6 +111,26 @@ jobs:
         run: >-
           "$RUNNER_TEMP/alphus-checker/bin/python" -m pip install
           --disable-pip-version-check -e '.[fastapi-test]'
+      - name: Install the optional PDF contract test extra
+        run: >-
+          "$RUNNER_TEMP/alphus-checker/bin/python" -m pip install
+          --disable-pip-version-check -e '.[pdf]'
+      - name: Exercise generated PDF navigation and portability contracts
+        shell: bash
+        env:
+          ALPHUS_TEST_CHECKER_PYTHON: ${{ runner.temp }}/alphus-checker/bin/python
+        run: |
+          if ! output=$("$ALPHUS_TEST_CHECKER_PYTHON" -m pytest -q -rs \
+            tests/execution/test_pdf_navigation_contract.py \
+            tests/execution/test_pdf_portability_contract.py 2>&1); then
+            printf '%s\n' "$output"
+            exit 1
+          fi
+          printf '%s\n' "$output"
+          if [[ "$output" =~ [0-9]+[[:space:]]skipped ]]; then
+            echo "PDF contract coverage skipped a selected test" >&2
+            exit 1
+          fi
       - name: Exercise optional Ty fixture checker
         shell: bash
         run: |
@@ -293,3 +313,35 @@ jobs:
             ${{ runner.temp }}/mdutils-stub-unmodified-ty.log
           if-no-files-found: ignore
           retention-days: 90
+  pdf-native-toolchain-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install native PDF and LaTeX tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends qpdf latexmk texlive-latex-recommended
+      - name: Install the optional PDF checker dependency
+        run: python -m pip install --disable-pip-version-check -e '.[pdf]'
+      - name: Run the generated LaTeX and PDF consumer profile
+        run: |
+          latexmk -v
+          qpdf --version
+          alphus --root . --config examples/documents/pdf-structural-check.toml \
+            --run --profile pdf-structure
+      - name: Retain the generated PDF and final build log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pdf-native-toolchain-smoke
+          path: |
+            build/report.pdf
+            build/report.log
+            build/report.aux
+          if-no-files-found: ignore
+          retention-days: 7
