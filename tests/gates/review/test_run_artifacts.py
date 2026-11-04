@@ -527,6 +527,30 @@ def test_failure_evidence_order_abstains_when_child_runner_is_shadowed() -> None
     assert run_artifact_findings(source, "src/harness.py", configured) == []
 
 
+def test_failure_evidence_checks_only_the_matched_diagnostic_path_binding() -> None:
+    configured = policy(
+        failure_evidence_order=True,
+        failure_child_runners=("run_child",),
+        failure_diagnostic_path_names=("diagnostic_path", "other_path"),
+        failure_cleanups=(ProvenanceCallRole(function="remove_diagnostic"),),
+        failure_sinks=(
+            ProvenanceCallRole(function="persist_failure", path_argument_index=1),
+        ),
+    )
+    source = (
+        "def run(diagnostic_path, other_path):\n"
+        "    child = run_child()\n"
+        "    if child.returncode != 0:\n"
+        "        other_path = temporary_path()\n"
+        "        remove_diagnostic(diagnostic_path)\n"
+        "        persist_failure(child.returncode, diagnostic_path)\n"
+    )
+
+    findings = run_artifact_findings(source, "src/harness.py", configured)
+    assert len(findings) == 1
+    assert findings[0].line == 5
+
+
 def test_failure_evidence_order_ignores_comprehension_target_shadow() -> None:
     configured = policy(
         failure_evidence_order=True,
@@ -724,11 +748,37 @@ def test_runtime_origin_binding_and_unknown_import_styles_abstain() -> None:
     assert len(run_artifact_findings(nested_alias, "src/harness.py", configured)) == 1
 
 
+def test_runtime_origin_evidence_is_checked_per_imported_module() -> None:
+    configured = policy(
+        runtime_attestation_gap=True,
+        runtime_module_names=("engine_a", "engine_b"),
+        runtime_import_helpers=("load_runtime_module",),
+        runtime_metadata_helpers=("distribution_version",),
+        runtime_origin_helpers=("module_origin",),
+        runtime_attestation_sinks=("record_runtime",),
+    )
+    source = (
+        "def run():\n"
+        "    engine_a = load_runtime_module('engine-a')\n"
+        "    engine_b = load_runtime_module('engine-b')\n"
+        "    record_runtime(\n"
+        "        distribution_version('engine-a'),\n"
+        "        distribution_version('engine-b'),\n"
+        "        module_origin(engine_a),\n"
+        "    )\n"
+    )
+
+    findings = run_artifact_findings(source, "src/harness.py", configured)
+    assert len(findings) == 1
+    assert "module `engine_b`" in findings[0].message
+
+
 @pytest.mark.parametrize(
     "origin_expression",
     [
         "[module_origin(engine) for engine in engines]",
         "lambda: module_origin(engine)",
+        "(module_origin(engine) for _ in engines)",
     ],
 )
 def test_deferred_or_comprehension_origin_is_not_runtime_attestation(

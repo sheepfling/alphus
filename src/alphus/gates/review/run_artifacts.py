@@ -54,6 +54,8 @@ def _calls(
 def _calls_with_scope(
     statements: Sequence[ast.AST],
     initial_shadowed: frozenset[str] = frozenset(),
+    *,
+    skip_generators: bool = False,
 ) -> Iterator[tuple[ast.Call, frozenset[str]]]:
     """Walk calls while retaining names shadowed by enclosing comprehensions."""
 
@@ -85,6 +87,12 @@ def _calls_with_scope(
                 yield from visit_comprehension(generators, (elt,), shadowed)
                 return
             case ast.GeneratorExp(generators=generators, elt=elt):
+                if skip_generators:
+                    # Only the first iterable is evaluated when the generator
+                    # is created; its filters and body are deferred.
+                    if generators:
+                        yield from visit(generators[0].iter, shadowed)
+                    return
                 yield from visit_comprehension(generators, (elt,), shadowed)
                 return
             case ast.DictComp(generators=generators, key=key, value=value):
@@ -430,11 +438,6 @@ def _failure_evidence_findings(
                 continue
         if result_name is None:
             continue
-        if any(
-            not _path_is_not_rebound(function, name)
-            for name in policy.failure_diagnostic_path_names
-        ):
-            continue
         direct_calls = [
             call for item in body if (call := _direct_call(item)) is not None
         ]
@@ -456,7 +459,11 @@ def _failure_evidence_findings(
                 (cleanup_role,),
                 frozenset(policy.failure_diagnostic_path_names),
             )
-            if diagnostic_path is None or diagnostic_path in emitted:
+            if (
+                diagnostic_path is None
+                or diagnostic_path in emitted
+                or not _path_is_not_rebound(function, diagnostic_path)
+            ):
                 continue
             for sink_role in policy.failure_sinks:
                 if sink_role.function.split(".", maxsplit=1)[0] in local_bindings:
@@ -509,7 +516,9 @@ def _contains_configured_call(
     module: str | None = None,
     inherited_shadowed: frozenset[str] = frozenset(),
 ) -> bool:
-    for call, shadowed in _calls_with_scope((node,), inherited_shadowed):
+    for call, shadowed in _calls_with_scope(
+        (node,), inherited_shadowed, skip_generators=True
+    ):
         if _call_is_shadowed(call, frozenset(), shadowed):
             continue
         if _call_name(call.func) != helper:
@@ -593,35 +602,42 @@ def _runtime_attestation_findings(
             for alias, owner in alias_owners.items()
             if owner in usable_modules and alias_lines[alias] < call.lineno
         )
-        if any(
-            _contains_configured_call(
-                call, helper, alias, inherited_shadowed=call_scope
+        uncovered_modules = [
+            module
+            for module in sorted(usable_modules)
+            if not any(
+                _contains_configured_call(
+                    call, helper, alias, inherited_shadowed=call_scope
+                )
+                for helper in origins
+                for alias, owner in alias_owners.items()
+                if owner == module
+                and alias in usable_aliases
+                and alias_lines[alias] < call.lineno
             )
-            for helper in origins
-            for alias in usable_aliases
-        ):
-            continue
-        module = min(usable_modules)
-        imported = imports[module]
-        findings.append(
-            Finding(
-                rule_tag(
-                    Scope.PYTHON,
-                    Framework.NONE,
-                    Category.ORCHESTRATION,
-                    "runtime-origin-not-bound-to-metadata",
-                ),
-                path,
-                f"configured execution module `{module}` is imported at line {imported.lineno}, "
-                f"while the provenance sink at line {call.lineno} records configured "
-                "distribution metadata without a configured origin check on that module; "
-                "metadata agreement does not establish the imported code's identity, and "
-                "the actual origin is not determined by this scan",
-                call.lineno,
-                "warning",
+        ]
+        for module in uncovered_modules:
+            imported = imports[module]
+            findings.append(
+                Finding(
+                    rule_tag(
+                        Scope.PYTHON,
+                        Framework.NONE,
+                        Category.ORCHESTRATION,
+                        "runtime-origin-not-bound-to-metadata",
+                    ),
+                    path,
+                    f"configured execution module `{module}` is imported at line {imported.lineno}, "
+                    f"while the provenance sink at line {call.lineno} records configured "
+                    "distribution metadata without a configured origin check on that module; "
+                    "metadata agreement does not establish the imported code's identity, and "
+                    "the actual origin is not determined by this scan",
+                    call.lineno,
+                    "warning",
+                )
             )
-        )
-        break
+        if uncovered_modules:
+            break
     return findings
 
 
