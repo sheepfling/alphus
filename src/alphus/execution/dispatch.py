@@ -10,13 +10,8 @@ from typing import cast
 
 from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.contracts.findings import Diagnostic
+from alphus.execution._generated_dispatch import RULE_RUNNERS
 from alphus.execution.results import RuleOutput
-from alphus.gates.hygiene.runners import HYGIENE_RULE_RUNNERS
-from alphus.gates.markdown.runners import MARKDOWN_RULE_RUNNERS
-from alphus.gates.repository.runners import REPOSITORY_RULE_RUNNERS
-from alphus.gates.review.runners import REVIEW_RULE_RUNNERS
-from alphus.gates.source.runners import SOURCE_RULE_RUNNERS
-from alphus.gates.vcs.runners import VCS_RULE_RUNNERS
 from alphus.plugins.api import PluginFinding
 from alphus.plugins.registry import enabled_plugin_registry
 from alphus.policy.base import RuleSelector
@@ -33,17 +28,6 @@ class BuiltinRuleBinding:
     spec: RuleSpec
     runner: RuleRunner
 
-
-RULE_RUNNERS: Mapping[QualityRuleName, RuleRunner] = MappingProxyType(
-    {
-        **HYGIENE_RULE_RUNNERS,
-        **MARKDOWN_RULE_RUNNERS,
-        **REPOSITORY_RULE_RUNNERS,
-        **REVIEW_RULE_RUNNERS,
-        **SOURCE_RULE_RUNNERS,
-        **VCS_RULE_RUNNERS,
-    }
-)
 
 if set(RULE_SPECS) != set(RULE_RUNNERS):
     raise RuntimeError("built-in rule metadata and runner registries differ")

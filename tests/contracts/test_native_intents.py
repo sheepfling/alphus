@@ -368,11 +368,11 @@ def test_native_context_rejects_missing_tools_versions_and_parse_failures() -> N
         validate_native_context(
             binding, ruff_context(syntax_errors=("file.py: invalid syntax",))
         )
+    binding = binding_for_native_rule(
+        "clang-tidy", "readability-identifier-naming", Scope.CPP
+    )
+    assert binding is not None
     with pytest.raises(NativeIntentContextError, match="compile database"):
-        binding = binding_for_native_rule(
-            "clang-tidy", "readability-identifier-naming", Scope.CPP
-        )
-        assert binding is not None
         validate_native_context(
             binding,
             NativeToolContext(

@@ -75,6 +75,7 @@ opaque_boundary_paths = [
   "src/alphus/execution/step_results.py",
   "src/alphus/execution/worker_protocol.py",
   "src/alphus/gates/source/cyclomatic_complexity.py",
+  "src/alphus/gates/review/typing_stub_suggestions.py",
   "src/alphus/policy/sources.py",
   "tests/execution/test_shared_quality_intent_execution.py",
   "tests/execution/test_history_index.py",
@@ -91,6 +92,9 @@ repeated_literal_paths = [
 ]
 semantic_result_paths = [
   "src/alphus/gates/review/positional_interfaces.py",
+  "src/alphus/gates/review/provenance_ownership.py",
+  "src/alphus/gates/review/rendered_value_reparsed.py",
+  "src/alphus/gates/review/unexplained_empty_results.py",
   "src/alphus/gates/repository/**",
   "src/alphus/gates/hygiene/comment_markers.py",
   "src/alphus/gates/hygiene/rules.py",
@@ -137,6 +141,14 @@ ephemeral_document_patterns = ["docs/**"]
 extensions = [".py"]
 exclude = []
 sequence_narrowing_paths = ["src/alphus/gates/review/positional_interfaces.py"]
+
+[checks.typing_stub_suggestions]
+extensions = [".py"]
+exclude = ["tests/**", "scripts/**"]
+dependency_file = "pyproject.toml"
+typing_groups = ["python"]
+checkers = ["pyright"]
+builtin_catalog = true
 
 [checks.source_families]
 extensions = [
@@ -500,6 +512,11 @@ rule = "input-contracts"
 
 [[orchestration.steps]]
 kind = "rule"
+name = "Typing stub suggestions"
+rule = "typing-stub-suggestions"
+
+[[orchestration.steps]]
+kind = "rule"
 name = "Source family review"
 rule = "source-families"
 rollout = "provisional"
@@ -524,6 +541,7 @@ rollout = "provisional"
 name = "review"
 steps = [
   "Numeric review", "SciPy constants review", "Test review", "Input contract review",
+  "Typing stub suggestions",
   "Source family review", "Pydantic practice review", "FastAPI practice review",
   "SQLAlchemy practices review",
 ]

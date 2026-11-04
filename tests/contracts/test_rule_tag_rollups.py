@@ -135,7 +135,7 @@ def test_rollups_use_cached_typed_tags_without_reparsing(
     ["alphus/python/none/style", "alphus/python/unknown/style/line-too-long"],
 )
 def test_invalid_alphus_rule_ids_are_rejected_at_ingestion(rule_id: str) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"rule IDs must use|is not a valid Framework"):
         Finding(rule_id, "src/example.py", "invalid")
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"rule IDs must use|is not a valid Framework"):
         Diagnostic(source="external", rule_id=rule_id, message="invalid")

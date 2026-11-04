@@ -12,16 +12,20 @@ path that matches the repository being checked.
 | Analyze gate history across repositories                   | [History analytics](QUALITY-HISTORY-ANALYTICS.md) |
 | Export profile evidence and inspect early failures          | [Profile reporting](REPORTING.md)            |
 | Check Python stubs in an isolated target                  | [Stub package CI](STUB-PACKAGE-CI.md)       |
+| Suggest explicitly mapped third-party typing stubs        | [Typing stub suggestions](TYPING-STUB-SUGGESTIONS.md) |
 | Reuse CI integrations across providers                    | [CI integrations](CI-INTEGRATIONS.md)       |
 | Check C++ source, builds, and artifacts                   | [C++ quality](CPP-QUALITY.md)               |
 | Check Git ignores or historical repository artifacts      | [Repository hygiene](REPOSITORY-HYGIENE.md) |
 | Understand shared text and file-size measurements          | [Source hygiene](SOURCE-HYGIENE.md)         |
-| Review test, input, source-family, and framework checks   | [Review checks](REVIEW-CHECKS.md)           |
+| Review Python source and framework checks                | [Review guides](review/README.md)            |
+| Review semantic patchwork advisories and their evidence  | [Semantic patchwork](review/semantic-patchwork/README.md) |
+| Review test, input, source-family, and framework checks   | [Review checks](review/README.md)            |
 | Review one handwritten matrix-product pattern             | [Numerical reuse](NUMERICAL-REUSE.md)         |
 | Review shell labels in Markdown examples                  | [Markdown shell fences](MARKDOWN-SHELL-FENCES.md) |
 | Detect docs/default drift                                   | [Docs/config drift](DOCUMENTATION-CONFIG-COUPLING.md) |
 | Separate machine CLI contracts from presentation policy     | [Python CLI policy](CLI-POLICY.md)                    |
 | Gate cyclomatic complexity across Python, C/C++, and JS    | [Cyclomatic complexity](CYCLOMATIC-COMPLEXITY.md) |
+| Select native pytest-style checks on test files           | [Pytest-style review](PYTEST-STYLE.md)          |
 | Review positional argument interfaces                      | [Positional interfaces](POSITIONAL-INTERFACES.md) |
 | Add FastAPI-specific static checks                        | [FastAPI quality](FASTAPI-QUALITY.md)        |
 | Map common lint intents to native rules                   | [Common lint intents](COMMON-LINT-INTENTS.md) |

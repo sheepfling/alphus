@@ -152,24 +152,27 @@ processes, or discover a checkout from the current directory or module path.
 Policy models are grouped under `alphus.policy` by source scanning,
 architecture, repository metadata, and orchestration. `alphus.config`
 re-exports the public models and TOML loader.
-`alphus.policy.catalog` records each built-in rule's required policy field,
+`alphus.policy.catalog` records each built-in rule's required policy field and
 JSON output shape, summary, supported surfaces, and advisory domain tags.
 `alphus --catalog` exposes this metadata for people and agent tooling without
 enabling checks. Policy validation and profile diagnostic decoding share that
-catalog. Theme packages own their runner mappings;
-`alphus.execution.dispatch.BUILTIN_RULES` joins their immutable checker
-dispatch with catalog metadata and checks that both registries cover the same
-selectors. The plugin registry is separately immutable and contains only
-allowlisted entry points. `alphus.execution.results` validates built-in
-outputs against their declared shape while normalizing diagnostics; plugin
-rules return the shared normalized diagnostic contract directly. The package
-tests require the built-in registries to cover every public rule selector. The
-CLI retains rendering adapters because some older rules have distinct
-direct-command output formats. `RuleEvaluation` keeps the checker output,
-normalized diagnostics, and threshold decision together before rendering.
-Direct CLI modes serialize that result to their established text or JSON
-formats; profiles consume its diagnostics directly, without parsing the CLI's
-own output.
+catalog. Direct gate theme packages own their runner mappings, named
+`<THEME>_RULE_RUNNERS` in each theme's `runners.py`. Run
+`python scripts/generate_runner_manifest.py --root .` to parse those literal mappings,
+reject duplicate selectors, verify exact `QualityRuleName` coverage, and emit
+the sorted static imports in `execution/_generated_dispatch.py`. The package
+tests run the generator in check mode and fail if the checked-in manifest is
+stale. Runtime built-in dispatch uses literal imports; it does not scan
+packages. The separately immutable plugin registry contains only allowlisted
+entry points. Plugin rules return the shared normalized diagnostic contract
+directly. `alphus.execution.results` validates built-in outputs against their
+declared shape while normalizing diagnostics. The package tests require both
+registries to cover every public rule selector. The CLI retains rendering
+adapters because some older rules have distinct direct-command output formats.
+`RuleEvaluation` keeps the checker output, normalized diagnostics, and threshold
+decision together before rendering. Direct CLI modes serialize that result to
+their established text or JSON formats; profiles consume its diagnostics
+directly, without parsing the CLI's own output.
 Selected command steps can separately declare a file-scoped `fix_argv`.
 The [fix plan](FIXES.md) lists those commands without running them; applying
 fixes requires explicit step names and remains separate from profile checks.

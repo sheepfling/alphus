@@ -53,7 +53,10 @@ def test_contexts_are_computed_once_for_a_fragment_with_many_values(
     calls = 0
     original = dynamic_markdown._MarkdownAnalyzer._contexts
 
-    def count_contexts(analyzer, fragment):
+    def count_contexts(
+        analyzer: dynamic_markdown._MarkdownAnalyzer,
+        fragment: dynamic_markdown._Fragment,
+    ) -> dict[str, frozenset[str]]:
         nonlocal calls
         calls += 1
         return original(analyzer, fragment)
