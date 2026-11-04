@@ -433,8 +433,9 @@ class _MarkdownAnalyzer:
             "code span": "backtick delimiting",
             "code fence": "fence length and block boundaries",
         }
+        contexts = self._contexts(fragment)
         for value in fragment.values:
-            for context in self._contexts(fragment).get(value.token, frozenset()):
+            for context in contexts.get(value.token, frozenset()):
                 message = (
                     f"Dynamic value {value.expression!r} is inserted into a Markdown "
                     f"{context} by {value.construct} ({value.evidence!r}); review "

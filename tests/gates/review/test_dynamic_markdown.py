@@ -12,6 +12,7 @@ import pytest
 from alphus.cli import main
 from alphus.config import DynamicMarkdownPolicy, load_config_stream
 from alphus.execution.profile_manifest import gate_manifest_entry
+from alphus.gates.review import dynamic_markdown
 from alphus.gates.review.dynamic_markdown import (
     check_dynamic_markdown,
     dynamic_markdown_findings,
@@ -44,6 +45,27 @@ def test_fstring_table_row_reports_dynamic_values_with_context() -> None:
         for finding in findings
     )
     assert "table cell" in str(findings[0].to_wire()["message"])
+
+
+def test_contexts_are_computed_once_for_a_fragment_with_many_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+    original = dynamic_markdown._MarkdownAnalyzer._contexts
+
+    def count_contexts(analyzer, fragment):
+        nonlocal calls
+        calls += 1
+        return original(analyzer, fragment)
+
+    monkeypatch.setattr(dynamic_markdown._MarkdownAnalyzer, "_contexts", count_contexts)
+
+    findings = dynamic_markdown_findings(
+        'def render(a, b, c):\n    return f"| {a} | {b} | {c} |\\n"\n'
+    )
+
+    assert len(findings) == 3
+    assert calls == 1
 
 
 def test_concatenation_and_format_report_link_contexts() -> None:
