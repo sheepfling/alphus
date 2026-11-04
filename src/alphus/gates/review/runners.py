@@ -89,6 +89,7 @@ from alphus.gates.review.semantic_work_presentation import (
     check_semantic_work_presentation,
 )
 from alphus.gates.review.source_families import check_source_families
+from alphus.gates.review.source_test_coverage import check_source_test_coverage
 from alphus.gates.review.suppression_reasons import check_suppression_reasons
 from alphus.gates.review.test_quality import check_test_quality
 from alphus.gates.review.typing_stub_suggestions import check_typing_stub_suggestions
@@ -334,6 +335,13 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
             root,
             files,
             require_policy(config.checks.ci_workflows, "ci_workflows"),
+        ),
+        "source-test-coverage": lambda root, files, config: check_source_test_coverage(
+            root,
+            files,
+            require_policy(
+                config.checks.source_test_coverage, "source_test_coverage"
+            ),
         ),
         "test-quality": lambda root, files, config: check_test_quality(
             root,

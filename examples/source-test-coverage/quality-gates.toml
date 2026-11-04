@@ -1,0 +1,30 @@
+schema_version = 1
+
+[checks.source_test_coverage]
+evidence_file = "build/source-test-coverage.json"
+
+[[checks.source_test_coverage.relationships]]
+source = "src/api.py"
+tests = ["tests/unit/test_api.py", "tests/integration/api_contract.py"]
+
+[[checks.source_test_coverage.relationships]]
+source = "src/models.py"
+tests = ["tests/integration/api_contract.py"]
+
+[[checks.source_test_coverage.relationships]]
+source = "src/generated/client.py"
+generated = true
+
+[orchestration]
+default_profile = "source-test-audit"
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Declared source-to-test audit"
+rule = "source-test-coverage"
+rollout = "provisional"
+
+[[orchestration.profiles]]
+name = "source-test-audit"
+steps = ["Declared source-to-test audit"]

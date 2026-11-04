@@ -137,6 +137,10 @@ from alphus.policy.review import (
     UnexplainedEmptyResultPolicy,
     UtcPersistenceContract,
 )
+from alphus.policy.source_test_coverage import (
+    SourceTestCoveragePolicy,
+    SourceTestRelationship,
+)
 from alphus.policy.sources import (
     CliPolicy,
     CommentMarkerPolicy,
@@ -264,6 +268,8 @@ __all__ = [
     "SharedQualityIntent",
     "SharedUtilitiesPolicy",
     "SourceFamilyPolicy",
+    "SourceTestCoveragePolicy",
+    "SourceTestRelationship",
     "SourceScanPolicy",
     "SqlAlchemyPracticePolicy",
     "SuppressionReasonException",
