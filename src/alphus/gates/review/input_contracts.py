@@ -875,16 +875,6 @@ def _is_starred(node: ast.expr) -> bool:
             return False
 
 
-def _loaded_attribute_name(node: ast.AST, parameter: str) -> tuple[str, int] | None:
-    match node:
-        case ast.Attribute(attr=attribute, ctx=ast.Load(), value=ast.Name(id=name)) if (
-            name == parameter
-        ):
-            return attribute, node.lineno
-        case _:
-            return None
-
-
 def _name_expression(node: ast.AST, expected: str) -> bool:
     match node:
         case ast.Name(id=name) if name == expected:
@@ -1089,6 +1079,30 @@ class _FunctionScopeBindings(ast.NodeVisitor):
         for name in node.names:
             self._bind(name, node.lineno)
 
+    def _visit_comprehension(
+        self,
+        generators: Sequence[ast.comprehension],
+        values: Sequence[ast.AST],
+    ) -> None:
+        for generator in generators:
+            self.visit(generator.iter)
+            for condition in generator.ifs:
+                self.visit(condition)
+        for value in values:
+            self.visit(value)
+
+    def visit_ListComp(self, node: ast.ListComp) -> None:
+        self._visit_comprehension(node.generators, [node.elt])
+
+    def visit_SetComp(self, node: ast.SetComp) -> None:
+        self._visit_comprehension(node.generators, [node.elt])
+
+    def visit_GeneratorExp(self, node: ast.GeneratorExp) -> None:
+        self._visit_comprehension(node.generators, [node.elt])
+
+    def visit_DictComp(self, node: ast.DictComp) -> None:
+        self._visit_comprehension(node.generators, [node.key, node.value])
+
     def visit_MatchAs(self, node: ast.MatchAs) -> None:
         if node.name is not None:
             self._bind(node.name, node.lineno)
@@ -1231,85 +1245,16 @@ class _FunctionNameIndex(ast.NodeVisitor):
         self.parts.pop()
 
 
-def _direct_mapping_reads(
-    parameter: str,
-    nodes: Sequence[ast.AST],
-    bindings: _FunctionScopeBindings,
-) -> list[int]:
-    """Find literal string-key indexing and ``.get`` reads on the parameter."""
-    lines: set[int] = set()
-    rebinding_lines = bindings.rebindings.get(parameter, [])
-    first_rebinding = min(rebinding_lines, default=None)
-    for node in nodes:
-        match node:
-            case ast.Subscript(
-                value=ast.Name(id=name), slice=ast.Constant(value=str())
-            ) if name == parameter:
-                lines.add(node.lineno)
-            case ast.Call(
-                func=ast.Attribute(value=ast.Name(id=name), attr="get"),
-                args=[ast.Constant(value=str()), *_],
-            ) if name == parameter:
-                lines.add(node.lineno)
-            case _:
-                pass
-    return sorted(
-        line for line in lines if first_rebinding is None or line < first_rebinding
-    )
+def _scoped_expression_reads(
+    expression: ast.AST, available_names: AbstractSet[str]
+) -> tuple[set[int], set[tuple[str, int]]]:
+    """Collect direct mapping and attribute reads without crossing nested scopes."""
+    mapping_lines: set[int] = set()
+    attribute_reads: set[tuple[str, int]] = set()
 
-
-def _linear_aliases_before(
-    function: ast.FunctionDef | ast.AsyncFunctionDef,
-    parameter: str,
-    line: int,
-) -> frozenset[str]:
-    """Follow straight-line simple-name aliases up to one source location."""
-    aliases = {parameter}
-    for statement in function.body:
-        if statement.lineno >= line:
-            break
-        match statement:
-            case ast.Assign(targets=[ast.Name(id=target)], value=ast.Name(id=source)):
-                aliases.discard(target)
-                if source in aliases:
-                    aliases.add(target)
-            case ast.AnnAssign(target=ast.Name(id=target), value=ast.Name(id=source)):
-                aliases.discard(target)
-                if source in aliases:
-                    aliases.add(target)
-            case (
-                ast.Assign(targets=[ast.Name(id=target)])
-                | ast.AnnAssign(target=ast.Name(id=target))
-            ):
-                aliases.discard(target)
-            case (
-                ast.If()
-                | ast.For()
-                | ast.AsyncFor()
-                | ast.While()
-                | ast.Try()
-                | ast.Match()
-            ):
-                # Branch-dependent assignments make local alias state uncertain.
-                return frozenset({parameter})
-            case _:
-                pass
-    return frozenset(aliases)
-
-
-def _direct_mapping_reads_with_aliases(
-    function: ast.FunctionDef | ast.AsyncFunctionDef,
-    parameter: str,
-    imports: ImportAliases,
-    bindings: _FunctionScopeBindings,
-) -> list[int]:
-    """Recognize reads through straight-line aliases and resolved typing casts."""
-    tracked_names = {parameter}
-    lines: set[int] = set()
-
-    class _ReadVisitor(ast.NodeVisitor):
-        def __init__(self, available: AbstractSet[str]) -> None:
-            self.available = set(available)
+    class ReadVisitor(ast.NodeVisitor):
+        def __init__(self) -> None:
+            self.available = set(available_names)
 
         def visit_Lambda(self, node: ast.Lambda) -> None:
             # Deferred bodies can shadow the selected function's input.
@@ -1370,7 +1315,7 @@ def _direct_mapping_reads_with_aliases(
                 case ast.Subscript(
                     value=ast.Name(id=name), slice=ast.Constant(value=str())
                 ) if name in self.available:
-                    lines.add(node.lineno)
+                    mapping_lines.add(node.lineno)
                 case _:
                     pass
             self.generic_visit(node)
@@ -1381,13 +1326,93 @@ def _direct_mapping_reads_with_aliases(
                     func=ast.Attribute(value=ast.Name(id=name), attr="get"),
                     args=[ast.Constant(value=str()), *_],
                 ) if name in self.available:
-                    lines.add(node.lineno)
+                    mapping_lines.add(node.lineno)
                 case _:
                     pass
             self.generic_visit(node)
 
+        def visit_Attribute(self, node: ast.Attribute) -> None:
+            match node:
+                case ast.Attribute(
+                    attr=attribute, ctx=ast.Load(), value=ast.Name(id=name)
+                ) if name in self.available:
+                    attribute_reads.add((attribute, node.lineno))
+                case _:
+                    pass
+            self.generic_visit(node)
+
+    ReadVisitor().visit(expression)
+    return mapping_lines, attribute_reads
+
+
+def _direct_mapping_reads(
+    parameter: str,
+    nodes: Sequence[ast.AST],
+    bindings: _FunctionScopeBindings,
+) -> list[int]:
+    """Find literal string-key indexing and ``.get`` reads on the parameter."""
+    lines = {
+        line
+        for node in nodes
+        for line in _scoped_expression_reads(node, {parameter})[0]
+    }
+    first_rebinding = min(bindings.rebindings.get(parameter, []), default=None)
+    return sorted(
+        line for line in lines if first_rebinding is None or line < first_rebinding
+    )
+
+
+def _linear_aliases_before(
+    function: ast.FunctionDef | ast.AsyncFunctionDef,
+    parameter: str,
+    line: int,
+) -> frozenset[str]:
+    """Follow straight-line simple-name aliases up to one source location."""
+    aliases = {parameter}
+    for statement in function.body:
+        if statement.lineno >= line:
+            break
+        match statement:
+            case ast.Assign(targets=[ast.Name(id=target)], value=ast.Name(id=source)):
+                aliases.discard(target)
+                if source in aliases:
+                    aliases.add(target)
+            case ast.AnnAssign(target=ast.Name(id=target), value=ast.Name(id=source)):
+                aliases.discard(target)
+                if source in aliases:
+                    aliases.add(target)
+            case (
+                ast.Assign(targets=[ast.Name(id=target)])
+                | ast.AnnAssign(target=ast.Name(id=target))
+            ):
+                aliases.discard(target)
+            case (
+                ast.If()
+                | ast.For()
+                | ast.AsyncFor()
+                | ast.While()
+                | ast.Try()
+                | ast.Match()
+            ):
+                # Branch-dependent assignments make local alias state uncertain.
+                return frozenset({parameter})
+            case _:
+                pass
+    return frozenset(aliases)
+
+
+def _direct_mapping_reads_with_aliases(
+    function: ast.FunctionDef | ast.AsyncFunctionDef,
+    parameter: str,
+    imports: ImportAliases,
+    bindings: _FunctionScopeBindings,
+) -> list[int]:
+    """Recognize reads through straight-line aliases and resolved typing casts."""
+    tracked_names = {parameter}
+    lines: set[int] = set()
+
     def record_reads(expression: ast.AST, available: AbstractSet[str]) -> None:
-        _ReadVisitor(available).visit(expression)
+        lines.update(_scoped_expression_reads(expression, available)[0])
 
     first_rebinding = min(bindings.rebindings.get(parameter, []), default=None)
     for statement in function.body:
@@ -1474,8 +1499,8 @@ def _direct_attribute_reads(
     reads = {
         read
         for node in nodes
-        if (read := _loaded_attribute_name(node, parameter)) is not None
-        and (first_rebinding is None or read[1] < first_rebinding)
+        for read in _scoped_expression_reads(node, {parameter})[1]
+        if first_rebinding is None or read[1] < first_rebinding
     }
     return sorted(reads, key=lambda read: (read[1], read[0]))
 
@@ -1597,7 +1622,7 @@ def _domain_mapping_findings(
             ):
                 continue
             reads = _mapping_read_evidence(
-                function, argument.arg, local.nodes, aliases, bindings
+                function, argument.arg, function.body, aliases, bindings
             )
             forwarded_reads = _direct_forwarded_mapping_reads(
                 function, argument.arg, module, aliases, bindings
@@ -1659,7 +1684,7 @@ def _domain_mapping_findings(
         )
         if mapping is not None:
             reads = _mapping_read_evidence(
-                function, argument.arg, local.nodes, aliases, bindings
+                function, argument.arg, function.body, aliases, bindings
             )
             forwarded_reads = _direct_forwarded_mapping_reads(
                 function, argument.arg, module, aliases, bindings
@@ -1679,7 +1704,7 @@ def _domain_mapping_findings(
                 )
             rule_id = "generic-mapping-domain-escape"
         elif annotation_name in {"object", "builtins.object"}:
-            attributes = _direct_attribute_reads(argument.arg, local.nodes, bindings)
+            attributes = _direct_attribute_reads(argument.arg, function.body, bindings)
             if not attributes:
                 continue
             kind = "object"

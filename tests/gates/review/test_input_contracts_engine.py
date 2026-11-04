@@ -907,11 +907,22 @@ def evaluate(packet: Mapping[str, JsonValue]):
 def test_domain_mapping_read_respects_comprehension_bindings() -> None:
     shadowed = """from collections.abc import Mapping
 def evaluate(packet: Mapping[str, JsonValue], packets):
-    return [packet["state"] for packet in packets]
+    return [
+        packet["state"]
+        for packet in packets
+    ]
 """
     uses_input = """from collections.abc import Mapping
 def evaluate(packet: Mapping[str, JsonValue], packets):
-    return [packet["state"] for _ in packets]
+    return [
+        packet["state"]
+        for _ in packets
+    ]
+"""
+    outer_after_comprehension = """from collections.abc import Mapping
+def evaluate(packet: Mapping[str, JsonValue], packets):
+    _ = [value for packet in packets]
+    return packet["state"]
 """
 
     assert (
@@ -924,7 +935,17 @@ def evaluate(packet: Mapping[str, JsonValue], packets):
         uses_input, DOMAIN_BOUNDARY_POLICY, path="src/internal/evaluate.py"
     )
     assert len(findings) == 1
-    assert "literal-key reads at line(s) 3" in findings[0].message
+    assert "literal-key reads at line(s) 4" in findings[0].message
+    assert (
+        len(
+            input_contract_findings(
+                outer_after_comprehension,
+                DOMAIN_BOUNDARY_POLICY,
+                path="src/internal/evaluate.py",
+            )
+        )
+        == 1
+    )
 
 
 def test_identity_preserving_cast_rebinding_keeps_mapping_evidence() -> None:
@@ -980,6 +1001,21 @@ def test_object_attribute_evidence_stops_after_parameter_replacement() -> None:
 def evaluate(packet: object):
     packet = EvaluationOptions.model_validate(packet)
     return packet.state
+""",
+        DOMAIN_BOUNDARY_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert findings == []
+
+
+def test_object_attribute_read_ignores_comprehension_shadow() -> None:
+    findings = input_contract_findings(
+        """def evaluate(packet: object, packets):
+    return [
+        packet.state
+        for packet in packets
+    ]
 """,
         DOMAIN_BOUNDARY_POLICY,
         path="src/internal/evaluate.py",
