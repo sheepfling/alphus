@@ -50,6 +50,27 @@ def test_conditional_output_rule_abstains_on_unconfigured_path_and_helper() -> N
     assert run_artifact_findings(source, "src/pipeline.py", configured) == []
 
 
+def test_comprehension_path_target_does_not_bind_outer_output_path() -> None:
+    configured = policy(
+        conditional_output_readback=True,
+        reused_output_path_names=("output_path",),
+        output_writers=(ProvenanceCallRole(function="write_output"),),
+        output_readers=(ProvenanceCallRole(function="read_output"),),
+    )
+    shadowed = (
+        "def run(rows, output_path, candidates):\n"
+        "    if rows:\n"
+        "        write_output(output_path, rows)\n"
+        "    return [read_output(output_path) for output_path in candidates]\n"
+    )
+    outer_path = shadowed.replace(
+        "for output_path in candidates", "for candidate in candidates"
+    )
+
+    assert run_artifact_findings(shadowed, "src/pipeline.py", configured) == []
+    assert len(run_artifact_findings(outer_path, "src/pipeline.py", configured)) == 1
+
+
 def test_current_run_manifest_guard_is_an_explicit_reuse_control() -> None:
     configured = policy(
         conditional_output_readback=True,
@@ -303,6 +324,47 @@ def test_parse_hash_rule_ignores_shared_snapshot_and_unbound_digest() -> None:
     )
     assert run_artifact_findings(same_bytes, "src/pipeline.py", configured) == []
     assert run_artifact_findings(unbound, "src/pipeline.py", configured) == []
+
+
+def test_parse_hash_comprehension_target_does_not_bind_outer_input_path() -> None:
+    configured = policy(
+        parse_hash_reread=True,
+        provenance_input_path_names=("input_path",),
+        parsers=(ProvenanceCallRole(function="parse_input"),),
+        digesters=(ProvenanceCallRole(function="digest_file"),),
+        provenance_sinks=("record_provenance",),
+    )
+    shadowed = (
+        "def run(input_path, candidates):\n"
+        "    model = parse_input(input_path)\n"
+        "    record_provenance(\n"
+        "        [digest_file(input_path) for input_path in candidates]\n"
+        "    )\n"
+    )
+    outer_path = shadowed.replace(
+        "for input_path in candidates", "for candidate in candidates"
+    )
+
+    assert run_artifact_findings(shadowed, "src/pipeline.py", configured) == []
+    assert len(run_artifact_findings(outer_path, "src/pipeline.py", configured)) == 1
+
+
+def test_comprehension_walrus_rebinding_disables_path_attribution() -> None:
+    configured = policy(
+        parse_hash_reread=True,
+        provenance_input_path_names=("input_path",),
+        parsers=(ProvenanceCallRole(function="parse_input"),),
+        digesters=(ProvenanceCallRole(function="digest_file"),),
+        provenance_sinks=("record_provenance",),
+    )
+    source = (
+        "def run(input_path, candidates):\n"
+        "    model = parse_input(input_path)\n"
+        "    record_provenance(digest_file(input_path))\n"
+        "    [(input_path := replacement) for replacement in candidates]\n"
+    )
+
+    assert run_artifact_findings(source, "src/pipeline.py", configured) == []
 
 
 def test_parse_hash_rule_ignores_explicit_immutable_snapshot_bytes() -> None:
@@ -660,6 +722,63 @@ def test_runtime_origin_binding_and_unknown_import_styles_abstain() -> None:
     assert run_artifact_findings(aliased_origin, "src/harness.py", configured) == []
     assert len(run_artifact_findings(rebound_alias, "src/harness.py", configured)) == 1
     assert len(run_artifact_findings(nested_alias, "src/harness.py", configured)) == 1
+
+
+@pytest.mark.parametrize(
+    "origin_expression",
+    [
+        "[module_origin(engine) for engine in engines]",
+        "lambda: module_origin(engine)",
+    ],
+)
+def test_deferred_or_comprehension_origin_is_not_runtime_attestation(
+    origin_expression: str,
+) -> None:
+    configured = policy(
+        runtime_attestation_gap=True,
+        runtime_module_names=("engine",),
+        runtime_import_helpers=("load_runtime_module",),
+        runtime_metadata_helpers=("distribution_version",),
+        runtime_origin_helpers=("module_origin",),
+        runtime_attestation_sinks=("record_runtime",),
+    )
+    source = (
+        "def run(engines):\n"
+        "    engine = load_runtime_module('example-engine')\n"
+        "    record_runtime(\n"
+        "        distribution_version('example-engine'), "
+        f"{origin_expression}\n"
+        "    )\n"
+    )
+
+    findings = run_artifact_findings(source, "src/harness.py", configured)
+    assert len(findings) == 1
+    assert findings[0].rule_id.endswith("runtime-origin-not-bound-to-metadata")
+
+
+def test_runtime_sink_inside_comprehension_respects_target_shadowing() -> None:
+    configured = policy(
+        runtime_attestation_gap=True,
+        runtime_module_names=("engine",),
+        runtime_import_helpers=("load_runtime_module",),
+        runtime_metadata_helpers=("distribution_version",),
+        runtime_origin_helpers=("module_origin",),
+        runtime_attestation_sinks=("record_runtime",),
+    )
+    source = (
+        "def run(engines):\n"
+        "    engine = load_runtime_module('example-engine')\n"
+        "    return [\n"
+        "        record_runtime(\n"
+        "            distribution_version('example-engine'), module_origin(engine)\n"
+        "        )\n"
+        "        for engine in engines\n"
+        "    ]\n"
+    )
+
+    findings = run_artifact_findings(source, "src/harness.py", configured)
+    assert len(findings) == 1
+    assert findings[0].rule_id.endswith("runtime-origin-not-bound-to-metadata")
 
 
 def test_runtime_origin_alias_must_be_bound_before_provenance_sink() -> None:

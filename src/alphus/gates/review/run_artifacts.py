@@ -51,18 +51,108 @@ def _calls(
         yield from visit(statement, conditional)
 
 
+def _calls_with_scope(
+    statements: Sequence[ast.AST],
+    initial_shadowed: frozenset[str] = frozenset(),
+) -> Iterator[tuple[ast.Call, frozenset[str]]]:
+    """Walk calls while retaining names shadowed by enclosing comprehensions."""
+
+    def target_names(target: ast.AST) -> set[str]:
+        names: set[str] = set()
+        for child in ast.walk(target):
+            match child:
+                case ast.Name(id=name, ctx=ast.Store()):
+                    names.add(name)
+                case _:
+                    pass
+        return names
+
+    def visit(
+        node: ast.AST, shadowed: frozenset[str]
+    ) -> Iterator[tuple[ast.Call, frozenset[str]]]:
+        match node:
+            case (
+                ast.FunctionDef()
+                | ast.AsyncFunctionDef()
+                | ast.ClassDef()
+                | ast.Lambda()
+            ):
+                return
+            case ast.ListComp(generators=generators, elt=elt):
+                yield from visit_comprehension(generators, (elt,), shadowed)
+                return
+            case ast.SetComp(generators=generators, elt=elt):
+                yield from visit_comprehension(generators, (elt,), shadowed)
+                return
+            case ast.GeneratorExp(generators=generators, elt=elt):
+                yield from visit_comprehension(generators, (elt,), shadowed)
+                return
+            case ast.DictComp(generators=generators, key=key, value=value):
+                yield from visit_comprehension(generators, (key, value), shadowed)
+                return
+            case ast.Call() as call:
+                yield call, shadowed
+            case _:
+                pass
+        for child in ast.iter_child_nodes(node):
+            yield from visit(child, shadowed)
+
+    def visit_comprehension(
+        generators: Sequence[ast.comprehension],
+        values: Sequence[ast.AST],
+        outer_shadowed: frozenset[str],
+    ) -> Iterator[tuple[ast.Call, frozenset[str]]]:
+        shadowed = set(outer_shadowed)
+        for generator in generators:
+            yield from visit(generator.iter, frozenset(shadowed))
+            shadowed.update(target_names(generator.target))
+            for condition in generator.ifs:
+                yield from visit(condition, frozenset(shadowed))
+        for value in values:
+            yield from visit(value, frozenset(shadowed))
+
+    for statement in statements:
+        yield from visit(statement, initial_shadowed)
+
+
+def _shadowed_at_calls(statements: Sequence[ast.AST]) -> dict[int, frozenset[str]]:
+    return {id(call): names for call, names in _calls_with_scope(statements)}
+
+
+def _call_is_shadowed(
+    call: ast.Call,
+    function_shadowed: AbstractSet[str],
+    scope_shadowed: AbstractSet[str],
+) -> bool:
+    name = _call_name(call.func)
+    if name is None:
+        return True
+    root = name.split(".", maxsplit=1)[0]
+    return (
+        name in function_shadowed
+        or root in scope_shadowed
+        or any(helper.split(".", maxsplit=1)[0] == root for helper in function_shadowed)
+    )
+
+
 def _role_path(
     call: ast.Call,
     roles: Sequence[ProvenanceCallRole],
     configured_paths: frozenset[str],
+    scope_shadowed: AbstractSet[str] = frozenset(),
 ) -> str | None:
     name = _call_name(call.func)
     role = next((item for item in roles if item.function == name), None)
     if role is None or role.path_argument_index >= len(call.args):
         return None
     argument = call.args[role.path_argument_index]
-    if isinstance(argument, ast.Name) and argument.id in configured_paths:
-        return argument.id
+    match argument:
+        case ast.Name(id=path) if (
+            path in configured_paths and path not in scope_shadowed
+        ):
+            return path
+        case _:
+            pass
     return None
 
 
@@ -76,6 +166,7 @@ def _manifest_guarded_read_ids(
 ) -> frozenset[int]:
     """Recognize reads after a configured missing-artifact guard exits."""
     protected: set[int] = set()
+    scope_shadowed = _shadowed_at_calls(function.body)
     for index, statement in enumerate(function.body):
         match statement:
             case ast.If(
@@ -87,10 +178,21 @@ def _manifest_guarded_read_ids(
                 continue
         if _call_name(check_call.func) in shadowed:
             continue
-        checked_path = _role_path(check_call, checks, path_names)
+        check_scope = scope_shadowed.get(id(check_call), frozenset())
+        if _call_is_shadowed(check_call, shadowed, check_scope):
+            continue
+        checked_path = _role_path(check_call, checks, path_names, check_scope)
         prior_write = any(
-            _call_name(call.func) not in shadowed
-            and _role_path(call, writers, path_names) == checked_path
+            not _call_is_shadowed(
+                call, shadowed, scope_shadowed.get(id(call), frozenset())
+            )
+            and _role_path(
+                call,
+                writers,
+                path_names,
+                scope_shadowed.get(id(call), frozenset()),
+            )
+            == checked_path
             for prior in function.body[:index]
             for call, _ in _calls((prior,))
         )
@@ -104,8 +206,18 @@ def _manifest_guarded_read_ids(
         for later in function.body[index + 1 :]:
             for read_call, _ in _calls((later,)):
                 if (
-                    _call_name(read_call.func) not in shadowed
-                    and _role_path(read_call, readers, path_names) == checked_path
+                    not _call_is_shadowed(
+                        read_call,
+                        shadowed,
+                        scope_shadowed.get(id(read_call), frozenset()),
+                    )
+                    and _role_path(
+                        read_call,
+                        readers,
+                        path_names,
+                        scope_shadowed.get(id(read_call), frozenset()),
+                    )
+                    == checked_path
                 ):
                     protected.add(id(read_call))
     return frozenset(protected)
@@ -392,21 +504,24 @@ def _failure_evidence_findings(
 
 
 def _contains_configured_call(
-    node: ast.AST, helper: str, module: str | None = None
+    node: ast.AST,
+    helper: str,
+    module: str | None = None,
+    inherited_shadowed: frozenset[str] = frozenset(),
 ) -> bool:
-    for child in ast.walk(node):
-        match child:
-            case ast.Call(func=function, args=args) if _call_name(function) == helper:
-                if module is None:
+    for call, shadowed in _calls_with_scope((node,), inherited_shadowed):
+        if _call_is_shadowed(call, frozenset(), shadowed):
+            continue
+        if _call_name(call.func) != helper:
+            continue
+        if module is None:
+            return True
+        for argument in call.args:
+            match argument:
+                case ast.Name(id=name) if name == module and name not in shadowed:
                     return True
-                for argument in args:
-                    match argument:
-                        case ast.Name(id=name) if name == module:
-                            return True
-                        case _:
-                            continue
-            case _:
-                continue
+                case _:
+                    continue
     return False
 
 
@@ -458,10 +573,15 @@ def _runtime_attestation_findings(
     metadata = unshadowed(policy.runtime_metadata_helpers)
     origins = unshadowed(policy.runtime_origin_helpers)
     findings: list[Finding] = []
-    for call, _ in _calls(function.body):
-        if _call_name(call.func) not in sinks:
+    for call, call_scope in _calls_with_scope(function.body):
+        if _call_name(call.func) not in sinks or _call_is_shadowed(
+            call, frozenset(), call_scope
+        ):
             continue
-        if not any(_contains_configured_call(call, helper) for helper in metadata):
+        if not any(
+            _contains_configured_call(call, helper, inherited_shadowed=call_scope)
+            for helper in metadata
+        ):
             continue
         usable_modules = frozenset(
             module for module in module_names if imports[module].lineno < call.lineno
@@ -474,7 +594,9 @@ def _runtime_attestation_findings(
             if owner in usable_modules and alias_lines[alias] < call.lineno
         )
         if any(
-            _contains_configured_call(call, helper, alias)
+            _contains_configured_call(
+                call, helper, alias, inherited_shadowed=call_scope
+            )
             for helper in origins
             for alias in usable_aliases
         ):
@@ -506,6 +628,21 @@ def _runtime_attestation_findings(
 def _assigned_names(function: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
     names: set[str] = set()
 
+    def collect_walrus(node: ast.AST) -> None:
+        if isinstance(
+            node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
+        ):
+            return
+        match node:
+            case ast.NamedExpr(target=ast.Name(id=name), value=value):
+                names.add(name)
+                collect_walrus(value)
+                return
+            case _:
+                pass
+        for child in ast.iter_child_nodes(node):
+            collect_walrus(child)
+
     def visit(node: ast.AST) -> None:
         match node:
             case (
@@ -516,13 +653,10 @@ def _assigned_names(function: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str
                 if node is not function:
                     names.add(name)
                     return
-            case (
-                ast.Lambda()
-                | ast.ListComp()
-                | ast.SetComp()
-                | ast.DictComp()
-                | ast.GeneratorExp()
-            ):
+            case ast.Lambda():
+                return
+            case ast.ListComp() | ast.SetComp() | ast.DictComp() | ast.GeneratorExp():
+                collect_walrus(node)
                 return
             case ast.Name(ctx=ast.Store(), id=name):
                 names.add(name)
@@ -593,6 +727,21 @@ def _function_findings(
         *policy.provenance_sinks,
     }
     shadowed = _shadowed_helpers(function, helper_names)
+    scope_shadowed = _shadowed_at_calls(function.body)
+
+    def call_shadowed(call: ast.Call) -> frozenset[str]:
+        return scope_shadowed.get(id(call), frozenset())
+
+    def helper_is_shadowed(call: ast.Call) -> bool:
+        return _call_is_shadowed(call, shadowed, call_shadowed(call))
+
+    def role_path(
+        call: ast.Call,
+        roles: Sequence[ProvenanceCallRole],
+        configured_paths: frozenset[str],
+    ) -> str | None:
+        return _role_path(call, roles, configured_paths, call_shadowed(call))
+
     rebound = _assigned_names(function)
     output_paths = frozenset(
         set(policy.reused_output_path_names)
@@ -619,17 +768,17 @@ def _function_findings(
             (call, name)
             for call, is_conditional in calls
             if is_conditional
-            and (name := _role_path(call, policy.output_writers, output_paths))
+            and (name := role_path(call, policy.output_writers, output_paths))
             is not None
-            and _call_name(call.func) not in shadowed
+            and not helper_is_shadowed(call)
         ]
         readers = [
             (call, name)
             for call, is_conditional in calls
             if not is_conditional
-            and (name := _role_path(call, policy.output_readers, output_paths))
+            and (name := role_path(call, policy.output_readers, output_paths))
             is not None
-            and _call_name(call.func) not in shadowed
+            and not helper_is_shadowed(call)
             and id(call) not in manifest_guarded_reads
         ]
         emitted_paths: set[str] = set()
@@ -661,20 +810,20 @@ def _function_findings(
         parsers = [
             (call, name)
             for call, _ in calls
-            if (name := _role_path(call, policy.parsers, input_paths)) is not None
-            and _call_name(call.func) not in shadowed
+            if (name := role_path(call, policy.parsers, input_paths)) is not None
+            and not helper_is_shadowed(call)
         ]
         digesters = [
             (call, name)
             for call, _ in calls
-            if (name := _role_path(call, policy.digesters, input_paths)) is not None
-            and _call_name(call.func) not in shadowed
+            if (name := role_path(call, policy.digesters, input_paths)) is not None
+            and not helper_is_shadowed(call)
         ]
         sinks = [
             call
             for call, _ in calls
             if _call_name(call.func) in policy.provenance_sinks
-            and _call_name(call.func) not in shadowed
+            and not helper_is_shadowed(call)
         ]
         emitted_paths: set[str] = set()
         for parser, name in parsers:
@@ -684,7 +833,8 @@ def _function_findings(
                 if digest_name != name or digest.lineno <= parser.lineno:
                     continue
                 if not any(
-                    any(node is digest for node in ast.walk(sink)) for sink in sinks
+                    any(node is digest for node, _ in _calls_with_scope((sink,)))
+                    for sink in sinks
                 ):
                     continue
                 findings.append(
