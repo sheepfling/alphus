@@ -18,17 +18,18 @@ from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_utf8_text
 
-ALPHUS_MORPHOLOGY = {
-    "selector": "document-style",
-    "finding_ids": ("alphus/any/none/style/rhetorical-heading-density",),
-    "concern": "rhetorical-heading-style",
-    "claim": "Selected documents may repeat configured rhetorical heading patterns.",
-    "mechanisms": ("style-preference",),
-    "inspected_scope": ("selected-document-headings", "document-structure"),
-    "languages_formats": ("markdown", "latex", "html", "docx", "pptx"),
-    "evidence_kinds": ("document-heading", "format-specific-location"),
-    "evaluation_maturity": "synthetic-only",
-}
+ALPHUS_MORPHOLOGY = (
+    ("selector", "document-style"),
+    ("concern", "rhetorical-heading-style"),
+    ("claim_kind", "style-preference"),
+    ("claim", "Selected documents may repeat configured rhetorical heading patterns."),
+    ("mechanisms", ("exact-rule",)),
+    ("inspected_scope", ("selected-document-headings", "document-structure")),
+    ("languages_formats", ("markdown", "latex", "html", "docx", "pptx")),
+    ("evidence_kinds", ("document-heading", "format-specific-location")),
+    ("evaluation_maturity", "synthetic-only"),
+    ("finding_tag_complaints", ("rhetorical-heading-density",)),
+)
 
 
 _RULE_ID = rule_tag(

@@ -6,16 +6,18 @@ from dataclasses import fields
 
 from alphus.policy._generated_morphology import MORPHOLOGY_BY_SELECTOR
 from alphus.policy.catalog import _LEGACY_RULE_SPECS, RULE_SPECS
-from alphus.policy.morphology import DetectionMechanism, EvaluationMaturity
+from alphus.policy.morphology import ClaimKind, DetectionMechanism, EvaluationMaturity
 
-_EXPECTED_SELECTORS = {
-    "file-size",
-    "source-test-coverage",
-    "positional-semantic-overrides",
-    "benchmark-docs",
-    "document-style",
-    "cyclomatic-complexity",
-}
+_EXPECTED_SELECTORS = frozenset(
+    {
+        "file-size",
+        "source-test-coverage",
+        "positional-semantic-overrides",
+        "benchmark-docs",
+        "document-style",
+        "cyclomatic-complexity",
+    }
+)
 
 
 def test_feature_morphology_is_attached_without_changing_rule_contracts() -> None:
@@ -44,10 +46,13 @@ def test_pilot_covers_exact_heuristic_prose_style_and_native_tool_mechanisms() -
     assert mechanisms == {
         DetectionMechanism.EXACT_RULE,
         DetectionMechanism.BOUNDED_HEURISTIC,
-        DetectionMechanism.PROSE_RISK,
-        DetectionMechanism.STYLE_PREFERENCE,
         DetectionMechanism.NATIVE_TOOL,
     }
+    assert MORPHOLOGY_BY_SELECTOR["benchmark-docs"].claim_kind is ClaimKind.RISK
+    assert (
+        MORPHOLOGY_BY_SELECTOR["document-style"].claim_kind
+        is ClaimKind.STYLE_PREFERENCE
+    )
     assert (
         MORPHOLOGY_BY_SELECTOR["positional-semantic-overrides"].evaluation_maturity
         is EvaluationMaturity.PUBLIC_SAMPLE_REVIEWED

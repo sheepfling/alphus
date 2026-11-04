@@ -459,13 +459,6 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
 )
 
 
-_UNKNOWN_MORPHOLOGY_SELECTORS = set(MORPHOLOGY_BY_SELECTOR) - set(_LEGACY_RULE_SPECS)
-if _UNKNOWN_MORPHOLOGY_SELECTORS:
-    raise RuntimeError(
-        "morphology declarations reference unknown built-in selectors: "
-        f"{sorted(_UNKNOWN_MORPHOLOGY_SELECTORS)}"
-    )
-
 RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
     {
         selector: replace(

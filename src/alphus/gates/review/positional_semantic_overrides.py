@@ -12,25 +12,30 @@ from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 
-ALPHUS_MORPHOLOGY = {
-    "selector": "positional-semantic-overrides",
-    "finding_ids": ("alphus/python/none/maintainability/positional-semantic-override",),
-    "concern": "semantic-field-overrides",
-    "claim": "A configured positional branch assigns hard-coded text to a semantic field; the match is a review candidate, not proof of a defect.",
-    "mechanisms": ("bounded-heuristic",),
-    "inspected_scope": (
-        "configured-python-paths",
-        "if-branches",
-        "semantic-field-assignments",
+ALPHUS_MORPHOLOGY = (
+    ("selector", "positional-semantic-overrides"),
+    ("concern", "semantic-field-overrides"),
+    ("claim_kind", "risk"),
+    (
+        "claim",
+        (
+            "A configured positional branch assigns hard-coded text to a semantic field; the "
+            "match is a review candidate, not proof of a defect."
+        ),
     ),
-    "languages_formats": ("python",),
-    "evidence_kinds": (
-        "python-ast-branch",
-        "configured-field",
-        "assignment-source-line",
+    ("mechanisms", ("bounded-heuristic",)),
+    (
+        "inspected_scope",
+        ("configured-python-paths", "if-branches", "semantic-field-assignments"),
     ),
-    "evaluation_maturity": "public-sample-reviewed",
-}
+    ("languages_formats", ("python",)),
+    (
+        "evidence_kinds",
+        ("python-ast-branch", "configured-field", "assignment-source-line"),
+    ),
+    ("evaluation_maturity", "public-sample-reviewed"),
+    ("finding_tag_complaints", ("positional-semantic-override",)),
+)
 
 
 _RULE_ID = rule_tag(

@@ -11,13 +11,19 @@ from alphus.contracts.rule_tags import RuleTag
 _SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 
 
+class ClaimKind(StrEnum):
+    """Kind of claim the detector makes about its subject."""
+
+    CONDITION = "condition"
+    RISK = "risk"
+    STYLE_PREFERENCE = "style-preference"
+
+
 class DetectionMechanism(StrEnum):
     """How a rule obtains candidate evidence."""
 
     EXACT_RULE = "exact-rule"
     BOUNDED_HEURISTIC = "bounded-heuristic"
-    PROSE_RISK = "prose-risk"
-    STYLE_PREFERENCE = "style-preference"
     NATIVE_TOOL = "native-tool"
     LOCAL_MODEL_ASSISTED = "local-model-assisted"
 
@@ -36,8 +42,9 @@ class RuleMorphology:
     """Static description of one built-in rule's claim and evidence."""
 
     selector: str
-    finding_ids: tuple[str, ...]
+    finding_ids: tuple[RuleTag, ...]
     concern: str
+    claim_kind: ClaimKind
     claim: str
     mechanisms: tuple[DetectionMechanism, ...]
     inspected_scope: tuple[str, ...]
@@ -50,6 +57,7 @@ class RuleMorphology:
             raise ValueError("morphology selectors must be lowercase slugs")
         if not _SLUG.fullmatch(self.concern):
             raise ValueError("morphology concerns must be lowercase slugs")
+        object.__setattr__(self, "claim_kind", ClaimKind(self.claim_kind))
         if not self.claim.strip():
             raise ValueError("morphology claims must not be empty")
         for field_name in (
@@ -63,8 +71,6 @@ class RuleMorphology:
                 raise ValueError(
                     f"morphology {field_name} must be non-empty and unique"
                 )
-        for finding_id in self.finding_ids:
-            RuleTag.parse(finding_id)
         if not self.mechanisms or len(self.mechanisms) != len(set(self.mechanisms)):
             raise ValueError("morphology mechanisms must be non-empty and unique")
         object.__setattr__(
@@ -84,4 +90,4 @@ class RuleMorphology:
                 )
 
 
-__all__ = ["DetectionMechanism", "EvaluationMaturity", "RuleMorphology"]
+__all__ = ["ClaimKind", "DetectionMechanism", "EvaluationMaturity", "RuleMorphology"]

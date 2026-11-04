@@ -35,25 +35,30 @@ from alphus.support.inventory import candidate_files
 from alphus.support.platform_utils import is_windows
 from alphus.support.python_runtime import current_python_executable
 
-ALPHUS_MORPHOLOGY = {
-    "selector": "cyclomatic-complexity",
-    "finding_ids": (
-        "alphus/any/none/maintainability/cyclomatic-complexity-threshold",
-        "alphus/any/none/configuration/cyclomatic-backend-failure",
+ALPHUS_MORPHOLOGY = (
+    ("selector", "cyclomatic-complexity"),
+    ("concern", "function-complexity"),
+    ("claim_kind", "condition"),
+    (
+        "claim",
+        (
+            "A selected function exceeds its configured complexity threshold under the selected "
+            "native backend, or that backend fails explicitly."
+        ),
     ),
-    "concern": "function-complexity",
-    "claim": "A selected function exceeds its configured complexity threshold under the selected native backend, or that backend fails explicitly.",
-    "mechanisms": ("native-tool", "exact-rule"),
-    "inspected_scope": ("selected-functions", "configured-thresholds"),
-    "languages_formats": ("python", "javascript", "cpp"),
-    "evidence_kinds": (
-        "native-tool-result",
-        "tool-version",
-        "function-identity",
-        "path-line",
+    ("mechanisms", ("native-tool", "exact-rule")),
+    ("inspected_scope", ("selected-functions", "configured-thresholds")),
+    ("languages_formats", ("python", "javascript", "cpp")),
+    (
+        "evidence_kinds",
+        ("native-tool-result", "tool-version", "function-identity", "path-line"),
     ),
-    "evaluation_maturity": "synthetic-only",
-}
+    ("evaluation_maturity", "synthetic-only"),
+    (
+        "finding_tag_complaints",
+        ("cyclomatic-complexity-threshold", "cyclomatic-backend-failure"),
+    ),
+)
 
 
 _EXTENSIONS: Mapping[str, frozenset[str]] = MappingProxyType(
