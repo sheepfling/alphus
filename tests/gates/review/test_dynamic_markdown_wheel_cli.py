@@ -11,11 +11,10 @@ import sys
 import sysconfig
 import venv
 from collections.abc import Mapping, Sequence
-from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 import pytest
-from packaging.version import Version
+from packaging.utils import parse_wheel_filename
 
 from alphus.support.platform_utils import is_windows
 
@@ -58,13 +57,6 @@ def test_built_wheel_cli_uses_git_inventory_and_respects_scope(
     wheelhouse = tmp_path / "wheelhouse"
     wheelhouse.mkdir()
     build_command = [sys.executable, "-m", "pip", "wheel", "--no-deps"]
-    try:
-        setuptools_version = Version(version("setuptools"))
-    except PackageNotFoundError:
-        pass
-    else:
-        if setuptools_version >= Version("68"):
-            build_command.append("--no-build-isolation")
     build_command.extend(["--wheel-dir", str(wheelhouse), str(project)])
     built = _run(
         build_command,
@@ -120,7 +112,9 @@ def test_built_wheel_cli_uses_git_inventory_and_respects_scope(
         .resolve()
         .is_relative_to((site_packages / "alphus").resolve())
     )
-    assert identity["version"] == "0.0.2"
+    distribution, wheel_version, _build, _tags = parse_wheel_filename(wheel.name)
+    assert distribution == "alphus"
+    assert identity["version"] == str(wheel_version)
     wheel_sha256 = hashlib.sha256(wheel.read_bytes()).hexdigest()
     identity_record = {
         "wheel": wheel.name,
