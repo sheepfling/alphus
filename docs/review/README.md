@@ -324,6 +324,55 @@ avoid broadening findings across unrelated code. Alphus scopes it to the
 positional-interface analyzer so its own quality profile checks that a
 single-pass AST input remains typed as `Iterable`.
 
+The opt-in `input-contracts` rule can review selected internal interfaces for
+a configured domain type unioned with `Mapping[str, JsonValue]` or
+`dict[str, JsonValue]`, including supported `typing_extensions` equivalents.
+Set `domain_mapping_types` to consumer-known, fully
+qualified model names and select only relevant internal files in the top-level
+inventory. A finding requires a literal string-key read from the union
+parameter and reports the parameter and read locations. A direct assigned
+`model_validate` or `parse_obj` result used later in the function counts as
+local normalization evidence. See
+[`examples/consumer/domain-mapping-review.toml`](../examples/consumer/domain-mapping-review.toml).
+
+For adjacent signatures that cannot be selected by a union annotation, a
+consumer may add exact `domain_mapping_contracts` selectors. Each selector
+names one repository-relative Python path, lexical function name (including
+enclosing classes), parameter, and expected fully qualified domain type. A
+selected `Mapping[str, JsonValue]`/`dict[str, JsonValue]` parameter is reviewed
+when its function directly reads a literal string key or passes that exact
+parameter to a unique module-level helper whose corresponding parameter has a
+direct literal-key read. One straight-line assignment alias in the selected
+function or helper is followed when it is a simple name-to-name assignment;
+the finding names the pass-through call and helper read. This is one-hop
+evidence only: branch-dependent aliases, imported/class helpers, duplicate
+helper names, and deeper flows remain unresolved. A selected
+`object` parameter is reviewed only when the function directly reads one of its
+attributes. This narrow setting is useful when the consumer has independently
+declared that the input represents a particular domain model; it does not infer
+that contract from parameter names or access syntax. Generic mapping shapes
+with other key/value types, other broad annotations, dynamic keys, nested
+attributes, arbitrary helper calls, and unselected functions remain outside the scan.
+Use exact `domain_mapping_exceptions` selectors to document a reviewed adapter
+or compatibility boundary. Each exception requires the path, function,
+parameter, expected domain type, and a non-empty reason; it suppresses only
+that exact selected parameter when its domain type is unambiguous and matches.
+For union annotations, an exception does not suppress a finding if the input
+also accepts another configured domain type. A stale or ambiguous exception
+leaves the review finding visible.
+
+This is a review candidate, not proof that validation is absent or that the
+interface is wrong. The scanner does not resolve model-like names
+automatically or infer behavior through arbitrary aliases, casts, helpers, or
+branch-specific normalization. The single direct-helper slice is not recursive
+and does not establish whether helper-local validation is sufficient. Unsupported flow
+should be reviewed manually; the advisory stays opt-in and informational.
+Direct attribute access on `object` can be intentional duck typing or a
+compatibility boundary, so a finding asks for review rather than asserting that
+the interface must become a concrete model. A configured contract does not
+prove a runtime validation defect, a caller's actual values, or that a typed
+model is the only suitable interface.
+
 The existing `python-style.concrete_inputs` annotation convention stays at its
 configured severity, independently of these optional warnings. Its imported
 `typing.List as L` and `typing.Dict as D` aliases are now recognized. Prefer a

@@ -1329,12 +1329,68 @@ class TestQualityPolicy(PythonSourceScanPolicy):
         return self
 
 
+class DomainMappingContract(StrictModel):
+    """Consumer-declared domain boundary used for narrow mapping/object advice."""
+
+    path: str
+    function: str
+    parameter: str
+    domain_type: str
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, value: str) -> str:
+        return validate_single_path(value, "domain mapping contract path")
+
+    @field_validator("function")
+    @classmethod
+    def validate_function(cls, value: str) -> str:
+        if not value or any(not part.isidentifier() for part in value.split(".")):
+            raise ValueError(
+                "domain mapping contract function must be a dotted identifier"
+            )
+        return value
+
+    @field_validator("parameter")
+    @classmethod
+    def validate_parameter(cls, value: str) -> str:
+        if not value.isidentifier():
+            raise ValueError("domain mapping contract parameter must be an identifier")
+        return value
+
+    @field_validator("domain_type")
+    @classmethod
+    def validate_domain_type(cls, value: str) -> str:
+        if not value or any(not part.isidentifier() for part in value.split(".")):
+            raise ValueError("domain mapping contract type must be a dotted identifier")
+        return value
+
+
+class DomainMappingException(DomainMappingContract):
+    """Exact consumer-declared adapter/compatibility exception."""
+
+    reason: str
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, value: str) -> str:
+        reason = value.strip()
+        if not reason:
+            raise ValueError("domain mapping exception reason must not be empty")
+        return reason
+
+
 class InputContractPolicy(PythonSourceScanPolicy):
     """Advisory, local collection-use analysis without interprocedural inference."""
 
     report_mutation: bool = True
     suggest_read_only: bool = True
     sequence_narrowing_paths: tuple[str, ...] = ()
+    domain_mapping_types: tuple[str, ...] = ()
+    domain_mapping_value_types: tuple[str, ...] = ("JsonValue",)
+    domain_mapping_contracts: tuple[DomainMappingContract, ...] = ()
+    domain_mapping_exceptions: tuple[DomainMappingException, ...] = ()
+    domain_mapping_severity: Severity = "info"
 
     @field_validator("sequence_narrowing_paths")
     @classmethod
@@ -1342,6 +1398,34 @@ class InputContractPolicy(PythonSourceScanPolicy):
         cls, patterns: Sequence[str]
     ) -> tuple[str, ...]:
         return validate_patterns(patterns)
+
+    @field_validator("domain_mapping_types", "domain_mapping_value_types")
+    @classmethod
+    def validate_domain_mapping_types(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not value or any(not part.isidentifier() for part in value.split("."))
+            for value in values
+        ):
+            raise ValueError("domain mapping types must be dotted identifiers")
+        require_unique(values, "domain mapping types must be unique")
+        return tuple(values)
+
+    @model_validator(mode="after")
+    def validate_domain_mapping_contracts(self) -> Self:
+        selectors = tuple(
+            (contract.path, contract.function, contract.parameter)
+            for contract in self.domain_mapping_contracts
+        )
+        require_unique(selectors, "domain mapping contract selectors must be unique")
+        exception_selectors = tuple(
+            (exception.path, exception.function, exception.parameter)
+            for exception in self.domain_mapping_exceptions
+        )
+        require_unique(
+            exception_selectors,
+            "domain mapping exception selectors must be unique",
+        )
+        return self
 
 
 class SourceFamilyPolicy(StrictModel):

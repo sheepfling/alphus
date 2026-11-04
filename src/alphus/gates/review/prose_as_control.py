@@ -10,6 +10,10 @@ from pathlib import Path
 from alphus.config import ProseAsControlPolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.support.ast_visitors import (
+    visit_class_definition_header,
+    visit_exception_handler_bindings,
+)
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 
@@ -419,11 +423,12 @@ def _regex_helper_root_is_shadowed(
             and _class_scope_binds_name(ancestor, root, call, parents)
         ):
             return True
-        if isinstance(ancestor, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
-            if not _is_definition_time_expression(
-                ancestor, call, parents
-            ) and _function_scope_binds_name(ancestor, root):
-                return True
+        if (
+            isinstance(ancestor, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda))
+            and not _is_definition_time_expression(ancestor, call, parents)
+            and _function_scope_binds_name(ancestor, root)
+        ):
+            return True
         ancestor = parents.get(ancestor)
     return False
 
@@ -695,12 +700,7 @@ class _FunctionBindingNames(ast.NodeVisitor):
         self.names.update(node.names)
 
     def visit_ExceptHandler(self, node: ast.ExceptHandler) -> None:
-        if node.name is not None:
-            self.names.add(node.name)
-        if node.type is not None:
-            self.visit(node.type)
-        for statement in node.body:
-            self.visit(statement)
+        self.names.update(visit_exception_handler_bindings(self, node))
 
     def visit_MatchAs(self, node: ast.MatchAs) -> None:
         if node.name is not None:
@@ -761,11 +761,7 @@ class _FunctionBindingNames(ast.NodeVisitor):
             self.visit(node.returns)
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
-        self.names.add(node.name)
-        for expression in (*node.decorator_list, *node.bases):
-            self.visit(expression)
-        for keyword in node.keywords:
-            self.visit(keyword.value)
+        self.names.update(visit_class_definition_header(self, node))
 
     def visit_Lambda(self, node: ast.Lambda) -> None:
         for expression in (*node.args.defaults, *node.args.kw_defaults):
