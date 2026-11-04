@@ -42,9 +42,15 @@ the report and do not count as checked.
 ## Supply execution evidence
 
 The optional JSON artifact has an explicit schema and records repository-root
-relative paths. Its `revision` must be the full Git commit SHA of the checkout.
-The producer sets `complete` to true only when it can report every declared
-test; partial artifacts use false.
+relative paths. Its revision must be the full Git commit SHA of the checkout.
+Declared source and test files must also be tracked and unchanged from that
+revision. Symlinked paths and loops, index entries marked assume-unchanged or skip-worktree,
+and staged or working-tree edits make the relationship unverified. The
+evidence artifact itself may remain untracked. The producer sets complete to
+true only when it can report every declared test;
+partial artifacts use false. The overall summary remains incomplete whenever
+the producer marks the artifact partial, even if some individual rows are
+checked.
 
 ```json
 {
