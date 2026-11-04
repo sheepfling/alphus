@@ -130,20 +130,21 @@ def _page_for_destination(reader: _Reader, destination: _PdfDestination) -> int 
             destination = cast(_PdfDestination, getter())
         except Exception:  # noqa: BLE001 - malformed references are unresolved
             return None
-    named = reader.named_destinations.get(str(destination).lstrip("/"))
+    normalized: _PdfDestination = destination
+    named = reader.named_destinations.get(str(normalized).lstrip("/"))
     if named is not None:
         try:
             return reader.get_destination_page_number(named)
         except (AttributeError, IndexError, KeyError, TypeError, ValueError):
             return None
-    if isinstance(destination, list) and destination:
+    if isinstance(normalized, list) and normalized:
         try:
-            page = cast(_IndirectObject, destination[0]).get_object()
+            page = cast(_IndirectObject, normalized[0]).get_object()
             return reader.get_page_number(cast(_Page, page))
         except (AttributeError, IndexError, KeyError, TypeError, ValueError):
             return None
     try:
-        return reader.get_destination_page_number(destination)
+        return reader.get_destination_page_number(normalized)
     except (AttributeError, IndexError, KeyError, TypeError, ValueError):
         return None
 
