@@ -20,7 +20,7 @@ _DURATION = re.compile(
 )
 _THROUGHPUT = re.compile(
     r"(?<![\w.])\d+(?:[,_]\d{3})*(?:\.\d+)?\s*"
-    r"(?:k|m|g)?\s*(?:ops?|operations?|req(?:uests?)?|items?|samples?)"
+    r"(?:(?:k|m|g)\s*)?(?:ops?|operations?|req(?:uests?)?|items?|samples?)"
     r"\s*(?:/\s*s|per\s+second)\b",
     re.IGNORECASE,
 )

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
+import sys
 from io import StringIO
 from pathlib import Path
 
@@ -210,6 +212,27 @@ def test_detects_throughput_and_comparison_sections_deterministically(
         sort_keys=True,
     )
     assert encoded == repeated
+
+
+def test_throughput_regex_does_not_backtrack_on_long_nonunit_whitespace() -> None:
+    command = (
+        "import re, sys; "
+        "assert re.search(sys.argv[1], '1' + ' ' * 32000 + chr(10), "
+        "re.IGNORECASE) is None"
+    )
+    subprocess.run(
+        [sys.executable, "-c", command, benchmark_docs._THROUGHPUT.pattern],
+        check=True,
+        timeout=5,
+    )
+
+
+@pytest.mark.parametrize(
+    "measurement",
+    ("12k ops/s", "12 k operations/s", "12 M requests per second"),
+)
+def test_throughput_regex_accepts_magnitude_prefix(measurement: str) -> None:
+    assert benchmark_docs._measurement_count(measurement) == 1
 
 
 @pytest.mark.parametrize(
