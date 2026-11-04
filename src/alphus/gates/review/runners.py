@@ -13,6 +13,7 @@ from typing import TypeAlias
 
 from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.execution.results import RuleOutput
+from alphus.gates.review.benchmark_docs import check_benchmark_docs
 from alphus.gates.review.ci_workflows import check_ci_workflows
 from alphus.gates.review.document_style import check_document_style
 from alphus.gates.review.dynamic_markdown import check_dynamic_markdown
@@ -82,11 +83,13 @@ from alphus.gates.review.provenance_ownership import check_provenance_ownership
 from alphus.gates.review.rendered_value_reparsed import (
     check_rendered_value_reparsed,
 )
+from alphus.gates.review.run_artifacts import check_run_artifacts
 from alphus.gates.review.scipy_constants import check_scipy_constants
 from alphus.gates.review.semantic_work_presentation import (
     check_semantic_work_presentation,
 )
 from alphus.gates.review.source_families import check_source_families
+from alphus.gates.review.suppression_reasons import check_suppression_reasons
 from alphus.gates.review.test_quality import check_test_quality
 from alphus.gates.review.typing_stub_suggestions import check_typing_stub_suggestions
 from alphus.gates.review.unexplained_empty_results import (
@@ -322,6 +325,11 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
             files,
             require_policy(config.checks.scipy_constants, "scipy_constants"),
         ),
+        "run-artifacts": lambda root, files, config: check_run_artifacts(
+            root,
+            files,
+            require_policy(config.checks.run_artifacts, "run_artifacts"),
+        ),
         "ci-workflows": lambda root, files, config: check_ci_workflows(
             root,
             files,
@@ -341,6 +349,11 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
             root,
             files,
             require_policy(config.checks.source_families, "source_families"),
+        ),
+        "benchmark-docs": lambda root, files, config: check_benchmark_docs(
+            root,
+            files,
+            require_policy(config.checks.benchmark_docs, "benchmark_docs"),
         ),
         "positional-interfaces": lambda root, files, config: (
             check_positional_interfaces(
@@ -373,6 +386,11 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
         ),
         "document-style": lambda root, files, config: check_document_style(
             root, files, require_policy(config.checks.document_style, "document_style")
+        ),
+        "suppression-reasons": lambda root, files, config: check_suppression_reasons(
+            root,
+            files,
+            require_policy(config.checks.suppression_reasons, "suppression_reasons"),
         ),
     }
 )

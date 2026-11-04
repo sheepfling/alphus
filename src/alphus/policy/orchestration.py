@@ -41,6 +41,7 @@ from alphus.policy.repository import (
 )
 from alphus.policy.review import (
     ArrayRepresentationPolicy,
+    BenchmarkDocPolicy,
     CholeskyRecurrencePolicy,
     CiWorkflowPolicy,
     DocumentStylePolicy,
@@ -68,10 +69,12 @@ from alphus.policy.review import (
     QuaternionNormalizationPolicy,
     QuaternionProductPolicy,
     QuaternionVectorRotationPolicy,
+    RunArtifactPolicy,
     ScipyConstantsPolicy,
     SemanticWorkPresentationPolicy,
     SourceFamilyPolicy,
     SqlAlchemyPracticePolicy,
+    SuppressionReasonPolicy,
     TestQualityPolicy,
     TypingStubSuggestionPolicy,
     UnexplainedEmptyResultPolicy,
@@ -126,16 +129,19 @@ class CheckPolicies(StrictModel):
     ecef_ned_matrix_transform: EcefNedMatrixTransformPolicy | None = None
     ned_basis_vectors: NedBasisVectorsPolicy | None = None
     scipy_constants: ScipyConstantsPolicy | None = None
+    run_artifacts: RunArtifactPolicy | None = None
     ci_workflows: CiWorkflowPolicy | None = None
     test_quality: TestQualityPolicy | None = None
     input_contracts: InputContractPolicy | None = None
     source_families: SourceFamilyPolicy | None = None
+    benchmark_docs: BenchmarkDocPolicy | None = None
     positional_interfaces: PositionalInterfacePolicy | None = None
     pydantic_practices: PydanticPracticePolicy | None = None
     fastapi_practices: FastApiPracticePolicy | None = None
     sqlalchemy_practices: SqlAlchemyPracticePolicy | None = None
     dynamic_markdown: DynamicMarkdownPolicy | None = None
     document_style: DocumentStylePolicy | None = None
+    suppression_reasons: SuppressionReasonPolicy | None = None
     shared_utilities: SharedUtilitiesPolicy | None = None
     python_style: PythonStylePolicy | None = None
     runtime_types: RuntimeTypePolicy | None = None

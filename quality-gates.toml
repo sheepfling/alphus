@@ -174,6 +174,11 @@ max_findings = 100
 max_reported_members = 40
 max_scope_patterns = 64
 
+[checks.benchmark_docs]
+include = ["README.md", "docs/README.md"]
+max_files = 20
+max_findings = 10
+
 [checks.pydantic_practices]
 extensions = [".py"]
 exclude = []
@@ -523,6 +528,12 @@ rollout = "provisional"
 
 [[orchestration.steps]]
 kind = "rule"
+name = "Durable benchmark prose review"
+rule = "benchmark-docs"
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "rule"
 name = "Pydantic practice review"
 rule = "pydantic-practices"
 
@@ -543,5 +554,5 @@ steps = [
   "Numeric review", "SciPy constants review", "Test review", "Input contract review",
   "Typing stub suggestions",
   "Source family review", "Pydantic practice review", "FastAPI practice review",
-  "SQLAlchemy practices review",
+  "SQLAlchemy practices review", "Durable benchmark prose review",
 ]

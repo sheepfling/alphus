@@ -1145,3 +1145,60 @@ the absence of selected outside consumers cannot establish the full dependency
 graph or zero external use. This one curated candidate plus four path-only
 no-candidate screens is too small and biased to support an accuracy claim or
 stronger enforcement.
+
+## Durable benchmark prose review
+
+Selector: `benchmark-docs`. This opt-in Markdown review finds section-level
+candidates when benchmark language appears with a cluster of duration,
+throughput, or comparative measurements. It reports a source path and heading
+and asks for human review. It does not decide whether a result is stale, wrong,
+or unsuitable, and it does not infer that context is missing from nearby prose.
+Links to methodology, protocol, reproducibility, or benchmark commands suppress
+that section because relevant context may live elsewhere.
+
+The rule scans only Markdown files selected by the consumer's `include` globs.
+Use `exclude` for local scope decisions. Historical report directories and
+filenames matching `historical_report_patterns` are skipped by default; set the
+list to `[]` only when those reports should also be reviewed. Exact
+path-and-heading exceptions require a reason of at least twenty characters.
+`max_files`, `max_file_bytes`, and `max_findings` bound work and output. If the
+file inventory is truncated or a selected file cannot be read, the rule reports
+an incomplete-scope status instead of implying that every selected document was
+analyzed. A successful scan with no finding means no candidate matched within
+the configured, readable scope; it is not a semantic cleanliness claim.
+
+```toml
+[checks.benchmark_docs]
+include = ["README.md", "docs/performance/**"]
+exclude = ["docs/generated/**"]
+historical_report_patterns = [
+  "**/benchmarks/**",
+  "**/benchmark-reports/**",
+  "**/*benchmark-report*.md",
+]
+max_files = 100
+max_file_bytes = 1000000
+max_findings = 20
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Durable benchmark prose review"
+rule = "benchmark-docs"
+rollout = "provisional"
+```
+
+Keep a concise workload description and reproducible benchmark command in
+current-facing documentation when useful. When detailed, machine-specific
+measurements need to be retained, consider a dated report that is explicitly
+maintained. The checker never runs benchmarks or asks consumers to check in
+machine-specific benchmark JSON. The positive timing, throughput, and speedup
+fixtures are synthetic and their values are invented solely to exercise lexical
+matches; they are not benchmark evidence. A real negative fixture excerpts the
+QuatOps `experiments/README.md` procedure for saving run artifacts and keeping
+medians out of durable docs. The checked QuatOps documentation and available
+history contained no durable numeric comparison to use as a real positive
+calibration example. Tests also cover routine timeout/install waits, software
+versions, fenced examples, linked methods, historical report paths, and exact
+scoped exceptions. This sample does not measure precision or enforcement
+performance; collect multiple human-labeled real positives and negatives before
+making those claims.

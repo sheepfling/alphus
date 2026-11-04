@@ -374,6 +374,12 @@ RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             "Reviews configured NED basis vector construction patterns.",
             ("python", "geospatial"),
         ),
+        "run-artifacts": RuleSpec(
+            "run_artifacts",
+            RuleOutputShape.FINDINGS,
+            "Reviews selected Python artifact production and verification handoffs.",
+            ("python", "ci"),
+        ),
         "positional-interfaces": RuleSpec(
             "positional_interfaces",
             RuleOutputShape.FINDINGS,
@@ -410,6 +416,18 @@ RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             RuleOutputShape.FINDINGS,
             "Reviews heading styles in selected Markdown, LaTeX, and source HTML documents.",
             ("markdown", "latex", "html"),
+        ),
+        "benchmark-docs": RuleSpec(
+            "benchmark_docs",
+            RuleOutputShape.FINDINGS,
+            "Reviews benchmark documentation for required result context.",
+            ("markdown", "benchmarking"),
+        ),
+        "suppression-reasons": RuleSpec(
+            "suppression_reasons",
+            RuleOutputShape.FINDINGS,
+            "Reviews selected Ruff suppressions for documented reasons.",
+            ("python", "ruff"),
         ),
         "cyclomatic-complexity": RuleSpec(
             "cyclomatic_complexity",

@@ -1221,6 +1221,160 @@ class ScipyConstantsPolicy(PythonSourceScanPolicy):
         return self
 
 
+class ProvenanceCallRole(StrictModel):
+    """A consumer-declared helper and the argument that names its source path."""
+
+    function: str
+    path_argument_index: Annotated[int, Field(ge=0)] = 0
+
+    @field_validator("function")
+    @classmethod
+    def validate_function(cls, value: str) -> str:
+        if any(not part.isidentifier() for part in value.split(".")):
+            raise ValueError("provenance helper names must be dotted identifiers")
+        return value
+
+
+class RunArtifactPolicy(PythonSourceScanPolicy):
+    """Opt-in local-flow advisories for explicitly configured run artifacts."""
+
+    conditional_output_readback: bool = False
+    parse_hash_reread: bool = False
+    failure_evidence_order: bool = False
+    runtime_attestation_gap: bool = False
+    reused_output_path_names: tuple[str, ...] = ()
+    fresh_output_path_names: tuple[str, ...] = ()
+    provenance_input_path_names: tuple[str, ...] = ()
+    immutable_snapshot_names: tuple[str, ...] = ()
+    output_writers: tuple[ProvenanceCallRole, ...] = ()
+    output_readers: tuple[ProvenanceCallRole, ...] = ()
+    current_run_artifact_checks: tuple[ProvenanceCallRole, ...] = ()
+    parsers: tuple[ProvenanceCallRole, ...] = ()
+    digesters: tuple[ProvenanceCallRole, ...] = ()
+    provenance_sinks: tuple[str, ...] = ()
+    failure_child_runners: tuple[str, ...] = ()
+    failure_diagnostic_path_names: tuple[str, ...] = ()
+    failure_cleanups: tuple[ProvenanceCallRole, ...] = ()
+    failure_sinks: tuple[ProvenanceCallRole, ...] = ()
+    runtime_module_names: tuple[str, ...] = ()
+    runtime_import_helpers: tuple[str, ...] = ()
+    runtime_metadata_helpers: tuple[str, ...] = ()
+    runtime_origin_helpers: tuple[str, ...] = ()
+    runtime_attestation_sinks: tuple[str, ...] = ()
+
+    @field_validator(
+        "reused_output_path_names",
+        "fresh_output_path_names",
+        "provenance_input_path_names",
+        "immutable_snapshot_names",
+        "failure_diagnostic_path_names",
+        "runtime_module_names",
+    )
+    @classmethod
+    def validate_identifiers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("provenance path and sink names must be identifiers")
+        require_unique(values, "provenance path and sink names must be unique")
+        return tuple(values)
+
+    @field_validator("provenance_sinks")
+    @classmethod
+    def validate_provenance_sinks(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not part.isidentifier() for value in values for part in value.split(".")
+        ):
+            raise ValueError("provenance sink names must be dotted identifiers")
+        require_unique(values, "provenance sink names must be unique")
+        return tuple(values)
+
+    @field_validator(
+        "failure_child_runners",
+        "runtime_import_helpers",
+        "runtime_metadata_helpers",
+        "runtime_origin_helpers",
+        "runtime_attestation_sinks",
+    )
+    @classmethod
+    def validate_review_helpers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not part.isidentifier() for value in values for part in value.split(".")
+        ):
+            raise ValueError("run artifact helper names must be dotted identifiers")
+        require_unique(values, "run artifact helper names must be unique")
+        return tuple(values)
+
+    @model_validator(mode="after")
+    def validate_enabled_families(self) -> Self:
+        if self.conditional_output_readback and not (
+            self.reused_output_path_names
+            and self.output_writers
+            and self.output_readers
+        ):
+            raise ValueError(
+                "conditional_output_readback needs configured reused paths, writers, "
+                "and readers"
+            )
+        if self.parse_hash_reread and not (
+            self.provenance_input_path_names
+            and self.parsers
+            and self.digesters
+            and self.provenance_sinks
+        ):
+            raise ValueError(
+                "parse_hash_reread needs configured input paths, parsers, digesters, "
+                "and provenance sinks"
+            )
+        if self.failure_evidence_order and not (
+            self.failure_child_runners
+            and self.failure_diagnostic_path_names
+            and self.failure_cleanups
+            and self.failure_sinks
+        ):
+            raise ValueError(
+                "failure_evidence_order needs child runners, diagnostic paths, "
+                "cleanup helpers, and failure sinks"
+            )
+        if self.runtime_attestation_gap and not (
+            self.runtime_module_names
+            and self.runtime_import_helpers
+            and self.runtime_metadata_helpers
+            and self.runtime_origin_helpers
+            and self.runtime_attestation_sinks
+        ):
+            raise ValueError(
+                "runtime_attestation_gap needs module names, import helpers, "
+                "metadata helpers, origin helpers, and attestation sinks"
+            )
+        require_unique(
+            tuple(
+                (role.function, role.path_argument_index)
+                for role in (
+                    *self.output_writers,
+                    *self.output_readers,
+                    *self.current_run_artifact_checks,
+                    *self.parsers,
+                    *self.digesters,
+                )
+            ),
+            "provenance helper roles must be unique",
+        )
+        require_unique(self.provenance_sinks, "provenance sinks must be unique")
+        require_unique(
+            tuple(
+                (role.function, role.path_argument_index)
+                for role in (*self.failure_cleanups, *self.failure_sinks)
+            ),
+            "failure evidence helper roles must be unique",
+        )
+        if set(self.reused_output_path_names) & set(self.fresh_output_path_names):
+            raise ValueError("an output path cannot be both reused and fresh per run")
+        if set(self.provenance_input_path_names) & set(self.immutable_snapshot_names):
+            raise ValueError(
+                "an input name cannot be both a path and immutable snapshot"
+            )
+        return self
+
+
 class CiWorkflowPolicy(SourceScanPolicy):
     """Read-only review for repeated workflow blocks and long inline scripts."""
 
@@ -1247,6 +1401,76 @@ class CiWorkflowPolicy(SourceScanPolicy):
             raise ValueError("ignored run blocks must be non-empty")
         require_unique(values, "ignored run blocks must be unique")
         return tuple(values)
+
+
+class SuppressionReasonException(StrictModel):
+    """A narrowly approved suppression location and its reviewable reason."""
+
+    path: str
+    rule_code: str
+    line: Annotated[int, Field(gt=0)]
+    reason: str
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, value: str) -> str:
+        return validate_single_path(value, "suppression exception paths")
+
+    @field_validator("rule_code")
+    @classmethod
+    def validate_rule_code(cls, value: str) -> str:
+        if not re.fullmatch(r"[A-Z]+[0-9]{3,4}", value):
+            raise ValueError("suppression exception codes must be Ruff rule codes")
+        return value
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, value: str) -> str:
+        reason = validate_one_line_message(value)
+        if not reason.strip():
+            raise ValueError("suppression exception reasons must be non-empty")
+        return reason
+
+
+class SuppressionReasonPolicy(PythonSourceScanPolicy):
+    """Consumer-selected inline Ruff suppressions that require a rationale."""
+
+    rule_codes: tuple[str, ...] = ("E402",)
+    reason_delimiter: str = "--"
+    exceptions: tuple[SuppressionReasonException, ...] = ()
+    severity: Severity = "info"
+
+    @field_validator("rule_codes")
+    @classmethod
+    def validate_rule_codes(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not re.fullmatch(r"[A-Z]+[0-9]{3,4}", code) for code in values):
+            raise ValueError("suppression rule codes must be uppercase Ruff codes")
+        require_unique(values, "suppression rule codes must be unique")
+        if not values:
+            raise ValueError("at least one suppression rule code must be selected")
+        return tuple(values)
+
+    @field_validator("reason_delimiter")
+    @classmethod
+    def validate_reason_delimiter(cls, value: str) -> str:
+        return validate_one_line_message(value)
+
+    @field_validator("exceptions")
+    @classmethod
+    def validate_exceptions(
+        cls, values: Sequence[SuppressionReasonException]
+    ) -> tuple[SuppressionReasonException, ...]:
+        keys = tuple((item.path, item.rule_code, item.line) for item in values)
+        require_unique(keys, "suppression exception locations must be unique")
+        return tuple(values)
+
+    @model_validator(mode="after")
+    def validate_exception_codes(self) -> Self:
+        if any(
+            exception.rule_code not in self.rule_codes for exception in self.exceptions
+        ):
+            raise ValueError("suppression exceptions must use a selected rule code")
+        return self
 
 
 class TestQualityExclusion(StrictModel):
@@ -1666,6 +1890,67 @@ class SourceFamilyPolicy(StrictModel):
             raise ValueError("source-family file limits must be positive")
         require_unique(extensions, "source-family limit extensions must be unique")
         return tuple(values)
+
+
+class BenchmarkDocException(StrictModel):
+    """One exact document section exempted with a reviewable reason."""
+
+    path: str
+    section: str
+    reason: str
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, value: str) -> str:
+        return validate_single_path(value, "benchmark documentation exception paths")
+
+    @field_validator("section", "reason")
+    @classmethod
+    def validate_text(cls, value: str) -> str:
+        return validate_one_line_message(value)
+
+    @field_validator("reason")
+    @classmethod
+    def require_reason(cls, value: str) -> str:
+        if len(value.strip()) < 20:
+            raise ValueError(
+                "benchmark documentation exception reasons need 20 characters"
+            )
+        return value
+
+
+class BenchmarkDocPolicy(StrictModel):
+    """Opt-in bounded review of benchmark prose in selected Markdown files."""
+
+    include: Annotated[tuple[str, ...], Field(min_length=1)]
+    exclude: tuple[str, ...] = ()
+    historical_report_patterns: tuple[str, ...] = (
+        "**/benchmarks/**",
+        "**/benchmark-reports/**",
+        "**/*benchmark-report*.md",
+    )
+    exceptions: tuple[BenchmarkDocException, ...] = ()
+    min_measurements: Annotated[int, Field(ge=2, le=20)] = 2
+    max_files: Annotated[int, Field(ge=1, le=20_000)] = 200
+    max_file_bytes: Annotated[int, Field(ge=1_024, le=5_000_000)] = 1_000_000
+    max_findings: Annotated[int, Field(ge=1, le=200)] = 20
+
+    @field_validator("include", "exclude", "historical_report_patterns")
+    @classmethod
+    def validate_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("exceptions")
+    @classmethod
+    def validate_exceptions(
+        cls, values: Sequence[BenchmarkDocException]
+    ) -> tuple[BenchmarkDocException, ...]:
+        exceptions = tuple(values)
+        require_unique(
+            tuple((item.path, item.section) for item in exceptions),
+            "benchmark documentation exceptions must have unique path and section pairs",
+        )
+        return exceptions
 
 
 class PositionalInterfacePolicy(PythonSourceScanPolicy):
