@@ -890,6 +890,120 @@ def test_object_attribute_review_requires_declared_contract_and_direct_read() ->
     )
 
 
+def test_domain_mapping_read_ignores_deferred_lambda_scope_and_shadowing() -> None:
+    source = """from collections.abc import Mapping
+def evaluate(packet: Mapping[str, JsonValue]):
+    return lambda packet: packet["state"]
+"""
+
+    assert (
+        input_contract_findings(
+            source, DOMAIN_BOUNDARY_POLICY, path="src/internal/evaluate.py"
+        )
+        == []
+    )
+
+
+def test_domain_mapping_read_respects_comprehension_bindings() -> None:
+    shadowed = """from collections.abc import Mapping
+def evaluate(packet: Mapping[str, JsonValue], packets):
+    return [packet["state"] for packet in packets]
+"""
+    uses_input = """from collections.abc import Mapping
+def evaluate(packet: Mapping[str, JsonValue], packets):
+    return [packet["state"] for _ in packets]
+"""
+
+    assert (
+        input_contract_findings(
+            shadowed, DOMAIN_BOUNDARY_POLICY, path="src/internal/evaluate.py"
+        )
+        == []
+    )
+    findings = input_contract_findings(
+        uses_input, DOMAIN_BOUNDARY_POLICY, path="src/internal/evaluate.py"
+    )
+    assert len(findings) == 1
+    assert "literal-key reads at line(s) 3" in findings[0].message
+
+
+def test_identity_preserving_cast_rebinding_keeps_mapping_evidence() -> None:
+    findings = input_contract_findings(
+        """from collections.abc import Mapping
+from typing import cast as cast_value
+def evaluate(packet: Mapping[str, JsonValue]):
+    packet = cast_value(Mapping[str, JsonValue], packet)
+    return packet["state"]
+""",
+        DOMAIN_BOUNDARY_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert len(findings) == 1
+    assert "literal-key reads at line(s) 5" in findings[0].message
+
+
+def test_parameter_replaced_by_validated_model_stops_mapping_evidence() -> None:
+    findings = input_contract_findings(
+        """from collections.abc import Mapping
+from app.models import EvaluationOptions
+def evaluate(packet: Mapping[str, JsonValue]):
+    packet = EvaluationOptions.model_validate(packet)
+    return packet["state"]
+""",
+        DOMAIN_BOUNDARY_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert findings == []
+
+
+def test_function_local_cast_shadow_is_not_treated_as_identity_preserving() -> None:
+    findings = input_contract_findings(
+        """from collections.abc import Mapping
+from typing import cast
+def evaluate(packet: Mapping[str, JsonValue]):
+    cast = lambda kind, value: {}
+    packet = cast(Mapping[str, JsonValue], packet)
+    return packet["state"]
+""",
+        DOMAIN_BOUNDARY_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert findings == []
+
+
+def test_object_attribute_evidence_stops_after_parameter_replacement() -> None:
+    findings = input_contract_findings(
+        """from app.models import EvaluationOptions
+def evaluate(packet: object):
+    packet = EvaluationOptions.model_validate(packet)
+    return packet.state
+""",
+        DOMAIN_BOUNDARY_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert findings == []
+
+
+def test_object_attribute_read_before_replacement_remains_visible() -> None:
+    findings = input_contract_findings(
+        """from app.models import EvaluationOptions
+def evaluate(packet: object):
+    state = packet.state
+    packet = EvaluationOptions.model_validate(packet)
+    return state
+""",
+        DOMAIN_BOUNDARY_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert len(findings) == 1
+    assert ".state at line 3" in findings[0].message
+
+
 def test_explicit_adapter_exception_suppresses_only_the_declared_boundary() -> None:
     source = """from collections.abc import Mapping
 class ProviderCompactionWindow:
