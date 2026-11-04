@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=80", "setuptools-scm>=10.3.4,<11"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "alphus"
-version = "0.0.2"
+dynamic = ["version"]
 description = "Portable, policy-driven source quality gates for Git repositories"
 requires-python = ">=3.11,<3.16"
 readme = "README.md"
@@ -21,9 +21,11 @@ dependencies = [
 [project.optional-dependencies]
 python = [
   "markdown-it-py>=4.2,<5",
+  "build>=1,<2",
   "pyright>=1.1.414,<2",
   "pytest>=8,<10",
   "ruff>=0.16,<1",
+  "setuptools-scm>=10.3.4,<11",
   "types-PyYAML>=6,<7",
 ]
 mypy = ["mypy>=2.3,<3"]
@@ -52,6 +54,13 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools_scm]
+version_scheme = "guess-next-dev"
+local_scheme = "node-and-date"
+
+[tool.setuptools_scm.scm.git]
+pre_parse = "fail_on_shallow"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
