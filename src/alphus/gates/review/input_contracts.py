@@ -14,6 +14,10 @@ from typing import Literal
 from alphus.config import InputContractPolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.support.ast_visitors import (
+    visit_class_definition_header,
+    visit_exception_handler_bindings,
+)
 from alphus.support.inventory import matches_path
 from alphus.support.source_scanning import (
     ImportAliases,
@@ -1173,11 +1177,7 @@ class _ModuleScopeBindings(ast.NodeVisitor):
             self.visit(expression)
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
-        self.names.add(node.name)
-        for expression in (*node.decorator_list, *node.bases):
-            self.visit(expression)
-        for keyword in node.keywords:
-            self.visit(keyword.value)
+        self.names.update(visit_class_definition_header(self, node))
 
     def visit_Name(self, node: ast.Name) -> None:
         match node.ctx:
@@ -1197,12 +1197,7 @@ class _ModuleScopeBindings(ast.NodeVisitor):
         )
 
     def visit_ExceptHandler(self, node: ast.ExceptHandler) -> None:
-        if node.name is not None:
-            self.names.add(node.name)
-        if node.type is not None:
-            self.visit(node.type)
-        for statement in node.body:
-            self.visit(statement)
+        self.names.update(visit_exception_handler_bindings(self, node))
 
     def visit_MatchAs(self, node: ast.MatchAs) -> None:
         if node.name is not None:
@@ -1279,12 +1274,13 @@ def _scoped_expression_reads(
             for generator in generators:
                 self.available = available
                 self.visit(generator.iter)
-                bound = {
-                    target.id
-                    for target in ast.walk(generator.target)
-                    if isinstance(target, ast.Name)
-                    and isinstance(target.ctx, ast.Store)
-                }
+                bound: set[str] = set()
+                for target in ast.walk(generator.target):
+                    match target:
+                        case ast.Name(id=name, ctx=ast.Store()):
+                            bound.add(name)
+                        case _:
+                            pass
                 available.difference_update(bound)
                 self.available = available
                 for condition in generator.ifs:
