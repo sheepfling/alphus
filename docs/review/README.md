@@ -799,11 +799,11 @@ use ordered `path_language_overrides` when a suffix is ambiguous in particular
 directories. The last matching path override wins and path overrides take
 precedence over suffix overrides.
 
-The heuristic has no semantic or history evidence. Uppercase acronym runs are
-not split into separate words, and files outside the configured extensions or
-supplied inventory are invisible to it. Names that do not share a meaningful
-token prefix are not detected. These are limits of the lexical stage, not
-evidence that a family is cohesive.
+The default heuristic has no dependency or history evidence. Uppercase acronym
+runs are not split into separate words, and files outside the configured
+extensions or supplied inventory are invisible to it. Names that do not share
+a meaningful token prefix are not detected. These are limits of the lexical
+stage, not evidence that a family is cohesive.
 
 ```toml
 [checks.source_families]
@@ -818,6 +818,21 @@ max_reported_members = 40
 language_overrides = [[".h", "C++"]]
 path_language_overrides = [["src/legacy_c/**", "C"]]
 file_length_limits = [[".py", 500], [".cpp", 800]]
+# Optional: direct Python import evidence for selected .py files under `src`.
+python_import_evidence = true
+python_module_roots = ["src"]
+# Optional: literal quoted C/C++ includes resolving inside the selected inventory.
+cpp_include_evidence = true
+# Optional: parser-backed literal relative JS/TS module references.
+javascript_import_evidence = true
+max_import_edges = 12
+max_public_api_names = 20
+max_contract_declarations = 12
+# One run-wide Python or C/C++ pass byte budget, shared across all families.
+max_import_analysis_bytes = 8388608
+# Optional: bounded, read-only co-change evidence for selected family paths.
+git_cochange_evidence = true
+max_git_history_commits = 100
 ```
 
 The first slice is lexical-only and low-confidence. A shared prefix selects a
@@ -830,7 +845,80 @@ configured thresholds, extensions, scope, exclusions, and language overrides
 are included so reviewers can see the effective settings. The scan streams line
 counts and never imports or executes consumer code. Selected-source processing,
 per-finding evidence, and total-finding output are bounded; incomplete scans
-produce explicit warnings instead of implying a complete clean result.
+produce explicit warnings instead of implying a complete clean result. The
+optional Python import pass is disabled by default and requires explicit
+`python_module_roots`; it parses only selected `.py` files, reports uniquely
+resolved direct `import` and `from ... import ...` module edges, including
+incoming references from selected Python files outside each family. Source
+reads and AST parses are cached across family reports, under one run-wide
+`max_import_analysis_bytes` budget; displayed edges are separately capped.
+The import walk remains family-specific, but selected files are not re-read or
+re-parsed for each family. Unresolved, ambiguous, above-package-root relative
+imports, parse failures, and files outside the selected inventory are not
+treated as absent dependencies. It does not follow dynamic imports,
+aliases/re-exports, or type-checker resolution.
+
+The optional C/C++ pass is also disabled by default. It indexes literal quoted
+includes in selected C/C++ files under one run-wide `max_import_analysis_bytes`
+budget, reserving the budget for all retained family members before scanning
+selected external files. It reports literal include edges from family members
+to selected targets and incoming references from selected external files to
+family members, with source lines. Resolution is a relative-path match against
+the selected inventory, not compiler resolution: include search paths, macros,
+angle-bracket includes, conditional activation, and unselected targets are not
+assessed. Read failures or an exhausted shared budget produce incomplete-scan
+warnings; missing evidence is not treated as zero references.
+
+JavaScript and TypeScript import evidence is also disabled by default and
+requires the optional `alphus[javascript]` extra. Its Tree-sitter parsers inspect selected `.js`,
+`.jsx`, `.mjs`, `.cjs`, `.ts`, and `.tsx` files and report only literal relative
+`import`, `export ... from`, dynamic `import()`, and `require()` references
+resolving uniquely to selected files (including extensionless exact-file
+candidates). Package resolution, TypeScript path aliases, index lookup,
+shadowed `require`, conditional activation, and compiler configuration are not
+resolved. Parse failures and exhausted byte budgets produce incomplete-scan
+warnings; unresolved references are not treated as absent dependencies. Other
+language evidence requires its own explicitly enabled analysis. These edges are partial
+dependency evidence and do not prove
+shared responsibility, coupling strength, or a public contract. For parsed
+Python family members, the optional pass also reports bounded names from a
+single direct literal module-level `__all__` assignment. Dynamic, augmented,
+or reassigned declarations are reported as unresolved; package-level
+re-exports, consumers outside the selected inventory, and names without a
+literal `__all__` are not inferred. This is syntax evidence, not a complete
+public API or responsibility assessment. The pass also reports bounded,
+module-level classes with a
+qualified `typing.Protocol` or `typing_extensions.Protocol` base and their
+direct method names. It also reports bounded fields for module-level classes
+with a qualified `typing.TypedDict` or `typing_extensions.TypedDict` base.
+These are explicit contract-shaped syntax only; aliases, ABCs, factory
+declarations, other forms, implementations, and actual sharing across consumers
+remain unknown. Import edges and declarations do not establish which files
+share responsibility. When a selected family member directly imports one of
+those Protocol or TypedDict names and references the unshadowed import in an
+annotation or class base, the report includes both the importing reference
+location and declaration file. Rebinding causes the reference to be omitted.
+This is cross-file type-reference syntax, not proof of runtime use, an
+established shared contract, or common responsibility. Optional
+`git_cochange_evidence`
+uses a bounded read-only `git log` query for selected family paths and reports
+observed commit IDs and co-changed paths. This is correlation only; it does not
+establish causation, ownership, or responsibility. Shallow history, query
+failures, pathspec limits, and a full commit window are called out, and no
+co-changes are explicitly not evidence of independence. Renames are not
+followed, and unrelated/historical path names outside the current family are
+not mapped.
+
+Optional `cpp_include_evidence` reports direct literal quoted include
+directives only when the normalized path is another selected source file. It
+does not use a compile database or resolve angle-bracket/macro includes,
+conditional activation, include search paths, or unselected targets. This is
+lexical path evidence, not compiler-resolved dependency data. JavaScript and
+TypeScript use the optional parser-backed literal relative-reference pass
+described above; package resolution, TypeScript aliases, index lookup,
+shadowed `require`, conditional activation, and compiler configuration remain
+unassessed. Unsupported or unresolved relationships are not evidence of zero
+coupling.
 
 A typical finding starts: `src/service: Family gateway_*: 12 logical units
 across 12 physical files; 12 of 20 selected sibling source files (60%);
@@ -848,8 +936,49 @@ families can still be legitimate; treat a finding as a prompt to inspect actual
 responsibilities and public contracts. Preserve established import/include/
 export paths before changing a layout. File-length limits remain an independent
 hygiene control: splitting files below a limit does not demonstrate improved
-cohesion. Dependency, responsibility, public-surface, and history analysis are
-not part of this first slice. Fewer files, renamed prefixes, or a new directory
-do not by themselves demonstrate better boundaries.
+cohesion. Optional Python and C/C++ evidence supplements the lexical candidate
+with bounded source relationships, and optional Git history records correlation
+only. Responsibility and public-surface assessment remain incomplete.
+JavaScript/TypeScript evidence is optional and limited to the literal relative
+references described above; package resolution and other cases remain
+unassessed. Fewer files, renamed prefixes, or a new directory do not by
+themselves demonstrate better boundaries.
 
+### Exploratory real-project calibration
 
+Read-only GitHub snapshots collected on 2026-11-02 provide a small exploratory
+check, not a precision or recall estimate. A path-name screen used the default
+family thresholds (`min_family_files=5`, `min_prefix_characters=4`), Python
+source paths under each package root, and excluded test-directory segments.
+It found no candidate groups in Requests (`src/requests`, 19 files, revision
+[`3c7baaa`](https://github.com/psf/requests/commit/3c7baaa05ab4aa49cc819ce3a819d260de19c157)),
+Flask (`src/flask`, 24 files, revision
+[`49943b5`](https://github.com/pallets/flask/commit/49943b5a94413a530761350f04e896f76e8d620e)),
+HTTPX (`httpx`, 23 files, revision
+[`b5addb6`](https://github.com/encode/httpx/commit/b5addb64f0161ff6bfe94c124ef76f6a1fba5254)),
+or Pydantic (`pydantic`, 54 files, revision
+[`b09325b`](https://github.com/pydantic/pydantic/commit/b09325b0a41d9a957df9a530e5c6a7836799df1e)).
+These four results are inventory-name screens only: source contents and
+semantic evidence were not inspected, so no candidate is not evidence of
+cohesion or a missed defect.
+
+The PR-head analyzer was also run on the 35 direct `*.py` files in Matplotlib's
+`lib/matplotlib/backends` directory at
+[`5a84a6f`](https://github.com/matplotlib/matplotlib/commit/5a84a6f84361b9c94458a85b20c40e8a1ffe55d7),
+with the same family thresholds. It emitted one advisory: `backend_*`, 32 of
+35 selected siblings (91%), 32 logical units, and 11–2,850 physical lines.
+[The guide](https://github.com/matplotlib/matplotlib/blob/5a84a6f/galleries/users_explain/figure/backends.rst)
+describes these as intentional output implementations for GUI and file
+formats. This is a known legitimate platform/backend family and a false
+positive if the lexical candidate is treated as evidence of poor boundaries.
+It demonstrates why the result must remain advisory and be reviewed against
+the project's purpose.
+
+Enabling Python import evidence on that same 35-file snapshot resolved 50
+direct intra-family edges, while 297 imports were unresolved or outside the
+selected inventory. The snapshot omitted the rest of Matplotlib's `lib/`
+source tree and nested backend directories, so those unresolved imports and
+the absence of selected outside consumers cannot establish the full dependency
+graph or zero external use. This one curated candidate plus four path-only
+no-candidate screens is too small and biased to support an accuracy claim or
+stronger enforcement.
