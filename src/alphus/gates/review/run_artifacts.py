@@ -627,7 +627,8 @@ def _runtime_attestation_findings(
                         "runtime-origin-not-bound-to-metadata",
                     ),
                     path,
-                    f"configured execution module `{module}` is imported at line {imported.lineno}, "
+                    f"configured execution module `{module}` is imported "
+                    f"at line {imported.lineno}, "
                     f"while the provenance sink at line {call.lineno} records configured "
                     "distribution metadata without a configured origin check on that module; "
                     "metadata agreement does not establish the imported code's identity, and "
