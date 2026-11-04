@@ -75,6 +75,7 @@ QualityRuleName: TypeAlias = Literal[
     "fastapi-practices",
     "sqlalchemy-practices",
     "document-style",
+    "suppression-reasons",
     "cyclomatic-complexity",
 ]
 

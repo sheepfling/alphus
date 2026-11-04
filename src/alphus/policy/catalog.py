@@ -136,6 +136,9 @@ RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
             "sqlalchemy_practices", RuleOutputShape.FINDINGS
         ),
         "document-style": RuleSpec("document_style", RuleOutputShape.FINDINGS),
+        "suppression-reasons": RuleSpec(
+            "suppression_reasons", RuleOutputShape.FINDINGS
+        ),
         "cyclomatic-complexity": RuleSpec(
             "cyclomatic_complexity",
             RuleOutputShape.CYCLOMATIC_REPORT,

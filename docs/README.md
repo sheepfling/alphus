@@ -20,6 +20,8 @@ path that matches the repository being checked.
 | Review Python source and framework checks                | [Review guides](review/README.md)            |
 | Review semantic patchwork advisories and their evidence  | [Semantic patchwork](review/semantic-patchwork/README.md) |
 | Review test, input, source-family, and framework checks   | [Review checks](review/README.md)            |
+| Review test, input, source-family, and framework checks   | [Review checks](review/README.md)           |
+| Audit consumer-selected lint suppression reasons          | [Lint suppressions](LINT-SUPPRESSIONS.md)   |
 | Review one handwritten matrix-product pattern             | [Numerical reuse](NUMERICAL-REUSE.md)         |
 | Review shell labels in Markdown examples                  | [Markdown shell fences](MARKDOWN-SHELL-FENCES.md) |
 | Detect docs/default drift                                   | [Docs/config drift](DOCUMENTATION-CONFIG-COUPLING.md) |

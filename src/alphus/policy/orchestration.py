@@ -72,6 +72,7 @@ from alphus.policy.review import (
     SemanticWorkPresentationPolicy,
     SourceFamilyPolicy,
     SqlAlchemyPracticePolicy,
+    SuppressionReasonPolicy,
     TestQualityPolicy,
     TypingStubSuggestionPolicy,
     UnexplainedEmptyResultPolicy,
@@ -137,6 +138,7 @@ class CheckPolicies(StrictModel):
     fastapi_practices: FastApiPracticePolicy | None = None
     sqlalchemy_practices: SqlAlchemyPracticePolicy | None = None
     document_style: DocumentStylePolicy | None = None
+    suppression_reasons: SuppressionReasonPolicy | None = None
     shared_utilities: SharedUtilitiesPolicy | None = None
     python_style: PythonStylePolicy | None = None
     runtime_types: RuntimeTypePolicy | None = None

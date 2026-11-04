@@ -1403,6 +1403,76 @@ class CiWorkflowPolicy(SourceScanPolicy):
         return tuple(values)
 
 
+class SuppressionReasonException(StrictModel):
+    """A narrowly approved suppression location and its reviewable reason."""
+
+    path: str
+    rule_code: str
+    line: Annotated[int, Field(gt=0)]
+    reason: str
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, value: str) -> str:
+        return validate_single_path(value, "suppression exception paths")
+
+    @field_validator("rule_code")
+    @classmethod
+    def validate_rule_code(cls, value: str) -> str:
+        if not re.fullmatch(r"[A-Z]+[0-9]{3,4}", value):
+            raise ValueError("suppression exception codes must be Ruff rule codes")
+        return value
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, value: str) -> str:
+        reason = validate_one_line_message(value)
+        if not reason.strip():
+            raise ValueError("suppression exception reasons must be non-empty")
+        return reason
+
+
+class SuppressionReasonPolicy(PythonSourceScanPolicy):
+    """Consumer-selected inline Ruff suppressions that require a rationale."""
+
+    rule_codes: tuple[str, ...] = ("E402",)
+    reason_delimiter: str = "--"
+    exceptions: tuple[SuppressionReasonException, ...] = ()
+    severity: Severity = "info"
+
+    @field_validator("rule_codes")
+    @classmethod
+    def validate_rule_codes(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not re.fullmatch(r"[A-Z]+[0-9]{3,4}", code) for code in values):
+            raise ValueError("suppression rule codes must be uppercase Ruff codes")
+        require_unique(values, "suppression rule codes must be unique")
+        if not values:
+            raise ValueError("at least one suppression rule code must be selected")
+        return tuple(values)
+
+    @field_validator("reason_delimiter")
+    @classmethod
+    def validate_reason_delimiter(cls, value: str) -> str:
+        return validate_one_line_message(value)
+
+    @field_validator("exceptions")
+    @classmethod
+    def validate_exceptions(
+        cls, values: Sequence[SuppressionReasonException]
+    ) -> tuple[SuppressionReasonException, ...]:
+        keys = tuple((item.path, item.rule_code, item.line) for item in values)
+        require_unique(keys, "suppression exception locations must be unique")
+        return tuple(values)
+
+    @model_validator(mode="after")
+    def validate_exception_codes(self) -> Self:
+        if any(
+            exception.rule_code not in self.rule_codes for exception in self.exceptions
+        ):
+            raise ValueError("suppression exceptions must use a selected rule code")
+        return self
+
+
 class TestQualityExclusion(StrictModel):
     """One documented test excluded from shared-oracle review."""
 

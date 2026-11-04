@@ -88,6 +88,7 @@ from alphus.gates.review.semantic_work_presentation import (
     check_semantic_work_presentation,
 )
 from alphus.gates.review.source_families import check_source_families
+from alphus.gates.review.suppression_reasons import check_suppression_reasons
 from alphus.gates.review.test_quality import check_test_quality
 from alphus.gates.review.typing_stub_suggestions import check_typing_stub_suggestions
 from alphus.gates.review.unexplained_empty_results import (
@@ -379,6 +380,11 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
         ),
         "document-style": lambda root, files, config: check_document_style(
             root, files, require_policy(config.checks.document_style, "document_style")
+        ),
+        "suppression-reasons": lambda root, files, config: check_suppression_reasons(
+            root,
+            files,
+            require_policy(config.checks.suppression_reasons, "suppression_reasons"),
         ),
     }
 )

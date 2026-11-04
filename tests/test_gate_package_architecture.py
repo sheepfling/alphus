@@ -118,6 +118,7 @@ def test_gate_themes_own_their_runner_mappings() -> None:
                 "run-artifacts",
                 "ci-workflows",
                 "document-style",
+                "suppression-reasons",
             },
         ),
         (

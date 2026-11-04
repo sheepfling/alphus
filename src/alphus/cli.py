@@ -427,6 +427,7 @@ def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
         "pydantic-practices": "Pydantic practices",
         "fastapi-practices": "FastAPI practices",
         "sqlalchemy-practices": "SQLAlchemy practices",
+        "suppression-reasons": "Suppression reasons",
     }
     if rule in review_labels:
         for finding in findings:

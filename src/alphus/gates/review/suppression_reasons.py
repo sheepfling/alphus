@@ -1,0 +1,1065 @@
+"""Audit selected inline Ruff suppressions for consumer-required reasons."""
+
+from __future__ import annotations
+
+import io
+import json
+import re
+import tokenize
+import tomllib
+from collections.abc import Collection, Iterable, Mapping, MutableSequence, MutableSet
+from collections.abc import Set as AbstractSet
+from fnmatch import fnmatchcase
+from pathlib import Path, PurePosixPath
+from types import MappingProxyType
+from typing import cast
+
+from alphus.config import SuppressionReasonPolicy
+from alphus.contracts.findings import Finding, Severity
+from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.support.inventory import matches_path
+from alphus.support.source_text import read_python_source, read_utf8_text
+
+_RULE_ID = rule_tag(
+    Scope.PYTHON, Framework.NONE, Category.STYLE, "missing-suppression-reason"
+)
+_DIRECTIVE = re.compile(r"^#\s*noqa\s*:\s*(?P<body>.*)$", re.IGNORECASE)
+_FILE_DIRECTIVE = re.compile(
+    r"^#\s*(?:ruff|flake8)\s*:\s*(?i:noqa)\s*:\s*(?P<body>.*)$"
+)
+_FILE_BLANKET_DIRECTIVE = re.compile(r"^#\s*(?:ruff|flake8)\s*:\s*(?i:noqa)\s*$")
+_BLANKET_DIRECTIVE = re.compile(r"^#\s*(?i:noqa)\s*$")
+_FILE_IGNORE_DIRECTIVE = re.compile(
+    r"^#\s*ruff\s*:\s*file-ignore\s*\[(?P<codes>[^]]*)\](?P<tail>.*)$"
+)
+_COMMENT_MARKER = re.compile(r"(?:^|\s)#")
+_CODE = re.compile(r"\b[A-Z]+[0-9]{3,4}\b")
+_RUFF_RULE_REDIRECTS: Mapping[str, str] = MappingProxyType(
+    {
+        "TCH": "TC",
+        "TCH001": "TC001",
+        "TCH002": "TC002",
+        "TCH003": "TC003",
+        "TCH004": "TC004",
+        "TCH005": "TC005",
+        "TCH006": "TC010",
+        "TCH010": "TC010",
+    }
+)
+
+
+def _canonical_ruff_selector(selector: str) -> str:
+    """Apply the explicitly supported legacy Flake8-type-checking redirects."""
+    normalized = selector.upper()
+    return _RUFF_RULE_REDIRECTS.get(normalized, normalized)
+
+
+def _ruff_code_selections(
+    selectors: Iterable[str], required_codes: Collection[str]
+) -> list[str]:
+    """Return selected codes matched by Ruff's exact or prefix selectors."""
+    normalized = {_canonical_ruff_selector(selector) for selector in selectors}
+    return sorted(
+        code
+        for code in required_codes
+        if "ALL" in normalized
+        or any(code.startswith(selector) for selector in normalized)
+    )
+
+
+def _comment_directive_match(
+    pattern: re.Pattern[str], comment: str
+) -> re.Match[str] | None:
+    """Match a Ruff directive after any hash marker in one comment token."""
+    for marker in _COMMENT_MARKER.finditer(comment):
+        candidate = comment[marker.start() :].strip()
+        match = pattern.fullmatch(candidate)
+        if match is not None:
+            return match
+    return None
+
+
+def _brace_alternatives(pattern: str, *, limit: int = 128) -> tuple[str, ...] | None:
+    """Expand Ruff-style comma brace alternatives, returning None if unsupported."""
+    opening = pattern.find("{")
+    if opening < 0:
+        return (pattern,) if "}" not in pattern else None
+    depth = 0
+    closing = -1
+    for index in range(opening, len(pattern)):
+        if pattern[index] == "{":
+            depth += 1
+        elif pattern[index] == "}":
+            depth -= 1
+            if depth == 0:
+                closing = index
+                break
+            if depth < 0:
+                return None
+    if closing < 0:
+        return None
+    body = pattern[opening + 1 : closing]
+    parts: list[str] = []
+    part_start = 0
+    depth = 0
+    for index, char in enumerate(body):
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+        elif char == "," and depth == 0:
+            parts.append(body[part_start:index])
+            part_start = index + 1
+    if not parts:
+        return None
+    parts.append(body[part_start:])
+    expanded: list[str] = []
+    for part in parts:
+        part_variants = _brace_alternatives(part, limit=limit)
+        if part_variants is None:
+            return None
+        for suffix in _brace_alternatives(pattern[closing + 1 :], limit=limit) or ():
+            for part_variant in part_variants:
+                expanded.append(pattern[:opening] + part_variant + suffix)
+                if len(expanded) > limit:
+                    return None
+    return tuple(expanded)
+
+
+def _ruff_per_file_matches(path: str, pattern: str) -> bool | None:
+    """Match Ruff per-file globs by path or basename, including ! and braces.
+
+    ``None`` means the pattern uses brace syntax this bounded matcher cannot
+    safely evaluate, so callers must report the entry as not evaluated.
+    """
+    negated = pattern.startswith("!")
+    glob = pattern[1:] if negated else pattern
+    alternatives = _brace_alternatives(glob)
+    if alternatives is None:
+        return None
+    matched = any(
+        matches_path(path, item) or fnmatchcase(PurePosixPath(path).name, item)
+        for item in alternatives
+    )
+    return not matched if negated else matched
+
+
+def suppression_reason_findings(
+    source: str, policy: SuppressionReasonPolicy, *, path: str = "<source>"
+) -> list[Finding]:
+    """Find selected inline ``noqa`` codes without the configured reason marker."""
+    findings: list[Finding] = []
+    required_codes = set(policy.rule_codes)
+    exceptions = {
+        (exception.path, exception.rule_code, exception.line): exception
+        for exception in policy.exceptions
+        if exception.path == path
+    }
+    used_exceptions: set[tuple[str, str, int]] = set()
+    try:
+        tokens = tokenize.generate_tokens(io.StringIO(source).readline)
+        comments = (token for token in tokens if token.type == tokenize.COMMENT)
+        for token in comments:
+            comment = token.string.strip()
+            if _comment_directive_match(_BLANKET_DIRECTIVE, comment) or (
+                _comment_directive_match(_FILE_BLANKET_DIRECTIVE, comment)
+            ):
+                findings.append(
+                    Finding(
+                        rule_id=_RULE_ID,
+                        path=path,
+                        line=token.start[0],
+                        severity=policy.severity,
+                        message=(
+                            "Blanket Ruff suppression has no selected rule code, so "
+                            "its reason obligation is unknown to this audit. Review "
+                            "the native Ruff blanket-suppression diagnostics; no "
+                            "reason status was inferred."
+                        ),
+                    )
+                )
+                continue
+            inline = bool(token.line[: token.start[1]].strip())
+            directive = (
+                _comment_directive_match(_DIRECTIVE, comment)
+                if inline
+                else _comment_directive_match(_FILE_DIRECTIVE, comment)
+            )
+            file_ignore = (
+                _comment_directive_match(_FILE_IGNORE_DIRECTIVE, comment)
+                if not inline and token.start[1] == 0
+                else None
+            )
+            if directive is None and file_ignore is None:
+                continue
+            if file_ignore is not None:
+                code_list = file_ignore.group("codes")
+                _, separator, reason = file_ignore.group("tail").partition(
+                    policy.reason_delimiter
+                )
+            elif directive is not None:
+                body = directive.group("body")
+                code_list, separator, reason = body.partition(policy.reason_delimiter)
+            else:
+                continue
+            selected = sorted(
+                required_codes.intersection(
+                    _canonical_ruff_selector(code) for code in _CODE.findall(code_list)
+                )
+            )
+            if not selected:
+                continue
+            unaudited = [
+                code
+                for code in selected
+                if (path, code, token.start[0]) not in exceptions
+            ]
+            used_exceptions.update(
+                (path, code, token.start[0])
+                for code in selected
+                if code not in unaudited
+            )
+            if not unaudited or (separator and reason.strip()):
+                continue
+            findings.append(
+                Finding(
+                    rule_id=_RULE_ID,
+                    path=path,
+                    line=token.start[0],
+                    severity=policy.severity,
+                    message=(
+                        f"Selected Ruff suppression {', '.join(unaudited)} has no rationale "
+                        f"after {policy.reason_delimiter!r}. Add a concise reason to this "
+                        "comment. This audit checks documentation only; Ruff still owns "
+                        "whether the suppression is valid or used."
+                    ),
+                )
+            )
+    except (IndentationError, tokenize.TokenError) as error:
+        return [
+            Finding(
+                rule_id=_RULE_ID,
+                path=path,
+                severity=policy.severity,
+                message=(
+                    "Suppression reasons were not evaluated because Python comment "
+                    f"tokenization failed: {type(error).__name__}."
+                ),
+            )
+        ]
+    for key, exception in exceptions.items():
+        if key in used_exceptions:
+            continue
+        findings.append(
+            Finding(
+                rule_id=_RULE_ID,
+                path=exception.path,
+                line=exception.line,
+                severity=policy.severity,
+                message=(
+                    f"Approved Ruff suppression exception for {exception.rule_code} "
+                    "does not match a selected directive at this path and line; "
+                    "review or remove the stale exception."
+                ),
+            )
+        )
+    return findings
+
+
+def check_suppression_reasons(
+    root: Path, paths: Iterable[Path], policy: SuppressionReasonPolicy
+) -> list[Finding]:
+    """Scan only selected configured Python files without importing them."""
+    checkout = root.resolve(strict=True)
+    findings: list[Finding] = []
+    selected_files: set[str] = set()
+    for relative in sorted(set(paths)):
+        name = relative.as_posix()
+        if relative.suffix != ".py" or any(
+            matches_path(name, pattern) for pattern in policy.exclude
+        ):
+            continue
+        selected_files.add(name)
+        try:
+            source = read_python_source(checkout / relative)
+        except (OSError, UnicodeError, SyntaxError) as error:
+            findings.append(
+                Finding(
+                    rule_id=_RULE_ID,
+                    path=name,
+                    severity=policy.severity,
+                    message=(
+                        "Suppression reasons were not evaluated because the Python "
+                        f"source could not be read: {type(error).__name__}."
+                    ),
+                )
+            )
+            continue
+        findings.extend(suppression_reason_findings(source, policy, path=name))
+    findings.extend(_missing_exception_file_findings(checkout, selected_files, policy))
+    active_ruff_configs: set[str] = set()
+    findings.extend(
+        _ruff_config_suppression_findings(
+            checkout,
+            selected_files,
+            policy,
+            active_configs=active_ruff_configs,
+        )
+    )
+    for exception in policy.exceptions:
+        if (
+            Path(exception.path).suffix == ".toml"
+            and exception.path not in active_ruff_configs
+        ):
+            config_path = checkout / exception.path
+            try:
+                resolved_config = config_path.resolve(strict=True)
+                resolved_config.relative_to(checkout)
+            except (OSError, ValueError):
+                continue
+            if resolved_config.is_file():
+                findings.append(
+                    Finding(
+                        rule_id=_RULE_ID,
+                        path=exception.path,
+                        line=exception.line,
+                        severity=policy.severity,
+                        message=(
+                            f"Approved Ruff config exception for {exception.rule_code} "
+                            "does not belong to the active Ruff configuration or its "
+                            "extend chain; review or remove the stale exception."
+                        ),
+                    )
+                )
+    if not selected_files:
+        findings.append(
+            Finding(
+                rule_id=_RULE_ID,
+                path=".",
+                severity="info",
+                message=(
+                    "Python inline suppression reasons were not evaluated because "
+                    "no selected Python source files matched the configured scope. "
+                    "Ruff TOML suppression entries, when present, were still audited."
+                ),
+            )
+        )
+    return sorted(
+        findings, key=lambda item: (item.path or "", item.line or 0, item.message)
+    )
+
+
+def _missing_exception_file_findings(
+    root: Path, selected_files: AbstractSet[str], policy: SuppressionReasonPolicy
+) -> list[Finding]:
+    """Report approved source/config sites whose file was deleted or moved."""
+    findings: list[Finding] = []
+    for exception in policy.exceptions:
+        extension = Path(exception.path).suffix
+        if (
+            exception.path in selected_files
+            or extension not in {*policy.extensions, ".toml"}
+            or extension != ".toml"
+            and any(matches_path(exception.path, pattern) for pattern in policy.exclude)
+        ):
+            continue
+        try:
+            source_path = (root / exception.path).resolve(strict=True)
+            source_path.relative_to(root)
+        except (OSError, ValueError):
+            findings.append(
+                Finding(
+                    rule_id=_RULE_ID,
+                    path=exception.path,
+                    line=exception.line,
+                    severity=policy.severity,
+                    message=(
+                        f"Approved Ruff exception for {exception.rule_code} "
+                        "points to a missing or out-of-root file; the exception "
+                        "site is stale after a move or deletion."
+                    ),
+                )
+            )
+            continue
+        if not source_path.is_file():
+            findings.append(
+                Finding(
+                    rule_id=_RULE_ID,
+                    path=exception.path,
+                    line=exception.line,
+                    severity=policy.severity,
+                    message=(
+                        f"Approved Ruff exception for {exception.rule_code} "
+                        "does not point to a regular file; the exception site "
+                        "is stale."
+                    ),
+                )
+            )
+    return findings
+
+
+_RUFF_PER_FILE_TABLES = frozenset(
+    {
+        "tool.ruff.lint.per-file-ignores",
+        "tool.ruff.lint.extend-per-file-ignores",
+        "tool.ruff.per-file-ignores",
+        "tool.ruff.extend-per-file-ignores",
+        "lint.per-file-ignores",
+        "lint.extend-per-file-ignores",
+        "per-file-ignores",
+        "extend-per-file-ignores",
+    }
+)
+_RUFF_NORMAL_PER_FILE_TABLES = frozenset(
+    table for table in _RUFF_PER_FILE_TABLES if "extend-per-file-ignores" not in table
+)
+
+
+def _split_toml_comment(value: str) -> tuple[str, str]:
+    """Split a TOML assignment at its first unquoted comment marker."""
+    quote: str | None = None
+    escaped = False
+    for index, char in enumerate(value):
+        if escaped:
+            escaped = False
+        elif char == "\\" and quote == '"':
+            escaped = True
+        elif quote is not None:
+            if char == quote:
+                quote = None
+        elif char in {'"', "'"}:
+            quote = char
+        elif char == "#":
+            return value[:index].rstrip(), value[index + 1 :].strip()
+    return value.rstrip(), ""
+
+
+def _toml_string_list(value: object) -> list[str] | None:
+    """Return a parsed TOML array only when each item is a string."""
+    match value:
+        case list():
+            values = cast(list[object], value)
+        case _:
+            return None
+    result: list[str] = []
+    for item in values:
+        match item:
+            case str() as text:
+                result.append(text)
+            case _:
+                return None
+    return result
+
+
+def _toml_per_file_map(value: object) -> dict[str, list[str]] | None:
+    """Return only a string-pattern to string-code mapping."""
+    match value:
+        case dict():
+            entries = cast(dict[object, object], value)
+        case _:
+            return None
+    result: dict[str, list[str]] = {}
+    for pattern, raw_codes in entries.items():
+        match pattern:
+            case str() as text:
+                codes = _toml_string_list(raw_codes)
+            case _:
+                return None
+        if codes is None:
+            return None
+        result[text] = codes
+    return result
+
+
+def _normalize_multiline_inline_map(
+    lines: MutableSequence[str], start: int
+) -> tuple[str, int, dict[str, str], str] | None:
+    """Normalize Ruff's multiline inline map using its string/list subset."""
+    entries: dict[str, list[str]] = {}
+    entry_comments: dict[str, str] = {}
+    index = start + 1
+    while index < len(lines):
+        value_text, line_comment = _split_toml_comment(lines[index])
+        stripped = value_text.strip()
+        if stripped in {"", ","}:
+            index += 1
+            continue
+        if stripped == "}":
+            rendered = (
+                "{ "
+                + ", ".join(
+                    f"{json.dumps(pattern)} = {json.dumps(codes)}"
+                    for pattern, codes in entries.items()
+                )
+                + " }"
+            )
+            return rendered, index, entry_comments, line_comment
+        assignment = re.match(r"(?P<key>[^=]+?)\s*=\s*(?P<value>.*)$", stripped)
+        if assignment is None:
+            return None
+        try:
+            pattern = tomllib.loads(f"key = {assignment.group('key')}")["key"]
+        except tomllib.TOMLDecodeError:
+            return None
+        match pattern:
+            case str() as pattern_text:
+                pass
+            case _:
+                return None
+        fragments: list[str] = []
+        comments = [line_comment] if line_comment else []
+        code_end = index
+        while True:
+            code_text = assignment.group("value") if not fragments else lines[code_end]
+            code_value, code_comment = _split_toml_comment(code_text)
+            if code_comment:
+                comments.append(code_comment)
+            fragments.append(code_value.strip())
+            expression = "\n".join(fragments).rstrip()
+            if expression.endswith(","):
+                expression = expression[:-1].rstrip()
+            try:
+                parsed = tomllib.loads(f"codes = {expression}")["codes"]
+            except tomllib.TOMLDecodeError:
+                code_end += 1
+                if code_end >= len(lines):
+                    return None
+                continue
+            codes = _toml_string_list(parsed)
+            if codes is None:
+                return None
+            entries[pattern_text] = codes
+            if comments:
+                entry_comments[pattern_text] = " ".join(comments)
+            index = code_end + 1
+            break
+    return None
+
+
+def _normalize_multiline_per_file_values(
+    source: str,
+) -> tuple[str, dict[tuple[int, str], str], set[int]]:
+    """Collapse valid multiline per-file-ignore arrays without losing line numbers."""
+    lines = source.splitlines()
+    table = ""
+    index = 0
+    entry_comments: dict[tuple[int, str], str] = {}
+    inline_map_lines: set[int] = set()
+    while index < len(lines):
+        line = lines[index]
+        section_text, _comment = _split_toml_comment(line)
+        section = re.fullmatch(r"\s*\[([^]]+)\]\s*", section_text)
+        if section:
+            table = section.group(1).strip()
+            index += 1
+            continue
+        if not line.strip() or line.lstrip().startswith("#"):
+            index += 1
+            continue
+        assignment = re.match(r"(?P<key>[^=]+?)\s*=\s*(?P<value>.*)$", line)
+        if assignment is None:
+            index += 1
+            continue
+        key = assignment.group("key").strip()
+        inline_map = table in {"", "tool.ruff", "tool.ruff.lint", "lint"} and key in {
+            "per-file-ignores",
+            "extend-per-file-ignores",
+        }
+        table_entry = table in _RUFF_PER_FILE_TABLES
+        if not inline_map and not table_entry:
+            index += 1
+            continue
+        value_text, comment = _split_toml_comment(assignment.group("value"))
+        if inline_map and value_text.strip() == "{":
+            normalized = _normalize_multiline_inline_map(lines, index)
+            if normalized is not None:
+                (
+                    normalized_value,
+                    end_index,
+                    map_entry_comments,
+                    map_comment,
+                ) = normalized
+                inline_map_lines.add(index + 1)
+                for pattern, entry_comment in map_entry_comments.items():
+                    entry_comments[(index + 1, pattern)] = entry_comment
+                setting_comments = [value for value in (comment, map_comment) if value]
+                if setting_comments:
+                    normalized_value += " # " + " ".join(setting_comments)
+                lines[index] = f"{assignment.group('key')} = {normalized_value}"
+                for skipped in range(index + 1, end_index + 1):
+                    lines[skipped] = ""
+                index = end_index + 1
+                continue
+        fragments = [value_text]
+        comments = [comment] if comment else []
+        end_index = index
+        parsed: object | None = None
+        while True:
+            try:
+                expression = "\n".join(fragments)
+                parsed = tomllib.loads(f"value = {expression}")["value"]
+            except tomllib.TOMLDecodeError:
+                parsed = None
+            opening_inline_map = (
+                inline_map and end_index == index and value_text.strip() == "{"
+            )
+            if parsed is not None and not opening_inline_map:
+                break
+            end_index += 1
+            if end_index >= len(lines):
+                break
+            next_value, next_comment = _split_toml_comment(lines[end_index])
+            fragments.append(next_value)
+            if next_comment:
+                comments.append(next_comment)
+        normalized_value: str | None = None
+        if table_entry:
+            parsed_values = _toml_string_list(parsed)
+            if parsed_values is not None:
+                normalized_value = json.dumps(parsed_values)
+        elif inline_map:
+            parsed_entries = _toml_per_file_map(parsed)
+            if parsed_entries is not None:
+                normalized_value = (
+                    "{ "
+                    + ", ".join(
+                        f"{json.dumps(pattern)} = {json.dumps(codes)}"
+                        for pattern, codes in parsed_entries.items()
+                    )
+                    + " }"
+                )
+        if end_index > index and normalized_value is not None:
+            normalized = normalized_value
+            if comments:
+                normalized += " # " + " ".join(comments)
+            lines[index] = f"{assignment.group('key')} = {normalized}"
+            for skipped in range(index + 1, end_index + 1):
+                lines[skipped] = ""
+            index = end_index + 1
+        else:
+            index += 1
+    return "\n".join(lines), entry_comments, inline_map_lines
+
+
+def _unsupported_per_file_value_finding(
+    config_name: str, line: int, severity: Severity
+) -> Finding:
+    return Finding(
+        rule_id=_RULE_ID,
+        path=config_name,
+        line=line,
+        severity=severity,
+        message=(
+            "A Ruff per-file-ignore entry contains unsupported TOML values; "
+            "its suppression reasons were not evaluated."
+        ),
+    )
+
+
+def _unsupported_per_file_pattern_finding(
+    config_name: str, line: int, pattern: str, severity: Severity
+) -> Finding:
+    return Finding(
+        rule_id=_RULE_ID,
+        path=config_name,
+        line=line,
+        severity=severity,
+        message=(
+            f"Ruff per-file-ignore pattern {pattern!r} uses unsupported glob syntax; "
+            "its applicability and suppression reasons were not evaluated."
+        ),
+    )
+
+
+def _ruff_config_suppression_findings(
+    root: Path,
+    selected_files: Collection[str],
+    policy: SuppressionReasonPolicy,
+    *,
+    config_path: Path | None = None,
+    seen: frozenset[Path] = frozenset(),
+    depth: int = 0,
+    skip_inherited_normal_per_file: bool = False,
+    active_configs: MutableSet[str] | None = None,
+) -> list[Finding]:
+    """Audit simple Ruff per-file-ignore table entries without executing Ruff."""
+    findings: list[Finding] = []
+    if config_path is None:
+        config_path = next(
+            (
+                root / name
+                for name in (".ruff.toml", "ruff.toml", "pyproject.toml")
+                if (root / name).is_file()
+            ),
+            None,
+        )
+    if config_path is None:
+        return findings
+    try:
+        config_path = config_path.resolve(strict=True)
+        config_name = config_path.relative_to(root).as_posix()
+    except (OSError, ValueError):
+        return [
+            Finding(
+                rule_id=_RULE_ID,
+                path="ruff configuration",
+                severity=policy.severity,
+                message=(
+                    "Ruff inherited configuration was not evaluated because its "
+                    "path is missing or outside the selected repository root."
+                ),
+            )
+        ]
+    if active_configs is not None:
+        active_configs.add(config_name)
+    if depth >= 8 or config_path in seen:
+        return [
+            Finding(
+                rule_id=_RULE_ID,
+                path=config_name,
+                severity=policy.severity,
+                message=(
+                    "Ruff inherited configuration was not evaluated because the "
+                    "extension chain is cyclic or exceeds the depth limit."
+                ),
+            )
+        ]
+    seen = seen | {config_path}
+    source = ""
+    config_error: str | None = None
+    unsupported_multiline_map = False
+    per_file_entry_comments: dict[tuple[int, str], str] = {}
+    multiline_inline_map_lines: set[int] = set()
+    try:
+        source = read_utf8_text(config_path)
+        (
+            source,
+            per_file_entry_comments,
+            multiline_inline_map_lines,
+        ) = _normalize_multiline_per_file_values(source)
+        tomllib.loads(source)
+    except tomllib.TOMLDecodeError:
+        unsupported_multiline_map = bool(
+            re.search(r"(?m)^\s*(?:extend-)?per-file-ignores\s*=\s*\{\s*$", source)
+        )
+        config_error = "TOMLDecodeError"
+    except (OSError, UnicodeError) as error:
+        config_error = type(error).__name__
+    if config_error is not None:
+        detail = (
+            "Ruff per-file-ignore settings use a multiline inline table that the "
+            "Python TOML parser cannot read; suppression reasons were not evaluated."
+            if unsupported_multiline_map
+            else "Ruff per-file-ignore settings were not evaluated because the TOML "
+            f"configuration could not be read: {config_error}."
+        )
+        findings.append(
+            Finding(
+                rule_id=_RULE_ID,
+                path=config_name,
+                severity=policy.severity,
+                message=detail,
+            )
+        )
+        return findings
+    table = ""
+    used_exceptions: set[tuple[str, int]] = set()
+    inherited_config: str | None = None
+    local_normal_per_file = False
+    for line_number, line in enumerate(source.splitlines(), start=1):
+        stripped = line.strip()
+        section_text, _comment = _split_toml_comment(line)
+        section = re.fullmatch(r"\[([^]]+)\]", section_text.strip())
+        if section:
+            table = section.group(1).strip()
+            if table in _RUFF_NORMAL_PER_FILE_TABLES:
+                local_normal_per_file = True
+            continue
+        if table in {"", "tool.ruff"} and re.match(r"\s*extend\s*=", line):
+            extension_value, _comment = _split_toml_comment(line.split("=", 1)[1])
+            try:
+                parsed_extension = tomllib.loads(f"extend = {extension_value}")
+                raw_extension = parsed_extension["extend"]
+            except (tomllib.TOMLDecodeError, KeyError):
+                raw_extension = None
+            match raw_extension:
+                case str() as extension:
+                    inherited_config = extension
+                case _:
+                    findings.append(
+                        Finding(
+                            rule_id=_RULE_ID,
+                            path=config_name,
+                            line=line_number,
+                            severity=policy.severity,
+                            message=(
+                                "Ruff inherited configuration uses an unsupported "
+                                "extension value; inherited per-file ignores were not evaluated."
+                            ),
+                        )
+                    )
+            continue
+        if table in {"", "tool.ruff", "tool.ruff.lint", "lint"} and re.match(
+            r"\s*(?:extend-)?per-file-ignores\s*=", line
+        ):
+            inline_value, inline_comment = _split_toml_comment(line.split("=", 1)[1])
+            try:
+                parsed_entries = tomllib.loads(f"value = {inline_value}")["value"]
+            except tomllib.TOMLDecodeError:
+                parsed_entries = None
+            entries = _toml_per_file_map(parsed_entries)
+            if entries is not None:
+                normal_inline = not re.match(r"\s*extend-per-file-ignores\s*=", line)
+                local_normal_per_file = local_normal_per_file or normal_inline
+                if skip_inherited_normal_per_file and normal_inline:
+                    continue
+                for pattern, code_values in entries.items():
+                    selected_codes = _ruff_code_selections(
+                        code_values, policy.rule_codes
+                    )
+                    if not selected_codes:
+                        continue
+                    applicability = [
+                        _ruff_per_file_matches(path, pattern) for path in selected_files
+                    ]
+                    if any(result is None for result in applicability):
+                        findings.append(
+                            _unsupported_per_file_pattern_finding(
+                                config_name, line_number, pattern, policy.severity
+                            )
+                        )
+                        continue
+                    applicable = [
+                        path
+                        for path, result in zip(selected_files, applicability)
+                        if result
+                    ]
+                    entry_comment = per_file_entry_comments.get((line_number, pattern))
+                    reason_comment = (
+                        entry_comment
+                        if entry_comment is not None
+                        else ""
+                        if line_number in multiline_inline_map_lines
+                        else inline_comment
+                    )
+                    _, _, reason = reason_comment.partition(policy.reason_delimiter)
+                    if not selected_codes or not applicable:
+                        continue
+                    exception_keys = {
+                        (exception.rule_code, exception.line)
+                        for exception in policy.exceptions
+                        if exception.path == config_name
+                    }
+                    used_exceptions.update(
+                        (code, line_number)
+                        for code in selected_codes
+                        if (code, line_number) in exception_keys
+                    )
+                    if reason.strip():
+                        continue
+                    unaudited = [
+                        code
+                        for code in selected_codes
+                        if (code, line_number) not in exception_keys
+                    ]
+                    if unaudited:
+                        findings.append(
+                            Finding(
+                                rule_id=_RULE_ID,
+                                path=config_name,
+                                line=line_number,
+                                severity=policy.severity,
+                                message=(
+                                    f"Selected Ruff per-file-ignore code(s) {', '.join(unaudited)} "
+                                    f"apply to {', '.join(sorted(applicable)[:3])} via {pattern!r} "
+                                    f"but have no rationale after {policy.reason_delimiter!r}; "
+                                    "add a TOML comment with the configured reason delimiter. "
+                                    "Ruff retains ownership of suppression validity and usage."
+                                ),
+                            )
+                        )
+            else:
+                findings.append(
+                    Finding(
+                        rule_id=_RULE_ID,
+                        path=config_name,
+                        line=line_number,
+                        severity=policy.severity,
+                        message=(
+                            "Ruff per-file-ignore settings use an unsupported inline form; "
+                            "suppression reasons were not evaluated."
+                        ),
+                    )
+                )
+            continue
+        if skip_inherited_normal_per_file and table in _RUFF_NORMAL_PER_FILE_TABLES:
+            continue
+        if (
+            table not in _RUFF_PER_FILE_TABLES
+            or not stripped
+            or stripped.startswith("#")
+        ):
+            continue
+        assignment = re.match(r"(?P<key>[^=]+?)\s*=\s*(?P<value>.+)$", line)
+        if assignment is None:
+            continue
+        value_text, comment = _split_toml_comment(assignment.group("value"))
+        try:
+            parsed_key = tomllib.loads(f"key = {assignment.group('key').strip()}")[
+                "key"
+            ]
+            parsed_codes = tomllib.loads(f"codes = {value_text}")["codes"]
+        except (tomllib.TOMLDecodeError, KeyError):
+            findings.append(
+                Finding(
+                    rule_id=_RULE_ID,
+                    path=config_name,
+                    line=line_number,
+                    severity=policy.severity,
+                    message=(
+                        "A Ruff per-file-ignore entry uses unsupported or "
+                        "unparseable syntax; its suppression reasons were not evaluated."
+                    ),
+                )
+            )
+            continue
+        match parsed_codes:
+            case list():
+                # opaque-boundary: TOML arrays are heterogeneous until policy filtering.
+                codes = cast(list[object], parsed_codes)
+            case _:
+                findings.append(
+                    _unsupported_per_file_value_finding(
+                        config_name, line_number, policy.severity
+                    )
+                )
+                continue
+        selected_candidates: list[str] = []
+        unsupported_code_value = False
+        for value in codes:
+            match value:
+                case str() as code:
+                    selected_candidates.append(code)
+                case _:
+                    unsupported_code_value = True
+        selected_codes = _ruff_code_selections(selected_candidates, policy.rule_codes)
+        if unsupported_code_value:
+            if selected_codes:
+                findings.append(
+                    _unsupported_per_file_value_finding(
+                        config_name, line_number, policy.severity
+                    )
+                )
+            continue
+        match parsed_key:
+            case str() as pattern:
+                pass
+            case _:
+                if selected_codes:
+                    findings.append(
+                        _unsupported_per_file_value_finding(
+                            config_name, line_number, policy.severity
+                        )
+                    )
+                continue
+        applicability = [
+            _ruff_per_file_matches(path, pattern) for path in selected_files
+        ]
+        if any(result is None for result in applicability):
+            if selected_codes:
+                findings.append(
+                    _unsupported_per_file_pattern_finding(
+                        config_name, line_number, pattern, policy.severity
+                    )
+                )
+            continue
+        applicable = [
+            path for path, result in zip(selected_files, applicability) if result
+        ]
+        if not selected_codes or not applicable:
+            continue
+        _, _, reason = comment.partition(policy.reason_delimiter)
+        exception_keys = {
+            (exception.rule_code, exception.line)
+            for exception in policy.exceptions
+            if exception.path == config_name
+        }
+        used_exceptions.update(
+            (code, line_number)
+            for code in selected_codes
+            if (code, line_number) in exception_keys
+        )
+        if reason.strip():
+            continue
+        unaudited = [
+            code for code in selected_codes if (code, line_number) not in exception_keys
+        ]
+        if not unaudited:
+            continue
+        findings.append(
+            Finding(
+                rule_id=_RULE_ID,
+                path=config_name,
+                line=line_number,
+                severity=policy.severity,
+                message=(
+                    f"Selected Ruff per-file-ignore code(s) {', '.join(unaudited)} "
+                    f"apply to {', '.join(sorted(applicable)[:3])} via {pattern!r} "
+                    f"but have no rationale after {policy.reason_delimiter!r}; "
+                    "add a TOML comment with the configured reason delimiter. "
+                    "Ruff retains ownership of whether the suppression is valid or used."
+                ),
+            )
+        )
+    for exception in policy.exceptions:
+        if exception.path != config_name:
+            continue
+        key = (exception.rule_code, exception.line)
+        if key in used_exceptions:
+            continue
+        findings.append(
+            Finding(
+                rule_id=_RULE_ID,
+                path=config_name,
+                line=exception.line,
+                severity=policy.severity,
+                message=(
+                    f"Approved Ruff config exception for {exception.rule_code} "
+                    "does not match a selected per-file-ignore entry at this line; "
+                    "review or remove the stale exception."
+                ),
+            )
+        )
+    if inherited_config is not None:
+        parent_path = config_path.parent / inherited_config
+        try:
+            resolved_parent = parent_path.resolve(strict=True)
+            resolved_parent.relative_to(root)
+        except (OSError, ValueError):
+            findings.append(
+                Finding(
+                    rule_id=_RULE_ID,
+                    path=config_name,
+                    severity=policy.severity,
+                    message=(
+                        "Ruff inherited configuration was not evaluated because "
+                        "its target is missing or outside the repository root."
+                    ),
+                )
+            )
+        else:
+            findings.extend(
+                _ruff_config_suppression_findings(
+                    root,
+                    selected_files,
+                    policy,
+                    config_path=resolved_parent,
+                    seen=seen,
+                    depth=depth + 1,
+                    skip_inherited_normal_per_file=(
+                        skip_inherited_normal_per_file or local_normal_per_file
+                    ),
+                    active_configs=active_configs,
+                )
+            )
+    return findings
