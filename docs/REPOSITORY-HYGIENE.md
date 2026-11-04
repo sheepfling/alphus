@@ -89,4 +89,3 @@ review findings before rewriting shared history.
 requests and pushes, and schedules the history profile monthly. Cadence lives
 in CI or a scheduler, not in individual rule settings. A local history audit
 covers only refs available in that checkout.
-

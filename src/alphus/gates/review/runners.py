@@ -87,6 +87,7 @@ from alphus.gates.review.semantic_work_presentation import (
 )
 from alphus.gates.review.source_families import check_source_families
 from alphus.gates.review.test_quality import check_test_quality
+from alphus.gates.review.typing_stub_suggestions import check_typing_stub_suggestions
 from alphus.gates.review.unexplained_empty_results import (
     check_unexplained_empty_results,
 )
@@ -104,6 +105,15 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
             root,
             files,
             require_policy(config.checks.numeric_literals, "numeric_literals"),
+        ),
+        "typing-stub-suggestions": lambda root, files, config: (
+            check_typing_stub_suggestions(
+                root,
+                files,
+                require_policy(
+                    config.checks.typing_stub_suggestions, "typing_stub_suggestions"
+                ),
+            )
         ),
         "prose-as-control": lambda root, files, config: (
             check_prose_as_control(

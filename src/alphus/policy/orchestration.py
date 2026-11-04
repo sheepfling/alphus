@@ -71,6 +71,7 @@ from alphus.policy.review import (
     SourceFamilyPolicy,
     SqlAlchemyPracticePolicy,
     TestQualityPolicy,
+    TypingStubSuggestionPolicy,
     UnexplainedEmptyResultPolicy,
 )
 from alphus.policy.sources import (
@@ -99,6 +100,7 @@ class CheckPolicies(StrictModel):
     output_escaping: SourceScanPolicy | None = None
     path_discovery: PathDiscoveryPolicy | None = None
     numeric_literals: NumericLiteralPolicy | None = None
+    typing_stub_suggestions: TypingStubSuggestionPolicy | None = None
     prose_as_control: ProseAsControlPolicy | None = None
     positional_semantic_overrides: PositionalSemanticOverridePolicy | None = None
     unexplained_empty_results: UnexplainedEmptyResultPolicy | None = None

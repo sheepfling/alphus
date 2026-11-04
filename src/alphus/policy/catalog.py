@@ -58,6 +58,9 @@ RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
         ),
         "git-history": RuleSpec("git", RuleOutputShape.FINDINGS, requires_files=False),
         "numeric-literals": RuleSpec("numeric_literals", RuleOutputShape.FINDINGS),
+        "typing-stub-suggestions": RuleSpec(
+            "typing_stub_suggestions", RuleOutputShape.FINDINGS
+        ),
         "prose-as-control": RuleSpec("prose_as_control", RuleOutputShape.FINDINGS),
         "rendered-value-reparsed": RuleSpec(
             "prose_as_control", RuleOutputShape.FINDINGS

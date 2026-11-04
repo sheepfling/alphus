@@ -39,6 +39,7 @@ QualityRuleName: TypeAlias = Literal[
     "git-attributes",
     "git-history",
     "numeric-literals",
+    "typing-stub-suggestions",
     "prose-as-control",
     "rendered-value-reparsed",
     "positional-semantic-overrides",

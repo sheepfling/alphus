@@ -1,7 +1,7 @@
 # Human review packet: document heading style
 
-**Packet version:** 1  
-**Prepared:** 2026-11-02  
+**Packet version:** 1
+**Prepared:** 2026-11-02
 **Status:** source excerpts assembled; all human labels are pending.
 
 This packet gives reviewers a small, mixed-context sample for #57. It contains

@@ -82,6 +82,7 @@ def test_gate_themes_own_their_runner_mappings() -> None:
             REVIEW_RULE_RUNNERS,
             {
                 "numeric-literals",
+                "typing-stub-suggestions",
                 "prose-as-control",
                 "rendered-value-reparsed",
                 "positional-semantic-overrides",

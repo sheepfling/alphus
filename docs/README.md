@@ -12,6 +12,7 @@ path that matches the repository being checked.
 | Analyze gate history across repositories                   | [History analytics](QUALITY-HISTORY-ANALYTICS.md) |
 | Export profile evidence and inspect early failures          | [Profile reporting](REPORTING.md)            |
 | Check Python stubs in an isolated target                  | [Stub package CI](STUB-PACKAGE-CI.md)       |
+| Suggest explicitly mapped third-party typing stubs        | [Typing stub suggestions](TYPING-STUB-SUGGESTIONS.md) |
 | Reuse CI integrations across providers                    | [CI integrations](CI-INTEGRATIONS.md)       |
 | Check C++ source, builds, and artifacts                   | [C++ quality](CPP-QUALITY.md)               |
 | Check Git ignores or historical repository artifacts      | [Repository hygiene](REPOSITORY-HYGIENE.md) |
