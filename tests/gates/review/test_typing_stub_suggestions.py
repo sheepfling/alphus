@@ -394,6 +394,29 @@ def test_excluded_python_paths_are_not_read_or_used_for_recommendations(
     assert findings == []
 
 
+@pytest.mark.parametrize(
+    "source",
+    [
+        b"\xef\xbb\xbfimport yaml\n",
+        b"# coding: cp1252\n# caf\xe9\nimport yaml\n",
+    ],
+    ids=("utf8-bom", "pep263-encoding"),
+)
+def test_python_import_scan_honors_python_source_encodings(
+    tmp_path: Path, monkeypatch: MonkeyPatch, source: bytes
+) -> None:
+    _checkout(tmp_path)
+    (tmp_path / "app.py").write_bytes(source)
+    monkeypatch.setattr(gate.metadata, "distribution", _distribution)
+
+    findings = gate.check_typing_stub_suggestions(
+        tmp_path, _python_sources(tmp_path), _policy()
+    )
+
+    assert len(findings) == 1
+    assert "Import 'yaml'" in findings[0].message
+
+
 def test_dotted_custom_import_defaults_to_full_package_path(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
@@ -413,7 +436,9 @@ def test_dotted_custom_import_defaults_to_full_package_path(
         checkers=("mypy",),
         stub_version_specifier=">=1",
     )
-    policy = _policy().model_copy(update={"candidates": (candidate,)})
+    policy = _policy().model_copy(
+        update={"builtin_catalog": False, "candidates": (candidate,)}
+    )
     monkeypatch.setattr(
         gate.metadata,
         "distribution",
@@ -427,6 +452,40 @@ def test_dotted_custom_import_defaults_to_full_package_path(
         )(),
     )
     monkeypatch.setattr(gate, "_checker_installation", lambda checkers: "mypy 2.3")
+
+    assert (
+        gate.check_typing_stub_suggestions(tmp_path, _python_sources(tmp_path), policy)
+        == []
+    )
+
+
+def test_dotted_custom_import_honors_ancestor_typing_marker(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    _checkout(tmp_path)
+    (tmp_path / "app.py").write_text("import requests.sessions\n", encoding="utf-8")
+    candidate = TypingStubCandidate(
+        import_name="requests.sessions",
+        runtime_distribution="PyYAML",
+        stub_distribution="types-PyYAML",
+        supported_runtime_versions=">=6,<7",
+        supported_python_versions=">=3.11,<4",
+        checkers=("mypy",),
+        package_path="requests/sessions",
+        stub_version_specifier=">=6,<7",
+    )
+    policy = _policy().model_copy(
+        update={"builtin_catalog": False, "candidates": (candidate,)}
+    )
+    monkeypatch.setattr(
+        gate.metadata,
+        "distribution",
+        lambda _: type(
+            "AncestorTypedDistribution",
+            (),
+            {"version": "6.0.2", "files": (Path("requests/py.typed"),)},
+        )(),
+    )
 
     assert (
         gate.check_typing_stub_suggestions(tmp_path, _python_sources(tmp_path), policy)

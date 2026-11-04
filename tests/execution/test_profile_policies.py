@@ -97,6 +97,35 @@ def test_missing_global_files_for_rule_is_rejected_before_commands(
     assert "top-level [files]" in capsys.readouterr().err
 
 
+def test_typing_stub_rule_requires_source_inventory(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = tmp_path / "quality-gates.toml"
+    path.write_text(
+        "schema_version = 1\n"
+        "[checks.typing_stub_suggestions]\n"
+        'extensions = [".py"]\n'
+        'typing_groups = ["dev"]\n',
+        encoding="utf-8",
+    )
+
+    assert RULE_SPECS["typing-stub-suggestions"].requires_files
+    assert (
+        main(
+            [
+                "--root",
+                str(tmp_path),
+                "--config",
+                str(path),
+                "--rule",
+                "typing-stub-suggestions",
+            ]
+        )
+        == 2
+    )
+    assert "top-level [files]" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize("rule", get_args(QualityRuleName))
 def test_each_selected_portable_rule_requires_its_policy(rule: QualityRuleName) -> None:
     with pytest.raises(MissingPolicyError, match=RULE_SPECS[rule].policy_field):
@@ -126,11 +155,9 @@ def test_public_size_rules_require_policy_before_iterating_empty_inventory(
 ) -> None:
     config = load_config(repository(tmp_path))
     # The public functions also guard callers that do not use the CLI.
+    check = check_file_size if rule == "file-size" else check_line_length
     with pytest.raises(MissingPolicyError):
-        if rule == "file-size":
-            check_file_size(tmp_path, (), config)
-        else:
-            check_line_length(tmp_path, (), config)
+        check(tmp_path, (), config)
 
 
 def test_selected_missing_policy_is_rejected_before_native_side_effect(

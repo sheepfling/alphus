@@ -19,7 +19,7 @@ from alphus.config import TypingStubCandidate, TypingStubSuggestionPolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.support.inventory import matches_path
-from alphus.support.source_text import read_utf8_text
+from alphus.support.source_text import read_python_source, read_utf8_text
 
 _RULE_ID = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.DEPENDENCIES, "typing-stub-suggestion"
@@ -140,7 +140,7 @@ def _has_inline_typing_for_imports(
         module_parts = (*package_parts, *suffix)
         typed_markers = (
             (*module_parts[:size], "py.typed")
-            for size in range(len(package_parts), len(module_parts) + 1)
+            for size in range(1, len(module_parts) + 1)
         )
         module_stubs = (
             (*module_parts, "__init__.pyi"),
@@ -205,8 +205,8 @@ def check_typing_stub_suggestions(
         if any(matches_path(relative_name, pattern) for pattern in policy.exclude):
             continue
         try:
-            source = read_utf8_text(checkout / relative)
-        except (OSError, UnicodeError) as error:
+            source = read_python_source(checkout / relative)
+        except (OSError, UnicodeError, SyntaxError, LookupError) as error:
             input_findings.append(
                 Finding(
                     rule_id=_RULE_ID,

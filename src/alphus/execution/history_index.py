@@ -61,7 +61,7 @@ _runs = Table(
     Column("branch", String),
     Column("revision", String),
     Column("completed_at_utc", String, nullable=False),
-    Column[float]("duration_seconds", Float, nullable=False),
+    Column[float]("duration_seconds", Float(), nullable=False),
     Column("total_steps", Integer, nullable=False),
     Column("passed", Integer, nullable=False),
     Column("failed", Integer, nullable=False),
@@ -81,7 +81,7 @@ _gates = Table(
     Column("status", String, nullable=False),
     Column("rollout", String, nullable=False),
     Column("attempted", Boolean, nullable=False),
-    Column[float]("duration_seconds", Float),
+    Column[float]("duration_seconds", Float()),
     Column("finding_count", Integer, nullable=False),
 )
 _findings = Table(
@@ -104,7 +104,7 @@ _units = Table(
     Column("run_id", String, ForeignKey("runs.record_id"), primary_key=True),
     Column("unit_name", String, primary_key=True),
     Column("step_name", String),
-    Column[float]("duration_seconds", Float, nullable=False),
+    Column[float]("duration_seconds", Float(), nullable=False),
 )
 
 

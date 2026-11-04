@@ -73,6 +73,61 @@ def test_nested_requirement_includes_and_url_sources_are_supported(
     assert check_dependency_locks(tmp_path, _policy()) == []
 
 
+def test_conflicting_normalized_exact_pins_keep_locations_across_includes(
+    tmp_path: Path,
+) -> None:
+    _write(
+        tmp_path,
+        "config/requirements.txt",
+        "Sample_Lib==1.0\n-r extras/more.txt\n",
+    )
+    _write(tmp_path, "config/extras/more.txt", "-r deeper.txt\n")
+    _write(tmp_path, "config/extras/deeper.txt", "sample-lib==2.0\n")
+    _write(tmp_path, "locks/base.txt", "sample-lib==2.0\n")
+    _write(tmp_path, "locks/build.txt", "")
+
+    findings = check_dependency_locks(tmp_path, _policy())
+    conflicts = [
+        finding
+        for finding in findings
+        if finding.rule_id
+        == "alphus/repository/none/dependencies/duplicate-requirement-conflict"
+    ]
+
+    assert len(conflicts) == 1
+    assert conflicts[0].path == "config/extras/deeper.txt"
+    assert conflicts[0].line == 1
+    assert "config/requirements.txt:1" in conflicts[0].message
+    assert "config/extras/deeper.txt:1" in conflicts[0].message
+
+
+@pytest.mark.parametrize(
+    "requirements",
+    [
+        "sample-lib>=1\nsample_lib<3\n",
+        "sample-lib==1.0\nsample_lib==1.0.0\n",
+        "sample-lib==1.0\nsample_lib==1.0+vendor\n",
+        (
+            'sample-lib[a]==1; python_version < "3.12"\n'
+            'sample-lib[b]==2; python_version >= "3.12"\n'
+        ),
+        "sample-lib[a]==1\nsample-lib[b]==1\n",
+    ],
+)
+def test_compatible_or_disjoint_duplicate_constraints_are_not_conflicts(
+    tmp_path: Path, requirements: str
+) -> None:
+    _write(tmp_path, "config/requirements.txt", requirements)
+    _write(tmp_path, "locks/base.txt", "sample-lib==1\n")
+    _write(tmp_path, "locks/build.txt", "")
+
+    findings = check_dependency_locks(tmp_path, _policy())
+
+    assert not any(
+        "duplicate-requirement-conflict" in item.rule_id for item in findings
+    )
+
+
 def test_include_cycles_unsafe_paths_and_invalid_requirements_are_reported(
     tmp_path: Path,
 ) -> None:
@@ -96,3 +151,21 @@ def test_dependency_lock_policy_rejects_parent_paths() -> None:
         DependencyLockPolicy.model_validate(
             {"pairs": [{"input_file": "../outside.txt", "lock_file": "lock.txt"}]}
         )
+
+
+def test_unresolved_marker_pin_relationship_is_informational(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "config/requirements.txt",
+        'sample-lib==1; sys_platform == "linux"\n'
+        'sample-lib==2; python_version >= "3.12"\n',
+    )
+    _write(tmp_path, "locks/base.txt", "sample-lib==2\n")
+    _write(tmp_path, "locks/build.txt", "")
+
+    findings = check_dependency_locks(tmp_path, _policy())
+    uncertain = [item for item in findings if "marker-uncertain" in item.rule_id]
+
+    assert len(uncertain) == 1
+    assert uncertain[0].severity == "info"
+    assert "not proven overlapping or disjoint" in uncertain[0].message

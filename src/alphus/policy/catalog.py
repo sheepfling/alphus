@@ -59,8 +59,34 @@ RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
         "git-history": RuleSpec("git", RuleOutputShape.FINDINGS, requires_files=False),
         "numeric-literals": RuleSpec("numeric_literals", RuleOutputShape.FINDINGS),
         "typing-stub-suggestions": RuleSpec(
-            "typing_stub_suggestions", RuleOutputShape.FINDINGS, requires_files=False
+            "typing_stub_suggestions", RuleOutputShape.FINDINGS
         ),
+        "prose-as-control": RuleSpec("prose_as_control", RuleOutputShape.FINDINGS),
+        "rendered-value-reparsed": RuleSpec(
+            "prose_as_control", RuleOutputShape.FINDINGS
+        ),
+        "positional-semantic-overrides": RuleSpec(
+            "positional_semantic_overrides", RuleOutputShape.FINDINGS
+        ),
+        "unexplained-empty-results": RuleSpec(
+            "unexplained_empty_results", RuleOutputShape.FINDINGS
+        ),
+        "embedded-semantic-overrides": RuleSpec(
+            "embedded_semantic_overrides", RuleOutputShape.FINDINGS
+        ),
+        "heuristic-total-consumption": RuleSpec(
+            "heuristic_total_consumption", RuleOutputShape.FINDINGS
+        ),
+        "provenance-as-ownership": RuleSpec(
+            "provenance_ownership", RuleOutputShape.FINDINGS
+        ),
+        "semantic-work-in-presentation": RuleSpec(
+            "semantic_work_presentation", RuleOutputShape.FINDINGS
+        ),
+        "parallel-normalization": RuleSpec(
+            "parallel_normalization", RuleOutputShape.FINDINGS
+        ),
+        "patch-cascade": RuleSpec("patch_cascade", RuleOutputShape.FINDINGS),
         "manual-matrix-kernels": RuleSpec(
             "manual_matrix_kernels", RuleOutputShape.FINDINGS
         ),
@@ -95,6 +121,7 @@ RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
         ),
         "ned-basis-vectors": RuleSpec("ned_basis_vectors", RuleOutputShape.FINDINGS),
         "scipy-constants": RuleSpec("scipy_constants", RuleOutputShape.FINDINGS),
+        "ci-workflows": RuleSpec("ci_workflows", RuleOutputShape.FINDINGS),
         "test-quality": RuleSpec("test_quality", RuleOutputShape.FINDINGS),
         "input-contracts": RuleSpec("input_contracts", RuleOutputShape.FINDINGS),
         "source-families": RuleSpec("source_families", RuleOutputShape.FINDINGS),
@@ -106,6 +133,7 @@ RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
         "sqlalchemy-practices": RuleSpec(
             "sqlalchemy_practices", RuleOutputShape.FINDINGS
         ),
+        "document-style": RuleSpec("document_style", RuleOutputShape.FINDINGS),
         "cyclomatic-complexity": RuleSpec(
             "cyclomatic_complexity",
             RuleOutputShape.CYCLOMATIC_REPORT,
