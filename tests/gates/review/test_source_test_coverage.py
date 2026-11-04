@@ -268,6 +268,7 @@ def test_stale_revision_and_mismatched_source_evidence_remain_unverified(
     assert any("[coverage:unverified]" in item.message for item in stale)
     assert not any("[coverage:checked]" in item.message for item in stale)
 
+
 def test_absent_execution_artifact_is_unverified_not_clean(tmp_path: Path) -> None:
     _commit_checkout(
         tmp_path,
