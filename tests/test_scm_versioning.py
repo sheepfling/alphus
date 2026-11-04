@@ -14,6 +14,8 @@ import pytest
 from packaging.utils import parse_sdist_filename, parse_wheel_filename
 from packaging.version import Version
 
+from alphus.support.platform_utils import is_windows
+
 
 def _run(
     command: Sequence[str], *, cwd: Path, env: Mapping[str, str]
@@ -97,7 +99,7 @@ def test_tagged_and_archived_builds_keep_the_same_version(
     backend_environment = tmp_path / "build-environment"
     venv.EnvBuilder(with_pip=True).create(backend_environment)
     backend_python = backend_environment / (
-        "Scripts/python.exe" if os.name == "nt" else "bin/python"
+        "Scripts/python.exe" if is_windows() else "bin/python"
     )
     backend_install = _run(
         [
