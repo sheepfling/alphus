@@ -1,4 +1,3 @@
-schema validation passed
 """Advisory audit of explicitly declared source-to-test evidence."""
 
 from __future__ import annotations
