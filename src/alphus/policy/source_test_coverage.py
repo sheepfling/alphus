@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Self
 
 from pydantic import field_validator, model_validator
@@ -40,20 +40,14 @@ class SourceTestRelationship(StrictModel):
     @field_validator("tests")
     @classmethod
     def validate_tests(cls, values: Sequence[str]) -> tuple[str, ...]:
-        checked = tuple(
-            _repository_file_path(value, "test paths") for value in values
-        )
+        checked = tuple(_repository_file_path(value, "test paths") for value in values)
         require_unique(checked, "declared test paths must be unique per source")
         return checked
 
     @field_validator("exclusion_reason")
     @classmethod
     def validate_exclusion_reason(cls, value: str | None) -> str | None:
-        return (
-            validate_suppression_reason(value)
-            if value is not None
-            else None
-        )
+        return validate_suppression_reason(value) if value is not None else None
 
     @model_validator(mode="after")
     def validate_exclusion(self) -> Self:
@@ -73,11 +67,7 @@ class SourceTestCoveragePolicy(StrictModel):
     @field_validator("evidence_file")
     @classmethod
     def validate_evidence_file(cls, value: str | None) -> str | None:
-        return (
-            _repository_file_path(value, "evidence_file")
-            if value is not None
-            else None
-        )
+        return _repository_file_path(value, "evidence_file") if value is not None else None
 
     @model_validator(mode="after")
     def validate_relationships(self) -> Self:
