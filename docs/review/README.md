@@ -1,5 +1,10 @@
 # Python review checks
 
+This folder groups source-review guidance. This page covers the Python review
+profile and its selectors. The [semantic patchwork guide](semantic-patchwork/README.md)
+documents that advisory family; its [calibration record](semantic-patchwork/CALIBRATION.md)
+holds pinned-source observations and their limits.
+
 These bounded source checks emit structured **warning** and **info** findings.
 They prompt a review of intent; they do not prove numeric correctness, test
 quality, or the absence of side effects. Existing policies remain valid without
@@ -8,7 +13,7 @@ own checks.
 
 Alphus applies all six scanners to its real source/test inventory through the
 `review` profile and includes them in `check` with a warning failure threshold.
-Build/install the wheel using [the self-check guide](SELF-CHECK.md), then
+Build/install the wheel using [the self-check guide](../SELF-CHECK.md), then
 invoke the installed command from the temporary directory:
 
 ```shell
@@ -350,7 +355,8 @@ Selector: `pydantic-practices`. IDs: `alphus/python/pydantic/validation/dump-rev
 `alphus/python/pydantic/style/field-positional-default`, and
 `alphus/python/pydantic/metadata/external-schema-documentation`,
 `alphus/python/pydantic/validation/custom-init`, and
-`alphus/python/pydantic/validation/public-unconstrained-any`.
+`alphus/python/pydantic/validation/public-unconstrained-any`, and
+`alphus/python/pydantic/style/static-mutable-default-factory`.
 
 ```toml
 [checks.pydantic_practices]
@@ -363,12 +369,42 @@ report_unvalidated_construct = false
 report_unvalidated_copy_update = false
 report_validator_fallthrough = false
 report_field_positional_default = false
+prefer_static_mutable_defaults = false
 report_external_model_docs = false
 external_model_names = []
 report_custom_init = false
 report_unconstrained_any = false
 public_model_paths = []
 ```
+
+`prefer_static_mutable_defaults` is an opt-in, informational style preference
+for Pydantic fields that use exactly `Field(default_factory=list)` or
+`Field(default_factory=dict)`. Pydantic copies unhashable literal defaults for
+each model instance, so those factories are not needed solely to prevent
+instances from sharing a list or dictionary. The check excludes dataclasses,
+dynamic factories, and factories that consume validated data. It does not
+rewrite code; retain factories when they express computed or contextual values.
+
+For a known UTC-only persistence boundary, `utc_persistence_contracts` can
+select an exact source function and call argument:
+
+```toml
+[[checks.pydantic_practices.utc_persistence_contracts]]
+path = "src/storage.py"
+function = "save_created_at"
+call = "writer.save"
+keyword = "created_at"
+```
+
+This opt-in advisory reports a known non-UTC `datetime.now(ZoneInfo("..."))`
+capture passed to that exact keyword unless the same captured value is
+explicitly normalized with `astimezone(timezone.utc)` or a recognized zero-
+offset `ZoneInfo` alias. Calling `astimezone()` without an explicit target,
+converting to another named zone, or using `replace(tzinfo=...)` does not prove
+UTC normalization. Unknown zones, aliases through variables, validators and
+cross-function flow remain unreported. It does not establish consumer meaning
+from a field name, and it does not replace Ruff DTZ rules for naive clock
+captures.
 
 To include one model exposed by another interface, set
 `report_external_model_docs = true` and add its class name, for example:
@@ -458,9 +494,11 @@ the other declaration rules stay with Flake8-Pydantic and native type/runtime
 diagnostics instead of being duplicated here. `PYD010` for
 `__pydantic_config__` likewise belongs with TypedDict/type-checker validation.
 
-There is no blanket mutable-default rule: Pydantic deep-copies unhashable model
-defaults per instance, and a consumer can still choose `default_factory` as a
-style convention. A static gate cannot prove a validator's side effects or that
+There is no blanket mutable-default correctness rule: Pydantic deep-copies
+unhashable model defaults per instance. The opt-in `prefer_static_mutable_defaults`
+flag below is a low-severity style preference for exact built-in list/dict
+factories only; it does not require a factory or rewrite fields. A static gate
+cannot prove a validator's side effects or that
 a `TypeAdapter` is on a hot path, so profile those paths and test side effects
 at runtime. Pydantic also intentionally inherits and merges model config;
 static checks do not warn on inheritance without a consumer-specific expected
@@ -469,14 +507,131 @@ configuration. See Pydantic's guidance on
 [custom model initialization](https://pydantic.dev/docs/validation/latest/concepts/models/),
 and [performance](https://pydantic.dev/docs/validation/latest/concepts/performance/).
 
-See the [runnable Pydantic consumer example](../examples/consumer/pydantic-practices/README.md)
+See the [runnable Pydantic consumer example](../../examples/consumer/pydantic-practices/README.md)
 for a complete opt-in policy, plan command, and JSON findings run.
+
+For selected internal functions that declare a domain-model result, a consumer
+may add an exact `domain_return_contracts` entry:
+
+```toml
+[[checks.pydantic_practices.domain_return_contracts]]
+path = "src/domain/summary.py"
+function = "build_summary"
+model = "app.models.Summary"
+```
+
+`model-dump-domain-return` is informational and requires the selected function
+to return the same locally resolved model type it accepts as a parameter while
+directly returning that parameter's `model_dump()` result. A local Pydantic model
+is recognized from its declaration; an imported model must also be named in
+`external_model_names` so its identity is consumer-declared. The explicit
+selector declares an internal domain-return boundary. Unselected JSON/CSV writers,
+external adapters, unresolved aliases, copied dumps, and cross-function flow
+are not inferred. Review whether serialization belongs at an I/O boundary; the
+finding does not establish that a conversion is unsafe and never recommends
+deleting validation or changing wire behavior automatically.
+
+For an explicitly closed action domain, a consumer can opt in to a bounded
+review of a selected string parameter:
+
+```toml
+[[checks.pydantic_practices.finite_state_contracts]]
+path = "src/actions.py"
+function = "dispatch"
+parameter = "action"
+values = ["approve", "reject"]
+```
+
+The advisory requires a direct `str` annotation and a complete `if`/`elif`
+chain comparing the parameter with exactly the declared values. It suggests a
+`Literal`, `Enum`/`StrEnum`, or validated finite type. Typed inputs, partial
+chains, parameter rebinding, unselected paths, and values outside the declared
+contract are left alone. This policy does not establish that an external
+protocol is closed; maintainers must only configure it when they own that
+closed-set contract.
+
+## Project-convention coverage and ownership
+
+The checks below are review aids with independent owners. A repository should
+select only the paths and contracts it maintains; lack of static evidence is
+unknown rather than proof of a defect.
+
+- **Preserve domain models:** Pydantic reports dump/revalidation and selected
+  direct domain-return dumps; input-contracts reports configured direct escapes.
+  Identity and cross-module flow need a consumer contract.
+- **Match collection inputs:** input-contracts follows direct uses and simple
+  aliases; mutation and uncertain escapes are preserved.
+- **Review flush/fsync/replace:** human review needs output-role and
+  write-guarantee contracts. Atomic visibility differs from crash durability;
+  no consumer output contract was supplied to scope this rule.
+- **Prefer `Annotated` and static defaults:** native tools own declaration
+  correctness. The static-default rule is an opt-in preference; assignment-form
+  `Field` stays valid.
+- **Centralize package configuration:** native packaging tools and consumer
+  review. Included requirement files retain declaration locations for
+  conflicting exact pins. Cross-manifest authority is not inferred.
+- **Match pytest style:** Ruff `PT` rules in the scoped
+  [pytest style profile](PYTEST-STYLE.md). `unittest`, mocks, and migration
+  suites remain valid.
+- **Centralize business states:** human review with typed `Literal`/`Enum`
+  evidence. An opt-in `finite_state_contracts` entry can declare a selected
+  function parameter's closed string values; a complete `if`/`elif` decision
+  chain over that exact set is an informational candidate when the parameter
+  remains a plain `str`. Typed `Literal`/`Enum` inputs, partial chains, rebound
+  parameters and unselected or unresolved values are skipped. Repetition alone
+  does not prove a finite domain.
+- **Keep timezone awareness and UTC distinct:** Ruff `DTZ` covers naive calls.
+  Aware types and UTC normalization need boundary contracts.
+- **Separate generated output from inputs:** Git inventory covers known build
+  artifacts and explicitly declared tracked-output contracts with exact
+  provenance exceptions. Untracked files and paths outside a consumer contract
+  are ignored; this does not infer static write locations or generator
+  behavior.
+
+The runnable [pytest-style consumer profile](../examples/python/pytest-style.toml)
+shows native rule selection. The Pydantic example above shows the separate
+domain/model profile. These recipes demonstrate configuration, not sampled
+production precision or universal enforcement.
+
+The dependency-lock check reports conflicting exact pins for a normalized
+package name when environment markers match, including declarations reached
+through included files. Compatible ranges, same-version extras, and distinct
+marker scopes remain accepted. It does not infer that independent manifests
+are authoritative; that requires an explicit consumer contract.
+
+## Inputs needed for other consumer-specific conventions
+
+The issue's additional triage cases need project contracts before they can be
+checked safely. No consumer repository or representative examples were supplied
+for these cases, so they remain review guidance and have no production
+precision claim:
+
+- Cross-manifest dependency review needs the package root, each maintained or
+  generated manifest, and an explicit authority order. Environment-marker
+  overlap and dynamic build metadata must remain unknown when unresolved.
+- Flush/fsync/replace review needs each selected writer's output role and its
+  atomic-visibility or crash-durability requirements.
+- Static generated-output write-location review needs declared output/generator
+  paths and provenance for versioned fixtures and operator-maintained inputs.
+  The Git gate handles only paths already tracked and matching an explicit
+  contract; a filesystem path alone cannot distinguish a write from a value.
+- Finite-state review needs selected fields/types and their declared closed
+  variants. Repeated strings alone do not supply that contract.
+- Payload/schema review needs payload paths, the authoritative schema and
+  version mapping, and the consumer's validation command. Missing ownership is
+  not a successful validation result.
+- Action/result review needs selected domain actions, their result models, and
+  the renderer boundary. A `print` call alone does not identify a violation.
+- Shared-fixture review needs the exact test fixtures and evidence that setup,
+  parametrization, scope, and teardown behavior are equivalent.
+- Numerical review needs the consumer-declared dtype/shape contract or linear
+  system semantics. Without them, array and inverse expressions stay unknown.
 
 ## FastAPI and Starlette practices
 
 This opt-in rule supports source advice and, when explicitly configured, route
 and generated OpenAPI review. The native Ruff profile and execution limits are
-described in the [FastAPI quality guide](FASTAPI-QUALITY.md).
+described in the [FastAPI quality guide](../FASTAPI-QUALITY.md).
 
 Selector: `fastapi-practices`. Source-only IDs:
 `alphus/python/fastapi/correctness/literal-http-status` and
@@ -532,7 +687,7 @@ Selector: `positional-interfaces`. ID:
 This opt-in pilot reports directly annotated, consecutive positional parameters
 with the same builtin primitive type. It defaults to informational severity and
 does not infer that any call is wrong. Native parameter-count and call-order
-diagnostics remain separate. See the [positional interface guide](POSITIONAL-INTERFACES.md)
+diagnostics remain separate. See the [positional interface guide](../POSITIONAL-INTERFACES.md)
 for the Python boundaries, native capability matrix, and runnable consumer example.
 
 ## SQLAlchemy 2.x practices
@@ -619,7 +774,7 @@ counts scale with result size; exercise intended relationship loaders,
 boundaries, and async session ownership. Those runtime checks need the
 consumer's database fixtures and do not belong in Alphus's portable scanner.
 
-See the [synthetic SQLAlchemy consumer example](../examples/consumer/sqlalchemy-practices/README.md)
+See the [synthetic SQLAlchemy consumer example](../../examples/consumer/sqlalchemy-practices/README.md)
 for an opt-in provisional profile, representative findings, and runnable
 plan/report commands.
 

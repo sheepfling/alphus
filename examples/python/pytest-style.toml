@@ -1,0 +1,18 @@
+schema_version = 1
+
+[orchestration]
+default_profile = "pytest-style"
+
+[[orchestration.steps]]
+kind = "command"
+name = "Ruff pytest style"
+gate_id = "pytest-style"
+argv = ["{python}", "-m", "ruff", "check", "--select", "PT", "--target-version", "py311", "{files}"]
+working_directory = "."
+files = { include = ["tests/**/*.py"], exclude = ["tests/fixtures/**"] }
+rollout = "provisional"
+timeout_seconds = 60
+
+[[orchestration.profiles]]
+name = "pytest-style"
+steps = ["Ruff pytest style"]
