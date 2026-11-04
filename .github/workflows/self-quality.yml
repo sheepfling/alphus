@@ -93,7 +93,7 @@ jobs:
         run: |
           "${{ steps.checker-python.outputs.python-path }}" -m venv "$RUNNER_TEMP/alphus-checker"
           "${{ steps.target-python.outputs.python-path }}" -m venv "$RUNNER_TEMP/alphus-target"
-          "$RUNNER_TEMP/alphus-checker/bin/python" -m pip install --disable-pip-version-check -e '.[python,mypy,ty]'
+          "$RUNNER_TEMP/alphus-checker/bin/python" -m pip install --disable-pip-version-check -e '.[python,mypy,ty,javascript]'
           "$RUNNER_TEMP/alphus-target/bin/python" -m pip install --disable-pip-version-check 'snakemd==2.4.1' 'mdutils==1.8.1'
       - name: Verify optional typing checker extras
         run: |

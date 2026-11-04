@@ -1,5 +1,10 @@
 # Python review checks
 
+This folder groups source-review guidance. This page covers the Python review
+profile and its selectors. The [semantic patchwork guide](semantic-patchwork/README.md)
+documents that advisory family; its [calibration record](semantic-patchwork/CALIBRATION.md)
+holds pinned-source observations and their limits.
+
 These bounded source checks emit structured **warning** and **info** findings.
 They prompt a review of intent; they do not prove numeric correctness, test
 quality, or the absence of side effects. Existing policies remain valid without
@@ -8,7 +13,7 @@ own checks.
 
 Alphus applies all six scanners to its real source/test inventory through the
 `review` profile and includes them in `check` with a warning failure threshold.
-Build/install the wheel using [the self-check guide](SELF-CHECK.md), then
+Build/install the wheel using [the self-check guide](../SELF-CHECK.md), then
 invoke the installed command from the temporary directory:
 
 ```shell
@@ -319,6 +324,55 @@ avoid broadening findings across unrelated code. Alphus scopes it to the
 positional-interface analyzer so its own quality profile checks that a
 single-pass AST input remains typed as `Iterable`.
 
+The opt-in `input-contracts` rule can review selected internal interfaces for
+a configured domain type unioned with `Mapping[str, JsonValue]` or
+`dict[str, JsonValue]`, including supported `typing_extensions` equivalents.
+Set `domain_mapping_types` to consumer-known, fully
+qualified model names and select only relevant internal files in the top-level
+inventory. A finding requires a literal string-key read from the union
+parameter and reports the parameter and read locations. A direct assigned
+`model_validate` or `parse_obj` result used later in the function counts as
+local normalization evidence. See
+[`examples/consumer/domain-mapping-review.toml`](../examples/consumer/domain-mapping-review.toml).
+
+For adjacent signatures that cannot be selected by a union annotation, a
+consumer may add exact `domain_mapping_contracts` selectors. Each selector
+names one repository-relative Python path, lexical function name (including
+enclosing classes), parameter, and expected fully qualified domain type. A
+selected `Mapping[str, JsonValue]`/`dict[str, JsonValue]` parameter is reviewed
+when its function directly reads a literal string key or passes that exact
+parameter to a unique module-level helper whose corresponding parameter has a
+direct literal-key read. One straight-line assignment alias in the selected
+function or helper is followed when it is a simple name-to-name assignment;
+the finding names the pass-through call and helper read. This is one-hop
+evidence only: branch-dependent aliases, imported/class helpers, duplicate
+helper names, and deeper flows remain unresolved. A selected
+`object` parameter is reviewed only when the function directly reads one of its
+attributes. This narrow setting is useful when the consumer has independently
+declared that the input represents a particular domain model; it does not infer
+that contract from parameter names or access syntax. Generic mapping shapes
+with other key/value types, other broad annotations, dynamic keys, nested
+attributes, arbitrary helper calls, and unselected functions remain outside the scan.
+Use exact `domain_mapping_exceptions` selectors to document a reviewed adapter
+or compatibility boundary. Each exception requires the path, function,
+parameter, expected domain type, and a non-empty reason; it suppresses only
+that exact selected parameter when its domain type is unambiguous and matches.
+For union annotations, an exception does not suppress a finding if the input
+also accepts another configured domain type. A stale or ambiguous exception
+leaves the review finding visible.
+
+This is a review candidate, not proof that validation is absent or that the
+interface is wrong. The scanner does not resolve model-like names
+automatically or infer behavior through arbitrary aliases, casts, helpers, or
+branch-specific normalization. The single direct-helper slice is not recursive
+and does not establish whether helper-local validation is sufficient. Unsupported flow
+should be reviewed manually; the advisory stays opt-in and informational.
+Direct attribute access on `object` can be intentional duck typing or a
+compatibility boundary, so a finding asks for review rather than asserting that
+the interface must become a concrete model. A configured contract does not
+prove a runtime validation defect, a caller's actual values, or that a typed
+model is the only suitable interface.
+
 The existing `python-style.concrete_inputs` annotation convention stays at its
 configured severity, independently of these optional warnings. Its imported
 `typing.List as L` and `typing.Dict as D` aliases are now recognized. Prefer a
@@ -350,7 +404,8 @@ Selector: `pydantic-practices`. IDs: `alphus/python/pydantic/validation/dump-rev
 `alphus/python/pydantic/style/field-positional-default`, and
 `alphus/python/pydantic/metadata/external-schema-documentation`,
 `alphus/python/pydantic/validation/custom-init`, and
-`alphus/python/pydantic/validation/public-unconstrained-any`.
+`alphus/python/pydantic/validation/public-unconstrained-any`, and
+`alphus/python/pydantic/style/static-mutable-default-factory`.
 
 ```toml
 [checks.pydantic_practices]
@@ -363,12 +418,42 @@ report_unvalidated_construct = false
 report_unvalidated_copy_update = false
 report_validator_fallthrough = false
 report_field_positional_default = false
+prefer_static_mutable_defaults = false
 report_external_model_docs = false
 external_model_names = []
 report_custom_init = false
 report_unconstrained_any = false
 public_model_paths = []
 ```
+
+`prefer_static_mutable_defaults` is an opt-in, informational style preference
+for Pydantic fields that use exactly `Field(default_factory=list)` or
+`Field(default_factory=dict)`. Pydantic copies unhashable literal defaults for
+each model instance, so those factories are not needed solely to prevent
+instances from sharing a list or dictionary. The check excludes dataclasses,
+dynamic factories, and factories that consume validated data. It does not
+rewrite code; retain factories when they express computed or contextual values.
+
+For a known UTC-only persistence boundary, `utc_persistence_contracts` can
+select an exact source function and call argument:
+
+```toml
+[[checks.pydantic_practices.utc_persistence_contracts]]
+path = "src/storage.py"
+function = "save_created_at"
+call = "writer.save"
+keyword = "created_at"
+```
+
+This opt-in advisory reports a known non-UTC `datetime.now(ZoneInfo("..."))`
+capture passed to that exact keyword unless the same captured value is
+explicitly normalized with `astimezone(timezone.utc)` or a recognized zero-
+offset `ZoneInfo` alias. Calling `astimezone()` without an explicit target,
+converting to another named zone, or using `replace(tzinfo=...)` does not prove
+UTC normalization. Unknown zones, aliases through variables, validators and
+cross-function flow remain unreported. It does not establish consumer meaning
+from a field name, and it does not replace Ruff DTZ rules for naive clock
+captures.
 
 To include one model exposed by another interface, set
 `report_external_model_docs = true` and add its class name, for example:
@@ -458,9 +543,11 @@ the other declaration rules stay with Flake8-Pydantic and native type/runtime
 diagnostics instead of being duplicated here. `PYD010` for
 `__pydantic_config__` likewise belongs with TypedDict/type-checker validation.
 
-There is no blanket mutable-default rule: Pydantic deep-copies unhashable model
-defaults per instance, and a consumer can still choose `default_factory` as a
-style convention. A static gate cannot prove a validator's side effects or that
+There is no blanket mutable-default correctness rule: Pydantic deep-copies
+unhashable model defaults per instance. The opt-in `prefer_static_mutable_defaults`
+flag below is a low-severity style preference for exact built-in list/dict
+factories only; it does not require a factory or rewrite fields. A static gate
+cannot prove a validator's side effects or that
 a `TypeAdapter` is on a hot path, so profile those paths and test side effects
 at runtime. Pydantic also intentionally inherits and merges model config;
 static checks do not warn on inheritance without a consumer-specific expected
@@ -469,14 +556,131 @@ configuration. See Pydantic's guidance on
 [custom model initialization](https://pydantic.dev/docs/validation/latest/concepts/models/),
 and [performance](https://pydantic.dev/docs/validation/latest/concepts/performance/).
 
-See the [runnable Pydantic consumer example](../examples/consumer/pydantic-practices/README.md)
+See the [runnable Pydantic consumer example](../../examples/consumer/pydantic-practices/README.md)
 for a complete opt-in policy, plan command, and JSON findings run.
+
+For selected internal functions that declare a domain-model result, a consumer
+may add an exact `domain_return_contracts` entry:
+
+```toml
+[[checks.pydantic_practices.domain_return_contracts]]
+path = "src/domain/summary.py"
+function = "build_summary"
+model = "app.models.Summary"
+```
+
+`model-dump-domain-return` is informational and requires the selected function
+to return the same locally resolved model type it accepts as a parameter while
+directly returning that parameter's `model_dump()` result. A local Pydantic model
+is recognized from its declaration; an imported model must also be named in
+`external_model_names` so its identity is consumer-declared. The explicit
+selector declares an internal domain-return boundary. Unselected JSON/CSV writers,
+external adapters, unresolved aliases, copied dumps, and cross-function flow
+are not inferred. Review whether serialization belongs at an I/O boundary; the
+finding does not establish that a conversion is unsafe and never recommends
+deleting validation or changing wire behavior automatically.
+
+For an explicitly closed action domain, a consumer can opt in to a bounded
+review of a selected string parameter:
+
+```toml
+[[checks.pydantic_practices.finite_state_contracts]]
+path = "src/actions.py"
+function = "dispatch"
+parameter = "action"
+values = ["approve", "reject"]
+```
+
+The advisory requires a direct `str` annotation and a complete `if`/`elif`
+chain comparing the parameter with exactly the declared values. It suggests a
+`Literal`, `Enum`/`StrEnum`, or validated finite type. Typed inputs, partial
+chains, parameter rebinding, unselected paths, and values outside the declared
+contract are left alone. This policy does not establish that an external
+protocol is closed; maintainers must only configure it when they own that
+closed-set contract.
+
+## Project-convention coverage and ownership
+
+The checks below are review aids with independent owners. A repository should
+select only the paths and contracts it maintains; lack of static evidence is
+unknown rather than proof of a defect.
+
+- **Preserve domain models:** Pydantic reports dump/revalidation and selected
+  direct domain-return dumps; input-contracts reports configured direct escapes.
+  Identity and cross-module flow need a consumer contract.
+- **Match collection inputs:** input-contracts follows direct uses and simple
+  aliases; mutation and uncertain escapes are preserved.
+- **Review flush/fsync/replace:** human review needs output-role and
+  write-guarantee contracts. Atomic visibility differs from crash durability;
+  no consumer output contract was supplied to scope this rule.
+- **Prefer `Annotated` and static defaults:** native tools own declaration
+  correctness. The static-default rule is an opt-in preference; assignment-form
+  `Field` stays valid.
+- **Centralize package configuration:** native packaging tools and consumer
+  review. Included requirement files retain declaration locations for
+  conflicting exact pins. Cross-manifest authority is not inferred.
+- **Match pytest style:** Ruff `PT` rules in the scoped
+  [pytest style profile](PYTEST-STYLE.md). `unittest`, mocks, and migration
+  suites remain valid.
+- **Centralize business states:** human review with typed `Literal`/`Enum`
+  evidence. An opt-in `finite_state_contracts` entry can declare a selected
+  function parameter's closed string values; a complete `if`/`elif` decision
+  chain over that exact set is an informational candidate when the parameter
+  remains a plain `str`. Typed `Literal`/`Enum` inputs, partial chains, rebound
+  parameters and unselected or unresolved values are skipped. Repetition alone
+  does not prove a finite domain.
+- **Keep timezone awareness and UTC distinct:** Ruff `DTZ` covers naive calls.
+  Aware types and UTC normalization need boundary contracts.
+- **Separate generated output from inputs:** Git inventory covers known build
+  artifacts and explicitly declared tracked-output contracts with exact
+  provenance exceptions. Untracked files and paths outside a consumer contract
+  are ignored; this does not infer static write locations or generator
+  behavior.
+
+The runnable [pytest-style consumer profile](../examples/python/pytest-style.toml)
+shows native rule selection. The Pydantic example above shows the separate
+domain/model profile. These recipes demonstrate configuration, not sampled
+production precision or universal enforcement.
+
+The dependency-lock check reports conflicting exact pins for a normalized
+package name when environment markers match, including declarations reached
+through included files. Compatible ranges, same-version extras, and distinct
+marker scopes remain accepted. It does not infer that independent manifests
+are authoritative; that requires an explicit consumer contract.
+
+## Inputs needed for other consumer-specific conventions
+
+The issue's additional triage cases need project contracts before they can be
+checked safely. No consumer repository or representative examples were supplied
+for these cases, so they remain review guidance and have no production
+precision claim:
+
+- Cross-manifest dependency review needs the package root, each maintained or
+  generated manifest, and an explicit authority order. Environment-marker
+  overlap and dynamic build metadata must remain unknown when unresolved.
+- Flush/fsync/replace review needs each selected writer's output role and its
+  atomic-visibility or crash-durability requirements.
+- Static generated-output write-location review needs declared output/generator
+  paths and provenance for versioned fixtures and operator-maintained inputs.
+  The Git gate handles only paths already tracked and matching an explicit
+  contract; a filesystem path alone cannot distinguish a write from a value.
+- Finite-state review needs selected fields/types and their declared closed
+  variants. Repeated strings alone do not supply that contract.
+- Payload/schema review needs payload paths, the authoritative schema and
+  version mapping, and the consumer's validation command. Missing ownership is
+  not a successful validation result.
+- Action/result review needs selected domain actions, their result models, and
+  the renderer boundary. A `print` call alone does not identify a violation.
+- Shared-fixture review needs the exact test fixtures and evidence that setup,
+  parametrization, scope, and teardown behavior are equivalent.
+- Numerical review needs the consumer-declared dtype/shape contract or linear
+  system semantics. Without them, array and inverse expressions stay unknown.
 
 ## FastAPI and Starlette practices
 
 This opt-in rule supports source advice and, when explicitly configured, route
 and generated OpenAPI review. The native Ruff profile and execution limits are
-described in the [FastAPI quality guide](FASTAPI-QUALITY.md).
+described in the [FastAPI quality guide](../FASTAPI-QUALITY.md).
 
 Selector: `fastapi-practices`. Source-only IDs:
 `alphus/python/fastapi/correctness/literal-http-status` and
@@ -532,7 +736,7 @@ Selector: `positional-interfaces`. ID:
 This opt-in pilot reports directly annotated, consecutive positional parameters
 with the same builtin primitive type. It defaults to informational severity and
 does not infer that any call is wrong. Native parameter-count and call-order
-diagnostics remain separate. See the [positional interface guide](POSITIONAL-INTERFACES.md)
+diagnostics remain separate. See the [positional interface guide](../POSITIONAL-INTERFACES.md)
 for the Python boundaries, native capability matrix, and runnable consumer example.
 
 ## SQLAlchemy 2.x practices
@@ -619,7 +823,7 @@ counts scale with result size; exercise intended relationship loaders,
 boundaries, and async session ownership. Those runtime checks need the
 consumer's database fixtures and do not belong in Alphus's portable scanner.
 
-See the [synthetic SQLAlchemy consumer example](../examples/consumer/sqlalchemy-practices/README.md)
+See the [synthetic SQLAlchemy consumer example](../../examples/consumer/sqlalchemy-practices/README.md)
 for an opt-in provisional profile, representative findings, and runnable
 plan/report commands.
 
@@ -644,11 +848,11 @@ use ordered `path_language_overrides` when a suffix is ambiguous in particular
 directories. The last matching path override wins and path overrides take
 precedence over suffix overrides.
 
-The heuristic has no semantic or history evidence. Uppercase acronym runs are
-not split into separate words, and files outside the configured extensions or
-supplied inventory are invisible to it. Names that do not share a meaningful
-token prefix are not detected. These are limits of the lexical stage, not
-evidence that a family is cohesive.
+The default heuristic has no dependency or history evidence. Uppercase acronym
+runs are not split into separate words, and files outside the configured
+extensions or supplied inventory are invisible to it. Names that do not share
+a meaningful token prefix are not detected. These are limits of the lexical
+stage, not evidence that a family is cohesive.
 
 ```toml
 [checks.source_families]
@@ -663,6 +867,21 @@ max_reported_members = 40
 language_overrides = [[".h", "C++"]]
 path_language_overrides = [["src/legacy_c/**", "C"]]
 file_length_limits = [[".py", 500], [".cpp", 800]]
+# Optional: direct Python import evidence for selected .py files under `src`.
+python_import_evidence = true
+python_module_roots = ["src"]
+# Optional: literal quoted C/C++ includes resolving inside the selected inventory.
+cpp_include_evidence = true
+# Optional: parser-backed literal relative JS/TS module references.
+javascript_import_evidence = true
+max_import_edges = 12
+max_public_api_names = 20
+max_contract_declarations = 12
+# One run-wide Python or C/C++ pass byte budget, shared across all families.
+max_import_analysis_bytes = 8388608
+# Optional: bounded, read-only co-change evidence for selected family paths.
+git_cochange_evidence = true
+max_git_history_commits = 100
 ```
 
 The first slice is lexical-only and low-confidence. A shared prefix selects a
@@ -675,7 +894,80 @@ configured thresholds, extensions, scope, exclusions, and language overrides
 are included so reviewers can see the effective settings. The scan streams line
 counts and never imports or executes consumer code. Selected-source processing,
 per-finding evidence, and total-finding output are bounded; incomplete scans
-produce explicit warnings instead of implying a complete clean result.
+produce explicit warnings instead of implying a complete clean result. The
+optional Python import pass is disabled by default and requires explicit
+`python_module_roots`; it parses only selected `.py` files, reports uniquely
+resolved direct `import` and `from ... import ...` module edges, including
+incoming references from selected Python files outside each family. Source
+reads and AST parses are cached across family reports, under one run-wide
+`max_import_analysis_bytes` budget; displayed edges are separately capped.
+The import walk remains family-specific, but selected files are not re-read or
+re-parsed for each family. Unresolved, ambiguous, above-package-root relative
+imports, parse failures, and files outside the selected inventory are not
+treated as absent dependencies. It does not follow dynamic imports,
+aliases/re-exports, or type-checker resolution.
+
+The optional C/C++ pass is also disabled by default. It indexes literal quoted
+includes in selected C/C++ files under one run-wide `max_import_analysis_bytes`
+budget, reserving the budget for all retained family members before scanning
+selected external files. It reports literal include edges from family members
+to selected targets and incoming references from selected external files to
+family members, with source lines. Resolution is a relative-path match against
+the selected inventory, not compiler resolution: include search paths, macros,
+angle-bracket includes, conditional activation, and unselected targets are not
+assessed. Read failures or an exhausted shared budget produce incomplete-scan
+warnings; missing evidence is not treated as zero references.
+
+JavaScript and TypeScript import evidence is also disabled by default and
+requires the optional `alphus[javascript]` extra. Its Tree-sitter parsers inspect selected `.js`,
+`.jsx`, `.mjs`, `.cjs`, `.ts`, and `.tsx` files and report only literal relative
+`import`, `export ... from`, dynamic `import()`, and `require()` references
+resolving uniquely to selected files (including extensionless exact-file
+candidates). Package resolution, TypeScript path aliases, index lookup,
+shadowed `require`, conditional activation, and compiler configuration are not
+resolved. Parse failures and exhausted byte budgets produce incomplete-scan
+warnings; unresolved references are not treated as absent dependencies. Other
+language evidence requires its own explicitly enabled analysis. These edges are partial
+dependency evidence and do not prove
+shared responsibility, coupling strength, or a public contract. For parsed
+Python family members, the optional pass also reports bounded names from a
+single direct literal module-level `__all__` assignment. Dynamic, augmented,
+or reassigned declarations are reported as unresolved; package-level
+re-exports, consumers outside the selected inventory, and names without a
+literal `__all__` are not inferred. This is syntax evidence, not a complete
+public API or responsibility assessment. The pass also reports bounded,
+module-level classes with a
+qualified `typing.Protocol` or `typing_extensions.Protocol` base and their
+direct method names. It also reports bounded fields for module-level classes
+with a qualified `typing.TypedDict` or `typing_extensions.TypedDict` base.
+These are explicit contract-shaped syntax only; aliases, ABCs, factory
+declarations, other forms, implementations, and actual sharing across consumers
+remain unknown. Import edges and declarations do not establish which files
+share responsibility. When a selected family member directly imports one of
+those Protocol or TypedDict names and references the unshadowed import in an
+annotation or class base, the report includes both the importing reference
+location and declaration file. Rebinding causes the reference to be omitted.
+This is cross-file type-reference syntax, not proof of runtime use, an
+established shared contract, or common responsibility. Optional
+`git_cochange_evidence`
+uses a bounded read-only `git log` query for selected family paths and reports
+observed commit IDs and co-changed paths. This is correlation only; it does not
+establish causation, ownership, or responsibility. Shallow history, query
+failures, pathspec limits, and a full commit window are called out, and no
+co-changes are explicitly not evidence of independence. Renames are not
+followed, and unrelated/historical path names outside the current family are
+not mapped.
+
+Optional `cpp_include_evidence` reports direct literal quoted include
+directives only when the normalized path is another selected source file. It
+does not use a compile database or resolve angle-bracket/macro includes,
+conditional activation, include search paths, or unselected targets. This is
+lexical path evidence, not compiler-resolved dependency data. JavaScript and
+TypeScript use the optional parser-backed literal relative-reference pass
+described above; package resolution, TypeScript aliases, index lookup,
+shadowed `require`, conditional activation, and compiler configuration remain
+unassessed. Unsupported or unresolved relationships are not evidence of zero
+coupling.
 
 A typical finding starts: `src/service: Family gateway_*: 12 logical units
 across 12 physical files; 12 of 20 selected sibling source files (60%);
@@ -693,9 +985,52 @@ families can still be legitimate; treat a finding as a prompt to inspect actual
 responsibilities and public contracts. Preserve established import/include/
 export paths before changing a layout. File-length limits remain an independent
 hygiene control: splitting files below a limit does not demonstrate improved
-cohesion. Dependency, responsibility, public-surface, and history analysis are
-not part of this first slice. Fewer files, renamed prefixes, or a new directory
-do not by themselves demonstrate better boundaries.
+cohesion. Optional Python and C/C++ evidence supplements the lexical candidate
+with bounded source relationships, and optional Git history records correlation
+only. Responsibility and public-surface assessment remain incomplete.
+JavaScript/TypeScript evidence is optional and limited to the literal relative
+references described above; package resolution and other cases remain
+unassessed. Fewer files, renamed prefixes, or a new directory do not by
+themselves demonstrate better boundaries.
+
+### Exploratory real-project calibration
+
+Read-only GitHub snapshots collected on 2026-11-02 provide a small exploratory
+check, not a precision or recall estimate. A path-name screen used the default
+family thresholds (`min_family_files=5`, `min_prefix_characters=4`), Python
+source paths under each package root, and excluded test-directory segments.
+It found no candidate groups in Requests (`src/requests`, 19 files, revision
+[`3c7baaa`](https://github.com/psf/requests/commit/3c7baaa05ab4aa49cc819ce3a819d260de19c157)),
+Flask (`src/flask`, 24 files, revision
+[`49943b5`](https://github.com/pallets/flask/commit/49943b5a94413a530761350f04e896f76e8d620e)),
+HTTPX (`httpx`, 23 files, revision
+[`b5addb6`](https://github.com/encode/httpx/commit/b5addb64f0161ff6bfe94c124ef76f6a1fba5254)),
+or Pydantic (`pydantic`, 54 files, revision
+[`b09325b`](https://github.com/pydantic/pydantic/commit/b09325b0a41d9a957df9a530e5c6a7836799df1e)).
+These four results are inventory-name screens only: source contents and
+semantic evidence were not inspected, so no candidate is not evidence of
+cohesion or a missed defect.
+
+The PR-head analyzer was also run on the 35 direct `*.py` files in Matplotlib's
+`lib/matplotlib/backends` directory at
+[`5a84a6f`](https://github.com/matplotlib/matplotlib/commit/5a84a6f84361b9c94458a85b20c40e8a1ffe55d7),
+with the same family thresholds. It emitted one advisory: `backend_*`, 32 of
+35 selected siblings (91%), 32 logical units, and 11–2,850 physical lines.
+[The guide](https://github.com/matplotlib/matplotlib/blob/5a84a6f/galleries/users_explain/figure/backends.rst)
+describes these as intentional output implementations for GUI and file
+formats. This is a known legitimate platform/backend family and a false
+positive if the lexical candidate is treated as evidence of poor boundaries.
+It demonstrates why the result must remain advisory and be reviewed against
+the project's purpose.
+
+Enabling Python import evidence on that same 35-file snapshot resolved 50
+direct intra-family edges, while 297 imports were unresolved or outside the
+selected inventory. The snapshot omitted the rest of Matplotlib's `lib/`
+source tree and nested backend directories, so those unresolved imports and
+the absence of selected outside consumers cannot establish the full dependency
+graph or zero external use. This one curated candidate plus four path-only
+no-candidate screens is too small and biased to support an accuracy claim or
+stronger enforcement.
 
 ## Durable benchmark prose review
 
