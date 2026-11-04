@@ -3,15 +3,92 @@
 from __future__ import annotations
 
 import tomllib
+from collections.abc import Sequence
 from pathlib import Path
 
-from alphus.config import CommandRunStep, RuleRunStep, load_config
+import pytest
 
-_POLICY = Path("examples/consumer/quality-gates.toml")
+from alphus.config import (
+    CommandRunStep,
+    ProseAsControlPolicy,
+    RuleRunStep,
+    load_config,
+)
+from alphus.gates.review import runners as review_runners
 
 
-def test_starter_policy_has_one_scoped_command_and_no_global_inventory() -> None:
-    config = load_config(Path("examples/starter/quality-gates.toml"))
+@pytest.fixture
+def examples_root(request: pytest.FixtureRequest) -> Path:
+    """Locate published examples from pytest's repository context."""
+    return Path(request.config.rootpath) / "examples"
+
+
+def test_prose_as_control_example_is_scoped_and_provisional(
+    examples_root: Path,
+) -> None:
+    config = load_config(examples_root / "review" / "prose-as-control.toml")
+    assert config.files is not None
+    assert config.files.include == ("src/render/*.py",)
+    policy = config.checks.prose_as_control
+    assert policy is not None
+    assert policy.source_paths == ("src/render/*.py",)
+    orchestration = config.orchestration
+    assert orchestration is not None
+    plan = orchestration.resolve_profile("semantic-review")
+    assert plan is not None
+    step = orchestration.steps[0]
+    assert isinstance(step, RuleRunStep)
+    assert step.rule == "prose-as-control"
+    assert step.rollout == "provisional"
+    consumption = config.checks.heuristic_total_consumption
+    assert consumption is not None
+    assert consumption.function_names == ("preserve_text",)
+    assert consumption.output_contract == "preserve-unmatched-spans"
+    ownership = config.checks.provenance_ownership
+    assert ownership is not None
+    assert ownership.ownership_basis == "exact-source-span"
+    presentation = config.checks.semantic_work_presentation
+    assert presentation is not None
+    assert presentation.module_role == "presentation"
+    normalization = config.checks.parallel_normalization
+    assert normalization is not None
+    assert normalization.pairs[0].output_contract == "same-output-for-same-input"
+
+
+def test_rendered_feedback_is_dispatched_only_by_its_dedicated_rule(
+    monkeypatch: pytest.MonkeyPatch,
+    examples_root: Path,
+) -> None:
+    config = load_config(examples_root / "review" / "prose-as-control.toml")
+    calls: list[str] = []
+
+    def rendered_result(
+        root: Path, files: Sequence[Path], policy: ProseAsControlPolicy
+    ) -> list[str]:
+        calls.append("rendered")
+        return ["rendered finding"]
+
+    monkeypatch.setattr(
+        review_runners, "check_rendered_value_reparsed", rendered_result
+    )
+
+    prose_findings = review_runners.REVIEW_RULE_RUNNERS["prose-as-control"](
+        Path("."), (), config
+    )
+    assert prose_findings == []
+    assert calls == []
+
+    rendered_findings = review_runners.REVIEW_RULE_RUNNERS["rendered-value-reparsed"](
+        Path("."), (), config
+    )
+    assert rendered_findings == ["rendered finding"]
+    assert calls == ["rendered"]
+
+
+def test_starter_policy_has_one_scoped_command_and_no_global_inventory(
+    examples_root: Path,
+) -> None:
+    config = load_config(examples_root / "starter" / "quality-gates.toml")
     assert config.files is None
     orchestration = config.orchestration
     assert orchestration is not None
@@ -24,8 +101,35 @@ def test_starter_policy_has_one_scoped_command_and_no_global_inventory() -> None
     assert step.fix_argv == ("rumdl", "fmt", "{files}")
 
 
-def test_markdown_example_pairs_two_fixers_without_duplicate_missing_links() -> None:
-    config = load_config(Path("examples/markdown/quality-gates.toml"))
+def test_pytest_style_example_uses_native_ruff_on_test_inventory() -> None:
+    config = load_config(Path("examples/python/pytest-style.toml"))
+    orchestration = config.orchestration
+    assert orchestration is not None
+    plan = orchestration.resolve_profile("pytest-style")
+    assert plan is not None
+    step = orchestration.steps[0]
+    assert isinstance(step, CommandRunStep)
+    assert step.argv == (
+        "{python}",
+        "-m",
+        "ruff",
+        "check",
+        "--select",
+        "PT",
+        "--target-version",
+        "py311",
+        "{files}",
+    )
+    assert step.files is not None
+    assert step.files.include == ("tests/**/*.py",)
+    assert step.files.exclude == ("tests/fixtures/**",)
+    assert step.rollout == "provisional"
+
+
+def test_markdown_example_pairs_two_fixers_without_duplicate_missing_links(
+    examples_root: Path,
+) -> None:
+    config = load_config(examples_root / "markdown" / "quality-gates.toml")
     assert config.files is None
     orchestration = config.orchestration
     assert orchestration is not None
@@ -37,14 +141,84 @@ def test_markdown_example_pairs_two_fixers_without_duplicate_missing_links() -> 
         for step in orchestration.steps
     )
     mdrepo_config = tomllib.loads(
-        Path("examples/markdown/mdrepo.toml").read_text(encoding="utf-8")
+        (examples_root / "markdown" / "mdrepo.toml").read_text(encoding="utf-8")
     )
     assert mdrepo_config["orphans"]["roots"] == ["README.md"]
     assert not mdrepo_config.get("links", {}).get("check-missing-targets", False)
 
 
-def test_consumer_example_composes_portable_rules_and_native_tools() -> None:
-    config = load_config(_POLICY)
+def test_manual_matrix_kernel_example_is_scoped_and_provisional() -> None:
+    config = load_config(Path("examples/numerics/manual-matrix-kernels.toml"))
+    assert config.files is not None
+    assert config.files.include == ("src/numerics/*.py", "src/geometry/*.py")
+    policy = config.checks.manual_matrix_kernels
+    assert policy is not None
+    assert policy.source_paths == ("src/numerics/*.py",)
+    elimination_policy = config.checks.manual_elimination
+    assert elimination_policy is not None
+    assert elimination_policy.function_names == ("invert_matrix",)
+    assert elimination_policy.matrix_name == "matrix"
+    churn_policy = config.checks.array_representation_churn
+    assert churn_policy is not None
+    assert churn_policy.loop_contracts[0].path == "src/numerics/kernels.py"
+    assert churn_policy.loop_contracts[0].function == "process_batches"
+    assert churn_policy.loop_contracts[0].array_variable == "batch"
+    normalization_policy = config.checks.manual_quaternion_normalization
+    assert normalization_policy is not None
+    assert normalization_policy.components == ("w", "x", "y", "z")
+    assert normalization_policy.rotation_consumer_helpers == ("Rotation.from_quat",)
+    inversion_policy = config.checks.manual_quaternion_inversion
+    assert inversion_policy is not None
+    assert inversion_policy.components == ("w", "x", "y", "z")
+    vector_rotation_policy = config.checks.manual_quaternion_vector_rotation
+    assert vector_rotation_policy is not None
+    assert vector_rotation_policy.vector_components == ("vx", "vy", "vz")
+    assert vector_rotation_policy.multiplication_helpers == ("multiply",)
+    matrix_policy = config.checks.manual_quaternion_matrix_conversion
+    assert matrix_policy is not None
+    assert matrix_policy.convention == "active-column-scalar-first"
+    frame_policy = config.checks.ecef_enu_transform
+    assert frame_policy is not None
+    assert frame_policy.source_frame == "ECEF"
+    assert frame_policy.destination_frame == "ENU"
+    assert frame_policy.operation == "displacement-vector"
+    assert frame_policy.reference_ellipsoid == "WGS84"
+    assert "pyproj.Transformer.from_pipeline" in frame_policy.preferred_helpers[0]
+    ned_matrix_policy = config.checks.ecef_ned_matrix_transform
+    assert ned_matrix_policy is not None
+    assert ned_matrix_policy.destination_frame == "NED"
+    assert ned_matrix_policy.axis_order == "north-east-down"
+    assert ned_matrix_policy.vector_orientation == "column"
+    assert ned_matrix_policy.output_shape == "matrix3x3"
+    assert "pyproj.Transformer.from_pipeline" in ned_matrix_policy.preferred_helpers[0]
+    ned_basis_policy = config.checks.ned_basis_vectors
+    assert ned_basis_policy is not None
+    assert ned_basis_policy.latitude_type == "geodetic"
+    assert ned_basis_policy.output_representation == "basis3"
+    assert ned_basis_policy.destination_frame == "GEODETIC_HORIZON"
+    assert "pyproj.Transformer.from_pipeline" in ned_basis_policy.preferred_helpers[0]
+    orchestration = config.orchestration
+    assert orchestration is not None
+    plan = orchestration.resolve_profile("numerical-review")
+    assert plan is not None
+    step = orchestration.steps[0]
+    assert isinstance(step, RuleRunStep)
+    assert step.rule == "manual-matrix-kernels"
+    assert step.rollout == "provisional"
+    assert "Quaternion product review" in plan.steps
+    assert "Quaternion normalization review" in plan.steps
+    assert "Quaternion inversion review" in plan.steps
+    assert "Quaternion vector rotation review" in plan.steps
+    assert "Quaternion matrix conversion review" in plan.steps
+    assert "ECEF to ENU transform review" in plan.steps
+    assert "ECEF to NED matrix review" in plan.steps
+    assert "Manual elimination review" in plan.steps
+
+
+def test_consumer_example_composes_portable_rules_and_native_tools(
+    examples_root: Path,
+) -> None:
+    config = load_config(examples_root / "consumer" / "quality-gates.toml")
     orchestration = config.orchestration
     assert orchestration is not None
     profile = orchestration.resolve_profile("check")
@@ -118,8 +292,10 @@ def test_consumer_example_composes_portable_rules_and_native_tools() -> None:
     )
 
 
-def test_consumer_documentation_profile_has_only_native_doc_owners() -> None:
-    config = load_config(_POLICY)
+def test_consumer_documentation_profile_has_only_native_doc_owners(
+    examples_root: Path,
+) -> None:
+    config = load_config(examples_root / "consumer" / "quality-gates.toml")
     orchestration = config.orchestration
     assert orchestration is not None
     profile = orchestration.resolve_profile("docs")
@@ -127,8 +303,10 @@ def test_consumer_documentation_profile_has_only_native_doc_owners() -> None:
     assert profile.steps == ("Markdown style", "Markdown links and graph")
 
 
-def test_consumer_data_formats_have_separate_profiles_with_format_fixers() -> None:
-    config = load_config(_POLICY)
+def test_consumer_data_formats_have_separate_profiles_with_format_fixers(
+    examples_root: Path,
+) -> None:
+    config = load_config(examples_root / "consumer" / "quality-gates.toml")
     orchestration = config.orchestration
     assert orchestration is not None
     toml = orchestration.resolve_profile("toml")
@@ -157,3 +335,13 @@ def test_consumer_data_formats_have_separate_profiles_with_format_fixers() -> No
     )
     assert steps["TOML syntax"].fix_argv is None
     assert steps["JSON syntax"].fix_argv is None
+
+
+def test_consumer_policy_path_is_independent_of_working_directory(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, examples_root: Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    assert (
+        load_config(examples_root / "consumer" / "quality-gates.toml").orchestration
+        is not None
+    )

@@ -29,6 +29,7 @@ from alphus.policy.intents import (
     SharedQualityIntent,
     resolve_intent_bindings,
 )
+from alphus.policy.markdown import MarkdownShellFencesPolicy
 from alphus.policy.metrics import CyclomaticComplexityPolicy
 from alphus.policy.repository import (
     DependencyLockPolicy,
@@ -38,15 +39,39 @@ from alphus.policy.repository import (
     VersionSyncPolicy,
 )
 from alphus.policy.review import (
+    ArrayRepresentationPolicy,
+    CholeskyRecurrencePolicy,
+    CiWorkflowPolicy,
+    DocumentStylePolicy,
+    EcefEnuTransformPolicy,
+    EcefNedMatrixTransformPolicy,
+    EmbeddedSemanticOverridePolicy,
     FastApiPracticePolicy,
+    HeuristicTotalConsumptionPolicy,
     InputContractPolicy,
+    ManualEliminationPolicy,
+    ManualMatrixKernelPolicy,
+    NedBasisVectorsPolicy,
     NumericLiteralPolicy,
+    ParallelNormalizationPolicy,
+    PatchCascadePolicy,
     PositionalInterfacePolicy,
+    PositionalSemanticOverridePolicy,
+    ProseAsControlPolicy,
+    ProvenanceOwnershipPolicy,
     PydanticPracticePolicy,
+    QuaternionConjugationPolicy,
+    QuaternionInversionPolicy,
+    QuaternionMatrixConversionPolicy,
+    QuaternionNormalizationPolicy,
+    QuaternionProductPolicy,
+    QuaternionVectorRotationPolicy,
     ScipyConstantsPolicy,
+    SemanticWorkPresentationPolicy,
     SourceFamilyPolicy,
     SqlAlchemyPracticePolicy,
     TestQualityPolicy,
+    UnexplainedEmptyResultPolicy,
 )
 from alphus.policy.sources import (
     CliPolicy,
@@ -74,7 +99,30 @@ class CheckPolicies(StrictModel):
     output_escaping: SourceScanPolicy | None = None
     path_discovery: PathDiscoveryPolicy | None = None
     numeric_literals: NumericLiteralPolicy | None = None
+    prose_as_control: ProseAsControlPolicy | None = None
+    positional_semantic_overrides: PositionalSemanticOverridePolicy | None = None
+    unexplained_empty_results: UnexplainedEmptyResultPolicy | None = None
+    embedded_semantic_overrides: EmbeddedSemanticOverridePolicy | None = None
+    heuristic_total_consumption: HeuristicTotalConsumptionPolicy | None = None
+    provenance_ownership: ProvenanceOwnershipPolicy | None = None
+    semantic_work_presentation: SemanticWorkPresentationPolicy | None = None
+    parallel_normalization: ParallelNormalizationPolicy | None = None
+    patch_cascade: PatchCascadePolicy | None = None
+    manual_matrix_kernels: ManualMatrixKernelPolicy | None = None
+    manual_elimination: ManualEliminationPolicy | None = None
+    array_representation_churn: ArrayRepresentationPolicy | None = None
+    cholesky_recurrence: CholeskyRecurrencePolicy | None = None
+    manual_quaternion_conjugation: QuaternionConjugationPolicy | None = None
+    manual_quaternion_products: QuaternionProductPolicy | None = None
+    manual_quaternion_normalization: QuaternionNormalizationPolicy | None = None
+    manual_quaternion_inversion: QuaternionInversionPolicy | None = None
+    manual_quaternion_vector_rotation: QuaternionVectorRotationPolicy | None = None
+    manual_quaternion_matrix_conversion: QuaternionMatrixConversionPolicy | None = None
+    ecef_enu_transform: EcefEnuTransformPolicy | None = None
+    ecef_ned_matrix_transform: EcefNedMatrixTransformPolicy | None = None
+    ned_basis_vectors: NedBasisVectorsPolicy | None = None
     scipy_constants: ScipyConstantsPolicy | None = None
+    ci_workflows: CiWorkflowPolicy | None = None
     test_quality: TestQualityPolicy | None = None
     input_contracts: InputContractPolicy | None = None
     source_families: SourceFamilyPolicy | None = None
@@ -82,6 +130,7 @@ class CheckPolicies(StrictModel):
     pydantic_practices: PydanticPracticePolicy | None = None
     fastapi_practices: FastApiPracticePolicy | None = None
     sqlalchemy_practices: SqlAlchemyPracticePolicy | None = None
+    document_style: DocumentStylePolicy | None = None
     shared_utilities: SharedUtilitiesPolicy | None = None
     python_style: PythonStylePolicy | None = None
     runtime_types: RuntimeTypePolicy | None = None
@@ -92,6 +141,7 @@ class CheckPolicies(StrictModel):
     architecture_graph: ArchitectureGraphCheckPolicy | None = None
     repository_layout: RepositoryLayoutPolicy | None = None
     documentation_config: DocumentationConfigPolicy | None = None
+    markdown_shell_fences: MarkdownShellFencesPolicy | None = None
     version_sync: VersionSyncPolicy | None = None
     callable_registry: CallableRegistryPolicy | None = None
     dependency_locks: DependencyLockPolicy | None = None

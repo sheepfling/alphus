@@ -49,13 +49,76 @@ RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
         "documentation-config": RuleSpec(
             "documentation_config", RuleOutputShape.FINDINGS, requires_files=False
         ),
+        "markdown-shell-fences": RuleSpec(
+            "markdown_shell_fences", RuleOutputShape.FINDINGS, requires_files=False
+        ),
         "git-ignores": RuleSpec("git", RuleOutputShape.FINDINGS, requires_files=False),
         "git-attributes": RuleSpec(
             "git", RuleOutputShape.FINDINGS, requires_files=False
         ),
         "git-history": RuleSpec("git", RuleOutputShape.FINDINGS, requires_files=False),
         "numeric-literals": RuleSpec("numeric_literals", RuleOutputShape.FINDINGS),
+        "prose-as-control": RuleSpec("prose_as_control", RuleOutputShape.FINDINGS),
+        "rendered-value-reparsed": RuleSpec(
+            "prose_as_control", RuleOutputShape.FINDINGS
+        ),
+        "positional-semantic-overrides": RuleSpec(
+            "positional_semantic_overrides", RuleOutputShape.FINDINGS
+        ),
+        "unexplained-empty-results": RuleSpec(
+            "unexplained_empty_results", RuleOutputShape.FINDINGS
+        ),
+        "embedded-semantic-overrides": RuleSpec(
+            "embedded_semantic_overrides", RuleOutputShape.FINDINGS
+        ),
+        "heuristic-total-consumption": RuleSpec(
+            "heuristic_total_consumption", RuleOutputShape.FINDINGS
+        ),
+        "provenance-as-ownership": RuleSpec(
+            "provenance_ownership", RuleOutputShape.FINDINGS
+        ),
+        "semantic-work-in-presentation": RuleSpec(
+            "semantic_work_presentation", RuleOutputShape.FINDINGS
+        ),
+        "parallel-normalization": RuleSpec(
+            "parallel_normalization", RuleOutputShape.FINDINGS
+        ),
+        "patch-cascade": RuleSpec("patch_cascade", RuleOutputShape.FINDINGS),
+        "manual-matrix-kernels": RuleSpec(
+            "manual_matrix_kernels", RuleOutputShape.FINDINGS
+        ),
+        "manual-elimination": RuleSpec("manual_elimination", RuleOutputShape.FINDINGS),
+        "array-representation-churn": RuleSpec(
+            "array_representation_churn", RuleOutputShape.FINDINGS
+        ),
+        "cholesky-recurrence": RuleSpec(
+            "cholesky_recurrence", RuleOutputShape.FINDINGS
+        ),
+        "manual-quaternion-products": RuleSpec(
+            "manual_quaternion_products", RuleOutputShape.FINDINGS
+        ),
+        "manual-quaternion-conjugation": RuleSpec(
+            "manual_quaternion_conjugation", RuleOutputShape.FINDINGS
+        ),
+        "manual-quaternion-normalization": RuleSpec(
+            "manual_quaternion_normalization", RuleOutputShape.FINDINGS
+        ),
+        "manual-quaternion-inversion": RuleSpec(
+            "manual_quaternion_inversion", RuleOutputShape.FINDINGS
+        ),
+        "manual-quaternion-vector-rotation": RuleSpec(
+            "manual_quaternion_vector_rotation", RuleOutputShape.FINDINGS
+        ),
+        "manual-quaternion-matrix-conversion": RuleSpec(
+            "manual_quaternion_matrix_conversion", RuleOutputShape.FINDINGS
+        ),
+        "ecef-enu-transform": RuleSpec("ecef_enu_transform", RuleOutputShape.FINDINGS),
+        "ecef-ned-matrix-transform": RuleSpec(
+            "ecef_ned_matrix_transform", RuleOutputShape.FINDINGS
+        ),
+        "ned-basis-vectors": RuleSpec("ned_basis_vectors", RuleOutputShape.FINDINGS),
         "scipy-constants": RuleSpec("scipy_constants", RuleOutputShape.FINDINGS),
+        "ci-workflows": RuleSpec("ci_workflows", RuleOutputShape.FINDINGS),
         "test-quality": RuleSpec("test_quality", RuleOutputShape.FINDINGS),
         "input-contracts": RuleSpec("input_contracts", RuleOutputShape.FINDINGS),
         "source-families": RuleSpec("source_families", RuleOutputShape.FINDINGS),
@@ -67,6 +130,7 @@ RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
         "sqlalchemy-practices": RuleSpec(
             "sqlalchemy_practices", RuleOutputShape.FINDINGS
         ),
+        "document-style": RuleSpec("document_style", RuleOutputShape.FINDINGS),
         "cyclomatic-complexity": RuleSpec(
             "cyclomatic_complexity",
             RuleOutputShape.CYCLOMATIC_REPORT,

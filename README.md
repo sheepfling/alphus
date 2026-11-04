@@ -27,7 +27,9 @@ launcher analysis, `review` for advisory rules, `repository` for architecture
 and packaging policy, `hygiene` for size and duplicate-helper rules,
 `stubs` for installed stub-package verification, and `python` for
 package-import smoke and compatibility-import removal checks. Portable
-themes own a `runners.py` that binds selectors to validated policy.
+themes own a `runners.py` exposing `<THEME>_RULE_RUNNERS`. A repository script
+generates their sorted, literal imports in the dispatcher and verifies complete
+selector coverage; tests fail when the checked-in manifest is stale.
 
 `src/alphus/contracts/` owns shared finding and diagnostic types.
 `src/alphus/policy/` owns validated settings and the built-in rule catalog.
@@ -74,7 +76,7 @@ alphus
 
 For the installed-wheel version of this check, including the current self-profile
 scope and exclusions, see [Self-checking Alphus](docs/SELF-CHECK.md). The
-`review` profile also selects [the review checks](docs/REVIEW-CHECKS.md) alone.
+`review` profile also selects [the review checks](docs/review/README.md) alone.
 Those include opt-in Pydantic and FastAPI source sniffers with consumer-owned
 scope and error-code vocabulary.
 See [version support](docs/VERSION-SUPPORT.md) for the checker Python range,

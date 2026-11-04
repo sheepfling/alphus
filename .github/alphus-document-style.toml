@@ -1,0 +1,24 @@
+schema_version = 1
+
+[files]
+include = ["README.md", "docs/**/*.md"]
+exclude = ["docs/vendor/**", "docs/build/**"]
+
+[checks.document_style]
+extensions = [".md", ".mdx"]
+minimum_headings = 8
+minimum_family_matches = 2
+minimum_family_density = 0.25
+severity = "info"
+
+[orchestration]
+default_profile = "self-document-style"
+
+[[orchestration.profiles]]
+name = "self-document-style"
+steps = ["Review documentation heading patterns"]
+
+[[orchestration.steps]]
+name = "Review documentation heading patterns"
+kind = "rule"
+rule = "document-style"

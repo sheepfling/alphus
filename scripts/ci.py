@@ -16,14 +16,27 @@ from pathlib import Path
 from typing import Literal
 
 
+def _normalized_name(name: str) -> str:
+    """Apply the dependency-name normalization needed for duplicate detection."""
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def _floor_key(version: str) -> tuple[int, ...]:
+    """Compare the numeric release floors accepted by dependency_floors."""
+    parts = [int(part) for part in version.split(".")]
+    while len(parts) > 1 and parts[-1] == 0:
+        parts.pop()
+    return tuple(parts)
+
+
 def dependency_floors(pyproject: Path) -> tuple[str, ...]:
-    """Read each declared >= floor without duplicating pins in workflow YAML."""
+    """Read the strongest declared floor for each normalized package name."""
     project = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]
     declarations = [
         *project["dependencies"],
         *project["optional-dependencies"]["python"],
     ]
-    floors: list[str] = []
+    floors: dict[str, tuple[str, str, tuple[int, ...]]] = {}
     for declaration in declarations:
         match = re.fullmatch(
             r"([A-Za-z0-9_-]+)>=(\d+(?:\.\d+)*),<\d+(?:\.\d+)*",
@@ -33,8 +46,15 @@ def dependency_floors(pyproject: Path) -> tuple[str, ...]:
             raise ValueError(
                 f"expected a bounded dependency with one floor: {declaration}"
             )
-        floors.append(f"{match.group(1)}=={match.group(2)}")
-    return tuple(floors)
+        name, floor_text = match.groups()
+        normalized_name = _normalized_name(name)
+        floor = _floor_key(floor_text)
+        previous = floors.get(normalized_name)
+        if previous is None:
+            floors[normalized_name] = (name, floor_text, floor)
+        elif floor > previous[2]:
+            floors[normalized_name] = (previous[0], floor_text, floor)
+    return tuple(f"{name}=={floor}" for name, floor, _key in floors.values())
 
 
 OutputMode = Literal["plain", "json"]
@@ -190,6 +210,16 @@ def python_profile(
         "alphus",
         *history_arguments,
         stage="Run Alphus self profile",
+        output=output,
+    )
+    run(
+        root,
+        sys.executable,
+        "-m",
+        "alphus",
+        "--profile",
+        "markdown-shell-review",
+        stage="Run Alphus Markdown shell review",
         output=output,
     )
 
