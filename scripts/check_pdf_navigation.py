@@ -6,7 +6,7 @@ import argparse
 import importlib
 import math
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Annotated, Protocol, TypeAlias, cast
 
@@ -124,8 +124,8 @@ def _flatten_outline(items: _OutlineItem) -> list[_Destination]:
 
 
 def _page_for_destination(reader: _Reader, destination: _PdfDestination) -> int | None:
-    getter = getattr(destination, "get_object", None)
-    if callable(getter):
+    getter = cast(Callable[[], object] | None, getattr(destination, "get_object", None))
+    if getter is not None:
         try:
             destination = cast(_PdfDestination, getter())
         except Exception:  # noqa: BLE001 - malformed references are unresolved
