@@ -52,7 +52,9 @@ class _EvidenceObservation(StrictModel):
     @field_validator("observed_sources")
     @classmethod
     def validate_observed_sources(cls, values: tuple[str, ...]) -> tuple[str, ...]:
-        checked = tuple(_artifact_path(value, "observed source path") for value in values)
+        checked = tuple(
+            _artifact_path(value, "observed source path") for value in values
+        )
         require_unique(checked, "observed source paths must be unique per test")
         return checked
 
