@@ -81,6 +81,7 @@ from alphus.gates.review.provenance_ownership import check_provenance_ownership
 from alphus.gates.review.rendered_value_reparsed import (
     check_rendered_value_reparsed,
 )
+from alphus.gates.review.run_artifacts import check_run_artifacts
 from alphus.gates.review.scipy_constants import check_scipy_constants
 from alphus.gates.review.semantic_work_presentation import (
     check_semantic_work_presentation,
@@ -320,6 +321,11 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
             root,
             files,
             require_policy(config.checks.scipy_constants, "scipy_constants"),
+        ),
+        "run-artifacts": lambda root, files, config: check_run_artifacts(
+            root,
+            files,
+            require_policy(config.checks.run_artifacts, "run_artifacts"),
         ),
         "ci-workflows": lambda root, files, config: check_ci_workflows(
             root,

@@ -121,6 +121,7 @@ RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
         ),
         "ned-basis-vectors": RuleSpec("ned_basis_vectors", RuleOutputShape.FINDINGS),
         "scipy-constants": RuleSpec("scipy_constants", RuleOutputShape.FINDINGS),
+        "run-artifacts": RuleSpec("run_artifacts", RuleOutputShape.FINDINGS),
         "ci-workflows": RuleSpec("ci_workflows", RuleOutputShape.FINDINGS),
         "test-quality": RuleSpec("test_quality", RuleOutputShape.FINDINGS),
         "input-contracts": RuleSpec("input_contracts", RuleOutputShape.FINDINGS),

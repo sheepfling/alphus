@@ -66,6 +66,7 @@ from alphus.policy.review import (
     QuaternionNormalizationPolicy,
     QuaternionProductPolicy,
     QuaternionVectorRotationPolicy,
+    RunArtifactPolicy,
     ScipyConstantsPolicy,
     SemanticWorkPresentationPolicy,
     SourceFamilyPolicy,
@@ -124,6 +125,7 @@ class CheckPolicies(StrictModel):
     ecef_ned_matrix_transform: EcefNedMatrixTransformPolicy | None = None
     ned_basis_vectors: NedBasisVectorsPolicy | None = None
     scipy_constants: ScipyConstantsPolicy | None = None
+    run_artifacts: RunArtifactPolicy | None = None
     ci_workflows: CiWorkflowPolicy | None = None
     test_quality: TestQualityPolicy | None = None
     input_contracts: InputContractPolicy | None = None

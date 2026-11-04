@@ -64,6 +64,7 @@ QualityRuleName: TypeAlias = Literal[
     "ecef-ned-matrix-transform",
     "ned-basis-vectors",
     "scipy-constants",
+    "run-artifacts",
     "ci-workflows",
     "test-quality",
     "input-contracts",
