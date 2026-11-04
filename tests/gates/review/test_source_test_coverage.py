@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import subprocess
+from collections.abc import Iterable, Mapping
 from pathlib import Path
+from typing import Literal, TypedDict
 
 from alphus.contracts.findings import Finding
 from alphus.gates.review.source_test_coverage import check_source_test_coverage
@@ -14,7 +16,12 @@ from alphus.policy.source_test_coverage import (
 )
 
 
-def _commit_checkout(root: Path, files: dict[str, str]) -> str:
+class _EvidenceObservationInput(TypedDict):
+    outcome: Literal["passed", "failed", "skipped", "not_selected"]
+    observed_sources: list[str]
+
+
+def _commit_checkout(root: Path, files: Mapping[str, str]) -> str:
     for name, contents in files.items():
         path = root / name
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -44,7 +51,7 @@ def _commit_checkout(root: Path, files: dict[str, str]) -> str:
 def _write_evidence(
     root: Path,
     revision: str,
-    tests: dict[str, dict[str, object]],
+    tests: Mapping[str, _EvidenceObservationInput],
     *,
     complete: bool = True,
     evidence_revision: str | None = None,
@@ -65,7 +72,7 @@ def _write_evidence(
     )
 
 
-def _messages(findings: list[Finding]) -> list[str]:
+def _messages(findings: Iterable[Finding]) -> list[str]:
     return [finding.message for finding in findings]
 
 
@@ -251,9 +258,7 @@ def test_stale_revision_and_mismatched_source_evidence_remain_unverified(
 
     _write_evidence(tmp_path, revision, tests)
     mismatched = check_source_test_coverage(tmp_path, (), policy)
-    assert any(
-        "did not report this source" in item.message for item in mismatched
-    )
+    assert any("did not report this source" in item.message for item in mismatched)
     assert any("[coverage:unverified]" in item.message for item in mismatched)
     assert not any("[coverage:checked]" in item.message for item in mismatched)
 
@@ -372,3 +377,299 @@ def test_failed_test_execution_can_confirm_relationship_without_claiming_quality
         "Test correctness and quality were not assessed" in item.message
         for item in findings
     )
+
+
+def test_worktree_changes_to_declared_source_or_test_make_evidence_unverified(
+    tmp_path: Path,
+) -> None:
+    files = {
+        "src/service.py": "def run(): return 1\\n",
+        "tests/test_service.py": "def test_service(): pass\\n",
+    }
+    revision = _commit_checkout(tmp_path, files)
+    _write_evidence(
+        tmp_path,
+        revision,
+        {
+            "tests/test_service.py": {
+                "outcome": "passed",
+                "observed_sources": ["src/service.py"],
+            }
+        },
+    )
+    policy = SourceTestCoveragePolicy(
+        relationships=(
+            SourceTestRelationship(
+                source="src/service.py", tests=("tests/test_service.py",)
+            ),
+        ),
+        evidence_file="build/source-test-coverage.json",
+    )
+
+    for name in ("src/service.py", "tests/test_service.py"):
+        path = tmp_path / name
+        original = path.read_text(encoding="utf-8")
+        path.write_text(original + "# changed after evidence\\n", encoding="utf-8")
+        if name == "src/service.py":
+            subprocess.run(["git", "add", name], cwd=tmp_path, check=True)
+        findings = check_source_test_coverage(tmp_path, (), policy)
+        assert any("[coverage:unverified]" in item.message for item in findings)
+        assert any(
+            "evidence freshness cannot be established" in item.message
+            for item in findings
+        )
+        assert not any("[coverage:checked]" in item.message for item in findings)
+        assert any("[coverage:incomplete]" in item.message for item in findings)
+        path.write_text(original, encoding="utf-8")
+        if name == "src/service.py":
+            subprocess.run(["git", "reset", "--hard", "HEAD"], cwd=tmp_path, check=True)
+
+
+def test_untracked_declared_test_is_unverified_even_with_matching_artifact(
+    tmp_path: Path,
+) -> None:
+    revision = _commit_checkout(tmp_path, {"src/service.py": "VALUE = 1\\n"})
+    test_path = tmp_path / "tests/test_service.py"
+    test_path.parent.mkdir(parents=True, exist_ok=True)
+    test_path.write_text("def test_service(): pass\\n", encoding="utf-8")
+    _write_evidence(
+        tmp_path,
+        revision,
+        {
+            "tests/test_service.py": {
+                "outcome": "passed",
+                "observed_sources": ["src/service.py"],
+            }
+        },
+    )
+    policy = SourceTestCoveragePolicy(
+        relationships=(
+            SourceTestRelationship(
+                source="src/service.py", tests=("tests/test_service.py",)
+            ),
+        ),
+        evidence_file="build/source-test-coverage.json",
+    )
+
+    findings = check_source_test_coverage(tmp_path, (), policy)
+
+    assert any("[coverage:unverified]" in item.message for item in findings)
+    assert any("untracked" in item.message for item in findings)
+    assert not any("[coverage:checked]" in item.message for item in findings)
+
+
+def test_partial_artifact_keeps_overall_summary_incomplete(tmp_path: Path) -> None:
+    revision = _commit_checkout(
+        tmp_path,
+        {
+            "src/service.py": "VALUE = 1\\n",
+            "tests/test_service.py": "def test_service(): pass\\n",
+        },
+    )
+    _write_evidence(
+        tmp_path,
+        revision,
+        {
+            "tests/test_service.py": {
+                "outcome": "passed",
+                "observed_sources": ["src/service.py"],
+            }
+        },
+        complete=False,
+    )
+    policy = SourceTestCoveragePolicy(
+        relationships=(
+            SourceTestRelationship(
+                source="src/service.py", tests=("tests/test_service.py",)
+            ),
+        ),
+        evidence_file="build/source-test-coverage.json",
+    )
+
+    findings = check_source_test_coverage(tmp_path, (), policy)
+
+    assert any("[coverage:checked]" in item.message for item in findings)
+    assert any("[coverage:incomplete]" in item.message for item in findings)
+    assert not any("[coverage:complete]" in item.message for item in findings)
+
+
+def test_symlink_target_changes_remain_unverified(tmp_path: Path) -> None:
+    _commit_checkout(
+        tmp_path,
+        {
+            "src/implementation_v1.py": "VALUE = 1\\n",
+            "src/implementation_v2.py": "VALUE = 2\\n",
+            "tests/test_service.py": "def test_service(): pass\\n",
+        },
+    )
+    latest = tmp_path / "src/latest.py"
+    latest.symlink_to("implementation_v1.py")
+    current = tmp_path / "src/current.py"
+    current.symlink_to("latest.py")
+    subprocess.run(
+        ["git", "add", "src/latest.py", "src/current.py"], cwd=tmp_path, check=True
+    )
+    subprocess.run(
+        ["git", "commit", "-qm", "add source symlink chain"],
+        cwd=tmp_path,
+        check=True,
+    )
+    revision = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    _write_evidence(
+        tmp_path,
+        revision,
+        {
+            "tests/test_service.py": {
+                "outcome": "passed",
+                "observed_sources": ["src/current.py"],
+            }
+        },
+    )
+    policy = SourceTestCoveragePolicy(
+        relationships=(
+            SourceTestRelationship(
+                source="src/current.py", tests=("tests/test_service.py",)
+            ),
+        ),
+        evidence_file="build/source-test-coverage.json",
+    )
+    latest.unlink()
+    latest.symlink_to("implementation_v2.py")
+
+    findings = check_source_test_coverage(tmp_path, (), policy)
+
+    assert any("[coverage:unverified]" in item.message for item in findings)
+    assert any("symlinked" in item.message for item in findings)
+    assert not any("[coverage:checked]" in item.message for item in findings)
+
+
+def test_index_assume_unchanged_and_skip_worktree_flags_are_unverified(
+    tmp_path: Path,
+) -> None:
+    for flag in ("--assume-unchanged", "--skip-worktree"):
+        root = tmp_path / flag.removeprefix("--")
+        root.mkdir()
+        revision = _commit_checkout(
+            root,
+            {
+                "src/service.py": "VALUE = 1\\n",
+                "tests/test_service.py": "def test_service(): pass\\n",
+            },
+        )
+        _write_evidence(
+            root,
+            revision,
+            {
+                "tests/test_service.py": {
+                    "outcome": "passed",
+                    "observed_sources": ["src/service.py"],
+                }
+            },
+        )
+        policy = SourceTestCoveragePolicy(
+            relationships=(
+                SourceTestRelationship(
+                    source="src/service.py", tests=("tests/test_service.py",)
+                ),
+            ),
+            evidence_file="build/source-test-coverage.json",
+        )
+        subprocess.run(
+            ["git", "update-index", flag, "src/service.py"], cwd=root, check=True
+        )
+        (root / "src/service.py").write_text("VALUE = 99\\n", encoding="utf-8")
+
+        findings = check_source_test_coverage(root, (), policy)
+
+        assert any("[coverage:unverified]" in item.message for item in findings)
+        assert any("index flags that hide changes" in item.message for item in findings)
+        assert not any("[coverage:checked]" in item.message for item in findings)
+
+
+def test_duplicate_evidence_object_keys_are_invalid(tmp_path: Path) -> None:
+    revision = _commit_checkout(
+        tmp_path,
+        {
+            "src/service.py": "VALUE = 1\\n",
+            "tests/test_service.py": "def test_service(): pass\\n",
+        },
+    )
+    policy = SourceTestCoveragePolicy(
+        relationships=(
+            SourceTestRelationship(
+                source="src/service.py", tests=("tests/test_service.py",)
+            ),
+        ),
+        evidence_file="build/source-test-coverage.json",
+    )
+    payload = {
+        "schema": "alphus.source-test-coverage",
+        "schema_version": 1,
+        "revision": revision,
+        "complete": True,
+        "tests": {
+            "tests/test_service.py": {
+                "outcome": "passed",
+                "observed_sources": ["src/service.py"],
+            }
+        },
+    }
+    original = json.dumps(payload)
+    duplicate_documents = (
+        original.replace(
+            '"complete": true,', '"complete": true, "complete": false,', 1
+        ),
+        original.replace(
+            '"outcome": "passed",', '"outcome": "passed", "outcome": "failed",', 1
+        ),
+    )
+    artifact_path = tmp_path / "build/source-test-coverage.json"
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    for document in duplicate_documents:
+        artifact_path.write_text(document, encoding="utf-8")
+        findings = check_source_test_coverage(tmp_path, (), policy)
+        assert any("[coverage:unverified]" in item.message for item in findings)
+        assert any("evidence is invalid" in item.message for item in findings)
+        assert not any("[coverage:checked]" in item.message for item in findings)
+
+
+def test_symlink_loop_is_unverified_not_fatal(tmp_path: Path) -> None:
+    revision = _commit_checkout(
+        tmp_path,
+        {
+            "src/service.py": "VALUE = 1\\n",
+            "tests/test_service.py": "def test_service(): pass\\n",
+        },
+    )
+    _write_evidence(
+        tmp_path,
+        revision,
+        {
+            "tests/test_service.py": {
+                "outcome": "passed",
+                "observed_sources": ["src/service.py"],
+            }
+        },
+    )
+    source = tmp_path / "src/service.py"
+    source.unlink()
+    source.symlink_to("service.py")
+    policy = SourceTestCoveragePolicy(
+        relationships=(
+            SourceTestRelationship(
+                source="src/service.py", tests=("tests/test_service.py",)
+            ),
+        ),
+        evidence_file="build/source-test-coverage.json",
+    )
+
+    findings = check_source_test_coverage(tmp_path, (), policy)
+
+    assert any("[coverage:unverified]" in item.message for item in findings)
+    assert not any("[coverage:checked]" in item.message for item in findings)
