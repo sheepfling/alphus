@@ -126,6 +126,7 @@ RULE_SPECS: Mapping[QualityRuleName, RuleSpec] = MappingProxyType(
         "test-quality": RuleSpec("test_quality", RuleOutputShape.FINDINGS),
         "input-contracts": RuleSpec("input_contracts", RuleOutputShape.FINDINGS),
         "source-families": RuleSpec("source_families", RuleOutputShape.FINDINGS),
+        "benchmark-docs": RuleSpec("benchmark_docs", RuleOutputShape.FINDINGS),
         "positional-interfaces": RuleSpec(
             "positional_interfaces", RuleOutputShape.FINDINGS
         ),

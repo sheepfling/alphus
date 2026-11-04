@@ -40,6 +40,7 @@ from alphus.policy.repository import (
 )
 from alphus.policy.review import (
     ArrayRepresentationPolicy,
+    BenchmarkDocPolicy,
     CholeskyRecurrencePolicy,
     CiWorkflowPolicy,
     DocumentStylePolicy,
@@ -130,6 +131,7 @@ class CheckPolicies(StrictModel):
     test_quality: TestQualityPolicy | None = None
     input_contracts: InputContractPolicy | None = None
     source_families: SourceFamilyPolicy | None = None
+    benchmark_docs: BenchmarkDocPolicy | None = None
     positional_interfaces: PositionalInterfacePolicy | None = None
     pydantic_practices: PydanticPracticePolicy | None = None
     fastapi_practices: FastApiPracticePolicy | None = None

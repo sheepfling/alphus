@@ -60,10 +60,10 @@ language neutral.
 - `alphus.support` owns shared file inventory, contained-file/JSON access,
   AST name resolution, and platform probes. These utilities do not emit
   findings or register rules.
-- `alphus.gates.review` owns numeric-literal, test-quality, and input-contract
-  checkers. `review.frameworks` contains the Pydantic and FastAPI practice
-  modules so each framework can grow independently. The theme's `runners.py`
-  binds their selectors to validated policies.
+- `alphus.gates.review` owns numeric-literal, test-quality, input-contract,
+  source-family, and durable benchmark-prose checkers. `review.frameworks`
+  contains Pydantic and FastAPI practice modules so each framework can grow
+  independently. The theme's `runners.py` binds selectors to validated policies.
 - `alphus.gates.source` owns shared source inventory, dispatch, and policy
   binding for portable source checks. `alphus.gates.languages.python` and
   `alphus.gates.languages.javascript` own language-specific analysis engines.

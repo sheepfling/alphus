@@ -13,6 +13,7 @@ from typing import TypeAlias
 
 from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.execution.results import RuleOutput
+from alphus.gates.review.benchmark_docs import check_benchmark_docs
 from alphus.gates.review.ci_workflows import check_ci_workflows
 from alphus.gates.review.document_style import check_document_style
 from alphus.gates.review.embedded_semantic_overrides import (
@@ -346,6 +347,11 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
             root,
             files,
             require_policy(config.checks.source_families, "source_families"),
+        ),
+        "benchmark-docs": lambda root, files, config: check_benchmark_docs(
+            root,
+            files,
+            require_policy(config.checks.benchmark_docs, "benchmark_docs"),
         ),
         "positional-interfaces": lambda root, files, config: (
             check_positional_interfaces(

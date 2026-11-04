@@ -76,6 +76,8 @@ from alphus.policy.repository import (
 from alphus.policy.review import (
     ArrayRepresentationContract,
     ArrayRepresentationPolicy,
+    BenchmarkDocException,
+    BenchmarkDocPolicy,
     CholeskyRecurrencePolicy,
     CiWorkflowPolicy,
     DocumentStylePolicy,
@@ -150,6 +152,8 @@ __all__ = [
     "ArchitectureGraphPolicy",
     "ArrayRepresentationContract",
     "ArrayRepresentationPolicy",
+    "BenchmarkDocException",
+    "BenchmarkDocPolicy",
     "CallableRegistryPolicy",
     "CheckPolicies",
     "CholeskyRecurrencePolicy",
