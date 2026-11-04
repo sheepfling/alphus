@@ -1,12 +1,15 @@
 """Alphus must apply its own policy and package contracts."""
 
 import ast
+import os
 import re
+import subprocess
 import tomllib
 from importlib.metadata import EntryPoint
 from pathlib import Path
 
 import pytest
+import yaml
 from packaging.specifiers import SpecifierSet
 from packaging.version import Version
 
@@ -147,6 +150,48 @@ def test_hosted_dependency_floor_uses_package_metadata() -> None:
     workflow = Path(".github/workflows/self-quality.yml").read_text(encoding="utf-8")
     floor_job = workflow.split("  minimum-dependencies:", 1)[1]
     assert "python scripts/ci.py --root . --minimum" in floor_job
+
+
+def test_source_family_self_review_propagates_pipeline_errors_without_blocking_advisories(
+    tmp_path: Path,
+) -> None:
+    workflow = yaml.safe_load(
+        Path(".github/workflows/self-source-family-import-review.yml").read_text(
+            encoding="utf-8"
+        )
+    )
+    review_step = next(
+        step
+        for step in workflow["jobs"]["review"]["steps"]
+        if step.get("name")
+        == "Review Alphus source families and retain the complete report"
+    )
+    assert review_step["shell"] == "bash"
+    assert review_step["run"].startswith("set -o pipefail\n")
+    assert (
+        '| tee "$RUNNER_TEMP/alphus-source-family-import-review.json"'
+        in (review_step["run"])
+    )
+
+    policy = tomllib.loads(
+        Path(".github/alphus-self-source-families.toml").read_text(encoding="utf-8")
+    )
+    orchestration = policy["orchestration"]
+    assert orchestration["failure_threshold"] == "warning"
+    assert orchestration["steps"][0]["rollout"] == "provisional"
+
+    failing_command = review_step["run"].replace("alphus --root .", "false --root .", 1)
+    environment = {**os.environ, "RUNNER_TEMP": str(tmp_path)}
+    result = subprocess.run(
+        ["bash", "-e", "-c", failing_command],
+        check=False,
+        capture_output=True,
+        cwd=Path.cwd(),
+        env=environment,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert (tmp_path / "alphus-source-family-import-review.json").is_file()
 
 
 def test_stub_checker_extras_are_opt_in() -> None:

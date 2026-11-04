@@ -21,10 +21,12 @@ jobs:
       - name: Install Alphus
         run: python -m pip install --disable-pip-version-check -e .
       - name: Review Alphus source families and retain the complete report
-        run: >-
-          alphus --root . --config .github/alphus-self-source-families.toml
-          --profile self-source-family-imports --output json
-          | tee "$RUNNER_TEMP/alphus-source-family-import-review.json"
+        shell: bash
+        run: |
+          set -o pipefail
+          alphus --root . --config .github/alphus-self-source-families.toml \
+            --profile self-source-family-imports --output json \
+            | tee "$RUNNER_TEMP/alphus-source-family-import-review.json"
       - name: Retain Alphus source family findings
         if: always()
         uses: actions/upload-artifact@v7
