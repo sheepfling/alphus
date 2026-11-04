@@ -5,10 +5,77 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import cast
 
 from alphus.contracts.rule_tags import RuleTag
 
 _SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
+
+
+def _slug_text(field_name: str, value: object) -> str:
+    candidate: str | bytes = cast(str | bytes, value)
+    if type(candidate) is not str or not _SLUG.fullmatch(candidate):
+        raise ValueError(f"morphology {field_name} must be a lowercase slug")
+    return candidate
+
+
+def _immutable_slug_tuple(field_name: str, value: object) -> tuple[str, ...]:
+    candidate: tuple[object, ...] | list[object] = cast(
+        tuple[object, ...] | list[object], value
+    )
+    if type(candidate) is not tuple:
+        raise TypeError(f"morphology {field_name} must be an immutable tuple")
+    result: list[str] = []
+    for raw_value in candidate:
+        string_value: str | bytes = cast(str | bytes, raw_value)
+        if type(string_value) is not str:
+            raise TypeError(f"morphology {field_name} must contain strings")
+        if not _SLUG.fullmatch(string_value):
+            raise ValueError(f"morphology {field_name} must contain lowercase slugs")
+        result.append(string_value)
+    values = tuple(result)
+    if not values or len(values) != len(set(values)):
+        raise ValueError(f"morphology {field_name} must be non-empty and unique")
+    return values
+
+
+def _immutable_rule_tags(value: object) -> tuple[RuleTag, ...]:
+    candidate: tuple[object, ...] | list[object] = cast(
+        tuple[object, ...] | list[object], value
+    )
+    if type(candidate) is not tuple:
+        raise TypeError("morphology finding_ids must be an immutable tuple")
+    result: list[RuleTag] = []
+    for raw_value in candidate:
+        tag: RuleTag | str = cast(RuleTag | str, raw_value)
+        if type(tag) is not RuleTag:
+            raise TypeError("morphology finding_ids must contain RuleTag values")
+        result.append(tag)
+    values = tuple(result)
+    if not values or len(values) != len(set(values)):
+        raise ValueError("morphology finding_ids must be non-empty and unique")
+    return values
+
+
+def _immutable_mechanisms(value: object) -> tuple[DetectionMechanism, ...]:
+    candidate: tuple[object, ...] | list[object] = cast(
+        tuple[object, ...] | list[object], value
+    )
+    if type(candidate) is not tuple:
+        raise TypeError("morphology mechanisms must be an immutable tuple")
+    result: list[DetectionMechanism] = []
+    for raw_value in candidate:
+        match raw_value:
+            case DetectionMechanism() as mechanism:
+                result.append(mechanism)
+            case _:
+                raise TypeError(
+                    "morphology mechanisms must contain DetectionMechanism values"
+                )
+    values = tuple(result)
+    if not values or len(values) != len(set(values)):
+        raise ValueError("morphology mechanisms must be non-empty and unique")
+    return values
 
 
 class ClaimKind(StrEnum):
@@ -53,41 +120,22 @@ class RuleMorphology:
     evaluation_maturity: EvaluationMaturity
 
     def __post_init__(self) -> None:
-        if not _SLUG.fullmatch(self.selector):
-            raise ValueError("morphology selectors must be lowercase slugs")
-        if not _SLUG.fullmatch(self.concern):
-            raise ValueError("morphology concerns must be lowercase slugs")
+        _slug_text("selector", self.selector)
+        _slug_text("concern", self.concern)
         object.__setattr__(self, "claim_kind", ClaimKind(self.claim_kind))
-        if not self.claim.strip():
+        claim: str | bytes = cast(str | bytes, self.claim)
+        if type(claim) is not str or not claim.strip():
             raise ValueError("morphology claims must not be empty")
-        for field_name in (
-            "finding_ids",
-            "inspected_scope",
-            "languages_formats",
-            "evidence_kinds",
-        ):
-            values = getattr(self, field_name)
-            if not values or len(values) != len(set(values)):
-                raise ValueError(
-                    f"morphology {field_name} must be non-empty and unique"
-                )
-        if not self.mechanisms or len(self.mechanisms) != len(set(self.mechanisms)):
-            raise ValueError("morphology mechanisms must be non-empty and unique")
-        object.__setattr__(
-            self,
-            "mechanisms",
-            tuple(DetectionMechanism(value) for value in self.mechanisms),
-        )
+        _immutable_rule_tags(self.finding_ids)
+        _immutable_slug_tuple("inspected_scope", self.inspected_scope)
+        _immutable_slug_tuple("languages_formats", self.languages_formats)
+        _immutable_slug_tuple("evidence_kinds", self.evidence_kinds)
+        _immutable_mechanisms(self.mechanisms)
         object.__setattr__(
             self,
             "evaluation_maturity",
             EvaluationMaturity(self.evaluation_maturity),
         )
-        for field_name in ("inspected_scope", "languages_formats", "evidence_kinds"):
-            if any(not _SLUG.fullmatch(value) for value in getattr(self, field_name)):
-                raise ValueError(
-                    f"morphology {field_name} must contain lowercase slugs"
-                )
 
 
 __all__ = ["ClaimKind", "DetectionMechanism", "EvaluationMaturity", "RuleMorphology"]

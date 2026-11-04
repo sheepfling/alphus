@@ -66,9 +66,7 @@ def test_discovery_rejects_orphan_finding_complaint(tmp_path: Path) -> None:
         declaration=_with_field(source, "finding_tag_complaints", ("orphan",)),
     )
 
-    with pytest.raises(
-        ValueError, match="finding complaints are not declared by this feature"
-    ):
+    with pytest.raises(ValueError, match="finding complaint 'orphan' is not declared"):
         render_manifest(tmp_path)
 
 
@@ -84,9 +82,60 @@ def test_discovery_ignores_rule_tags_with_dynamic_components(tmp_path: Path) -> 
     )
 
     with pytest.raises(
-        ValueError, match="finding complaints are not declared by this feature"
+        ValueError, match="finding complaint 'demo-check' is not declared"
     ):
         render_manifest(tmp_path)
+
+
+def test_discovery_rejects_orphan_before_duplicate_complaint_matches(
+    tmp_path: Path,
+) -> None:
+    declaration = _with_field(
+        _DECLARATION, "finding_tag_complaints", ("orphan", "shared")
+    )
+    _module(tmp_path, "demo", declaration=declaration)
+    path = tmp_path / "src/alphus/gates/demo.py"
+    with path.open("a", encoding="utf-8") as source:
+        source.write(
+            "rule_tag(Scope.PYTHON, Framework.NONE, Category.TESTING, 'shared')\n"
+            "rule_tag(Scope.MARKDOWN, Framework.NONE, Category.TESTING, 'shared')\n"
+        )
+
+    with pytest.raises(ValueError, match="finding complaint 'orphan' is not declared"):
+        render_manifest(tmp_path)
+
+
+def test_discovery_rejects_ambiguous_complaint_matches(tmp_path: Path) -> None:
+    declaration = _with_field(_DECLARATION, "finding_tag_complaints", ("shared",))
+    _module(tmp_path, "demo", declaration=declaration)
+    path = tmp_path / "src/alphus/gates/demo.py"
+    with path.open("a", encoding="utf-8") as source:
+        source.write(
+            "rule_tag(Scope.PYTHON, Framework.NONE, Category.TESTING, 'shared')\n"
+            "rule_tag(Scope.MARKDOWN, Framework.NONE, Category.TESTING, 'shared')\n"
+        )
+
+    with pytest.raises(
+        ValueError, match="finding complaint 'shared' resolves to multiple rule tags"
+    ):
+        render_manifest(tmp_path)
+
+
+def test_discovery_preserves_declared_complaint_order(tmp_path: Path) -> None:
+    declaration = _with_field(
+        _DECLARATION, "finding_tag_complaints", ("second", "demo-check")
+    )
+    _module(tmp_path, "demo", declaration=declaration)
+    path = tmp_path / "src/alphus/gates/demo.py"
+    with path.open("a", encoding="utf-8") as source:
+        source.write(
+            "rule_tag(Scope.PYTHON, Framework.NONE, Category.TESTING, 'second')\n"
+        )
+
+    manifest = render_manifest(tmp_path)
+    finding_ids = manifest.split("finding_ids=(", maxsplit=1)[1]
+
+    assert finding_ids.index('"second"') < finding_ids.index('"demo-check"')
 
 
 def test_discovery_rejects_oversized_source_before_parsing(tmp_path: Path) -> None:
@@ -137,6 +186,20 @@ def test_discovery_rejects_symlinked_python_modules(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="escapes the built-in gates root"):
         render_manifest(tmp_path)
+
+
+def test_discovery_rejects_symlinked_gates_root(tmp_path: Path) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "demo.py").write_text("ALPHUS_MORPHOLOGY = ()\n", encoding="utf-8")
+    gates = repository / "src/alphus/gates"
+    gates.parent.mkdir(parents=True)
+    gates.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="built-in gates root escapes the repository"):
+        render_manifest(repository)
 
 
 def test_discovery_rejects_unknown_mechanisms(tmp_path: Path) -> None:

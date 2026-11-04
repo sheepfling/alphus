@@ -84,8 +84,8 @@ def _assignment_value(statement: ast.stmt) -> ast.expr | None:
             return None
 
 
-def _static_rule_ids(tree: ast.Module) -> frozenset[str]:
-    result: set[str] = set()
+def _static_rule_ids(tree: ast.Module) -> dict[str, tuple[str, ...]]:
+    result: dict[str, set[str]] = {}
     for node in ast.walk(tree):
         match node:
             case ast.Call(
@@ -98,13 +98,16 @@ def _static_rule_ids(tree: ast.Module) -> frozenset[str]:
                 ],
                 keywords=[],
             ):
-                result.add(
+                rule_id = (
                     f"alphus/{scope.lower()}/{framework.lower()}/{category.lower()}"
                     f"/{complaint}"
                 )
+                result.setdefault(complaint, set()).add(rule_id)
             case _:
                 pass
-    return frozenset(result)
+    return {
+        complaint: tuple(sorted(rule_ids)) for complaint, rule_ids in result.items()
+    }
 
 
 def _string_tuple(value: object, field: str) -> tuple[str, ...]:
@@ -235,7 +238,10 @@ def _declaration_records(raw: object) -> tuple[object, ...]:
 
 def _declarations(root: Path) -> tuple[_Declaration, ...]:
     gates = root / "src" / "alphus" / "gates"
+    repository_root = root.resolve(strict=True)
     gates_root = gates.resolve(strict=True)
+    if gates.is_symlink() or not gates_root.is_relative_to(repository_root):
+        raise ValueError(f"built-in gates root escapes the repository: {gates}")
     declarations: list[_Declaration] = []
     paths: list[Path] = []
     for path in gates.rglob("*.py"):
@@ -295,27 +301,27 @@ def _declarations(root: Path) -> tuple[_Declaration, ...]:
         except (ValueError, TypeError, SyntaxError) as error:
             raise ValueError(f"{path}:{_DECLARATION_NAME} must be a literal") from error
         records = _declaration_records(raw)
+        local_ids = _static_rule_ids(tree)
         for item in records:
             declaration = _validate_declaration(item, path)
-            local_ids = _static_rule_ids(tree)
-            resolved_ids = tuple(
-                rule_id
-                for complaint in declaration.finding_ids
-                for rule_id in local_ids
-                if rule_id.rsplit("/", 1)[-1] == complaint
-            )
-            if len(resolved_ids) != len(declaration.finding_ids):
-                missing = set(declaration.finding_ids) - {
-                    rule_id.rsplit("/", 1)[-1] for rule_id in local_ids
-                }
-                raise ValueError(
-                    f"{path}: finding complaints are not declared by this feature: "
-                    f"{sorted(missing)}"
-                )
+            resolved_ids: list[str] = []
+            for complaint in declaration.finding_ids:
+                matches = local_ids.get(complaint, ())
+                if not matches:
+                    raise ValueError(
+                        f"{path}: finding complaint {complaint!r} is not declared "
+                        "by this feature"
+                    )
+                if len(matches) != 1:
+                    raise ValueError(
+                        f"{path}: finding complaint {complaint!r} resolves to multiple "
+                        f"rule tags: {matches}"
+                    )
+                resolved_ids.append(matches[0])
             declarations.append(
                 _Declaration(
                     selector=declaration.selector,
-                    finding_ids=resolved_ids,
+                    finding_ids=tuple(resolved_ids),
                     concern=declaration.concern,
                     claim_kind=declaration.claim_kind,
                     claim=declaration.claim,

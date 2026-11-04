@@ -2,29 +2,25 @@
 
 from __future__ import annotations
 
-from dataclasses import fields
+from dataclasses import fields, replace
+
+import pytest
 
 from alphus.policy._generated_morphology import MORPHOLOGY_BY_SELECTOR
 from alphus.policy.catalog import _LEGACY_RULE_SPECS, RULE_SPECS
-from alphus.policy.morphology import ClaimKind, DetectionMechanism, EvaluationMaturity
-
-_EXPECTED_SELECTORS = frozenset(
-    {
-        "file-size",
-        "source-test-coverage",
-        "positional-semantic-overrides",
-        "benchmark-docs",
-        "document-style",
-        "cyclomatic-complexity",
-    }
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
 )
 
 
 def test_feature_morphology_is_attached_without_changing_rule_contracts() -> None:
-    assert set(MORPHOLOGY_BY_SELECTOR) == _EXPECTED_SELECTORS
-    assert {name for name, spec in RULE_SPECS.items() if spec.morphology} == (
-        _EXPECTED_SELECTORS
-    )
+    attached_selectors = {
+        name for name, spec in RULE_SPECS.items() if spec.morphology is not None
+    }
+    assert attached_selectors == set(MORPHOLOGY_BY_SELECTOR)
     assert set(RULE_SPECS) == set(_LEGACY_RULE_SPECS)
     for selector, old_spec in _LEGACY_RULE_SPECS.items():
         current = RULE_SPECS[selector]
@@ -79,3 +75,24 @@ def test_morphology_does_not_absorb_policy_or_run_state() -> None:
             "coverage",
         }
     )
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    ("finding_ids", "inspected_scope", "languages_formats", "evidence_kinds"),
+)
+def test_morphology_rejects_mutable_sequence_inputs(field_name: str) -> None:
+    morphology = next(iter(MORPHOLOGY_BY_SELECTOR.values()))
+    values = getattr(morphology, field_name)
+
+    with pytest.raises(TypeError, match="immutable tuple"):
+        replace(morphology, **{field_name: list(values)})
+
+
+def test_morphology_requires_rule_tags_and_slug_values() -> None:
+    morphology: RuleMorphology = next(iter(MORPHOLOGY_BY_SELECTOR.values()))
+
+    with pytest.raises(TypeError, match="RuleTag values"):
+        replace(morphology, finding_ids=("alphus/any/none/style/not-a-tag",))
+    with pytest.raises(ValueError, match="lowercase slugs"):
+        replace(morphology, inspected_scope=("Selected-files",))

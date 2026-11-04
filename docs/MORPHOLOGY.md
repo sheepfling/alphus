@@ -17,8 +17,11 @@ A feature module may contain a top-level `ALPHUS_MORPHOLOGY` literal. The
 `generate_morphology_manifest.py` script parses only literal data with Python's
 AST parser. It does not import the module or execute check code. It validates
 selector syntax and uniqueness, matches declared complaint slugs to static
-`rule_tag` calls in the owning module, rejects duplicate declarations, and
-generates the typed `policy/_generated_morphology.py` view.
+`rule_tag` calls in the owning module, requires exactly one matching tag per
+complaint, rejects duplicate declarations, and generates the typed
+`policy/_generated_morphology.py` view. Discovery rejects symlinked feature
+modules and a symlinked gates root. Runtime metadata validates tuple inputs,
+typed rule tags, and lowercase scope/evidence slugs.
 
 This is a six-rule pilot, not a complete built-in registration migration. The
 selector type, policy fields, runner adapters, output normalization, and CLI
