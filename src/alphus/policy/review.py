@@ -169,6 +169,56 @@ class NumericLiteralPolicy(PythonSourceScanPolicy):
         return self
 
 
+class NumericLimitRole(StrictModel):
+    """Consumer-declared names that represent one analysis boundary."""
+
+    name: str
+    identifiers: Annotated[tuple[str, ...], Field(min_length=1)]
+
+    @field_validator("name")
+    @classmethod
+    def validate_role_name(cls, value: str) -> str:
+        name = validate_one_line_message(value)
+        if not name:
+            raise ValueError("numeric limit roles require a name")
+        return name
+
+    @field_validator("identifiers")
+    @classmethod
+    def validate_identifiers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("numeric limit role identifiers must be identifiers")
+        require_unique(values, "numeric limit role identifiers must be unique")
+        return tuple(values)
+
+
+class RepeatedNumericLimitPolicy(PythonSourceScanPolicy):
+    """Opt-in AST review of repeated numeric guards in selected Python paths."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    roles: Annotated[tuple[NumericLimitRole, ...], Field(min_length=1)]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @model_validator(mode="after")
+    def validate_roles(self) -> Self:
+        require_unique(
+            tuple(role.name for role in self.roles),
+            "numeric limit role names must be unique",
+        )
+        identifiers = tuple(
+            identifier for role in self.roles for identifier in role.identifiers
+        )
+        require_unique(
+            identifiers, "numeric limit role identifiers must be unique across roles"
+        )
+        return self
+
+
 class ManualMatrixKernelPolicy(PythonSourceScanPolicy):
     """Opt-in detector scope for one narrowly recognized matrix product form."""
 

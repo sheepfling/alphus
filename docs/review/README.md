@@ -130,6 +130,51 @@ AST nodes. Language adapters must exclude comments, strings, declarations, and
 non-arithmetic values according to their own grammar; the shared matcher only
 compares normalized evidence against configured catalogs.
 
+## Repeated numeric limits
+
+Selector: `repeated-numeric-limits`. ID:
+`alphus/python/none/maintainability/repeated-numeric-limit`.
+
+This opt-in review-only rule compares explicit numeric literals in `if` and
+conditional-expression guards across selected Python paths. A consumer must
+select `source_paths` and declare named roles with exact boundary identifiers;
+only comparisons against those names (or `len(name)`) can match. Values below
+2, booleans, loop bounds, assertions, test paths, generated paths, and references
+to named constants are ignored. Findings report every matching file and line,
+the literal, declared role, and uncertainty. They do not suggest or perform
+constant extraction.
+
+```toml
+[checks.repeated_numeric_limits]
+extensions = [".py"]
+source_paths = ["src/analysis/**"]
+exclude = ["src/analysis/experimental/**"]
+severity = "info"
+
+[[checks.repeated_numeric_limits.roles]]
+name = "AST traversal ceiling"
+identifiers = ["node_count", "ast_nodes"]
+```
+
+Evaluate Ruff's maintained
+[`PLR2004` (`magic-value-comparison`)](https://docs.astral.sh/ruff/rules/magic-value-comparison/)
+first for unnamed comparison values in selected Python files. It identifies
+individual magic-value comparisons and common scalar exemptions; it does not
+establish that equal values across files implement one policy. This rule adds only the
+declared cross-site comparison, and remains an advisory.
+
+The initial calibration uses synthetic cases: 1/1 positive case for an equal
+cap at the same declared boundary and 4/4 negative categories for independent
+roles, common scalar values and loop bounds, named constants/unselected paths,
+and test/generated files. No production repository sample has been scored, so
+real-world precision is unknown and enforcement is unsupported. The AST check
+does not follow aliases, assignments, imported constants, arbitrary call
+expressions, dynamic configuration, nested boolean meaning, or equivalent
+thresholds written with different numeric values. It also cannot prove that
+consumer-declared names refer to the same semantic boundary; review each
+finding. It is distinct from `numeric-literals` arithmetic constants,
+`manual-matrix-kernels` numerical reuse, and native cyclomatic metrics.
+
 ## SciPy constants and conversions
 
 Selector: `scipy-constants`. IDs:

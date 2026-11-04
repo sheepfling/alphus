@@ -183,6 +183,12 @@ RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
                 "trajectory-analysis",
             ),
         ),
+        "repeated-numeric-limits": RuleSpec(
+            "repeated_numeric_limits",
+            RuleOutputShape.FINDINGS,
+            "Reviews repeated numeric thresholds in explicitly selected Python analysis paths.",
+            ("python",),
+        ),
         "scipy-constants": RuleSpec(
             "scipy_constants",
             RuleOutputShape.FINDINGS,

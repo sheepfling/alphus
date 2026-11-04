@@ -161,6 +161,7 @@ _SOURCE_SCAN_RULES: frozenset[QualityRuleName] = frozenset(
         "python-style",
         "runtime-types",
         "numeric-literals",
+        "repeated-numeric-limits",
         "manual-matrix-kernels",
         "manual-elimination",
         "array-representation-churn",
@@ -431,6 +432,7 @@ def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
     """Keep concise text summaries while offering a stable JSON format."""
     review_labels = {
         "numeric-literals": "Numeric literals",
+        "repeated-numeric-limits": "Repeated numeric limits",
         "scipy-constants": "SciPy constants",
         "test-quality": "Test quality",
         "input-contracts": "Input contracts",
