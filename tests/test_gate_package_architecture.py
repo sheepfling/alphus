@@ -110,6 +110,7 @@ def test_gate_themes_own_their_runner_mappings() -> None:
                 "test-quality",
                 "input-contracts",
                 "source-families",
+                "source-test-coverage",
                 "benchmark-docs",
                 "positional-interfaces",
                 "pydantic-practices",
@@ -276,3 +277,4 @@ def test_target_audit_package_contains_only_python_310_helpers() -> None:
         "runtime_audit.py",
         "py.typed",
     }
+
