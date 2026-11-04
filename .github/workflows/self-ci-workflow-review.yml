@@ -1,0 +1,35 @@
+name: Alphus CI workflow self-review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Install Alphus
+        run: python -m pip install --disable-pip-version-check -e .
+      - name: Review Alphus workflows and retain the complete report
+        run: >-
+          alphus --root . --config .github/alphus-self-ci-workflows.toml
+          --profile self-ci-workflows --output json
+          | tee "$RUNNER_TEMP/alphus-ci-workflow-review.json"
+      - name: Retain Alphus workflow findings
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: alphus-ci-workflow-review
+          path: ${{ runner.temp }}/alphus-ci-workflow-review.json
+          if-no-files-found: ignore
+          retention-days: 30

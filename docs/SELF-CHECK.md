@@ -82,7 +82,7 @@ and file-backed module loading remains rejected.
 `docs/**/*.md`, and all repository TOML and JSON files. The profile retains
 the eight original portable rules, the target-audit isolation rule, the opt-in
 Markdown shell-fence check, and Python lint/package tests, then adds TOML
-syntax, Python formatting, strict Pyright, and five review checks.
+syntax, Python formatting, strict Pyright, and six review checks.
 The separate `json` profile is available when JSON documents are
 added to this repository. The global
 `[files].exclude` is empty.
@@ -153,7 +153,7 @@ The `review` profile selects the five warning scanners on its own.
 `check` now includes it and fails on warnings so test prose and input-contract
 regressions cannot be silently accepted. The test scan covers `tests/**` and
 flags direct reads from `docs/**`; temporary fixtures and paths created by the
-test remain allowed. See [review checks](REVIEW-CHECKS.md) for exact behavior
+test remain allowed. See [review checks](review/README.md) for exact behavior
 and current limits.
 
 ## Optional gate execution

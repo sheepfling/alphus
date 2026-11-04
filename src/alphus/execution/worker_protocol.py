@@ -17,7 +17,7 @@ from alphus.gates.source.cyclomatic_complexity import (
     CyclomaticBackendResult,
     CyclomaticFunctionMetric,
 )
-from alphus.policy.base import QualityRuleName, StrictModel
+from alphus.policy.base import RuleSelector, StrictModel
 
 
 class WorkerRequest(StrictModel):
@@ -28,7 +28,7 @@ class WorkerRequest(StrictModel):
     root: str
     config_path: str
     config_fingerprint: str
-    rule: QualityRuleName | None = None
+    rule: RuleSelector | None = None
     verbose: bool = False
     language: str | None = None
     expected_plan: CyclomaticBackendPlan | None = None

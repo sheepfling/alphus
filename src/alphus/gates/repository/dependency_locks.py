@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 
 from packaging.requirements import InvalidRequirement, Requirement
+from packaging.specifiers import Specifier
 from packaging.utils import canonicalize_name
+from packaging.version import Version
 
 from alphus.config import DependencyLockPolicy
 from alphus.contracts.findings import Finding
@@ -19,10 +21,26 @@ from alphus.support.source_text import read_utf8_text
 
 
 @dataclass(frozen=True, slots=True)
+class RequirementDeclaration:
+    """One parsed requirement with its source location retained."""
+
+    source: str
+    line: int
+    requirement: Requirement
+
+
+@dataclass(frozen=True, slots=True)
+class _MarkerCondition:
+    operator: str
+    version: str
+
+
+@dataclass(frozen=True, slots=True)
 class RequirementLoad:
     """Requirements parsed from a lock input and any source findings."""
 
     requirements: Mapping[str, Requirement]
+    declarations: tuple[RequirementDeclaration, ...]
     findings: tuple[Finding, ...]
 
 
@@ -47,6 +65,7 @@ def _load_requirements(
     if relative in active:
         return RequirementLoad(
             MappingProxyType({}),
+            (),
             (
                 Finding(
                     rule_id=rule_tag(
@@ -64,6 +83,7 @@ def _load_requirements(
     if path is None:
         return RequirementLoad(
             MappingProxyType({}),
+            (),
             (
                 Finding(
                     rule_id=rule_tag(
@@ -78,6 +98,7 @@ def _load_requirements(
             ),
         )
     result: dict[str, Requirement] = {}
+    declarations: list[RequirementDeclaration] = []
     findings: list[Finding] = []
     current = active | {relative}
     for line_number, line in enumerate(read_utf8_text(path).splitlines(), 1):
@@ -108,6 +129,7 @@ def _load_requirements(
                 continue
             nested_load = _load_requirements(root, nested, current)
             result.update(nested_load.requirements)
+            declarations.extend(nested_load.declarations)
             findings.extend(nested_load.findings)
             continue
         try:
@@ -127,8 +149,115 @@ def _load_requirements(
                 )
             )
             continue
-        result[canonicalize_name(requirement.name)] = requirement
-    return RequirementLoad(MappingProxyType(result), tuple(findings))
+        name = canonicalize_name(requirement.name)
+        declarations.append(RequirementDeclaration(relative, line_number, requirement))
+        result[name] = requirement
+    return RequirementLoad(
+        MappingProxyType(result), tuple(declarations), tuple(findings)
+    )
+
+
+def _duplicate_exact_pin_findings(
+    declarations: Sequence[RequirementDeclaration],
+) -> list[Finding]:
+    """Report exact conflicts and mark unresolved marker relationships as info."""
+    seen: dict[str, list[RequirementDeclaration]] = {}
+    findings: list[Finding] = []
+    for declaration in declarations:
+        requirement = declaration.requirement
+        specifiers = tuple(requirement.specifier)
+        if (
+            requirement.url is not None
+            or len(specifiers) != 1
+            or specifiers[0].operator != "=="
+            or "*" in specifiers[0].version
+        ):
+            continue
+        name = canonicalize_name(requirement.name)
+        prior_declarations = seen.setdefault(name, [])
+        for previous in prior_declarations:
+            previous_specifier = next(iter(previous.requirement.specifier))
+            if _exact_pins_overlap(previous_specifier, specifiers[0]):
+                continue
+            if _marker_text(previous.requirement) == _marker_text(requirement):
+                findings.append(
+                    Finding(
+                        rule_id=rule_tag(
+                            Scope.REPOSITORY,
+                            Framework.NONE,
+                            Category.DEPENDENCIES,
+                            "duplicate-requirement-conflict",
+                        ),
+                        path=declaration.source,
+                        line=declaration.line,
+                        message=(
+                            f"{requirement.name} exact pin {specifiers[0].version} at "
+                            f"{declaration.source}:{declaration.line} conflicts with "
+                            f"{previous_specifier.version} at "
+                            f"{previous.source}:{previous.line}; same environment marker"
+                        ),
+                    )
+                )
+            elif not _markers_provably_disjoint(previous.requirement, requirement):
+                findings.append(
+                    Finding(
+                        rule_id=rule_tag(
+                            Scope.REPOSITORY,
+                            Framework.NONE,
+                            Category.DEPENDENCIES,
+                            "duplicate-requirement-marker-uncertain",
+                        ),
+                        path=declaration.source,
+                        line=declaration.line,
+                        severity="info",
+                        message=(
+                            f"{requirement.name} has differing exact pins at "
+                            f"{previous.source}:{previous.line} and "
+                            f"{declaration.source}:{declaration.line}; marker scopes "
+                            "are not proven overlapping or disjoint"
+                        ),
+                    )
+                )
+        prior_declarations.append(declaration)
+    return findings
+
+
+def _exact_pins_overlap(left: Specifier, right: Specifier) -> bool:
+    """Check whether two exact PEP 440 pins admit either pinned candidate."""
+    left_version = Version(left.version)
+    right_version = Version(right.version)
+    return left.contains(right_version, prereleases=True) or right.contains(
+        left_version, prereleases=True
+    )
+
+
+def _marker_text(requirement: Requirement) -> str | None:
+    return str(requirement.marker) if requirement.marker is not None else None
+
+
+def _markers_provably_disjoint(first: Requirement, second: Requirement) -> bool:
+    """Prove only complementary simple Python-version half-open intervals."""
+    first_marker = _marker_text(first)
+    second_marker = _marker_text(second)
+    if first_marker is None or second_marker is None:
+        return False
+
+    def condition(marker: str) -> _MarkerCondition | None:
+        parts = marker.split()
+        if len(parts) != 3 or parts[0] != "python_version":
+            return None
+        return _MarkerCondition(parts[1], parts[2].strip("'\""))
+
+    left = condition(first_marker)
+    right = condition(second_marker)
+    if left is None or right is None or left.version != right.version:
+        return False
+    return (left.operator, right.operator) in {
+        ("<", ">="),
+        (">=", "<"),
+        ("<=", ">"),
+        (">", "<="),
+    }
 
 
 def _exact_pin_findings(
@@ -163,6 +292,8 @@ def _pair_findings(root: Path, input_file: str, lock_file: str) -> list[Finding]
     declared = declared_load.requirements
     pinned = pinned_load.requirements
     findings = [*declared_load.findings, *pinned_load.findings]
+    findings.extend(_duplicate_exact_pin_findings(declared_load.declarations))
+    findings.extend(_duplicate_exact_pin_findings(pinned_load.declarations))
     findings.extend(_exact_pin_findings(lock_file, pinned))
     for name, requirement in declared.items():
         resolved = pinned.get(name)
@@ -220,5 +351,6 @@ def check_dependency_locks(root: Path, policy: DependencyLockPolicy) -> list[Fin
     for lock_file in policy.exact_pin_files:
         load = _load_requirements(checkout, lock_file)
         findings.extend(load.findings)
+        findings.extend(_duplicate_exact_pin_findings(load.declarations))
         findings.extend(_exact_pin_findings(lock_file, load.requirements))
     return findings

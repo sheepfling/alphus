@@ -58,8 +58,173 @@ thresholds, and command arguments, not executable Python callbacks. The
 profile `failure_threshold` currently defaults to `error`, and a rule step may
 override the severity of its findings. These are narrow threshold controls;
 they do not add category-wide selectors or an independent enforcement-state
-model. Alphus does not currently discover third-party rule packages or expose
-pytest-style hooks.
+model. Alphus supports explicitly enabled third-party rule packages through a
+small versioned API; it does not automatically load installed plugins or
+expose a general hook system.
+
+## Check discovery and domain recommendations
+
+`alphus.policy.catalog.RULE_SPECS` is the source of truth for built-in check
+discovery. Every selector records a short summary, the source or framework
+surfaces it supports, an optional set of domain tags, its policy section, and
+whether it needs a file inventory. Inspect the complete catalog with
+`alphus --catalog`; use `alphus --catalog --json` for machine-readable output.
+The catalog describes all built-in rules and rules from enabled plugins.
+Installed but disabled plugin IDs appear without importing their packages or
+revealing rule metadata. Consumer-defined native command steps are visible in
+the configured profiles and in `alphus --plan` output.
+
+Domain tags are advisory hints for an agent, not automatic applicability
+claims. Before recommending a rule, compare its supported surface and limits
+with the repository's languages, dependencies, and actual workload. The
+agent should suggest a consumer-owned rule step and required `[checks.*]`
+policy, explain the match, and identify domain requirements that no available
+check covers. It must not enable a rule or change a default profile merely
+because a tag matched.
+
+For example, a Python simulation, earth-science, or trajectory-analysis
+project may find `numeric-literals` and `scipy-constants` relevant. They can
+flag configured exact constants in arithmetic, but they do not validate
+physical models, dimensional consistency, coordinate reference systems,
+trajectory integrators, or conservation laws. `input-contracts` may fit code
+that mutates Python collection inputs, and `test-quality` may fit its tests;
+neither supplies those missing domain semantics. State that gap instead of
+treating a generic check as domain validation.
+
+An agent can propose a separate profile and leave the current default alone:
+
+```toml
+[checks.numeric_literals]
+extensions = [".py"]
+exclude = []
+math_constants = true
+
+[checks.scipy_constants]
+extensions = [".py"]
+exclude = []
+physical_constants = true
+unit_conversions = true
+inverse_conversions = true
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Numeric review"
+rule = "numeric-literals"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "SciPy constants review"
+rule = "scipy-constants"
+
+[[orchestration.profiles]]
+name = "science-review"
+steps = ["Numeric review", "SciPy constants review"]
+```
+
+The root `[files]` inventory still controls which files can be inspected.
+Run the proposed profile explicitly with
+`alphus --run --profile science-review` after reviewing its scope.
+
+When adding a built-in selector, add complete discovery metadata to its
+`RuleSpec`. Keep domain tags narrowly justified and open to new areas; do not
+add a tag simply to make a rule appear relevant. The existing catalog
+completeness check ensures every public selector has a spec and runner.
+
+## Third-party rule packages (API v1)
+
+Third-party rules are ordinary Python distributions. They advertise one
+registration function through the `alphus.rules.v1` entry-point group; their
+distribution can install its own dependencies and import package without
+adding modules under Alphus's import namespace. Namespace packages are not
+needed for this model. Plugins use the standard [PyPA entry-point
+metadata](https://packaging.python.org/en/latest/specifications/entry-points/),
+the same discovery mechanism described in [pytest's plugin
+guide](https://docs.pytest.org/en/latest/how-to/writing_plugins.html), with a
+narrow rule registration contract instead of pytest's hook lifecycle. See the
+[PyPA plugin guide](https://packaging.python.org/en/latest/guides/creating-and-discovering-plugins/)
+for the trade-offs between entry points and namespace packages.
+
+The entry-point name is the plugin ID. Both plugin IDs and rule IDs are
+lowercase slugs. Alphus exposes selectors as `plugin-id:rule-id`, rejects
+duplicate names, and checks the plugin's declared API version before
+registering a rule. A plugin factory returns a `RulePlugin`:
+
+```toml
+[project.entry-points."alphus.rules.v1"]
+docs = "my_docs_rules:register"
+```
+
+```python
+from collections.abc import Sequence
+from pathlib import Path
+
+from alphus.contracts.model import StrictModel
+from alphus.plugins import PluginFinding, PluginRuleSpec, RulePlugin
+
+
+class HeadingPolicy(StrictModel):
+    extensions: tuple[str, ...] = (".md",)
+
+
+def check_headings(
+    root: Path, files: Sequence[Path], policy: HeadingPolicy
+) -> tuple[PluginFinding, ...]:
+    # `files` contains repository-relative paths from the configured inventory.
+    return ()
+
+
+def register() -> RulePlugin:
+    return RulePlugin(
+        name="docs",
+        rules=(
+            PluginRuleSpec(
+                name="heading-check",
+                config_model=HeadingPolicy,
+                check=check_headings,
+                summary="Checks headings in selected Markdown documents.",
+                applies_to=("markdown",),
+                domains=("documentation-publishing",),
+            ),
+        ),
+    )
+```
+
+The settings model must be strict, immutable, and reject unknown fields. Plugin
+configuration is a JSON-compatible TOML table and is validated against that
+model before a selected rule runs. Checkers receive the repository root,
+selected repository-relative files, and validated settings. They return
+`PluginFinding` records; Alphus adds the plugin source and selector namespace,
+then applies the normal severity threshold and profile reporting. Finding
+paths must be repository-relative, lines are one-based, and local finding IDs
+are lowercase slugs.
+
+Installation does not activate a plugin. Add its ID to consumer policy and
+add its selector to a profile:
+
+```toml
+[plugins]
+enabled = ["docs"]
+
+[plugins.rules."docs:heading-check"]
+extensions = [".md"]
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Documentation headings"
+rule = "docs:heading-check"
+
+[[orchestration.profiles]]
+name = "docs-review"
+steps = ["Documentation headings"]
+```
+
+Loading an enabled entry point executes its Python factory. The allowlist is
+therefore an explicit trust decision; disabled entry points are only listed by
+package metadata and are not imported. `alphus --catalog --json` shows rules
+from enabled plugins and their domain hints. It also lists installed but
+disabled plugin IDs without trying to inspect their rule metadata. An agent can
+recommend an installed plugin, but enabling it and selecting its rule remain
+consumer policy changes.
 
 ## Proposed category selection model
 
@@ -123,7 +288,8 @@ verifier runs through a command step instead.
 
 For a new built-in selector, add its policy model under `alphus.policy`,
 add the selector to `alphus.policy.base.QualityRuleName` and its policy field
-to `alphus.policy.catalog.RULE_SPECS`, register its runner in the theme package,
+to `alphus.policy.catalog.RULE_SPECS` with a summary, supported surfaces, and
+justified domain tags, register its runner in the theme package,
 and compose that mapping in `alphus.execution.dispatch`. Add an output adapter
 in `alphus.execution.results` only if it has a new shape. Add direct CLI and profile
 tests, then select the gate in a consumer profile. The registry completeness
@@ -152,33 +318,31 @@ before adding dependencies such as SciPy. Git inventory failures also need
 a typed operational error contract before introducing recovery policy.
 
 Python namespace packages become useful if independently installed and
-versioned distributions need to share one import namespace. They are not needed
-to organize modules inside the current distribution. If third-party gate
-packages become necessary, discover them through an explicit, versioned entry
-point contract rather than by scanning a namespace for imports. JavaScript
+versioned distributions need to share one import namespace. They are not
+needed for third-party Alphus rules: those use the versioned entry-point
+contract described above and keep their own import package. JavaScript
 projects can continue to use consumer-owned native command steps. Alphus now
 includes the C++ quality workflow described in
 [C++ quality gates](CPP-QUALITY.md); its engines keep their JSON reports and
 run through the existing command-step contract rather than introducing a
 second rule registry.
 
-### Hook contract
+### Rule contract
 
-The internal `RuleSpec` catalog now gives every built-in selector one primary
-policy field and output shape; a matching runner table holds concrete checker
-dispatch. The next step is to migrate older rule outputs to common findings,
-then attach selector-group metadata and a typed checker callable to each
-specification. Those groups are distinct from diagnostic-tag categories. Keep
-the current CLI selectors as adapters while that contract is exercised across
-existing rules.
+The built-in `RuleSpec` catalog records policy field, output shape, discovery
+summary, supported surfaces, and advisory domain tags. The immutable
+`alphus.execution.dispatch.BUILTIN_RULES` registry joins those records with
+theme-owned checker functions and fails early if their selectors differ.
+Older built-in output shapes remain adapted through
+`alphus.execution.results` while they migrate to common diagnostics. Domain
+suggestions remain separate from diagnostic-tag categories.
 
-Only after consumers need third-party checks should Alphus expose a versioned
-plugin API, potentially through an entry-point group and pytest-style hook
-specifications. The API would need explicit loading policy, deterministic
-ordering, duplicate-name rejection, typed configuration, and the same finding
-contract as built-in checks. Loading a plugin executes Python code, so a policy
-file should not silently import arbitrary modules. Native tools should remain
-available as command steps without requiring a Python plugin.
+The v1 plugin boundary is intentionally limited to rule registration and
+synchronous check callbacks. It does not add lifecycle hooks, automatic
+discovery imports, or category-wide activation. Native tools remain available
+as command steps without requiring a Python plugin. Keep plugin metadata,
+runner dispatch, and normalized output in immutable registries, and add
+conformance coverage before introducing another API version.
 
 Fixability is separate from diagnostic severity, remediation priority, and
 gate rollout. Command steps can already declare an explicit, file-scoped
@@ -194,6 +358,6 @@ through the same apply workflow.
    built-in prerequisites, disabled checks, and explicit `not run` outcomes.
 3. Migrate checkers to the shared rule specification one at a time, comparing
    normalized findings and JSON output with the existing contracts.
-4. Design and version third-party hooks only when an actual consumer requires
-   them; test ordering, collisions, configuration failures, and diagnostics
-   before release.
+4. Keep third-party rules on API v1 until an actual consumer needs a new
+   capability; test entry-point ordering, collisions, typed configuration,
+   and normalized diagnostics with separately packaged conformance fixtures.

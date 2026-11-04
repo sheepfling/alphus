@@ -1,0 +1,24 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py"]
+exclude = []
+
+[checks.suppression_reasons]
+extensions = [".py"]
+exclude = ["src/generated/**"]
+rule_codes = ["E402"]
+reason_delimiter = "--"
+severity = "info"
+
+[orchestration]
+default_profile = "suppression-review"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Suppression reasons"
+rule = "suppression-reasons"
+
+[[orchestration.profiles]]
+name = "suppression-review"
+steps = ["Suppression reasons"]

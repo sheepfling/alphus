@@ -1,0 +1,11 @@
+{
+  "source_evidence": "examples/documents/pdf-navigation-source-map.json",
+  "contents_links": [],
+  "sections": [
+    {
+      "outline_title": "Overview",
+      "heading_text": "Overview",
+      "expected_physical_page": 1
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 """Synthetic Pydantic source contracts for optional review findings."""
 
 import pytest
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from alphus.config import PydanticPracticePolicy
 from alphus.gates.review.frameworks.pydantic.practices import pydantic_practice_findings
@@ -44,6 +44,383 @@ def test_dump_revalidation_detects_inline_json_and_skips_plain_validation() -> N
     assert [(item.rule_id, item.line) for item in findings] == [
         ("alphus/python/pydantic/validation/dump-revalidation", 2)
     ]
+
+
+def test_declared_domain_return_contract_reviews_direct_model_dump() -> None:
+    source = (
+        "from app.models import Summary as Result\n"
+        "def build_summary(summary: Result) -> Result:\n"
+        "    return summary.model_dump()\n"
+        "def write_json(summary: Result) -> dict[str, object]:\n"
+        "    return summary.model_dump()\n"
+    )
+    policy = PydanticPracticePolicy.model_validate(
+        {
+            "extensions": [".py"],
+            "external_model_names": ["Summary"],
+            "domain_return_contracts": [
+                {
+                    "path": "src/domain.py",
+                    "function": "build_summary",
+                    "model": "app.models.Summary",
+                }
+            ],
+        }
+    )
+
+    findings = pydantic_practice_findings(source, policy, path="src/domain.py")
+
+    assert [
+        (item.rule_id, item.line, item.severity, item.path) for item in findings
+    ] == [
+        (
+            "alphus/python/pydantic/correctness/model-dump-domain-return",
+            3,
+            "info",
+            "src/domain.py",
+        )
+    ]
+    assert "does not prove the conversion is unsafe" in findings[0].message
+
+
+def test_domain_return_contract_requires_declared_identity_and_exact_scope() -> None:
+    source = (
+        "from app.models import Summary\n"
+        "def build_summary(summary: Summary) -> Summary:\n"
+        "    return summary.model_dump()\n"
+    )
+    policy = PydanticPracticePolicy.model_validate(
+        {
+            "extensions": [".py"],
+            "external_model_names": ["OtherSummary"],
+            "domain_return_contracts": [
+                {
+                    "path": "src/domain.py",
+                    "function": "build_summary",
+                    "model": "app.models.OtherSummary",
+                }
+            ],
+        }
+    )
+
+    assert pydantic_practice_findings(source, policy, path="src/domain.py") == []
+    assert pydantic_practice_findings(source, policy, path="src/io.py") == []
+
+
+def test_domain_return_contracts_reject_duplicate_selectors() -> None:
+    contract = {
+        "path": "src/domain.py",
+        "function": "build_summary",
+        "model": "app.models.Summary",
+    }
+    with pytest.raises(ValueError, match="selectors must be unique"):
+        PydanticPracticePolicy.model_validate(
+            {
+                "extensions": [".py"],
+                "domain_return_contracts": [contract, contract],
+            }
+        )
+
+
+def test_declared_finite_state_contract_reports_complete_raw_string_chain() -> None:
+    source = (
+        "def dispatch(action: str):\n"
+        "    if action == 'approve':\n"
+        "        return accept()\n"
+        "    elif 'reject' == action:\n"
+        "        return deny()\n"
+    )
+    contract = {
+        "path": "src/actions.py",
+        "function": "dispatch",
+        "parameter": "action",
+        "values": ["approve", "reject"],
+    }
+    policy = _policy(finite_state_contracts=(contract,))
+
+    assert pydantic_practice_findings(source, _policy()) == []
+    findings = pydantic_practice_findings(source, policy, path="src/actions.py")
+
+    assert [(item.rule_id, item.line, item.severity) for item in findings] == [
+        (
+            "alphus/python/pydantic/style/finite-state-string-selector",
+            4,
+            "info",
+        )
+    ]
+    assert "does not infer a domain from repeated literals" in findings[0].message
+
+
+def test_finite_state_contract_does_not_collect_nested_compound_comparisons() -> None:
+    source = (
+        "def dispatch(action: str, enabled: bool):\n"
+        "    if enabled and action == 'approve':\n"
+        "        return accept()\n"
+        "    elif enabled and action == 'reject':\n"
+        "        return deny()\n"
+    )
+    policy = _policy(
+        finite_state_contracts=(
+            {
+                "path": "src/actions.py",
+                "function": "dispatch",
+                "parameter": "action",
+                "values": ["approve", "reject"],
+            },
+        )
+    )
+
+    assert pydantic_practice_findings(source, policy, path="src/actions.py") == []
+
+
+def test_finite_state_contract_skips_typed_partial_rebound_and_unselected_inputs() -> (
+    None
+):
+    source = (
+        "from typing import Literal\n"
+        "def typed(action: Literal['approve', 'reject']):\n"
+        "    if action == 'approve': return accept()\n"
+        "    elif action == 'reject': return deny()\n"
+        "def partial(action: str):\n"
+        "    if action == 'approve': return accept()\n"
+        "def rebound(action: str):\n"
+        "    action = normalize(action)\n"
+        "    if action == 'approve': return accept()\n"
+        "    elif action == 'reject': return deny()\n"
+        "str = ProtocolString\n"
+        "def shadowed(action: str):\n"
+        "    if action == 'approve': return accept()\n"
+        "    elif action == 'reject': return deny()\n"
+        "StateKey = str\n"
+        "def aliased(action: StateKey):\n"
+        "    if action == 'approve': return accept()\n"
+        "    elif action == 'reject': return deny()\n"
+        "def open_input(action: str):\n"
+        "    if action == 'approve': return accept()\n"
+        "    elif action == 'reject': return deny()\n"
+    )
+    policy = _policy(
+        finite_state_contracts=(
+            {
+                "path": "src/actions.py",
+                "function": "typed",
+                "parameter": "action",
+                "values": ["approve", "reject"],
+            },
+            {
+                "path": "src/actions.py",
+                "function": "partial",
+                "parameter": "action",
+                "values": ["approve", "reject"],
+            },
+            {
+                "path": "src/actions.py",
+                "function": "rebound",
+                "parameter": "action",
+                "values": ["approve", "reject"],
+            },
+            {
+                "path": "src/actions.py",
+                "function": "shadowed",
+                "parameter": "action",
+                "values": ["approve", "reject"],
+            },
+            {
+                "path": "src/actions.py",
+                "function": "aliased",
+                "parameter": "action",
+                "values": ["approve", "reject"],
+            },
+            {
+                "path": "src/other.py",
+                "function": "open_input",
+                "parameter": "action",
+                "values": ["approve", "reject"],
+            },
+        )
+    )
+
+    assert pydantic_practice_findings(source, policy, path="src/actions.py") == []
+
+
+def test_finite_state_contract_rejects_duplicate_values() -> None:
+    with pytest.raises(ValueError, match="finite-state values must be unique"):
+        _policy(
+            finite_state_contracts=(
+                {
+                    "path": "src/actions.py",
+                    "function": "dispatch",
+                    "parameter": "action",
+                    "values": ["approve", "approve"],
+                },
+            )
+        )
+
+
+def test_finite_state_contracts_reject_duplicate_selectors() -> None:
+    contract = {
+        "path": "src/actions.py",
+        "function": "dispatch",
+        "parameter": "action",
+        "values": ["approve", "reject"],
+    }
+    with pytest.raises(ValueError, match="finite-state selectors must be unique"):
+        _policy(finite_state_contracts=(contract, contract))
+
+
+def test_utc_persistence_contract_reports_only_known_non_utc_capture() -> None:
+    source = (
+        "from datetime import datetime, timezone\n"
+        "from zoneinfo import ZoneInfo\n"
+        "def save_local(writer):\n"
+        "    writer.save(created_at=datetime.now(ZoneInfo('Europe/Paris')))\n"
+        "def save_utc(writer):\n"
+        "    writer.save(created_at=datetime.now(timezone.utc))\n"
+        "def save_unknown(writer, zone):\n"
+        "    writer.save(created_at=datetime.now(zone))\n"
+    )
+    contract = {
+        "path": "src/storage.py",
+        "function": "save_local",
+        "call": "writer.save",
+        "keyword": "created_at",
+    }
+    policy = _policy(utc_persistence_contracts=(contract,))
+
+    findings = pydantic_practice_findings(source, policy, path="src/storage.py")
+
+    assert [(item.rule_id, item.line) for item in findings] == [
+        ("alphus/python/pydantic/correctness/non-utc-persistence", 4)
+    ]
+    assert pydantic_practice_findings(source, policy, path="src/other.py") == []
+
+
+def test_utc_persistence_accepts_zero_offset_etc_gmt_zone() -> None:
+    source = (
+        "from datetime import datetime\n"
+        "from zoneinfo import ZoneInfo\n"
+        "def save_created_at(writer):\n"
+        "    writer.save(created_at=datetime.now(ZoneInfo('Etc/GMT')))\n"
+    )
+    policy = _policy(
+        utc_persistence_contracts=(
+            {
+                "path": "src/storage.py",
+                "function": "save_created_at",
+                "call": "writer.save",
+                "keyword": "created_at",
+            },
+        )
+    )
+
+    assert pydantic_practice_findings(source, policy, path="src/storage.py") == []
+
+
+@pytest.mark.parametrize("zone", ("Etc/UCT", "Etc/Greenwich", "GMT+0", "GMT-0"))
+def test_utc_persistence_accepts_additional_zero_offset_zone_aliases(zone: str) -> None:
+    source = (
+        "from datetime import datetime\n"
+        "from zoneinfo import ZoneInfo\n"
+        "def save_created_at(writer):\n"
+        f"    writer.save(created_at=datetime.now(ZoneInfo({zone!r})))\n"
+    )
+    policy = _policy(
+        utc_persistence_contracts=(
+            {
+                "path": "src/storage.py",
+                "function": "save_created_at",
+                "call": "writer.save",
+                "keyword": "created_at",
+            },
+        )
+    )
+
+    assert pydantic_practice_findings(source, policy, path="src/storage.py") == []
+
+
+def test_utc_persistence_requires_explicit_utc_normalization() -> None:
+    source = (
+        "from datetime import datetime, timezone\n"
+        "from zoneinfo import ZoneInfo\n"
+        "def save_created_at(writer):\n"
+        "    writer.save(created_at=datetime.now(ZoneInfo('Europe/Paris'))"
+        ".astimezone(timezone.utc))\n"
+        "    writer.save(created_at=datetime.now(ZoneInfo('Europe/Paris'))"
+        ".astimezone(ZoneInfo('America/Los_Angeles')))\n"
+        "    writer.save(created_at=datetime.now(ZoneInfo('Europe/Paris'))"
+        ".astimezone())\n"
+        "    writer.save(created_at=datetime.now(ZoneInfo('Europe/Paris'))"
+        ".replace(tzinfo=timezone.utc))\n"
+    )
+    policy = _policy(
+        utc_persistence_contracts=(
+            {
+                "path": "src/storage.py",
+                "function": "save_created_at",
+                "call": "writer.save",
+                "keyword": "created_at",
+            },
+        )
+    )
+
+    findings = pydantic_practice_findings(source, policy, path="src/storage.py")
+
+    assert [(item.line, item.rule_id) for item in findings] == [
+        (5, "alphus/python/pydantic/correctness/non-utc-persistence"),
+        (6, "alphus/python/pydantic/correctness/non-utc-persistence"),
+        (7, "alphus/python/pydantic/correctness/non-utc-persistence"),
+    ]
+
+
+def test_utc_persistence_accepts_imported_utc_and_checks_final_conversion() -> None:
+    source = (
+        "from datetime import UTC, datetime, timezone\n"
+        "from zoneinfo import ZoneInfo\n"
+        "def save_created_at(writer):\n"
+        "    writer.save(created_at=datetime.now(ZoneInfo('Europe/Paris'))"
+        ".astimezone(UTC))\n"
+        "    writer.save(created_at=datetime.now(ZoneInfo('Europe/Paris'))"
+        ".astimezone(timezone.utc).astimezone(ZoneInfo('Europe/Paris')))\n"
+    )
+    policy = _policy(
+        utc_persistence_contracts=(
+            {
+                "path": "src/storage.py",
+                "function": "save_created_at",
+                "call": "writer.save",
+                "keyword": "created_at",
+            },
+        )
+    )
+
+    findings = pydantic_practice_findings(source, policy, path="src/storage.py")
+
+    assert [(item.line, item.rule_id) for item in findings] == [
+        (5, "alphus/python/pydantic/correctness/non-utc-persistence")
+    ]
+
+
+def test_utc_persistence_ignores_nested_function_outside_selected_boundary() -> None:
+    source = (
+        "from datetime import datetime\n"
+        "from zoneinfo import ZoneInfo\n"
+        "def save_created_at(writer):\n"
+        "    def local_example():\n"
+        "        writer.save(created_at=datetime.now(ZoneInfo('Europe/Paris')))\n"
+        "    return None\n"
+    )
+    policy = _policy(
+        utc_persistence_contracts=(
+            {
+                "path": "src/storage.py",
+                "function": "save_created_at",
+                "call": "writer.save",
+                "keyword": "created_at",
+            },
+        )
+    )
+
+    assert pydantic_practice_findings(source, policy, path="src/storage.py") == []
 
 
 def test_rebinding_and_nested_functions_do_not_carry_dump_state() -> None:
@@ -160,6 +537,25 @@ def test_explicit_mutability_is_opt_in_and_handles_pydantic_aliases() -> None:
     findings = pydantic_practice_findings(source, _policy(require_explicit_frozen=True))
     assert [(item.rule_id, item.line) for item in findings] == [
         ("alphus/python/pydantic/correctness/implicit-mutability", 4)
+    ]
+
+
+@pytest.mark.parametrize("terminal", ["return None", "raise RuntimeError()"])
+def test_terminal_exception_handlers_do_not_hide_normal_dump_flow(
+    terminal: str,
+) -> None:
+    source = (
+        "def output(model):\n"
+        "    try:\n"
+        "        prepare()\n"
+        "    except ValueError:\n"
+        f"        {terminal}\n"
+        "    payload = model.model_dump()\n"
+        "    return Adapter.model_validate(payload)\n"
+    )
+    findings = pydantic_practice_findings(source, _policy())
+    assert [(item.line, item.rule_id) for item in findings] == [
+        (7, "alphus/python/pydantic/validation/dump-revalidation")
     ]
 
 
@@ -354,6 +750,159 @@ def test_field_positional_default_is_advisory_and_alias_aware() -> None:
     assert [(item.rule_id, item.line, item.severity) for item in findings] == [
         ("alphus/python/pydantic/style/field-positional-default", 3, "info")
     ]
+
+
+def test_static_mutable_default_factory_is_opt_in_and_narrow() -> None:
+    source = (
+        "from typing import Annotated\n"
+        "from pydantic import BaseModel as Model, Field as F\n"
+        "class Config(Model):\n"
+        "    tags: list[str] = F(default_factory=list)\n"
+        "    options: Annotated[dict[str, int], F(default_factory=dict)]\n"
+        "    computed: list[str] = F(default_factory=load_tags)\n"
+        "    contextual: list[str] = F(default_factory=lambda data: data['tags'])\n"
+        "    direct: list[str] = []\n"
+        "class Plain:\n"
+        "    tags: list[str] = F(default_factory=list)\n"
+    )
+
+    assert pydantic_practice_findings(source, _policy()) == []
+    findings = pydantic_practice_findings(
+        source, _policy(prefer_static_mutable_defaults=True)
+    )
+
+    assert [(item.rule_id, item.line, item.severity) for item in findings] == [
+        (
+            "alphus/python/pydantic/style/static-mutable-default-factory",
+            4,
+            "info",
+        ),
+        (
+            "alphus/python/pydantic/style/static-mutable-default-factory",
+            5,
+            "info",
+        ),
+    ]
+    assert all("not required for isolation" in item.message for item in findings)
+
+
+@pytest.mark.parametrize(
+    ("builtin", "annotation"),
+    [("list", "list[str]"), ("dict", "dict[str, int]")],
+)
+def test_static_mutable_default_factory_skips_shadowed_builtins(
+    builtin: str, annotation: str
+) -> None:
+    source = (
+        "from pydantic import BaseModel, Field\n"
+        "def custom_factory(): return None\n"
+        f"{builtin} = custom_factory\n"
+        "class Item(BaseModel):\n"
+        f"    value: {annotation} = Field(default_factory={builtin})\n"
+    )
+
+    findings = pydantic_practice_findings(
+        source, _policy(prefer_static_mutable_defaults=True), path="src/item.py"
+    )
+
+    assert findings == []
+
+
+@pytest.mark.parametrize(
+    ("builtin", "annotation"),
+    [("list", "list[str]"), ("dict", "dict[str, int]")],
+)
+def test_static_mutable_default_factory_ignores_unrelated_function_locals(
+    builtin: str, annotation: str
+) -> None:
+    source = (
+        "from pydantic import BaseModel, Field\n"
+        "def helper():\n"
+        f"    {builtin} = custom_factory\n"
+        "    return None\n"
+        "class Item(BaseModel):\n"
+        f"    value: {annotation} = Field(default_factory={builtin})\n"
+    )
+
+    findings = pydantic_practice_findings(
+        source, _policy(prefer_static_mutable_defaults=True), path="src/item.py"
+    )
+
+    assert [item.line for item in findings] == [6]
+
+
+def test_static_mutable_default_factory_respects_prior_class_binding() -> None:
+    source = (
+        "from pydantic import BaseModel, Field\n"
+        "class Item(BaseModel):\n"
+        "    list = custom_factory\n"
+        "    value: list[str] = Field(default_factory=list)\n"
+    )
+
+    findings = pydantic_practice_findings(
+        source, _policy(prefer_static_mutable_defaults=True), path="src/item.py"
+    )
+
+    assert findings == []
+
+
+@pytest.mark.parametrize(
+    ("builtin", "annotation"),
+    [("list", "list[str]"), ("dict", "dict[str, int]")],
+)
+def test_static_mutable_default_factory_ignores_later_module_rebinding(
+    builtin: str, annotation: str
+) -> None:
+    source = (
+        "from pydantic import BaseModel, Field\n"
+        "class Item(BaseModel):\n"
+        f"    value: {annotation} = Field(default_factory={builtin})\n"
+        f"{builtin} = custom_factory\n"
+    )
+
+    findings = pydantic_practice_findings(
+        source, _policy(prefer_static_mutable_defaults=True), path="src/item.py"
+    )
+
+    assert [item.line for item in findings] == [3]
+
+
+@pytest.mark.parametrize(
+    ("builtin", "annotation"),
+    [("list", "list[str]"), ("dict", "dict[str, int]")],
+)
+def test_static_mutable_default_factory_ignores_comprehension_targets(
+    builtin: str, annotation: str
+) -> None:
+    source = (
+        "from pydantic import BaseModel, Field\n"
+        f"[None for {builtin} in values]\n"
+        "class Item(BaseModel):\n"
+        f"    [None for {builtin} in values]\n"
+        f"    value: {annotation} = Field(default_factory={builtin})\n"
+    )
+
+    findings = pydantic_practice_findings(
+        source, _policy(prefer_static_mutable_defaults=True), path="src/item.py"
+    )
+
+    assert [item.line for item in findings] == [5]
+
+
+def test_pydantic_copies_static_unhashable_defaults_per_instance() -> None:
+    class Defaults(BaseModel):
+        tags: list[str] = []
+        options: dict[str, int] = {}
+
+    first = Defaults()
+    second = Defaults()
+    first.tags.append("local")
+    first.options["count"] = 1
+
+    assert second.tags == []
+    assert second.options == {}
+    assert first.tags is not second.tags
+    assert first.options is not second.options
 
 
 def test_unconstrained_any_is_limited_to_designated_public_model_paths() -> None:

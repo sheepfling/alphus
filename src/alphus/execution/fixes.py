@@ -13,7 +13,7 @@ from alphus.execution.commands import (
     step_directory,
     windows_shell_required,
 )
-from alphus.policy.base import QualityRuleName
+from alphus.policy.base import RuleSelector
 from alphus.policy.orchestration import CommandRunStep, OrchestrationPolicy, RuleRunStep
 from alphus.support.inventory import candidate_files
 
@@ -25,7 +25,7 @@ class FixPlanEntry:
     name: str
     kind: Literal["rule", "command"]
     rollout: Literal["mainline", "provisional"] = "mainline"
-    rule: QualityRuleName | None = None
+    rule: RuleSelector | None = None
     argv: tuple[str, ...] | None = None
     check_argv: tuple[str, ...] | None = None
     fix_argv: tuple[str, ...] | None = None
