@@ -15,6 +15,30 @@ from alphus.policy.sources import PathLimit
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 
+ALPHUS_MORPHOLOGY = {
+    "selector": "file-size",
+    "finding_ids": (
+        "alphus/any/none/maintainability/file-exceeds-hard-limit",
+        "alphus/any/none/maintainability/code-file-too-large",
+        "alphus/any/none/maintainability/file-exceeds-byte-limit",
+        "alphus/python/none/maintainability/initializer-too-large",
+        "alphus/python/none/architecture/initializer-contains-definition",
+        "alphus/python/none/style/initializer-wildcard-import",
+    ),
+    "concern": "source-file-bounds",
+    "claim": "A selected file exceeds a configured physical-line or byte limit, or a Python package initializer contains disallowed structure.",
+    "mechanisms": ("exact-rule",),
+    "inspected_scope": ("selected-files", "python-initializers"),
+    "languages_formats": ("source-files", "markdown", "python"),
+    "evidence_kinds": (
+        "physical-line-count",
+        "raw-byte-count",
+        "top-level-ast-declaration",
+        "path-line",
+    ),
+    "evaluation_maturity": "synthetic-only",
+}
+
 
 def check_line_length(
     root: Path, files: Sequence[Path], config: QualityGateConfig

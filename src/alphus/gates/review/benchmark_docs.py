@@ -12,6 +12,19 @@ from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.support.inventory import matches_path
 
+ALPHUS_MORPHOLOGY = {
+    "selector": "benchmark-docs",
+    "finding_ids": ("alphus/markdown/none/maintainability/brittle-benchmark-prose",),
+    "concern": "benchmark-reproducibility-context",
+    "claim": "Benchmark documentation may omit protocol or result context needed to reproduce or assess measurements.",
+    "mechanisms": ("prose-risk",),
+    "inspected_scope": ("selected-markdown-files", "benchmark-sections"),
+    "languages_formats": ("markdown",),
+    "evidence_kinds": ("bounded-lexical-match", "heading-context", "document-location"),
+    "evaluation_maturity": "synthetic-only",
+}
+
+
 _DURATION = re.compile(
     r"(?<![\w.])\d+(?:[,_]\d{3})*(?:\.\d+)?\s*"
     r"(?:ns|nanoseconds?|µs|μs|us|microseconds?|ms|milliseconds?|"

@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from types import MappingProxyType
+
+from alphus.policy._generated_morphology import MORPHOLOGY_BY_SELECTOR
+from alphus.policy.morphology import RuleMorphology
 
 
 class RuleOutputShape(StrEnum):
@@ -26,6 +29,7 @@ class RuleSpec:
     applies_to: tuple[str, ...]
     domains: tuple[str, ...] = ()
     requires_files: bool = True
+    morphology: RuleMorphology | None = None
 
     def __post_init__(self) -> None:
         """Reject incomplete or malformed metadata used by agent discovery."""
@@ -50,7 +54,7 @@ class RuleSpec:
                 )
 
 
-RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
+_LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
     {
         "file-size": RuleSpec(
             "file_size",
@@ -451,5 +455,23 @@ RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             ("python", "javascript", "cpp"),
             requires_files=False,
         ),
+    }
+)
+
+
+_UNKNOWN_MORPHOLOGY_SELECTORS = set(MORPHOLOGY_BY_SELECTOR) - set(_LEGACY_RULE_SPECS)
+if _UNKNOWN_MORPHOLOGY_SELECTORS:
+    raise RuntimeError(
+        "morphology declarations reference unknown built-in selectors: "
+        f"{sorted(_UNKNOWN_MORPHOLOGY_SELECTORS)}"
+    )
+
+RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
+    {
+        selector: replace(
+            spec,
+            morphology=MORPHOLOGY_BY_SELECTOR.get(selector),
+        )
+        for selector, spec in _LEGACY_RULE_SPECS.items()
     }
 )

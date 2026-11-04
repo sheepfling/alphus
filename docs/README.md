@@ -5,6 +5,7 @@ path that matches the repository being checked.
 
 | Need                                                      | Read                                        |
 | --------------------------------------------------------- | ------------------------------------------- |
+| Understand rule morphology and evidence maturity      | [Rule morphology](MORPHOLOGY.md)             |
 | Choose language bundles and configure one profile         | [Consumer profiles](CONSUMER-PROFILES.md)   |
 | Understand installed native tools and their configuration | [Subtools](SUBTOOLS.md)                     |
 | Plan and apply available fixes                            | [Fixes](FIXES.md)                           |
