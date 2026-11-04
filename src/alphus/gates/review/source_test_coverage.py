@@ -5,34 +5,35 @@ from __future__ import annotations
 import json
 import re
 from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+from pydantic import Field, field_validator
+
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
-from alphus.policy.base import validate_single_path
+from alphus.policy.base import StrictModel, require_unique, validate_single_path
 from alphus.policy.source_test_coverage import (
     SourceTestCoveragePolicy as _SourceTestCoveragePolicy,
 )
-from alphus.support.data_access import contained_file
-from alphus.support.git import git_value
+from alphus.support.data_access import JsonValue, contained_file
+from alphus.support.git import git_value, run_git
 from alphus.support.source_text import read_utf8_text
 
 _RULE_ID = rule_tag(
     Scope.REPOSITORY, Framework.NONE, Category.TESTING, "source-test-coverage"
 )
-_ARTIFACT_SCHEMA = "alphus.source-test-coverage"
 _REVISION = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})\Z")
-_OUTCOMES = frozenset({"passed", "failed", "skipped", "not_selected"})
 
 EvidenceStatus = Literal["current", "partial", "unavailable", "stale", "invalid"]
+TestOutcome = Literal["passed", "failed", "skipped", "not_selected"]
 
 
 @dataclass(frozen=True, slots=True)
 class _TestObservation:
-    outcome: str
+    outcome: TestOutcome
     observed_sources: frozenset[str]
 
 
@@ -41,11 +42,54 @@ class _CoverageEvidence:
     status: EvidenceStatus
     reason: str
     complete: bool
-    tests: Mapping[str, _TestObservation]
+    tests: dict[str, _TestObservation]
 
 
-def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
-    result: dict[str, object] = {}
+class _EvidenceObservation(StrictModel):
+    outcome: TestOutcome
+    observed_sources: tuple[str, ...]
+
+    @field_validator("observed_sources")
+    @classmethod
+    def validate_observed_sources(cls, values: tuple[str, ...]) -> tuple[str, ...]:
+        checked = tuple(_artifact_path(value, "observed source path") for value in values)
+        require_unique(checked, "observed source paths must be unique per test")
+        return checked
+
+
+class _EvidenceDocument(StrictModel):
+    schema_id: Literal["alphus.source-test-coverage"] = Field(alias="schema")
+    schema_version: int
+    revision: str
+    complete: bool
+    tests: dict[str, _EvidenceObservation]
+
+    @field_validator("schema_version")
+    @classmethod
+    def validate_schema_version(cls, value: int) -> int:
+        if value != 1:
+            raise ValueError("evidence schema version is unsupported")
+        return value
+
+    @field_validator("revision")
+    @classmethod
+    def validate_revision(cls, value: str) -> str:
+        if not _REVISION.fullmatch(value):
+            raise ValueError("evidence revision must be a full Git commit SHA")
+        return value
+
+    @field_validator("tests")
+    @classmethod
+    def validate_test_paths(
+        cls, tests: Mapping[str, _EvidenceObservation]
+    ) -> dict[str, _EvidenceObservation]:
+        for test_path in tests:
+            _artifact_path(test_path, "evidence test path")
+        return dict(tests)
+
+
+def _unique_object(pairs: Iterable[tuple[str, JsonValue]]) -> dict[str, JsonValue]:
+    result: dict[str, JsonValue] = {}
     for key, value in pairs:
         if key in result:
             raise ValueError("evidence contains a duplicate JSON object key")
@@ -53,31 +97,46 @@ def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
     return result
 
 
-def _exact_keys(
-    value: Mapping[str, object], expected: frozenset[str], context: str
-) -> None:
-    if frozenset(value) != expected:
-        raise ValueError(f"{context} has unsupported or missing fields")
-
-
-def _artifact_path(value: object, context: str) -> str:
-    if not isinstance(value, str):
-        raise ValueError(f"{context} must be a repository-relative file path")
+def _artifact_path(value: str, context: str) -> str:
     checked = validate_single_path(value, context)
-    if checked == ".":
-        raise ValueError(f"{context} must name a file")
+    if checked == "." or any(
+        ord(character) < 32 or ord(character) == 127 for character in checked
+    ):
+        raise ValueError(f"{context} must name a repository-relative file path")
     return checked
+
+
+def _tracked_file_matches_head(root: Path, relative: str) -> bool:
+    """Require audited source/test files to match the evidence checkout."""
+    candidate = root / relative
+    try:
+        resolved = candidate.resolve(strict=True)
+        if resolved != candidate:
+            return False
+        resolved.relative_to(root)
+    except (OSError, RuntimeError, ValueError):
+        return False
+    pathspec = f":(literal){relative}"
+    try:
+        tracked = run_git(root, "ls-files", "-v", "--error-unmatch", "--", pathspec)
+        if tracked.returncode != 0 or not tracked.stdout.startswith(b"H "):
+            return False
+        staged = run_git(root, "diff", "--cached", "--quiet", "HEAD", "--", pathspec)
+        unstaged = run_git(root, "diff", "--quiet", "--", pathspec)
+    except OSError:
+        return False
+    return staged.returncode == 0 and unstaged.returncode == 0
 
 
 def _path_state(
     root: Path, relative: str
 ) -> Literal["present", "missing", "untrusted"]:
-    if contained_file(root, relative) is not None:
-        return "present"
-    candidate = root / relative
     try:
+        if contained_file(root, relative) is not None:
+            return "present"
+        candidate = root / relative
         return "untrusted" if candidate.exists() else "missing"
-    except (OSError, ValueError):
+    except (OSError, RuntimeError, ValueError):
         return "untrusted"
 
 
@@ -94,7 +153,10 @@ def _load_evidence(
 ) -> _CoverageEvidence:
     if policy.evidence_file is None:
         return _unavailable("no evidence_file is configured")
-    evidence_path = contained_file(root, policy.evidence_file)
+    try:
+        evidence_path = contained_file(root, policy.evidence_file)
+    except (OSError, RuntimeError, ValueError):
+        evidence_path = None
     if evidence_path is None:
         return _unavailable(
             "the configured evidence file is missing or is not safely contained"
@@ -102,78 +164,33 @@ def _load_evidence(
     if current_revision is None or not _REVISION.fullmatch(current_revision):
         return _unavailable("the checkout revision could not be established")
     try:
-        decoded = json.loads(
-            read_utf8_text(evidence_path), object_pairs_hook=_unique_object
-        )
+        text = read_utf8_text(evidence_path)
+        # Reject duplicate keys before the named strict model validates the payload.
+        decoded = json.JSONDecoder(object_pairs_hook=_unique_object).decode(text)
+        artifact = _EvidenceDocument.model_validate(decoded)
     except (OSError, UnicodeError, ValueError, TypeError):
         return _unavailable(
-            "the configured evidence file is unreadable or invalid JSON",
+            "the evidence document is unreadable, invalid JSON, or does not match "
+            "the supported schema",
             status="invalid",
         )
-    if not isinstance(decoded, dict):
-        return _unavailable(
-            "the evidence document must be a JSON object", status="invalid"
-        )
-    try:
-        _exact_keys(
-            decoded,
-            frozenset({"schema", "schema_version", "revision", "complete", "tests"}),
-            "evidence document",
-        )
-        if decoded["schema"] != _ARTIFACT_SCHEMA:
-            raise ValueError("evidence schema identifier is unsupported")
-        if type(decoded["schema_version"]) is not int or decoded["schema_version"] != 1:
-            raise ValueError("evidence schema version is unsupported")
-        revision = decoded["revision"]
-        if not isinstance(revision, str) or not _REVISION.fullmatch(revision):
-            raise ValueError("evidence revision must be a full Git commit SHA")
-        complete = decoded["complete"]
-        if type(complete) is not bool:
-            raise ValueError("evidence complete must be a boolean")
-        raw_tests = decoded["tests"]
-        if not isinstance(raw_tests, dict):
-            raise ValueError("evidence tests must be an object")
-        observations: dict[str, _TestObservation] = {}
-        for raw_test, raw_observation in raw_tests.items():
-            test_path = _artifact_path(raw_test, "evidence test path")
-            if not isinstance(raw_observation, dict):
-                raise ValueError("each test observation must be an object")
-            _exact_keys(
-                raw_observation,
-                frozenset({"outcome", "observed_sources"}),
-                "test observation",
-            )
-            outcome = raw_observation["outcome"]
-            if not isinstance(outcome, str) or outcome not in _OUTCOMES:
-                raise ValueError("test outcome is unsupported")
-            raw_sources = raw_observation["observed_sources"]
-            if not isinstance(raw_sources, list):
-                raise ValueError("observed_sources must be an array")
-            observed_sources = tuple(
-                _artifact_path(source, "observed source path")
-                for source in raw_sources
-            )
-            if len(observed_sources) != len(set(observed_sources)):
-                raise ValueError("observed source paths must be unique per test")
-            observations[test_path] = _TestObservation(
-                outcome, frozenset(observed_sources)
-            )
-    except (TypeError, ValueError):
-        return _unavailable(
-            "the evidence document does not match the supported schema",
-            status="invalid",
-        )
-    if revision != current_revision:
+    if artifact.revision != current_revision:
         return _unavailable(
             "the evidence revision does not match the current checkout",
             status="stale",
         )
+    observations = {
+        test_path: _TestObservation(
+            observation.outcome, frozenset(observation.observed_sources)
+        )
+        for test_path, observation in artifact.tests.items()
+    }
     return _CoverageEvidence(
-        "current" if complete else "partial",
+        "current" if artifact.complete else "partial",
         "current revision-matched execution evidence"
-        if complete
+        if artifact.complete
         else "revision-matched evidence is marked partial",
-        complete,
+        artifact.complete,
         observations,
     )
 
@@ -234,6 +251,15 @@ def check_source_test_coverage(
                 "relationship may be stale",
             )
             continue
+        if not _tracked_file_matches_head(checkout, source):
+            record(
+                source,
+                "unverified",
+                "declared source is symlinked, untracked, modified, or has "
+                "index flags that hide changes; evidence freshness cannot be "
+                "established",
+            )
+            continue
         if not relationship.tests:
             record(
                 source,
@@ -256,6 +282,15 @@ def check_source_test_coverage(
                     source,
                     "unverified",
                     f"declared test file {test_path} is not safely contained",
+                )
+                continue
+            if not _tracked_file_matches_head(checkout, test_path):
+                record(
+                    source,
+                    "unverified",
+                    f"declared test file {test_path} is symlinked, untracked, "
+                    "modified, or has index flags that hide changes; evidence "
+                    "freshness cannot be established",
                 )
                 continue
             if evidence.status not in {"current", "partial"}:
@@ -311,7 +346,11 @@ def check_source_test_coverage(
     unverified = counts["unverified"]
     missing = counts["missing"]
     excluded = counts["excluded"]
-    state = "complete" if not unverified and not missing else "incomplete"
+    state = (
+        "complete"
+        if evidence.complete and not unverified and not missing
+        else "incomplete"
+    )
     record(
         ".",
         state,
