@@ -2,10 +2,11 @@
 
 from pathlib import Path
 from textwrap import dedent
+from types import MappingProxyType
 
 import pytest
 
-from alphus.config import InputContractPolicy
+from alphus.config import InputContractPolicy, load_config
 from alphus.contracts.findings import Finding
 from alphus.gates.review.input_contracts import (
     check_input_contracts,
@@ -13,6 +14,24 @@ from alphus.gates.review.input_contracts import (
 )
 
 POLICY = InputContractPolicy(extensions=[".py"], exclude=[])
+DOMAIN_POLICY = InputContractPolicy(
+    extensions=[".py"],
+    exclude=[],
+    domain_mapping_types=("app.models.EvaluationOptions",),
+)
+DECLARED_DOMAIN_BOUNDARY = MappingProxyType(
+    {
+        "path": "src/internal/evaluate.py",
+        "function": "evaluate",
+        "parameter": "packet",
+        "domain_type": "app.models.EvaluationOptions",
+    }
+)
+DOMAIN_BOUNDARY_POLICY = InputContractPolicy(
+    extensions=[".py"],
+    exclude=[],
+    domain_mapping_contracts=(DECLARED_DOMAIN_BOUNDARY,),
+)
 
 
 def analyze(source: str, policy: InputContractPolicy = POLICY) -> list[Finding]:
@@ -184,6 +203,1165 @@ def test_already_abstract_interfaces_are_allowed_and_mutability_stays_typed() ->
         )
         == []
     )
+
+
+def test_domain_union_and_imported_mapping_alias_with_literal_read_are_reviewed() -> (
+    None
+):
+    findings = input_contract_findings(
+        """from collections.abc import Mapping as M
+from app.models import EvaluationOptions as Options
+from app.json_types import JsonValue as JV
+def evaluate(options: Options | M[str, JV]):
+    return options["count"]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert len(findings) == 1
+    assert (
+        findings[0].rule_id
+        == "alphus/python/none/correctness/generic-mapping-domain-escape"
+    )
+    assert findings[0].line == 4
+    assert "app.models.EvaluationOptions" in findings[0].message
+    assert "line(s) 5" in findings[0].message
+    assert "does not prove validation is absent" in findings[0].message
+
+
+def test_typing_extensions_union_and_mapping_aliases_are_reviewed() -> None:
+    findings = input_contract_findings(
+        """from typing_extensions import Union as Either, Mapping as ReadOnlyMap
+from app.models import EvaluationOptions as Options
+from app.json_types import JsonValue as JV
+def evaluate(options: Either[Options, ReadOnlyMap[str, JV]]):
+    return options["count"]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert len(findings) == 1
+    assert "app.models.EvaluationOptions" in findings[0].message
+    assert "generic typing_extensions.Mapping" in findings[0].message
+    assert "literal-key reads at line(s) 5" in findings[0].message
+
+
+def test_shadowed_typing_extensions_aliases_stay_unresolved() -> None:
+    findings = input_contract_findings(
+        """from typing_extensions import Union as Either, Mapping as ReadOnlyMap
+from app.models import EvaluationOptions as Options
+from app.json_types import JsonValue as JV
+Either = object
+def evaluate(options: Either[Options, ReadOnlyMap[str, JV]]):
+    return options["count"]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert findings == []
+
+
+def test_typing_union_dict_and_ignored_validation_result_remain_review_candidates() -> (
+    None
+):
+    findings = input_contract_findings(
+        """from typing import Union
+from app.models import EvaluationOptions
+def evaluate(options: Union[EvaluationOptions, dict[str, JsonValue]]):
+    EvaluationOptions.model_validate(options)
+    return options.get("count")
+""",
+        DOMAIN_POLICY,
+    )
+    assert len(findings) == 1
+    assert "dict" in findings[0].message
+
+
+def test_union_mapping_reads_follow_straight_line_local_aliases() -> None:
+    findings = input_contract_findings(
+        """from collections.abc import Mapping
+from app.models import EvaluationOptions
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
+    payload = options
+    return payload["count"]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].rule_id.endswith("generic-mapping-domain-escape")
+    assert "literal-key reads at line(s) 5" in findings[0].message
+
+
+def test_union_mapping_alias_reassignment_and_branch_aliases_stay_unresolved() -> None:
+    reassigned = input_contract_findings(
+        """from collections.abc import Mapping
+from app.models import EvaluationOptions
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
+    payload = options
+    payload = {}
+    return payload["count"]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+    branch_dependent = input_contract_findings(
+        """from collections.abc import Mapping
+from app.models import EvaluationOptions
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
+    payload = options
+    if condition:
+        return payload["count"]
+    return 0
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert reassigned == []
+    assert branch_dependent == []
+
+
+def test_typing_cast_alias_is_not_mistaken_for_runtime_normalization() -> None:
+    findings = input_contract_findings(
+        """from collections.abc import Mapping
+from typing import cast as cast_value
+from app.models import EvaluationOptions
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
+    payload = cast_value(EvaluationOptions, options)
+    return payload["count"]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].rule_id.endswith("generic-mapping-domain-escape")
+    assert "literal-key reads at line(s) 6" in findings[0].message
+
+
+def test_locally_shadowed_cast_alias_does_not_preserve_mapping_identity() -> None:
+    findings = input_contract_findings(
+        """from collections.abc import Mapping
+from typing import cast as cast_value
+from app.models import EvaluationOptions
+from app.json_types import JsonValue
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
+    cast_value = custom_cast
+    payload = cast_value(EvaluationOptions, options)
+    return payload["state"]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert findings == []
+
+
+def test_forwarded_mapping_read_ignores_comprehension_target_shadowing() -> None:
+    shadowed = input_contract_findings(
+        """from collections.abc import Mapping
+from app.models import EvaluationOptions
+from app.json_types import JsonValue
+def read(packet):
+    return packet["state"]
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue], rows):
+    return [read(options) for options in rows]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+    outer_value = input_contract_findings(
+        """from collections.abc import Mapping
+from app.models import EvaluationOptions
+from app.json_types import JsonValue
+def read(packet):
+    return packet["state"]
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue], rows):
+    return [read(options) for _ in rows]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert shadowed == []
+    assert len(outer_value) == 1
+    assert "generic-mapping-domain-escape" in outer_value[0].rule_id
+
+
+def test_mapping_alias_survives_original_parameter_walrus_rebinding() -> None:
+    findings = input_contract_findings(
+        """from collections.abc import Mapping
+from app.models import EvaluationOptions
+from app.json_types import JsonValue
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
+    payload = options
+    marker = (options := {})
+    return payload["state"]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+    replaced_value = input_contract_findings(
+        """from collections.abc import Mapping
+from app.models import EvaluationOptions
+from app.json_types import JsonValue
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
+    marker = (options := {})
+    return options["state"]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert len(findings) == 1
+    assert "literal-key reads at line(s) 7" in findings[0].message
+    assert replaced_value == []
+
+
+def test_mapping_alias_survives_original_parameter_reassignment() -> None:
+    findings = input_contract_findings(
+        """from collections.abc import Mapping
+from app.models import EvaluationOptions
+from app.json_types import JsonValue
+def evaluate(packet: EvaluationOptions | Mapping[str, JsonValue]):
+    payload = packet
+    packet = {"state": "replacement"}
+    return payload["state"]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+    replaced_value = input_contract_findings(
+        """from collections.abc import Mapping
+from app.models import EvaluationOptions
+from app.json_types import JsonValue
+def evaluate(packet: EvaluationOptions | Mapping[str, JsonValue]):
+    packet = {"state": "replacement"}
+    return packet["state"]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert len(findings) == 1
+    assert "literal-key reads at line(s) 7" in findings[0].message
+    assert replaced_value == []
+
+
+def test_validator_result_is_distinct_from_cast_and_branch_alias_flow() -> None:
+    validated = input_contract_findings(
+        """from collections.abc import Mapping
+from app.models import EvaluationOptions
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
+    normalized = EvaluationOptions.model_validate(options)
+    return normalized["count"]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+    branch_alias = input_contract_findings(
+        """from collections.abc import Mapping
+from app.models import EvaluationOptions
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
+    payload = options
+    if condition:
+        return payload["count"]
+    return 0
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert validated == []
+    assert branch_alias == []
+
+
+def test_discarded_validator_inside_a_branch_is_not_normalization() -> None:
+    findings = input_contract_findings(
+        """from collections.abc import Mapping
+from app.models import EvaluationOptions
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
+    if isinstance(options, Mapping):
+        EvaluationOptions.model_validate(options)
+    return options["count"]
+""",
+        DOMAIN_POLICY,
+    )
+
+    assert len(findings) == 1
+    assert "literal-key reads" in findings[0].message
+
+
+def test_assigned_local_model_normalization_stops_direct_mapping_advice() -> None:
+    assert (
+        input_contract_findings(
+            """from collections.abc import Mapping
+from app.models import EvaluationOptions
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
+    normalized = EvaluationOptions.model_validate(options)
+    return _evaluate(normalized)
+""",
+            DOMAIN_POLICY,
+        )
+        == []
+    )
+
+
+def test_used_validation_result_does_not_hide_continued_mapping_computation() -> None:
+    findings = input_contract_findings(
+        """from collections.abc import Mapping
+from app.models import EvaluationOptions
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
+    normalized = EvaluationOptions.model_validate(options)
+    _evaluate(normalized)
+    return options["count"]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].rule_id.endswith("generic-mapping-domain-escape")
+    assert "literal-key reads at line(s) 6" in findings[0].message
+
+
+def test_branch_validation_does_not_hide_mapping_use_after_the_branch() -> None:
+    findings = input_contract_findings(
+        """from collections.abc import Mapping
+from app.models import EvaluationOptions
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
+    if isinstance(options, Mapping):
+        normalized = EvaluationOptions.model_validate(options)
+    else:
+        normalized = options
+    _evaluate(normalized)
+    return options["count"]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].rule_id.endswith("generic-mapping-domain-escape")
+    assert "literal-key reads at line(s) 9" in findings[0].message
+
+
+def test_branch_specific_assigned_model_normalization_is_used() -> None:
+    assert (
+        input_contract_findings(
+            """from collections.abc import Mapping
+from app.models import EvaluationOptions
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
+    if isinstance(options, Mapping):
+        normalized = EvaluationOptions.model_validate(options)
+        return _evaluate(normalized)
+    return _evaluate(options)
+""",
+            DOMAIN_POLICY,
+        )
+        == []
+    )
+
+
+@pytest.mark.parametrize(
+    "validation",
+    [
+        "normalized = EvaluationOptions.model_validate(options)",
+        (
+            "if isinstance(options, Mapping):\n"
+            "        normalized = EvaluationOptions.model_validate(options)"
+        ),
+    ],
+)
+def test_rebinding_normalized_value_does_not_suppress_mapping_review(
+    validation: str,
+) -> None:
+    source = (
+        "from collections.abc import Mapping\n"
+        "from app.models import EvaluationOptions\n"
+        "def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):\n"
+        f"    {validation.replace(chr(10), chr(10) + '    ')}\n"
+        "    normalized = None\n"
+        "    consume(normalized)\n"
+        "    return options['threshold']\n"
+    )
+
+    findings = input_contract_findings(source, DOMAIN_POLICY)
+
+    assert len(findings) == 1
+    assert findings[0].rule_id == (
+        "alphus/python/none/correctness/generic-mapping-domain-escape"
+    )
+
+
+def test_declared_mapping_only_boundary_requires_literal_mapping_reads() -> None:
+    findings = input_contract_findings(
+        """from collections.abc import Mapping
+from app.json_types import JsonValue
+def evaluate(packet: Mapping[str, JsonValue]):
+    return packet["state"]
+""",
+        DOMAIN_BOUNDARY_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].rule_id == (
+        "alphus/python/none/correctness/generic-mapping-domain-escape"
+    )
+    assert "expects app.models.EvaluationOptions" in findings[0].message
+    assert "literal-key reads at line(s) 4" in findings[0].message
+
+
+@pytest.mark.parametrize(
+    "rebind",
+    [
+        'replacement = (packet := {"state": "replacement"})',
+        'callback = lambda value=(packet := {"state": "replacement"}): value',
+    ],
+)
+def test_alias_evidence_stops_after_parameter_rebinding(rebind: str) -> None:
+    source = (
+        "from collections.abc import Mapping\n"
+        "from app.json_types import JsonValue\n"
+        "def evaluate(packet: Mapping[str, JsonValue]):\n"
+        f"    {rebind}\n"
+        '    return packet["state"]\n'
+    )
+
+    assert (
+        input_contract_findings(
+            source, DOMAIN_BOUNDARY_POLICY, path="src/internal/evaluate.py"
+        )
+        == []
+    )
+
+
+def test_alias_evidence_keeps_reads_before_parameter_rebinding() -> None:
+    findings = input_contract_findings(
+        "from collections.abc import Mapping\n"
+        "from app.json_types import JsonValue\n"
+        "def evaluate(packet: Mapping[str, JsonValue]):\n"
+        '    mode = packet["mode"]\n'
+        '    replacement = (packet := {"state": "replacement"})\n'
+        '    return packet["state"]\n',
+        DOMAIN_BOUNDARY_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert len(findings) == 1
+    assert "literal-key reads at line(s) 4" in findings[0].message
+
+
+def test_multiple_declared_mapping_parameters_are_all_reviewed() -> None:
+    policy = InputContractPolicy(
+        extensions=[".py"],
+        exclude=[],
+        domain_mapping_contracts=(
+            {
+                "path": "src/internal/evaluate.py",
+                "function": "evaluate",
+                "parameter": "options",
+                "domain_type": "app.models.EvaluationOptions",
+            },
+            {
+                "path": "src/internal/evaluate.py",
+                "function": "evaluate",
+                "parameter": "limits",
+                "domain_type": "app.models.EvaluationLimits",
+            },
+        ),
+    )
+    findings = input_contract_findings(
+        """from collections.abc import Mapping
+from app.json_types import JsonValue
+def evaluate(options: Mapping[str, JsonValue], limits: Mapping[str, JsonValue]):
+    return options["mode"], limits["maximum"]
+""",
+        policy,
+        path="src/internal/evaluate.py",
+    )
+
+    assert len(findings) == 2
+    assert all(
+        any(f"evaluate.{parameter}" in finding.message for finding in findings)
+        for parameter in ("options", "limits")
+    )
+
+
+def test_mapping_escape_evidence_follows_one_direct_local_helper_pass() -> None:
+    findings = input_contract_findings(
+        """from collections.abc import Mapping
+from app.json_types import JsonValue
+def evaluate(packet: Mapping[str, JsonValue]):
+    return _read_state(packet)
+def _read_state(payload):
+    return payload["state"]
+""",
+        DOMAIN_BOUNDARY_POLICY,
+        path="src/internal/evaluate.py",
+    )
+    assert len(findings) == 1
+    assert "direct helper pass-through at line 4 to _read_state" in findings[0].message
+    assert "reads 6" in findings[0].message
+
+
+def test_locally_shadowed_helper_name_does_not_use_module_helper_evidence() -> None:
+    source = """from collections.abc import Mapping
+from app.json_types import JsonValue
+def _read_state(payload):
+    return payload["state"]
+def evaluate(packet: Mapping[str, JsonValue]):
+    _read_state = lambda value: value
+    return _read_state(packet)
+"""
+    findings = input_contract_findings(
+        source,
+        DOMAIN_BOUNDARY_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert findings == []
+
+
+@pytest.mark.parametrize(
+    ("subject", "pattern"),
+    [
+        ('{"reader": "value"}', '{"reader": _read_state}'),
+        ('["value"]', "[*_read_state]"),
+        ('{"reader": "value", "other": "item"}', '{"reader": _, **_read_state}'),
+    ],
+)
+def test_match_capture_names_shadow_module_helpers(subject: str, pattern: str) -> None:
+    source = f"""from collections.abc import Mapping
+from app.json_types import JsonValue
+def _read_state(payload):
+    return payload["state"]
+def evaluate(packet: Mapping[str, JsonValue]):
+    match {subject}:
+        case {pattern}:
+            return _read_state(packet)
+    return None
+"""
+    findings = input_contract_findings(
+        source,
+        DOMAIN_BOUNDARY_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert findings == []
+
+
+def test_match_capture_of_selected_parameter_is_not_original_mapping_evidence() -> None:
+    source = """from collections.abc import Mapping
+from app.json_types import JsonValue
+def evaluate(packet: Mapping[str, JsonValue]):
+    match {"packet": {"state": "captured"}}:
+        case {"packet": packet}:
+            return packet["state"]
+    return None
+"""
+    findings = input_contract_findings(
+        source,
+        DOMAIN_BOUNDARY_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert findings == []
+
+
+@pytest.mark.parametrize(
+    "binding_expression",
+    [
+        "def nested(callback=(_read_state := lambda value: value)):\n        pass",
+        "callback = lambda value=(_read_state := (lambda item: item)): value",
+    ],
+)
+def test_nested_default_walrus_binding_shadows_module_helper(
+    binding_expression: str,
+) -> None:
+    source = (
+        "from collections.abc import Mapping\n"
+        "from app.json_types import JsonValue\n"
+        "def _read_state(payload):\n"
+        '    return payload["state"]\n'
+        "def evaluate(packet: Mapping[str, JsonValue]):\n"
+        f"    {binding_expression.replace(chr(10), chr(10) + '    ')}\n"
+        "    return _read_state(packet)\n"
+    )
+    findings = input_contract_findings(
+        source,
+        DOMAIN_BOUNDARY_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert findings == []
+
+
+def test_reassigned_module_helper_is_not_used_for_forwarded_read_evidence() -> None:
+    source = """from collections.abc import Mapping
+from app.json_types import JsonValue
+def _read_state(payload):
+    return payload["state"]
+_read_state = lambda value: value
+def evaluate(packet: Mapping[str, JsonValue]):
+    return _read_state(packet)
+"""
+    findings = input_contract_findings(
+        source,
+        DOMAIN_BOUNDARY_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert findings == []
+
+
+@pytest.mark.parametrize(
+    ("subject", "pattern"),
+    [
+        ('{"reader": "value"}', '{"reader": captured}'),
+        ('["value"]', "[*captured]"),
+        ('{"reader": "value", "other": "item"}', '{"reader": _, **captured}'),
+    ],
+)
+def test_unrelated_match_captures_keep_module_helper_evidence(
+    subject: str, pattern: str
+) -> None:
+    source = f"""from collections.abc import Mapping
+from app.json_types import JsonValue
+def _read_state(payload):
+    return payload["state"]
+def evaluate(packet: Mapping[str, JsonValue]):
+    match {subject}:
+        case {pattern}:
+            return _read_state(packet)
+    return None
+"""
+    findings = input_contract_findings(
+        source,
+        DOMAIN_BOUNDARY_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert len(findings) == 1
+    assert "direct helper pass-through" in findings[0].message
+
+
+def test_mapping_escape_cross_function_following_accepts_linear_aliases_but_not_ambiguity() -> (
+    None
+):
+    alias_case = """from collections.abc import Mapping
+from app.json_types import JsonValue
+def evaluate(packet: Mapping[str, JsonValue]):
+    local = packet
+    return _read(local)
+def _read(value):
+    local = value
+    return local["state"]
+"""
+    ambiguous_case = """from collections.abc import Mapping
+from app.json_types import JsonValue
+def evaluate(packet: Mapping[str, JsonValue]):
+    return _read(packet)
+def _read(value):
+    return value["state"]
+def _read(other):
+    return other["state"]
+"""
+    findings = input_contract_findings(
+        alias_case, DOMAIN_BOUNDARY_POLICY, path="src/internal/evaluate.py"
+    )
+    assert len(findings) == 1
+    assert "direct helper pass-through at line 5 to _read" in findings[0].message
+    assert "reads 8" in findings[0].message
+    assert (
+        input_contract_findings(
+            ambiguous_case, DOMAIN_BOUNDARY_POLICY, path="src/internal/evaluate.py"
+        )
+        == []
+    )
+
+
+def test_shadowed_domain_import_alias_remains_unresolved() -> None:
+    source = """from collections.abc import Mapping as M
+from typing import Union as Either
+from app.models import EvaluationOptions as Options
+from app.json_types import JsonValue as JV
+Options = object
+def evaluate(options: Either[Options, M[str, JV]]):
+    return options["state"]
+"""
+
+    assert input_contract_findings(source, DOMAIN_POLICY) == []
+
+
+def test_unresolved_model_identity_does_not_match_configured_domain_contract() -> None:
+    source = """from collections.abc import Mapping
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
+    return options["state"]
+"""
+
+    assert input_contract_findings(source, DOMAIN_POLICY) == []
+
+
+@pytest.mark.parametrize(
+    ("source", "path", "policy"),
+    [
+        (
+            """from collections.abc import Mapping
+def evaluate(packet: Mapping[str, JsonValue]):
+    return packet["state"]
+""",
+            "src/internal/other.py",
+            DOMAIN_BOUNDARY_POLICY,
+        ),
+        (
+            """from collections.abc import Mapping
+def evaluate(packet: Mapping[str, object]):
+    return packet["state"]
+""",
+            "src/internal/evaluate.py",
+            DOMAIN_BOUNDARY_POLICY,
+        ),
+        (
+            """from collections.abc import Mapping
+def evaluate(packet: Mapping[str, JsonValue]):
+    return len(packet)
+""",
+            "src/internal/evaluate.py",
+            DOMAIN_BOUNDARY_POLICY,
+        ),
+        (
+            """from collections.abc import Mapping
+def evaluate(packet: Mapping[str, JsonValue]):
+    return packet["state"]
+""",
+            "src/internal/evaluate.py",
+            InputContractPolicy(extensions=[".py"], exclude=[]),
+        ),
+    ],
+)
+def test_mapping_only_candidate_requires_exact_consumer_scope_and_shape(
+    source: str, path: str, policy: InputContractPolicy
+) -> None:
+    assert input_contract_findings(source, policy, path=path) == []
+
+
+def test_declared_object_boundary_reports_direct_required_attribute_reads() -> None:
+    policy = InputContractPolicy(
+        extensions=[".py"],
+        exclude=[],
+        domain_mapping_contracts=(
+            {
+                **DECLARED_DOMAIN_BOUNDARY,
+                "function": "Evaluator.evaluate",
+            },
+        ),
+    )
+    findings = input_contract_findings(
+        """class Evaluator:
+    def evaluate(self, packet: object):
+        return packet.frame
+""",
+        policy,
+        path="src/internal/evaluate.py",
+    )
+
+    assert len(findings) == 1
+    assert (
+        findings[0].rule_id
+        == "alphus/python/none/correctness/broad-object-domain-input"
+    )
+    assert "expects app.models.EvaluationOptions" in findings[0].message
+    assert ".frame at line 3" in findings[0].message
+
+
+def test_object_attribute_review_requires_declared_contract_and_direct_read() -> None:
+    source = "def evaluate(packet: object):\n    return packet.frame\n"
+    assert input_contract_findings(source, DOMAIN_BOUNDARY_POLICY) == []
+    policy = InputContractPolicy(
+        extensions=[".py"],
+        exclude=[],
+        domain_mapping_contracts=(DECLARED_DOMAIN_BOUNDARY,),
+    )
+    assert (
+        input_contract_findings(
+            "def evaluate(packet: object):\n    return repr(packet)\n",
+            policy,
+            path="src/internal/evaluate.py",
+        )
+        == []
+    )
+
+
+def test_domain_mapping_read_ignores_deferred_lambda_scope_and_shadowing() -> None:
+    source = """from collections.abc import Mapping
+def evaluate(packet: Mapping[str, JsonValue]):
+    return lambda packet: packet["state"]
+"""
+
+    assert (
+        input_contract_findings(
+            source, DOMAIN_BOUNDARY_POLICY, path="src/internal/evaluate.py"
+        )
+        == []
+    )
+
+
+def test_domain_mapping_read_respects_comprehension_bindings() -> None:
+    shadowed = """from collections.abc import Mapping
+def evaluate(packet: Mapping[str, JsonValue], packets):
+    return [
+        packet["state"]
+        for packet in packets
+    ]
+"""
+    uses_input = """from collections.abc import Mapping
+def evaluate(packet: Mapping[str, JsonValue], packets):
+    return [
+        packet["state"]
+        for _ in packets
+    ]
+"""
+    outer_after_comprehension = """from collections.abc import Mapping
+def evaluate(packet: Mapping[str, JsonValue], packets):
+    _ = [value for packet in packets]
+    return packet["state"]
+"""
+
+    assert (
+        input_contract_findings(
+            shadowed, DOMAIN_BOUNDARY_POLICY, path="src/internal/evaluate.py"
+        )
+        == []
+    )
+    findings = input_contract_findings(
+        uses_input, DOMAIN_BOUNDARY_POLICY, path="src/internal/evaluate.py"
+    )
+    assert len(findings) == 1
+    assert "literal-key reads at line(s) 4" in findings[0].message
+    assert (
+        len(
+            input_contract_findings(
+                outer_after_comprehension,
+                DOMAIN_BOUNDARY_POLICY,
+                path="src/internal/evaluate.py",
+            )
+        )
+        == 1
+    )
+
+
+def test_identity_preserving_cast_rebinding_keeps_mapping_evidence() -> None:
+    findings = input_contract_findings(
+        """from collections.abc import Mapping
+from typing import cast as cast_value
+def evaluate(packet: Mapping[str, JsonValue]):
+    packet = cast_value(Mapping[str, JsonValue], packet)
+    return packet["state"]
+""",
+        DOMAIN_BOUNDARY_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert len(findings) == 1
+    assert "literal-key reads at line(s) 5" in findings[0].message
+
+
+def test_parameter_replaced_by_validated_model_stops_mapping_evidence() -> None:
+    findings = input_contract_findings(
+        """from collections.abc import Mapping
+from app.models import EvaluationOptions
+def evaluate(packet: Mapping[str, JsonValue]):
+    packet = EvaluationOptions.model_validate(packet)
+    return packet["state"]
+""",
+        DOMAIN_BOUNDARY_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert findings == []
+
+
+def test_function_local_cast_shadow_is_not_treated_as_identity_preserving() -> None:
+    findings = input_contract_findings(
+        """from collections.abc import Mapping
+from typing import cast
+def evaluate(packet: Mapping[str, JsonValue]):
+    cast = lambda kind, value: {}
+    packet = cast(Mapping[str, JsonValue], packet)
+    return packet["state"]
+""",
+        DOMAIN_BOUNDARY_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert findings == []
+
+
+def test_object_attribute_evidence_stops_after_parameter_replacement() -> None:
+    findings = input_contract_findings(
+        """from app.models import EvaluationOptions
+def evaluate(packet: object):
+    packet = EvaluationOptions.model_validate(packet)
+    return packet.state
+""",
+        DOMAIN_BOUNDARY_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert findings == []
+
+
+def test_object_attribute_read_ignores_comprehension_shadow() -> None:
+    findings = input_contract_findings(
+        """def evaluate(packet: object, packets):
+    return [
+        packet.state
+        for packet in packets
+    ]
+""",
+        DOMAIN_BOUNDARY_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert findings == []
+
+
+def test_object_attribute_read_before_replacement_remains_visible() -> None:
+    findings = input_contract_findings(
+        """from app.models import EvaluationOptions
+def evaluate(packet: object):
+    state = packet.state
+    packet = EvaluationOptions.model_validate(packet)
+    return state
+""",
+        DOMAIN_BOUNDARY_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert len(findings) == 1
+    assert ".state at line 3" in findings[0].message
+
+
+def test_explicit_adapter_exception_suppresses_only_the_declared_boundary() -> None:
+    source = """from collections.abc import Mapping
+class ProviderCompactionWindow:
+    @classmethod
+    def from_raw(cls, raw: Mapping[str, object]):
+        provider = raw.get("provider")
+        endpoint = raw.get("endpoint")
+        if not isinstance(provider, str) or not isinstance(endpoint, str):
+            raise ValueError("route is invalid")
+        return cls(provider, endpoint)
+def evaluate(options: Mapping[str, object]):
+    return options["count"]
+"""
+    policy = InputContractPolicy(
+        extensions=[".py"],
+        exclude=[],
+        domain_mapping_value_types=("object",),
+        domain_mapping_contracts=(
+            {
+                "path": "src/consumer/types.py",
+                "function": "ProviderCompactionWindow.from_raw",
+                "parameter": "raw",
+                "domain_type": "ProviderCompactionWindow",
+            },
+            {
+                "path": "src/consumer/types.py",
+                "function": "evaluate",
+                "parameter": "options",
+                "domain_type": "EvaluationOptions",
+            },
+        ),
+        domain_mapping_exceptions=(
+            {
+                "path": "src/consumer/types.py",
+                "function": "ProviderCompactionWindow.from_raw",
+                "parameter": "raw",
+                "domain_type": "ProviderCompactionWindow",
+                "reason": "Public compatibility parser validates before model construction.",
+            },
+        ),
+    )
+
+    findings = input_contract_findings(source, policy, path="src/consumer/types.py")
+
+    assert len(findings) == 1
+    assert "evaluate.options" in findings[0].message
+    assert "from_raw" not in findings[0].message
+
+
+def test_domain_mapping_exception_with_stale_domain_type_does_not_suppress() -> None:
+    source = """from collections.abc import Mapping
+from app.models import NewOptions
+def evaluate(packet: NewOptions | Mapping[str, JsonValue]):
+    return packet["count"]
+"""
+    policy = InputContractPolicy(
+        extensions=[".py"],
+        exclude=[],
+        domain_mapping_types=("app.models.OldOptions", "app.models.NewOptions"),
+        domain_mapping_exceptions=(
+            {
+                "path": "src/internal/evaluate.py",
+                "function": "evaluate",
+                "parameter": "packet",
+                "domain_type": "app.models.OldOptions",
+                "reason": "Legacy payload parser.",
+            },
+        ),
+    )
+
+    findings = input_contract_findings(source, policy, path="src/internal/evaluate.py")
+
+    assert len(findings) == 1
+    assert "configured domain type app.models.NewOptions" in findings[0].message
+
+
+def test_domain_mapping_exception_does_not_hide_another_union_domain_type() -> None:
+    source = """from collections.abc import Mapping
+from app.models import OldOptions, NewOptions
+def evaluate(packet: OldOptions | NewOptions | Mapping[str, JsonValue]):
+    return packet["count"]
+"""
+    policy = InputContractPolicy(
+        extensions=[".py"],
+        exclude=[],
+        domain_mapping_types=("app.models.OldOptions", "app.models.NewOptions"),
+        domain_mapping_exceptions=(
+            {
+                "path": "src/internal/evaluate.py",
+                "function": "evaluate",
+                "parameter": "packet",
+                "domain_type": "app.models.OldOptions",
+                "reason": "Legacy payload parser.",
+            },
+        ),
+    )
+
+    findings = input_contract_findings(source, policy, path="src/internal/evaluate.py")
+
+    assert len(findings) == 1
+    assert findings[0].rule_id.endswith("generic-mapping-domain-escape")
+
+
+def test_domain_mapping_exception_does_not_suppress_changed_contract_type() -> None:
+    source = """from collections.abc import Mapping
+def evaluate(packet: Mapping[str, JsonValue]):
+    return packet["count"]
+"""
+    policy = InputContractPolicy(
+        extensions=[".py"],
+        exclude=[],
+        domain_mapping_contracts=(
+            {
+                "path": "src/internal/evaluate.py",
+                "function": "evaluate",
+                "parameter": "packet",
+                "domain_type": "app.models.NewOptions",
+            },
+        ),
+        domain_mapping_exceptions=(
+            {
+                "path": "src/internal/evaluate.py",
+                "function": "evaluate",
+                "parameter": "packet",
+                "domain_type": "app.models.OldOptions",
+                "reason": "Legacy payload parser.",
+            },
+        ),
+    )
+
+    findings = input_contract_findings(source, policy, path="src/internal/evaluate.py")
+
+    assert len(findings) == 1
+    assert "expects app.models.NewOptions" in findings[0].message
+
+
+def test_domain_mapping_exception_requires_a_reason_and_unique_selector() -> None:
+    with pytest.raises(ValueError, match="reason must not be empty"):
+        InputContractPolicy(
+            extensions=[".py"],
+            exclude=[],
+            domain_mapping_exceptions=(
+                {
+                    "path": "src/internal/evaluate.py",
+                    "function": "evaluate",
+                    "parameter": "packet",
+                    "domain_type": "app.models.EvaluationOptions",
+                    "reason": " ",
+                },
+            ),
+        )
+    exception = {
+        "path": "src/internal/evaluate.py",
+        "function": "evaluate",
+        "parameter": "packet",
+        "domain_type": "app.models.EvaluationOptions",
+        "reason": "Declared wire compatibility boundary.",
+    }
+    with pytest.raises(ValueError, match="exception selectors must be unique"):
+        InputContractPolicy(
+            extensions=[".py"],
+            exclude=[],
+            domain_mapping_exceptions=(exception, exception),
+        )
+
+
+def test_domain_mapping_contract_selectors_must_be_unique_and_relative() -> None:
+    with pytest.raises(ValueError, match="selectors must be unique"):
+        InputContractPolicy(
+            extensions=[".py"],
+            exclude=[],
+            domain_mapping_contracts=(
+                DECLARED_DOMAIN_BOUNDARY,
+                DECLARED_DOMAIN_BOUNDARY,
+            ),
+        )
+    with pytest.raises(ValueError, match="relative POSIX path"):
+        InputContractPolicy(
+            extensions=[".py"],
+            exclude=[],
+            domain_mapping_contracts=(
+                {**DECLARED_DOMAIN_BOUNDARY, "path": "../evaluate.py"},
+            ),
+        )
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "options = {}\n return options['count']",
+        "def nested():\n  return options['count']\n return None",
+        (
+            "if isinstance(options, dict):\n"
+            "  normalized = EvaluationOptions.model_validate(options)\n"
+            "  return _evaluate(normalized)\n"
+            " return _evaluate(options)"
+        ),
+    ],
+)
+def test_rebinding_nested_and_branch_validation_stay_uncertain(body: str) -> None:
+    source = (
+        "from collections.abc import Mapping\n"
+        "from app.models import EvaluationOptions\n"
+        "def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):\n " + body
+    )
+    assert input_contract_findings(source, DOMAIN_POLICY) == []
+
+
+def test_sample_domain_profile_selects_existing_input_contract_rule() -> None:
+    config = load_config(Path("examples/consumer/domain-mapping-review.toml"))
+    plan = config.orchestration.resolve_profile("domain-review")
+    assert plan is not None
+    assert plan.steps == ("Domain mapping review",)
 
 
 def test_set_membership_can_use_an_abstract_set_contract() -> None:

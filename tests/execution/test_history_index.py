@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import Float, Table, text
 
 from alphus.config import (
     CheckPolicies,
@@ -22,6 +22,9 @@ from alphus.config import (
 )
 from alphus.execution.history_cli import main
 from alphus.execution.history_index import (
+    _gates,
+    _runs,
+    _units,
     ingest_archives,
     list_gate_observations,
     list_index_runs,
@@ -36,6 +39,14 @@ from alphus.execution.profile_history import (
     write_profile_record,
 )
 from alphus.execution.profile_manifest import gate_manifest_entry
+
+
+@pytest.mark.parametrize("table", [_runs, _gates, _units])
+def test_duration_columns_use_typed_float_instances(table: Table) -> None:
+    column = table.c.duration_seconds
+
+    assert isinstance(column.type, Float)
+    assert column.type.python_type is float
 
 
 def _write(

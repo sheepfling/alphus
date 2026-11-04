@@ -35,6 +35,18 @@ def test_selected_inline_suppression_without_reason_is_reported_at_comment_line(
     assert "Ruff still owns" in findings[0].message
 
 
+def test_inline_noqa_after_type_ignore_is_audited() -> None:
+    findings = suppression_reason_findings(
+        "import optional_runtime  # type: ignore[import-not-found]  # noqa: E402\n",
+        SuppressionReasonPolicy(extensions=(".py",), rule_codes=("E402",)),
+        path="src/package.py",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].line == 1
+    assert "E402" in findings[0].message
+
+
 def test_reason_and_unselected_directives_are_accepted() -> None:
     source = """import optional_runtime  # noqa: E402 -- configure plugins first
 import unused  # noqa: F401
@@ -374,6 +386,29 @@ def test_ruff_per_file_ignores_require_reasons_for_selected_codes(
     assert findings[0].line == 2
     assert "E402" in findings[0].message
     assert "src/app.py" in findings[0].message
+
+
+def test_commented_per_file_ignore_header_is_audited_with_multiline_array(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src/app.py").write_text("value = 1\n", encoding="utf-8")
+    (tmp_path / "ruff.toml").write_text(
+        "[lint.per-file-ignores] # bootstrap imports\n"
+        '"src/app.py" = [\n    "E402",\n]\n',
+        encoding="utf-8",
+    )
+
+    findings = check_suppression_reasons(
+        tmp_path,
+        [Path("src/app.py")],
+        SuppressionReasonPolicy(extensions=(".py",), rule_codes=("E402",)),
+    )
+
+    assert len(findings) == 1
+    assert findings[0].path == "ruff.toml"
+    assert "E402" in findings[0].message
+    assert "no rationale" in findings[0].message
 
 
 def test_ruff_per_file_ignore_comment_rationale_and_unselected_codes_are_accepted(

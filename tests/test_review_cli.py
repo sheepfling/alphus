@@ -168,6 +168,48 @@ def test_scipy_direct_rule_uses_its_own_label(
     assert "File size:" not in output
 
 
+def test_missing_required_document_artifact_fails_opt_in_profile(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    subprocess.run(
+        ["git", "init", "--quiet", str(tmp_path)], check=True, capture_output=True
+    )
+    (tmp_path / "quality.toml").write_text(
+        "schema_version = 1\n"
+        '[files]\ninclude = ["build/review.docx"]\nexclude = []\n'
+        '[checks.document_style]\nextensions = [".docx"]\n'
+        'required_paths = ["build/review.docx"]\n'
+        '[orchestration]\ndefault_profile = "artifact-review"\n'
+        'failure_threshold = "error"\n'
+        '[[orchestration.steps]]\nkind = "rule"\nname = "Document style"\n'
+        'rule = "document-style"\n'
+        '[[orchestration.profiles]]\nname = "artifact-review"\n'
+        'steps = ["Document style"]\n',
+        encoding="utf-8",
+    )
+
+    assert (
+        main(
+            [
+                "--root",
+                str(tmp_path),
+                "--config",
+                "quality.toml",
+                "--run",
+                "--json",
+            ]
+        )
+        == 1
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["steps"][0]["status"] == "failed"
+    assert payload["severity_counts"] == {"error": 1, "warning": 0, "info": 0}
+    assert (
+        "Required document was not present"
+        in payload["steps"][0]["findings"][0]["message"]
+    )
+
+
 @pytest.mark.parametrize(
     "selector",
     [

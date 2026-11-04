@@ -32,6 +32,7 @@ _BLANKET_DIRECTIVE = re.compile(r"^#\s*(?i:noqa)\s*$")
 _FILE_IGNORE_DIRECTIVE = re.compile(
     r"^#\s*ruff\s*:\s*file-ignore\s*\[(?P<codes>[^]]*)\](?P<tail>.*)$"
 )
+_COMMENT_MARKER = re.compile(r"(?:^|\s)#")
 _CODE = re.compile(r"\b[A-Z]+[0-9]{3,4}\b")
 _RUFF_RULE_REDIRECTS: Mapping[str, str] = MappingProxyType(
     {
@@ -64,6 +65,18 @@ def _ruff_code_selections(
         if "ALL" in normalized
         or any(code.startswith(selector) for selector in normalized)
     )
+
+
+def _comment_directive_match(
+    pattern: re.Pattern[str], comment: str
+) -> re.Match[str] | None:
+    """Match a Ruff directive after any hash marker in one comment token."""
+    for marker in _COMMENT_MARKER.finditer(comment):
+        candidate = comment[marker.start() :].strip()
+        match = pattern.fullmatch(candidate)
+        if match is not None:
+            return match
+    return None
 
 
 def _brace_alternatives(pattern: str, *, limit: int = 128) -> tuple[str, ...] | None:
@@ -148,9 +161,9 @@ def suppression_reason_findings(
         comments = (token for token in tokens if token.type == tokenize.COMMENT)
         for token in comments:
             comment = token.string.strip()
-            if _BLANKET_DIRECTIVE.fullmatch(
-                comment
-            ) or _FILE_BLANKET_DIRECTIVE.fullmatch(comment):
+            if _comment_directive_match(_BLANKET_DIRECTIVE, comment) or (
+                _comment_directive_match(_FILE_BLANKET_DIRECTIVE, comment)
+            ):
                 findings.append(
                     Finding(
                         rule_id=_RULE_ID,
@@ -168,12 +181,12 @@ def suppression_reason_findings(
                 continue
             inline = bool(token.line[: token.start[1]].strip())
             directive = (
-                _DIRECTIVE.fullmatch(comment)
+                _comment_directive_match(_DIRECTIVE, comment)
                 if inline
-                else _FILE_DIRECTIVE.fullmatch(comment)
+                else _comment_directive_match(_FILE_DIRECTIVE, comment)
             )
             file_ignore = (
-                _FILE_IGNORE_DIRECTIVE.fullmatch(comment)
+                _comment_directive_match(_FILE_IGNORE_DIRECTIVE, comment)
                 if not inline and token.start[1] == 0
                 else None
             )
@@ -534,7 +547,8 @@ def _normalize_multiline_per_file_values(
     inline_map_lines: set[int] = set()
     while index < len(lines):
         line = lines[index]
-        section = re.fullmatch(r"\s*\[([^]]+)\]\s*", line)
+        section_text, _comment = _split_toml_comment(line)
+        section = re.fullmatch(r"\s*\[([^]]+)\]\s*", section_text)
         if section:
             table = section.group(1).strip()
             index += 1
@@ -754,7 +768,8 @@ def _ruff_config_suppression_findings(
     local_normal_per_file = False
     for line_number, line in enumerate(source.splitlines(), start=1):
         stripped = line.strip()
-        section = re.fullmatch(r"\[([^]]+)\]", stripped)
+        section_text, _comment = _split_toml_comment(line)
+        section = re.fullmatch(r"\[([^]]+)\]", section_text.strip())
         if section:
             table = section.group(1).strip()
             if table in _RUFF_NORMAL_PER_FILE_TABLES:

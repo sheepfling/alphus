@@ -51,6 +51,28 @@ C/C++ build outputs. The gate also reports generated paths already tracked;
 adding `.gitignore` does not untrack them. A local global ignore can satisfy
 the rule, while clean CI confirms repository coverage.
 
+For consumer-specific outputs, declare exact generated-output contracts under
+`[checks.git]`:
+
+```toml
+[[checks.git.generated_outputs]]
+pattern = "src/client/generated/**"
+generator = "tools/build_client.py"
+classification = "generated API client"
+
+[[checks.git.generated_provenance]]
+path = "src/client/generated/compatibility_fixture.py"
+reason = "Versioned protocol fixture retained for interoperability tests"
+```
+
+The `git-ignores` rule reports a tracked path matching a declared output
+contract, including its generator and classification. An exact provenance
+entry accepts an intentionally versioned file with its reason. Matching is
+based on `git ls-files`, so an ignore entry does not hide a tracked output;
+untracked files and paths outside declared globs are not reported. This check
+does not infer that a path is written by a generator, or inspect static write
+locations. Add a contract only for outputs the consumer owns.
+
 The attributes rule requires the root `.gitattributes` to be tracked. Each
 configured row checks the *effective* value for its representative path using
 `git check-attr`, including nested attributes. `value = "set"` checks a boolean

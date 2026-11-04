@@ -151,9 +151,15 @@ architecture, repository metadata, and orchestration. `alphus.config`
 re-exports the public models and TOML loader.
 `alphus.policy.catalog` records each built-in rule's required policy field and
 JSON output shape. Policy validation and profile diagnostic decoding share
-that catalog. Theme packages own their runner mappings;
-`alphus.execution.dispatch` composes the built-in checker dispatch, and
-`alphus.execution.results` validates each result against its declared shape
+that catalog. Direct gate theme packages own their runner mappings, named
+`<THEME>_RULE_RUNNERS` in each theme's `runners.py`. Run
+`python scripts/generate_runner_manifest.py --root .` to parse those literal mappings,
+reject duplicate selectors, verify exact `QualityRuleName` coverage, and emit
+the sorted static imports in `execution/_generated_dispatch.py`. The package
+tests run the generator in check mode and fail if the checked-in manifest is
+stale. Runtime dispatch uses only literal imports; it does not scan packages
+or load third-party plugins. `alphus.execution.results` validates each result
+against its declared shape
 while normalizing diagnostics. The package tests require
 both registries to cover every public rule selector. The CLI retains rendering
 adapters because some older rules have distinct direct-command output formats.
