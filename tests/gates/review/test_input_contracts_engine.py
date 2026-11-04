@@ -344,6 +344,115 @@ def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
     assert "literal-key reads at line(s) 6" in findings[0].message
 
 
+def test_locally_shadowed_cast_alias_does_not_preserve_mapping_identity() -> None:
+    findings = input_contract_findings(
+        """from collections.abc import Mapping
+from typing import cast as cast_value
+from app.models import EvaluationOptions
+from app.json_types import JsonValue
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
+    cast_value = custom_cast
+    payload = cast_value(EvaluationOptions, options)
+    return payload["state"]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert findings == []
+
+
+def test_forwarded_mapping_read_ignores_comprehension_target_shadowing() -> None:
+    shadowed = input_contract_findings(
+        """from collections.abc import Mapping
+from app.models import EvaluationOptions
+from app.json_types import JsonValue
+def read(packet):
+    return packet["state"]
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue], rows):
+    return [read(options) for options in rows]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+    outer_value = input_contract_findings(
+        """from collections.abc import Mapping
+from app.models import EvaluationOptions
+from app.json_types import JsonValue
+def read(packet):
+    return packet["state"]
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue], rows):
+    return [read(options) for _ in rows]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert shadowed == []
+    assert len(outer_value) == 1
+    assert "generic-mapping-domain-escape" in outer_value[0].rule_id
+
+
+def test_mapping_alias_survives_original_parameter_walrus_rebinding() -> None:
+    findings = input_contract_findings(
+        """from collections.abc import Mapping
+from app.models import EvaluationOptions
+from app.json_types import JsonValue
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
+    payload = options
+    marker = (options := {})
+    return payload["state"]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+    replaced_value = input_contract_findings(
+        """from collections.abc import Mapping
+from app.models import EvaluationOptions
+from app.json_types import JsonValue
+def evaluate(options: EvaluationOptions | Mapping[str, JsonValue]):
+    marker = (options := {})
+    return options["state"]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert len(findings) == 1
+    assert "literal-key reads at line(s) 7" in findings[0].message
+    assert replaced_value == []
+
+
+def test_mapping_alias_survives_original_parameter_reassignment() -> None:
+    findings = input_contract_findings(
+        """from collections.abc import Mapping
+from app.models import EvaluationOptions
+from app.json_types import JsonValue
+def evaluate(packet: EvaluationOptions | Mapping[str, JsonValue]):
+    payload = packet
+    packet = {"state": "replacement"}
+    return payload["state"]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+    replaced_value = input_contract_findings(
+        """from collections.abc import Mapping
+from app.models import EvaluationOptions
+from app.json_types import JsonValue
+def evaluate(packet: EvaluationOptions | Mapping[str, JsonValue]):
+    packet = {"state": "replacement"}
+    return packet["state"]
+""",
+        DOMAIN_POLICY,
+        path="src/internal/evaluate.py",
+    )
+
+    assert len(findings) == 1
+    assert "literal-key reads at line(s) 7" in findings[0].message
+    assert replaced_value == []
+
+
 def test_validator_result_is_distinct_from_cast_and_branch_alias_flow() -> None:
     validated = input_contract_findings(
         """from collections.abc import Mapping

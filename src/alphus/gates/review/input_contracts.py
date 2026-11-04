@@ -879,22 +879,6 @@ def _is_starred(node: ast.expr) -> bool:
             return False
 
 
-def _name_expression(node: ast.AST, expected: str) -> bool:
-    match node:
-        case ast.Name(id=name) if name == expected:
-            return True
-        case _:
-            return False
-
-
-def _is_name_in(node: ast.AST, names: AbstractSet[str]) -> bool:
-    match node:
-        case ast.Name(id=name) if name in names:
-            return True
-        case _:
-            return False
-
-
 class _FunctionLocalNodes(ast.NodeVisitor):
     """Collect nodes for one function without treating nested scopes as local."""
 
@@ -921,6 +905,90 @@ class _FunctionLocalNodes(ast.NodeVisitor):
     def generic_visit(self, node: ast.AST) -> None:
         self.nodes.append(node)
         super().generic_visit(node)
+
+
+class _ComprehensionCallScopes(ast.NodeVisitor):
+    """Record comprehension targets that shadow names at each call site."""
+
+    def __init__(self, root: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        self.root = root
+        self.bound_names: set[str] = set()
+        self.shadowed_at_call: dict[int, frozenset[str]] = {}
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        if node is self.root:
+            for statement in node.body:
+                self.visit(statement)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        if node is self.root:
+            for statement in node.body:
+                self.visit(statement)
+
+    def visit_Lambda(self, node: ast.Lambda) -> None:
+        return
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        return
+
+    def visit_Call(self, node: ast.Call) -> None:
+        self.shadowed_at_call[id(node)] = frozenset(self.bound_names)
+        self.generic_visit(node)
+
+    def _visit_comprehension(
+        self,
+        generators: Sequence[ast.comprehension],
+        values: Sequence[ast.AST],
+    ) -> None:
+        original = set(self.bound_names)
+        for generator in generators:
+            self.visit(generator.iter)
+            for target in ast.walk(generator.target):
+                match target:
+                    case ast.Name(id=name, ctx=ast.Store()):
+                        self.bound_names.add(name)
+                    case _:
+                        pass
+            for condition in generator.ifs:
+                self.visit(condition)
+        for value in values:
+            self.visit(value)
+        self.bound_names = original
+
+    def visit_ListComp(self, node: ast.ListComp) -> None:
+        self._visit_comprehension(node.generators, [node.elt])
+
+    def visit_SetComp(self, node: ast.SetComp) -> None:
+        self._visit_comprehension(node.generators, [node.elt])
+
+    def visit_GeneratorExp(self, node: ast.GeneratorExp) -> None:
+        self._visit_comprehension(node.generators, [node.elt])
+
+    def visit_DictComp(self, node: ast.DictComp) -> None:
+        self._visit_comprehension(node.generators, [node.key, node.value])
+
+
+def _resolved_cast_call(
+    function: ast.expr, imports: ImportAliases, local_names: AbstractSet[str]
+) -> bool:
+    """Return whether a cast spelling still resolves to the imported typing API."""
+    if canonical_expression_name(function, imports) not in {
+        "typing.cast",
+        "typing_extensions.cast",
+    }:
+        return False
+    root: ast.expr = function
+    while True:
+        match root:
+            case ast.Attribute(value=value):
+                root = value
+            case _:
+                break
+    match root:
+        case ast.Name(id=name):
+            return name not in local_names
+        case _:
+            return True
 
 
 class _FunctionScopeBindings(ast.NodeVisitor):
@@ -1410,14 +1478,10 @@ def _direct_mapping_reads_with_aliases(
     def record_reads(expression: ast.AST, available: AbstractSet[str]) -> None:
         lines.update(_scoped_expression_reads(expression, available)[0])
 
-    first_rebinding = min(bindings.rebindings.get(parameter, []), default=None)
     for statement in function.body:
-        # The alias walk only models straight-line assignments. Once the
-        # parameter is rebound, later reads no longer refer to the caller's
-        # mapping; in particular, walrus expressions inside defaults can
-        # rebind it without appearing as a simple assignment target here.
-        if first_rebinding is not None and statement.lineno >= first_rebinding:
-            break
+        # Track each alias independently: rebinding the original parameter
+        # must not invalidate an earlier alias that still points to its value.
+        # Control-flow statements remain an explicit boundary below.
         match statement:
             case ast.Assign(targets=[ast.Name(id=target)], value=value):
                 record_reads(value, tracked_names)
@@ -1428,14 +1492,20 @@ def _direct_mapping_reads_with_aliases(
                         func=func,
                         args=[_, ast.Name(id=source)],
                         keywords=[],
-                    ) if source in tracked_names and canonical_expression_name(
-                        func, imports
-                    ) in {"typing.cast", "typing_extensions.cast"}:
+                    ) if source in tracked_names and _resolved_cast_call(
+                        func, imports, bindings.names
+                    ):
                         # typing.cast returns its value unchanged; it is not
                         # runtime validation or normalization evidence.
                         tracked_names.add(target)
                     case _:
                         tracked_names.discard(target)
+                for child in ast.walk(value):
+                    match child:
+                        case ast.NamedExpr(target=ast.Name(id=name)):
+                            tracked_names.discard(name)
+                        case _:
+                            pass
             case ast.AnnAssign(target=ast.Name(id=target), value=value):
                 if value is not None:
                     record_reads(value, tracked_names)
@@ -1446,15 +1516,28 @@ def _direct_mapping_reads_with_aliases(
                         func=func,
                         args=[_, ast.Name(id=source)],
                         keywords=[],
-                    ) if source in tracked_names and canonical_expression_name(
-                        func, imports
-                    ) in {"typing.cast", "typing_extensions.cast"}:
+                    ) if source in tracked_names and _resolved_cast_call(
+                        func, imports, bindings.names
+                    ):
                         tracked_names.add(target)
                     case _:
                         tracked_names.discard(target)
+                if value is not None:
+                    for child in ast.walk(value):
+                        match child:
+                            case ast.NamedExpr(target=ast.Name(id=name)):
+                                tracked_names.discard(name)
+                            case _:
+                                pass
             case ast.Return(value=value) | ast.Expr(value=value):
                 if value is not None:
                     record_reads(value, tracked_names)
+                    for child in ast.walk(value):
+                        match child:
+                            case ast.NamedExpr(target=ast.Name(id=name)):
+                                tracked_names.discard(name)
+                            case _:
+                                pass
             case (
                 ast.If()
                 | ast.For()
@@ -1518,6 +1601,8 @@ def _direct_forwarded_mapping_reads(
                 pass
     local = _FunctionLocalNodes(function)
     local.visit(function)
+    comprehension_scopes = _ComprehensionCallScopes(function)
+    comprehension_scopes.visit(function)
     module_bound_names = _ModuleScopeBindings(module).names
     rebinding = min(bindings.rebindings.get(parameter, []), default=None)
     evidence: set[tuple[str, int, tuple[int, ...]]] = set()
@@ -1529,6 +1614,18 @@ def _direct_forwarded_mapping_reads(
                 continue
         if rebinding is not None and node.lineno >= rebinding:
             continue
+        shadowed_names = comprehension_scopes.shadowed_at_call.get(
+            id(node), frozenset()
+        )
+        passed_names = _linear_aliases_before(function, parameter, node.lineno)
+
+        def passes_outer_mapping(argument: ast.AST) -> bool:
+            match argument:
+                case ast.Name(id=name) if name not in shadowed_names:
+                    return name in passed_names
+                case _:
+                    return False
+
         candidates = helpers.get(call_name, [])
         if (
             call_name in bindings.names
@@ -1537,24 +1634,17 @@ def _direct_forwarded_mapping_reads(
             or candidates[0] is function
         ):
             continue
-        passed_names = _linear_aliases_before(function, parameter, node.lineno)
         helper = candidates[0]
         helper_args = [*helper.args.posonlyargs, *helper.args.args]
         helper_all_args = [*helper_args, *helper.args.kwonlyargs]
         helper_parameter: str | None = None
         for index, argument in enumerate(args):
-            if index < len(helper_args) and (
-                _name_expression(argument, parameter)
-                or _is_name_in(argument, passed_names)
-            ):
+            if index < len(helper_args) and passes_outer_mapping(argument):
                 helper_parameter = helper_args[index].arg
                 break
         if helper_parameter is None:
             for keyword in keywords:
-                if keyword.arg is None or not (
-                    _name_expression(keyword.value, parameter)
-                    or _is_name_in(keyword.value, passed_names)
-                ):
+                if keyword.arg is None or not passes_outer_mapping(keyword.value):
                     continue
                 if any(argument.arg == keyword.arg for argument in helper_all_args):
                     helper_parameter = keyword.arg
