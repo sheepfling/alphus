@@ -5,13 +5,13 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
-import sys
 import tarfile
+import venv
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 import pytest
-from packaging.utils import parse_wheel_filename
+from packaging.utils import parse_sdist_filename, parse_wheel_filename
 from packaging.version import Version
 
 
@@ -36,27 +36,22 @@ def _successful_run(
     return result
 
 
-def _scm_version(
-    root: Path, *, env: Mapping[str, str]
-) -> subprocess.CompletedProcess[str]:
-    return _run([sys.executable, "-m", "setuptools_scm"], cwd=root, env=env)
-
-
 def _build(
     root: Path,
     output: Path,
     build_kind: str,
     *,
+    python: Path,
     env: Mapping[str, str],
 ) -> list[Path]:
     output.mkdir()
     _successful_run(
         [
-            sys.executable,
+            str(python),
             "-m",
             "build",
-            "--no-isolation",
             f"--{build_kind}",
+            "--no-isolation",
             "--outdir",
             str(output),
             str(root),
@@ -99,6 +94,26 @@ def test_tagged_and_archived_builds_keep_the_same_version(
 ) -> None:
     project = Path(pytestconfig.rootpath)
     environment = _clean_environment()
+    backend_environment = tmp_path / "build-environment"
+    venv.EnvBuilder(with_pip=True).create(backend_environment)
+    backend_python = backend_environment / (
+        "Scripts/python.exe" if os.name == "nt" else "bin/python"
+    )
+    backend_install = _run(
+        [
+            str(backend_python),
+            "-m",
+            "pip",
+            "install",
+            "--disable-pip-version-check",
+            "build>=1,<2",
+            "setuptools>=80",
+            "setuptools-scm>=10.3.4,<11",
+        ],
+        cwd=tmp_path,
+        env=environment,
+    )
+    assert backend_install.returncode == 0, backend_install.stderr
     repository = tmp_path / "scm-repository"
     source = repository / "src" / "alphus"
     source.mkdir(parents=True)
@@ -131,11 +146,12 @@ def test_tagged_and_archived_builds_keep_the_same_version(
     )
     _successful_run(["git", "tag", "0.0.2"], cwd=repository, env=environment)
 
-    exact_tag = _scm_version(repository, env=environment)
-    assert exact_tag.returncode == 0, exact_tag.stderr
-    assert exact_tag.stdout.strip() == "0.0.2"
     tagged_wheels = _build(
-        repository, tmp_path / "tagged-wheel", "wheel", env=environment
+        repository,
+        tmp_path / "tagged-wheel",
+        "wheel",
+        python=backend_python,
+        env=environment,
     )
     assert len(tagged_wheels) == 1
     assert _wheel_version(tagged_wheels[0]) == Version("0.0.2")
@@ -156,15 +172,17 @@ def test_tagged_and_archived_builds_keep_the_same_version(
         cwd=repository,
         env=environment,
     )
-    post_tag = _scm_version(repository, env=environment)
-    assert post_tag.returncode == 0, post_tag.stderr
-    post_tag_version = Version(post_tag.stdout.strip())
+    git_wheels = _build(
+        repository,
+        tmp_path / "git-wheel",
+        "wheel",
+        python=backend_python,
+        env=environment,
+    )
+    assert len(git_wheels) == 1
+    post_tag_version = _wheel_version(git_wheels[0])
     assert post_tag_version.public == "0.0.3.dev1"
     assert post_tag_version.local is not None
-
-    git_wheels = _build(repository, tmp_path / "git-wheel", "wheel", env=environment)
-    assert len(git_wheels) == 1
-    assert _wheel_version(git_wheels[0]) == post_tag_version
 
     archive = tmp_path / "git-archive.tar"
     with archive.open("wb") as output:
@@ -181,26 +199,37 @@ def test_tagged_and_archived_builds_keep_the_same_version(
         archive, tmp_path / "git-archive-source", single_root=False
     )
     assert not (archived_source / ".git").exists()
-    archived_version = _scm_version(archived_source, env=environment)
-    assert archived_version.returncode == 0, archived_version.stderr
-    archived_package_version = Version(archived_version.stdout.strip())
-    assert archived_package_version.public == post_tag_version.public
-    assert archived_package_version.local is not None
     archived_wheels = _build(
-        archived_source, tmp_path / "archive-wheel", "wheel", env=environment
+        archived_source,
+        tmp_path / "archive-wheel",
+        "wheel",
+        python=backend_python,
+        env=environment,
     )
     assert len(archived_wheels) == 1
-    assert _wheel_version(archived_wheels[0]).public == post_tag_version.public
+    archived_package_version = _wheel_version(archived_wheels[0])
+    assert archived_package_version.public == post_tag_version.public
+    assert archived_package_version.local is not None
 
-    sdists = _build(repository, tmp_path / "sdist", "sdist", env=environment)
+    sdists = _build(
+        repository,
+        tmp_path / "sdist",
+        "sdist",
+        python=backend_python,
+        env=environment,
+    )
     assert len(sdists) == 1
+    sdist_distribution, sdist_version = parse_sdist_filename(sdists[0].name)
+    assert sdist_distribution == "alphus"
+    assert sdist_version == post_tag_version
     unpacked_sdist = _extract(sdists[0], tmp_path / "sdist-source")
     assert not (unpacked_sdist / ".git").exists()
-    sdist_version = _scm_version(unpacked_sdist, env=environment)
-    assert sdist_version.returncode == 0, sdist_version.stderr
-    assert Version(sdist_version.stdout.strip()) == post_tag_version
     sdist_wheels = _build(
-        unpacked_sdist, tmp_path / "sdist-wheel", "wheel", env=environment
+        unpacked_sdist,
+        tmp_path / "sdist-wheel",
+        "wheel",
+        python=backend_python,
+        env=environment,
     )
     assert len(sdist_wheels) == 1
     assert _wheel_version(sdist_wheels[0]) == post_tag_version
@@ -211,9 +240,24 @@ def test_tagged_and_archived_builds_keep_the_same_version(
         cwd=tmp_path,
         env=environment,
     )
-    shallow_version = _scm_version(shallow, env=environment)
-    assert shallow_version.returncode != 0
-    assert "shallow" in shallow_version.stderr.lower()
+    shallow_wheelhouse = tmp_path / "shallow-wheel"
+    shallow_wheelhouse.mkdir()
+    shallow_build = _run(
+        [
+            str(backend_python),
+            "-m",
+            "build",
+            "--wheel",
+            "--no-isolation",
+            "--outdir",
+            str(shallow_wheelhouse),
+            str(shallow),
+        ],
+        cwd=tmp_path,
+        env=environment,
+    )
+    assert shallow_build.returncode != 0
+    assert "shallow" in shallow_build.stderr.lower()
 
     raw_source = tmp_path / "raw-source-without-version-metadata"
     shutil.copytree(
@@ -223,5 +267,20 @@ def test_tagged_and_archived_builds_keep_the_same_version(
             ".git", ".git_archival.txt", "*.egg-info", "build", "dist"
         ),
     )
-    raw_version = _scm_version(raw_source, env=environment)
-    assert raw_version.returncode != 0
+    raw_wheelhouse = tmp_path / "raw-source-wheel"
+    raw_wheelhouse.mkdir()
+    raw_build = _run(
+        [
+            str(backend_python),
+            "-m",
+            "build",
+            "--wheel",
+            "--no-isolation",
+            "--outdir",
+            str(raw_wheelhouse),
+            str(raw_source),
+        ],
+        cwd=tmp_path,
+        env=environment,
+    )
+    assert raw_build.returncode != 0
