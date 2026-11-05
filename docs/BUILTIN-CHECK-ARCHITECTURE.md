@@ -337,8 +337,8 @@ source commits, wheel hashes, fixture commits and hashes, the manifest hash,
 package versions, and the declared output normalization. Exact temporary paths
 are replaced with stable placeholders in the evidence.
 
-A first comparison used reference `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`
-and candidate `dbcddcb3738e4f54614de998f4753203364f55fe`. The catalog was
+The comparison used reference `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`
+and candidate `99686ac5348b218f52825b3a50ddfcef113f7976`. The catalog was
 identical at 62 selectors. Behavioral cases exercised `file-size`,
 `benchmark-docs`, `line-length`, `numeric-literals`, and `input-contracts`:
 strict invalid-config rejection, direct JSON and plain output, profile
@@ -357,15 +357,15 @@ identify each artifact. This does not meet the full compatibility prerequisite
 for any runtime registration migration.
 
 The complete machine-readable run is
-[the c880093-to-dbcddcb evidence report](architecture/builtin-check-wheel-differential-c880093-dbcddcb.json).
+[the c880093-to-dbcddcb evidence report](architecture/builtin-check-wheel-differential-c880093-99686ac.json).
 Reproduce it with:
 
 ```sh
 .venv/bin/python scripts/differential_wheels.py \
   --root . \
   --baseline c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e \
-  --candidate dbcddcb3738e4f54614de998f4753203364f55fe \
-  --output docs/architecture/builtin-check-wheel-differential-c880093-dbcddcb.json
+  --candidate 99686ac5348b218f52825b3a50ddfcef113f7976 \
+  --output docs/architecture/builtin-check-wheel-differential-c880093-99686ac.json
 ```
 
 ## Performance and cache boundary

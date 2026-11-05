@@ -1,7 +1,7 @@
 {
   "build_python": "3.11.16 (main, Aug 12 2026, 23:03:19) [Clang 21.0.0 (clang-2100.1.1.101)]",
   "candidate": {
-    "commit": "dbcddcb3738e4f54614de998f4753203364f55fe",
+    "commit": "99686ac5348b218f52825b3a50ddfcef113f7976",
     "installation": {
       "distribution_owns_module": true,
       "distribution_root": "$WHEEL_RUN_ROOT/venv-candidate/lib/python3.11/site-packages",
@@ -360,7 +360,7 @@
       "module_path": "$WHEEL_RUN_ROOT/venv-candidate/lib/python3.11/site-packages/alphus/__init__.py",
       "record_hash": "sha256=YMETX0sFrloKmGhuymcZaioTaIcipuwLe7tmfw2wlz0"
     },
-    "wheel_sha256": "2bce0e251e8bf3df348df5a7bd98f3d223a58d75ac02449fe06fe50c272b276a"
+    "wheel_sha256": "f4432575b2a127e851c0a857fdf578b82a8061dab8ab15921b114c41b158c576"
   },
   "coverage": {
     "behaviorally_exercised_selectors": [
@@ -827,7 +827,7 @@
       "module_path": "$WHEEL_RUN_ROOT/venv-baseline/lib/python3.11/site-packages/alphus/__init__.py",
       "record_hash": "sha256=YMETX0sFrloKmGhuymcZaioTaIcipuwLe7tmfw2wlz0"
     },
-    "wheel_sha256": "c22a05ff75b4b2c99172f9d2591c2c0172dd51e87579cb10b924f4cbe42b4d42"
+    "wheel_sha256": "b32d9e001b16451615aa8613b4749f4c08901e1bd62a49a6c6826c0d00041e6d"
   },
   "scenario_results": {
     "candidate": {
