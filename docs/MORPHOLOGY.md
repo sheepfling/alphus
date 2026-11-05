@@ -1,9 +1,21 @@
 # Rule morphology
 
+The broader built-in ownership and registration design is documented in the
+[built-in check architecture and migration plan](BUILTIN-CHECK-ARCHITECTURE.md).
+This page remains the morphology vocabulary and pilot boundary.
+
 Morphology describes a built-in rule's claim, detection mechanism, inspected
 scope, evidence, and rule-level evaluation maturity. Claim kind (condition,
 risk, or style preference) is independent of detection mechanism. Morphology
 describes the rule itself; it does not describe a particular finding or run.
+
+The six-check pilot's `mechanisms` vocabulary is transitional. `exact-rule`
+describes claim/evidence strength, while `bounded-heuristic`, `native-tool`,
+and `local-model-assisted` describe different detection or backend properties.
+The [built-in check architecture](BUILTIN-CHECK-ARCHITECTURE.md) separates
+claim strength, analyzer method, backend, repeatability, and advisory or
+enforcement disposition before broad registration migration. Do not infer
+repeatability from a pilot mechanism label.
 
 Keep these fields separate from severity, remediation priority, provisional or
 mainline rollout, per-finding confidence, applicability, selection, and actual
