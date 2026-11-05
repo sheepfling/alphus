@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -10,7 +11,12 @@ import pytest
 from scripts.differential_wheels import (
     ProcessResult,
     Scenario,
+    _assert_file_identity,
     _assert_scenario_output,
+    _compare_reports,
+    _scenario_classification,
+    _scenario_executes,
+    _ScenarioRunReport,
     load_manifest,
     normalize_json,
     remove_path,
@@ -45,18 +51,18 @@ def test_normalizer_removes_only_declared_volatile_paths() -> None:
 def test_report_manifest_derives_selector_coverage_without_a_total_list(
     pytestconfig: pytest.Config,
 ) -> None:
-    root = Path.cwd()
+    root = pytestconfig.rootpath
     scenarios, deferred = load_manifest(
         root / "tests" / "differential" / "wheel-scenarios.toml"
     )
     exercised = {selector for scenario in scenarios for selector in scenario.selectors}
 
     assert {"file-size", "benchmark-docs"} <= exercised
-    assert {item["selector"] for item in deferred if "selector" in item} == {
+    assert {item.selector for item in deferred if item.selector is not None} == {
         "cyclomatic-complexity",
         "package-boundaries",
     }
-    assert any(item["capability"] == "plugin-api-v1" for item in deferred)
+    assert any(item.capability == "plugin-api-v1" for item in deferred)
 
 
 @pytest.mark.parametrize(
@@ -65,6 +71,10 @@ def test_report_manifest_derives_selector_coverage_without_a_total_list(
         '{ rule_id = 7, path = "src/example.py" }',
         '{ rule_id = "rule/id", path = 3 }',
         '{ rule_id = "rule/id", path = "src/example.py", line = "two" }',
+        '{ rule_id = "", path = "src/example.py" }',
+        '{ rule_id = "rule/id", path = "" }',
+        '{ rule_id = "rule/id", path = "src/example.py", line = 0 }',
+        '{ rule_id = "rule/id", path = "src/example.py", line = -1 }',
     ],
 )
 def test_manifest_rejects_malformed_expected_findings(
@@ -85,6 +95,107 @@ def test_manifest_rejects_malformed_expected_findings(
 
     with pytest.raises(ValueError, match="expected finding"):
         load_manifest(manifest)
+
+
+def test_manifest_rejects_direct_selector_labels_that_disagree(tmp_path: Path) -> None:
+    manifest = tmp_path / "scenarios.toml"
+    manifest.write_text(
+        "schema_version = 1\n\n[[scenario]]\n"
+        'name = "mislabeled-direct-rule"\n'
+        'selectors = ["file-size"]\n'
+        'behavior = ["manifest-validation"]\n'
+        "expected_exit = 0\n\n"
+        "[[scenario.variant]]\n"
+        'name = "direct"\n'
+        'arguments = ["--rule", "numeric-literals", "--json"]\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="do not match direct --rule"):
+        load_manifest(manifest)
+
+
+def test_profile_plan_requires_reported_selector_rules() -> None:
+    scenarios, _ = load_manifest(Path("tests/differential/wheel-scenarios.toml"))
+    scenario = next(item for item in scenarios if item.name == "profile-plan-selection")
+    variant = scenario.variants[0]
+    result = ProcessResult(
+        0,
+        json.dumps(
+            {
+                "steps": [
+                    {"name": "source-size", "rule": None, "kind": "rule"},
+                    {"name": "source-lines", "rule": None, "kind": "rule"},
+                ]
+            }
+        ),
+        "",
+    )
+
+    with pytest.raises(ValueError, match="expected reported rules"):
+        _assert_scenario_output(scenario, variant.name, result)
+
+
+def test_plan_only_scenarios_are_not_behavioral_coverage() -> None:
+    scenarios, _ = load_manifest(Path("tests/differential/wheel-scenarios.toml"))
+    plan = next(item for item in scenarios if item.name == "profile-plan-selection")
+    run = next(item for item in scenarios if item.name == "profile-serial-parallel")
+
+    control = next(item for item in scenarios if item.name == "catalog")
+
+    assert _scenario_executes(plan) is False
+    assert _scenario_executes(run) is True
+    assert _scenario_classification(plan) == "planned-only"
+    assert _scenario_classification(run) == "behavioral"
+    assert _scenario_classification(control) == "control"
+
+
+def test_report_comparison_rejects_different_fixture_snapshots() -> None:
+    scenarios, _ = load_manifest(Path("tests/differential/wheel-scenarios.toml"))
+    scenario = next(
+        item for item in scenarios if item.name == "numeric-literals-direct"
+    )
+    result = ProcessResult(0, "[]", "").to_wire()
+    reference = {
+        scenario.name: _ScenarioRunReport(
+            fixture_sha256="reference-fixture",
+            fixture_git_commit="reference-commit",
+            selectors=list(scenario.selectors),
+            execution_classification="behavioral",
+            behavior=list(scenario.behavior),
+            within_build_equal=True,
+            variants={scenario.variants[0].name: result},
+            build="reference",
+        )
+    }
+    candidate = {
+        scenario.name: _ScenarioRunReport(
+            fixture_sha256="different-fixture",
+            fixture_git_commit="candidate-commit",
+            selectors=list(scenario.selectors),
+            execution_classification="behavioral",
+            behavior=list(scenario.behavior),
+            within_build_equal=True,
+            variants={scenario.variants[0].name: result},
+            build="candidate",
+        )
+    }
+
+    differences = _compare_reports((scenario,), reference, candidate)
+
+    assert any("fixture_sha256 differs" in difference for difference in differences)
+    assert any("fixture_git_commit differs" in difference for difference in differences)
+
+
+@pytest.mark.parametrize("label", ["scenario manifest", "harness"])
+def test_changed_run_identity_fails_closed(tmp_path: Path, label: str) -> None:
+    identity = tmp_path / "run-input"
+    identity.write_text("before", encoding="utf-8")
+    expected = hashlib.sha256(b"before").hexdigest()
+    identity.write_text("after", encoding="utf-8")
+
+    with pytest.raises(ValueError, match=f"{label} changed during differential run"):
+        _assert_file_identity(identity, expected, label)
 
 
 def test_exact_findings_reject_non_json_variants(tmp_path: Path) -> None:
@@ -119,6 +230,7 @@ def test_declared_exact_findings_are_not_skipped_for_zero_minimum() -> None:
         minimum_findings=0,
         expected_step_names=(),
         expected_step_rules=(),
+        expected_reported_step_rules=(),
         require_passed_steps=False,
         required_output=(),
         expected_findings=(
@@ -132,11 +244,11 @@ def test_declared_exact_findings_are_not_skipped_for_zero_minimum() -> None:
 
 
 def test_volatile_paths_do_not_clear_unrelated_object_fields() -> None:
-    payload: object = {"steps": [{"duration_seconds": 1.2, "status": "failed"}]}
+    payload = {"steps": [{"duration_seconds": 1.2, "status": "failed"}]}
 
-    remove_path(payload, ["steps", "*", "duration_seconds"])
+    normalized = remove_path(payload, ["steps", "*", "duration_seconds"])
 
-    assert payload == {"steps": [{"status": "failed"}]}
+    assert normalized == {"steps": [{"status": "failed"}]}
 
 
 def test_normalizer_accepts_json_array_results() -> None:
@@ -144,7 +256,7 @@ def test_normalizer_accepts_json_array_results() -> None:
 
 
 def test_normalizer_rejects_invalid_json() -> None:
-    with pytest.raises(json.JSONDecodeError):
+    with pytest.raises(ValueError):
         normalize_json("not-json")
 
 

@@ -99,6 +99,35 @@ name = "json"
 arguments = ["--config", "quality-gates.toml", "--rule", "input-contracts", "--json"]
 
 [[scenario]]
+name = "test-quality-direct"
+fixture = "test-quality"
+selectors = ["test-quality"]
+behavior = ["direct-selector", "test-assertion-prose-heuristic", "finding-id", "json-result"]
+expected_exit = 0
+minimum_findings = 1
+required_output = ["tests/report_fixture.py"]
+expected_findings = [
+  { rule_id = "alphus/python/none/testing/large-prose-assertion", path = "tests/report_fixture.py", line = 6 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "test-quality", "--json"]
+
+[[scenario]]
+name = "output-escaping-direct-plain"
+fixture = "output-escaping"
+selectors = ["output-escaping"]
+behavior = ["direct-selector", "security-finding", "plain-output"]
+expected_exit = 1
+required_output = ["alphus/python/none/security/manual-output-escaping", "src/render.py:2", "Output escaping: 1 finding(s)"]
+
+[[scenario.variant]]
+name = "plain"
+arguments = ["--config", "quality-gates.toml", "--rule", "output-escaping"]
+parse_json = false
+
+[[scenario]]
 name = "profile-plan-selection"
 fixture = "profile"
 selectors = ["file-size", "line-length"]
@@ -106,6 +135,7 @@ behavior = ["resolved-profile-selection", "selected-selector-list"]
 expected_exit = 0
 expected_step_names = ["source-size", "source-lines"]
 expected_step_rules = ["file-size", "line-length"]
+expected_reported_step_rules = ["file-size", "line-length"]
 
 [[scenario.variant]]
 name = "plan"
@@ -124,6 +154,7 @@ behavior = ["explicit-profile-selection", "severity-priority", "ordered-results"
 expected_exit = 0
 minimum_findings = 2
 expected_step_names = ["source-size", "source-lines"]
+expected_step_rules = ["file-size", "line-length"]
 require_passed_steps = true
 required_output = ["src/example.py", "warning", "high", "normal"]
 

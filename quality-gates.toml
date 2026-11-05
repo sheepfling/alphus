@@ -42,9 +42,12 @@ exclude = ["tests/**"]
 
 [checks.output_escaping]
 extensions = [".py"]
-# The synthetic fixture owns a tiny serializer solely so markdown-it-py can
-# inspect its output; the render assertions independently verify these escapes.
-exclude = ["tests/gates/review/test_dynamic_markdown_rendering.py"]
+# These tiny fixtures intentionally contain unsafe renderer input to prove the
+# differential scenario reports the finding; their assertions live in that scenario.
+exclude = [
+  "tests/gates/review/test_dynamic_markdown_rendering.py",
+  "tests/differential/fixtures/output-escaping/src/render.py",
+]
 
 [checks.path_discovery]
 extensions = [".py"]
@@ -64,7 +67,9 @@ minimum_ast_nodes = 15
 
 [checks.python_style]
 extensions = [".py"]
-exclude = []
+# The positive input-contract fixture needs a concrete mutable list parameter
+# to demonstrate a caller-visible mutation finding in its own differential run.
+exclude = ["tests/differential/fixtures/input-contracts/src/example.py"]
 opaque_boundary_paths = [
   "src/alphus/config.py",
   "src/alphus/cli.py",
@@ -127,7 +132,9 @@ exclude = [
 
 [checks.numeric_literals]
 extensions = [".py"]
-exclude = []
+# The fixture intentionally includes 3.14 so the installed-wheel scenario can
+# assert the numeric-literal finding.
+exclude = ["tests/differential/fixtures/numeric-literals/src/example.py"]
 math_constants = true
 
 [checks.scipy_constants]
@@ -139,13 +146,17 @@ inverse_conversions = true
 
 [checks.test_quality]
 extensions = [".py"]
-exclude = []
+# The fixture intentionally has a large prose equality so the differential
+# scenario can assert the test-quality finding.
+exclude = ["tests/differential/fixtures/test-quality/tests/report_fixture.py"]
 test_paths = ["tests/**"]
 ephemeral_document_patterns = ["docs/**"]
 
 [checks.input_contracts]
 extensions = [".py"]
-exclude = []
+# The fixture intentionally mutates its input so the differential scenario can
+# assert the input-contract finding.
+exclude = ["tests/differential/fixtures/input-contracts/src/example.py"]
 sequence_narrowing_paths = ["src/alphus/gates/review/positional_interfaces.py"]
 
 [checks.typing_stub_suggestions]
