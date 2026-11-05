@@ -163,6 +163,7 @@ from alphus.policy.sources import (
     SharedUtilitiesPolicy,
     SourceScanPolicy,
 )
+from alphus.policy.test_layout import TestLayoutPair, TestLayoutPolicy
 from alphus.support.source_text import read_utf8_text
 
 __all__ = [
@@ -272,12 +273,14 @@ __all__ = [
     "SharedQualityIntent",
     "SharedUtilitiesPolicy",
     "SourceFamilyPolicy",
+    "SourceScanPolicy",
     "SourceTestCoveragePolicy",
     "SourceTestRelationship",
-    "SourceScanPolicy",
     "SqlAlchemyPracticePolicy",
     "SuppressionReasonException",
     "SuppressionReasonPolicy",
+    "TestLayoutPair",
+    "TestLayoutPolicy",
     "TestQualityExclusion",
     "TestQualityPolicy",
     "TrackedGeneratedOutput",

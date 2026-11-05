@@ -68,6 +68,7 @@ QualityRuleName: TypeAlias = Literal[
     "run-artifacts",
     "ci-workflows",
     "source-test-coverage",
+    "test-layout",
     "test-quality",
     "input-contracts",
     "source-families",

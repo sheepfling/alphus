@@ -17,6 +17,7 @@ from alphus.gates.repository.dependency_locks import check_dependency_locks
 from alphus.gates.repository.documentation_config import check_documentation_config
 from alphus.gates.repository.package_boundaries import check_package_boundaries
 from alphus.gates.repository.repository_layout import check_repository_layout
+from alphus.gates.repository.test_layout import check_test_layout
 from alphus.gates.repository.version_sync import check_version_sync
 from alphus.policy.base import require_policy
 from alphus.support.inventory import tracked_files
@@ -57,6 +58,11 @@ REPOSITORY_RULE_RUNNERS: Mapping[QualityRuleName, RepositoryRunner] = MappingPro
             root,
             require_policy(config.checks.repository_layout, "repository_layout"),
             tracked_files(root),
+        ),
+        "test-layout": lambda root, files, config: check_test_layout(
+            root,
+            files,
+            require_policy(config.checks.test_layout, "test_layout"),
         ),
         "documentation-config": lambda root, _files, config: check_documentation_config(
             root,

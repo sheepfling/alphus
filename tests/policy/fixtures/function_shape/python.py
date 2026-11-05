@@ -1,6 +1,6 @@
 """Python native-rule fixtures; each boundary is exercised independently."""
 
-# ruff: noqa: ANN001, ANN002, ANN003, ANN201, ANN206, F841
+# ruff: noqa: F841
 
 
 def parameters_at_limit(first, second, *, keyword=3):

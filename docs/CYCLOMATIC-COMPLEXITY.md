@@ -111,7 +111,7 @@ contains paths only, not source text.
 
 ## Fixture and upgrade policy
 
-Golden fixtures in [`tests/fixtures/cyclomatic`](../tests/fixtures/cyclomatic/)
+Golden fixtures in [`tests/gates/source/fixtures/cyclomatic`](../tests/gates/source/fixtures/cyclomatic/)
 pin the expected native result shapes for Ruff 0.16.1, ESLint 10.13.0, and
 Lizard 1.24.2. The adjacent source examples exercise branches, loops, exception
 paths, nesting, boolean expressions, ternaries, switch/match, Python

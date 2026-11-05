@@ -134,7 +134,7 @@ methods. Read the selected
 backend's versioned documentation and treat its reported count as authoritative.
 The plan retains the backend rule ID and its count description; no
 cross-language equality is promised.
-Cross-language source examples live in `tests/fixtures/function_shape/`;
+Cross-language source examples live in `tests/policy/fixtures/function_shape/`;
 the Ruff integration test executes the positive, boundary, and negative
 Python cases with its native rules. Pylint, ESLint, and clang-tidy remain
 optional native tools and should be exercised by a consumer profile that

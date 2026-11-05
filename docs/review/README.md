@@ -61,13 +61,14 @@ public callable whose result contract is under review:
 semantic_result_paths = ["src/my_package/api.py"]
 semantic_result_apis = ["my_package.api.load_pair"]
 ```
+
 ## Third-party typing stubs
 
 Selector: `typing-stub-suggestions`. This opt-in informational rule reads
 explicit import/distribution mappings and PEP 621 dependency groups. It checks
 the installed runtime version against configured bounds and skips packages
 whose installed distribution includes `py.typed` or `.pyi` files. See the
-[typing stub suggestions guide](TYPING-STUB-SUGGESTIONS.md) for configuration,
+[typing stub suggestions guide](../TYPING-STUB-SUGGESTIONS.md) for configuration,
 examples, and the limits of its static import analysis.
 
 ## Numeric literals
@@ -231,6 +232,30 @@ pytest-style conventions. See the [coverage-contract guide](SOURCE-TEST-COVERAGE
 for the evidence format, status meanings, and a runnable example. This audit is
 separate from the test-content and oracle-independence checks below.
 
+## Test layout
+
+Selector: `test-layout`. Configure source package roots and their corresponding
+test roots. Conventional `test_*.py` and `*_test.py` modules should live below
+the test directory that mirrors their source package. A test for a source
+module at the package root can remain at the test root. Cross-module tests
+belong below a configured integration root, which defaults to `integration`.
+Global `conftest.py` files and package `__init__.py` files are support files and
+are not treated as test modules.
+
+The checker reports a missing or unsafe configured root, test modules placed
+outside the matching source package directory, root-level tests with no
+matching source module, and test directories that do not exist in the source
+package layout. It detects both direct module names and flattened nested names
+such as `test_dis_receiver.py`, which should live under `tests/dis/`.
+
+This is a layout check, not a source-to-test coverage claim. It does not infer
+which functions a test exercises. Use
+[source/test coverage contracts](SOURCE-TEST-COVERAGE.md) when a consumer needs
+explicit, revision-matched execution evidence.
+
+See [the test-layout guide](TEST-LAYOUT.md) and the
+[consumer policy example](../../examples/consumer/test-layout/quality-gates.toml).
+
 ## Test quality
 
 Selector: `test-quality`. IDs: `alphus/python/none/testing/large-prose-assertion`,
@@ -308,8 +333,8 @@ not claim that the test is useless.
 `oracle_production_modules` contains dotted Python module prefixes. The helper
 allowlist contains exact dotted callable names. Exclusions match one test
 function in one exact configured test file and require a one-line reason of at
-least 20 characters. A missing production-module scope is a configuration error when
-the check is enabled.
+least 20 characters. A missing production-module scope is a configuration
+error when the check is enabled.
 
 Unknown wrappers, dynamic imports, branch-dependent bindings, and unresolved
 receivers are skipped. Fixture builders outside the configured production
@@ -438,7 +463,7 @@ inventory. A finding requires a literal string-key read from the union
 parameter and reports the parameter and read locations. A direct assigned
 `model_validate` or `parse_obj` result used later in the function counts as
 local normalization evidence. See
-[`examples/consumer/domain-mapping-review.toml`](../examples/consumer/domain-mapping-review.toml).
+[`examples/consumer/domain-mapping-review.toml`](../../examples/consumer/domain-mapping-review.toml).
 
 For adjacent signatures that cannot be selected by a union annotation, a
 consumer may add exact `domain_mapping_contracts` selectors. Each selector
@@ -457,7 +482,8 @@ attributes. This narrow setting is useful when the consumer has independently
 declared that the input represents a particular domain model; it does not infer
 that contract from parameter names or access syntax. Generic mapping shapes
 with other key/value types, other broad annotations, dynamic keys, nested
-attributes, arbitrary helper calls, and unselected functions remain outside the scan.
+attributes, arbitrary helper calls, and unselected functions remain outside
+the scan.
 Use exact `domain_mapping_exceptions` selectors to document a reviewed adapter
 or compatibility boundary. Each exception requires the path, function,
 parameter, expected domain type, and a non-empty reason; it suppresses only
@@ -470,8 +496,9 @@ This is a review candidate, not proof that validation is absent or that the
 interface is wrong. The scanner does not resolve model-like names
 automatically or infer behavior through arbitrary aliases, casts, helpers, or
 branch-specific normalization. The single direct-helper slice is not recursive
-and does not establish whether helper-local validation is sufficient. Unsupported flow
-should be reviewed manually; the advisory stays opt-in and informational.
+and does not establish whether helper-local validation is sufficient.
+Unsupported flow should be reviewed manually; the advisory stays opt-in and
+informational.
 Direct attribute access on `object` can be intentional duck typing or a
 compatibility boundary, so a finding asks for review rather than asserting that
 the interface must become a concrete model. A configured contract does not
@@ -769,7 +796,7 @@ unknown rather than proof of a defect.
   review. Included requirement files retain declaration locations for
   conflicting exact pins. Cross-manifest authority is not inferred.
 - **Match pytest style:** Ruff `PT` rules in the scoped
-  [pytest style profile](PYTEST-STYLE.md). `unittest`, mocks, and migration
+  [pytest style profile](../PYTEST-STYLE.md). `unittest`, mocks, and migration
   suites remain valid.
 - **Centralize business states:** human review with typed `Literal`/`Enum`
   evidence. An opt-in `finite_state_contracts` entry can declare a selected
@@ -786,7 +813,7 @@ unknown rather than proof of a defect.
   are ignored; this does not infer static write locations or generator
   behavior.
 
-The runnable [pytest-style consumer profile](../examples/python/pytest-style.toml)
+The runnable [pytest-style consumer profile](../../examples/python/pytest-style.toml)
 shows native rule selection. The Pydantic example above shows the separate
 domain/model profile. These recipes demonstrate configuration, not sampled
 production precision or universal enforcement.
@@ -1173,7 +1200,8 @@ assessed. Read failures or an exhausted shared budget produce incomplete-scan
 warnings; missing evidence is not treated as zero references.
 
 JavaScript and TypeScript import evidence is also disabled by default and
-requires the optional `alphus[javascript]` extra. Its Tree-sitter parsers inspect selected `.js`,
+requires the optional `alphus[javascript]` extra. Its Tree-sitter parsers
+inspect selected `.js`,
 `.jsx`, `.mjs`, `.cjs`, `.ts`, and `.tsx` files and report only literal relative
 `import`, `export ... from`, dynamic `import()`, and `require()` references
 resolving uniquely to selected files (including extensionless exact-file
@@ -1181,9 +1209,9 @@ candidates). Package resolution, TypeScript path aliases, index lookup,
 shadowed `require`, conditional activation, and compiler configuration are not
 resolved. Parse failures and exhausted byte budgets produce incomplete-scan
 warnings; unresolved references are not treated as absent dependencies. Other
-language evidence requires its own explicitly enabled analysis. These edges are partial
-dependency evidence and do not prove
-shared responsibility, coupling strength, or a public contract. For parsed
+language evidence requires its own explicitly enabled analysis. These edges
+show partial dependency evidence; they do not prove shared responsibility,
+coupling strength, or a public contract. For parsed
 Python family members, the optional pass also reports bounded names from a
 single direct literal module-level `__all__` assignment. Dynamic, augmented,
 or reassigned declarations are reported as unresolved; package-level

@@ -95,6 +95,7 @@ from alphus.policy.sources import (
     SharedUtilitiesPolicy,
     SourceScanPolicy,
 )
+from alphus.policy.test_layout import TestLayoutPolicy
 
 
 class CheckPolicies(StrictModel):
@@ -135,6 +136,7 @@ class CheckPolicies(StrictModel):
     run_artifacts: RunArtifactPolicy | None = None
     ci_workflows: CiWorkflowPolicy | None = None
     source_test_coverage: SourceTestCoveragePolicy | None = None
+    test_layout: TestLayoutPolicy | None = None
     test_quality: TestQualityPolicy | None = None
     input_contracts: InputContractPolicy | None = None
     source_families: SourceFamilyPolicy | None = None

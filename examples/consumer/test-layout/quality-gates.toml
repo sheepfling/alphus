@@ -1,0 +1,24 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py", "tests/**/*.py"]
+exclude = []
+
+[checks.test_layout]
+
+[[checks.test_layout.pairs]]
+source_root = "src/example"
+test_root = "tests"
+integration_roots = ["integration"]
+
+[orchestration]
+default_profile = "check"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Python test layout"
+rule = "test-layout"
+
+[[orchestration.profiles]]
+name = "check"
+steps = ["Python test layout"]

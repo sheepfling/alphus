@@ -212,6 +212,12 @@ RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             ("repository",),
             requires_files=False,
         ),
+        "test-layout": RuleSpec(
+            "test_layout",
+            RuleOutputShape.FINDINGS,
+            "Checks that configured Python test roots mirror their source package directories.",
+            ("python", "testing"),
+        ),
         "test-quality": RuleSpec(
             "test_quality",
             RuleOutputShape.FINDINGS,

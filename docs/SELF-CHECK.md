@@ -8,7 +8,9 @@ The `check` profile validates the package against its own repository policy. It
 runs Alphus portable rules, shared-utility analysis, the comment-marker and
 review rules, TOML syntax, installed-package import smoke and compatibility-
 import removal checks, native Ruff lint and format checks, strict Pyright, and
-the package tests. The opt-in `markdown-shell-review` profile stays separate
+the package tests. The `test-layout` rule checks that tests under `tests/`
+follow the `src/alphus/` package layout, with cross-module tests under
+`tests/integration/`. The opt-in `markdown-shell-review` profile stays separate
 from `check` so consumer defaults do not change. The repository CI runner
 invokes it as a separate stage after the self-check, including after installing
 the built wheel. To run it explicitly when reviewing Markdown fences:
@@ -16,6 +18,7 @@ the built wheel. To run it explicitly when reviewing Markdown fences:
 ```sh
 alphus --run --profile markdown-shell-review
 ```
+
 The repository's GitHub Actions quality workflow runs the `check` profile on
 Python 3.11 through 3.15 for pull requests and main-branch pushes. It checks
 editable installation, builds and installs a wheel, then invokes the installed
@@ -26,8 +29,8 @@ An additional Python 3.11 job runs the profile with every direct runtime and
 so the workflow contains no second list of dependency versions. The runner
 labels every stage and prints its command, exit code, duration, and captured
 output. Use `python scripts/ci.py --root . --output json` for one compact JSON
-event per stage; a failed stage includes the final 8,192 characters of stdout and stderr
-with truncation flags.
+event per stage. A failed stage includes the final 8,192 characters of stdout
+and stderr with truncation flags.
 Pass `--history-dir PATH --consumer-id ID` to this runner to archive its final
 self-profile result. The runner passes those options only to the self-profile
 command, so the package tests run without a global history setting.
@@ -82,7 +85,7 @@ and file-backed module loading remains rejected.
 `docs/**/*.md`, and all repository TOML and JSON files. The profile retains
 the eight original portable rules, the target-audit isolation rule, the opt-in
 Markdown shell-fence check, and Python lint/package tests, then adds TOML
-syntax, Python formatting, strict Pyright, and six review checks.
+syntax, Python formatting, strict Pyright, and seven review checks.
 The separate `json` profile is available when JSON documents are
 added to this repository. The global
 `[files].exclude` is empty.
@@ -126,7 +129,6 @@ The configured source exclusions are:
 - **Source families, the five `src/alphus/execution/profile_*.py` modules:**
   the profile pipeline is intentionally split by responsibility; the lexical
   sibling-name heuristic does not assess that architecture.
-
 - **Shared utilities, `tests/**`:** test helpers intentionally define local hash
   routines and run Git commands as fixtures; the canonical utility rule covers
   application code.
@@ -136,8 +138,9 @@ The configured source exclusions are:
 
 Path handling has `exclude = []`; its `inspection_exclude = ["tests/**"]`
 suppresses only the string-inspection heuristic. Structural implicit-root
-checks still cover tests. `tests/gates/source/test_path_discovery_engine.py` verifies that a
-test file's `Path(__file__).resolve().parents[1]` finding remains while its
+checks still cover tests.
+`tests/gates/source/test_path_discovery_engine.py` verifies that a test file's
+`Path(__file__).resolve().parents[1]` finding remains while its
 `startswith("/")` inspection finding is suppressed.
 
 All other configured rule `exclude` lists are empty: file size, comment
@@ -199,8 +202,8 @@ diagnostics; Alphus does not duplicate or reinterpret them.
 The C++ engine fixtures import the installed `alphus.gates.cpp` modules
 from `tests/gates/cpp/test_cpp_quality_engine.py`. The self-profile also runs
 the shared-utilities rule, which flags duplicate helpers, extra file hash
-implementations, and direct Git subprocess calls outside `alphus.support.git`. The path rule flags
-raw `os.name` checks so code uses the shared platform probe.
+implementations, and direct Git subprocess calls outside `alphus.support.git`.
+The path rule flags raw `os.name` checks so code uses the shared platform probe.
 
 Duplicate-helper matching compares exact AST bodies across selected non-test
 files after removing a leading docstring. It excludes the conventional

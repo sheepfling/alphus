@@ -143,6 +143,13 @@ exclude = []
 test_paths = ["tests/**"]
 ephemeral_document_patterns = ["docs/**"]
 
+[checks.test_layout]
+
+[[checks.test_layout.pairs]]
+source_root = "src/alphus"
+test_root = "tests"
+integration_roots = ["integration"]
+
 [checks.input_contracts]
 extensions = [".py"]
 exclude = []
@@ -518,6 +525,11 @@ rule = "test-quality"
 
 [[orchestration.steps]]
 kind = "rule"
+name = "Test layout review"
+rule = "test-layout"
+
+[[orchestration.steps]]
+kind = "rule"
 name = "Input contract review"
 rule = "input-contracts"
 
@@ -557,7 +569,8 @@ rollout = "provisional"
 [[orchestration.profiles]]
 name = "review"
 steps = [
-  "Numeric review", "SciPy constants review", "Test review", "Input contract review",
+  "Numeric review", "SciPy constants review", "Test review", "Test layout review",
+  "Input contract review",
   "Typing stub suggestions",
   "Source family review", "Pydantic practice review", "FastAPI practice review",
   "SQLAlchemy practices review", "Durable benchmark prose review",
