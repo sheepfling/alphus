@@ -1,0 +1,8 @@
+schema_version = 1
+
+[files]
+include = ["docs/**/*.md"]
+exclude = []
+
+[checks.benchmark_docs]
+include = ["docs/**/*.md"]

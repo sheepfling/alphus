@@ -1,0 +1,164 @@
+schema_version = 1
+
+[[scenario]]
+name = "catalog"
+fixture = "catalog"
+behavior = ["built-in-selector-catalog", "catalog-schema"]
+expected_exit = 0
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--catalog", "--json"]
+
+[[scenario]]
+name = "strict-config-rejection"
+fixture = "invalid-config"
+behavior = ["strict-config-validation", "invalid-config-exit", "diagnostic-output"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "plan-json"
+arguments = ["--config", "quality-gates.toml", "--plan", "--json"]
+parse_json = false
+
+[[scenario]]
+name = "file-size-direct"
+expected_findings = [
+  { rule_id = "alphus/any/none/maintainability/code-file-too-large", path = "src/example.py" },
+]
+fixture = "file-size"
+selectors = ["file-size"]
+behavior = ["direct-selector", "exact-file-policy", "finding-id", "json-result"]
+expected_exit = 1
+minimum_findings = 1
+required_output = ["src/example.py"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "file-size", "--json"]
+
+[[scenario]]
+name = "file-size-plain"
+fixture = "file-size"
+selectors = ["file-size"]
+behavior = ["direct-selector", "plain-output", "finding-id"]
+expected_exit = 1
+required_output = ["code-file-too-large", "src/example.py", "File size: 1 violation(s)"]
+
+[[scenario.variant]]
+name = "plain"
+arguments = ["--config", "quality-gates.toml", "--rule", "file-size", "--output", "plain"]
+
+[[scenario]]
+name = "benchmark-docs-direct"
+expected_findings = [
+  { rule_id = "alphus/markdown/none/maintainability/brittle-benchmark-prose", path = "docs/quatops-style.md", line = 1 },
+]
+fixture = "benchmark-docs"
+selectors = ["benchmark-docs"]
+behavior = ["direct-selector", "deterministic-prose-heuristic", "finding-id", "json-result"]
+expected_exit = 0
+minimum_findings = 1
+required_output = ["docs/quatops-style.md"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "benchmark-docs", "--json"]
+
+[[scenario]]
+name = "numeric-literals-direct"
+expected_findings = [
+  { rule_id = "alphus/python/none/style/inline-constant", path = "src/example.py", line = 2 },
+]
+fixture = "numeric-literals"
+selectors = ["numeric-literals"]
+behavior = ["direct-selector", "deterministic-numeric-heuristic", "finding-id", "json-result"]
+expected_exit = 0
+minimum_findings = 1
+required_output = ["src/example.py"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "numeric-literals", "--json"]
+
+[[scenario]]
+name = "input-contracts-direct"
+expected_findings = [
+  { rule_id = "alphus/python/none/correctness/argument-mutation", path = "src/example.py", line = 2 },
+]
+fixture = "input-contracts"
+selectors = ["input-contracts"]
+behavior = ["direct-selector", "python-semantic-heuristic", "finding-id", "json-result"]
+expected_exit = 0
+minimum_findings = 1
+required_output = ["src/example.py"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "input-contracts", "--json"]
+
+[[scenario]]
+name = "profile-plan-selection"
+fixture = "profile"
+selectors = ["file-size", "line-length"]
+behavior = ["resolved-profile-selection", "selected-selector-list"]
+expected_exit = 0
+expected_step_names = ["source-size", "source-lines"]
+expected_step_rules = ["file-size", "line-length"]
+
+[[scenario.variant]]
+name = "plan"
+arguments = ["--config", "quality-gates.toml", "--profile", "check", "--plan", "--json"]
+
+[[scenario]]
+name = "profile-serial-parallel"
+expected_findings = [
+  { rule_id = "alphus/any/none/maintainability/code-file-too-large", path = "src/example.py" },
+  { rule_id = "alphus/any/none/style/line-too-long", path = "src/example.py", line = 3 },
+  { rule_id = "alphus/any/none/style/line-too-long", path = "src/example.py", line = 4 },
+]
+fixture = "profile"
+selectors = ["file-size", "line-length"]
+behavior = ["explicit-profile-selection", "severity-priority", "ordered-results", "serial-parallel"]
+expected_exit = 0
+minimum_findings = 2
+expected_step_names = ["source-size", "source-lines"]
+require_passed_steps = true
+required_output = ["src/example.py", "warning", "high", "normal"]
+
+[[scenario.variant]]
+name = "serial"
+arguments = ["--config", "quality-gates.toml", "--profile", "check", "--run", "--json", "--jobs", "1"]
+
+[[scenario.variant]]
+name = "parallel"
+arguments = ["--config", "quality-gates.toml", "--profile", "check", "--run", "--json", "--jobs", "2"]
+compare_within_build = true
+
+[[deferred]]
+capability = "composite-cross-file-package-boundaries"
+status = "not-exercised"
+reason = "Needs a dedicated multi-distribution fixture and explicit checks for the four effective policy inputs."
+selector = "package-boundaries"
+
+[[deferred]]
+capability = "native-polyglot-cyclomatic"
+status = "not-exercised"
+reason = "Python, JavaScript, and C++ backends need matched native-tool fixtures, versions, and missing/unsupported states."
+selector = "cyclomatic-complexity"
+
+[[deferred]]
+capability = "plugin-api-v1"
+status = "not-exercised"
+reason = "The installed-wheel plugin conformance and explicit-enablement boundary needs its own fixture package."
+
+[[deferred]]
+capability = "unselected-backend-laziness"
+status = "not-exercised"
+reason = "Requires an import-trace contract for optional providers that does not treat current eager imports as acceptable."
+
+[[deferred]]
+capability = "missing-unsupported-partial-error-states"
+status = "not-exercised"
+reason = "The first harness run covers strict config errors and selected rule findings; native/provider status cases remain future scenarios."

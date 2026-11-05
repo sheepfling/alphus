@@ -1,0 +1,13 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py"]
+exclude = []
+
+[checks.file_size]
+code_extensions = [".py"]
+code_limit = 3
+hard_limit = 20
+initializer_name = "__init__.py"
+initializer_limit = 5
+exclude = []
