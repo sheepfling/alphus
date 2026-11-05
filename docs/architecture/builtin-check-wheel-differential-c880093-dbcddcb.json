@@ -1,0 +1,1517 @@
+{
+  "build_python": "3.11.16 (main, Aug 12 2026, 23:03:19) [Clang 21.0.0 (clang-2100.1.1.101)]",
+  "candidate": {
+    "commit": "dbcddcb3738e4f54614de998f4753203364f55fe",
+    "installation": {
+      "distribution_owns_module": true,
+      "distribution_root": "$WHEEL_RUN_ROOT/venv-candidate/lib/python3.11/site-packages",
+      "module": "$WHEEL_RUN_ROOT/venv-candidate/lib/python3.11/site-packages/alphus/__init__.py",
+      "module_sha256": "60c1135f4b05ae5a0a98686eca67196a2a13688722a6ec0b7bbb667f0db0973d",
+      "packages": [
+        [
+          "annotated-doc",
+          "0.0.5"
+        ],
+        [
+          "annotated-types",
+          "0.8.0"
+        ],
+        [
+          "anyio",
+          "4.15.1"
+        ],
+        [
+          "attrs",
+          "26.1.0"
+        ],
+        [
+          "build",
+          "1.6.1"
+        ],
+        [
+          "cffi",
+          "2.1.1"
+        ],
+        [
+          "click",
+          "8.5.0"
+        ],
+        [
+          "contourpy",
+          "1.3.3"
+        ],
+        [
+          "cryptography",
+          "50.0.1"
+        ],
+        [
+          "cycler",
+          "0.12.1"
+        ],
+        [
+          "fonttools",
+          "4.66.0"
+        ],
+        [
+          "h11",
+          "0.16.0"
+        ],
+        [
+          "httpcore2",
+          "2.13.1"
+        ],
+        [
+          "httpx2",
+          "2.13.1"
+        ],
+        [
+          "idna",
+          "3.20"
+        ],
+        [
+          "iniconfig",
+          "2.3.1"
+        ],
+        [
+          "jsonschema",
+          "4.26.0"
+        ],
+        [
+          "jsonschema-specifications",
+          "2025.9.1"
+        ],
+        [
+          "kicad-team-tooling",
+          "0.5.1rc62.dev0+gba6590cce.d20261020"
+        ],
+        [
+          "kiwisolver",
+          "1.5.1"
+        ],
+        [
+          "markdown-it-py",
+          "4.2.0"
+        ],
+        [
+          "matplotlib",
+          "3.11.2"
+        ],
+        [
+          "mcp",
+          "2.2.0"
+        ],
+        [
+          "mcp-types",
+          "2.2.0"
+        ],
+        [
+          "mdrepo",
+          "0.0.1.post0"
+        ],
+        [
+          "mdurl",
+          "0.1.2"
+        ],
+        [
+          "nodeenv",
+          "1.11.0"
+        ],
+        [
+          "numpy",
+          "2.4.6"
+        ],
+        [
+          "opentelemetry-api",
+          "1.45.0"
+        ],
+        [
+          "packaging",
+          "26.3"
+        ],
+        [
+          "pathspec",
+          "1.1.1"
+        ],
+        [
+          "pillow",
+          "12.3.0"
+        ],
+        [
+          "pip",
+          "26.2.1"
+        ],
+        [
+          "pip",
+          "26.2.1"
+        ],
+        [
+          "pluggy",
+          "1.6.0"
+        ],
+        [
+          "pycparser",
+          "3.0"
+        ],
+        [
+          "pydantic",
+          "2.13.5"
+        ],
+        [
+          "pydantic_core",
+          "2.46.5"
+        ],
+        [
+          "pygments",
+          "2.21.0"
+        ],
+        [
+          "pyjwt",
+          "2.15.0"
+        ],
+        [
+          "pyparsing",
+          "3.3.3"
+        ],
+        [
+          "pyproject_hooks",
+          "1.3.3"
+        ],
+        [
+          "pyright",
+          "1.1.414"
+        ],
+        [
+          "pytest",
+          "9.1.1"
+        ],
+        [
+          "python-dateutil",
+          "2.9.0.post0"
+        ],
+        [
+          "python-multipart",
+          "0.0.32"
+        ],
+        [
+          "pyyaml",
+          "6.0.3"
+        ],
+        [
+          "referencing",
+          "0.37.0"
+        ],
+        [
+          "rich",
+          "15.0.0"
+        ],
+        [
+          "rpds-py",
+          "2026.6.3"
+        ],
+        [
+          "ruff",
+          "0.16.1"
+        ],
+        [
+          "rumdl",
+          "0.2.77"
+        ],
+        [
+          "setuptools",
+          "84.0.0"
+        ],
+        [
+          "setuptools",
+          "84.0.0"
+        ],
+        [
+          "setuptools-scm",
+          "10.3.4"
+        ],
+        [
+          "shellingham",
+          "1.5.4"
+        ],
+        [
+          "six",
+          "1.17.0"
+        ],
+        [
+          "snakemd",
+          "2.4.1"
+        ],
+        [
+          "snakemd-stubs",
+          "2.4.1.0"
+        ],
+        [
+          "sqlalchemy",
+          "2.1.6"
+        ],
+        [
+          "sse-starlette",
+          "3.4.11"
+        ],
+        [
+          "starlette",
+          "1.7.0"
+        ],
+        [
+          "truststore",
+          "0.10.4"
+        ],
+        [
+          "typer",
+          "0.27.3"
+        ],
+        [
+          "types-pyyaml",
+          "6.0.12.20261103"
+        ],
+        [
+          "typing-inspection",
+          "0.4.4"
+        ],
+        [
+          "typing_extensions",
+          "4.16.0"
+        ],
+        [
+          "uvicorn",
+          "0.54.0"
+        ],
+        [
+          "vcs-versioning",
+          "2.5.0"
+        ],
+        [
+          "wheel",
+          "0.48.0"
+        ]
+      ],
+      "prefix": "$WHEEL_RUN_ROOT/venv-candidate",
+      "version": "0.0.0"
+    },
+    "selectors": [
+      "array-representation-churn",
+      "benchmark-docs",
+      "cholesky-recurrence",
+      "ci-workflows",
+      "cli",
+      "comment-markers",
+      "cyclomatic-complexity",
+      "dependency-locks",
+      "document-style",
+      "documentation-config",
+      "dynamic-markdown",
+      "ecef-enu-transform",
+      "ecef-ned-matrix-transform",
+      "embedded-semantic-overrides",
+      "fastapi-practices",
+      "file-size",
+      "git-attributes",
+      "git-history",
+      "git-ignores",
+      "heuristic-total-consumption",
+      "input-contracts",
+      "json-structure",
+      "line-length",
+      "manual-elimination",
+      "manual-matrix-kernels",
+      "manual-quaternion-conjugation",
+      "manual-quaternion-inversion",
+      "manual-quaternion-matrix-conversion",
+      "manual-quaternion-normalization",
+      "manual-quaternion-products",
+      "manual-quaternion-vector-rotation",
+      "markdown-shell-fences",
+      "module-roles",
+      "ned-basis-vectors",
+      "numeric-literals",
+      "output-escaping",
+      "package-boundaries",
+      "parallel-normalization",
+      "patch-cascade",
+      "path-discovery",
+      "positional-interfaces",
+      "positional-semantic-overrides",
+      "prose-as-control",
+      "provenance-as-ownership",
+      "pydantic-practices",
+      "python-style",
+      "rendered-value-reparsed",
+      "repeated-numeric-limits",
+      "repository-layout",
+      "run-artifacts",
+      "runtime-types",
+      "scipy-constants",
+      "script-policy",
+      "semantic-work-in-presentation",
+      "shared-utilities",
+      "source-families",
+      "source-test-coverage",
+      "sqlalchemy-practices",
+      "suppression-reasons",
+      "test-quality",
+      "typing-stub-suggestions",
+      "unexplained-empty-results"
+    ],
+    "wheel_module_record": {
+      "module_path": "$WHEEL_RUN_ROOT/venv-candidate/lib/python3.11/site-packages/alphus/__init__.py",
+      "record_hash": "sha256=YMETX0sFrloKmGhuymcZaioTaIcipuwLe7tmfw2wlz0"
+    },
+    "wheel_sha256": "2bce0e251e8bf3df348df5a7bd98f3d223a58d75ac02449fe06fe50c272b276a"
+  },
+  "coverage": {
+    "behaviorally_exercised_selectors": [
+      "benchmark-docs",
+      "file-size",
+      "input-contracts",
+      "line-length",
+      "numeric-literals"
+    ],
+    "catalog_equal": true,
+    "catalog_selector_count": 62,
+    "deferred_capabilities": [
+      {
+        "capability": "composite-cross-file-package-boundaries",
+        "reason": "Needs a dedicated multi-distribution fixture and explicit checks for the four effective policy inputs.",
+        "selector": "package-boundaries",
+        "status": "not-exercised"
+      },
+      {
+        "capability": "native-polyglot-cyclomatic",
+        "reason": "Python, JavaScript, and C++ backends need matched native-tool fixtures, versions, and missing/unsupported states.",
+        "selector": "cyclomatic-complexity",
+        "status": "not-exercised"
+      },
+      {
+        "capability": "plugin-api-v1",
+        "reason": "The installed-wheel plugin conformance and explicit-enablement boundary needs its own fixture package.",
+        "status": "not-exercised"
+      },
+      {
+        "capability": "unselected-backend-laziness",
+        "reason": "Requires an import-trace contract for optional providers that does not treat current eager imports as acceptable.",
+        "status": "not-exercised"
+      },
+      {
+        "capability": "missing-unsupported-partial-error-states",
+        "reason": "The first harness run covers strict config errors and selected rule findings; native/provider status cases remain future scenarios.",
+        "status": "not-exercised"
+      }
+    ],
+    "selectors_not_behaviorally_exercised": [
+      "array-representation-churn",
+      "cholesky-recurrence",
+      "ci-workflows",
+      "cli",
+      "comment-markers",
+      "cyclomatic-complexity",
+      "dependency-locks",
+      "document-style",
+      "documentation-config",
+      "dynamic-markdown",
+      "ecef-enu-transform",
+      "ecef-ned-matrix-transform",
+      "embedded-semantic-overrides",
+      "fastapi-practices",
+      "git-attributes",
+      "git-history",
+      "git-ignores",
+      "heuristic-total-consumption",
+      "json-structure",
+      "manual-elimination",
+      "manual-matrix-kernels",
+      "manual-quaternion-conjugation",
+      "manual-quaternion-inversion",
+      "manual-quaternion-matrix-conversion",
+      "manual-quaternion-normalization",
+      "manual-quaternion-products",
+      "manual-quaternion-vector-rotation",
+      "markdown-shell-fences",
+      "module-roles",
+      "ned-basis-vectors",
+      "output-escaping",
+      "package-boundaries",
+      "parallel-normalization",
+      "patch-cascade",
+      "path-discovery",
+      "positional-interfaces",
+      "positional-semantic-overrides",
+      "prose-as-control",
+      "provenance-as-ownership",
+      "pydantic-practices",
+      "python-style",
+      "rendered-value-reparsed",
+      "repeated-numeric-limits",
+      "repository-layout",
+      "run-artifacts",
+      "runtime-types",
+      "scipy-constants",
+      "script-policy",
+      "semantic-work-in-presentation",
+      "shared-utilities",
+      "source-families",
+      "source-test-coverage",
+      "sqlalchemy-practices",
+      "suppression-reasons",
+      "test-quality",
+      "typing-stub-suggestions",
+      "unexplained-empty-results"
+    ]
+  },
+  "differences": [],
+  "environment_model": "separate Alphus venvs with identical shared system-site packages; not hermetic",
+  "equivalent_for_manifested_scenarios": true,
+  "fixture_mutation_check": "sha256 tree before/after every process; unchanged",
+  "harness_sha256": "119fc9a85eacca039b216d6a45b67f48481569412fc9a82a200e26c6d0715450",
+  "manifest_sha256": "83fcebd04884c6f45f9349679bf092bee6630386277e8df660042bfbe3127821",
+  "reference": {
+    "commit": "c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e",
+    "installation": {
+      "distribution_owns_module": true,
+      "distribution_root": "$WHEEL_RUN_ROOT/venv-baseline/lib/python3.11/site-packages",
+      "module": "$WHEEL_RUN_ROOT/venv-baseline/lib/python3.11/site-packages/alphus/__init__.py",
+      "module_sha256": "60c1135f4b05ae5a0a98686eca67196a2a13688722a6ec0b7bbb667f0db0973d",
+      "packages": [
+        [
+          "annotated-doc",
+          "0.0.5"
+        ],
+        [
+          "annotated-types",
+          "0.8.0"
+        ],
+        [
+          "anyio",
+          "4.15.1"
+        ],
+        [
+          "attrs",
+          "26.1.0"
+        ],
+        [
+          "build",
+          "1.6.1"
+        ],
+        [
+          "cffi",
+          "2.1.1"
+        ],
+        [
+          "click",
+          "8.5.0"
+        ],
+        [
+          "contourpy",
+          "1.3.3"
+        ],
+        [
+          "cryptography",
+          "50.0.1"
+        ],
+        [
+          "cycler",
+          "0.12.1"
+        ],
+        [
+          "fonttools",
+          "4.66.0"
+        ],
+        [
+          "h11",
+          "0.16.0"
+        ],
+        [
+          "httpcore2",
+          "2.13.1"
+        ],
+        [
+          "httpx2",
+          "2.13.1"
+        ],
+        [
+          "idna",
+          "3.20"
+        ],
+        [
+          "iniconfig",
+          "2.3.1"
+        ],
+        [
+          "jsonschema",
+          "4.26.0"
+        ],
+        [
+          "jsonschema-specifications",
+          "2025.9.1"
+        ],
+        [
+          "kicad-team-tooling",
+          "0.5.1rc62.dev0+gba6590cce.d20261020"
+        ],
+        [
+          "kiwisolver",
+          "1.5.1"
+        ],
+        [
+          "markdown-it-py",
+          "4.2.0"
+        ],
+        [
+          "matplotlib",
+          "3.11.2"
+        ],
+        [
+          "mcp",
+          "2.2.0"
+        ],
+        [
+          "mcp-types",
+          "2.2.0"
+        ],
+        [
+          "mdrepo",
+          "0.0.1.post0"
+        ],
+        [
+          "mdurl",
+          "0.1.2"
+        ],
+        [
+          "nodeenv",
+          "1.11.0"
+        ],
+        [
+          "numpy",
+          "2.4.6"
+        ],
+        [
+          "opentelemetry-api",
+          "1.45.0"
+        ],
+        [
+          "packaging",
+          "26.3"
+        ],
+        [
+          "pathspec",
+          "1.1.1"
+        ],
+        [
+          "pillow",
+          "12.3.0"
+        ],
+        [
+          "pip",
+          "26.2.1"
+        ],
+        [
+          "pip",
+          "26.2.1"
+        ],
+        [
+          "pluggy",
+          "1.6.0"
+        ],
+        [
+          "pycparser",
+          "3.0"
+        ],
+        [
+          "pydantic",
+          "2.13.5"
+        ],
+        [
+          "pydantic_core",
+          "2.46.5"
+        ],
+        [
+          "pygments",
+          "2.21.0"
+        ],
+        [
+          "pyjwt",
+          "2.15.0"
+        ],
+        [
+          "pyparsing",
+          "3.3.3"
+        ],
+        [
+          "pyproject_hooks",
+          "1.3.3"
+        ],
+        [
+          "pyright",
+          "1.1.414"
+        ],
+        [
+          "pytest",
+          "9.1.1"
+        ],
+        [
+          "python-dateutil",
+          "2.9.0.post0"
+        ],
+        [
+          "python-multipart",
+          "0.0.32"
+        ],
+        [
+          "pyyaml",
+          "6.0.3"
+        ],
+        [
+          "referencing",
+          "0.37.0"
+        ],
+        [
+          "rich",
+          "15.0.0"
+        ],
+        [
+          "rpds-py",
+          "2026.6.3"
+        ],
+        [
+          "ruff",
+          "0.16.1"
+        ],
+        [
+          "rumdl",
+          "0.2.77"
+        ],
+        [
+          "setuptools",
+          "84.0.0"
+        ],
+        [
+          "setuptools",
+          "84.0.0"
+        ],
+        [
+          "setuptools-scm",
+          "10.3.4"
+        ],
+        [
+          "shellingham",
+          "1.5.4"
+        ],
+        [
+          "six",
+          "1.17.0"
+        ],
+        [
+          "snakemd",
+          "2.4.1"
+        ],
+        [
+          "snakemd-stubs",
+          "2.4.1.0"
+        ],
+        [
+          "sqlalchemy",
+          "2.1.6"
+        ],
+        [
+          "sse-starlette",
+          "3.4.11"
+        ],
+        [
+          "starlette",
+          "1.7.0"
+        ],
+        [
+          "truststore",
+          "0.10.4"
+        ],
+        [
+          "typer",
+          "0.27.3"
+        ],
+        [
+          "types-pyyaml",
+          "6.0.12.20261103"
+        ],
+        [
+          "typing-inspection",
+          "0.4.4"
+        ],
+        [
+          "typing_extensions",
+          "4.16.0"
+        ],
+        [
+          "uvicorn",
+          "0.54.0"
+        ],
+        [
+          "vcs-versioning",
+          "2.5.0"
+        ],
+        [
+          "wheel",
+          "0.48.0"
+        ]
+      ],
+      "prefix": "$WHEEL_RUN_ROOT/venv-baseline",
+      "version": "0.0.0"
+    },
+    "selectors": [
+      "array-representation-churn",
+      "benchmark-docs",
+      "cholesky-recurrence",
+      "ci-workflows",
+      "cli",
+      "comment-markers",
+      "cyclomatic-complexity",
+      "dependency-locks",
+      "document-style",
+      "documentation-config",
+      "dynamic-markdown",
+      "ecef-enu-transform",
+      "ecef-ned-matrix-transform",
+      "embedded-semantic-overrides",
+      "fastapi-practices",
+      "file-size",
+      "git-attributes",
+      "git-history",
+      "git-ignores",
+      "heuristic-total-consumption",
+      "input-contracts",
+      "json-structure",
+      "line-length",
+      "manual-elimination",
+      "manual-matrix-kernels",
+      "manual-quaternion-conjugation",
+      "manual-quaternion-inversion",
+      "manual-quaternion-matrix-conversion",
+      "manual-quaternion-normalization",
+      "manual-quaternion-products",
+      "manual-quaternion-vector-rotation",
+      "markdown-shell-fences",
+      "module-roles",
+      "ned-basis-vectors",
+      "numeric-literals",
+      "output-escaping",
+      "package-boundaries",
+      "parallel-normalization",
+      "patch-cascade",
+      "path-discovery",
+      "positional-interfaces",
+      "positional-semantic-overrides",
+      "prose-as-control",
+      "provenance-as-ownership",
+      "pydantic-practices",
+      "python-style",
+      "rendered-value-reparsed",
+      "repeated-numeric-limits",
+      "repository-layout",
+      "run-artifacts",
+      "runtime-types",
+      "scipy-constants",
+      "script-policy",
+      "semantic-work-in-presentation",
+      "shared-utilities",
+      "source-families",
+      "source-test-coverage",
+      "sqlalchemy-practices",
+      "suppression-reasons",
+      "test-quality",
+      "typing-stub-suggestions",
+      "unexplained-empty-results"
+    ],
+    "wheel_module_record": {
+      "module_path": "$WHEEL_RUN_ROOT/venv-baseline/lib/python3.11/site-packages/alphus/__init__.py",
+      "record_hash": "sha256=YMETX0sFrloKmGhuymcZaioTaIcipuwLe7tmfw2wlz0"
+    },
+    "wheel_sha256": "c22a05ff75b4b2c99172f9d2591c2c0172dd51e87579cb10b924f4cbe42b4d42"
+  },
+  "scenario_results": {
+    "candidate": {
+      "benchmark-docs-direct": {
+        "behavior": [
+          "direct-selector",
+          "deterministic-prose-heuristic",
+          "finding-id",
+          "json-result"
+        ],
+        "build": "candidate",
+        "fixture_git_commit": "a3c67946b54bc51b3352c49de02f21929a43bfed",
+        "fixture_sha256": "ed24db773f476808d7ef3b62e82de42c1772162587297146d224780a2d193736",
+        "selectors": [
+          "benchmark-docs"
+        ],
+        "variants": {
+          "json": {
+            "exit_code": 0,
+            "stderr": "",
+            "stdout": "[{\"line\":1,\"message\":\"Possible benchmark-heavy prose in section 'Synthetic QuatOps-style example (invented values)': 3 timing, throughput, or comparison expressions. Review candidate only; freshness, correctness, and suitability were not assessed. Consider keeping a concise workload and reproducible command here, with detailed measurements in a dated, maintained report when useful.\",\"path\":\"docs/quatops-style.md\",\"rule_id\":\"alphus/markdown/none/maintainability/brittle-benchmark-prose\",\"severity\":\"warning\"}]"
+          }
+        },
+        "within_build_equal": true
+      },
+      "catalog": {
+        "behavior": [
+          "built-in-selector-catalog",
+          "catalog-schema"
+        ],
+        "build": "candidate",
+        "fixture_git_commit": "aba6ff5ac214cce328f5135a8be72434fe38991b",
+        "fixture_sha256": "ff11c9adfdcb941a5a73c02313225f110748f630178ec536a3e3dc760e3163b5",
+        "selectors": [],
+        "variants": {
+          "json": {
+            "exit_code": 0,
+            "stderr": "",
+            "stdout": "{\"activation\":\"Built-ins need checks.<policy_field>; plugins must be listed under plugins.enabled and have a rule step in a consumer-owned profile.\",\"domain_tags_are_advisory\":true,\"plugins\":[],\"rules\":[{\"applies_to\":[\"python\",\"numerical\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.array_representation_churn\",\"requires_files\":true,\"selector\":\"array-representation-churn\",\"summary\":\"Reviews configured array representation conversion patterns.\"},{\"applies_to\":[\"markdown\",\"benchmarking\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.benchmark_docs\",\"requires_files\":true,\"selector\":\"benchmark-docs\",\"summary\":\"Reviews benchmark documentation for required result context.\"},{\"applies_to\":[\"python\",\"numerical\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.cholesky_recurrence\",\"requires_files\":true,\"selector\":\"cholesky-recurrence\",\"summary\":\"Reviews configured hand-written Cholesky recurrence patterns.\"},{\"applies_to\":[\"yaml\",\"ci\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.ci_workflows\",\"requires_files\":false,\"selector\":\"ci-workflows\",\"summary\":\"Reviews selected CI workflow commands for repeated job work.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"messages\",\"plugin\":null,\"policy_section\":\"checks.cli\",\"requires_files\":true,\"selector\":\"cli\",\"summary\":\"Reviews configured Python command-line interface contracts.\"},{\"applies_to\":[\"python\",\"javascript\",\"c\",\"cpp\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.comment_markers\",\"requires_files\":true,\"selector\":\"comment-markers\",\"summary\":\"Finds configured TODO-style markers in supported source comments.\"},{\"applies_to\":[\"python\",\"javascript\",\"cpp\"],\"domains\":[],\"output_shape\":\"cyclomatic-report\",\"plugin\":null,\"policy_section\":\"checks.cyclomatic_complexity\",\"requires_files\":false,\"selector\":\"cyclomatic-complexity\",\"summary\":\"Measures bounded cyclomatic complexity for supported source backends.\"},{\"applies_to\":[\"python\",\"javascript\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.dependency_locks\",\"requires_files\":true,\"selector\":\"dependency-locks\",\"summary\":\"Checks consistency and pairing of configured dependency lockfiles.\"},{\"applies_to\":[\"markdown\",\"latex\",\"html\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.document_style\",\"requires_files\":true,\"selector\":\"document-style\",\"summary\":\"Reviews heading styles in selected Markdown, LaTeX, and source HTML documents.\"},{\"applies_to\":[\"markdown\",\"repository\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.documentation_config\",\"requires_files\":false,\"selector\":\"documentation-config\",\"summary\":\"Checks documentation links and repository-specific documentation configuration.\"},{\"applies_to\":[\"python\",\"markdown\"],\"domains\":[\"documentation-generation\",\"markdown-publishing\"],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.dynamic_markdown\",\"requires_files\":true,\"selector\":\"dynamic-markdown\",\"summary\":\"Reviews Python string assembly that places dynamic values into Markdown structure.\"},{\"applies_to\":[\"python\",\"geospatial\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.ecef_enu_transform\",\"requires_files\":true,\"selector\":\"ecef-enu-transform\",\"summary\":\"Reviews configured ECEF-to-ENU transform patterns.\"},{\"applies_to\":[\"python\",\"geospatial\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.ecef_ned_matrix_transform\",\"requires_files\":true,\"selector\":\"ecef-ned-matrix-transform\",\"summary\":\"Reviews configured ECEF-to-NED matrix patterns.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.embedded_semantic_overrides\",\"requires_files\":true,\"selector\":\"embedded-semantic-overrides\",\"summary\":\"Reviews semantic overrides embedded in source text.\"},{\"applies_to\":[\"python\",\"fastapi\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.fastapi_practices\",\"requires_files\":true,\"selector\":\"fastapi-practices\",\"summary\":\"Reviews configured FastAPI route and dependency practices.\"},{\"applies_to\":[\"configurable-source\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.file_size\",\"requires_files\":true,\"selector\":\"file-size\",\"summary\":\"Reports source files that exceed configured physical-line limits.\"},{\"applies_to\":[\"git\",\"repository\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.git\",\"requires_files\":false,\"selector\":\"git-attributes\",\"summary\":\"Checks configured Git attributes for tracked repository paths.\"},{\"applies_to\":[\"git\",\"repository\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.git\",\"requires_files\":false,\"selector\":\"git-history\",\"summary\":\"Reviews repository history for configured commit and change patterns.\"},{\"applies_to\":[\"git\",\"repository\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.git\",\"requires_files\":false,\"selector\":\"git-ignores\",\"summary\":\"Checks tracked paths against configured Git ignore expectations.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.heuristic_total_consumption\",\"requires_files\":true,\"selector\":\"heuristic-total-consumption\",\"summary\":\"Reviews heuristic assumptions about total input consumption.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.input_contracts\",\"requires_files\":true,\"selector\":\"input-contracts\",\"summary\":\"Reviews local Python collection mutation and read-only input contracts.\"},{\"applies_to\":[\"json\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.json_structure\",\"requires_files\":true,\"selector\":\"json-structure\",\"summary\":\"Checks configured structural expectations in JSON documents.\"},{\"applies_to\":[\"configurable-source\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.line_length\",\"requires_files\":true,\"selector\":\"line-length\",\"summary\":\"Reports source lines that exceed configured per-extension limits.\"},{\"applies_to\":[\"python\",\"numerical\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.manual_elimination\",\"requires_files\":true,\"selector\":\"manual-elimination\",\"summary\":\"Reviews configured hand-written elimination patterns.\"},{\"applies_to\":[\"python\",\"numerical\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.manual_matrix_kernels\",\"requires_files\":true,\"selector\":\"manual-matrix-kernels\",\"summary\":\"Reviews configured hand-written matrix kernel patterns.\"},{\"applies_to\":[\"python\",\"numerical\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.manual_quaternion_conjugation\",\"requires_files\":true,\"selector\":\"manual-quaternion-conjugation\",\"summary\":\"Reviews configured hand-written quaternion conjugation patterns.\"},{\"applies_to\":[\"python\",\"numerical\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.manual_quaternion_inversion\",\"requires_files\":true,\"selector\":\"manual-quaternion-inversion\",\"summary\":\"Reviews configured hand-written quaternion inversion patterns.\"},{\"applies_to\":[\"python\",\"numerical\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.manual_quaternion_matrix_conversion\",\"requires_files\":true,\"selector\":\"manual-quaternion-matrix-conversion\",\"summary\":\"Reviews configured quaternion-to-matrix conversions.\"},{\"applies_to\":[\"python\",\"numerical\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.manual_quaternion_normalization\",\"requires_files\":true,\"selector\":\"manual-quaternion-normalization\",\"summary\":\"Reviews configured hand-written quaternion normalization patterns.\"},{\"applies_to\":[\"python\",\"numerical\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.manual_quaternion_products\",\"requires_files\":true,\"selector\":\"manual-quaternion-products\",\"summary\":\"Reviews configured hand-written quaternion product patterns.\"},{\"applies_to\":[\"python\",\"numerical\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.manual_quaternion_vector_rotation\",\"requires_files\":true,\"selector\":\"manual-quaternion-vector-rotation\",\"summary\":\"Reviews configured hand-written quaternion vector rotations.\"},{\"applies_to\":[\"markdown\",\"shell\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.markdown_shell_fences\",\"requires_files\":false,\"selector\":\"markdown-shell-fences\",\"summary\":\"Checks fenced shell examples for bounded heredoc termination errors.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.module_roles\",\"requires_files\":true,\"selector\":\"module-roles\",\"summary\":\"Checks configured Python module-role and ownership conventions.\"},{\"applies_to\":[\"python\",\"geospatial\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.ned_basis_vectors\",\"requires_files\":true,\"selector\":\"ned-basis-vectors\",\"summary\":\"Reviews configured NED basis vector construction patterns.\"},{\"applies_to\":[\"python\"],\"domains\":[\"scientific-computing\",\"simulation\",\"earth-science\",\"trajectory-analysis\"],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.numeric_literals\",\"requires_files\":true,\"selector\":\"numeric-literals\",\"summary\":\"Matches configured exact numeric constants in Python arithmetic; it does not inspect model semantics.\"},{\"applies_to\":[\"python\",\"javascript\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.output_escaping\",\"requires_files\":true,\"selector\":\"output-escaping\",\"summary\":\"Reviews dynamic values at configured HTML or shell output sinks.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.package_boundaries\",\"requires_files\":true,\"selector\":\"package-boundaries\",\"summary\":\"Checks configured Python import and package-boundary rules.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.parallel_normalization\",\"requires_files\":true,\"selector\":\"parallel-normalization\",\"summary\":\"Reviews parallel normalization implementations.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.patch_cascade\",\"requires_files\":true,\"selector\":\"patch-cascade\",\"summary\":\"Reviews ordered patch operations that can cascade across edits.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.path_discovery\",\"requires_files\":true,\"selector\":\"path-discovery\",\"summary\":\"Reviews Python filesystem discovery and path handling patterns.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.positional_interfaces\",\"requires_files\":true,\"selector\":\"positional-interfaces\",\"summary\":\"Reviews configured positional parameters at Python call and API boundaries.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.positional_semantic_overrides\",\"requires_files\":true,\"selector\":\"positional-semantic-overrides\",\"summary\":\"Reviews positional arguments that override semantic defaults.\"},{\"applies_to\":[\"python\",\"documentation\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.prose_as_control\",\"requires_files\":true,\"selector\":\"prose-as-control\",\"summary\":\"Reviews prose that controls adjacent source behavior.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.provenance_ownership\",\"requires_files\":true,\"selector\":\"provenance-as-ownership\",\"summary\":\"Reviews provenance metadata used as an ownership guarantee.\"},{\"applies_to\":[\"python\",\"pydantic\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.pydantic_practices\",\"requires_files\":true,\"selector\":\"pydantic-practices\",\"summary\":\"Reviews configured Pydantic model declarations and validation practices.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"python-style\",\"plugin\":null,\"policy_section\":\"checks.python_style\",\"requires_files\":true,\"selector\":\"python-style\",\"summary\":\"Runs configured Python source-style checks.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.prose_as_control\",\"requires_files\":true,\"selector\":\"rendered-value-reparsed\",\"summary\":\"Reviews rendered values that are parsed again as source.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.repeated_numeric_limits\",\"requires_files\":true,\"selector\":\"repeated-numeric-limits\",\"summary\":\"Reviews repeated numeric thresholds in explicitly selected Python analysis paths.\"},{\"applies_to\":[\"repository\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.repository_layout\",\"requires_files\":true,\"selector\":\"repository-layout\",\"summary\":\"Checks configured repository paths, required files, and layout rules.\"},{\"applies_to\":[\"python\",\"ci\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.run_artifacts\",\"requires_files\":true,\"selector\":\"run-artifacts\",\"summary\":\"Reviews selected Python artifact production and verification handoffs.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"messages\",\"plugin\":null,\"policy_section\":\"checks.runtime_types\",\"requires_files\":true,\"selector\":\"runtime-types\",\"summary\":\"Reviews configured Python runtime type-checking conventions.\"},{\"applies_to\":[\"python\"],\"domains\":[\"scientific-computing\",\"simulation\",\"earth-science\",\"trajectory-analysis\",\"physical-units\"],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.scipy_constants\",\"requires_files\":true,\"selector\":\"scipy-constants\",\"summary\":\"Finds selected SciPy physical constants and unit-conversion factors in Python arithmetic; it does not validate units or coordinate systems.\"},{\"applies_to\":[\"python\",\"javascript\"],\"domains\":[],\"output_shape\":\"messages\",\"plugin\":null,\"policy_section\":\"checks.script_policy\",\"requires_files\":true,\"selector\":\"script-policy\",\"summary\":\"Checks configured Python and Node launcher/script conventions.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.semantic_work_presentation\",\"requires_files\":true,\"selector\":\"semantic-work-in-presentation\",\"summary\":\"Reviews semantic work placed in presentation code.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"shared-utilities\",\"plugin\":null,\"policy_section\":\"checks.shared_utilities\",\"requires_files\":true,\"selector\":\"shared-utilities\",\"summary\":\"Finds duplicated shared-helper implementations and direct Git calls.\"},{\"applies_to\":[\"configurable-source\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.source_families\",\"requires_files\":true,\"selector\":\"source-families\",\"summary\":\"Flags flat similarly named source families for human architectural review.\"},{\"applies_to\":[\"repository\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.source_test_coverage\",\"requires_files\":false,\"selector\":\"source-test-coverage\",\"summary\":\"Audits caller-declared source-to-test relationships against revision-matched execution evidence; it does not infer relationships from filenames or assess test correctness.\"},{\"applies_to\":[\"python\",\"sqlalchemy\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.sqlalchemy_practices\",\"requires_files\":true,\"selector\":\"sqlalchemy-practices\",\"summary\":\"Reviews configured SQLAlchemy model, query, and session practices.\"},{\"applies_to\":[\"python\",\"ruff\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.suppression_reasons\",\"requires_files\":true,\"selector\":\"suppression-reasons\",\"summary\":\"Reviews selected Ruff suppressions for documented reasons.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.test_quality\",\"requires_files\":true,\"selector\":\"test-quality\",\"summary\":\"Reviews configured Python tests for brittle prose assertions and transient-document handling.\"},{\"applies_to\":[\"python\",\"typing\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.typing_stub_suggestions\",\"requires_files\":true,\"selector\":\"typing-stub-suggestions\",\"summary\":\"Suggests compatible typing stub packages for declared dependencies.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.unexplained_empty_results\",\"requires_files\":true,\"selector\":\"unexplained-empty-results\",\"summary\":\"Reviews empty results without an evident explanation.\"}],\"schema_version\":1,\"scope\":\"Built-in and explicitly enabled Alphus rule selectors. Native command steps are consumer-defined and appear in configured profiles and --plan output.\"}"
+          }
+        },
+        "within_build_equal": true
+      },
+      "file-size-direct": {
+        "behavior": [
+          "direct-selector",
+          "exact-file-policy",
+          "finding-id",
+          "json-result"
+        ],
+        "build": "candidate",
+        "fixture_git_commit": "5d47cc3a47e8d1bc6f04352f31e8860a51b26016",
+        "fixture_sha256": "afa1ec78abb5cae18d6e51f02b5a3d1dd7222af244d651fafaa583983c823ca7",
+        "selectors": [
+          "file-size"
+        ],
+        "variants": {
+          "json": {
+            "exit_code": 1,
+            "stderr": "",
+            "stdout": "[{\"line\":null,\"message\":\"4 physical lines exceed the 3-physical-line limit\",\"path\":\"src/example.py\",\"rule_id\":\"alphus/any/none/maintainability/code-file-too-large\",\"severity\":\"error\"}]"
+          }
+        },
+        "within_build_equal": true
+      },
+      "file-size-plain": {
+        "behavior": [
+          "direct-selector",
+          "plain-output",
+          "finding-id"
+        ],
+        "build": "candidate",
+        "fixture_git_commit": "5d47cc3a47e8d1bc6f04352f31e8860a51b26016",
+        "fixture_sha256": "afa1ec78abb5cae18d6e51f02b5a3d1dd7222af244d651fafaa583983c823ca7",
+        "selectors": [
+          "file-size"
+        ],
+        "variants": {
+          "plain": {
+            "exit_code": 1,
+            "stderr": "",
+            "stdout": "ERROR alphus/any/none/maintainability/code-file-too-large src/example.py: 4 physical lines exceed the 3-physical-line limit\nFile size: 1 violation(s)\n"
+          }
+        },
+        "within_build_equal": true
+      },
+      "input-contracts-direct": {
+        "behavior": [
+          "direct-selector",
+          "python-semantic-heuristic",
+          "finding-id",
+          "json-result"
+        ],
+        "build": "candidate",
+        "fixture_git_commit": "5851364eb5773ca6d03d2f4a9445c39581d61a6a",
+        "fixture_sha256": "f4c1c4fd9fe3d3463a7bf5309c97d5c3e2e4908ccf6689a64477e6ecdc34b6ae",
+        "selectors": [
+          "input-contracts"
+        ],
+        "variants": {
+          "json": {
+            "exit_code": 0,
+            "stderr": "",
+            "stdout": "[{\"line\":2,\"message\":\"parameter values: append(); possible caller-visible mutation; preserve a typed mutable contract\",\"path\":\"src/example.py\",\"rule_id\":\"alphus/python/none/correctness/argument-mutation\",\"severity\":\"warning\"}]"
+          }
+        },
+        "within_build_equal": true
+      },
+      "numeric-literals-direct": {
+        "behavior": [
+          "direct-selector",
+          "deterministic-numeric-heuristic",
+          "finding-id",
+          "json-result"
+        ],
+        "build": "candidate",
+        "fixture_git_commit": "ba9d03382201a76a02ed32f9060c1e564de2eae2",
+        "fixture_sha256": "2a5001f59d8c4467bef4947693ce45e88314d12ba6eedc0db67288e16c03b692",
+        "selectors": [
+          "numeric-literals"
+        ],
+        "variants": {
+          "json": {
+            "exit_code": 0,
+            "stderr": "",
+            "stdout": "[{\"line\":2,\"message\":\"possible inline pi constant literal 3.14; review use of math.pi\",\"path\":\"src/example.py\",\"rule_id\":\"alphus/python/none/style/inline-constant\",\"severity\":\"warning\"}]"
+          }
+        },
+        "within_build_equal": true
+      },
+      "profile-plan-selection": {
+        "behavior": [
+          "resolved-profile-selection",
+          "selected-selector-list"
+        ],
+        "build": "candidate",
+        "fixture_git_commit": "ec9216e5f1d9c6ddb48610ddb976abc1e832f5b9",
+        "fixture_sha256": "3c6d090242b6e473eec4e34eacc4f228da6bce26b3dbf9c618588a4ca3946870",
+        "selectors": [
+          "file-size",
+          "line-length"
+        ],
+        "variants": {
+          "plan": {
+            "exit_code": 0,
+            "stderr": "",
+            "stdout": "{\"failure_threshold\":\"error\",\"profile\":\"check\",\"profiles\":[\"check\"],\"steps\":[{\"fixable\":false,\"kind\":\"rule\",\"name\":\"source-size\",\"priority\":\"high\",\"rollout\":\"mainline\",\"rule\":\"file-size\",\"selected_files\":[\"src/example.py\"],\"severity\":\"warning\"},{\"fixable\":false,\"kind\":\"rule\",\"name\":\"source-lines\",\"priority\":\"normal\",\"rollout\":\"mainline\",\"rule\":\"line-length\",\"selected_files\":[\"src/example.py\"],\"severity\":\"warning\"}]}"
+          }
+        },
+        "within_build_equal": true
+      },
+      "profile-serial-parallel": {
+        "behavior": [
+          "explicit-profile-selection",
+          "severity-priority",
+          "ordered-results",
+          "serial-parallel"
+        ],
+        "build": "candidate",
+        "fixture_git_commit": "ec9216e5f1d9c6ddb48610ddb976abc1e832f5b9",
+        "fixture_sha256": "3c6d090242b6e473eec4e34eacc4f228da6bce26b3dbf9c618588a4ca3946870",
+        "selectors": [
+          "file-size",
+          "line-length"
+        ],
+        "variants": {
+          "parallel": {
+            "exit_code": 0,
+            "stderr": "",
+            "stdout": "{\"exit_code\":0,\"failed\":0,\"failure_threshold\":\"error\",\"finding_rollups\":{\"categories\":[{\"count\":1,\"key\":\"maintainability\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":1}},{\"count\":2,\"key\":\"style\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":2}}],\"complaints\":[{\"count\":1,\"key\":\"maintainability/code-file-too-large\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":1}},{\"count\":2,\"key\":\"style/line-too-long\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":2}}],\"scopes\":[{\"count\":3,\"key\":\"any\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":3}}]},\"passed\":2,\"profile\":\"check\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":3},\"steps\":[{\"diagnostics\":[\"WARNING src/example.py: 4 physical lines exceed the 3-physical-line limit\"],\"exit_code\":0,\"findings\":[{\"line\":null,\"message\":\"4 physical lines exceed the 3-physical-line limit\",\"path\":\"src/example.py\",\"priority\":\"high\",\"rule_id\":\"alphus/any/none/maintainability/code-file-too-large\",\"severity\":\"warning\",\"source\":\"alphus\"}],\"name\":\"source-size\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":1},\"status\":\"passed\",\"stderr\":\"\",\"stdout\":\"\"},{\"diagnostics\":[\"WARNING src/example.py:3: physical line has 9 Unicode code points (limit 8 Unicode code points)\",\"WARNING src/example.py:4: physical line has 34 Unicode code points (limit 8 Unicode code points)\"],\"exit_code\":0,\"findings\":[{\"line\":3,\"message\":\"physical line has 9 Unicode code points (limit 8 Unicode code points)\",\"path\":\"src/example.py\",\"priority\":\"normal\",\"rule_id\":\"alphus/any/none/style/line-too-long\",\"severity\":\"warning\",\"source\":\"alphus\"},{\"line\":4,\"message\":\"physical line has 34 Unicode code points (limit 8 Unicode code points)\",\"path\":\"src/example.py\",\"priority\":\"normal\",\"rule_id\":\"alphus/any/none/style/line-too-long\",\"severity\":\"warning\",\"source\":\"alphus\"}],\"name\":\"source-lines\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":2},\"status\":\"passed\",\"stderr\":\"\",\"stdout\":\"\"}]}"
+          },
+          "serial": {
+            "exit_code": 0,
+            "stderr": "",
+            "stdout": "{\"exit_code\":0,\"failed\":0,\"failure_threshold\":\"error\",\"finding_rollups\":{\"categories\":[{\"count\":1,\"key\":\"maintainability\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":1}},{\"count\":2,\"key\":\"style\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":2}}],\"complaints\":[{\"count\":1,\"key\":\"maintainability/code-file-too-large\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":1}},{\"count\":2,\"key\":\"style/line-too-long\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":2}}],\"scopes\":[{\"count\":3,\"key\":\"any\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":3}}]},\"passed\":2,\"profile\":\"check\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":3},\"steps\":[{\"diagnostics\":[\"WARNING src/example.py: 4 physical lines exceed the 3-physical-line limit\"],\"exit_code\":0,\"findings\":[{\"line\":null,\"message\":\"4 physical lines exceed the 3-physical-line limit\",\"path\":\"src/example.py\",\"priority\":\"high\",\"rule_id\":\"alphus/any/none/maintainability/code-file-too-large\",\"severity\":\"warning\",\"source\":\"alphus\"}],\"name\":\"source-size\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":1},\"status\":\"passed\",\"stderr\":\"\",\"stdout\":\"\"},{\"diagnostics\":[\"WARNING src/example.py:3: physical line has 9 Unicode code points (limit 8 Unicode code points)\",\"WARNING src/example.py:4: physical line has 34 Unicode code points (limit 8 Unicode code points)\"],\"exit_code\":0,\"findings\":[{\"line\":3,\"message\":\"physical line has 9 Unicode code points (limit 8 Unicode code points)\",\"path\":\"src/example.py\",\"priority\":\"normal\",\"rule_id\":\"alphus/any/none/style/line-too-long\",\"severity\":\"warning\",\"source\":\"alphus\"},{\"line\":4,\"message\":\"physical line has 34 Unicode code points (limit 8 Unicode code points)\",\"path\":\"src/example.py\",\"priority\":\"normal\",\"rule_id\":\"alphus/any/none/style/line-too-long\",\"severity\":\"warning\",\"source\":\"alphus\"}],\"name\":\"source-lines\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":2},\"status\":\"passed\",\"stderr\":\"\",\"stdout\":\"\"}]}"
+          }
+        },
+        "within_build_equal": true
+      },
+      "strict-config-rejection": {
+        "behavior": [
+          "strict-config-validation",
+          "invalid-config-exit",
+          "diagnostic-output"
+        ],
+        "build": "candidate",
+        "fixture_git_commit": "80a7670393872e6922e89365f26ca9b95247b316",
+        "fixture_sha256": "a6bf7cd7081b2b74f62bfba38f1f0d41be2f48741f3745a02c9577985fa1b092",
+        "selectors": [],
+        "variants": {
+          "plan-json": {
+            "exit_code": 2,
+            "stderr": "Invalid quality policy: configuration values failed validation.\n",
+            "stdout": ""
+          }
+        },
+        "within_build_equal": true
+      }
+    },
+    "reference": {
+      "benchmark-docs-direct": {
+        "behavior": [
+          "direct-selector",
+          "deterministic-prose-heuristic",
+          "finding-id",
+          "json-result"
+        ],
+        "build": "reference",
+        "fixture_git_commit": "a3c67946b54bc51b3352c49de02f21929a43bfed",
+        "fixture_sha256": "ed24db773f476808d7ef3b62e82de42c1772162587297146d224780a2d193736",
+        "selectors": [
+          "benchmark-docs"
+        ],
+        "variants": {
+          "json": {
+            "exit_code": 0,
+            "stderr": "",
+            "stdout": "[{\"line\":1,\"message\":\"Possible benchmark-heavy prose in section 'Synthetic QuatOps-style example (invented values)': 3 timing, throughput, or comparison expressions. Review candidate only; freshness, correctness, and suitability were not assessed. Consider keeping a concise workload and reproducible command here, with detailed measurements in a dated, maintained report when useful.\",\"path\":\"docs/quatops-style.md\",\"rule_id\":\"alphus/markdown/none/maintainability/brittle-benchmark-prose\",\"severity\":\"warning\"}]"
+          }
+        },
+        "within_build_equal": true
+      },
+      "catalog": {
+        "behavior": [
+          "built-in-selector-catalog",
+          "catalog-schema"
+        ],
+        "build": "reference",
+        "fixture_git_commit": "aba6ff5ac214cce328f5135a8be72434fe38991b",
+        "fixture_sha256": "ff11c9adfdcb941a5a73c02313225f110748f630178ec536a3e3dc760e3163b5",
+        "selectors": [],
+        "variants": {
+          "json": {
+            "exit_code": 0,
+            "stderr": "",
+            "stdout": "{\"activation\":\"Built-ins need checks.<policy_field>; plugins must be listed under plugins.enabled and have a rule step in a consumer-owned profile.\",\"domain_tags_are_advisory\":true,\"plugins\":[],\"rules\":[{\"applies_to\":[\"python\",\"numerical\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.array_representation_churn\",\"requires_files\":true,\"selector\":\"array-representation-churn\",\"summary\":\"Reviews configured array representation conversion patterns.\"},{\"applies_to\":[\"markdown\",\"benchmarking\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.benchmark_docs\",\"requires_files\":true,\"selector\":\"benchmark-docs\",\"summary\":\"Reviews benchmark documentation for required result context.\"},{\"applies_to\":[\"python\",\"numerical\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.cholesky_recurrence\",\"requires_files\":true,\"selector\":\"cholesky-recurrence\",\"summary\":\"Reviews configured hand-written Cholesky recurrence patterns.\"},{\"applies_to\":[\"yaml\",\"ci\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.ci_workflows\",\"requires_files\":false,\"selector\":\"ci-workflows\",\"summary\":\"Reviews selected CI workflow commands for repeated job work.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"messages\",\"plugin\":null,\"policy_section\":\"checks.cli\",\"requires_files\":true,\"selector\":\"cli\",\"summary\":\"Reviews configured Python command-line interface contracts.\"},{\"applies_to\":[\"python\",\"javascript\",\"c\",\"cpp\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.comment_markers\",\"requires_files\":true,\"selector\":\"comment-markers\",\"summary\":\"Finds configured TODO-style markers in supported source comments.\"},{\"applies_to\":[\"python\",\"javascript\",\"cpp\"],\"domains\":[],\"output_shape\":\"cyclomatic-report\",\"plugin\":null,\"policy_section\":\"checks.cyclomatic_complexity\",\"requires_files\":false,\"selector\":\"cyclomatic-complexity\",\"summary\":\"Measures bounded cyclomatic complexity for supported source backends.\"},{\"applies_to\":[\"python\",\"javascript\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.dependency_locks\",\"requires_files\":true,\"selector\":\"dependency-locks\",\"summary\":\"Checks consistency and pairing of configured dependency lockfiles.\"},{\"applies_to\":[\"markdown\",\"latex\",\"html\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.document_style\",\"requires_files\":true,\"selector\":\"document-style\",\"summary\":\"Reviews heading styles in selected Markdown, LaTeX, and source HTML documents.\"},{\"applies_to\":[\"markdown\",\"repository\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.documentation_config\",\"requires_files\":false,\"selector\":\"documentation-config\",\"summary\":\"Checks documentation links and repository-specific documentation configuration.\"},{\"applies_to\":[\"python\",\"markdown\"],\"domains\":[\"documentation-generation\",\"markdown-publishing\"],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.dynamic_markdown\",\"requires_files\":true,\"selector\":\"dynamic-markdown\",\"summary\":\"Reviews Python string assembly that places dynamic values into Markdown structure.\"},{\"applies_to\":[\"python\",\"geospatial\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.ecef_enu_transform\",\"requires_files\":true,\"selector\":\"ecef-enu-transform\",\"summary\":\"Reviews configured ECEF-to-ENU transform patterns.\"},{\"applies_to\":[\"python\",\"geospatial\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.ecef_ned_matrix_transform\",\"requires_files\":true,\"selector\":\"ecef-ned-matrix-transform\",\"summary\":\"Reviews configured ECEF-to-NED matrix patterns.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.embedded_semantic_overrides\",\"requires_files\":true,\"selector\":\"embedded-semantic-overrides\",\"summary\":\"Reviews semantic overrides embedded in source text.\"},{\"applies_to\":[\"python\",\"fastapi\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.fastapi_practices\",\"requires_files\":true,\"selector\":\"fastapi-practices\",\"summary\":\"Reviews configured FastAPI route and dependency practices.\"},{\"applies_to\":[\"configurable-source\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.file_size\",\"requires_files\":true,\"selector\":\"file-size\",\"summary\":\"Reports source files that exceed configured physical-line limits.\"},{\"applies_to\":[\"git\",\"repository\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.git\",\"requires_files\":false,\"selector\":\"git-attributes\",\"summary\":\"Checks configured Git attributes for tracked repository paths.\"},{\"applies_to\":[\"git\",\"repository\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.git\",\"requires_files\":false,\"selector\":\"git-history\",\"summary\":\"Reviews repository history for configured commit and change patterns.\"},{\"applies_to\":[\"git\",\"repository\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.git\",\"requires_files\":false,\"selector\":\"git-ignores\",\"summary\":\"Checks tracked paths against configured Git ignore expectations.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.heuristic_total_consumption\",\"requires_files\":true,\"selector\":\"heuristic-total-consumption\",\"summary\":\"Reviews heuristic assumptions about total input consumption.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.input_contracts\",\"requires_files\":true,\"selector\":\"input-contracts\",\"summary\":\"Reviews local Python collection mutation and read-only input contracts.\"},{\"applies_to\":[\"json\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.json_structure\",\"requires_files\":true,\"selector\":\"json-structure\",\"summary\":\"Checks configured structural expectations in JSON documents.\"},{\"applies_to\":[\"configurable-source\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.line_length\",\"requires_files\":true,\"selector\":\"line-length\",\"summary\":\"Reports source lines that exceed configured per-extension limits.\"},{\"applies_to\":[\"python\",\"numerical\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.manual_elimination\",\"requires_files\":true,\"selector\":\"manual-elimination\",\"summary\":\"Reviews configured hand-written elimination patterns.\"},{\"applies_to\":[\"python\",\"numerical\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.manual_matrix_kernels\",\"requires_files\":true,\"selector\":\"manual-matrix-kernels\",\"summary\":\"Reviews configured hand-written matrix kernel patterns.\"},{\"applies_to\":[\"python\",\"numerical\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.manual_quaternion_conjugation\",\"requires_files\":true,\"selector\":\"manual-quaternion-conjugation\",\"summary\":\"Reviews configured hand-written quaternion conjugation patterns.\"},{\"applies_to\":[\"python\",\"numerical\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.manual_quaternion_inversion\",\"requires_files\":true,\"selector\":\"manual-quaternion-inversion\",\"summary\":\"Reviews configured hand-written quaternion inversion patterns.\"},{\"applies_to\":[\"python\",\"numerical\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.manual_quaternion_matrix_conversion\",\"requires_files\":true,\"selector\":\"manual-quaternion-matrix-conversion\",\"summary\":\"Reviews configured quaternion-to-matrix conversions.\"},{\"applies_to\":[\"python\",\"numerical\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.manual_quaternion_normalization\",\"requires_files\":true,\"selector\":\"manual-quaternion-normalization\",\"summary\":\"Reviews configured hand-written quaternion normalization patterns.\"},{\"applies_to\":[\"python\",\"numerical\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.manual_quaternion_products\",\"requires_files\":true,\"selector\":\"manual-quaternion-products\",\"summary\":\"Reviews configured hand-written quaternion product patterns.\"},{\"applies_to\":[\"python\",\"numerical\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.manual_quaternion_vector_rotation\",\"requires_files\":true,\"selector\":\"manual-quaternion-vector-rotation\",\"summary\":\"Reviews configured hand-written quaternion vector rotations.\"},{\"applies_to\":[\"markdown\",\"shell\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.markdown_shell_fences\",\"requires_files\":false,\"selector\":\"markdown-shell-fences\",\"summary\":\"Checks fenced shell examples for bounded heredoc termination errors.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.module_roles\",\"requires_files\":true,\"selector\":\"module-roles\",\"summary\":\"Checks configured Python module-role and ownership conventions.\"},{\"applies_to\":[\"python\",\"geospatial\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.ned_basis_vectors\",\"requires_files\":true,\"selector\":\"ned-basis-vectors\",\"summary\":\"Reviews configured NED basis vector construction patterns.\"},{\"applies_to\":[\"python\"],\"domains\":[\"scientific-computing\",\"simulation\",\"earth-science\",\"trajectory-analysis\"],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.numeric_literals\",\"requires_files\":true,\"selector\":\"numeric-literals\",\"summary\":\"Matches configured exact numeric constants in Python arithmetic; it does not inspect model semantics.\"},{\"applies_to\":[\"python\",\"javascript\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.output_escaping\",\"requires_files\":true,\"selector\":\"output-escaping\",\"summary\":\"Reviews dynamic values at configured HTML or shell output sinks.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.package_boundaries\",\"requires_files\":true,\"selector\":\"package-boundaries\",\"summary\":\"Checks configured Python import and package-boundary rules.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.parallel_normalization\",\"requires_files\":true,\"selector\":\"parallel-normalization\",\"summary\":\"Reviews parallel normalization implementations.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.patch_cascade\",\"requires_files\":true,\"selector\":\"patch-cascade\",\"summary\":\"Reviews ordered patch operations that can cascade across edits.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.path_discovery\",\"requires_files\":true,\"selector\":\"path-discovery\",\"summary\":\"Reviews Python filesystem discovery and path handling patterns.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.positional_interfaces\",\"requires_files\":true,\"selector\":\"positional-interfaces\",\"summary\":\"Reviews configured positional parameters at Python call and API boundaries.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.positional_semantic_overrides\",\"requires_files\":true,\"selector\":\"positional-semantic-overrides\",\"summary\":\"Reviews positional arguments that override semantic defaults.\"},{\"applies_to\":[\"python\",\"documentation\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.prose_as_control\",\"requires_files\":true,\"selector\":\"prose-as-control\",\"summary\":\"Reviews prose that controls adjacent source behavior.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.provenance_ownership\",\"requires_files\":true,\"selector\":\"provenance-as-ownership\",\"summary\":\"Reviews provenance metadata used as an ownership guarantee.\"},{\"applies_to\":[\"python\",\"pydantic\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.pydantic_practices\",\"requires_files\":true,\"selector\":\"pydantic-practices\",\"summary\":\"Reviews configured Pydantic model declarations and validation practices.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"python-style\",\"plugin\":null,\"policy_section\":\"checks.python_style\",\"requires_files\":true,\"selector\":\"python-style\",\"summary\":\"Runs configured Python source-style checks.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.prose_as_control\",\"requires_files\":true,\"selector\":\"rendered-value-reparsed\",\"summary\":\"Reviews rendered values that are parsed again as source.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.repeated_numeric_limits\",\"requires_files\":true,\"selector\":\"repeated-numeric-limits\",\"summary\":\"Reviews repeated numeric thresholds in explicitly selected Python analysis paths.\"},{\"applies_to\":[\"repository\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.repository_layout\",\"requires_files\":true,\"selector\":\"repository-layout\",\"summary\":\"Checks configured repository paths, required files, and layout rules.\"},{\"applies_to\":[\"python\",\"ci\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.run_artifacts\",\"requires_files\":true,\"selector\":\"run-artifacts\",\"summary\":\"Reviews selected Python artifact production and verification handoffs.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"messages\",\"plugin\":null,\"policy_section\":\"checks.runtime_types\",\"requires_files\":true,\"selector\":\"runtime-types\",\"summary\":\"Reviews configured Python runtime type-checking conventions.\"},{\"applies_to\":[\"python\"],\"domains\":[\"scientific-computing\",\"simulation\",\"earth-science\",\"trajectory-analysis\",\"physical-units\"],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.scipy_constants\",\"requires_files\":true,\"selector\":\"scipy-constants\",\"summary\":\"Finds selected SciPy physical constants and unit-conversion factors in Python arithmetic; it does not validate units or coordinate systems.\"},{\"applies_to\":[\"python\",\"javascript\"],\"domains\":[],\"output_shape\":\"messages\",\"plugin\":null,\"policy_section\":\"checks.script_policy\",\"requires_files\":true,\"selector\":\"script-policy\",\"summary\":\"Checks configured Python and Node launcher/script conventions.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.semantic_work_presentation\",\"requires_files\":true,\"selector\":\"semantic-work-in-presentation\",\"summary\":\"Reviews semantic work placed in presentation code.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"shared-utilities\",\"plugin\":null,\"policy_section\":\"checks.shared_utilities\",\"requires_files\":true,\"selector\":\"shared-utilities\",\"summary\":\"Finds duplicated shared-helper implementations and direct Git calls.\"},{\"applies_to\":[\"configurable-source\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.source_families\",\"requires_files\":true,\"selector\":\"source-families\",\"summary\":\"Flags flat similarly named source families for human architectural review.\"},{\"applies_to\":[\"repository\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.source_test_coverage\",\"requires_files\":false,\"selector\":\"source-test-coverage\",\"summary\":\"Audits caller-declared source-to-test relationships against revision-matched execution evidence; it does not infer relationships from filenames or assess test correctness.\"},{\"applies_to\":[\"python\",\"sqlalchemy\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.sqlalchemy_practices\",\"requires_files\":true,\"selector\":\"sqlalchemy-practices\",\"summary\":\"Reviews configured SQLAlchemy model, query, and session practices.\"},{\"applies_to\":[\"python\",\"ruff\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.suppression_reasons\",\"requires_files\":true,\"selector\":\"suppression-reasons\",\"summary\":\"Reviews selected Ruff suppressions for documented reasons.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.test_quality\",\"requires_files\":true,\"selector\":\"test-quality\",\"summary\":\"Reviews configured Python tests for brittle prose assertions and transient-document handling.\"},{\"applies_to\":[\"python\",\"typing\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.typing_stub_suggestions\",\"requires_files\":true,\"selector\":\"typing-stub-suggestions\",\"summary\":\"Suggests compatible typing stub packages for declared dependencies.\"},{\"applies_to\":[\"python\"],\"domains\":[],\"output_shape\":\"findings\",\"plugin\":null,\"policy_section\":\"checks.unexplained_empty_results\",\"requires_files\":true,\"selector\":\"unexplained-empty-results\",\"summary\":\"Reviews empty results without an evident explanation.\"}],\"schema_version\":1,\"scope\":\"Built-in and explicitly enabled Alphus rule selectors. Native command steps are consumer-defined and appear in configured profiles and --plan output.\"}"
+          }
+        },
+        "within_build_equal": true
+      },
+      "file-size-direct": {
+        "behavior": [
+          "direct-selector",
+          "exact-file-policy",
+          "finding-id",
+          "json-result"
+        ],
+        "build": "reference",
+        "fixture_git_commit": "5d47cc3a47e8d1bc6f04352f31e8860a51b26016",
+        "fixture_sha256": "afa1ec78abb5cae18d6e51f02b5a3d1dd7222af244d651fafaa583983c823ca7",
+        "selectors": [
+          "file-size"
+        ],
+        "variants": {
+          "json": {
+            "exit_code": 1,
+            "stderr": "",
+            "stdout": "[{\"line\":null,\"message\":\"4 physical lines exceed the 3-physical-line limit\",\"path\":\"src/example.py\",\"rule_id\":\"alphus/any/none/maintainability/code-file-too-large\",\"severity\":\"error\"}]"
+          }
+        },
+        "within_build_equal": true
+      },
+      "file-size-plain": {
+        "behavior": [
+          "direct-selector",
+          "plain-output",
+          "finding-id"
+        ],
+        "build": "reference",
+        "fixture_git_commit": "5d47cc3a47e8d1bc6f04352f31e8860a51b26016",
+        "fixture_sha256": "afa1ec78abb5cae18d6e51f02b5a3d1dd7222af244d651fafaa583983c823ca7",
+        "selectors": [
+          "file-size"
+        ],
+        "variants": {
+          "plain": {
+            "exit_code": 1,
+            "stderr": "",
+            "stdout": "ERROR alphus/any/none/maintainability/code-file-too-large src/example.py: 4 physical lines exceed the 3-physical-line limit\nFile size: 1 violation(s)\n"
+          }
+        },
+        "within_build_equal": true
+      },
+      "input-contracts-direct": {
+        "behavior": [
+          "direct-selector",
+          "python-semantic-heuristic",
+          "finding-id",
+          "json-result"
+        ],
+        "build": "reference",
+        "fixture_git_commit": "5851364eb5773ca6d03d2f4a9445c39581d61a6a",
+        "fixture_sha256": "f4c1c4fd9fe3d3463a7bf5309c97d5c3e2e4908ccf6689a64477e6ecdc34b6ae",
+        "selectors": [
+          "input-contracts"
+        ],
+        "variants": {
+          "json": {
+            "exit_code": 0,
+            "stderr": "",
+            "stdout": "[{\"line\":2,\"message\":\"parameter values: append(); possible caller-visible mutation; preserve a typed mutable contract\",\"path\":\"src/example.py\",\"rule_id\":\"alphus/python/none/correctness/argument-mutation\",\"severity\":\"warning\"}]"
+          }
+        },
+        "within_build_equal": true
+      },
+      "numeric-literals-direct": {
+        "behavior": [
+          "direct-selector",
+          "deterministic-numeric-heuristic",
+          "finding-id",
+          "json-result"
+        ],
+        "build": "reference",
+        "fixture_git_commit": "ba9d03382201a76a02ed32f9060c1e564de2eae2",
+        "fixture_sha256": "2a5001f59d8c4467bef4947693ce45e88314d12ba6eedc0db67288e16c03b692",
+        "selectors": [
+          "numeric-literals"
+        ],
+        "variants": {
+          "json": {
+            "exit_code": 0,
+            "stderr": "",
+            "stdout": "[{\"line\":2,\"message\":\"possible inline pi constant literal 3.14; review use of math.pi\",\"path\":\"src/example.py\",\"rule_id\":\"alphus/python/none/style/inline-constant\",\"severity\":\"warning\"}]"
+          }
+        },
+        "within_build_equal": true
+      },
+      "profile-plan-selection": {
+        "behavior": [
+          "resolved-profile-selection",
+          "selected-selector-list"
+        ],
+        "build": "reference",
+        "fixture_git_commit": "ec9216e5f1d9c6ddb48610ddb976abc1e832f5b9",
+        "fixture_sha256": "3c6d090242b6e473eec4e34eacc4f228da6bce26b3dbf9c618588a4ca3946870",
+        "selectors": [
+          "file-size",
+          "line-length"
+        ],
+        "variants": {
+          "plan": {
+            "exit_code": 0,
+            "stderr": "",
+            "stdout": "{\"failure_threshold\":\"error\",\"profile\":\"check\",\"profiles\":[\"check\"],\"steps\":[{\"fixable\":false,\"kind\":\"rule\",\"name\":\"source-size\",\"priority\":\"high\",\"rollout\":\"mainline\",\"rule\":\"file-size\",\"selected_files\":[\"src/example.py\"],\"severity\":\"warning\"},{\"fixable\":false,\"kind\":\"rule\",\"name\":\"source-lines\",\"priority\":\"normal\",\"rollout\":\"mainline\",\"rule\":\"line-length\",\"selected_files\":[\"src/example.py\"],\"severity\":\"warning\"}]}"
+          }
+        },
+        "within_build_equal": true
+      },
+      "profile-serial-parallel": {
+        "behavior": [
+          "explicit-profile-selection",
+          "severity-priority",
+          "ordered-results",
+          "serial-parallel"
+        ],
+        "build": "reference",
+        "fixture_git_commit": "ec9216e5f1d9c6ddb48610ddb976abc1e832f5b9",
+        "fixture_sha256": "3c6d090242b6e473eec4e34eacc4f228da6bce26b3dbf9c618588a4ca3946870",
+        "selectors": [
+          "file-size",
+          "line-length"
+        ],
+        "variants": {
+          "parallel": {
+            "exit_code": 0,
+            "stderr": "",
+            "stdout": "{\"exit_code\":0,\"failed\":0,\"failure_threshold\":\"error\",\"finding_rollups\":{\"categories\":[{\"count\":1,\"key\":\"maintainability\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":1}},{\"count\":2,\"key\":\"style\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":2}}],\"complaints\":[{\"count\":1,\"key\":\"maintainability/code-file-too-large\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":1}},{\"count\":2,\"key\":\"style/line-too-long\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":2}}],\"scopes\":[{\"count\":3,\"key\":\"any\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":3}}]},\"passed\":2,\"profile\":\"check\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":3},\"steps\":[{\"diagnostics\":[\"WARNING src/example.py: 4 physical lines exceed the 3-physical-line limit\"],\"exit_code\":0,\"findings\":[{\"line\":null,\"message\":\"4 physical lines exceed the 3-physical-line limit\",\"path\":\"src/example.py\",\"priority\":\"high\",\"rule_id\":\"alphus/any/none/maintainability/code-file-too-large\",\"severity\":\"warning\",\"source\":\"alphus\"}],\"name\":\"source-size\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":1},\"status\":\"passed\",\"stderr\":\"\",\"stdout\":\"\"},{\"diagnostics\":[\"WARNING src/example.py:3: physical line has 9 Unicode code points (limit 8 Unicode code points)\",\"WARNING src/example.py:4: physical line has 34 Unicode code points (limit 8 Unicode code points)\"],\"exit_code\":0,\"findings\":[{\"line\":3,\"message\":\"physical line has 9 Unicode code points (limit 8 Unicode code points)\",\"path\":\"src/example.py\",\"priority\":\"normal\",\"rule_id\":\"alphus/any/none/style/line-too-long\",\"severity\":\"warning\",\"source\":\"alphus\"},{\"line\":4,\"message\":\"physical line has 34 Unicode code points (limit 8 Unicode code points)\",\"path\":\"src/example.py\",\"priority\":\"normal\",\"rule_id\":\"alphus/any/none/style/line-too-long\",\"severity\":\"warning\",\"source\":\"alphus\"}],\"name\":\"source-lines\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":2},\"status\":\"passed\",\"stderr\":\"\",\"stdout\":\"\"}]}"
+          },
+          "serial": {
+            "exit_code": 0,
+            "stderr": "",
+            "stdout": "{\"exit_code\":0,\"failed\":0,\"failure_threshold\":\"error\",\"finding_rollups\":{\"categories\":[{\"count\":1,\"key\":\"maintainability\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":1}},{\"count\":2,\"key\":\"style\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":2}}],\"complaints\":[{\"count\":1,\"key\":\"maintainability/code-file-too-large\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":1}},{\"count\":2,\"key\":\"style/line-too-long\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":2}}],\"scopes\":[{\"count\":3,\"key\":\"any\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":3}}]},\"passed\":2,\"profile\":\"check\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":3},\"steps\":[{\"diagnostics\":[\"WARNING src/example.py: 4 physical lines exceed the 3-physical-line limit\"],\"exit_code\":0,\"findings\":[{\"line\":null,\"message\":\"4 physical lines exceed the 3-physical-line limit\",\"path\":\"src/example.py\",\"priority\":\"high\",\"rule_id\":\"alphus/any/none/maintainability/code-file-too-large\",\"severity\":\"warning\",\"source\":\"alphus\"}],\"name\":\"source-size\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":1},\"status\":\"passed\",\"stderr\":\"\",\"stdout\":\"\"},{\"diagnostics\":[\"WARNING src/example.py:3: physical line has 9 Unicode code points (limit 8 Unicode code points)\",\"WARNING src/example.py:4: physical line has 34 Unicode code points (limit 8 Unicode code points)\"],\"exit_code\":0,\"findings\":[{\"line\":3,\"message\":\"physical line has 9 Unicode code points (limit 8 Unicode code points)\",\"path\":\"src/example.py\",\"priority\":\"normal\",\"rule_id\":\"alphus/any/none/style/line-too-long\",\"severity\":\"warning\",\"source\":\"alphus\"},{\"line\":4,\"message\":\"physical line has 34 Unicode code points (limit 8 Unicode code points)\",\"path\":\"src/example.py\",\"priority\":\"normal\",\"rule_id\":\"alphus/any/none/style/line-too-long\",\"severity\":\"warning\",\"source\":\"alphus\"}],\"name\":\"source-lines\",\"severity_counts\":{\"error\":0,\"info\":0,\"warning\":2},\"status\":\"passed\",\"stderr\":\"\",\"stdout\":\"\"}]}"
+          }
+        },
+        "within_build_equal": true
+      },
+      "strict-config-rejection": {
+        "behavior": [
+          "strict-config-validation",
+          "invalid-config-exit",
+          "diagnostic-output"
+        ],
+        "build": "reference",
+        "fixture_git_commit": "80a7670393872e6922e89365f26ca9b95247b316",
+        "fixture_sha256": "a6bf7cd7081b2b74f62bfba38f1f0d41be2f48741f3745a02c9577985fa1b092",
+        "selectors": [],
+        "variants": {
+          "plan-json": {
+            "exit_code": 2,
+            "stderr": "Invalid quality policy: configuration values failed validation.\n",
+            "stdout": ""
+          }
+        },
+        "within_build_equal": true
+      }
+    }
+  },
+  "schema_version": 1,
+  "shared_dependency_versions": [
+    [
+      "annotated-doc",
+      "0.0.5"
+    ],
+    [
+      "annotated-types",
+      "0.8.0"
+    ],
+    [
+      "anyio",
+      "4.15.1"
+    ],
+    [
+      "attrs",
+      "26.1.0"
+    ],
+    [
+      "build",
+      "1.6.1"
+    ],
+    [
+      "cffi",
+      "2.1.1"
+    ],
+    [
+      "click",
+      "8.5.0"
+    ],
+    [
+      "contourpy",
+      "1.3.3"
+    ],
+    [
+      "cryptography",
+      "50.0.1"
+    ],
+    [
+      "cycler",
+      "0.12.1"
+    ],
+    [
+      "fonttools",
+      "4.66.0"
+    ],
+    [
+      "h11",
+      "0.16.0"
+    ],
+    [
+      "httpcore2",
+      "2.13.1"
+    ],
+    [
+      "httpx2",
+      "2.13.1"
+    ],
+    [
+      "idna",
+      "3.20"
+    ],
+    [
+      "iniconfig",
+      "2.3.1"
+    ],
+    [
+      "jsonschema",
+      "4.26.0"
+    ],
+    [
+      "jsonschema-specifications",
+      "2025.9.1"
+    ],
+    [
+      "kicad-team-tooling",
+      "0.5.1rc62.dev0+gba6590cce.d20261020"
+    ],
+    [
+      "kiwisolver",
+      "1.5.1"
+    ],
+    [
+      "markdown-it-py",
+      "4.2.0"
+    ],
+    [
+      "matplotlib",
+      "3.11.2"
+    ],
+    [
+      "mcp",
+      "2.2.0"
+    ],
+    [
+      "mcp-types",
+      "2.2.0"
+    ],
+    [
+      "mdrepo",
+      "0.0.1.post0"
+    ],
+    [
+      "mdurl",
+      "0.1.2"
+    ],
+    [
+      "nodeenv",
+      "1.11.0"
+    ],
+    [
+      "numpy",
+      "2.4.6"
+    ],
+    [
+      "opentelemetry-api",
+      "1.45.0"
+    ],
+    [
+      "packaging",
+      "26.3"
+    ],
+    [
+      "pathspec",
+      "1.1.1"
+    ],
+    [
+      "pillow",
+      "12.3.0"
+    ],
+    [
+      "pip",
+      "26.2.1"
+    ],
+    [
+      "pip",
+      "26.2.1"
+    ],
+    [
+      "pluggy",
+      "1.6.0"
+    ],
+    [
+      "pycparser",
+      "3.0"
+    ],
+    [
+      "pydantic",
+      "2.13.5"
+    ],
+    [
+      "pydantic_core",
+      "2.46.5"
+    ],
+    [
+      "pygments",
+      "2.21.0"
+    ],
+    [
+      "pyjwt",
+      "2.15.0"
+    ],
+    [
+      "pyparsing",
+      "3.3.3"
+    ],
+    [
+      "pyproject_hooks",
+      "1.3.3"
+    ],
+    [
+      "pyright",
+      "1.1.414"
+    ],
+    [
+      "pytest",
+      "9.1.1"
+    ],
+    [
+      "python-dateutil",
+      "2.9.0.post0"
+    ],
+    [
+      "python-multipart",
+      "0.0.32"
+    ],
+    [
+      "pyyaml",
+      "6.0.3"
+    ],
+    [
+      "referencing",
+      "0.37.0"
+    ],
+    [
+      "rich",
+      "15.0.0"
+    ],
+    [
+      "rpds-py",
+      "2026.6.3"
+    ],
+    [
+      "ruff",
+      "0.16.1"
+    ],
+    [
+      "rumdl",
+      "0.2.77"
+    ],
+    [
+      "setuptools",
+      "84.0.0"
+    ],
+    [
+      "setuptools",
+      "84.0.0"
+    ],
+    [
+      "setuptools-scm",
+      "10.3.4"
+    ],
+    [
+      "shellingham",
+      "1.5.4"
+    ],
+    [
+      "six",
+      "1.17.0"
+    ],
+    [
+      "snakemd",
+      "2.4.1"
+    ],
+    [
+      "snakemd-stubs",
+      "2.4.1.0"
+    ],
+    [
+      "sqlalchemy",
+      "2.1.6"
+    ],
+    [
+      "sse-starlette",
+      "3.4.11"
+    ],
+    [
+      "starlette",
+      "1.7.0"
+    ],
+    [
+      "truststore",
+      "0.10.4"
+    ],
+    [
+      "typer",
+      "0.27.3"
+    ],
+    [
+      "types-pyyaml",
+      "6.0.12.20261103"
+    ],
+    [
+      "typing-inspection",
+      "0.4.4"
+    ],
+    [
+      "typing_extensions",
+      "4.16.0"
+    ],
+    [
+      "uvicorn",
+      "0.54.0"
+    ],
+    [
+      "vcs-versioning",
+      "2.5.0"
+    ],
+    [
+      "wheel",
+      "0.48.0"
+    ]
+  ],
+  "temporary_path_normalization": "Exact wheel-run root replaced by $WHEEL_RUN_ROOT; exact CLI fixture root replaced by $FIXTURE_ROOT.",
+  "volatile_json_paths_removed": [
+    "$.started_at_utc",
+    "$.duration_seconds",
+    "$.steps[*].duration_seconds"
+  ]
+}

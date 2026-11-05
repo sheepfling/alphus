@@ -325,6 +325,49 @@ absolute paths. Do not refresh snapshots, suppress self-review findings, or
 weaken thresholds to conceal a difference. An unexplained behavior difference
 blocks the refactor slice.
 
+## First pinned-wheel differential result
+
+The runnable harness is [scripts/differential_wheels.py](../scripts/differential_wheels.py)
+with its scenario manifest and fixtures under
+[tests/differential](../tests/differential). It builds wheels from full commit
+SHAs, installs each wheel into a separate virtual environment, verifies that
+`alphus/__init__.py` is owned by the installed distribution and matches the
+wheel `RECORD`, and checks that fixtures remain unchanged. Its report records
+source commits, wheel hashes, fixture commits and hashes, the manifest hash,
+package versions, and the declared output normalization. Exact temporary paths
+are replaced with stable placeholders in the evidence.
+
+A first comparison used reference `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`
+and candidate `dbcddcb3738e4f54614de998f4753203364f55fe`. The catalog was
+identical at 62 selectors. Behavioral cases exercised `file-size`,
+`benchmark-docs`, `line-length`, `numeric-literals`, and `input-contracts`:
+strict invalid-config rejection, direct JSON and plain output, profile
+selection, exact finding IDs and locations, and serial/parallel profile
+results. All nine scenarios matched with no differences. Serial and parallel
+profile outputs also matched.
+
+This is representative evidence only: 5 of 62 selectors were behaviorally
+exercised. Composite package-boundaries, polyglot/native tools, plugin API v1,
+missing or unsupported providers, partial/error states, and lazy unselected
+backends remain explicitly untested in the report. The two wheel virtual
+environments share the same system-site dependency layer so the comparison is
+matched but not hermetic; the report labels that limitation. The source archive
+builds both wheels as version `0.0.0`; full source commit and wheel hashes
+identify each artifact. This does not meet the full compatibility prerequisite
+for any runtime registration migration.
+
+The complete machine-readable run is
+[the c880093-to-dbcddcb evidence report](architecture/builtin-check-wheel-differential-c880093-dbcddcb.json).
+Reproduce it with:
+
+```sh
+.venv/bin/python scripts/differential_wheels.py \
+  --root . \
+  --baseline c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e \
+  --candidate dbcddcb3738e4f54614de998f4753203364f55fe \
+  --output docs/architecture/builtin-check-wheel-differential-c880093-dbcddcb.json
+```
+
 ## Performance and cache boundary
 
 Measure startup/import time, inventory construction, parsing, native tool
