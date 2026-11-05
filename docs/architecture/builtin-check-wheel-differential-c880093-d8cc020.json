@@ -1,7 +1,7 @@
 {
   "build_python": "3.11.16 (main, Aug 12 2026, 23:03:19) [Clang 21.0.0 (clang-2100.1.1.101)]",
   "candidate": {
-    "commit": "99686ac5348b218f52825b3a50ddfcef113f7976",
+    "commit": "d8cc02081a511c79466c6b52361d02cd2f0238e9",
     "installation": {
       "distribution_owns_module": true,
       "distribution_root": "$WHEEL_RUN_ROOT/venv-candidate/lib/python3.11/site-packages",
@@ -360,7 +360,7 @@
       "module_path": "$WHEEL_RUN_ROOT/venv-candidate/lib/python3.11/site-packages/alphus/__init__.py",
       "record_hash": "sha256=YMETX0sFrloKmGhuymcZaioTaIcipuwLe7tmfw2wlz0"
     },
-    "wheel_sha256": "f4432575b2a127e851c0a857fdf578b82a8061dab8ab15921b114c41b158c576"
+    "wheel_sha256": "bdb0b517495c3eae890770dae8e7cc30158ee6f7c0183727b18bf3942c09fdfd"
   },
   "coverage": {
     "behaviorally_exercised_selectors": [
@@ -368,7 +368,9 @@
       "file-size",
       "input-contracts",
       "line-length",
-      "numeric-literals"
+      "numeric-literals",
+      "output-escaping",
+      "test-quality"
     ],
     "catalog_equal": true,
     "catalog_selector_count": 62,
@@ -388,18 +390,25 @@
       {
         "capability": "plugin-api-v1",
         "reason": "The installed-wheel plugin conformance and explicit-enablement boundary needs its own fixture package.",
+        "selector": null,
         "status": "not-exercised"
       },
       {
         "capability": "unselected-backend-laziness",
         "reason": "Requires an import-trace contract for optional providers that does not treat current eager imports as acceptable.",
+        "selector": null,
         "status": "not-exercised"
       },
       {
         "capability": "missing-unsupported-partial-error-states",
         "reason": "The first harness run covers strict config errors and selected rule findings; native/provider status cases remain future scenarios.",
+        "selector": null,
         "status": "not-exercised"
       }
+    ],
+    "selectors_in_plan_only_scenarios": [
+      "file-size",
+      "line-length"
     ],
     "selectors_not_behaviorally_exercised": [
       "array-representation-churn",
@@ -432,7 +441,6 @@
       "markdown-shell-fences",
       "module-roles",
       "ned-basis-vectors",
-      "output-escaping",
       "package-boundaries",
       "parallel-normalization",
       "patch-cascade",
@@ -456,7 +464,6 @@
       "source-test-coverage",
       "sqlalchemy-practices",
       "suppression-reasons",
-      "test-quality",
       "typing-stub-suggestions",
       "unexplained-empty-results"
     ]
@@ -465,8 +472,9 @@
   "environment_model": "separate Alphus venvs with identical shared system-site packages; not hermetic",
   "equivalent_for_manifested_scenarios": true,
   "fixture_mutation_check": "sha256 tree before/after every process; unchanged",
-  "harness_sha256": "119fc9a85eacca039b216d6a45b67f48481569412fc9a82a200e26c6d0715450",
-  "manifest_sha256": "83fcebd04884c6f45f9349679bf092bee6630386277e8df660042bfbe3127821",
+  "fixture_snapshot_check": "one source snapshot and Git commit per scenario; copied to both runs and compared by tree SHA-256 and Git commit",
+  "harness_sha256": "565ba5e93f8b236716d38175c9cc86c3cd7f8492143571edee894cb126faacab",
+  "manifest_sha256": "fe5b1c4bd288ca9cfcd38fde2b97432b9544592b94fc71b45aa9cab807ecd4ce",
   "reference": {
     "commit": "c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e",
     "installation": {
@@ -827,7 +835,26 @@
       "module_path": "$WHEEL_RUN_ROOT/venv-baseline/lib/python3.11/site-packages/alphus/__init__.py",
       "record_hash": "sha256=YMETX0sFrloKmGhuymcZaioTaIcipuwLe7tmfw2wlz0"
     },
-    "wheel_sha256": "b32d9e001b16451615aa8613b4749f4c08901e1bd62a49a6c6826c0d00041e6d"
+    "wheel_sha256": "e27437b2c94d2ac5568f658a168a5fece8297471e43f2e6113658da3af104ab4"
+  },
+  "scenario_classification": {
+    "behavioral": [
+      "file-size-direct",
+      "file-size-plain",
+      "benchmark-docs-direct",
+      "numeric-literals-direct",
+      "input-contracts-direct",
+      "test-quality-direct",
+      "output-escaping-direct-plain",
+      "profile-serial-parallel"
+    ],
+    "control": [
+      "catalog",
+      "strict-config-rejection"
+    ],
+    "planned_only": [
+      "profile-plan-selection"
+    ]
   },
   "scenario_results": {
     "candidate": {
@@ -839,6 +866,7 @@
           "json-result"
         ],
         "build": "candidate",
+        "execution_classification": "behavioral",
         "fixture_git_commit": "a3c67946b54bc51b3352c49de02f21929a43bfed",
         "fixture_sha256": "ed24db773f476808d7ef3b62e82de42c1772162587297146d224780a2d193736",
         "selectors": [
@@ -859,6 +887,7 @@
           "catalog-schema"
         ],
         "build": "candidate",
+        "execution_classification": "control",
         "fixture_git_commit": "aba6ff5ac214cce328f5135a8be72434fe38991b",
         "fixture_sha256": "ff11c9adfdcb941a5a73c02313225f110748f630178ec536a3e3dc760e3163b5",
         "selectors": [],
@@ -879,6 +908,7 @@
           "json-result"
         ],
         "build": "candidate",
+        "execution_classification": "behavioral",
         "fixture_git_commit": "5d47cc3a47e8d1bc6f04352f31e8860a51b26016",
         "fixture_sha256": "afa1ec78abb5cae18d6e51f02b5a3d1dd7222af244d651fafaa583983c823ca7",
         "selectors": [
@@ -900,6 +930,7 @@
           "finding-id"
         ],
         "build": "candidate",
+        "execution_classification": "behavioral",
         "fixture_git_commit": "5d47cc3a47e8d1bc6f04352f31e8860a51b26016",
         "fixture_sha256": "afa1ec78abb5cae18d6e51f02b5a3d1dd7222af244d651fafaa583983c823ca7",
         "selectors": [
@@ -922,8 +953,9 @@
           "json-result"
         ],
         "build": "candidate",
-        "fixture_git_commit": "5851364eb5773ca6d03d2f4a9445c39581d61a6a",
-        "fixture_sha256": "f4c1c4fd9fe3d3463a7bf5309c97d5c3e2e4908ccf6689a64477e6ecdc34b6ae",
+        "execution_classification": "behavioral",
+        "fixture_git_commit": "ac9c2656bd481ee30b4189659eb2afd570961be0",
+        "fixture_sha256": "2621f6a2834d7bbcf1a26565da5adb532d02805bf824c8023e949c077ac25d62",
         "selectors": [
           "input-contracts"
         ],
@@ -944,6 +976,7 @@
           "json-result"
         ],
         "build": "candidate",
+        "execution_classification": "behavioral",
         "fixture_git_commit": "ba9d03382201a76a02ed32f9060c1e564de2eae2",
         "fixture_sha256": "2a5001f59d8c4467bef4947693ce45e88314d12ba6eedc0db67288e16c03b692",
         "selectors": [
@@ -958,12 +991,35 @@
         },
         "within_build_equal": true
       },
+      "output-escaping-direct-plain": {
+        "behavior": [
+          "direct-selector",
+          "security-finding",
+          "plain-output"
+        ],
+        "build": "candidate",
+        "execution_classification": "behavioral",
+        "fixture_git_commit": "e4179b730297de5bee48315704ebe84c865fb32e",
+        "fixture_sha256": "d78ad84e667cf6009da9c674f559d36226394dd1345e12a94c387e2289ef7f3c",
+        "selectors": [
+          "output-escaping"
+        ],
+        "variants": {
+          "plain": {
+            "exit_code": 1,
+            "stderr": "",
+            "stdout": "ERROR alphus/python/none/security/manual-output-escaping src/render.py:2: manual output escape replacement; use a library or tested shared utility\nOutput escaping: 1 finding(s)\n"
+          }
+        },
+        "within_build_equal": true
+      },
       "profile-plan-selection": {
         "behavior": [
           "resolved-profile-selection",
           "selected-selector-list"
         ],
         "build": "candidate",
+        "execution_classification": "planned-only",
         "fixture_git_commit": "ec9216e5f1d9c6ddb48610ddb976abc1e832f5b9",
         "fixture_sha256": "3c6d090242b6e473eec4e34eacc4f228da6bce26b3dbf9c618588a4ca3946870",
         "selectors": [
@@ -987,6 +1043,7 @@
           "serial-parallel"
         ],
         "build": "candidate",
+        "execution_classification": "behavioral",
         "fixture_git_commit": "ec9216e5f1d9c6ddb48610ddb976abc1e832f5b9",
         "fixture_sha256": "3c6d090242b6e473eec4e34eacc4f228da6bce26b3dbf9c618588a4ca3946870",
         "selectors": [
@@ -1014,6 +1071,7 @@
           "diagnostic-output"
         ],
         "build": "candidate",
+        "execution_classification": "control",
         "fixture_git_commit": "80a7670393872e6922e89365f26ca9b95247b316",
         "fixture_sha256": "a6bf7cd7081b2b74f62bfba38f1f0d41be2f48741f3745a02c9577985fa1b092",
         "selectors": [],
@@ -1022,6 +1080,29 @@
             "exit_code": 2,
             "stderr": "Invalid quality policy: configuration values failed validation.\n",
             "stdout": ""
+          }
+        },
+        "within_build_equal": true
+      },
+      "test-quality-direct": {
+        "behavior": [
+          "direct-selector",
+          "test-assertion-prose-heuristic",
+          "finding-id",
+          "json-result"
+        ],
+        "build": "candidate",
+        "execution_classification": "behavioral",
+        "fixture_git_commit": "64e4313af5960986704404bef8efc37d9348e514",
+        "fixture_sha256": "2172f8f643eccc4b9ace75d571bd3b765306a11035806c3cd968558c58f49579",
+        "selectors": [
+          "test-quality"
+        ],
+        "variants": {
+          "json": {
+            "exit_code": 0,
+            "stderr": "",
+            "stdout": "[{\"line\":6,\"message\":\"large exact prose comparison; review whether the full text is a stable contract\",\"path\":\"tests/report_fixture.py\",\"rule_id\":\"alphus/python/none/testing/large-prose-assertion\",\"severity\":\"warning\"}]"
           }
         },
         "within_build_equal": true
@@ -1036,6 +1117,7 @@
           "json-result"
         ],
         "build": "reference",
+        "execution_classification": "behavioral",
         "fixture_git_commit": "a3c67946b54bc51b3352c49de02f21929a43bfed",
         "fixture_sha256": "ed24db773f476808d7ef3b62e82de42c1772162587297146d224780a2d193736",
         "selectors": [
@@ -1056,6 +1138,7 @@
           "catalog-schema"
         ],
         "build": "reference",
+        "execution_classification": "control",
         "fixture_git_commit": "aba6ff5ac214cce328f5135a8be72434fe38991b",
         "fixture_sha256": "ff11c9adfdcb941a5a73c02313225f110748f630178ec536a3e3dc760e3163b5",
         "selectors": [],
@@ -1076,6 +1159,7 @@
           "json-result"
         ],
         "build": "reference",
+        "execution_classification": "behavioral",
         "fixture_git_commit": "5d47cc3a47e8d1bc6f04352f31e8860a51b26016",
         "fixture_sha256": "afa1ec78abb5cae18d6e51f02b5a3d1dd7222af244d651fafaa583983c823ca7",
         "selectors": [
@@ -1097,6 +1181,7 @@
           "finding-id"
         ],
         "build": "reference",
+        "execution_classification": "behavioral",
         "fixture_git_commit": "5d47cc3a47e8d1bc6f04352f31e8860a51b26016",
         "fixture_sha256": "afa1ec78abb5cae18d6e51f02b5a3d1dd7222af244d651fafaa583983c823ca7",
         "selectors": [
@@ -1119,8 +1204,9 @@
           "json-result"
         ],
         "build": "reference",
-        "fixture_git_commit": "5851364eb5773ca6d03d2f4a9445c39581d61a6a",
-        "fixture_sha256": "f4c1c4fd9fe3d3463a7bf5309c97d5c3e2e4908ccf6689a64477e6ecdc34b6ae",
+        "execution_classification": "behavioral",
+        "fixture_git_commit": "ac9c2656bd481ee30b4189659eb2afd570961be0",
+        "fixture_sha256": "2621f6a2834d7bbcf1a26565da5adb532d02805bf824c8023e949c077ac25d62",
         "selectors": [
           "input-contracts"
         ],
@@ -1141,6 +1227,7 @@
           "json-result"
         ],
         "build": "reference",
+        "execution_classification": "behavioral",
         "fixture_git_commit": "ba9d03382201a76a02ed32f9060c1e564de2eae2",
         "fixture_sha256": "2a5001f59d8c4467bef4947693ce45e88314d12ba6eedc0db67288e16c03b692",
         "selectors": [
@@ -1155,12 +1242,35 @@
         },
         "within_build_equal": true
       },
+      "output-escaping-direct-plain": {
+        "behavior": [
+          "direct-selector",
+          "security-finding",
+          "plain-output"
+        ],
+        "build": "reference",
+        "execution_classification": "behavioral",
+        "fixture_git_commit": "e4179b730297de5bee48315704ebe84c865fb32e",
+        "fixture_sha256": "d78ad84e667cf6009da9c674f559d36226394dd1345e12a94c387e2289ef7f3c",
+        "selectors": [
+          "output-escaping"
+        ],
+        "variants": {
+          "plain": {
+            "exit_code": 1,
+            "stderr": "",
+            "stdout": "ERROR alphus/python/none/security/manual-output-escaping src/render.py:2: manual output escape replacement; use a library or tested shared utility\nOutput escaping: 1 finding(s)\n"
+          }
+        },
+        "within_build_equal": true
+      },
       "profile-plan-selection": {
         "behavior": [
           "resolved-profile-selection",
           "selected-selector-list"
         ],
         "build": "reference",
+        "execution_classification": "planned-only",
         "fixture_git_commit": "ec9216e5f1d9c6ddb48610ddb976abc1e832f5b9",
         "fixture_sha256": "3c6d090242b6e473eec4e34eacc4f228da6bce26b3dbf9c618588a4ca3946870",
         "selectors": [
@@ -1184,6 +1294,7 @@
           "serial-parallel"
         ],
         "build": "reference",
+        "execution_classification": "behavioral",
         "fixture_git_commit": "ec9216e5f1d9c6ddb48610ddb976abc1e832f5b9",
         "fixture_sha256": "3c6d090242b6e473eec4e34eacc4f228da6bce26b3dbf9c618588a4ca3946870",
         "selectors": [
@@ -1211,6 +1322,7 @@
           "diagnostic-output"
         ],
         "build": "reference",
+        "execution_classification": "control",
         "fixture_git_commit": "80a7670393872e6922e89365f26ca9b95247b316",
         "fixture_sha256": "a6bf7cd7081b2b74f62bfba38f1f0d41be2f48741f3745a02c9577985fa1b092",
         "selectors": [],
@@ -1219,6 +1331,29 @@
             "exit_code": 2,
             "stderr": "Invalid quality policy: configuration values failed validation.\n",
             "stdout": ""
+          }
+        },
+        "within_build_equal": true
+      },
+      "test-quality-direct": {
+        "behavior": [
+          "direct-selector",
+          "test-assertion-prose-heuristic",
+          "finding-id",
+          "json-result"
+        ],
+        "build": "reference",
+        "execution_classification": "behavioral",
+        "fixture_git_commit": "64e4313af5960986704404bef8efc37d9348e514",
+        "fixture_sha256": "2172f8f643eccc4b9ace75d571bd3b765306a11035806c3cd968558c58f49579",
+        "selectors": [
+          "test-quality"
+        ],
+        "variants": {
+          "json": {
+            "exit_code": 0,
+            "stderr": "",
+            "stdout": "[{\"line\":6,\"message\":\"large exact prose comparison; review whether the full text is a stable contract\",\"path\":\"tests/report_fixture.py\",\"rule_id\":\"alphus/python/none/testing/large-prose-assertion\",\"severity\":\"warning\"}]"
           }
         },
         "within_build_equal": true

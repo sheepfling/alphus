@@ -333,20 +333,23 @@ with its scenario manifest and fixtures under
 SHAs, installs each wheel into a separate virtual environment, verifies that
 `alphus/__init__.py` is owned by the installed distribution and matches the
 wheel `RECORD`, and checks that fixtures remain unchanged. Its report records
-source commits, wheel hashes, fixture commits and hashes, the manifest hash,
-package versions, and the declared output normalization. Exact temporary paths
-are replaced with stable placeholders in the evidence.
+source commits, wheel hashes, fixture commits and hashes, the manifest and
+harness hashes, package versions, and the declared output normalization. It
+freezes each fixture once for both runs, compares fixture hashes and Git
+commits, and checks that the manifest and harness stay unchanged through the
+run. Exact temporary paths are replaced with stable placeholders in the evidence.
 
 The comparison used reference `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`
-and candidate `99686ac5348b218f52825b3a50ddfcef113f7976`. The catalog was
+and candidate `d8cc02081a511c79466c6b52361d02cd2f0238e9`. The catalog was
 identical at 62 selectors. Behavioral cases exercised `file-size`,
-`benchmark-docs`, `line-length`, `numeric-literals`, and `input-contracts`:
+`benchmark-docs`, `line-length`, `numeric-literals`, `input-contracts`, `test-quality`, and
+`output-escaping`:
 strict invalid-config rejection, direct JSON and plain output, profile
 selection, exact finding IDs and locations, and serial/parallel profile
-results. All nine scenarios matched with no differences. Serial and parallel
+results. All eleven scenarios matched with no differences. Serial and parallel
 profile outputs also matched.
 
-This is representative evidence only: 5 of 62 selectors were behaviorally
+This is representative evidence only: 7 of 62 selectors were behaviorally
 exercised. Composite package-boundaries, polyglot/native tools, plugin API v1,
 missing or unsupported providers, partial/error states, and lazy unselected
 backends remain explicitly untested in the report. The two wheel virtual
@@ -357,15 +360,15 @@ identify each artifact. This does not meet the full compatibility prerequisite
 for any runtime registration migration.
 
 The complete machine-readable run is
-[the c880093-to-dbcddcb evidence report](architecture/builtin-check-wheel-differential-c880093-99686ac.json).
+[the c880093-to-d8cc020 evidence report](architecture/builtin-check-wheel-differential-c880093-d8cc020.json).
 Reproduce it with:
 
 ```sh
 .venv/bin/python scripts/differential_wheels.py \
   --root . \
   --baseline c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e \
-  --candidate 99686ac5348b218f52825b3a50ddfcef113f7976 \
-  --output docs/architecture/builtin-check-wheel-differential-c880093-99686ac.json
+  --candidate d8cc02081a511c79466c6b52361d02cd2f0238e9 \
+  --output docs/architecture/builtin-check-wheel-differential-c880093-d8cc020.json
 ```
 
 ## Performance and cache boundary
