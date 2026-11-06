@@ -830,13 +830,13 @@ including the warning-level profile result.
 
 The [documentation-config wheel differential][documentation-config-differential]
 compares main baseline `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` with source
-candidate `66e7eaa37eb7ad00e638722bdfc13f4728d8a449`. All 30 manifested
+candidate `6b41a039c995d8cb9ff3c8f71f1bdf52dae81583`. All 30 manifested
 scenarios match, catalogs match at 62 selectors, and the registered check
 preserves the conflict ID, location, severity, message, and profile behavior.
 Thirteen selectors now have behavior-level evidence; 49 remain without it.
 
 [documentation-config-differential]:
-  architecture/builtin-check-wheel-differential-c880093-66e7eaa-documentation-config.json
+  architecture/builtin-check-wheel-differential-c880093-6b41a03-documentation-config.json
 
 ## Performance and cache boundary
 

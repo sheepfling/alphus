@@ -95,7 +95,7 @@ providers.
 This is still bounded: the other 56 baseline selectors use legacy registration
 paths, and the current thirteen-selector differential report is not full wheel
 equivalence. The [latest pinned report](
-architecture/builtin-check-wheel-differential-c880093-66e7eaa-documentation-config.json)
+architecture/builtin-check-wheel-differential-c880093-6b41a03-documentation-config.json)
 includes direct and profile documentation-config execution; 49 baseline selectors
 still lack behavior-level differential evidence. Broad migration must continue
 by owner package with direct/profile behavior comparisons, lazy-provider checks,
