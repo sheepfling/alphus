@@ -498,6 +498,38 @@ PATH="$PWD/node_modules/.bin:$PATH" .venv/bin/python scripts/differential_wheels
   --output docs/architecture/builtin-check-wheel-differential-c880093-d8cc020-dispatch-matrix.json
 ```
 
+## First runtime registration slice: `file-size`
+
+Commit `22698843ad2ceca12f4b65567cd3cf5cf1340bf2` moves file-size behavior to
+`src/alphus/gates/hygiene/file_size.py` and removes its duplicate entries from
+the central `RuleSpec` and hygiene runner maps. Its adjacent `ALPHUS_CHECK`
+literal feeds generated feature metadata, the `RuleSpec`, inventory and a
+lazy generated dispatch thunk. Strict `CheckPolicies.file_size` validation and
+the `QualityRuleName` selector remain in their shared contracts. This removes
+two hand-maintained runtime registration entries for this selector; it does
+not yet make strict config or selector typing feature-owned.
+
+The corrected candidate commit
+`ab0d4ff9c40672943a8690a20b2773efbb9b1c3f` was compared with the pinned
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` wheel. The [file-size differential
+report][file-size-differential] records equal 62-selector catalogs and no
+differences across the 21 manifested scenarios. Nine built-in selectors have
+behavior-level evidence in this run, including file-size direct JSON/plain
+output and profile-plan plus serial/parallel execution. The 26 direct selector
+invocations and 36 strict missing-policy rejections verify selection/config
+contracts; they are not semantic coverage for all 62 checks. The existing
+subprocess regression also verifies that importing dispatch leaves the
+file-size implementation unloaded until that selector is run. Installed-wheel
+CI passed the self-profile and all 2,425 package tests (43 skipped).
+
+The first differential attempt caught a catalog-summary change for
+file-size. The declaration was corrected to preserve the exact mainline
+summary, and the final report above was generated from the corrected commit.
+This is one bounded migration with representative compatibility evidence, not
+full equivalence or completion of issue #87.
+
+[file-size-differential]: architecture/builtin-check-wheel-differential-c880093-ab0d4ff-file-size.json
+
 ## Performance and cache boundary
 
 Measure startup/import time, inventory construction, parsing, native tool
