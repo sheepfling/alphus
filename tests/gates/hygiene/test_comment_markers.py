@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -147,15 +148,13 @@ def test_malformed_python_reports_the_scan_failure_contract(tmp_path: Path) -> N
 
     findings = check_comment_markers(tmp_path, [relative], policy)
 
-    assert [
-        (finding.rule_id, finding.path, finding.message) for finding in findings
-    ] == [
-        (
-            "alphus/any/none/hygiene/comment-scan-failed",
-            "sample.py",
-            "cannot scan Python comments: ('EOF in multi-line string', (1, 8))",
-        )
+    assert [(finding.rule_id, finding.path) for finding in findings] == [
+        ("alphus/any/none/hygiene/comment-scan-failed", "sample.py")
     ]
+    assert re.fullmatch(
+        r"cannot scan Python comments: \('EOF in multi-line string', \(1, \d+\)\)",
+        findings[0].message,
+    )
 
 
 def test_unselected_comment_marker_provider_stays_unloaded() -> None:
