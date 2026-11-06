@@ -37,12 +37,26 @@ class FeatureDefinition:
     requires_files: bool
     runner_module: str
     runner_name: str
+    policy_inputs: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if _SELECTOR.fullmatch(self.selector) is None:
             raise ValueError("feature selectors must be lowercase slugs")
         if _POLICY_FIELD.fullmatch(self.policy_field) is None:
             raise ValueError("feature policy fields must be lowercase identifiers")
+        policy_values: _StringLabels = cast(_StringLabels, self.policy_inputs)
+        policy_inputs = _require_tuple(policy_values, "feature policy inputs")
+        if not policy_inputs:
+            policy_inputs = (self.policy_field,)
+            object.__setattr__(self, "policy_inputs", policy_inputs)
+        if (
+            len(policy_inputs) != len(set(policy_inputs))
+            or self.policy_field not in policy_inputs
+            or any(_POLICY_FIELD.fullmatch(item) is None for item in policy_inputs)
+        ):
+            raise ValueError(
+                "feature policy inputs must uniquely include the primary policy field"
+            )
         if _POLICY_MODEL.fullmatch(self.policy_model) is None:
             raise ValueError("feature policy models must name a built-in policy class")
         if not self.summary.strip():

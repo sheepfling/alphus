@@ -10,7 +10,8 @@ from types import MappingProxyType
 
 from alphus.config import ArchitectureGraphPolicy, PackageBoundaryPolicy
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, Scope
+from alphus.gates.repository.composite_contracts import package_boundary_rule_tag
 from alphus.support.source_text import read_utf8_text
 
 _EDGE_PATTERNS: Mapping[str, Pattern[str]] = MappingProxyType(
@@ -61,7 +62,7 @@ def check_architecture_graph(
     except (OSError, ValueError):
         return [
             Finding(
-                rule_id=rule_tag(
+                rule_id=package_boundary_rule_tag(
                     Scope.REPOSITORY,
                     Framework.NONE,
                     Category.ARCHITECTURE,
@@ -74,7 +75,7 @@ def check_architecture_graph(
     if not path.is_file():
         return [
             Finding(
-                rule_id=rule_tag(
+                rule_id=package_boundary_rule_tag(
                     Scope.REPOSITORY,
                     Framework.NONE,
                     Category.ARCHITECTURE,
@@ -89,7 +90,7 @@ def check_architecture_graph(
     if diagram is None:
         return [
             Finding(
-                rule_id=rule_tag(
+                rule_id=package_boundary_rule_tag(
                     Scope.REPOSITORY,
                     Framework.NONE,
                     Category.ARCHITECTURE,
@@ -107,7 +108,7 @@ def check_architecture_graph(
     if re.match(header, diagram.lstrip()) is None:
         return [
             Finding(
-                rule_id=rule_tag(
+                rule_id=package_boundary_rule_tag(
                     Scope.REPOSITORY,
                     Framework.NONE,
                     Category.ARCHITECTURE,
@@ -126,7 +127,7 @@ def check_architecture_graph(
     missing_nodes = set(allowed) - node_names.keys()
     findings = [
         Finding(
-            rule_id=rule_tag(
+            rule_id=package_boundary_rule_tag(
                 Scope.REPOSITORY, Framework.NONE, Category.ARCHITECTURE, "node-missing"
             ),
             path=graph.path,
@@ -143,7 +144,7 @@ def check_architecture_graph(
     expected.update(graph.extra_edges)
     findings.extend(
         Finding(
-            rule_id=rule_tag(
+            rule_id=package_boundary_rule_tag(
                 Scope.REPOSITORY, Framework.NONE, Category.ARCHITECTURE, "edge-missing"
             ),
             path=graph.path,
@@ -153,7 +154,7 @@ def check_architecture_graph(
     )
     findings.extend(
         Finding(
-            rule_id=rule_tag(
+            rule_id=package_boundary_rule_tag(
                 Scope.REPOSITORY,
                 Framework.NONE,
                 Category.ARCHITECTURE,

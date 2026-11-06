@@ -221,6 +221,30 @@ name = "json"
 arguments = ["--config", "quality-gates.toml", "--rule", "package-boundaries", "--json"]
 
 [[scenario]]
+name = "package-boundaries-profile-dispatch"
+fixture = "package-boundaries"
+selectors = ["package-boundaries"]
+behavior = ["explicit-profile-selection", "composite-effective-policy-inputs", "profile-result-adapter"]
+expected_exit = 0
+minimum_findings = 6
+expected_step_names = ["package-check"]
+expected_step_rules = ["package-boundaries"]
+expected_reported_step_rules = ["package-boundaries"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/python/none/dependencies/forbidden-package-dependency", path = "distributions/workspace-plugin/pyproject.toml" },
+  { rule_id = "alphus/python/none/architecture/forbidden-import", path = "distributions/workspace-plugin/src/workspace_plugin/__init__.py", line = 1 },
+  { rule_id = "alphus/repository/none/architecture/edge-missing", path = "docs/architecture.md" },
+  { rule_id = "alphus/repository/none/architecture/edge-forbidden", path = "docs/architecture.md" },
+  { rule_id = "alphus/repository/none/metadata/version-mismatch", path = "pyproject.toml" },
+  { rule_id = "alphus/python/none/architecture/public-callable-unregistered", path = "registry.py" },
+]
+
+[[scenario.variant]]
+name = "profile-json"
+arguments = ["--config", "quality-gates.toml", "--profile", "package-review", "--run", "--json"]
+
+[[scenario]]
 name = "cyclomatic-python-ruff"
 fixture = "cyclomatic-python"
 selectors = ["cyclomatic-complexity"]

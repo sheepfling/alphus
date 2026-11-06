@@ -141,7 +141,6 @@ def test_gate_themes_own_their_runner_mappings() -> None:
             REPOSITORY_RULE_RUNNERS,
             {
                 "module-roles",
-                "package-boundaries",
                 "dependency-locks",
                 "repository-layout",
                 "documentation-config",
@@ -161,6 +160,9 @@ def test_gate_themes_own_their_runner_mappings() -> None:
         assert set(runners) == expected
         assert all(RULE_RUNNERS[name] is runner for name, runner in runners.items())
     assert RULE_RUNNERS["file-size"].__module__ == (
+        "alphus.execution._generated_dispatch"
+    )
+    assert RULE_RUNNERS["package-boundaries"].__module__ == (
         "alphus.execution._generated_dispatch"
     )
 

@@ -117,12 +117,6 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             "Checks configured Python and Node launcher/script conventions.",
             ("python", "javascript"),
         ),
-        "package-boundaries": RuleSpec(
-            "package_boundaries",
-            RuleOutputShape.FINDINGS,
-            "Checks configured Python import and package-boundary rules.",
-            ("python",),
-        ),
         "dependency-locks": RuleSpec(
             "dependency_locks",
             RuleOutputShape.FINDINGS,

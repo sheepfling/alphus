@@ -410,17 +410,15 @@ the rejected neighbors. This establishes a bounded pattern for dynamic/shared
 emitters; it does not migrate the numeric selectors' selector/config/runner
 registration or imply all existing shared checkers fit this contract.
 
-Likewise, the current `FeatureDefinition.policy_field` and single
-`runner_module` describe a selector's primary compatibility binding, not its
-complete effective-input graph or provider graph. `package-boundaries` uses
-`PackageBoundaryPolicy` together with architecture-graph, version-sync and
-callable-registry inputs; its history digest currently has a separate known
-input gap. Do not infer that graph from one primary field or change legacy
-history cohorts during registration work. A composite migration needs a typed
-effective-input aggregate (or explicit, validated policy-input references)
-and a feature-level router that can plan multiple providers while retaining
-the primary `RuleSpec.policy_field` and public selector. The shape should be
-proved against the existing composite before it becomes a general API.
+`FeatureDefinition.policy_field` remains the primary compatibility binding.
+Feature declarations can also name validated `policy_inputs`; the
+package-boundaries slice declares its primary package policy plus the existing
+architecture-graph, version-sync and callable-registry fields. A feature-owned
+router composes those configured providers while `RuleSpec.policy_field`, the
+public selector and strict TOML names remain unchanged. This is one proven
+composite, not yet a generic provider-graph API. Its history digest still has
+a separate known input gap. Do not change legacy history cohorts during
+registration work.
 
 ### Human-facing smell names and stable finding IDs
 
@@ -712,6 +710,34 @@ selectors have behavior-level evidence; the remaining 53 still lack it. The
 selection/config evidence, not semantic coverage. Installed-wheel validation
 on the line-length candidate passed 27 self-profile checks and 2,432 tests
 (43 skipped). Neither slice proves full equivalence or completes #87.
+
+## Composite registration slice: `package-boundaries`
+
+`package-boundaries` now owns one static `ALPHUS_CHECK` declaration beside its
+runner. The declaration supplies the selector, primary policy, four effective
+policy inputs, output contract and lazy runner binding. Generated views provide
+the feature definition, catalog `RuleSpec`, strict primary `CheckPolicies`
+field, selector literal, morphology view and dispatch thunk. The secondary
+policy fields remain in their existing strict models because they are also
+used elsewhere; the declaration names them explicitly rather than copying
+their schemas.
+
+The existing composite emits findings from package-boundary, architecture
+graph, version-sync and callable-registry engines. Their stable RuleTags are
+owned by one statically parsed complaint contract in
+`gates/repository/composite_contracts.py`; all four engines resolve through
+that contract. The router imports optional providers only when their policy is
+configured, and generated dispatch imports the feature runner only when this
+selector is selected. The scheduler's `after` dependencies remain ordering
+only. No public IDs, configuration keys, finding adapters, selection rules,
+report shape or enforcement thresholds change.
+
+Regression coverage checks strict policy parsing, direct dispatch, profile
+dispatch and that an unselected composite leaves its checker modules unloaded.
+The differential matrix exercises both direct JSON findings and an explicitly
+selected profile step with all four policy inputs. This extends compatibility
+evidence for one difficult composite; the remaining legacy selectors and
+effectful command/build paths still require behavior-level coverage.
 
 [file-size-differential]: architecture/builtin-check-wheel-differential-c880093-ab0d4ff-file-size.json
 [line-length-differential]: architecture/builtin-check-wheel-differential-c880093-0daeab6-line-length.json

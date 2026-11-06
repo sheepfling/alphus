@@ -8,7 +8,8 @@ from pathlib import Path
 
 from alphus.config import CallableRegistryPolicy
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, Scope
+from alphus.gates.repository.composite_contracts import package_boundary_rule_tag
 from alphus.support.data_access import contained_file
 from alphus.support.source_text import read_python_source
 
@@ -68,7 +69,7 @@ def check_callable_registry(
     if registry_path is None:
         return [
             Finding(
-                rule_id=rule_tag(
+                rule_id=package_boundary_rule_tag(
                     Scope.PYTHON,
                     Framework.NONE,
                     Category.ARCHITECTURE,
@@ -114,7 +115,7 @@ def check_callable_registry(
     ):
         findings.append(
             Finding(
-                rule_id=rule_tag(
+                rule_id=package_boundary_rule_tag(
                     Scope.PYTHON,
                     Framework.NONE,
                     Category.TYPING,
@@ -127,7 +128,7 @@ def check_callable_registry(
     if registry is None or registry.value is None:
         findings.append(
             Finding(
-                rule_id=rule_tag(
+                rule_id=package_boundary_rule_tag(
                     Scope.PYTHON,
                     Framework.NONE,
                     Category.ARCHITECTURE,
@@ -142,7 +143,7 @@ def check_callable_registry(
     if literal is None:
         findings.append(
             Finding(
-                rule_id=rule_tag(
+                rule_id=package_boundary_rule_tag(
                     Scope.PYTHON,
                     Framework.NONE,
                     Category.ARCHITECTURE,
@@ -158,7 +159,7 @@ def check_callable_registry(
     if not _contains_name(registry.annotation, policy.protocol_name):
         findings.append(
             Finding(
-                rule_id=rule_tag(
+                rule_id=package_boundary_rule_tag(
                     Scope.PYTHON,
                     Framework.NONE,
                     Category.TYPING,
@@ -184,7 +185,7 @@ def check_callable_registry(
             ):
                 findings.append(
                     Finding(
-                        rule_id=rule_tag(
+                        rule_id=package_boundary_rule_tag(
                             Scope.PYTHON,
                             Framework.NONE,
                             Category.CORRECTNESS,
@@ -200,7 +201,7 @@ def check_callable_registry(
             case _:
                 findings.append(
                     Finding(
-                        rule_id=rule_tag(
+                        rule_id=package_boundary_rule_tag(
                             Scope.PYTHON,
                             Framework.NONE,
                             Category.CORRECTNESS,
@@ -213,7 +214,7 @@ def check_callable_registry(
                 )
     findings.extend(
         Finding(
-            rule_id=rule_tag(
+            rule_id=package_boundary_rule_tag(
                 Scope.PYTHON,
                 Framework.NONE,
                 Category.ARCHITECTURE,
@@ -226,7 +227,7 @@ def check_callable_registry(
     )
     findings.extend(
         Finding(
-            rule_id=rule_tag(
+            rule_id=package_boundary_rule_tag(
                 Scope.PYTHON, Framework.NONE, Category.CORRECTNESS, "unknown-callable"
             ),
             path=policy.registry_path,
@@ -236,7 +237,7 @@ def check_callable_registry(
     )
     findings.extend(
         Finding(
-            rule_id=rule_tag(
+            rule_id=package_boundary_rule_tag(
                 Scope.PYTHON, Framework.NONE, Category.CORRECTNESS, "duplicate-callable"
             ),
             path=policy.registry_path,

@@ -28,6 +28,35 @@ def test_generated_feature_definitions_are_immutable() -> None:
             runner_name=definition.runner_name,
         )
 
+    default_inputs = FeatureDefinition(
+        selector=definition.selector,
+        policy_field=definition.policy_field,
+        policy_model=definition.policy_model,
+        output_shape=definition.output_shape,
+        summary=definition.summary,
+        applies_to=definition.applies_to,
+        domains=definition.domains,
+        requires_files=definition.requires_files,
+        runner_module=definition.runner_module,
+        runner_name=definition.runner_name,
+    )
+    assert default_inputs.policy_inputs == (definition.policy_field,)
+
+    with pytest.raises(TypeError, match="immutable tuple"):
+        FeatureDefinition(
+            selector=definition.selector,
+            policy_field=definition.policy_field,
+            policy_model=definition.policy_model,
+            output_shape=definition.output_shape,
+            summary=definition.summary,
+            applies_to=definition.applies_to,
+            domains=definition.domains,
+            requires_files=definition.requires_files,
+            runner_module=definition.runner_module,
+            runner_name=definition.runner_name,
+            policy_inputs=[definition.policy_field],  # type: ignore[arg-type]
+        )
+
 
 def test_feature_definition_rejects_malformed_labels() -> None:
     definition = FEATURE_DEFINITIONS["file-size"]

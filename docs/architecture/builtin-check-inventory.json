@@ -641,7 +641,7 @@
       ],
       "requires_files": true,
       "result_adapter": "alphus.execution.results:RuleEvaluation.from_output/findings",
-      "runner": "alphus.gates.repository.runners:_package_boundary_findings",
+      "runner": "alphus.gates.repository.package_boundaries:run_package_boundary_gate",
       "selector": "package-boundaries"
     },
     {

@@ -78,17 +78,19 @@ readiness.
 
 ## Registration boundary and next tranche
 
-The six-check morphology pilot is metadata discovery, while the current #100
-runtime tranche also demonstrates feature-owned execution registration for
-`file-size` and `line-length`. Their declarations generate morphology,
-`FeatureDefinition`, `RuleSpec`, strict `CheckPolicies` fields, the selector
-literal and lazy dispatch. Existing config names, output adaptation, reports,
-selection and exit behavior remain the compatibility contract. Synthetic
-feature discovery proves a new selector can be found without a central
-selector list, and focused tests cover strict policy validation and unloaded
-unselected providers.
+The six-check morphology pilot is metadata discovery. Draft PR #100 also
+demonstrates feature-owned runtime registration for `file-size`, `line-length`
+and the composite `package-boundaries` feature. Its declaration generates
+morphology, `FeatureDefinition`, `RuleSpec`, strict primary `CheckPolicies`
+field, selector literal and lazy dispatch. The composite explicitly names its
+secondary effective policy inputs while retaining their existing strict
+models. Existing config names, output adaptation, reports, selection and exit
+behavior remain the compatibility contract. Synthetic feature discovery
+proves a new selector can be found without a central selector list; focused
+tests cover strict validation, composite dispatch and unloaded unselected
+providers.
 
-This is still bounded: the other 60 baseline selectors use legacy registration
+This is still bounded: the other 59 baseline selectors use legacy registration
 paths, and the current nine-selector differential report is not full wheel
 equivalence. Broad migration must continue by owner package with direct/profile
 behavior comparisons, lazy-provider checks, and explicit missing/unsupported,

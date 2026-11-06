@@ -35,3 +35,17 @@ source_path = "actions.py"
 registry_path = "registry.py"
 protocol_name = "Action"
 registry_name = "REGISTRY"
+
+[orchestration]
+failure_threshold = "error"
+default_profile = "package-review"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "package-check"
+rule = "package-boundaries"
+severity = "warning"
+
+[[orchestration.profiles]]
+name = "package-review"
+steps = ["package-check"]

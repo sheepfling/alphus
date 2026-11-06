@@ -79,6 +79,7 @@ class _FeatureRegistration:
     requires_files: bool
     runner_module: str
     runner_name: str
+    policy_inputs: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -361,6 +362,7 @@ def _validate_declaration(
             "runner_name",
         }
     )
+    optional_feature_fields: frozenset[str] = frozenset({"policy_inputs"})
     declaration_fields: frozenset[str] = _DECLARATION_COMMON_FIELDS | (
         feature_fields if feature_owned else frozenset[str]()
     )
@@ -368,7 +370,11 @@ def _validate_declaration(
         declaration_fields | {_DIRECT_FINDING_FIELD},
         declaration_fields | {_CONTRACT_FINDING_FIELD},
     )
-    if len(keys) != len(pairs) or keys not in valid_fields:
+    valid_key_sets = (
+        *valid_fields,
+        *(fields | optional_feature_fields for fields in valid_fields if feature_owned),
+    )
+    if len(keys) != len(pairs) or keys not in valid_key_sets:
         raise ValueError(
             f"{path}:{_CHECK_DECLARATION_NAME if feature_owned else _DECLARATION_NAME} "
             "must contain common fields and exactly one finding declaration "
@@ -493,6 +499,18 @@ def _validate_declaration(
         ):
             raise ValueError(f"{path}: runner_name must be a function identifier")
         applies_to = _string_tuple(field("applies_to"), "applies_to")
+        policy_inputs = (
+            _string_tuple(field("policy_inputs"), "policy_inputs")
+            if "policy_inputs" in keys
+            else (policy_text,)
+        )
+        if policy_text not in policy_inputs or any(
+            re.fullmatch(r"[a-z][a-z0-9_]*", item) is None for item in policy_inputs
+        ):
+            raise ValueError(
+                f"{path}: policy_inputs must include policy_field and use lowercase "
+                "identifiers"
+            )
         raw_domains: tuple[object, ...] | list[object] = cast(
             tuple[object, ...] | list[object], field("domains")
         )
@@ -514,6 +532,7 @@ def _validate_declaration(
             requires_files=files_value,
             runner_module=module_text,
             runner_name=function_text,
+            policy_inputs=policy_inputs,
         )
     return _Declaration(
         selector=selector_text,
@@ -778,6 +797,16 @@ def _validate_feature_registration(root: Path, declaration: _Declaration) -> Non
             f"{declaration.source}: feature policy field duplicates a legacy "
             f"CheckPolicies field: {feature.policy_field}"
         )
+    undeclared_policy_inputs = tuple(
+        policy_input
+        for policy_input in feature.policy_inputs
+        if policy_input != feature.policy_field and policy_input not in legacy_fields
+    )
+    if undeclared_policy_inputs:
+        raise ValueError(
+            f"{declaration.source}: secondary policy inputs must name existing "
+            f"CheckPolicies fields: {undeclared_policy_inputs!r}"
+        )
 
     policy_module, policy_class = feature.policy_model.rsplit(".", 1)
     policy_path = root.joinpath("src", *policy_module.split(".")).with_suffix(".py")
@@ -819,11 +848,24 @@ def _tuple_lines(name: str, values: tuple[str, ...]) -> list[str]:
 
 def _claim_lines(claim: str) -> list[str]:
     inline = f"            claim={_quoted(claim)},"
-    if len(inline) <= 100:
+    if len(inline) <= 88:
         return [inline]
+    quoted_claim = _quoted(claim)
+    if len(quoted_claim) + 16 <= 88:
+        return [
+            "            claim=(",
+            f"                {quoted_claim}",
+            "            ),",
+        ]
     parts = textwrap.wrap(
         claim, width=68, break_long_words=True, break_on_hyphens=False
     )
+    if len(parts) == 1:
+        return [
+            "            claim=(",
+            f"                {_quoted(parts[0])}",
+            "            ),",
+        ]
     quoted = [
         _quoted(part + (" " if index < len(parts) - 1 else ""))
         for index, part in enumerate(parts)
@@ -842,7 +884,7 @@ def _mechanism_lines(values: tuple[str, ...]) -> list[str]:
     inline = (
         f"            mechanisms=({', '.join(names)}{',' if len(names) == 1 else ''}),"
     )
-    if len(inline) <= 100:
+    if len(inline) <= 88:
         return [inline]
     return [
         "            mechanisms=(",
@@ -950,6 +992,7 @@ def render_feature_manifest(root: Path) -> str:
                 f"            requires_files={feature.requires_files!r},",
                 f"            runner_module={_quoted(feature.runner_module)},",
                 f"            runner_name={_quoted(feature.runner_name)},",
+                *_tuple_lines("policy_inputs", feature.policy_inputs),
                 "        ),",
             ]
         )
@@ -970,7 +1013,7 @@ def render_feature_policies(root: Path) -> str:
         if feature.policy_field in fields:
             raise ValueError(f"duplicate feature policy field {feature.policy_field!r}")
         fields[feature.policy_field] = feature
-    imports: dict[str, set[str]] = {}
+    imports: dict[str, set[str]] = {"alphus.policy.base": {"StrictModel"}}
     for feature in fields.values():
         module, class_name = _policy_class(feature)
         imports.setdefault(module, set()).add(class_name)
@@ -979,7 +1022,6 @@ def render_feature_policies(root: Path) -> str:
         "",
         "from __future__ import annotations",
         "",
-        "from alphus.policy.base import StrictModel",
     ]
     for module, names in sorted(imports.items()):
         lines.append(f"from {module} import {', '.join(sorted(names))}")

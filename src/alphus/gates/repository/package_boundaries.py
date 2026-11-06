@@ -5,19 +5,100 @@ from __future__ import annotations
 import ast
 import re
 import tomllib
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
+from importlib import import_module
 from pathlib import Path
-from typing import cast
+from typing import Final, cast
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from alphus.config import PackageBoundaryPolicy
+from alphus.config import (
+    CallableRegistryPolicy,
+    PackageBoundaryPolicy,
+    QualityGateConfig,
+    VersionSyncPolicy,
+)
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, Scope
+from alphus.gates.repository.composite_contracts import package_boundary_rule_tag
+from alphus.policy.architecture import ArchitectureGraphPolicy
+from alphus.policy.base import require_policy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source, read_utf8_text
+
+ALPHUS_CHECK: Final = (
+    ("selector", "package-boundaries"),
+    ("concern", "package-architecture-contracts"),
+    ("claim_kind", "condition"),
+    (
+        "claim",
+        "Configured package, architecture, version, and callable contracts are satisfied.",
+    ),
+    (("mechanisms", ("exact-rule", "bounded-heuristic"))),
+    (("inspected_scope", ("repository", "python-source", "package-metadata"))),
+    (("languages_formats", ("python", "toml", "mermaid"))),
+    (
+        "evidence_kinds",
+        ("package-metadata", "import-edge", "architecture-graph", "callable-map"),
+    ),
+    (("evaluation_maturity", "synthetic-only")),
+    (("finding_contracts", ("package-boundaries-composite",))),
+    ("policy_field", "package_boundaries"),
+    (
+        "policy_inputs",
+        (
+            "package_boundaries",
+            "architecture_graph",
+            "version_sync",
+            "callable_registry",
+        ),
+    ),
+    ("policy_model", "alphus.policy.architecture.PackageBoundaryPolicy"),
+    ("output_shape", "findings"),
+    ("summary", "Checks configured Python import and package-boundary rules."),
+    (("applies_to", ("python",))),
+    (("domains", ())),
+    ("requires_files", True),
+    ("runner_module", "alphus.gates.repository.package_boundaries"),
+    ("runner_name", "run_package_boundary_gate"),
+)
+
+
+def run_package_boundary_gate(
+    root: Path, _files: Sequence[Path], config: QualityGateConfig
+) -> list[Finding]:
+    """Run the package-owned composite with the configured optional providers."""
+    policy = require_policy(config.checks.package_boundaries, "package_boundaries")
+    findings = check_package_boundaries(root, policy)
+    graph_policy = config.checks.architecture_graph
+    if graph_policy is not None and graph_policy.graph is not None:
+        module = import_module("alphus.gates.repository.architecture_graph")
+        check_graph = cast(
+            Callable[
+                [Path, ArchitectureGraphPolicy, PackageBoundaryPolicy], list[Finding]
+            ],
+            module.check_architecture_graph,
+        )
+        findings.extend(check_graph(root, graph_policy.graph, policy))
+    version_policy = config.checks.version_sync
+    if version_policy is not None:
+        module = import_module("alphus.gates.repository.version_sync")
+        check_versions = cast(
+            Callable[[Path, VersionSyncPolicy], list[Finding]],
+            module.check_version_sync,
+        )
+        findings.extend(check_versions(root, version_policy))
+    registry_policy = config.checks.callable_registry
+    if registry_policy is not None:
+        module = import_module("alphus.gates.repository.callable_registry")
+        check_registry = cast(
+            Callable[[Path, CallableRegistryPolicy], list[Finding]],
+            module.check_callable_registry,
+        )
+        findings.extend(check_registry(root, registry_policy))
+    return findings
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,7 +211,7 @@ def _distributions(root: Path, policy: PackageBoundaryPolicy) -> _DistributionSc
         if not _inside_root(checkout, config):
             findings.append(
                 Finding(
-                    rule_id=rule_tag(
+                    rule_id=package_boundary_rule_tag(
                         Scope.PYTHON,
                         Framework.NONE,
                         Category.METADATA,
@@ -148,7 +229,7 @@ def _distributions(root: Path, policy: PackageBoundaryPolicy) -> _DistributionSc
         except (ValueError, tomllib.TOMLDecodeError) as error:
             findings.append(
                 Finding(
-                    rule_id=rule_tag(
+                    rule_id=package_boundary_rule_tag(
                         Scope.PYTHON,
                         Framework.NONE,
                         Category.METADATA,
@@ -167,7 +248,7 @@ def _distributions(root: Path, policy: PackageBoundaryPolicy) -> _DistributionSc
                 if not _valid_script_reference(reference):
                     findings.append(
                         Finding(
-                            rule_id=rule_tag(
+                            rule_id=package_boundary_rule_tag(
                                 Scope.PYTHON,
                                 Framework.NONE,
                                 Category.METADATA,
@@ -232,7 +313,7 @@ def _metadata_findings(
         if name not in allowed:
             findings.append(
                 Finding(
-                    rule_id=rule_tag(
+                    rule_id=package_boundary_rule_tag(
                         Scope.PYTHON,
                         Framework.NONE,
                         Category.CONFIGURATION,
@@ -245,7 +326,7 @@ def _metadata_findings(
         if policy.require_import_packages and not distribution.import_roots:
             findings.append(
                 Finding(
-                    rule_id=rule_tag(
+                    rule_id=package_boundary_rule_tag(
                         Scope.PYTHON,
                         Framework.NONE,
                         Category.CONFIGURATION,
@@ -263,7 +344,7 @@ def _metadata_findings(
                 if dependency not in allowed.get(name, frozenset()):
                     findings.append(
                         Finding(
-                            rule_id=rule_tag(
+                            rule_id=package_boundary_rule_tag(
                                 Scope.PYTHON,
                                 Framework.NONE,
                                 Category.DEPENDENCIES,
@@ -276,7 +357,7 @@ def _metadata_findings(
                 if dependency not in present:
                     findings.append(
                         Finding(
-                            rule_id=rule_tag(
+                            rule_id=package_boundary_rule_tag(
                                 Scope.PYTHON,
                                 Framework.NONE,
                                 Category.DEPENDENCIES,
@@ -289,7 +370,7 @@ def _metadata_findings(
             else:
                 findings.append(
                     Finding(
-                        rule_id=rule_tag(
+                        rule_id=package_boundary_rule_tag(
                             Scope.PYTHON,
                             Framework.NONE,
                             Category.DEPENDENCIES,
@@ -333,7 +414,7 @@ def _cycle_findings(
         visit(name, (name,))
     return [
         Finding(
-            rule_id=rule_tag(
+            rule_id=package_boundary_rule_tag(
                 Scope.PYTHON,
                 Framework.NONE,
                 Category.DEPENDENCIES,
@@ -430,7 +511,7 @@ def _source_findings(
             if previous != distribution.name:
                 findings.append(
                     Finding(
-                        rule_id=rule_tag(
+                        rule_id=package_boundary_rule_tag(
                             Scope.PYTHON,
                             Framework.NONE,
                             Category.CONFIGURATION,
@@ -500,7 +581,7 @@ def _source_findings(
                     if owner not in allowed.get(owner_distribution.name, frozenset()):
                         findings.append(
                             Finding(
-                                rule_id=rule_tag(
+                                rule_id=package_boundary_rule_tag(
                                     Scope.PYTHON,
                                     Framework.NONE,
                                     Category.ARCHITECTURE,
@@ -514,7 +595,7 @@ def _source_findings(
                     elif owner not in owner_distribution.dependencies:
                         findings.append(
                             Finding(
-                                rule_id=rule_tag(
+                                rule_id=package_boundary_rule_tag(
                                     Scope.PYTHON,
                                     Framework.NONE,
                                     Category.ARCHITECTURE,
@@ -531,7 +612,7 @@ def _source_findings(
                 ):
                     findings.append(
                         Finding(
-                            rule_id=rule_tag(
+                            rule_id=package_boundary_rule_tag(
                                 Scope.PYTHON,
                                 Framework.NONE,
                                 Category.ARCHITECTURE,
@@ -545,7 +626,7 @@ def _source_findings(
                 elif imported in loose_roots:
                     findings.append(
                         Finding(
-                            rule_id=rule_tag(
+                            rule_id=package_boundary_rule_tag(
                                 Scope.PYTHON,
                                 Framework.NONE,
                                 Category.ARCHITECTURE,
@@ -574,7 +655,7 @@ def _source_findings(
                                 findings.append(
                                     Finding(
                                         rule_id=(
-                                            rule_tag(
+                                            package_boundary_rule_tag(
                                                 Scope.PYTHON,
                                                 Framework.NONE,
                                                 Category.ARCHITECTURE,
@@ -594,7 +675,7 @@ def _source_findings(
                             findings.append(
                                 Finding(
                                     rule_id=(
-                                        rule_tag(
+                                        package_boundary_rule_tag(
                                             Scope.PYTHON,
                                             Framework.NONE,
                                             Category.ARCHITECTURE,
@@ -615,7 +696,7 @@ def _source_findings(
                         if imported == "<dynamic>":
                             findings.append(
                                 Finding(
-                                    rule_id=rule_tag(
+                                    rule_id=package_boundary_rule_tag(
                                         Scope.PYTHON,
                                         Framework.NONE,
                                         Category.ARCHITECTURE,
@@ -640,7 +721,7 @@ def _source_findings(
                         ) if _edits_sys_path(node, path_aliases):
                             findings.append(
                                 Finding(
-                                    rule_id=rule_tag(
+                                    rule_id=package_boundary_rule_tag(
                                         Scope.PYTHON,
                                         Framework.NONE,
                                         Category.SECURITY,

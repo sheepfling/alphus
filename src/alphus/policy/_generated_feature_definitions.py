@@ -18,6 +18,7 @@ FEATURE_DEFINITIONS: Mapping[str, FeatureDefinition] = MappingProxyType(
             requires_files=True,
             runner_module="alphus.gates.hygiene.file_size",
             runner_name="check_file_size",
+            policy_inputs=("file_size",),
         ),
         "line-length": FeatureDefinition(
             selector="line-length",
@@ -30,6 +31,25 @@ FEATURE_DEFINITIONS: Mapping[str, FeatureDefinition] = MappingProxyType(
             requires_files=True,
             runner_module="alphus.gates.hygiene.line_length",
             runner_name="check_line_length",
+            policy_inputs=("line_length",),
+        ),
+        "package-boundaries": FeatureDefinition(
+            selector="package-boundaries",
+            policy_field="package_boundaries",
+            policy_model="alphus.policy.architecture.PackageBoundaryPolicy",
+            output_shape="findings",
+            summary="Checks configured Python import and package-boundary rules.",
+            applies_to=("python",),
+            domains=(),
+            requires_files=True,
+            runner_module="alphus.gates.repository.package_boundaries",
+            runner_name="run_package_boundary_gate",
+            policy_inputs=(
+                "package_boundaries",
+                "architecture_graph",
+                "version_sync",
+                "callable_registry",
+            ),
         ),
     }
 )

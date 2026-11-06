@@ -14,7 +14,6 @@ from alphus.policy.architecture import (
     ArchitectureGraphCheckPolicy,
     CallableRegistryPolicy,
     ModuleRolePolicy,
-    PackageBoundaryPolicy,
 )
 from alphus.policy.base import (
     QualityRuleName,
@@ -148,7 +147,6 @@ class CheckPolicies(GeneratedFeaturePolicies):
     runtime_types: RuntimeTypePolicy | None = None
     cli: CliPolicy | None = None
     script_policy: ScriptPolicy | None = None
-    package_boundaries: PackageBoundaryPolicy | None = None
     module_roles: ModuleRolePolicy | None = None
     architecture_graph: ArchitectureGraphCheckPolicy | None = None
     repository_layout: RepositoryLayoutPolicy | None = None

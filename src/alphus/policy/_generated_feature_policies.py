@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from alphus.policy.architecture import PackageBoundaryPolicy
 from alphus.policy.base import StrictModel
 from alphus.policy.sources import FileSizePolicy, LineLengthPolicy
 
@@ -9,3 +10,4 @@ from alphus.policy.sources import FileSizePolicy, LineLengthPolicy
 class GeneratedFeaturePolicies(StrictModel):
     file_size: FileSizePolicy | None = None
     line_length: LineLengthPolicy | None = None
+    package_boundaries: PackageBoundaryPolicy | None = None

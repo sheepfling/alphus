@@ -7,7 +7,8 @@ from pathlib import Path
 
 from alphus.config import VersionSource, VersionSyncPolicy
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, Scope
+from alphus.gates.repository.composite_contracts import package_boundary_rule_tag
 from alphus.support.data_access import nested_value, validate_json_value
 from alphus.support.source_text import read_utf8_text
 
@@ -44,7 +45,7 @@ def check_version_sync(root: Path, policy: VersionSyncPolicy) -> list[Finding]:
         if version != reference_version:
             findings.append(
                 Finding(
-                    rule_id=rule_tag(
+                    rule_id=package_boundary_rule_tag(
                         Scope.REPOSITORY,
                         Framework.NONE,
                         Category.METADATA,
