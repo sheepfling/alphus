@@ -167,29 +167,205 @@ name = "parallel"
 arguments = ["--config", "quality-gates.toml", "--profile", "check", "--run", "--json", "--jobs", "2"]
 compare_within_build = true
 
+[[scenario]]
+name = "package-boundaries-composite"
+fixture = "package-boundaries"
+selectors = ["package-boundaries"]
+behavior = ["composite-package-policy", "effective-package-policy-inputs", "cross-file-findings"]
+expected_exit = 1
+minimum_findings = 6
+expected_findings = [
+  { rule_id = "alphus/python/none/dependencies/forbidden-package-dependency", path = "distributions/workspace-plugin/pyproject.toml" },
+  { rule_id = "alphus/python/none/architecture/forbidden-import", path = "distributions/workspace-plugin/src/workspace_plugin/__init__.py", line = 1 },
+  { rule_id = "alphus/repository/none/architecture/edge-missing", path = "docs/architecture.md" },
+  { rule_id = "alphus/repository/none/architecture/edge-forbidden", path = "docs/architecture.md" },
+  { rule_id = "alphus/repository/none/metadata/version-mismatch", path = "pyproject.toml" },
+  { rule_id = "alphus/python/none/architecture/public-callable-unregistered", path = "registry.py" },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "package-boundaries", "--json"]
+
+[[scenario]]
+name = "cyclomatic-python-ruff"
+fixture = "cyclomatic-python"
+selectors = ["cyclomatic-complexity"]
+behavior = ["native-ruff", "cyclomatic-report", "finding-and-coverage-provenance"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/any/none/maintainability/cyclomatic-complexity-threshold", path = "src/example.py", line = 1 },
+]
+expected_cyclomatic_outcome = "violations"
+expected_cyclomatic_backends = [
+  { language = "python", backend = "ruff", status = "violations", selected_files = 1, analyzed_files = 1 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "cyclomatic-complexity", "--json"]
+
+[[scenario]]
+name = "cyclomatic-missing-polyglot"
+fixture = "cyclomatic-missing-polyglot"
+selectors = ["cyclomatic-complexity"]
+behavior = ["javascript-and-cpp-backend-selection", "missing-native-provider", "operational-failure-report"]
+expected_exit = 2
+minimum_findings = 2
+expected_findings = [
+  { rule_id = "alphus/any/none/configuration/cyclomatic-backend-failure", path = "src/example.cpp" },
+  { rule_id = "alphus/any/none/configuration/cyclomatic-backend-failure", path = "src/example.js" },
+]
+expected_cyclomatic_outcome = "operational_failure"
+expected_cyclomatic_backends = [
+  { language = "cpp", backend = "lizard", status = "operational_failure", selected_files = 1, analyzed_files = 0 },
+  { language = "javascript", backend = "eslint", status = "operational_failure", selected_files = 1, analyzed_files = 0 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "cyclomatic-complexity", "--json"]
+
+[[scenario]]
+name = "cyclomatic-partial-coverage"
+fixture = "cyclomatic-partial"
+selectors = ["cyclomatic-complexity"]
+behavior = ["polyglot-selection", "no-matching-provider", "incomplete-coverage-exit"]
+expected_exit = 2
+expected_cyclomatic_outcome = "incomplete_coverage"
+expected_cyclomatic_backends = [
+  { language = "javascript", backend = "eslint", status = "no_matching_files", selected_files = 0, analyzed_files = 0 },
+  { language = "python", backend = "ruff", status = "clean", selected_files = 1, analyzed_files = 1 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "cyclomatic-complexity", "--json"]
+
+[[scenario]]
+name = "cyclomatic-unsupported-version"
+fixture = "cyclomatic-unsupported-version"
+selectors = ["cyclomatic-complexity"]
+behavior = ["native-version-mismatch", "operational-failure-report", "no-analysis-coverage"]
+expected_exit = 2
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/any/none/configuration/cyclomatic-backend-failure", path = "src/example.py" },
+]
+expected_cyclomatic_outcome = "operational_failure"
+expected_cyclomatic_backends = [
+  { language = "python", backend = "ruff", status = "operational_failure", selected_files = 1, analyzed_files = 0 },
+]
+required_output = ["unsupported ruff version 0.16.1; expected 0.15.0"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "cyclomatic-complexity", "--json"]
+
+[[scenario]]
+name = "cyclomatic-javascript-eslint"
+fixture = "cyclomatic-javascript"
+selectors = ["cyclomatic-complexity"]
+behavior = ["native-eslint", "javascript-provider", "finding-and-coverage-provenance"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/any/none/maintainability/cyclomatic-complexity-threshold", path = "src/example.js", line = 1 },
+]
+expected_cyclomatic_outcome = "violations"
+expected_cyclomatic_backends = [
+  { language = "javascript", backend = "eslint", status = "violations", selected_files = 1, analyzed_files = 1 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "cyclomatic-complexity", "--json"]
+
+[[scenario]]
+name = "cyclomatic-cpp-lizard"
+fixture = "cyclomatic-cpp"
+python_distributions = ["lizard==1.24.2"]
+selectors = ["cyclomatic-complexity"]
+behavior = ["native-lizard", "cpp-provider", "finding-and-coverage-provenance"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/any/none/maintainability/cyclomatic-complexity-threshold", path = "src/example.cpp", line = 1 },
+]
+expected_cyclomatic_outcome = "violations"
+expected_cyclomatic_backends = [
+  { language = "cpp", backend = "lizard", status = "violations", selected_files = 1, analyzed_files = 1 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "cyclomatic-complexity", "--json"]
+
+[[scenario]]
+name = "plugin-unselected-lazy"
+fixture = "plugin-unselected"
+plugin_package = "example"
+behavior = ["installed-plugin-discovery", "not-enabled", "module-not-imported"]
+expected_exit = 0
+required_output = ["\"name\":\"diff\"", "\"enabled\":false", "\"rules_loaded\":false"]
+
+[[scenario.variant]]
+name = "catalog"
+arguments = ["--config", "quality-gates.toml", "--catalog", "--json"]
+plugin_import_expected = false
+
+[[scenario]]
+name = "plugin-unenabled-settings-rejected"
+fixture = "plugin-unenabled-settings"
+plugin_package = "example"
+behavior = ["strict-plugin-config", "enablement-required", "module-not-imported"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-config"
+arguments = ["--config", "quality-gates.toml", "--catalog", "--json"]
+parse_json = false
+plugin_import_expected = false
+
+[[scenario]]
+name = "plugin-enabled-profile"
+fixture = "plugin-enabled"
+plugin_package = "example"
+selectors = ["diff:heading"]
+behavior = ["api-v1-installed-wheel", "explicit-plugin-enablement", "profile-selection", "plugin-finding-report"]
+expected_exit = 0
+minimum_findings = 1
+expected_step_names = ["markdown-title"]
+expected_step_rules = ["diff:heading"]
+expected_findings = [
+  { rule_id = "diff:heading/missing-title", path = "README.md", line = 1 },
+]
+
+[[scenario.variant]]
+name = "profile"
+arguments = ["--config", "quality-gates.toml", "--profile", "docs", "--run", "--json"]
+plugin_import_expected = true
+
 [[deferred]]
-capability = "composite-cross-file-package-boundaries"
+capability = "package-boundaries-history-digest-identity"
 status = "not-exercised"
-reason = "Needs a dedicated multi-distribution fixture and explicit checks for the four effective policy inputs."
+reason = "The composite runtime scenario exercises package, graph, version-sync, and callable-registry policies; changing legacy history cohort identity remains separately scoped."
 selector = "package-boundaries"
 
 [[deferred]]
-capability = "native-polyglot-cyclomatic"
+capability = "native-tool-unsupported-capability-plan"
 status = "not-exercised"
-reason = "Python, JavaScript, and C++ backends need matched native-tool fixtures, versions, and missing/unsupported states."
+reason = "Successful Python, JavaScript, and C++ providers plus missing, version-mismatch, and no-matching partial outcomes are exercised; plan-level unsupported-capability detail remains unasserted."
 selector = "cyclomatic-complexity"
 
 [[deferred]]
-capability = "plugin-api-v1"
-status = "not-exercised"
-reason = "The installed-wheel plugin conformance and explicit-enablement boundary needs its own fixture package."
+capability = "plugin-api-v1-conformance-edge-cases"
+status = "partial"
+reason = "The installed API-v1 plugin is discovered without import, rejected when unenabled settings are supplied, and explicitly selected in a profile; invalid plugin return values and duplicate entry points remain covered only by unit tests."
 
 [[deferred]]
-capability = "unselected-backend-laziness"
+capability = "unselected-builtin-backend-laziness"
 status = "not-exercised"
-reason = "Requires an import-trace contract for optional providers that does not treat current eager imports as acceptable."
-
-[[deferred]]
-capability = "missing-unsupported-partial-error-states"
-status = "not-exercised"
-reason = "The first harness run covers strict config errors and selected rule findings; native/provider status cases remain future scenarios."
+reason = "The plugin path proves unselected third-party modules remain unloaded; built-in optional provider modules still need a selected-versus-unselected import trace before registration migration."

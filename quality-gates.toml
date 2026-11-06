@@ -67,9 +67,12 @@ minimum_ast_nodes = 15
 
 [checks.python_style]
 extensions = [".py"]
-# The positive input-contract fixture needs a concrete mutable list parameter
-# to demonstrate a caller-visible mutation finding in its own differential run.
-exclude = ["tests/differential/fixtures/input-contracts/src/example.py"]
+# Positive differential fixtures retain the concrete input and registry shapes
+# needed to assert their findings; their scenario contracts verify those reports.
+exclude = [
+  "tests/differential/fixtures/input-contracts/src/example.py",
+  "tests/differential/fixtures/package-boundaries/registry.py",
+]
 opaque_boundary_paths = [
   "src/alphus/config.py",
   "src/alphus/cli.py",

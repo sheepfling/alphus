@@ -1,0 +1,23 @@
+schema_version = 1
+
+[files]
+include = ["*.md"]
+exclude = []
+
+[plugins]
+enabled = ["diff"]
+
+[plugins.rules."diff:heading"]
+heading_level = 1
+
+[orchestration]
+default_profile = "docs"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "markdown-title"
+rule = "diff:heading"
+
+[[orchestration.profiles]]
+name = "docs"
+steps = ["markdown-title"]

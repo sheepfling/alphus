@@ -9,6 +9,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -51,11 +52,22 @@ class _VariantDocument(_StrictDocument):
     arguments: Annotated[list[str], Field(default_factory=list)]
     compare_within_build: bool = False
     parse_json: bool | None = None
+    plugin_import_expected: bool | None = None
+
+
+class _ExpectedCyclomaticBackendDocument(_StrictDocument):
+    language: str
+    backend: str
+    status: str
+    selected_files: int
+    analyzed_files: int
 
 
 class _ScenarioDocument(_StrictDocument):
     name: str
     fixture: str | None = None
+    plugin_package: str | None = None
+    python_distributions: Annotated[list[str], Field(default_factory=list)]
     selectors: Annotated[list[str], Field(default_factory=list)]
     behavior: list[str]
     expected_exit: int
@@ -67,6 +79,10 @@ class _ScenarioDocument(_StrictDocument):
     required_output: Annotated[list[str], Field(default_factory=list)]
     expected_findings: Annotated[
         list[_ExpectedFindingDocument], Field(default_factory=list)
+    ]
+    expected_cyclomatic_outcome: str | None = None
+    expected_cyclomatic_backends: Annotated[
+        list[_ExpectedCyclomaticBackendDocument], Field(default_factory=list)
     ]
     variant: list[_VariantDocument]
 
@@ -125,6 +141,29 @@ class _ProfileDocument(_StrictDocument):
     steps: list[_ProfileStep]
 
 
+class _CyclomaticBackendDocument(_StrictDocument):
+    model_config = ConfigDict(extra="allow", strict=True)
+    language: str
+    backend: str
+    status: str
+    selected_file_count: int
+    analyzed_file_count: int
+    failure: str | None = None
+
+
+class _CyclomaticReportDocument(_StrictDocument):
+    model_config = ConfigDict(extra="allow", strict=True)
+    outcome: str
+    backends: list[_CyclomaticBackendDocument]
+
+
+class _CyclomaticEnvelopeDocument(_StrictDocument):
+    model_config = ConfigDict(extra="allow", strict=True)
+    report: _CyclomaticReportDocument
+    diagnostics: list[_ProfileFinding]
+    summary: str
+
+
 class _ProfileOrchestrationStep(_StrictDocument):
     model_config = ConfigDict(extra="ignore", strict=True)
     name: str
@@ -154,6 +193,7 @@ class ProcessResultWire(TypedDict):
     exit_code: int
     stdout: str
     stderr: str
+    plugin_module_imported: bool | None
 
 
 class WheelModuleRecord(TypedDict):
@@ -167,6 +207,8 @@ _MutableJsonContainer: TypeAlias = dict[str, JsonValue] | list[JsonValue]
 class _ScenarioRunReport(_StrictDocument):
     fixture_sha256: str
     fixture_git_commit: str
+    plugin_package: str | None = None
+    python_distributions: Annotated[list[str], Field(default_factory=list)]
     selectors: list[str]
     execution_classification: str
     behavior: list[str]
@@ -187,15 +229,23 @@ class _CoverageReport(_StrictDocument):
     catalog_selector_count: int
     catalog_equal: bool
     behaviorally_exercised_selectors: list[str]
+    behaviorally_exercised_plugin_selectors: list[str]
     selectors_in_plan_only_scenarios: list[str]
     selectors_not_behaviorally_exercised: list[str]
     deferred_capabilities: list[_DeferredDocument]
+
+
+class _PluginWheelReport(_StrictDocument):
+    name: str
+    source_sha256: str
+    wheel_sha256: str
 
 
 class _DifferentialReport(_StrictDocument):
     schema_version: int
     reference: _WheelBuildReport
     candidate: _WheelBuildReport
+    plugin_wheels: list[_PluginWheelReport]
     shared_dependency_versions: list[tuple[str, str]]
     volatile_json_paths_removed: list[str]
     fixture_mutation_check: str
@@ -220,6 +270,7 @@ class RunVariant:
     arguments: tuple[str, ...]
     compare_within_build: bool
     parse_json: bool | None
+    plugin_import_expected: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -239,6 +290,10 @@ class Scenario:
     required_output: tuple[str, ...]
     expected_findings: tuple[tuple[str, str, int | None], ...]
     variants: tuple[RunVariant, ...]
+    expected_cyclomatic_outcome: str | None = None
+    expected_cyclomatic_backends: tuple[tuple[str, str, str, int, int], ...] = ()
+    plugin_package: str | None = None
+    python_distributions: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -274,12 +329,14 @@ class ProcessResult:
     exit_code: int
     stdout: str
     stderr: str
+    plugin_module_imported: bool | None = None
 
     def to_wire(self) -> ProcessResultWire:
         return {
             "exit_code": self.exit_code,
             "stdout": self.stdout,
             "stderr": self.stderr,
+            "plugin_module_imported": self.plugin_module_imported,
         }
 
 
@@ -333,11 +390,41 @@ def _parse_manifest(
                 arguments=tuple(variant.arguments),
                 compare_within_build=variant.compare_within_build,
                 parse_json=variant.parse_json,
+                plugin_import_expected=variant.plugin_import_expected,
             )
             for variant in row.variant
         )
         if len({variant.name for variant in variants}) != len(variants):
             raise ValueError(f"duplicate variant name in scenario {name!r}")
+        if (
+            row.plugin_package is not None
+            and re.fullmatch(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*", row.plugin_package)
+            is None
+        ):
+            raise ValueError(f"scenario {name!r} has an invalid plugin package name")
+        if any(
+            re.fullmatch(
+                r"[A-Za-z0-9][A-Za-z0-9_.-]*==[A-Za-z0-9][A-Za-z0-9_.+-]*",
+                distribution,
+            )
+            is None
+            for distribution in row.python_distributions
+        ):
+            raise ValueError(
+                f"scenario {name!r} native Python dependencies must use exact pins"
+            )
+        if row.plugin_package is None and any(
+            variant.plugin_import_expected is not None for variant in row.variant
+        ):
+            raise ValueError(
+                f"scenario {name!r} expects a plugin import without a plugin package"
+            )
+        if row.plugin_package is not None and any(
+            variant.plugin_import_expected is None for variant in row.variant
+        ):
+            raise ValueError(
+                f"scenario {name!r} must assert plugin import behavior for every variant"
+            )
         expected_exit = row.expected_exit
         if not 0 <= expected_exit <= 255:
             raise ValueError(f"invalid expected exit for scenario {name!r}")
@@ -370,6 +457,19 @@ def _parse_manifest(
             raise ValueError(
                 f"scenario {name!r} reports step rules without expected steps"
             )
+        if row.expected_cyclomatic_outcome is not None:
+            if "cyclomatic-complexity" not in row.selectors:
+                raise ValueError(
+                    f"scenario {name!r} has cyclomatic expectations without its selector"
+                )
+            if any(not _variant_returns_json(variant) for variant in variants):
+                raise ValueError(
+                    f"scenario {name!r} cyclomatic expectations require JSON variants"
+                )
+            if not row.expected_cyclomatic_backends:
+                raise ValueError(
+                    f"scenario {name!r} must assert cyclomatic backend coverage"
+                )
         if expected_findings and any(
             not _variant_returns_json(variant) for variant in variants
         ):
@@ -391,6 +491,19 @@ def _parse_manifest(
                 require_passed_steps=row.require_passed_steps,
                 required_output=tuple(row.required_output),
                 expected_findings=expected_findings,
+                expected_cyclomatic_outcome=row.expected_cyclomatic_outcome,
+                expected_cyclomatic_backends=tuple(
+                    (
+                        backend.language,
+                        backend.backend,
+                        backend.status,
+                        backend.selected_files,
+                        backend.analyzed_files,
+                    )
+                    for backend in row.expected_cyclomatic_backends
+                ),
+                plugin_package=row.plugin_package,
+                python_distributions=tuple(row.python_distributions),
                 variants=variants,
             )
         )
@@ -426,6 +539,10 @@ HARNESS_SOURCE_SHA256 = _sha256(Path(__file__).resolve())
 
 
 def _build_wheel(source: Path, wheelhouse: Path) -> Path:
+    return _build_named_wheel(source, wheelhouse, "alphus-*.whl")
+
+
+def _build_named_wheel(source: Path, wheelhouse: Path, pattern: str) -> Path:
     wheelhouse.mkdir(parents=True, exist_ok=True)
     environment = os.environ.copy()
     environment.pop("SETUPTOOLS_SCM_PRETEND_VERSION_FOR_ALPHUS", None)
@@ -453,10 +570,62 @@ def _build_wheel(source: Path, wheelhouse: Path) -> Path:
             "wheel build failed in source snapshot "
             f"{source}:\n{result.stdout}\n{result.stderr}"
         )
-    wheels = sorted(wheelhouse.glob("alphus-*.whl"))
+    wheels = sorted(wheelhouse.glob(pattern))
     if len(wheels) != 1:
-        raise ValueError(f"expected exactly one Alphus wheel in {wheelhouse}")
+        raise ValueError(
+            f"expected exactly one wheel matching {pattern!r} in {wheelhouse}"
+        )
     return wheels[0]
+
+
+def _build_plugin_wheel(source: Path, destination: Path) -> Path:
+    destination.mkdir(parents=True, exist_ok=True)
+    build_source = destination / "source"
+    shutil.copytree(source, build_source)
+    wheelhouse = destination / "dist"
+    return _build_named_wheel(build_source, wheelhouse, "*.whl")
+
+
+def _install_wheel(python: Path, wheel: Path) -> None:
+    result = subprocess.run(
+        [str(python), "-m", "pip", "install", "--no-deps", str(wheel)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"wheel install failed for {wheel}:\n{result.stderr}")
+
+
+def _install_python_distributions(python: Path, distributions: Sequence[str]) -> None:
+    for distribution in distributions:
+        if (
+            re.fullmatch(
+                r"[A-Za-z0-9][A-Za-z0-9_.-]*==[A-Za-z0-9][A-Za-z0-9_.+-]*", distribution
+            )
+            is None
+        ):
+            raise ValueError(
+                f"native Python dependencies must be exactly pinned: {distribution!r}"
+            )
+        result = subprocess.run(
+            [
+                str(python),
+                "-m",
+                "pip",
+                "install",
+                "--disable-pip-version-check",
+                distribution,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"native Python dependency installation failed for {distribution}:\n"
+                f"{result.stderr}"
+            )
 
 
 def _python_environment(wheel: Path, destination: Path) -> Path:
@@ -729,6 +898,33 @@ def _catalog_selectors(python: Path, temporary_root: Path) -> tuple[str, ...]:
     return tuple(sorted(rule.selector for rule in payload.rules))
 
 
+def _snapshot_plugin_packages(
+    repository: Path,
+    scenarios: Sequence[Scenario],
+    destination: Path,
+) -> dict[str, FixtureSnapshot]:
+    destination.mkdir(parents=True, exist_ok=True)
+    snapshots: dict[str, FixtureSnapshot] = {}
+    packages = sorted(
+        {scenario.plugin_package for scenario in scenarios if scenario.plugin_package}
+    )
+    for name in packages:
+        source = repository / "tests" / "differential" / "plugin-packages" / name
+        if not source.is_dir():
+            raise ValueError(f"plugin package fixture does not exist: {source}")
+        if any(path.is_symlink() for path in source.rglob("*")):
+            raise ValueError(f"plugin package fixture contains a symlink: {source}")
+        snapshot_path = destination / name
+        shutil.copytree(source, snapshot_path)
+        git_commit = _initialize_fixture_git(snapshot_path)
+        snapshots[name] = FixtureSnapshot(
+            path=snapshot_path,
+            tree_sha256=_tree_digest(snapshot_path),
+            git_commit=git_commit,
+        )
+    return snapshots
+
+
 def _snapshot_fixtures(
     repository: Path, scenarios: Sequence[Scenario], destination: Path
 ) -> dict[str, FixtureSnapshot]:
@@ -779,6 +975,7 @@ def _run_variant(
     variant: RunVariant,
     *,
     empty_path: Path,
+    plugin_marker: Path | None = None,
 ) -> ProcessResult:
     arguments = [
         str(python.parent / "alphus"),
@@ -790,6 +987,8 @@ def _run_variant(
         python,
         path_override=str(empty_path) if "{empty_path}" in variant.arguments else None,
     )
+    if plugin_marker is not None:
+        environment["ALPHUS_PLUGIN_IMPORT_MARKER"] = str(plugin_marker)
     if "{empty_path}" in arguments:
         arguments = [
             argument.replace("{empty_path}", str(empty_path)) for argument in arguments
@@ -814,8 +1013,24 @@ def _run_variant(
         for index in range(len(arguments))
     )
     is_json = detected_json if variant.parse_json is None else variant.parse_json
-    return _normalize_result(
+    normalized = _normalize_result(
         result.stdout, result.stderr, result.returncode, is_json, root
+    )
+    if variant.plugin_import_expected is None:
+        return normalized
+    if plugin_marker is None:
+        raise ValueError("plugin import expectation has no marker path")
+    imported = plugin_marker.is_file()
+    if imported != variant.plugin_import_expected:
+        raise ValueError(
+            f"{variant.name} plugin module import was {imported}, "
+            f"expected {variant.plugin_import_expected}"
+        )
+    return ProcessResult(
+        normalized.exit_code,
+        normalized.stdout,
+        normalized.stderr,
+        plugin_module_imported=imported,
     )
 
 
@@ -845,6 +1060,7 @@ def _assert_scenario_output(
         scenario.minimum_findings == 0
         and not scenario.expected_step_names
         and not scenario.expected_findings
+        and scenario.expected_cyclomatic_outcome is None
     ):
         return
     profile_steps: tuple[_ProfileStep, ...] = ()
@@ -853,6 +1069,10 @@ def _assert_scenario_output(
             profile = _ProfileDocument.model_validate_json(result.stdout)
             profile_steps = tuple(profile.steps)
             findings = [finding for step in profile.steps for finding in step.findings]
+        elif scenario.expected_cyclomatic_outcome is not None:
+            cyclomatic = _CyclomaticEnvelopeDocument.model_validate_json(result.stdout)
+            _assert_cyclomatic_contract(scenario, variant_name, cyclomatic)
+            findings = cyclomatic.diagnostics
         else:
             findings = _DIRECT_FINDINGS.validate_json(result.stdout)
     except ValueError as error:
@@ -897,6 +1117,34 @@ def _assert_scenario_output(
         raise ValueError(
             f"{scenario.name}/{variant_name} findings {tuple(actual_findings)!r}, "
             f"expected {scenario.expected_findings!r}"
+        )
+
+
+def _assert_cyclomatic_contract(
+    scenario: Scenario,
+    variant_name: str,
+    result: _CyclomaticEnvelopeDocument,
+) -> None:
+    report = result.report
+    if report.outcome != scenario.expected_cyclomatic_outcome:
+        raise ValueError(
+            f"{scenario.name}/{variant_name} cyclomatic outcome "
+            f"{report.outcome!r}, expected {scenario.expected_cyclomatic_outcome!r}"
+        )
+    actual = tuple(
+        (
+            backend.language,
+            backend.backend,
+            backend.status,
+            backend.selected_file_count,
+            backend.analyzed_file_count,
+        )
+        for backend in report.backends
+    )
+    if actual != scenario.expected_cyclomatic_backends:
+        raise ValueError(
+            f"{scenario.name}/{variant_name} cyclomatic backend coverage "
+            f"{actual!r}, expected {scenario.expected_cyclomatic_backends!r}"
         )
 
 
@@ -955,10 +1203,24 @@ def _run_scenarios(
             raise ValueError(
                 f"scenario fixture differs from frozen snapshot: {scenario.name}"
             )
+        if scenario.python_distributions:
+            _install_python_distributions(python, scenario.python_distributions)
         results: dict[str, ProcessResult] = {}
         for variant in scenario.variants:
+            plugin_marker = None
+            if variant.plugin_import_expected is not None:
+                marker_directory = (
+                    temporary_root / "plugin-import-markers" / scenario.name
+                )
+                marker_directory.mkdir(parents=True, exist_ok=True)
+                plugin_marker = marker_directory / f"{variant.name}.txt"
+                plugin_marker.unlink(missing_ok=True)
             results[variant.name] = _run_variant(
-                python, fixture, variant, empty_path=empty_path
+                python,
+                fixture,
+                variant,
+                empty_path=empty_path,
+                plugin_marker=plugin_marker,
             )
         if _tree_digest(fixture) != before:
             raise ValueError(f"scenario changed fixture contents: {scenario.name}")
@@ -967,6 +1229,8 @@ def _run_scenarios(
         report[scenario.name] = _ScenarioRunReport(
             fixture_sha256=before,
             fixture_git_commit=fixture_commit,
+            plugin_package=scenario.plugin_package,
+            python_distributions=list(scenario.python_distributions),
             selectors=list(scenario.selectors),
             execution_classification=_scenario_classification(scenario),
             behavior=list(scenario.behavior),
@@ -1056,6 +1320,9 @@ def run(
         fixture_snapshots = _snapshot_fixtures(
             repository, scenarios, temporary_root / "fixture-snapshots"
         )
+        plugin_snapshots = _snapshot_plugin_packages(
+            repository, scenarios, temporary_root / "plugin-snapshots"
+        )
         baseline_source = temporary_root / "source-baseline"
         candidate_source = temporary_root / "source-candidate"
         baseline_source.mkdir()
@@ -1072,6 +1339,25 @@ def run(
         candidate_python = _python_environment(
             candidate_wheel, temporary_root / "venv-candidate"
         )
+        plugin_wheels: list[_PluginWheelReport] = []
+        for name, snapshot in plugin_snapshots.items():
+            source_sha256 = snapshot.tree_sha256
+            if _tree_digest(snapshot.path) != source_sha256:
+                raise ValueError(
+                    f"plugin package snapshot changed before build: {name}"
+                )
+            wheel = _build_plugin_wheel(
+                snapshot.path, temporary_root / "plugin-build" / name
+            )
+            _install_wheel(baseline_python, wheel)
+            _install_wheel(candidate_python, wheel)
+            plugin_wheels.append(
+                _PluginWheelReport(
+                    name=name,
+                    source_sha256=source_sha256,
+                    wheel_sha256=_sha256(wheel),
+                )
+            )
         probe_root = temporary_root / "probe"
         probe_root.mkdir()
         _initialize_fixture_git(probe_root)
@@ -1101,9 +1387,27 @@ def run(
             temporary_root / "runs-candidate",
             "candidate",
         )
+        baseline_install = _probe_installation(baseline_python, probe_root)
+        candidate_install = _probe_installation(candidate_python, probe_root)
+        if baseline_install.packages != candidate_install.packages:
+            raise ValueError(
+                "baseline and candidate final dependency environments differ"
+            )
+        baseline_packages = baseline_install.packages
+        baseline_wheel_module = _verify_wheel_module(baseline_wheel, baseline_install)
+        candidate_wheel_module = _verify_wheel_module(
+            candidate_wheel, candidate_install
+        )
         differences = _compare_reports(scenarios, baseline_runs, candidate_runs)
         _assert_file_identity(manifest_path, manifest_sha256, "scenario manifest")
         _assert_file_identity(harness_path, harness_sha256, "harness")
+        for name, snapshot in plugin_snapshots.items():
+            if _tree_digest(snapshot.path) != snapshot.tree_sha256:
+                raise ValueError(f"frozen plugin package changed during run: {name}")
+            if _git_head(snapshot.path) != snapshot.git_commit:
+                raise ValueError(
+                    f"plugin package Git identity changed during run: {name}"
+                )
         for name, snapshot in fixture_snapshots.items():
             if _tree_digest(snapshot.path) != snapshot.tree_sha256:
                 raise ValueError(f"frozen fixture snapshot changed during run: {name}")
@@ -1112,7 +1416,8 @@ def run(
                     f"frozen fixture Git identity changed during run: {name}"
                 )
         report = _DifferentialReport(
-            schema_version=1,
+            schema_version=2,
+            plugin_wheels=plugin_wheels,
             reference=_WheelBuildReport(
                 commit=baseline,
                 wheel_sha256=_sha256(baseline_wheel),
@@ -1155,6 +1460,7 @@ def run(
             },
             environment_model=(
                 "separate Alphus venvs with identical shared system-site packages; "
+                "exactly pinned scenario-native Python packages are installed in both; "
                 "not hermetic"
             ),
             temporary_path_normalization=(
@@ -1175,6 +1481,16 @@ def run(
                         for scenario in scenarios
                         if _scenario_executes(scenario)
                         for selector in scenario.selectors
+                        if selector in baseline_selectors
+                    }
+                ),
+                behaviorally_exercised_plugin_selectors=sorted(
+                    {
+                        selector
+                        for scenario in scenarios
+                        if _scenario_executes(scenario)
+                        for selector in scenario.selectors
+                        if selector not in baseline_selectors
                     }
                 ),
                 selectors_in_plan_only_scenarios=sorted(
@@ -1183,6 +1499,7 @@ def run(
                         for scenario in scenarios
                         if _scenario_classification(scenario) == "planned-only"
                         for selector in scenario.selectors
+                        if selector in baseline_selectors
                     }
                 ),
                 selectors_not_behaviorally_exercised=sorted(

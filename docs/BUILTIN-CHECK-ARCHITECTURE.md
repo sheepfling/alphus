@@ -230,6 +230,100 @@ exit status, and threshold behavior. Built-in discovery stays first-party and
 static. Third-party entry points remain explicitly allowlisted under plugin
 API v1.
 
+## Developer experience: add a check once
+
+The goal of the 0.0.3 structure is to make a built-in check easy to place and
+register without hand-editing unrelated selector lists. The example below is
+the target shape, not a runtime API implemented by the six-check pilot:
+
+```python
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="file-size",
+    policy_field="file_size",
+    policy_type="alphus.policy.sources.FileSizePolicy",
+    summary="Reports source files that exceed configured physical-line limits.",
+    provider=ProviderReference(
+        module="alphus.gates.hygiene.rules",
+        function="check_file_size",
+        language="any",
+        backend="alphus-python",
+        repeatability="same-source-policy-and-runtime",
+    ),
+    output=OutputReference(shape="findings", adapter="rule-findings-v1"),
+)
+```
+
+The declaration belongs beside the file-size implementation in
+`src/alphus/gates/hygiene/rules.py`. `FileSizePolicy` remains owned by
+`src/alphus/policy/sources.py`; the declaration points to that contract and
+does not move it into the checker package. Its claim is about configured
+physical limits, its provider counts bounded file content, and its evidence is
+the inspected path and measured size. Consumer severity, rollout, and profile
+selection remain in their existing policy and profile locations.
+
+A deterministic build-time AST reader parses only the constrained declaration
+syntax. It sorts source paths and selectors, verifies referenced policy types,
+provider paths and output adapters, and rejects duplicate selectors, duplicate
+finding IDs, missing references, or unsafe paths with source locations. It
+never imports a checker, model, repository module, or plugin. It produces the
+existing selector type, strict `CheckPolicies` fields, `RuleSpec` catalog,
+per-selector lazy dispatch, result adapters, and docs/catalog views from that
+one declaration. Generated changes are checked for freshness and are not
+hand-maintained lists.
+
+At runtime a consumer still opts in by writing `[checks.file_size]` and
+selecting `file-size` directly or naming it in a profile. Catalog inspection
+and config validation do not import its checker. Dispatch resolves only the
+selected provider, passes the existing validated policy and inventory, and
+adapts its findings to the existing `RuleEvaluation` and CLI outputs. A
+registration never activates a profile step. A selected provider failure uses
+the existing operational-error path; discovery and generation errors stop the
+build with the declaration path and offending reference.
+
+The feature has three views that must not be collapsed into one label:
+
+- **Concern and claim:** configured file-size limits, with the bounded claim
+  and evidence type documented by the checker.
+- **Provider:** `check_file_size` in the shared Alphus Python implementation.
+  A cross-language concern such as cyclomatic complexity instead maps Python
+to Ruff, JavaScript to ESLint, and C++ to Lizard, each with its own syntax,
+metric limits, version, and coverage.
+- **Repeatability:** same declared source, policy, tool version, and supported
+  environment assumptions produce the same evidence. This does not make a
+  heuristic exact or equate the languages' semantics.
+
+For a new implementation, place behavior tests beside the owning source
+package under the matching `tests/` path (for example,
+`tests/gates/hygiene/`). Add contract tests for generated config, dispatch,
+result adaptation, and the installed wheel under mirrored `tests/policy/`,
+`tests/execution/`, and `tests/` package paths. Keep shared scheduler behavior
+generic; do not add selectors, plugins, or language backends to scheduler code.
+
+### How we will measure the improvement
+
+Today the `file-size` selector is represented in the selector type,
+`CheckPolicies`, `RULE_SPECS`, a theme runner, and generated dispatch. A new
+check also needs its implementation and tests. The pilot does not remove those
+registration edits. The target is one feature-owned declaration plus the
+implementation, focused tests, and user documentation; generated registration
+views require no manual selector-list edits. The exact number of policy files
+still touched depends on whether a check introduces a genuinely new policy
+type or result shape.
+
+Do not claim a time reduction from the design alone. For the first three
+migrated checks, record the commit diff, the count of manually edited
+registration locations, generator output, and elapsed implementation/review
+time. The objective is zero hand-maintained central selector, config, catalog,
+or runner enumerations for a new check; the migration itself remains a
+bounded, reviewed change. The full exit criterion still requires all current
+selectors to derive from the same declarations.
+
+The six-check pilot proves metadata discovery only. It does not yet generate
+runnable registration, strict config, dispatch, result validation, or reporting.
+The expanded differential proves existing runtime behavior for selected
+representatives; it is evidence for the eventual migration, not proof that the
+target flow exists today.
+
 ## Existing-check mappings
 
 These examples exercise different shapes that the design must support. The
@@ -341,34 +435,41 @@ run. Exact temporary paths are replaced with stable placeholders in the evidence
 
 The comparison used reference `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`
 and candidate `d8cc02081a511c79466c6b52361d02cd2f0238e9`. The catalog was
-identical at 62 selectors. Behavioral cases exercised `file-size`,
-`benchmark-docs`, `line-length`, `numeric-literals`, `input-contracts`, `test-quality`, and
-`output-escaping`:
-strict invalid-config rejection, direct JSON and plain output, profile
-selection, exact finding IDs and locations, and serial/parallel profile
-results. All eleven scenarios matched with no differences. Serial and parallel
-profile outputs also matched.
+identical at 62 selectors. The 21 manifested scenarios produced no differences.
+They behaviorally exercised 9 built-in selectors and one API-v1 plugin selector;
+53 built-in selectors remain without behavior-level wheel evidence. Cases cover
+strict invalid-config rejection, direct JSON and plain output, profile selection,
+serial/parallel profile output, exact findings and locations, a composite
+package-boundaries check over package, architecture graph, version-sync and
+callable-registry policy, and Python Ruff, JavaScript ESLint, and C++ Lizard
+providers. The plugin scenarios verify discovery without importing the plugin,
+strict rejection of unenabled settings, and explicit profile activation with a
+reported finding. Provider cases cover missing tools, an unsupported Ruff
+version, and partial coverage from an empty JavaScript scope plus an analyzed
+Python file. Lizard was pinned to 1.24.2 in both wheel environments.
 
-This is representative evidence only: 7 of 62 selectors were behaviorally
-exercised. Composite package-boundaries, polyglot/native tools, plugin API v1,
-missing or unsupported providers, partial/error states, and lazy unselected
-backends remain explicitly untested in the report. The two wheel virtual
-environments share the same system-site dependency layer so the comparison is
-matched but not hermetic; the report labels that limitation. The source archive
-builds both wheels as version `0.0.0`; full source commit and wheel hashes
-identify each artifact. This does not meet the full compatibility prerequisite
-for any runtime registration migration.
+The comparison is representative, not full equivalence. The report defers the
+legacy package-boundaries history digest, plan-level unsupported-capability
+details, invalid plugin return values and duplicate entry points at wheel level,
+and built-in optional-provider import tracing. Unit tests cover some plugin
+edge cases. The two wheel virtual environments share the same system-site
+dependency layer, so the run is matched but not hermetic. Both source-archive
+wheels report version `0.0.0`; source commits and wheel hashes identify the
+artifacts. No runtime registration migration is justified yet.
 
 The complete machine-readable run is
-[the c880093-to-d8cc020 evidence report](architecture/builtin-check-wheel-differential-c880093-d8cc020.json).
-Reproduce it with:
+[the expanded c880093-to-d8cc020 evidence report](
+architecture/builtin-check-wheel-differential-c880093-d8cc020-expanded.json).
+It records the frozen fixture snapshot identities, manifest and harness hashes,
+plugin source/wheel hashes, per-scenario native dependencies, selected and
+analyzed file counts, and separate built-in/plugin coverage. Reproduce it with:
 
 ```sh
-.venv/bin/python scripts/differential_wheels.py \
+PATH="$PWD/node_modules/.bin:$PATH" .venv/bin/python scripts/differential_wheels.py \
   --root . \
   --baseline c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e \
   --candidate d8cc02081a511c79466c6b52361d02cd2f0238e9 \
-  --output docs/architecture/builtin-check-wheel-differential-c880093-d8cc020.json
+  --output docs/architecture/builtin-check-wheel-differential-c880093-d8cc020-expanded.json
 ```
 
 ## Performance and cache boundary

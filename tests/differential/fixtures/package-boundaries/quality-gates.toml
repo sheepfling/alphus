@@ -1,0 +1,37 @@
+schema_version = 1
+
+[files]
+include = ["distributions/**/*.py"]
+exclude = []
+
+[checks.package_boundaries]
+metadata_patterns = ["distributions/*/pyproject.toml"]
+source_directory = "src"
+allowed_dependencies = { "workspace-api" = [], "workspace-core" = [], "workspace-plugin" = ["workspace-core"] }
+local_dependency_prefixes = ["workspace-"]
+loose_module_directories = []
+forbidden_import_roots = []
+vendor_path_components = ["vendor"]
+file_loader_calls = []
+approved_dynamic_loading_paths = []
+
+[checks.architecture_graph.graph]
+path = "docs/architecture.md"
+syntax = "flowchart"
+node_names = { "workspace-api" = "API", "workspace-core" = "Core", "workspace-plugin" = "Plugin" }
+
+[[checks.version_sync.sources]]
+path = "project.json"
+format = "json"
+key = "version"
+
+[[checks.version_sync.sources]]
+path = "pyproject.toml"
+format = "toml"
+key = "project.version"
+
+[checks.callable_registry]
+source_path = "actions.py"
+registry_path = "registry.py"
+protocol_name = "Action"
+registry_name = "REGISTRY"

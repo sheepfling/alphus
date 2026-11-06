@@ -62,7 +62,7 @@ def test_report_manifest_derives_selector_coverage_without_a_total_list(
         "cyclomatic-complexity",
         "package-boundaries",
     }
-    assert any(item.capability == "plugin-api-v1" for item in deferred)
+    assert any(item.capability.startswith("plugin-api-v1") for item in deferred)
 
 
 @pytest.mark.parametrize(
@@ -273,3 +273,48 @@ def test_wheel_report_uses_resolved_temporary_root_placeholder() -> None:
         "module": "$WHEEL_RUN_ROOT/venv/lib/site-packages/alphus/__init__.py",
         "prefix": "$WHEEL_RUN_ROOT/venv",
     }
+
+
+def test_plugin_import_observation_is_part_of_differential_result() -> None:
+    scenarios, _ = load_manifest(Path("tests/differential/wheel-scenarios.toml"))
+    scenario = next(item for item in scenarios if item.name == "plugin-unselected-lazy")
+    reference = {
+        scenario.name: _ScenarioRunReport(
+            fixture_sha256="same-fixture",
+            fixture_git_commit="same-commit",
+            plugin_package=scenario.plugin_package,
+            python_distributions=[],
+            selectors=list(scenario.selectors),
+            execution_classification="control",
+            behavior=list(scenario.behavior),
+            within_build_equal=True,
+            variants={
+                "catalog": ProcessResult(
+                    0, "{}", "", plugin_module_imported=False
+                ).to_wire()
+            },
+            build="reference",
+        )
+    }
+    candidate = {
+        scenario.name: _ScenarioRunReport(
+            fixture_sha256="same-fixture",
+            fixture_git_commit="same-commit",
+            plugin_package=scenario.plugin_package,
+            python_distributions=[],
+            selectors=list(scenario.selectors),
+            execution_classification="control",
+            behavior=list(scenario.behavior),
+            within_build_equal=True,
+            variants={
+                "catalog": ProcessResult(
+                    0, "{}", "", plugin_module_imported=True
+                ).to_wire()
+            },
+            build="candidate",
+        )
+    }
+
+    assert _compare_reports((scenario,), reference, candidate) == [
+        "plugin-unselected-lazy/catalog differs"
+    ]
