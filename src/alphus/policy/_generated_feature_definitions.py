@@ -92,6 +92,27 @@ FEATURE_DEFINITIONS: Mapping[str, FeatureDefinition] = MappingProxyType(
             runner_name="check_line_length",
             policy_inputs=("line_length",),
         ),
+        "numeric-literals": FeatureDefinition(
+            selector="numeric-literals",
+            policy_field="numeric_literals",
+            policy_model="alphus.policy.review.NumericLiteralPolicy",
+            output_shape="findings",
+            summary=(
+                "Matches configured exact numeric constants in Python arithmetic; it "
+                "does not inspect model semantics."
+            ),
+            applies_to=("python",),
+            domains=(
+                "scientific-computing",
+                "simulation",
+                "earth-science",
+                "trajectory-analysis",
+            ),
+            requires_files=True,
+            runner_module="alphus.gates.review.numeric_literals",
+            runner_name="run_numeric_literals_rule",
+            policy_inputs=("numeric_literals",),
+        ),
         "output-escaping": FeatureDefinition(
             selector="output-escaping",
             policy_field="output_escaping",
@@ -137,6 +158,29 @@ FEATURE_DEFINITIONS: Mapping[str, FeatureDefinition] = MappingProxyType(
             runner_module="alphus.gates.repository.repository_layout",
             runner_name="run_repository_layout_gate",
             policy_inputs=("repository_layout",),
+        ),
+        "scipy-constants": FeatureDefinition(
+            selector="scipy-constants",
+            policy_field="scipy_constants",
+            policy_model="alphus.policy.review.ScipyConstantsPolicy",
+            output_shape="findings",
+            summary=(
+                "Finds selected SciPy physical constants and unit-conversion factors "
+                "in Python arithmetic; it does not validate units or coordinate "
+                "systems."
+            ),
+            applies_to=("python",),
+            domains=(
+                "scientific-computing",
+                "simulation",
+                "earth-science",
+                "trajectory-analysis",
+                "physical-units",
+            ),
+            requires_files=True,
+            runner_module="alphus.gates.review.scipy_constants",
+            runner_name="run_scipy_constants_rule",
+            policy_inputs=("scipy_constants",),
         ),
     }
 )

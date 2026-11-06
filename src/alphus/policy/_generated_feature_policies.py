@@ -10,6 +10,7 @@ from alphus.policy.repository import (
     DocumentationConfigPolicy,
     RepositoryLayoutPolicy,
 )
+from alphus.policy.review import NumericLiteralPolicy, ScipyConstantsPolicy
 from alphus.policy.sources import (
     CommentMarkerPolicy,
     FileSizePolicy,
@@ -25,6 +26,8 @@ class GeneratedFeaturePolicies(StrictModel):
     documentation_config: DocumentationConfigPolicy | None = None
     file_size: FileSizePolicy | None = None
     line_length: LineLengthPolicy | None = None
+    numeric_literals: NumericLiteralPolicy | None = None
     output_escaping: SourceScanPolicy | None = None
     package_boundaries: PackageBoundaryPolicy | None = None
     repository_layout: RepositoryLayoutPolicy | None = None
+    scipy_constants: ScipyConstantsPolicy | None = None

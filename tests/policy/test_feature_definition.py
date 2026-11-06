@@ -3,11 +3,13 @@
 from dataclasses import FrozenInstanceError
 
 import pytest
+from pydantic import ValidationError
 
 from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
 from alphus.policy._generated_morphology import MORPHOLOGY_BY_SELECTOR
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
 from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.orchestration import CheckPolicies
 
 
 def test_generated_feature_definitions_are_immutable() -> None:
@@ -123,6 +125,39 @@ def test_output_escaping_registration_owns_both_language_tags() -> None:
         "alphus/python/none/security/manual-output-escaping",
         "alphus/javascript/none/security/manual-output-escaping",
     )
+
+
+def test_shared_numeric_emitters_derive_strict_feature_registration() -> None:
+    expected = (
+        (
+            "numeric-literals",
+            "numeric_literals",
+            "alphus.policy.review.NumericLiteralPolicy",
+            "alphus.gates.review.numeric_literals",
+            "run_numeric_literals_rule",
+        ),
+        (
+            "scipy-constants",
+            "scipy_constants",
+            "alphus.policy.review.ScipyConstantsPolicy",
+            "alphus.gates.review.scipy_constants",
+            "run_scipy_constants_rule",
+        ),
+    )
+    for selector, policy_field, policy_model, runner_module, runner_name in expected:
+        definition = FEATURE_DEFINITIONS[selector]
+        spec = RULE_SPECS[selector]
+        assert definition.policy_field == policy_field
+        assert definition.policy_model == policy_model
+        assert definition.runner_module == runner_module
+        assert definition.runner_name == runner_name
+        assert spec.policy_field == policy_field
+        assert spec.output_shape is RuleOutputShape.FINDINGS
+        assert policy_field in CheckPolicies.model_fields
+        with pytest.raises(ValidationError):
+            CheckPolicies.model_validate(
+                {policy_field: {"extensions": [".py"], "unknown_setting": True}}
+            )
 
 
 def test_feature_definition_rejects_malformed_labels() -> None:

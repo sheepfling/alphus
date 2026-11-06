@@ -985,14 +985,8 @@ def render_feature_manifest(root: Path) -> str:
                 f"            policy_model={_quoted(feature.policy_model)},",
                 f"            output_shape={_quoted(feature.output_shape)},",
                 *_text_argument_lines("summary", feature.summary),
-                "            applies_to=("
-                + ", ".join(_quoted(value) for value in feature.applies_to)
-                + ("," if len(feature.applies_to) == 1 else "")
-                + "),",
-                "            domains=("
-                + ", ".join(_quoted(value) for value in feature.domains)
-                + ("," if len(feature.domains) == 1 else "")
-                + "),",
+                *_tuple_lines("applies_to", feature.applies_to),
+                *_tuple_lines("domains", feature.domains),
                 f"            requires_files={feature.requires_files!r},",
                 f"            runner_module={_quoted(feature.runner_module)},",
                 f"            runner_name={_quoted(feature.runner_name)},",

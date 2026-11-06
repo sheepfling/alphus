@@ -126,38 +126,11 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             ("git", "repository"),
             requires_files=False,
         ),
-        "numeric-literals": RuleSpec(
-            "numeric_literals",
-            RuleOutputShape.FINDINGS,
-            "Matches configured exact numeric constants in Python arithmetic; "
-            "it does not inspect model semantics.",
-            ("python",),
-            (
-                "scientific-computing",
-                "simulation",
-                "earth-science",
-                "trajectory-analysis",
-            ),
-        ),
         "repeated-numeric-limits": RuleSpec(
             "repeated_numeric_limits",
             RuleOutputShape.FINDINGS,
             "Reviews repeated numeric thresholds in explicitly selected Python analysis paths.",
             ("python",),
-        ),
-        "scipy-constants": RuleSpec(
-            "scipy_constants",
-            RuleOutputShape.FINDINGS,
-            "Finds selected SciPy physical constants and unit-conversion factors "
-            "in Python arithmetic; it does not validate units or coordinate systems.",
-            ("python",),
-            (
-                "scientific-computing",
-                "simulation",
-                "earth-science",
-                "trajectory-analysis",
-                "physical-units",
-            ),
         ),
         "source-test-coverage": RuleSpec(
             "source_test_coverage",

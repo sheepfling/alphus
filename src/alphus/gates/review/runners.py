@@ -29,7 +29,6 @@ from alphus.gates.review.heuristic_total_consumption import (
     check_heuristic_total_consumption,
 )
 from alphus.gates.review.input_contracts import check_input_contracts
-from alphus.gates.review.numeric_literals import check_numeric_literals
 from alphus.gates.review.numerical.frames.ecef_enu_transform import (
     check_ecef_enu_transform,
 )
@@ -87,7 +86,6 @@ from alphus.gates.review.repeated_numeric_limits import (
     check_repeated_numeric_limits,
 )
 from alphus.gates.review.run_artifacts import check_run_artifacts
-from alphus.gates.review.scipy_constants import check_scipy_constants
 from alphus.gates.review.semantic_work_presentation import (
     check_semantic_work_presentation,
 )
@@ -109,11 +107,6 @@ __all__ = ["REVIEW_RULE_RUNNERS"]
 
 REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
     {
-        "numeric-literals": lambda root, files, config: check_numeric_literals(
-            root,
-            files,
-            require_policy(config.checks.numeric_literals, "numeric_literals"),
-        ),
         "repeated-numeric-limits": lambda root, files, config: (
             check_repeated_numeric_limits(
                 root,
@@ -333,11 +326,6 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
             root,
             files,
             require_policy(config.checks.ned_basis_vectors, "ned_basis_vectors"),
-        ),
-        "scipy-constants": lambda root, files, config: check_scipy_constants(
-            root,
-            files,
-            require_policy(config.checks.scipy_constants, "scipy_constants"),
         ),
         "run-artifacts": lambda root, files, config: check_run_artifacts(
             root,

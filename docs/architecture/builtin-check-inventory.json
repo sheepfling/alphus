@@ -592,7 +592,7 @@
       ],
       "requires_files": true,
       "result_adapter": "alphus.execution.results:RuleEvaluation.from_output/findings",
-      "runner": "alphus.gates.review.runners:<lambda>",
+      "runner": "alphus.gates.review.numeric_literals:run_numeric_literals_rule",
       "selector": "numeric-literals"
     },
     {
@@ -896,7 +896,7 @@
       ],
       "requires_files": true,
       "result_adapter": "alphus.execution.results:RuleEvaluation.from_output/findings",
-      "runner": "alphus.gates.review.runners:<lambda>",
+      "runner": "alphus.gates.review.scipy_constants:run_scipy_constants_rule",
       "selector": "scipy-constants"
     },
     {

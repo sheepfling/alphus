@@ -84,6 +84,37 @@ name = "json"
 arguments = ["--config", "quality-gates.toml", "--rule", "benchmark-docs", "--json"]
 
 [[scenario]]
+name = "numeric-literals-profile"
+fixture = "numeric-literals"
+selectors = ["numeric-literals"]
+behavior = ["feature-owned-profile-dispatch", "shared-complaint-contract", "typed-result-adapter"]
+expected_exit = 0
+minimum_findings = 1
+expected_step_names = ["numeric-constants"]
+expected_step_rules = ["numeric-literals"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/python/none/style/inline-constant", path = "src/example.py", line = 2 },
+]
+
+[[scenario.variant]]
+name = "profile-json"
+arguments = ["--config", "quality-gates.toml", "--profile", "numeric-review", "--run", "--json"]
+
+[[scenario]]
+name = "numeric-literals-invalid-config"
+fixture = "numeric-literals-invalid-config"
+selectors = ["numeric-literals"]
+behavior = ["feature-owned-strict-policy", "unknown-field-rejected-before-run"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-config"
+arguments = ["--config", "quality-gates.toml", "--rule", "numeric-literals"]
+parse_json = false
+
+[[scenario]]
 name = "numeric-literals-direct"
 expected_findings = [
   { rule_id = "alphus/python/none/style/inline-constant", path = "src/example.py", line = 2 },
@@ -98,6 +129,37 @@ required_output = ["src/example.py"]
 [[scenario.variant]]
 name = "json"
 arguments = ["--config", "quality-gates.toml", "--rule", "numeric-literals", "--json"]
+
+[[scenario]]
+name = "scipy-constants-profile"
+fixture = "scipy-constants"
+selectors = ["scipy-constants"]
+behavior = ["feature-owned-profile-dispatch", "shared-complaint-contract", "typed-result-adapter"]
+expected_exit = 0
+minimum_findings = 1
+expected_step_names = ["scipy-constants"]
+expected_step_rules = ["scipy-constants"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/python/scipy/style/inline-constant", path = "src/example.py", line = 2 },
+]
+
+[[scenario.variant]]
+name = "profile-json"
+arguments = ["--config", "quality-gates.toml", "--profile", "scipy-review", "--run", "--json"]
+
+[[scenario]]
+name = "scipy-constants-invalid-config"
+fixture = "scipy-constants-invalid-config"
+selectors = ["scipy-constants"]
+behavior = ["feature-owned-strict-policy", "unknown-field-rejected-before-run"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-config"
+arguments = ["--config", "quality-gates.toml", "--rule", "scipy-constants"]
+parse_json = false
 
 [[scenario]]
 name = "scipy-constants-direct"

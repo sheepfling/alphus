@@ -6,18 +6,20 @@ It does not import SciPy or infer dimensions from source code.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from pathlib import Path
+from typing import Final
 
-from alphus.config import NumericLiteralSpec, ScipyConstantsPolicy
+from alphus.config import NumericLiteralSpec, QualityGateConfig, ScipyConstantsPolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Framework
 from alphus.gates.review.numeric_catalog import NumericLiteralFinding
 from alphus.gates.review.numeric_engine import scan_numeric_literals
+from alphus.policy.base import require_policy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 
-ALPHUS_MORPHOLOGY = (
+ALPHUS_CHECK: Final = (
     ("selector", "scipy-constants"),
     ("finding_contracts", ("numeric-inline",)),
     ("concern", "scientific-constant-reuse"),
@@ -37,6 +39,30 @@ ALPHUS_MORPHOLOGY = (
         ("configured-literal-match", "operation", "source-location"),
     ),
     ("evaluation_maturity", "synthetic-only"),
+    ("policy_field", "scipy_constants"),
+    ("policy_model", "alphus.policy.review.ScipyConstantsPolicy"),
+    ("output_shape", "findings"),
+    (
+        "summary",
+        (
+            "Finds selected SciPy physical constants and unit-conversion factors "
+            "in Python arithmetic; it does not validate units or coordinate systems."
+        ),
+    ),
+    ("applies_to", ("python",)),
+    (
+        "domains",
+        (
+            "scientific-computing",
+            "simulation",
+            "earth-science",
+            "trajectory-analysis",
+            "physical-units",
+        ),
+    ),
+    ("requires_files", True),
+    ("runner_module", "alphus.gates.review.scipy_constants"),
+    ("runner_name", "run_scipy_constants_rule"),
 )
 
 _PHYSICAL_CONSTANTS = (
@@ -164,3 +190,14 @@ def check_scipy_constants(
             for finding in scipy_literal_findings(read_python_source(path), policy)
         )
     return findings
+
+
+def run_scipy_constants_rule(
+    root: Path, paths: Sequence[Path], config: QualityGateConfig
+) -> list[Finding]:
+    """Adapt the feature-owned policy to the shared typed runner interface."""
+    return check_scipy_constants(
+        root,
+        paths,
+        require_policy(config.checks.scipy_constants, "scipy_constants"),
+    )

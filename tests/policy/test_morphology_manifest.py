@@ -10,6 +10,7 @@ import pytest
 
 from scripts.generate_morphology_manifest import (
     _text_argument_lines,
+    _tuple_lines,
     feature_registrations,
     main,
     render_feature_manifest,
@@ -46,6 +47,24 @@ def test_generated_text_arguments_wrap_without_changing_their_value() -> None:
     call = module.body[0].value
     assert isinstance(call, ast.Call)
     assert ast.literal_eval(call.keywords[0].value) == value
+
+
+def test_generated_feature_tuples_wrap_without_changing_their_values() -> None:
+    values = (
+        "scientific-computing",
+        "simulation",
+        "earth-science",
+        "trajectory-analysis",
+        "physical-units",
+    )
+    lines = _tuple_lines("domains", values)
+
+    assert len(lines) > 1
+    assert all(len(line) <= 88 for line in lines)
+    module = ast.parse("FeatureDefinition(\n" + "\n".join(lines) + "\n)")
+    call = module.body[0].value
+    assert isinstance(call, ast.Call)
+    assert ast.literal_eval(call.keywords[0].value) == values
 
 
 def _with_field(

@@ -51,7 +51,6 @@ from alphus.policy.review import (
     ManualEliminationPolicy,
     ManualMatrixKernelPolicy,
     NedBasisVectorsPolicy,
-    NumericLiteralPolicy,
     ParallelNormalizationPolicy,
     PatchCascadePolicy,
     PositionalInterfacePolicy,
@@ -67,7 +66,6 @@ from alphus.policy.review import (
     QuaternionVectorRotationPolicy,
     RepeatedNumericLimitPolicy,
     RunArtifactPolicy,
-    ScipyConstantsPolicy,
     SemanticWorkPresentationPolicy,
     SourceFamilyPolicy,
     SqlAlchemyPracticePolicy,
@@ -95,7 +93,6 @@ class CheckPolicies(GeneratedFeaturePolicies):
 
     json_structure: SourceScanPolicy | None = None
     path_discovery: PathDiscoveryPolicy | None = None
-    numeric_literals: NumericLiteralPolicy | None = None
     repeated_numeric_limits: RepeatedNumericLimitPolicy | None = None
     typing_stub_suggestions: TypingStubSuggestionPolicy | None = None
     prose_as_control: ProseAsControlPolicy | None = None
@@ -120,7 +117,6 @@ class CheckPolicies(GeneratedFeaturePolicies):
     ecef_enu_transform: EcefEnuTransformPolicy | None = None
     ecef_ned_matrix_transform: EcefNedMatrixTransformPolicy | None = None
     ned_basis_vectors: NedBasisVectorsPolicy | None = None
-    scipy_constants: ScipyConstantsPolicy | None = None
     run_artifacts: RunArtifactPolicy | None = None
     ci_workflows: CiWorkflowPolicy | None = None
     source_test_coverage: SourceTestCoveragePolicy | None = None

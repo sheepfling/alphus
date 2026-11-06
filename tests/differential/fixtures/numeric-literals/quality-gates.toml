@@ -6,3 +6,18 @@ exclude = []
 
 [checks.numeric_literals]
 extensions = [".py"]
+
+[orchestration]
+default_profile = "numeric-review"
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "numeric-constants"
+rule = "numeric-literals"
+severity = "warning"
+priority = "normal"
+
+[[orchestration.profiles]]
+name = "numeric-review"
+steps = ["numeric-constants"]

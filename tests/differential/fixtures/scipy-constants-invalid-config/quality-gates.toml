@@ -1,0 +1,5 @@
+schema_version = 1
+
+[checks.scipy_constants]
+extensions = [".py"]
+unknown_setting = true
