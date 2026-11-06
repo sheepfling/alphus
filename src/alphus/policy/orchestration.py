@@ -33,7 +33,6 @@ from alphus.policy.intents import (
 from alphus.policy.markdown import MarkdownShellFencesPolicy
 from alphus.policy.metrics import CyclomaticComplexityPolicy
 from alphus.policy.repository import (
-    DependencyLockPolicy,
     DocumentationConfigPolicy,
     GitRepositoryPolicy,
     VersionSyncPolicy,
@@ -152,7 +151,6 @@ class CheckPolicies(GeneratedFeaturePolicies):
     markdown_shell_fences: MarkdownShellFencesPolicy | None = None
     version_sync: VersionSyncPolicy | None = None
     callable_registry: CallableRegistryPolicy | None = None
-    dependency_locks: DependencyLockPolicy | None = None
     git: GitRepositoryPolicy | None = None
     function_shape: FunctionShapePolicy | None = None
     cyclomatic_complexity: CyclomaticComplexityPolicy | None = None

@@ -277,6 +277,39 @@ name = "profile-json"
 arguments = ["--config", "quality-gates.toml", "--profile", "layout-review", "--run", "--json"]
 
 [[scenario]]
+name = "dependency-locks-direct"
+fixture = "dependency-locks"
+selectors = ["dependency-locks"]
+behavior = ["feature-owned-strict-policy", "direct-selector", "stable-finding-id"]
+expected_exit = 1
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/repository/none/dependencies/requirement-pin-unsatisfied", path = "locks.txt" },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "dependency-locks", "--json"]
+
+[[scenario]]
+name = "dependency-locks-profile"
+fixture = "dependency-locks"
+selectors = ["dependency-locks"]
+behavior = ["explicit-profile-selection", "feature-result-adapter", "severity-override"]
+expected_exit = 0
+minimum_findings = 1
+expected_step_names = ["dependency-check"]
+expected_step_rules = ["dependency-locks"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/repository/none/dependencies/requirement-pin-unsatisfied", path = "locks.txt" },
+]
+
+[[scenario.variant]]
+name = "profile-json"
+arguments = ["--config", "quality-gates.toml", "--profile", "dependency-review", "--run", "--json"]
+
+[[scenario]]
 name = "cyclomatic-python-ruff"
 fixture = "cyclomatic-python"
 selectors = ["cyclomatic-complexity"]

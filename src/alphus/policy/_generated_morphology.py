@@ -72,6 +72,90 @@ MORPHOLOGY_BY_SELECTOR: Mapping[str, RuleMorphology] = MappingProxyType(
             ),
             evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
         ),
+        "dependency-locks": RuleMorphology(
+            selector="dependency-locks",
+            finding_ids=(
+                RuleTag(
+                    Scope.REPOSITORY,
+                    Framework.NONE,
+                    Category.DEPENDENCIES,
+                    "lock-include-cycle",
+                ),
+                RuleTag(
+                    Scope.REPOSITORY,
+                    Framework.NONE,
+                    Category.DEPENDENCIES,
+                    "lock-input-missing",
+                ),
+                RuleTag(
+                    Scope.REPOSITORY,
+                    Framework.NONE,
+                    Category.DEPENDENCIES,
+                    "requirement-pin-not-exact",
+                ),
+                RuleTag(
+                    Scope.REPOSITORY,
+                    Framework.NONE,
+                    Category.DEPENDENCIES,
+                    "requirement-unlocked",
+                ),
+                RuleTag(
+                    Scope.REPOSITORY,
+                    Framework.NONE,
+                    Category.DEPENDENCIES,
+                    "lock-include-invalid",
+                ),
+                RuleTag(
+                    Scope.REPOSITORY,
+                    Framework.NONE,
+                    Category.DEPENDENCIES,
+                    "requirement-invalid",
+                ),
+                RuleTag(
+                    Scope.REPOSITORY,
+                    Framework.NONE,
+                    Category.DEPENDENCIES,
+                    "duplicate-requirement-conflict",
+                ),
+                RuleTag(
+                    Scope.REPOSITORY,
+                    Framework.NONE,
+                    Category.DEPENDENCIES,
+                    "duplicate-requirement-marker-uncertain",
+                ),
+                RuleTag(
+                    Scope.REPOSITORY,
+                    Framework.NONE,
+                    Category.DEPENDENCIES,
+                    "lock-source-mismatch",
+                ),
+                RuleTag(
+                    Scope.REPOSITORY,
+                    Framework.NONE,
+                    Category.DEPENDENCIES,
+                    "requirement-pin-unsatisfied",
+                ),
+            ),
+            concern="dependency-lock-consistency",
+            claim_kind=ClaimKind.CONDITION,
+            claim=(
+                "Configured requirement declarations and lock entries are consistent "
+                "under their declared version and source constraints."
+            ),
+            mechanisms=(
+                DetectionMechanism.EXACT_RULE,
+                DetectionMechanism.BOUNDED_HEURISTIC,
+            ),
+            inspected_scope=("repository", "requirement-files", "lock-files"),
+            languages_formats=("python-requirements", "pep508-metadata"),
+            evidence_kinds=(
+                "resolved-requirement",
+                "version-specifier",
+                "include-edge",
+                "marker",
+            ),
+            evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+        ),
         "document-style": RuleMorphology(
             selector="document-style",
             finding_ids=(

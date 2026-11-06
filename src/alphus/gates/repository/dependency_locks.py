@@ -7,17 +7,65 @@ from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
+from typing import Final
 
 from packaging.requirements import InvalidRequirement, Requirement
 from packaging.specifiers import Specifier
 from packaging.utils import canonicalize_name
 from packaging.version import Version
 
-from alphus.config import DependencyLockPolicy
+from alphus.config import DependencyLockPolicy, QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.policy.base import require_policy
 from alphus.support.data_access import contained_file
 from alphus.support.source_text import read_utf8_text
+
+ALPHUS_CHECK: Final = (
+    ("selector", "dependency-locks"),
+    ("concern", "dependency-lock-consistency"),
+    ("claim_kind", "condition"),
+    (
+        "claim",
+        "Configured requirement declarations and lock entries are consistent "
+        "under their declared version and source constraints.",
+    ),
+    ("mechanisms", ("exact-rule", "bounded-heuristic")),
+    ("inspected_scope", ("repository", "requirement-files", "lock-files")),
+    ("languages_formats", ("python-requirements", "pep508-metadata")),
+    (
+        "evidence_kinds",
+        ("resolved-requirement", "version-specifier", "include-edge", "marker"),
+    ),
+    ("evaluation_maturity", "synthetic-only"),
+    (
+        "finding_tag_complaints",
+        (
+            "lock-include-cycle",
+            "lock-input-missing",
+            "requirement-pin-not-exact",
+            "requirement-unlocked",
+            "lock-include-invalid",
+            "requirement-invalid",
+            "duplicate-requirement-conflict",
+            "duplicate-requirement-marker-uncertain",
+            "lock-source-mismatch",
+            "requirement-pin-unsatisfied",
+        ),
+    ),
+    ("policy_field", "dependency_locks"),
+    ("policy_model", "alphus.policy.repository.DependencyLockPolicy"),
+    ("output_shape", "findings"),
+    (
+        "summary",
+        "Checks consistency and pairing of configured dependency lockfiles.",
+    ),
+    (("applies_to", ("python", "javascript"))),
+    (("domains", ())),
+    ("requires_files", True),
+    ("runner_module", "alphus.gates.repository.dependency_locks"),
+    ("runner_name", "run_dependency_lock_gate"),
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -354,3 +402,11 @@ def check_dependency_locks(root: Path, policy: DependencyLockPolicy) -> list[Fin
         findings.extend(_duplicate_exact_pin_findings(load.declarations))
         findings.extend(_exact_pin_findings(lock_file, load.requirements))
     return findings
+
+
+def run_dependency_lock_gate(
+    root: Path, _files: Sequence[Path], config: QualityGateConfig
+) -> list[Finding]:
+    """Run the feature-owned dependency-lock check with its strict policy."""
+    policy = require_policy(config.checks.dependency_locks, "dependency_locks")
+    return check_dependency_locks(root, policy)

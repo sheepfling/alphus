@@ -18,6 +18,14 @@ from alphus.gates.vcs.runners import VCS_RULE_RUNNERS
 _RuleRunner = Callable[[Path, Sequence[Path], QualityGateConfig], RuleOutput]
 
 
+def _run_feature_dependency_locks(
+    root: Path, files: Sequence[Path], config: QualityGateConfig
+) -> RuleOutput:
+    module = import_module("alphus.gates.repository.dependency_locks")
+    runner = cast(_RuleRunner, module.run_dependency_lock_gate)
+    return runner(root, files, config)
+
+
 def _run_feature_file_size(
     root: Path, files: Sequence[Path], config: QualityGateConfig
 ) -> RuleOutput:
@@ -52,6 +60,7 @@ def _run_feature_repository_layout(
 
 _FEATURE_RULE_RUNNERS: Mapping[QualityRuleName, _RuleRunner] = MappingProxyType(
     {
+        "dependency-locks": _run_feature_dependency_locks,
         "file-size": _run_feature_file_size,
         "line-length": _run_feature_line_length,
         "package-boundaries": _run_feature_package_boundaries,

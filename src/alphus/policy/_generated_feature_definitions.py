@@ -7,6 +7,21 @@ from alphus.policy.feature_definition import FeatureDefinition
 
 FEATURE_DEFINITIONS: Mapping[str, FeatureDefinition] = MappingProxyType(
     {
+        "dependency-locks": FeatureDefinition(
+            selector="dependency-locks",
+            policy_field="dependency_locks",
+            policy_model="alphus.policy.repository.DependencyLockPolicy",
+            output_shape="findings",
+            summary=(
+                "Checks consistency and pairing of configured dependency lockfiles."
+            ),
+            applies_to=("python", "javascript"),
+            domains=(),
+            requires_files=True,
+            runner_module="alphus.gates.repository.dependency_locks",
+            runner_name="run_dependency_lock_gate",
+            policy_inputs=("dependency_locks",),
+        ),
         "file-size": FeatureDefinition(
             selector="file-size",
             policy_field="file_size",

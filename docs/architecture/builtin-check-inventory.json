@@ -133,7 +133,7 @@
       ],
       "requires_files": true,
       "result_adapter": "alphus.execution.results:RuleEvaluation.from_output/findings",
-      "runner": "alphus.gates.repository.runners:<lambda>",
+      "runner": "alphus.gates.repository.dependency_locks:run_dependency_lock_gate",
       "selector": "dependency-locks"
     },
     {
