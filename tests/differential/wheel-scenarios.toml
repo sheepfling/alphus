@@ -582,15 +582,17 @@ reason = "The architecture plan names the LaTeX build-and-validation step, but t
 name = "comment-markers-polyglot-direct"
 fixture = "comment-markers-polyglot"
 selectors = ["comment-markers"]
-behavior = ["feature-owned-registration", "polyglot-comment-scanners", "stable-finding-identity"]
+behavior = ["feature-owned-registration", "polyglot-comment-scanners", "stable-finding-identity", "python-parse-failure"]
 expected_exit = 1
-minimum_findings = 5
+minimum_findings = 6
+required_output = ["EOF in multi-line string"]
 expected_findings = [
   { rule_id = "alphus/any/none/hygiene/comment-marker-found", path = "docs/guide.toml", line = 2 },
   { rule_id = "alphus/any/none/hygiene/comment-marker-found", path = "src/example.cpp", line = 2 },
   { rule_id = "alphus/any/none/hygiene/comment-marker-found", path = "src/example.java", line = 2 },
   { rule_id = "alphus/any/none/hygiene/comment-marker-found", path = "src/example.js", line = 2 },
   { rule_id = "alphus/any/none/hygiene/comment-marker-found", path = "src/example.py", line = 2 },
+  { rule_id = "alphus/any/none/hygiene/comment-scan-failed", path = "src/malformed.py" },
 ]
 
 [[scenario.variant]]
@@ -601,9 +603,10 @@ arguments = ["--config", "quality-gates.toml", "--rule", "comment-markers", "--j
 name = "comment-markers-polyglot-profile"
 fixture = "comment-markers-polyglot"
 selectors = ["comment-markers"]
-behavior = ["feature-owned-profile-dispatch", "polyglot-result-adapter", "ordered-findings"]
+behavior = ["feature-owned-profile-dispatch", "polyglot-result-adapter", "ordered-findings", "python-parse-failure"]
 expected_exit = 0
-minimum_findings = 5
+minimum_findings = 6
+required_output = ["EOF in multi-line string"]
 expected_step_names = ["comments"]
 expected_step_rules = ["comment-markers"]
 require_passed_steps = true
@@ -613,6 +616,7 @@ expected_findings = [
   { rule_id = "alphus/any/none/hygiene/comment-marker-found", path = "src/example.java", line = 2 },
   { rule_id = "alphus/any/none/hygiene/comment-marker-found", path = "src/example.js", line = 2 },
   { rule_id = "alphus/any/none/hygiene/comment-marker-found", path = "src/example.py", line = 2 },
+  { rule_id = "alphus/any/none/hygiene/comment-scan-failed", path = "src/malformed.py" },
 ]
 
 [[scenario.variant]]

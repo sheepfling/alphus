@@ -66,7 +66,7 @@ MORPHOLOGY_BY_SELECTOR: Mapping[str, RuleMorphology] = MappingProxyType(
                 DetectionMechanism.BOUNDED_HEURISTIC,
             ),
             inspected_scope=("configured-source-files",),
-            languages_formats=("python", "toml", "javascript", "cpp", "java"),
+            languages_formats=("python", "toml", "javascript", "c", "cpp", "java"),
             evidence_kinds=("comment-text", "source-line"),
             evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
         ),

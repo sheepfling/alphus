@@ -85,6 +85,18 @@ def test_comment_markers_uses_feature_owned_polyglot_registration() -> None:
     assert definition.runner_module == "alphus.gates.hygiene.comment_markers"
     assert definition.runner_name == "run_comment_markers_rule"
     assert definition.applies_to == ("python", "javascript", "c", "cpp")
+    assert morphology.languages_formats == (
+        "python",
+        "toml",
+        "javascript",
+        "c",
+        "cpp",
+        "java",
+    )
+    assert tuple(mechanism.value for mechanism in morphology.mechanisms) == (
+        "exact-rule",
+        "bounded-heuristic",
+    )
     assert (
         spec.summary
         == "Finds configured TODO-style markers in supported source comments."

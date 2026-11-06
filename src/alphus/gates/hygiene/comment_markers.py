@@ -35,7 +35,7 @@ ALPHUS_CHECK: Final = (
     ),
     (("mechanisms", ("exact-rule", "bounded-heuristic"))),
     (("inspected_scope", ("configured-source-files",))),
-    (("languages_formats", ("python", "toml", "javascript", "cpp", "java"))),
+    (("languages_formats", ("python", "toml", "javascript", "c", "cpp", "java"))),
     (("evidence_kinds", ("comment-text", "source-line"))),
     (("evaluation_maturity", "synthetic-only")),
     ("finding_tag_complaints", ("comment-scan-failed", "comment-marker-found")),
