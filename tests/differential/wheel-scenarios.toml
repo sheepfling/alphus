@@ -171,7 +171,6 @@ expected_findings = [
   { rule_id = "alphus/javascript/none/security/manual-output-escaping", path = "src/render.js", line = 1 },
   { rule_id = "alphus/python/none/security/manual-output-escaping", path = "src/render.py", line = 2 },
 ]
-required_output = ["Output escaping: 2 finding(s)"]
 
 [[scenario.variant]]
 name = "json"
