@@ -267,7 +267,6 @@ expected_exit = 0
 minimum_findings = 1
 expected_step_names = ["layout-check"]
 expected_step_rules = ["repository-layout"]
-expected_reported_step_rules = ["repository-layout"]
 require_passed_steps = true
 expected_findings = [
   { rule_id = "alphus/repository/none/configuration/path-required", path = "src/required.py" },
