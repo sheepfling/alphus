@@ -31,7 +31,6 @@ from alphus.policy.intents import (
     resolve_intent_bindings,
 )
 from alphus.policy.markdown import MarkdownShellFencesPolicy
-from alphus.policy.metrics import CyclomaticComplexityPolicy
 from alphus.policy.repository import (
     GitRepositoryPolicy,
     VersionSyncPolicy,
@@ -151,7 +150,6 @@ class CheckPolicies(GeneratedFeaturePolicies):
     callable_registry: CallableRegistryPolicy | None = None
     git: GitRepositoryPolicy | None = None
     function_shape: FunctionShapePolicy | None = None
-    cyclomatic_complexity: CyclomaticComplexityPolicy | None = None
 
     def require_rule(self, rule: QualityRuleName) -> None:
         """Validate only the primary policy needed by a selected rule."""

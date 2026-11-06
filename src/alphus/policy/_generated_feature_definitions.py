@@ -7,6 +7,21 @@ from alphus.policy.feature_definition import FeatureDefinition
 
 FEATURE_DEFINITIONS: Mapping[str, FeatureDefinition] = MappingProxyType(
     {
+        "cyclomatic-complexity": FeatureDefinition(
+            selector="cyclomatic-complexity",
+            policy_field="cyclomatic_complexity",
+            policy_model="alphus.policy.metrics.CyclomaticComplexityPolicy",
+            output_shape="cyclomatic-report",
+            summary=(
+                "Measures bounded cyclomatic complexity for supported source backends."
+            ),
+            applies_to=("python", "javascript", "cpp"),
+            domains=(),
+            requires_files=False,
+            runner_module="alphus.gates.source.cyclomatic_complexity",
+            runner_name="run_cyclomatic_rule",
+            policy_inputs=("cyclomatic_complexity",),
+        ),
         "dependency-locks": FeatureDefinition(
             selector="dependency-locks",
             policy_field="dependency_locks",

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from alphus.policy.architecture import PackageBoundaryPolicy
 from alphus.policy.base import StrictModel
+from alphus.policy.metrics import CyclomaticComplexityPolicy
 from alphus.policy.repository import (
     DependencyLockPolicy,
     DocumentationConfigPolicy,
@@ -13,6 +14,7 @@ from alphus.policy.sources import FileSizePolicy, LineLengthPolicy
 
 
 class GeneratedFeaturePolicies(StrictModel):
+    cyclomatic_complexity: CyclomaticComplexityPolicy | None = None
     dependency_locks: DependencyLockPolicy | None = None
     documentation_config: DocumentationConfigPolicy | None = None
     file_size: FileSizePolicy | None = None

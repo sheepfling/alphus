@@ -116,7 +116,7 @@
       ],
       "requires_files": false,
       "result_adapter": "alphus.execution.results:RuleEvaluation.from_output/cyclomatic-report",
-      "runner": "alphus.gates.source.runners:_run_cyclomatic_complexity",
+      "runner": "alphus.gates.source.cyclomatic_complexity:run_cyclomatic_rule",
       "selector": "cyclomatic-complexity"
     },
     {

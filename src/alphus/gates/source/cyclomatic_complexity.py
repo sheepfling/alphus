@@ -10,11 +10,12 @@ from collections.abc import Mapping, Sequence
 from dataclasses import asdict
 from pathlib import Path
 from types import MappingProxyType
-from typing import Annotated, TypeAlias
+from typing import Annotated, Final, TypeAlias
 
 from packaging.version import InvalidVersion, Version
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
+from alphus.config import QualityGateConfig
 from alphus.contracts.cyclomatic import (
     CyclomaticBackendPlan,
     CyclomaticBackendResult,
@@ -30,6 +31,7 @@ from alphus.contracts.findings import (
 from alphus.contracts.process import ExitCode
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.gates.source._lizard_contracts import LizardWorkerResponse as _LizardPayload
+from alphus.policy.base import require_policy
 from alphus.policy.metrics import (
     CyclomaticBackendBinding,
     CyclomaticComplexityPolicy,
@@ -41,15 +43,15 @@ from alphus.support.inventory import candidate_files
 from alphus.support.platform_utils import is_windows
 from alphus.support.python_runtime import current_python_executable
 
-ALPHUS_MORPHOLOGY = (
+ALPHUS_CHECK: Final = (
     ("selector", "cyclomatic-complexity"),
     ("concern", "function-complexity"),
     ("claim_kind", "condition"),
     (
         "claim",
         (
-            "A selected function exceeds its configured complexity threshold under the selected "
-            "native backend, or that backend fails explicitly."
+            "A selected function exceeds its configured complexity threshold under the "
+            "selected native backend, or that backend fails explicitly."
         ),
     ),
     ("mechanisms", ("native-tool", "exact-rule")),
@@ -64,6 +66,18 @@ ALPHUS_MORPHOLOGY = (
         "finding_tag_complaints",
         ("cyclomatic-complexity-threshold", "cyclomatic-backend-failure"),
     ),
+    ("policy_field", "cyclomatic_complexity"),
+    ("policy_model", "alphus.policy.metrics.CyclomaticComplexityPolicy"),
+    ("output_shape", "cyclomatic-report"),
+    (
+        "summary",
+        "Measures bounded cyclomatic complexity for supported source backends.",
+    ),
+    ("applies_to", ("python", "javascript", "cpp")),
+    ("domains", ()),
+    ("requires_files", False),
+    ("runner_module", "alphus.gates.source.cyclomatic_complexity"),
+    ("runner_name", "run_cyclomatic_rule"),
 )
 
 
@@ -873,6 +887,16 @@ def run_cyclomatic_complexity(
         )
     ]
     return combine_cyclomatic_backends(policy, runs)
+
+
+def run_cyclomatic_rule(
+    root: Path, _files: Sequence[Path], config: QualityGateConfig
+) -> CyclomaticReport:
+    """Adapt the selected strict policy to the existing native report runner."""
+    policy = require_policy(
+        config.checks.cyclomatic_complexity, "cyclomatic_complexity"
+    )
+    return run_cyclomatic_complexity(root, policy)
 
 
 def report_exit_code(

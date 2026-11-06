@@ -18,6 +18,14 @@ from alphus.gates.vcs.runners import VCS_RULE_RUNNERS
 _RuleRunner = Callable[[Path, Sequence[Path], QualityGateConfig], RuleOutput]
 
 
+def _run_feature_cyclomatic_complexity(
+    root: Path, files: Sequence[Path], config: QualityGateConfig
+) -> RuleOutput:
+    module = import_module("alphus.gates.source.cyclomatic_complexity")
+    runner = cast(_RuleRunner, module.run_cyclomatic_rule)
+    return runner(root, files, config)
+
+
 def _run_feature_dependency_locks(
     root: Path, files: Sequence[Path], config: QualityGateConfig
 ) -> RuleOutput:
@@ -68,6 +76,7 @@ def _run_feature_repository_layout(
 
 _FEATURE_RULE_RUNNERS: Mapping[QualityRuleName, _RuleRunner] = MappingProxyType(
     {
+        "cyclomatic-complexity": _run_feature_cyclomatic_complexity,
         "dependency-locks": _run_feature_dependency_locks,
         "documentation-config": _run_feature_documentation_config,
         "file-size": _run_feature_file_size,

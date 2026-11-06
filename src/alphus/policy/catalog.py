@@ -412,13 +412,6 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             "Reviews selected Ruff suppressions for documented reasons.",
             ("python", "ruff"),
         ),
-        "cyclomatic-complexity": RuleSpec(
-            "cyclomatic_complexity",
-            RuleOutputShape.CYCLOMATIC_REPORT,
-            "Measures bounded cyclomatic complexity for supported source backends.",
-            ("python", "javascript", "cpp"),
-            requires_files=False,
-        ),
     }
 )
 

@@ -577,22 +577,23 @@ provenance. Keep backend selection and unsupported/missing-tool outcomes
 explicit. A common complexity concern does not imply equal parsing, counting,
 or coverage guarantees across the three languages.
 
-This slice removes an existing eager-import seam before moving the selector
-itself to feature-owned registration. `CyclomaticPlan`, backend plans, results,
-metrics and `CyclomaticReport` now live in the lightweight
-`contracts.cyclomatic` module; the engine continues to re-export those names
-for import compatibility. The direct runner, CLI, parallel profile adapter and
-isolated worker use bounded dynamic imports on the selected cyclomatic path.
-Subprocess coverage verifies that importing the CLI, dispatcher and generic
-worker does not import the native analyzer. The full package tests continue to
-cover selected backend behavior and report adaptation.
+The feature-owned declaration in `gates/source/cyclomatic_complexity.py` now
+generates the existing `cyclomatic_complexity` strict policy field, selector,
+`RuleSpec`, audit inventory entry, and lazy runner thunk. Its
+`run_cyclomatic_rule` adapter retains the established report path and calls the
+same native engine. The former central catalog entry, source-runner binding,
+and hand-authored `CheckPolicies` field were removed. Direct selection, profile
+steps, TOML names and report adaptation stay the same.
 
-This resolves module laziness, not selector ownership: cyclomatic complexity
-still uses the legacy selector/config/runner registration. Its eventual
-feature-owned declaration must retain Python/Ruff, JavaScript/ESLint and
-C++/Lizard behavior, including unsupported, missing-tool and coverage
-outcomes. Do not treat the lazy import seam alone as completion of that
-registration migration.
+The preceding slice moved `CyclomaticPlan`, backend plans, results, metrics
+and `CyclomaticReport` into the lightweight `contracts.cyclomatic` module; the
+engine continues to re-export those names for import compatibility. The direct
+runner, CLI, parallel profile adapter and isolated worker use bounded dynamic
+imports on the selected cyclomatic path. Subprocess coverage verifies that
+importing the CLI, dispatcher and generic worker does not import the native
+analyzer. Differential wheel scenarios and the full package suite cover
+selected Python/Ruff, JavaScript/ESLint, and C++/Lizard behavior, including
+report, failure, unsupported and coverage outcomes.
 
 ## Applicability, recommendations and reporting
 

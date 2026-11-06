@@ -5,6 +5,7 @@ from dataclasses import FrozenInstanceError
 import pytest
 
 from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
+from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
 from alphus.policy.feature_definition import FeatureDefinition
 
 
@@ -56,6 +57,21 @@ def test_generated_feature_definitions_are_immutable() -> None:
             runner_name=definition.runner_name,
             policy_inputs=[definition.policy_field],  # type: ignore[arg-type]
         )
+
+
+def test_polyglot_cyclomatic_gate_uses_feature_owned_registration() -> None:
+    definition = FEATURE_DEFINITIONS["cyclomatic-complexity"]
+    spec = RULE_SPECS["cyclomatic-complexity"]
+
+    assert definition.policy_field == "cyclomatic_complexity"
+    assert definition.policy_model == "alphus.policy.metrics.CyclomaticComplexityPolicy"
+    assert definition.output_shape == "cyclomatic-report"
+    assert definition.applies_to == ("python", "javascript", "cpp")
+    assert definition.runner_module == "alphus.gates.source.cyclomatic_complexity"
+    assert definition.runner_name == "run_cyclomatic_rule"
+    assert spec.policy_field == definition.policy_field
+    assert spec.output_shape is RuleOutputShape.CYCLOMATIC_REPORT
+    assert spec.requires_files is False
 
 
 def test_feature_definition_rejects_malformed_labels() -> None:
