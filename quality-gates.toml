@@ -28,7 +28,6 @@ markers = ["TODO", "FIXME", "HACK", "XXX", "XXXX"]
 exclude = [
   "tests/differential/fixtures/comment-markers-polyglot/docs/guide.toml",
   "tests/differential/fixtures/comment-markers-polyglot/src/example.py",
-  "tests/differential/fixtures/comment-markers-polyglot/src/malformed.py",
 ]
 
 [checks.line_length]

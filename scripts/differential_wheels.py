@@ -47,6 +47,11 @@ class _ExpectedFindingDocument(_StrictDocument):
     line: Annotated[int, Field(gt=0)] | None = None
 
 
+class _MaterializedFileDocument(_StrictDocument):
+    path: Annotated[str, Field(min_length=1)]
+    contents: str
+
+
 class _VariantDocument(_StrictDocument):
     name: str
     arguments: Annotated[list[str], Field(default_factory=list)]
@@ -79,6 +84,9 @@ class _ScenarioDocument(_StrictDocument):
     required_output: Annotated[list[str], Field(default_factory=list)]
     expected_findings: Annotated[
         list[_ExpectedFindingDocument], Field(default_factory=list)
+    ]
+    materialized_files: Annotated[
+        list[_MaterializedFileDocument], Field(default_factory=list)
     ]
     expected_cyclomatic_outcome: str | None = None
     expected_cyclomatic_backends: Annotated[
@@ -323,6 +331,7 @@ class Scenario:
     required_output: tuple[str, ...]
     expected_findings: tuple[tuple[str, str, int | None], ...]
     variants: tuple[RunVariant, ...]
+    materialized_files: tuple[tuple[str, str], ...] = ()
     expected_cyclomatic_outcome: str | None = None
     expected_cyclomatic_backends: tuple[tuple[str, str, str, int, int], ...] = ()
     plugin_package: str | None = None
@@ -467,6 +476,10 @@ def _parse_manifest(
             (finding.rule_id, finding.path, finding.line)
             for finding in row.expected_findings
         )
+        materialized_files = tuple(
+            (item.path, item.contents) for item in row.materialized_files
+        )
+        _validate_materialized_files(materialized_files)
         direct_selectors = {
             variant.arguments[index + 1]
             for variant in variants
@@ -524,6 +537,7 @@ def _parse_manifest(
                 require_passed_steps=row.require_passed_steps,
                 required_output=tuple(row.required_output),
                 expected_findings=expected_findings,
+                materialized_files=materialized_files,
                 expected_cyclomatic_outcome=row.expected_cyclomatic_outcome,
                 expected_cyclomatic_backends=tuple(
                     (
@@ -541,6 +555,45 @@ def _parse_manifest(
             )
         )
     return tuple(scenarios), tuple(document.deferred)
+
+
+def _validate_materialized_files(
+    files: Sequence[tuple[str, str]],
+) -> None:
+    """Validate generated scenario inputs before any fixture copy is modified."""
+    names: set[str] = set()
+    for name, contents in files:
+        relative = PurePosixPath(name)
+        if (
+            not name
+            or relative.is_absolute()
+            or relative.as_posix() != name
+            or any(part in {"", ".", ".."} for part in relative.parts)
+        ):
+            raise ValueError(
+                f"materialized fixture path must be safe POSIX-relative: {name!r}"
+            )
+        if name in names:
+            raise ValueError(f"duplicate materialized fixture path: {name!r}")
+        names.add(name)
+        if len(contents.encode("utf-8")) > 65_536:
+            raise ValueError(f"materialized fixture file is too large: {name!r}")
+
+
+def _materialize_scenario_files(root: Path, files: Sequence[tuple[str, str]]) -> None:
+    """Write bounded synthetic inputs inside a frozen scenario fixture."""
+    _validate_materialized_files(files)
+    base = root.resolve(strict=True)
+    for name, contents in files:
+        relative = PurePosixPath(name)
+        destination = base.joinpath(*relative.parts)
+        if not destination.resolve(strict=False).is_relative_to(base):
+            raise ValueError(f"materialized fixture path escapes its root: {name!r}")
+        if destination.exists() or destination.is_symlink():
+            raise ValueError(f"materialized fixture path already exists: {name!r}")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with destination.open("w", encoding="utf-8", newline="") as stream:
+            stream.write(contents)
 
 
 def _resolve_commit(repository: Path, revision: str) -> str:
@@ -1199,6 +1252,7 @@ def _snapshot_fixtures(
             if any(path.is_symlink() for path in source.rglob("*")):
                 raise ValueError(f"fixture contains a symlink: {source}")
             shutil.copytree(source, snapshot_path)
+        _materialize_scenario_files(snapshot_path, scenario.materialized_files)
         fixture_commit = _initialize_fixture_git(snapshot_path)
         snapshots[scenario.name] = FixtureSnapshot(
             path=snapshot_path,

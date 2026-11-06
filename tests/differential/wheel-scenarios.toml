@@ -586,6 +586,9 @@ behavior = ["feature-owned-registration", "polyglot-comment-scanners", "stable-f
 expected_exit = 1
 minimum_findings = 6
 required_output = ["EOF in multi-line string"]
+materialized_files = [
+  { path = "src/malformed.py", contents = "value = '''unterminated\n" },
+]
 expected_findings = [
   { rule_id = "alphus/any/none/hygiene/comment-marker-found", path = "docs/guide.toml", line = 2 },
   { rule_id = "alphus/any/none/hygiene/comment-marker-found", path = "src/example.cpp", line = 2 },
@@ -607,6 +610,9 @@ behavior = ["feature-owned-profile-dispatch", "polyglot-result-adapter", "ordere
 expected_exit = 0
 minimum_findings = 6
 required_output = ["EOF in multi-line string"]
+materialized_files = [
+  { path = "src/malformed.py", contents = "value = '''unterminated\n" },
+]
 expected_step_names = ["comments"]
 expected_step_rules = ["comment-markers"]
 require_passed_steps = true

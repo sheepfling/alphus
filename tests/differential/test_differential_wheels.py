@@ -18,10 +18,12 @@ from scripts.differential_wheels import (
     _compare_reports,
     _configured_policy_sections,
     _dispatch_case,
+    _materialize_scenario_files,
     _missing_policy_error,
     _scenario_classification,
     _scenario_executes,
     _ScenarioRunReport,
+    _validate_materialized_files,
     load_manifest,
     normalize_json,
     remove_path,
@@ -403,3 +405,19 @@ def test_catalog_contract_differences_name_only_changed_selectors() -> None:
         "catalog-registration/removed-check is reference-only",
         "catalog-registration/runtime-types differs",
     ]
+
+
+def test_materialized_scenario_files_are_safe_and_stay_inside_fixture(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "fixture"
+    root.mkdir()
+    contents = "value = " + "'" * 3 + "unterminated\n"
+
+    _materialize_scenario_files(root, (("src/malformed.py", contents),))
+
+    assert (root / "src" / "malformed.py").read_text(encoding="utf-8") == contents
+    with pytest.raises(ValueError, match="safe POSIX-relative"):
+        _validate_materialized_files((("../outside.py", contents),))
+    with pytest.raises(ValueError, match="duplicate materialized fixture path"):
+        _validate_materialized_files((("src/a.py", "a"), ("src/a.py", "b")))
