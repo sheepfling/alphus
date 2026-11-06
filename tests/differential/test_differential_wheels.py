@@ -13,7 +13,12 @@ from scripts.differential_wheels import (
     Scenario,
     _assert_file_identity,
     _assert_scenario_output,
+    _catalog_contract_differences,
+    _CatalogRule,
     _compare_reports,
+    _configured_policy_sections,
+    _dispatch_case,
+    _missing_policy_error,
     _scenario_classification,
     _scenario_executes,
     _ScenarioRunReport,
@@ -317,4 +322,84 @@ def test_plugin_import_observation_is_part_of_differential_result() -> None:
 
     assert _compare_reports((scenario,), reference, candidate) == [
         "plugin-unselected-lazy/catalog differs"
+    ]
+
+
+def test_dispatch_matrix_classifies_from_reference_policy_sections(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "quality-gates.toml").write_text(
+        "schema_version = 1\n\n[checks]\nunrelated_scalar = 1\n\n"
+        "[checks.file_size]\ncode_limit = 10\n",
+        encoding="utf-8",
+    )
+    configured = _configured_policy_sections(tmp_path)
+    assert configured == frozenset({"checks.file_size"})
+    file_size = _CatalogRule(
+        selector="file-size",
+        policy_section="checks.file_size",
+        output_shape="findings",
+    )
+    benchmark_docs = _CatalogRule(
+        selector="benchmark-docs",
+        policy_section="checks.benchmark_docs",
+        output_shape="findings",
+    )
+
+    assert _dispatch_case(file_size, configured) == "configured-direct-invocation"
+    assert (
+        _dispatch_case(benchmark_docs, configured) == "strict-missing-policy-rejection"
+    )
+
+
+def test_missing_policy_error_matches_only_the_named_neighbor() -> None:
+    stderr = (
+        "│ Invalid value: selected configuration has no │\n"
+        "│ [checks.file_size] policy │\n"
+    )
+
+    assert _missing_policy_error(stderr, "checks.file_size")
+    assert not _missing_policy_error(stderr, "checks.line_length")
+
+
+def test_catalog_contract_differences_name_only_changed_selectors() -> None:
+    reference = [
+        _CatalogRule(
+            selector="file-size",
+            policy_section="checks.file_size",
+            output_shape="findings",
+        ),
+        _CatalogRule(
+            selector="runtime-types",
+            policy_section="checks.runtime_types",
+            output_shape="messages",
+        ),
+        _CatalogRule(
+            selector="removed-check",
+            policy_section="checks.removed_check",
+            output_shape="findings",
+        ),
+    ]
+    candidate = [
+        _CatalogRule(
+            selector="file-size",
+            policy_section="checks.file_size",
+            output_shape="findings",
+        ),
+        _CatalogRule(
+            selector="runtime-types",
+            policy_section="checks.runtime_type_usage",
+            output_shape="messages",
+        ),
+        _CatalogRule(
+            selector="new-check",
+            policy_section="checks.new_check",
+            output_shape="findings",
+        ),
+    ]
+
+    assert _catalog_contract_differences(reference, candidate) == [
+        "catalog-registration/new-check is candidate-only",
+        "catalog-registration/removed-check is reference-only",
+        "catalog-registration/runtime-types differs",
     ]

@@ -286,8 +286,8 @@ The feature has three views that must not be collapsed into one label:
   and evidence type documented by the checker.
 - **Provider:** `check_file_size` in the shared Alphus Python implementation.
   A cross-language concern such as cyclomatic complexity instead maps Python
-to Ruff, JavaScript to ESLint, and C++ to Lizard, each with its own syntax,
-metric limits, version, and coverage.
+  to Ruff, JavaScript to ESLint, and C++ to Lizard, each with its own syntax,
+  metric limits, version, and coverage.
 - **Repeatability:** same declared source, policy, tool version, and supported
   environment assumptions produce the same evidence. This does not make a
   heuristic exact or equate the languages' semantics.
@@ -313,10 +313,31 @@ type or result shape.
 Do not claim a time reduction from the design alone. For the first three
 migrated checks, record the commit diff, the count of manually edited
 registration locations, generator output, and elapsed implementation/review
-time. The objective is zero hand-maintained central selector, config, catalog,
-or runner enumerations for a new check; the migration itself remains a
-bounded, reviewed change. The full exit criterion still requires all current
-selectors to derive from the same declarations.
+time. Also count human corrections: accepted review comments that require a
+code, documentation, or test change, with categories for ownership/duplicate
+registration, config/selection/dispatch compatibility, static discovery and
+lazy imports, independent taxonomy axes, evidence and coverage, effective
+policy inputs, immutable typed contracts, fixture/path isolation, and mirrored
+test/self-review quality. Record repeated-category comments across changes,
+not only the total comment count, so the review loop reveals recurring failure
+families. Set a baseline from this morphology pilot and the immediately
+preceding backflow reviews; do not infer improvement from fewer comments when
+review scope or reviewer time changed. The numeric baseline is not yet
+reconstructed: PR #98's GitHub review reported no findings, while morphology
+corrections were delivered in the parent review conversation. Do not treat the
+absence of PR comments as zero corrections; classify those conversation notes
+before evaluating the first migration.
+
+For every accepted correction, search analogous declarations, selectors,
+runners, adapters, config fields, and fixtures before closing it. Add a
+positive regression and a legitimate-neighbor case where the category has a
+meaningful boundary. Keep the checklist and category definitions stable across
+the first three migrations, then compare repeated-category corrections and
+registration locations against the baseline. The objective is zero
+hand-maintained central selector, config, catalog, or runner enumerations for a
+new check; the migration itself remains a bounded, reviewed change. The full
+exit criterion still requires all current selectors to derive from the same
+declarations and the pinned-wheel proof to pass.
 
 The six-check pilot proves metadata discovery only. It does not yet generate
 runnable registration, strict config, dispatch, result validation, or reporting.
@@ -435,8 +456,8 @@ run. Exact temporary paths are replaced with stable placeholders in the evidence
 
 The comparison used reference `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`
 and candidate `d8cc02081a511c79466c6b52361d02cd2f0238e9`. The catalog was
-identical at 62 selectors. The 21 manifested scenarios produced no differences.
-They behaviorally exercised 9 built-in selectors and one API-v1 plugin selector;
+identical at 62 selectors. The 21 manifested behavior scenarios produced no differences. They
+behaviorally exercised 9 built-in selectors and one API-v1 plugin selector;
 53 built-in selectors remain without behavior-level wheel evidence. Cases cover
 strict invalid-config rejection, direct JSON and plain output, profile selection,
 serial/parallel profile output, exact findings and locations, a composite
@@ -458,18 +479,21 @@ wheels report version `0.0.0`; source commits and wheel hashes identify the
 artifacts. No runtime registration migration is justified yet.
 
 The complete machine-readable run is
-[the expanded c880093-to-d8cc020 evidence report](
-architecture/builtin-check-wheel-differential-c880093-d8cc020-expanded.json).
+[the c880093-to-d8cc020 behavior and selector-matrix report](architecture/builtin-check-wheel-differential-c880093-d8cc020-dispatch-matrix.json).
 It records the frozen fixture snapshot identities, manifest and harness hashes,
 plugin source/wheel hashes, per-scenario native dependencies, selected and
-analyzed file counts, and separate built-in/plugin coverage. Reproduce it with:
+analyzed file counts, and separate built-in/plugin coverage. Its generated
+matrix also invoked all 26 selectors with configured policies and verified
+strict missing-policy rejection for the other 36. These checks exercise
+selection/config contracts; they do not count as semantic behavior coverage.
+Reproduce it with:
 
 ```sh
 PATH="$PWD/node_modules/.bin:$PATH" .venv/bin/python scripts/differential_wheels.py \
   --root . \
   --baseline c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e \
   --candidate d8cc02081a511c79466c6b52361d02cd2f0238e9 \
-  --output docs/architecture/builtin-check-wheel-differential-c880093-d8cc020-expanded.json
+  --output docs/architecture/builtin-check-wheel-differential-c880093-d8cc020-dispatch-matrix.json
 ```
 
 ## Performance and cache boundary

@@ -103,6 +103,8 @@ class _ManifestDocument(_StrictDocument):
 class _CatalogRule(_StrictDocument):
     model_config = ConfigDict(extra="allow", strict=True)
     selector: str
+    policy_section: str
+    output_shape: str
 
 
 class _CatalogDocument(_StrictDocument):
@@ -228,6 +230,9 @@ class _WheelBuildReport(_StrictDocument):
 class _CoverageReport(_StrictDocument):
     catalog_selector_count: int
     catalog_equal: bool
+    catalog_registration_contract_equal: bool
+    directly_invoked_selectors: list[str]
+    strict_missing_policy_rejection_selectors: list[str]
     behaviorally_exercised_selectors: list[str]
     behaviorally_exercised_plugin_selectors: list[str]
     selectors_in_plan_only_scenarios: list[str]
@@ -239,6 +244,33 @@ class _PluginWheelReport(_StrictDocument):
     name: str
     source_sha256: str
     wheel_sha256: str
+
+
+class _SelectorDispatchOutcome(_StrictDocument):
+    exit_code: int
+    stdout_sha256: str
+    stderr_sha256: str
+    json_root_type: str | None
+
+
+class _SelectorDispatchEntry(_StrictDocument):
+    selector: str
+    policy_section: str
+    case: str
+    reference: _SelectorDispatchOutcome
+    candidate: _SelectorDispatchOutcome
+    equal: bool
+
+
+class _SelectorDispatchMatrix(_StrictDocument):
+    status: str
+    fixture_sha256: str | None = None
+    fixture_git_commit: str | None = None
+    config_path: str
+    catalog_selector_count: int
+    directly_invoked_count: int
+    strict_missing_policy_rejection_count: int
+    outcomes: list[_SelectorDispatchEntry]
 
 
 class _DifferentialReport(_StrictDocument):
@@ -257,6 +289,7 @@ class _DifferentialReport(_StrictDocument):
     temporary_path_normalization: str
     build_python: str
     scenario_results: dict[str, dict[str, _ScenarioRunReport]]
+    selector_dispatch_matrix: _SelectorDispatchMatrix
     coverage: _CoverageReport
     differences: list[str]
     equivalent_for_manifested_scenarios: bool
@@ -877,7 +910,7 @@ def _normalize_result(
     )
 
 
-def _catalog_selectors(python: Path, temporary_root: Path) -> tuple[str, ...]:
+def _catalog_document(python: Path, temporary_root: Path) -> _CatalogDocument:
     result = subprocess.run(
         [
             str(python.parent / "alphus"),
@@ -894,8 +927,232 @@ def _catalog_selectors(python: Path, temporary_root: Path) -> tuple[str, ...]:
     )
     if result.returncode != 0:
         raise RuntimeError(f"catalog invocation failed: {result.stderr}")
-    payload = _CatalogDocument.model_validate_json(result.stdout)
-    return tuple(sorted(rule.selector for rule in payload.rules))
+    return _CatalogDocument.model_validate_json(result.stdout)
+
+
+def _configured_policy_sections(root: Path) -> frozenset[str]:
+    parsed = tomllib.loads((root / "quality-gates.toml").read_text(encoding="utf-8"))
+    document: JsonValue = validate_json_value(json.dumps(parsed))
+    match document:
+        case {"checks": dict() as checks}:
+            configured: set[str] = set()
+            for field, value in checks.items():
+                match value:
+                    case dict():
+                        configured.add(f"checks.{field}")
+                    case _:
+                        continue
+            return frozenset(configured)
+        case _:
+            raise ValueError("reference quality-gates.toml has no checks table")
+
+
+def _catalog_contract_differences(
+    baseline_rules: Sequence[_CatalogRule], candidate_rules: Sequence[_CatalogRule]
+) -> list[str]:
+    baseline = {
+        rule.selector: (rule.policy_section, rule.output_shape)
+        for rule in baseline_rules
+    }
+    candidate = {
+        rule.selector: (rule.policy_section, rule.output_shape)
+        for rule in candidate_rules
+    }
+    differences: list[str] = []
+    for selector in sorted(set(baseline) | set(candidate)):
+        if selector not in baseline:
+            differences.append(f"catalog-registration/{selector} is candidate-only")
+        elif selector not in candidate:
+            differences.append(f"catalog-registration/{selector} is reference-only")
+        elif baseline[selector] != candidate[selector]:
+            differences.append(f"catalog-registration/{selector} differs")
+    return differences
+
+
+def _dispatch_case(rule: _CatalogRule, configured: frozenset[str]) -> str:
+    if rule.policy_section in configured:
+        return "configured-direct-invocation"
+    return "strict-missing-policy-rejection"
+
+
+def _dispatch_variant(rule: _CatalogRule, case: str) -> RunVariant:
+    return RunVariant(
+        name=rule.selector,
+        arguments=(
+            "--config",
+            "quality-gates.toml",
+            "--rule",
+            rule.selector,
+            "--json",
+        ),
+        compare_within_build=False,
+        parse_json=case == "configured-direct-invocation",
+    )
+
+
+def _missing_policy_error(stderr: str, policy_section: str) -> bool:
+    plain_text = " ".join(stderr.replace("│", " ").split())
+    return f"no [{policy_section}] policy" in plain_text
+
+
+def _dispatch_outcome(
+    python: Path,
+    root: Path,
+    rule: _CatalogRule,
+    case: str,
+    empty_path: Path,
+) -> tuple[_SelectorDispatchOutcome, ProcessResult]:
+    result = _run_variant(
+        python,
+        root,
+        _dispatch_variant(rule, case),
+        empty_path=empty_path,
+    )
+    if case == "configured-direct-invocation":
+        if result.exit_code != 0:
+            raise ValueError(
+                f"{rule.selector} configured direct invocation exited "
+                f"{result.exit_code}: {result.stderr[:240]!r}"
+            )
+        payload = validate_json_value(result.stdout)
+        match payload:
+            case list():
+                json_root_type = "array"
+            case dict():
+                json_root_type = "object"
+            case _:
+                raise ValueError(
+                    f"{rule.selector} returned JSON root {type(payload).__name__}; "
+                    "expected an array or object"
+                )
+    else:
+        if result.exit_code != 2:
+            raise ValueError(
+                f"{rule.selector} without policy exited {result.exit_code}; expected 2"
+            )
+        if not _missing_policy_error(result.stderr, rule.policy_section):
+            raise ValueError(
+                f"{rule.selector} missing-policy error did not name "
+                f"{rule.policy_section}: {result.stderr[:240]!r}"
+            )
+        json_root_type = None
+    return (
+        _SelectorDispatchOutcome(
+            exit_code=result.exit_code,
+            stdout_sha256=hashlib.sha256(result.stdout.encode("utf-8")).hexdigest(),
+            stderr_sha256=hashlib.sha256(result.stderr.encode("utf-8")).hexdigest(),
+            json_root_type=json_root_type,
+        ),
+        result,
+    )
+
+
+def _copy_selector_matrix_fixture(snapshot: FixtureSnapshot, destination: Path) -> Path:
+    shutil.copytree(snapshot.path, destination, ignore=shutil.ignore_patterns(".git"))
+    if _tree_digest(destination) != snapshot.tree_sha256:
+        raise ValueError("copied selector-matrix source differs from frozen snapshot")
+    if _initialize_fixture_git(destination) != snapshot.git_commit:
+        raise ValueError("selector-matrix fixture Git identity changed while copying")
+    return destination
+
+
+def _selector_dispatch_matrix(
+    baseline_python: Path,
+    candidate_python: Path,
+    baseline_rules: Sequence[_CatalogRule],
+    candidate_rules: Sequence[_CatalogRule],
+    repository: Path,
+    baseline_commit: str,
+    temporary_root: Path,
+) -> tuple[_SelectorDispatchMatrix, list[str]]:
+    baseline_contracts = {
+        rule.selector: (rule.policy_section, rule.output_shape)
+        for rule in baseline_rules
+    }
+    candidate_contracts = {
+        rule.selector: (rule.policy_section, rule.output_shape)
+        for rule in candidate_rules
+    }
+    if baseline_contracts != candidate_contracts:
+        raise ValueError("reference/candidate catalog registration contracts differ")
+    pristine_source = temporary_root / "selector-matrix-pristine-source"
+    pristine_source.mkdir()
+    _extract_source(repository, baseline_commit, pristine_source)
+    snapshot_path = temporary_root / "selector-matrix-snapshot"
+    shutil.copytree(pristine_source, snapshot_path)
+    if any(path.is_symlink() for path in snapshot_path.rglob("*")):
+        raise ValueError("reference source fixture contains a symlink")
+    fixture_git_commit = _initialize_fixture_git(snapshot_path)
+    fixture_sha256 = _tree_digest(snapshot_path)
+    snapshot = FixtureSnapshot(
+        path=snapshot_path,
+        tree_sha256=fixture_sha256,
+        git_commit=fixture_git_commit,
+    )
+    configured = _configured_policy_sections(snapshot_path)
+    reference_root = _copy_selector_matrix_fixture(
+        snapshot, temporary_root / "selector-matrix-reference"
+    )
+    candidate_root = _copy_selector_matrix_fixture(
+        snapshot, temporary_root / "selector-matrix-candidate"
+    )
+    empty_path = temporary_root / "selector-matrix-empty"
+    empty_path.mkdir()
+    outcomes: list[_SelectorDispatchEntry] = []
+    differences: list[str] = []
+    directly_invoked: list[str] = []
+    strict_rejected: list[str] = []
+    candidate_by_selector = {rule.selector: rule for rule in candidate_rules}
+    for rule in sorted(baseline_rules, key=lambda item: item.selector):
+        case = _dispatch_case(rule, configured)
+        reference_outcome, reference_result = _dispatch_outcome(
+            baseline_python, reference_root, rule, case, empty_path
+        )
+        candidate_outcome, candidate_result = _dispatch_outcome(
+            candidate_python,
+            candidate_root,
+            candidate_by_selector[rule.selector],
+            case,
+            empty_path,
+        )
+        equal = reference_result == candidate_result
+        if case == "configured-direct-invocation":
+            directly_invoked.append(rule.selector)
+        else:
+            strict_rejected.append(rule.selector)
+        if not equal:
+            differences.append(f"selector-dispatch/{rule.selector} differs")
+        outcomes.append(
+            _SelectorDispatchEntry(
+                selector=rule.selector,
+                policy_section=rule.policy_section,
+                case=case,
+                reference=reference_outcome,
+                candidate=candidate_outcome,
+                equal=equal,
+            )
+        )
+    if _tree_digest(snapshot_path) != fixture_sha256:
+        raise ValueError("selector-matrix source snapshot changed during the run")
+    if _git_head(snapshot_path) != fixture_git_commit:
+        raise ValueError("selector-matrix source Git identity changed during the run")
+    if _tree_digest(reference_root) != fixture_sha256:
+        raise ValueError("reference selector-matrix fixture changed during the run")
+    if _tree_digest(candidate_root) != fixture_sha256:
+        raise ValueError("candidate selector-matrix fixture changed during the run")
+    return (
+        _SelectorDispatchMatrix(
+            status="completed",
+            fixture_sha256=fixture_sha256,
+            fixture_git_commit=fixture_git_commit,
+            config_path="quality-gates.toml",
+            catalog_selector_count=len(baseline_rules),
+            directly_invoked_count=len(directly_invoked),
+            strict_missing_policy_rejection_count=len(strict_rejected),
+            outcomes=outcomes,
+        ),
+        differences,
+    )
 
 
 def _snapshot_plugin_packages(
@@ -1371,8 +1628,40 @@ def run(
         candidate_packages = candidate_install.packages
         if baseline_packages != candidate_packages:
             raise ValueError("baseline and candidate dependency environments differ")
-        baseline_selectors = _catalog_selectors(baseline_python, probe_root)
-        candidate_selectors = _catalog_selectors(candidate_python, probe_root)
+        baseline_catalog = _catalog_document(baseline_python, probe_root)
+        candidate_catalog = _catalog_document(candidate_python, probe_root)
+        baseline_selectors = tuple(
+            sorted(rule.selector for rule in baseline_catalog.rules)
+        )
+        candidate_selectors = tuple(
+            sorted(rule.selector for rule in candidate_catalog.rules)
+        )
+        catalog_contract_differences = _catalog_contract_differences(
+            baseline_catalog.rules, candidate_catalog.rules
+        )
+        catalog_registration_contract_equal = not catalog_contract_differences
+        if catalog_contract_differences:
+            selector_dispatch_matrix = _SelectorDispatchMatrix(
+                status="skipped-catalog-mismatch",
+                config_path="quality-gates.toml",
+                catalog_selector_count=len(baseline_catalog.rules),
+                directly_invoked_count=0,
+                strict_missing_policy_rejection_count=0,
+                outcomes=[],
+            )
+            selector_dispatch_differences = catalog_contract_differences
+        else:
+            selector_dispatch_matrix, selector_dispatch_differences = (
+                _selector_dispatch_matrix(
+                    baseline_python,
+                    candidate_python,
+                    baseline_catalog.rules,
+                    candidate_catalog.rules,
+                    repository,
+                    baseline,
+                    temporary_root,
+                )
+            )
         baseline_runs = _run_scenarios(
             baseline_python,
             scenarios,
@@ -1399,6 +1688,7 @@ def run(
             candidate_wheel, candidate_install
         )
         differences = _compare_reports(scenarios, baseline_runs, candidate_runs)
+        differences.extend(selector_dispatch_differences)
         _assert_file_identity(manifest_path, manifest_sha256, "scenario manifest")
         _assert_file_identity(harness_path, harness_sha256, "harness")
         for name, snapshot in plugin_snapshots.items():
@@ -1416,7 +1706,7 @@ def run(
                     f"frozen fixture Git identity changed during run: {name}"
                 )
         report = _DifferentialReport(
-            schema_version=2,
+            schema_version=3,
             plugin_wheels=plugin_wheels,
             reference=_WheelBuildReport(
                 commit=baseline,
@@ -1472,9 +1762,23 @@ def run(
                 "reference": baseline_runs,
                 "candidate": candidate_runs,
             },
+            selector_dispatch_matrix=selector_dispatch_matrix,
             coverage=_CoverageReport(
                 catalog_selector_count=len(baseline_selectors),
                 catalog_equal=baseline_selectors == candidate_selectors,
+                catalog_registration_contract_equal=(
+                    catalog_registration_contract_equal
+                ),
+                directly_invoked_selectors=sorted(
+                    entry.selector
+                    for entry in selector_dispatch_matrix.outcomes
+                    if entry.case == "configured-direct-invocation"
+                ),
+                strict_missing_policy_rejection_selectors=sorted(
+                    entry.selector
+                    for entry in selector_dispatch_matrix.outcomes
+                    if entry.case == "strict-missing-policy-rejection"
+                ),
                 behaviorally_exercised_selectors=sorted(
                     {
                         selector
@@ -1543,6 +1847,13 @@ def run(
                     report.coverage.behaviorally_exercised_selectors
                 ),
                 "scenario_count": len(scenarios),
+                "selector_dispatch_rows": len(selector_dispatch_matrix.outcomes),
+                "directly_invoked_selector_count": (
+                    selector_dispatch_matrix.directly_invoked_count
+                ),
+                "strict_missing_policy_rejection_count": (
+                    selector_dispatch_matrix.strict_missing_policy_rejection_count
+                ),
                 "differences": differences,
                 "equivalent_for_manifested_scenarios": (
                     report.equivalent_for_manifested_scenarios
