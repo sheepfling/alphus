@@ -57,12 +57,6 @@ class RuleSpec:
 
 _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
     {
-        "comment-markers": RuleSpec(
-            "comment_markers",
-            RuleOutputShape.FINDINGS,
-            "Finds configured TODO-style markers in supported source comments.",
-            ("python", "javascript", "c", "cpp"),
-        ),
         "json-structure": RuleSpec(
             "json_structure",
             RuleOutputShape.FINDINGS,

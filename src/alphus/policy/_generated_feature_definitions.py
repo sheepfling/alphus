@@ -7,6 +7,19 @@ from alphus.policy.feature_definition import FeatureDefinition
 
 FEATURE_DEFINITIONS: Mapping[str, FeatureDefinition] = MappingProxyType(
     {
+        "comment-markers": FeatureDefinition(
+            selector="comment-markers",
+            policy_field="comment_markers",
+            policy_model="alphus.policy.sources.CommentMarkerPolicy",
+            output_shape="findings",
+            summary="Finds configured TODO-style markers in supported source comments.",
+            applies_to=("python", "javascript", "c", "cpp"),
+            domains=(),
+            requires_files=True,
+            runner_module="alphus.gates.hygiene.comment_markers",
+            runner_name="run_comment_markers_rule",
+            policy_inputs=("comment_markers",),
+        ),
         "cyclomatic-complexity": FeatureDefinition(
             selector="cyclomatic-complexity",
             policy_field="cyclomatic_complexity",

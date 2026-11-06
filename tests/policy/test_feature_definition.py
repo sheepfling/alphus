@@ -75,6 +75,27 @@ def test_polyglot_cyclomatic_gate_uses_feature_owned_registration() -> None:
     assert spec.requires_files is False
 
 
+def test_comment_markers_uses_feature_owned_polyglot_registration() -> None:
+    definition = FEATURE_DEFINITIONS["comment-markers"]
+    spec = RULE_SPECS["comment-markers"]
+    morphology = MORPHOLOGY_BY_SELECTOR["comment-markers"]
+
+    assert definition.policy_field == "comment_markers"
+    assert definition.policy_model == "alphus.policy.sources.CommentMarkerPolicy"
+    assert definition.runner_module == "alphus.gates.hygiene.comment_markers"
+    assert definition.runner_name == "run_comment_markers_rule"
+    assert definition.applies_to == ("python", "javascript", "c", "cpp")
+    assert (
+        spec.summary
+        == "Finds configured TODO-style markers in supported source comments."
+    )
+    assert spec.policy_field == definition.policy_field
+    assert tuple(tag.rule_id for tag in morphology.finding_ids) == (
+        "alphus/any/none/hygiene/comment-scan-failed",
+        "alphus/any/none/hygiene/comment-marker-found",
+    )
+
+
 def test_output_escaping_registration_owns_both_language_tags() -> None:
     definition = FEATURE_DEFINITIONS["output-escaping"]
     spec = RULE_SPECS["output-escaping"]

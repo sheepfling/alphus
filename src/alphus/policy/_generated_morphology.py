@@ -39,6 +39,37 @@ MORPHOLOGY_BY_SELECTOR: Mapping[str, RuleMorphology] = MappingProxyType(
             ),
             evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
         ),
+        "comment-markers": RuleMorphology(
+            selector="comment-markers",
+            finding_ids=(
+                RuleTag(
+                    Scope.ANY,
+                    Framework.NONE,
+                    Category.HYGIENE,
+                    "comment-scan-failed",
+                ),
+                RuleTag(
+                    Scope.ANY,
+                    Framework.NONE,
+                    Category.HYGIENE,
+                    "comment-marker-found",
+                ),
+            ),
+            concern="temporary-work-markers",
+            claim_kind=ClaimKind.CONDITION,
+            claim=(
+                "Reports configured TODO-style markers found in supported source "
+                "comments."
+            ),
+            mechanisms=(
+                DetectionMechanism.EXACT_RULE,
+                DetectionMechanism.BOUNDED_HEURISTIC,
+            ),
+            inspected_scope=("configured-source-files",),
+            languages_formats=("python", "toml", "javascript", "cpp", "java"),
+            evidence_kinds=("comment-text", "source-line"),
+            evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+        ),
         "cyclomatic-complexity": RuleMorphology(
             selector="cyclomatic-complexity",
             finding_ids=(

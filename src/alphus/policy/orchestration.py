@@ -79,7 +79,6 @@ from alphus.policy.review import (
 from alphus.policy.source_test_coverage import SourceTestCoveragePolicy
 from alphus.policy.sources import (
     CliPolicy,
-    CommentMarkerPolicy,
     FileInventoryPolicy,
     FunctionShapePolicy,
     PathDiscoveryPolicy,
@@ -94,7 +93,6 @@ from alphus.policy.sources import (
 class CheckPolicies(GeneratedFeaturePolicies):
     """Settings for the currently available source gates."""
 
-    comment_markers: CommentMarkerPolicy | None = None
     json_structure: SourceScanPolicy | None = None
     path_discovery: PathDiscoveryPolicy | None = None
     numeric_literals: NumericLiteralPolicy | None = None

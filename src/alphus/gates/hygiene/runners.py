@@ -9,7 +9,6 @@ from typing import TypeAlias
 
 from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.execution.results import RuleOutput
-from alphus.gates.hygiene.comment_markers import check_comment_markers
 from alphus.gates.hygiene.shared_utilities import check_shared_utilities
 from alphus.policy.base import require_policy
 
@@ -19,11 +18,6 @@ HygieneRunner: TypeAlias = Callable[
 
 HYGIENE_RULE_RUNNERS: Mapping[QualityRuleName, HygieneRunner] = MappingProxyType(
     {
-        "comment-markers": lambda root, files, config: check_comment_markers(
-            root,
-            files,
-            require_policy(config.checks.comment_markers, "comment_markers"),
-        ),
         "shared-utilities": lambda root, files, config: check_shared_utilities(
             root,
             files,

@@ -576,3 +576,59 @@ reason = "The installed-wheel self-profile runs a subprocess regression proving 
 capability = "effectful-command-step-compatibility"
 status = "not-exercised"
 reason = "The architecture plan names the LaTeX build-and-validation step, but the current wheel harness has no command/build scenario; scheduler and command behavior are unchanged by this numeric-contract slice."
+
+
+[[scenario]]
+name = "comment-markers-polyglot-direct"
+fixture = "comment-markers-polyglot"
+selectors = ["comment-markers"]
+behavior = ["feature-owned-registration", "polyglot-comment-scanners", "stable-finding-identity"]
+expected_exit = 1
+minimum_findings = 5
+expected_findings = [
+  { rule_id = "alphus/any/none/hygiene/comment-marker-found", path = "docs/guide.toml", line = 2 },
+  { rule_id = "alphus/any/none/hygiene/comment-marker-found", path = "src/example.cpp", line = 2 },
+  { rule_id = "alphus/any/none/hygiene/comment-marker-found", path = "src/example.java", line = 2 },
+  { rule_id = "alphus/any/none/hygiene/comment-marker-found", path = "src/example.js", line = 2 },
+  { rule_id = "alphus/any/none/hygiene/comment-marker-found", path = "src/example.py", line = 2 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "comment-markers", "--json"]
+
+[[scenario]]
+name = "comment-markers-polyglot-profile"
+fixture = "comment-markers-polyglot"
+selectors = ["comment-markers"]
+behavior = ["feature-owned-profile-dispatch", "polyglot-result-adapter", "ordered-findings"]
+expected_exit = 0
+minimum_findings = 5
+expected_step_names = ["comments"]
+expected_step_rules = ["comment-markers"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/any/none/hygiene/comment-marker-found", path = "docs/guide.toml", line = 2 },
+  { rule_id = "alphus/any/none/hygiene/comment-marker-found", path = "src/example.cpp", line = 2 },
+  { rule_id = "alphus/any/none/hygiene/comment-marker-found", path = "src/example.java", line = 2 },
+  { rule_id = "alphus/any/none/hygiene/comment-marker-found", path = "src/example.js", line = 2 },
+  { rule_id = "alphus/any/none/hygiene/comment-marker-found", path = "src/example.py", line = 2 },
+]
+
+[[scenario.variant]]
+name = "profile"
+arguments = ["--config", "quality-gates.toml", "--profile", "review", "--run", "--json"]
+
+
+[[scenario]]
+name = "comment-markers-invalid-config"
+fixture = "comment-markers-invalid-config"
+selectors = ["comment-markers"]
+behavior = ["feature-owned-strict-config", "reject-unknown-policy-field"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-config"
+arguments = ["--config", "quality-gates.toml", "--rule", "comment-markers"]
+parse_json = false

@@ -10,10 +10,16 @@ from alphus.policy.repository import (
     DocumentationConfigPolicy,
     RepositoryLayoutPolicy,
 )
-from alphus.policy.sources import FileSizePolicy, LineLengthPolicy, SourceScanPolicy
+from alphus.policy.sources import (
+    CommentMarkerPolicy,
+    FileSizePolicy,
+    LineLengthPolicy,
+    SourceScanPolicy,
+)
 
 
 class GeneratedFeaturePolicies(StrictModel):
+    comment_markers: CommentMarkerPolicy | None = None
     cyclomatic_complexity: CyclomaticComplexityPolicy | None = None
     dependency_locks: DependencyLockPolicy | None = None
     documentation_config: DocumentationConfigPolicy | None = None

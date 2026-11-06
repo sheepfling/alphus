@@ -7,10 +7,12 @@ import re
 import tokenize
 from collections.abc import Iterable
 from pathlib import Path
-from typing import NamedTuple
+from typing import Final, NamedTuple
 
+from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.policy.base import require_policy
 from alphus.policy.sources import CommentMarkerPolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_utf8_sig_text
@@ -22,6 +24,31 @@ class CommentLine(NamedTuple):
 
 
 _RAW_STRING = re.compile(r'R"(?P<delimiter>[^\s()\\"]{0,16})\(')
+
+ALPHUS_CHECK: Final = (
+    ("selector", "comment-markers"),
+    ("concern", "temporary-work-markers"),
+    ("claim_kind", "condition"),
+    (
+        "claim",
+        "Reports configured TODO-style markers found in supported source comments.",
+    ),
+    (("mechanisms", ("exact-rule", "bounded-heuristic"))),
+    (("inspected_scope", ("configured-source-files",))),
+    (("languages_formats", ("python", "toml", "javascript", "cpp", "java"))),
+    (("evidence_kinds", ("comment-text", "source-line"))),
+    (("evaluation_maturity", "synthetic-only")),
+    ("finding_tag_complaints", ("comment-scan-failed", "comment-marker-found")),
+    ("policy_field", "comment_markers"),
+    ("policy_model", "alphus.policy.sources.CommentMarkerPolicy"),
+    ("output_shape", "findings"),
+    ("summary", "Finds configured TODO-style markers in supported source comments."),
+    ("applies_to", ("python", "javascript", "c", "cpp")),
+    ("domains", ()),
+    ("requires_files", True),
+    ("runner_module", "alphus.gates.hygiene.comment_markers"),
+    ("runner_name", "run_comment_markers_rule"),
+)
 
 
 def _python_comments(source: str) -> list[CommentLine]:
@@ -189,3 +216,11 @@ def check_comment_markers(
             for match in pattern.finditer(comment)
         )
     return findings
+
+
+def run_comment_markers_rule(
+    root: Path, paths: Iterable[Path], config: QualityGateConfig
+) -> list[Finding]:
+    """Adapt the feature-owned policy to the existing comment scanners."""
+    policy = require_policy(config.checks.comment_markers, "comment_markers")
+    return check_comment_markers(root, paths, policy)

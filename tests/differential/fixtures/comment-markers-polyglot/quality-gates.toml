@@ -1,0 +1,23 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*", "docs/**/*"]
+exclude = []
+
+[checks.comment_markers]
+extensions = [".py", ".js", ".cpp", ".java", ".toml"]
+markers = ["TODO", "FIXME", "HACK"]
+
+[orchestration]
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "comments"
+rule = "comment-markers"
+severity = "warning"
+priority = "normal"
+
+[[orchestration.profiles]]
+name = "review"
+steps = ["comments"]

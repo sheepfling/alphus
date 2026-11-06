@@ -23,7 +23,12 @@ extensions = [
   ".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".java",
 ]
 markers = ["TODO", "FIXME", "HACK", "XXX", "XXXX"]
-exclude = []
+# Positive polyglot fixtures intentionally contain real comments for the
+# differential wheel scenarios; their findings are asserted there.
+exclude = [
+  "tests/differential/fixtures/comment-markers-polyglot/docs/guide.toml",
+  "tests/differential/fixtures/comment-markers-polyglot/src/example.py",
+]
 
 [checks.line_length]
 exclude = ["docs/cpp/**"]
