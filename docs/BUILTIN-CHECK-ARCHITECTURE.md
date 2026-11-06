@@ -835,7 +835,8 @@ scenarios match, catalogs match at 62 selectors, and the registered check
 preserves the conflict ID, location, severity, message, and profile behavior.
 Thirteen selectors now have behavior-level evidence; 49 remain without it.
 
-[documentation-config-differential]: architecture/builtin-check-wheel-differential-c880093-66e7eaa-documentation-config.json
+[documentation-config-differential]:
+  architecture/builtin-check-wheel-differential-c880093-66e7eaa-documentation-config.json
 
 ## Performance and cache boundary
 
