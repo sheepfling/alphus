@@ -142,7 +142,8 @@ math_constants = true
 
 [checks.scipy_constants]
 extensions = [".py"]
-exclude = []
+# This is an intentional positive fixture exercised by the pinned-wheel test.
+exclude = ["tests/differential/fixtures/scipy-constants/src/example.py"]
 physical_constants = true
 unit_conversions = true
 inverse_conversions = true

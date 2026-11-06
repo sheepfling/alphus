@@ -100,6 +100,22 @@ name = "json"
 arguments = ["--config", "quality-gates.toml", "--rule", "numeric-literals", "--json"]
 
 [[scenario]]
+name = "scipy-constants-direct"
+expected_findings = [
+  { rule_id = "alphus/python/scipy/style/inline-constant", path = "src/example.py", line = 2 },
+]
+fixture = "scipy-constants"
+selectors = ["scipy-constants"]
+behavior = ["direct-selector", "deterministic-numeric-heuristic", "finding-id", "json-result"]
+expected_exit = 0
+minimum_findings = 1
+required_output = ["src/example.py"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "scipy-constants", "--json"]
+
+[[scenario]]
 name = "input-contracts-direct"
 expected_findings = [
   { rule_id = "alphus/python/none/correctness/argument-mutation", path = "src/example.py", line = 2 },
@@ -386,3 +402,8 @@ reason = "The installed API-v1 plugin is discovered without import, rejected whe
 capability = "unselected-builtin-backend-laziness"
 status = "not-exercised"
 reason = "The plugin path proves unselected third-party modules remain unloaded; built-in optional provider modules still need a selected-versus-unselected import trace before registration migration."
+
+[[deferred]]
+capability = "effectful-command-step-compatibility"
+status = "not-exercised"
+reason = "The architecture plan names the LaTeX build-and-validation step, but the current wheel harness has no command/build scenario; scheduler and command behavior are unchanged by this numeric-contract slice."

@@ -17,6 +17,28 @@ from alphus.gates.review.numeric_engine import scan_numeric_literals
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 
+ALPHUS_MORPHOLOGY = (
+    ("selector", "scipy-constants"),
+    ("finding_contracts", ("numeric-inline",)),
+    ("concern", "scientific-constant-reuse"),
+    ("claim_kind", "risk"),
+    (
+        "claim",
+        (
+            "Arithmetic matches a selected SciPy constant or unit factor; this review "
+            "does not validate dimensions or coordinate systems."
+        ),
+    ),
+    ("mechanisms", ("bounded-heuristic",)),
+    ("inspected_scope", ("selected-python-files", "arithmetic-expressions")),
+    ("languages_formats", ("python",)),
+    (
+        "evidence_kinds",
+        ("configured-literal-match", "operation", "source-location"),
+    ),
+    ("evaluation_maturity", "synthetic-only"),
+)
+
 _PHYSICAL_CONSTANTS = (
     NumericLiteralSpec(
         name="speed of light",
@@ -107,7 +129,13 @@ def scipy_literal_findings(
         *(_unit_specs(policy.inverse_conversions) if policy.unit_conversions else ()),
         *policy.constants,
     )
-    return scan_numeric_literals(source, specs, framework=Framework.SCIPY)
+    return scan_numeric_literals(
+        source,
+        specs,
+        complaint_contract="numeric-inline",
+        emitter="scipy-constants",
+        framework=Framework.SCIPY,
+    )
 
 
 def check_scipy_constants(

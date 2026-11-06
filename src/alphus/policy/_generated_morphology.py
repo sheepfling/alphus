@@ -173,6 +173,34 @@ MORPHOLOGY_BY_SELECTOR: Mapping[str, RuleMorphology] = MappingProxyType(
             evidence_kinds=("line-length-measurement", "path-line"),
             evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
         ),
+        "numeric-literals": RuleMorphology(
+            selector="numeric-literals",
+            finding_ids=(
+                RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.STYLE,
+                    "inline-constant",
+                ),
+                RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.STYLE,
+                    "inline-conversion",
+                ),
+            ),
+            concern="scientific-constant-reuse",
+            claim_kind=ClaimKind.RISK,
+            claim=(
+                "An arithmetic literal matches a configured constant or factor; "
+                "source syntax alone does not establish intent or physical meaning."
+            ),
+            mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+            inspected_scope=("selected-python-files", "arithmetic-expressions"),
+            languages_formats=("python",),
+            evidence_kinds=("configured-literal-match", "operation", "source-location"),
+            evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+        ),
         "positional-semantic-overrides": RuleMorphology(
             selector="positional-semantic-overrides",
             finding_ids=(
@@ -202,6 +230,34 @@ MORPHOLOGY_BY_SELECTOR: Mapping[str, RuleMorphology] = MappingProxyType(
                 "assignment-source-line",
             ),
             evaluation_maturity=EvaluationMaturity.PUBLIC_SAMPLE_REVIEWED,
+        ),
+        "scipy-constants": RuleMorphology(
+            selector="scipy-constants",
+            finding_ids=(
+                RuleTag(
+                    Scope.PYTHON,
+                    Framework.SCIPY,
+                    Category.STYLE,
+                    "inline-constant",
+                ),
+                RuleTag(
+                    Scope.PYTHON,
+                    Framework.SCIPY,
+                    Category.STYLE,
+                    "inline-conversion",
+                ),
+            ),
+            concern="scientific-constant-reuse",
+            claim_kind=ClaimKind.RISK,
+            claim=(
+                "Arithmetic matches a selected SciPy constant or unit factor; this "
+                "review does not validate dimensions or coordinate systems."
+            ),
+            mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+            inspected_scope=("selected-python-files", "arithmetic-expressions"),
+            languages_formats=("python",),
+            evidence_kinds=("configured-literal-match", "operation", "source-location"),
+            evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
         ),
         "source-test-coverage": RuleMorphology(
             selector="source-test-coverage",

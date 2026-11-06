@@ -37,6 +37,52 @@ def _with_field(
     return tuple((name, value if name == key else item) for name, item in declaration)
 
 
+def _with_contract(
+    declaration: tuple[tuple[str, object], ...], selector: str, contract: str
+) -> tuple[tuple[str, object], ...]:
+    result: list[tuple[str, object]] = []
+    for name, item in declaration:
+        if name == "selector":
+            result.append((name, selector))
+        elif name == "finding_tag_complaints":
+            result.append(("finding_contracts", (contract,)))
+        else:
+            result.append((name, item))
+    return tuple(result)
+
+
+def _write_contract_fixture(root: Path, *, shared_rule_id: str) -> None:
+    scope, framework, category, complaint = shared_rule_id.split("/")[1:]
+    rule_tag_call = (
+        f"rule_tag(Scope.{scope.upper()}, Framework.{framework.upper()}, "
+        f"Category.{category.upper()}, {complaint!r})"
+    )
+    gates = root / "src/alphus/gates"
+    gates.mkdir(parents=True, exist_ok=True)
+    (gates / "shared_catalog.py").write_text(
+        "ALPHUS_COMPLAINT_CONTRACTS = (\n"
+        "    ('shared-demo', ('demo-one', 'demo-two'), (\n"
+        f"        ('demo-one', {rule_tag_call}),\n"
+        f"        ('demo-two', {rule_tag_call}),\n"
+        "    )),\n"
+        ")\n",
+        encoding="utf-8",
+    )
+    contracts = root / "src/alphus/contracts"
+    contracts.mkdir(parents=True, exist_ok=True)
+    (contracts / "rule_tags.py").write_text(
+        "class Scope:\n    REPOSITORY = 'repository'\n"
+        "class Framework:\n    NONE = 'none'\n"
+        "class Category:\n    TESTING = 'testing'\n    STYLE = 'style'\n",
+        encoding="utf-8",
+    )
+    for filename, selector in (("first", "demo-one"), ("second", "demo-two")):
+        declaration = _with_contract(_DECLARATION, selector, "shared-demo")
+        (gates / f"{filename}.py").write_text(
+            f"ALPHUS_MORPHOLOGY = {declaration!r}\n", encoding="utf-8"
+        )
+
+
 def _module(
     root: Path, name: str, *, declaration: tuple[tuple[str, object], ...] | None = None
 ) -> None:
@@ -65,6 +111,86 @@ def test_feature_owned_discovery_accepts_selector_without_central_registry(
     assert "Scope.REPOSITORY" in manifest
     assert "Framework.NONE" in manifest
     assert "Category.TESTING" in manifest
+
+
+def test_explicit_complaint_contract_shares_one_tag_across_emitters(
+    tmp_path: Path,
+) -> None:
+    _write_contract_fixture(
+        tmp_path, shared_rule_id="alphus/repository/none/testing/shared-demo"
+    )
+
+    manifest = render_manifest(tmp_path)
+
+    assert '"demo-one": RuleMorphology(' in manifest
+    assert '"demo-two": RuleMorphology(' in manifest
+    assert manifest.count('"shared-demo"') == 2
+
+
+def test_complaint_contract_rejects_undeclared_emitter(tmp_path: Path) -> None:
+    _write_contract_fixture(
+        tmp_path, shared_rule_id="alphus/repository/none/testing/shared-demo"
+    )
+    declaration = _with_contract(_DECLARATION, "demo-three", "shared-demo")
+    gates = tmp_path / "src/alphus/gates"
+    (gates / "third.py").write_text(
+        f"ALPHUS_MORPHOLOGY = {declaration!r}\n", encoding="utf-8"
+    )
+
+    with pytest.raises(ValueError, match="not a permitted emitter"):
+        render_manifest(tmp_path)
+
+
+def test_complaint_contract_rejects_ambiguous_runtime_tag_lookup(
+    tmp_path: Path,
+) -> None:
+    _write_contract_fixture(
+        tmp_path, shared_rule_id="alphus/repository/none/testing/shared-demo"
+    )
+    (tmp_path / "src/alphus/gates/shared_catalog.py").write_text(
+        "ALPHUS_COMPLAINT_CONTRACTS = (\n"
+        "    ('shared-demo', ('demo-one',), (\n"
+        "        ('demo-one', rule_tag(Scope.REPOSITORY, Framework.NONE, "
+        "Category.TESTING, 'shared-demo')),\n"
+        "        ('demo-one', rule_tag(Scope.REPOSITORY, Framework.NONE, "
+        "Category.STYLE, 'shared-demo')),\n"
+        "    )),\n"
+        ")\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="ambiguous runtime tag lookup"):
+        render_manifest(tmp_path)
+
+
+def test_uncontracted_cross_selector_finding_id_remains_an_error(
+    tmp_path: Path,
+) -> None:
+    for filename, selector in (("first", "demo-one"), ("second", "demo-two")):
+        declaration = _with_field(_DECLARATION, "selector", selector)
+        declaration = _with_field(
+            declaration, "finding_tag_complaints", ("shared-demo",)
+        )
+        _module(tmp_path, filename, declaration=declaration)
+        path = tmp_path / f"src/alphus/gates/{filename}.py"
+        path.write_text(
+            f"ALPHUS_MORPHOLOGY = {declaration!r}\n"
+            "rule_tag(Scope.REPOSITORY, Framework.NONE, Category.TESTING, "
+            "'shared-demo')\n",
+            encoding="utf-8",
+        )
+
+    with pytest.raises(ValueError, match="declared by multiple owners"):
+        render_manifest(tmp_path)
+
+
+def test_complaint_contract_rejects_unknown_rule_tag_enum(tmp_path: Path) -> None:
+    _write_contract_fixture(
+        tmp_path, shared_rule_id="alphus/repository/none/tooling/shared-demo"
+    )
+
+    with pytest.raises(ValueError, match="invalid complaint contract rule ID"):
+        render_manifest(tmp_path)
 
 
 def test_feature_definition_generates_catalog_and_lazy_runner_views(
@@ -351,9 +477,7 @@ def test_discovery_rejects_duplicate_finding_ids_across_selectors(
     declaration = _with_field(_DECLARATION, "selector", "other-check")
     _module(tmp_path, "beta", declaration=declaration)
 
-    with pytest.raises(
-        ValueError, match="finding ID .* declared by multiple selectors"
-    ):
+    with pytest.raises(ValueError, match="finding ID .* declared by multiple owners"):
         render_manifest(tmp_path)
 
 

@@ -6,6 +6,7 @@ from dataclasses import fields, replace
 
 import pytest
 
+from alphus.contracts.rule_tags import RuleTag
 from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
 from alphus.policy._generated_morphology import MORPHOLOGY_BY_SELECTOR
 from alphus.policy.catalog import _LEGACY_RULE_SPECS, RULE_SPECS
@@ -58,6 +59,21 @@ def test_pilot_covers_exact_heuristic_prose_style_and_native_tool_mechanisms() -
         "declared-relationship",
         "revision-matched-execution-status",
         "tracked-paths",
+    )
+
+
+def test_shared_numeric_complaint_contract_preserves_selector_specific_tags() -> None:
+    numeric = MORPHOLOGY_BY_SELECTOR["numeric-literals"]
+    scipy = MORPHOLOGY_BY_SELECTOR["scipy-constants"]
+
+    assert numeric.concern == scipy.concern == "scientific-constant-reuse"
+    assert numeric.finding_ids == (
+        RuleTag.parse("alphus/python/none/style/inline-constant"),
+        RuleTag.parse("alphus/python/none/style/inline-conversion"),
+    )
+    assert scipy.finding_ids == (
+        RuleTag.parse("alphus/python/scipy/style/inline-constant"),
+        RuleTag.parse("alphus/python/scipy/style/inline-conversion"),
     )
 
 

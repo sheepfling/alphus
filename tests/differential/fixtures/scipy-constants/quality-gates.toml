@@ -1,0 +1,12 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py"]
+exclude = []
+
+[checks.scipy_constants]
+extensions = [".py"]
+exclude = []
+physical_constants = true
+unit_conversions = true
+inverse_conversions = true

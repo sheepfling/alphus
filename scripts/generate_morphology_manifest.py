@@ -12,17 +12,17 @@ import json
 import re
 import sys
 import textwrap
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
 _DECLARATION_NAME = "ALPHUS_MORPHOLOGY"
 _CHECK_DECLARATION_NAME = "ALPHUS_CHECK"
-_DECLARATION_FIELDS = frozenset(
+_COMPLAINT_CONTRACTS_NAME = "ALPHUS_COMPLAINT_CONTRACTS"
+_DECLARATION_COMMON_FIELDS: frozenset[str] = frozenset(
     {
         "selector",
-        "finding_tag_complaints",
         "concern",
         "claim_kind",
         "claim",
@@ -33,6 +33,8 @@ _DECLARATION_FIELDS = frozenset(
         "evaluation_maturity",
     }
 )
+_DIRECT_FINDING_FIELD = "finding_tag_complaints"
+_CONTRACT_FINDING_FIELD = "finding_contracts"
 _MECHANISMS = frozenset(
     {
         "exact-rule",
@@ -80,9 +82,17 @@ class _FeatureRegistration:
 
 
 @dataclass(frozen=True, slots=True)
+class _FindingContract:
+    name: str
+    emitters: tuple[str, ...]
+    rule_ids_by_emitter: tuple[tuple[str, str], ...]
+
+
+@dataclass(frozen=True, slots=True)
 class _Declaration:
     selector: str
     finding_ids: tuple[str, ...]
+    finding_contracts: tuple[str, ...]
     concern: str
     claim_kind: str
     claim: str
@@ -139,6 +149,158 @@ def _static_rule_ids(tree: ast.Module) -> dict[str, tuple[str, ...]]:
     }
 
 
+def _enum_values(root: Path, enum_name: str) -> frozenset[str]:
+    tags_path = root / "src" / "alphus" / "contracts" / "rule_tags.py"
+    tree = ast.parse(tags_path.read_text(encoding="utf-8"), filename=str(tags_path))
+    for statement in tree.body:
+        if not isinstance(statement, ast.ClassDef) or statement.name != enum_name:
+            continue
+        values: set[str] = set()
+        for member in statement.body:
+            if not isinstance(member, ast.Assign) or len(member.targets) != 1:
+                continue
+            if not isinstance(member.targets[0], ast.Name):
+                continue
+            value_node = member.value
+            if isinstance(value_node, ast.Constant):
+                value: str | bytes = cast(str | bytes, value_node.value)
+                if type(value) is str:
+                    values.add(value)
+        if values:
+            return frozenset(values)
+    raise ValueError(f"{tags_path}: missing string enum {enum_name}")
+
+
+def _parse_rule_id(root: Path, value: object, source: Path) -> str:
+    candidate: str | bytes = cast(str | bytes, value)
+    if type(candidate) is not str:
+        raise ValueError(f"{source}: complaint contract rule IDs must be strings")
+    parts = candidate.split("/")
+    if len(parts) != 5 or parts[0] != "alphus":
+        raise ValueError(f"{source}: invalid complaint contract rule ID {candidate!r}")
+    scope, framework, category, complaint = parts[1:]
+    if (
+        scope not in _enum_values(root, "Scope")
+        or framework not in _enum_values(root, "Framework")
+        or category not in _enum_values(root, "Category")
+        or not _SLUG.fullmatch(complaint)
+    ):
+        raise ValueError(f"{source}: invalid complaint contract rule ID {candidate!r}")
+    return candidate
+
+
+def _static_rule_id(root: Path, node: ast.expr, source: Path) -> str:
+    match node:
+        case ast.Call(
+            func=ast.Name(id="rule_tag"),
+            args=[
+                ast.Attribute(value=ast.Name(id="Scope"), attr=scope),
+                ast.Attribute(value=ast.Name(id="Framework"), attr=framework),
+                ast.Attribute(value=ast.Name(id="Category"), attr=category),
+                ast.Constant(value=complaint),
+            ],
+            keywords=[],
+        ):
+            complaint_value: str | bytes = cast(str | bytes, complaint)
+            if type(complaint_value) is not str:
+                raise ValueError(
+                    f"{source}: rule_tag complaint must be a string literal"
+                )
+            candidate = (
+                f"alphus/{scope.lower()}/{framework.lower()}/{category.lower()}/"
+                f"{complaint_value}"
+            )
+        case _:
+            raise ValueError(f"{source}: complaint contracts must use rule_tag calls")
+    return _parse_rule_id(root, candidate, source)
+
+
+def _static_complaint_contracts(
+    root: Path, paths: Sequence[Path]
+) -> dict[str, _FindingContract]:
+    contracts: dict[str, _FindingContract] = {}
+    rule_id_owners: dict[str, str] = {}
+    runtime_tag_owners: dict[tuple[str, str, str, str], str] = {}
+    for path in paths:
+        source = path.read_text(encoding="utf-8")
+        if _COMPLAINT_CONTRACTS_NAME not in source:
+            continue
+        tree = ast.parse(source, filename=str(path))
+        assignments = [
+            _assignment_value(statement)
+            for statement in tree.body
+            if _assignment_name(statement) == _COMPLAINT_CONTRACTS_NAME
+        ]
+        if len(assignments) != 1 or assignments[0] is None:
+            raise ValueError(
+                f"{path} must define exactly one {_COMPLAINT_CONTRACTS_NAME} literal"
+            )
+        raw_records = assignments[0]
+        if not isinstance(raw_records, ast.Tuple):
+            raise TypeError(f"{path}:{_COMPLAINT_CONTRACTS_NAME} must be a tuple")
+        for record in raw_records.elts:
+            if not isinstance(record, ast.Tuple) or len(record.elts) != 3:
+                raise ValueError(
+                    f"{path}:{_COMPLAINT_CONTRACTS_NAME} entries must be triples"
+                )
+            name_raw: object = ast.literal_eval(record.elts[0])
+            name_value: str | bytes = cast(str | bytes, name_raw)
+            if type(name_value) is not str or not _SLUG.fullmatch(name_value):
+                raise ValueError(
+                    f"{path}: invalid complaint contract name {name_raw!r}"
+                )
+            if name_value in contracts:
+                raise ValueError(f"{path}: duplicate complaint contract {name_value!r}")
+            raw_emitters: object = ast.literal_eval(record.elts[1])
+            emitters = _string_tuple(raw_emitters, "complaint contract emitters")
+            if any(not _SLUG.fullmatch(emitter) for emitter in emitters):
+                raise ValueError(f"{path}: complaint contract emitters must be slugs")
+            tag_records = record.elts[2]
+            if not isinstance(tag_records, ast.Tuple) or not tag_records.elts:
+                raise ValueError(f"{path}: complaint contract tags must be a tuple")
+            tags: list[tuple[str, str]] = []
+            for tag_record in tag_records.elts:
+                if not isinstance(tag_record, ast.Tuple) or len(tag_record.elts) != 2:
+                    raise ValueError(f"{path}: complaint contract tags must be pairs")
+                emitter_raw: object = ast.literal_eval(tag_record.elts[0])
+                emitter_value: str | bytes = cast(str | bytes, emitter_raw)
+                if type(emitter_value) is not str or emitter_value not in emitters:
+                    raise ValueError(
+                        f"{path}: complaint tag emitter must be declared by its contract"
+                    )
+                rule_id = _static_rule_id(root, tag_record.elts[1], path)
+                if (emitter_value, rule_id) in tags:
+                    raise ValueError(
+                        f"{path}: duplicate complaint tag for {emitter_value!r}"
+                    )
+                previous_contract = rule_id_owners.get(rule_id)
+                if previous_contract is not None and previous_contract != name_value:
+                    raise ValueError(
+                        f"{path}: rule ID {rule_id!r} belongs to multiple complaint contracts"
+                    )
+                rule_id_owners[rule_id] = name_value
+                _, scope, framework, _, complaint = rule_id.split("/")
+                runtime_key = (emitter_value, scope, framework, complaint)
+                previous_runtime_tag = runtime_tag_owners.get(runtime_key)
+                if previous_runtime_tag is not None:
+                    raise ValueError(
+                        f"{path}: complaint contract {name_value!r} has ambiguous "
+                        f"runtime tag lookup for {runtime_key!r}"
+                    )
+                runtime_tag_owners[runtime_key] = rule_id
+                tags.append((emitter_value, rule_id))
+            if set(emitters) != {emitter for emitter, _ in tags}:
+                raise ValueError(
+                    f"{path}: every complaint contract emitter must declare a rule ID"
+                )
+            contracts[name_value] = _FindingContract(
+                name=name_value,
+                emitters=emitters,
+                rule_ids_by_emitter=tuple(tags),
+            )
+    return contracts
+
+
 def _string_tuple(value: object, field: str) -> tuple[str, ...]:
     candidate: tuple[object, ...] | list[object] = cast(
         tuple[object, ...] | list[object], value
@@ -159,7 +321,11 @@ def _string_tuple(value: object, field: str) -> tuple[str, ...]:
 
 
 def _validate_declaration(
-    value: object, path: Path, *, feature_owned: bool = False
+    value: object,
+    path: Path,
+    *,
+    feature_owned: bool = False,
+    complaint_contracts: Mapping[str, _FindingContract],
 ) -> _Declaration:
     candidate: tuple[object, ...] | list[object] = cast(
         tuple[object, ...] | list[object], value
@@ -182,7 +348,7 @@ def _validate_declaration(
             )
         pairs.append((key_candidate, pair[1]))
     keys = frozenset(key for key, _ in pairs)
-    feature_fields = frozenset(
+    feature_fields: frozenset[str] = frozenset(
         {
             "policy_field",
             "policy_model",
@@ -195,13 +361,18 @@ def _validate_declaration(
             "runner_name",
         }
     )
-    expected_fields = (
-        _DECLARATION_FIELDS | feature_fields if feature_owned else _DECLARATION_FIELDS
+    declaration_fields: frozenset[str] = _DECLARATION_COMMON_FIELDS | (
+        feature_fields if feature_owned else frozenset[str]()
     )
-    if len(keys) != len(pairs) or keys != expected_fields:
+    valid_fields: tuple[frozenset[str], frozenset[str]] = (
+        declaration_fields | {_DIRECT_FINDING_FIELD},
+        declaration_fields | {_CONTRACT_FINDING_FIELD},
+    )
+    if len(keys) != len(pairs) or keys not in valid_fields:
         raise ValueError(
             f"{path}:{_CHECK_DECLARATION_NAME if feature_owned else _DECLARATION_NAME} "
-            f"must contain exactly {sorted(expected_fields)} with unique keys"
+            "must contain common fields and exactly one finding declaration "
+            "field with unique keys"
         )
 
     def field(name: str) -> object:
@@ -227,12 +398,31 @@ def _validate_declaration(
     if type(claim_kind_text) is not str or claim_kind_text not in _CLAIM_KINDS:
         raise ValueError(f"{path}: unsupported claim_kind {claim_kind_text!r}")
 
-    complaints = _string_tuple(
-        field("finding_tag_complaints"), "finding_tag_complaints"
-    )
-    for complaint in complaints:
-        if not _SLUG.fullmatch(complaint):
-            raise ValueError(f"{path}: invalid finding complaint {complaint!r}")
+    finding_ids: tuple[str, ...] = ()
+    finding_contracts: tuple[str, ...] = ()
+    if _DIRECT_FINDING_FIELD in keys:
+        complaints = _string_tuple(field(_DIRECT_FINDING_FIELD), _DIRECT_FINDING_FIELD)
+        for complaint in complaints:
+            if not _SLUG.fullmatch(complaint):
+                raise ValueError(f"{path}: invalid finding complaint {complaint!r}")
+        finding_ids = complaints
+    else:
+        finding_contracts = _string_tuple(
+            field(_CONTRACT_FINDING_FIELD), _CONTRACT_FINDING_FIELD
+        )
+        if len(finding_contracts) != 1:
+            raise ValueError(
+                f"{path}: a morphology declaration must reference exactly one "
+                "finding contract to keep complaint ownership unambiguous"
+            )
+        for contract_name in finding_contracts:
+            if contract_name not in complaint_contracts:
+                raise ValueError(f"{path}: unknown finding contract {contract_name!r}")
+            if selector_text not in complaint_contracts[contract_name].emitters:
+                raise ValueError(
+                    f"{path}: selector {selector_text!r} is not a permitted emitter "
+                    f"for finding contract {contract_name!r}"
+                )
     inspected_scope = _string_tuple(field("inspected_scope"), "inspected_scope")
     languages_formats = _string_tuple(field("languages_formats"), "languages_formats")
     evidence_kinds = _string_tuple(field("evidence_kinds"), "evidence_kinds")
@@ -327,7 +517,8 @@ def _validate_declaration(
         )
     return _Declaration(
         selector=selector_text,
-        finding_ids=complaints,
+        finding_ids=finding_ids,
+        finding_contracts=finding_contracts,
         concern=concern_text,
         claim_kind=claim_kind_text,
         claim=claim_text,
@@ -394,6 +585,7 @@ def _declarations(
                 f"feature discovery exceeds the {_MAX_SCANNED_SOURCE_BYTES}-byte scan limit"
             )
 
+    complaint_contracts = _static_complaint_contracts(root, paths)
     actual_scanned_bytes = 0
     for path in paths:
         source_bytes: bytes
@@ -441,25 +633,41 @@ def _declarations(
                     item,
                     path,
                     feature_owned=declaration_name == _CHECK_DECLARATION_NAME,
+                    complaint_contracts=complaint_contracts,
                 )
                 resolved_ids: list[str] = []
-                for complaint in declaration.finding_ids:
-                    matches = local_ids.get(complaint, ())
-                    if not matches:
+                if declaration.finding_contracts:
+                    contract_name = declaration.finding_contracts[0]
+                    contract = complaint_contracts[contract_name]
+                    resolved_ids.extend(
+                        rule_id
+                        for emitter, rule_id in contract.rule_ids_by_emitter
+                        if emitter == declaration.selector
+                    )
+                    if not resolved_ids:
                         raise ValueError(
-                            f"{path}: finding complaint {complaint!r} is not declared "
-                            "by this feature"
+                            f"{path}: finding contract {contract_name!r} declares no "
+                            f"rule IDs for {declaration.selector!r}"
                         )
-                    if len(matches) != 1:
-                        raise ValueError(
-                            f"{path}: finding complaint {complaint!r} resolves to multiple "
-                            f"rule tags: {matches}"
-                        )
-                    resolved_ids.append(matches[0])
+                else:
+                    for complaint in declaration.finding_ids:
+                        matches = local_ids.get(complaint, ())
+                        if not matches:
+                            raise ValueError(
+                                f"{path}: finding complaint {complaint!r} is not declared "
+                                "by this feature"
+                            )
+                        if len(matches) != 1:
+                            raise ValueError(
+                                f"{path}: finding complaint {complaint!r} resolves to multiple "
+                                f"rule tags: {matches}"
+                            )
+                        resolved_ids.append(matches[0])
                 declarations.append(
                     _Declaration(
                         selector=declaration.selector,
                         finding_ids=tuple(resolved_ids),
+                        finding_contracts=declaration.finding_contracts,
                         concern=declaration.concern,
                         claim_kind=declaration.claim_kind,
                         claim=declaration.claim,
@@ -482,14 +690,19 @@ def _declarations(
                 f"{owners[declaration.selector]} and {declaration.source}"
             )
         owners[declaration.selector] = declaration.source
+        finding_owner = (
+            f"contract:{declaration.finding_contracts[0]}"
+            if declaration.finding_contracts
+            else f"selector:{declaration.selector}"
+        )
         for finding_id in declaration.finding_ids:
             owner = finding_owners.get(finding_id)
-            if owner is not None and owner != declaration.selector:
+            if owner is not None and owner != finding_owner:
                 raise ValueError(
-                    f"finding ID {finding_id!r} is declared by multiple selectors: "
-                    f"{owner!r} and {declaration.selector!r}"
+                    f"finding ID {finding_id!r} is declared by multiple owners: "
+                    f"{owner!r} and {finding_owner!r}"
                 )
-            finding_owners[finding_id] = declaration.selector
+            finding_owners[finding_id] = finding_owner
         if declaration.feature is not None:
             _validate_feature_registration(root, declaration)
     if require_declarations and not declarations:

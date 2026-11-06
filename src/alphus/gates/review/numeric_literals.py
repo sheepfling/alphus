@@ -17,6 +17,25 @@ from alphus.gates.review.numeric_engine import scan_numeric_literals
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 
+ALPHUS_MORPHOLOGY = (
+    ("selector", "numeric-literals"),
+    ("finding_contracts", ("numeric-inline",)),
+    ("concern", "scientific-constant-reuse"),
+    ("claim_kind", "risk"),
+    (
+        "claim",
+        (
+            "An arithmetic literal matches a configured constant or factor; source syntax "
+            "alone does not establish intent or physical meaning."
+        ),
+    ),
+    ("mechanisms", ("bounded-heuristic",)),
+    ("inspected_scope", ("selected-python-files", "arithmetic-expressions")),
+    ("languages_formats", ("python",)),
+    ("evidence_kinds", ("configured-literal-match", "operation", "source-location")),
+    ("evaluation_maturity", "synthetic-only"),
+)
+
 _MATH_CONSTANTS = (
     NumericLiteralSpec(
         name="pi",
@@ -41,7 +60,13 @@ def numeric_literal_findings(
 ) -> list[NumericLiteralFinding]:
     """Review exact configured literals in arithmetic without guessing dimensions."""
     specs = (*(_MATH_CONSTANTS if policy.math_constants else ()), *policy.constants)
-    return scan_numeric_literals(source, specs, framework=Framework.NONE)
+    return scan_numeric_literals(
+        source,
+        specs,
+        complaint_contract="numeric-inline",
+        emitter="numeric-literals",
+        framework=Framework.NONE,
+    )
 
 
 def check_numeric_literals(
