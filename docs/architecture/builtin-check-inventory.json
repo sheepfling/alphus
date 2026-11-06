@@ -609,7 +609,7 @@
       ],
       "requires_files": true,
       "result_adapter": "alphus.execution.results:RuleEvaluation.from_output/findings",
-      "runner": "alphus.gates.source.runners:<lambda>",
+      "runner": "alphus.gates.source.output_escaping:run_output_escaping_rule",
       "selector": "output-escaping"
     },
     {

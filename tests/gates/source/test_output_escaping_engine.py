@@ -65,8 +65,8 @@ def test_scan_uses_extensions_and_exclusions_from_policy(tmp_path: Path) -> None
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(source, encoding="utf-8")
     policy = SourceScanPolicy(
-        extensions=[".py"],
-        exclude=["**/vendor/**", "vendor/**"],
+        extensions=(".py",),
+        exclude=("**/vendor/**", "vendor/**"),
     )
 
     findings = check_output_escaping(tmp_path, list(sources), policy)
@@ -81,5 +81,35 @@ def test_scan_uses_extensions_and_exclusions_from_policy(tmp_path: Path) -> None
             "tests/test_render.py",
             1,
             "manual output escape replacement; use a library or tested shared utility",
+        ),
+    ]
+
+
+def test_scan_uses_feature_owned_ids_for_each_language_scope(tmp_path: Path) -> None:
+    sources = {
+        Path("src/render.py"): 'value = value.replace("<", "&lt;")\n',
+        Path("src/render.js"): 'const html = value.replaceAll("&", "&amp;");\n',
+    }
+    for relative, source in sources.items():
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(source, encoding="utf-8")
+
+    findings = check_output_escaping(
+        tmp_path,
+        list(sources),
+        SourceScanPolicy(extensions=(".py", ".js"), exclude=()),
+    )
+
+    assert [(finding.rule_id, finding.path, finding.line) for finding in findings] == [
+        (
+            "alphus/javascript/none/security/manual-output-escaping",
+            "src/render.js",
+            1,
+        ),
+        (
+            "alphus/python/none/security/manual-output-escaping",
+            "src/render.py",
+            1,
         ),
     ]

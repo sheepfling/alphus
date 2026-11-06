@@ -69,12 +69,6 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             "Checks configured structural expectations in JSON documents.",
             ("json",),
         ),
-        "output-escaping": RuleSpec(
-            "output_escaping",
-            RuleOutputShape.FINDINGS,
-            "Reviews dynamic values at configured HTML or shell output sinks.",
-            ("python", "javascript"),
-        ),
         "path-discovery": RuleSpec(
             "path_discovery",
             RuleOutputShape.FINDINGS,

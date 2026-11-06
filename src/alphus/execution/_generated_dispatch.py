@@ -58,6 +58,14 @@ def _run_feature_line_length(
     return runner(root, files, config)
 
 
+def _run_feature_output_escaping(
+    root: Path, files: Sequence[Path], config: QualityGateConfig
+) -> RuleOutput:
+    module = import_module("alphus.gates.source.output_escaping")
+    runner = cast(_RuleRunner, module.run_output_escaping_rule)
+    return runner(root, files, config)
+
+
 def _run_feature_package_boundaries(
     root: Path, files: Sequence[Path], config: QualityGateConfig
 ) -> RuleOutput:
@@ -81,6 +89,7 @@ _FEATURE_RULE_RUNNERS: Mapping[QualityRuleName, _RuleRunner] = MappingProxyType(
         "documentation-config": _run_feature_documentation_config,
         "file-size": _run_feature_file_size,
         "line-length": _run_feature_line_length,
+        "output-escaping": _run_feature_output_escaping,
         "package-boundaries": _run_feature_package_boundaries,
         "repository-layout": _run_feature_repository_layout,
     }

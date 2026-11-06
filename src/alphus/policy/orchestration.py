@@ -96,7 +96,6 @@ class CheckPolicies(GeneratedFeaturePolicies):
 
     comment_markers: CommentMarkerPolicy | None = None
     json_structure: SourceScanPolicy | None = None
-    output_escaping: SourceScanPolicy | None = None
     path_discovery: PathDiscoveryPolicy | None = None
     numeric_literals: NumericLiteralPolicy | None = None
     repeated_numeric_limits: RepeatedNumericLimitPolicy | None = None

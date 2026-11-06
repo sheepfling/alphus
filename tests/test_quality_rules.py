@@ -135,6 +135,22 @@ def test_config_rejects_unknown_policy_fields(tmp_path: Path) -> None:
         load_config(config_path)
 
 
+def test_output_escaping_keeps_strict_generated_policy_field(tmp_path: Path) -> None:
+    _repository(tmp_path)
+    config_path = tmp_path / "quality.toml"
+    output_section = (
+        '[checks.output_escaping]\nextensions = [".py", ".js", ".mjs"]\n'
+        'exclude = ["**/vendor/**", "vendor/**"]\n'
+    )
+    invalid_section = output_section + "unknown_setting = true\n"
+    config_path.write_text(
+        POLICY.replace(output_section, invalid_section), encoding="utf-8"
+    )
+
+    with pytest.raises(ValidationError):
+        load_config(config_path)
+
+
 def test_config_can_be_loaded_from_a_caller_owned_text_stream() -> None:
     stream = StringIO(POLICY)
 

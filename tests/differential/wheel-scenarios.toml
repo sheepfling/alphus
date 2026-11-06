@@ -161,6 +161,55 @@ arguments = ["--config", "quality-gates.toml", "--rule", "output-escaping"]
 parse_json = false
 
 [[scenario]]
+name = "output-escaping-polyglot-direct"
+fixture = "output-escaping-polyglot"
+selectors = ["output-escaping"]
+behavior = ["feature-owned-complaint-contract", "python-javascript-provider-tags"]
+expected_exit = 1
+minimum_findings = 2
+expected_findings = [
+  { rule_id = "alphus/javascript/none/security/manual-output-escaping", path = "src/render.js", line = 1 },
+  { rule_id = "alphus/python/none/security/manual-output-escaping", path = "src/render.py", line = 2 },
+]
+required_output = ["Output escaping: 2 finding(s)"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "output-escaping", "--json"]
+
+[[scenario]]
+name = "output-escaping-polyglot-profile"
+fixture = "output-escaping-polyglot"
+selectors = ["output-escaping"]
+behavior = ["explicit-profile-selection", "feature-owned-result-adapter", "language-scoped-tags"]
+expected_exit = 1
+minimum_findings = 2
+expected_step_names = ["escaping-review"]
+expected_step_rules = ["output-escaping"]
+expected_reported_step_rules = ["output-escaping"]
+expected_findings = [
+  { rule_id = "alphus/javascript/none/security/manual-output-escaping", path = "src/render.js", line = 1 },
+  { rule_id = "alphus/python/none/security/manual-output-escaping", path = "src/render.py", line = 2 },
+]
+
+[[scenario.variant]]
+name = "profile"
+arguments = ["--config", "quality-gates.toml", "--profile", "security-review", "--run", "--json"]
+
+[[scenario]]
+name = "output-escaping-invalid-config"
+fixture = "output-escaping-invalid-config"
+selectors = ["output-escaping"]
+behavior = ["feature-owned-strict-policy", "unknown-field-rejected-before-run"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-config"
+arguments = ["--config", "quality-gates.toml", "--rule", "output-escaping"]
+parse_json = false
+
+[[scenario]]
 name = "profile-plan-selection"
 fixture = "profile"
 selectors = ["file-size", "line-length"]

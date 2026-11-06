@@ -334,6 +334,34 @@ MORPHOLOGY_BY_SELECTOR: Mapping[str, RuleMorphology] = MappingProxyType(
             evidence_kinds=("configured-literal-match", "operation", "source-location"),
             evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
         ),
+        "output-escaping": RuleMorphology(
+            selector="output-escaping",
+            finding_ids=(
+                RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.SECURITY,
+                    "manual-output-escaping",
+                ),
+                RuleTag(
+                    Scope.JAVASCRIPT,
+                    Framework.NONE,
+                    Category.SECURITY,
+                    "manual-output-escaping",
+                ),
+            ),
+            concern="manual-output-escaping",
+            claim_kind=ClaimKind.RISK,
+            claim=(
+                "Configured Python and JavaScript output sinks may use manual "
+                "escaping instead of a tested shared utility."
+            ),
+            mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+            inspected_scope=("selected-source-files", "configured-extensions"),
+            languages_formats=("python", "javascript"),
+            evidence_kinds=("bounded-source-pattern", "document-path", "line-location"),
+            evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+        ),
         "package-boundaries": RuleMorphology(
             selector="package-boundaries",
             finding_ids=(

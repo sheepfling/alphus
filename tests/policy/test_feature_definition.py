@@ -5,6 +5,7 @@ from dataclasses import FrozenInstanceError
 import pytest
 
 from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
+from alphus.policy._generated_morphology import MORPHOLOGY_BY_SELECTOR
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
 from alphus.policy.feature_definition import FeatureDefinition
 
@@ -72,6 +73,23 @@ def test_polyglot_cyclomatic_gate_uses_feature_owned_registration() -> None:
     assert spec.policy_field == definition.policy_field
     assert spec.output_shape is RuleOutputShape.CYCLOMATIC_REPORT
     assert spec.requires_files is False
+
+
+def test_output_escaping_registration_owns_both_language_tags() -> None:
+    definition = FEATURE_DEFINITIONS["output-escaping"]
+    spec = RULE_SPECS["output-escaping"]
+    morphology = MORPHOLOGY_BY_SELECTOR["output-escaping"]
+
+    assert definition.policy_field == "output_escaping"
+    assert definition.policy_model == "alphus.policy.sources.SourceScanPolicy"
+    assert definition.runner_name == "run_output_escaping_rule"
+    assert definition.applies_to == ("python", "javascript")
+    assert spec.policy_field == definition.policy_field
+    assert spec.output_shape is RuleOutputShape.FINDINGS
+    assert tuple(tag.rule_id for tag in morphology.finding_ids) == (
+        "alphus/python/none/security/manual-output-escaping",
+        "alphus/javascript/none/security/manual-output-escaping",
+    )
 
 
 def test_feature_definition_rejects_malformed_labels() -> None:

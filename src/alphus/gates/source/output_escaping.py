@@ -4,18 +4,107 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from pathlib import Path
+from typing import Final, Literal, TypeAlias
 
-from alphus.config import SourceScanPolicy
+from alphus.config import QualityGateConfig, SourceScanPolicy
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import (
+    Category,
+    Framework,
+    RuleTag,
+    Scope,
+    rule_tag,
+)
 from alphus.gates.languages.javascript.output_escaping import (
     escape_findings as js_escape_findings,
 )
 from alphus.gates.languages.python.output_escaping import (
     escape_findings as python_escape_findings,
 )
+from alphus.policy.base import require_policy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_utf8_sig_text
+
+_OutputEscapingEmitter: TypeAlias = Literal["output-escaping"]
+_OutputEscapingContractTag: TypeAlias = tuple[_OutputEscapingEmitter, str]
+_OutputEscapingContract: TypeAlias = tuple[
+    str,
+    tuple[_OutputEscapingEmitter, ...],
+    tuple[_OutputEscapingContractTag, ...],
+]
+
+ALPHUS_COMPLAINT_CONTRACTS: Final[tuple[_OutputEscapingContract, ...]] = (
+    (
+        "output-escaping",
+        ("output-escaping",),
+        (
+            (
+                "output-escaping",
+                rule_tag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.SECURITY,
+                    "manual-output-escaping",
+                ),
+            ),
+            (
+                "output-escaping",
+                rule_tag(
+                    Scope.JAVASCRIPT,
+                    Framework.NONE,
+                    Category.SECURITY,
+                    "manual-output-escaping",
+                ),
+            ),
+        ),
+    ),
+)
+
+ALPHUS_CHECK: Final = (
+    ("selector", "output-escaping"),
+    ("finding_contracts", ("output-escaping",)),
+    ("concern", "manual-output-escaping"),
+    ("claim_kind", "risk"),
+    (
+        "claim",
+        (
+            "Configured Python and JavaScript output sinks may use manual escaping "
+            "instead of a tested shared utility."
+        ),
+    ),
+    (("mechanisms", ("bounded-heuristic",))),
+    (("inspected_scope", ("selected-source-files", "configured-extensions"))),
+    (("languages_formats", ("python", "javascript"))),
+    (
+        "evidence_kinds",
+        ("bounded-source-pattern", "document-path", "line-location"),
+    ),
+    (("evaluation_maturity", "synthetic-only")),
+    ("policy_field", "output_escaping"),
+    ("policy_model", "alphus.policy.sources.SourceScanPolicy"),
+    ("output_shape", "findings"),
+    (
+        "summary",
+        "Reviews dynamic values at configured HTML or shell output sinks.",
+    ),
+    ("applies_to", ("python", "javascript")),
+    ("domains", ()),
+    ("requires_files", True),
+    ("runner_module", "alphus.gates.source.output_escaping"),
+    ("runner_name", "run_output_escaping_rule"),
+    ("policy_inputs", ("output_escaping",)),
+)
+
+
+def _output_escaping_tag(scope: Scope) -> RuleTag:
+    for contract_name, emitters, entries in ALPHUS_COMPLAINT_CONTRACTS:
+        if contract_name != "output-escaping" or "output-escaping" not in emitters:
+            continue
+        for emitter, rule_id in entries:
+            tag = RuleTag.parse(rule_id)
+            if emitter == "output-escaping" and tag.scope is scope:
+                return tag
+    raise ValueError(f"no output-escaping finding contract for scope {scope.value}")
 
 
 def check_output_escaping(
@@ -43,12 +132,7 @@ def check_output_escaping(
         scope = Scope.PYTHON if suffix == ".py" else Scope.JAVASCRIPT
         findings.extend(
             Finding(
-                rule_id=rule_tag(
-                    scope,
-                    Framework.NONE,
-                    Category.SECURITY,
-                    "manual-output-escaping",
-                ),
+                rule_id=_output_escaping_tag(scope).rule_id,
                 path=name,
                 line=line,
                 message=f"{message}; use a library or tested shared utility",
@@ -56,3 +140,11 @@ def check_output_escaping(
             for line, message in source_findings
         )
     return findings
+
+
+def run_output_escaping_rule(
+    root: Path, files: Iterable[Path], config: QualityGateConfig
+) -> list[Finding]:
+    """Adapt the feature-owned strict source scope to the legacy checker."""
+    policy = require_policy(config.checks.output_escaping, "output_escaping")
+    return check_output_escaping(root, files, policy)
