@@ -6,6 +6,7 @@ import ast
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
 from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
@@ -15,7 +16,7 @@ from alphus.policy.base import require_policy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 
-ALPHUS_CHECK = (
+ALPHUS_CHECK: Final = (
     ("selector", "file-size"),
     ("concern", "source-file-bounds"),
     ("claim_kind", "condition"),
