@@ -739,8 +739,19 @@ selected profile step with all four policy inputs. This extends compatibility
 evidence for one difficult composite; the remaining legacy selectors and
 effectful command/build paths still require behavior-level coverage.
 
+The [pinned composite differential report][composite-differential] compares
+reference `c880093` with candidate `87f01a0190191ed62f5657e2fd623cca21ea1fdd`.
+All 24 manifested scenarios match; both catalogs contain the same 62 selectors,
+and the composite direct and profile scenarios have identical fixture hashes,
+exit behavior, findings and order. Ten built-in selectors have behavior-level
+differential evidence, leaving 52 baseline selectors without that evidence.
+The provider import trace is also exercised by the installed-wheel self-profile
+test, while remaining a separate non-serialized capability in the comparison
+report.
+
 [file-size-differential]: architecture/builtin-check-wheel-differential-c880093-ab0d4ff-file-size.json
 [line-length-differential]: architecture/builtin-check-wheel-differential-c880093-0daeab6-line-length.json
+[composite-differential]: architecture/builtin-check-wheel-differential-c880093-87f01a0-package-composite.json
 
 ## Performance and cache boundary
 
