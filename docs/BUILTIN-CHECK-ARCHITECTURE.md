@@ -439,7 +439,12 @@ candidate `409c06d` across 40 manifested scenarios. The 62-selector catalog
 and registration contract match, direct/profile outputs and invalid-config
 behavior match, and no differences were reported. Numeric selectors already
 had direct behavior evidence before this slice, so this adds profile and strict
-config evidence but does not increase the behaviorally exercised count.
+config evidence but does not increase the behaviorally exercised count. The
+follow-up [numeric CLI metadata differential]
+[numeric-cli-metadata-differential] records the declaration-owned source-scan
+mode and plain labels across 42 scenarios with no differences, while retaining
+the same 62-selector catalog. The new cases assert both legacy numeric labels
+verbatim; the remaining 48 selectors still lack behavior-level evidence.
 
 `FeatureDefinition.policy_field` remains the primary compatibility binding.
 Feature declarations can also name validated `policy_inputs`; the
@@ -908,6 +913,8 @@ as semantic evidence for those remaining selectors.
 [comment-markers-differential]: architecture/builtin-check-wheel-differential-c880093-5d1a6f5-comment-markers.json
 [numeric-registration-differential]:
   architecture/builtin-check-wheel-differential-c880093-409c06d-numeric-registration.json
+[numeric-cli-metadata-differential]:
+  architecture/builtin-check-wheel-differential-c880093-c91ea92-numeric-cli-metadata.json
 
 ## Dependency-lock registration slice: `dependency-locks`
 

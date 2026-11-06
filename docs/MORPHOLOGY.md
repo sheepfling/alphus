@@ -98,12 +98,13 @@ composite dispatch and lazy unselected providers.
 This remains bounded: the other 51 baseline selectors use legacy registration
 paths, and the current fourteen-selector differential evidence is not full wheel
 equivalence. The [latest pinned report](
-architecture/builtin-check-wheel-differential-c880093-409c06d-numeric-registration.json)
-compares 40 scenarios with no differences and covers direct/profile numeric
-results plus strict config rejection. Forty-eight baseline selectors still lack
-behavior-level differential evidence. Continue migration with direct/profile
-comparisons, lazy-provider checks, and explicit missing/unsupported, partial,
-error, plugin/native and effectful-command cases; this does not complete #87.
+architecture/builtin-check-wheel-differential-c880093-c91ea92-numeric-cli-metadata.json)
+compares 42 scenarios with no differences, including direct/profile numeric
+results, strict-config rejection, source selection and exact plain labels.
+Forty-eight baseline selectors still lack behavior-level differential evidence.
+Continue migration with direct/profile comparisons, lazy-provider checks, and
+explicit missing/unsupported, partial, error, plugin/native and effectful-command
+cases; this does not complete #87.
 
 ## Orthogonal policy and run evidence
 
