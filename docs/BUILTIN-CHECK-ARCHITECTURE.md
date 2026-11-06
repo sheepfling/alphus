@@ -789,15 +789,15 @@ matrix also invoked all 26 selectors with configured policies and verified
 strict missing-policy rejection for the other 36. These checks exercise
 selection/config contracts; they do not count as semantic behavior coverage.
 
-[differential-report]: architecture/builtin-check-wheel-differential-c880093-b4d2d34-numeric-contract.json
+[differential-report]: architecture/builtin-check-wheel-differential-c880093-ad45db3-numeric-cli-metadata.json
 Reproduce it with:
 
 ```sh
 PATH="$PWD/node_modules/.bin:$PATH" .venv/bin/python scripts/differential_wheels.py \
   --root . \
   --baseline c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e \
-  --candidate b4d2d346478986abe1875613c6f051eb7ae7b69b \
-  --output docs/architecture/builtin-check-wheel-differential-c880093-b4d2d34-numeric-contract.json
+  --candidate ad45db3cdb52d4a3f9141782d3b06c057c904f23 \
+  --output docs/architecture/builtin-check-wheel-differential-c880093-ad45db3-numeric-cli-metadata.json
 ```
 
 ## Runtime registration slices: `file-size` and `line-length`
@@ -914,7 +914,7 @@ as semantic evidence for those remaining selectors.
 [numeric-registration-differential]:
   architecture/builtin-check-wheel-differential-c880093-409c06d-numeric-registration.json
 [numeric-cli-metadata-differential]:
-  architecture/builtin-check-wheel-differential-c880093-c91ea92-numeric-cli-metadata.json
+  architecture/builtin-check-wheel-differential-c880093-ad45db3-numeric-cli-metadata.json
 
 ## Dependency-lock registration slice: `dependency-locks`
 

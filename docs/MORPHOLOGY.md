@@ -98,7 +98,7 @@ composite dispatch and lazy unselected providers.
 This remains bounded: the other 51 baseline selectors use legacy registration
 paths, and the current fourteen-selector differential evidence is not full wheel
 equivalence. The [latest pinned report](
-architecture/builtin-check-wheel-differential-c880093-c91ea92-numeric-cli-metadata.json)
+architecture/builtin-check-wheel-differential-c880093-ad45db3-numeric-cli-metadata.json)
 compares 42 scenarios with no differences, including direct/profile numeric
 results, strict-config rejection, source selection and exact plain labels.
 Forty-eight baseline selectors still lack behavior-level differential evidence.
