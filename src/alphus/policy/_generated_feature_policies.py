@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from alphus.policy.architecture import PackageBoundaryPolicy
 from alphus.policy.base import StrictModel
-from alphus.policy.repository import DependencyLockPolicy, RepositoryLayoutPolicy
+from alphus.policy.repository import DependencyLockPolicy, DocumentationConfigPolicy, RepositoryLayoutPolicy
 from alphus.policy.sources import FileSizePolicy, LineLengthPolicy
 
 
 class GeneratedFeaturePolicies(StrictModel):
     dependency_locks: DependencyLockPolicy | None = None
+    documentation_config: DocumentationConfigPolicy | None = None
     file_size: FileSizePolicy | None = None
     line_length: LineLengthPolicy | None = None
     package_boundaries: PackageBoundaryPolicy | None = None

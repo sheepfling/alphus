@@ -117,13 +117,6 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             "Checks configured Python and Node launcher/script conventions.",
             ("python", "javascript"),
         ),
-        "documentation-config": RuleSpec(
-            "documentation_config",
-            RuleOutputShape.FINDINGS,
-            "Checks documentation links and repository-specific documentation configuration.",
-            ("markdown", "repository"),
-            requires_files=False,
-        ),
         "git-ignores": RuleSpec(
             "git",
             RuleOutputShape.FINDINGS,

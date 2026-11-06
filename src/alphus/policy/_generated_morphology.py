@@ -177,6 +177,50 @@ MORPHOLOGY_BY_SELECTOR: Mapping[str, RuleMorphology] = MappingProxyType(
             evidence_kinds=("document-heading", "format-specific-location"),
             evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
         ),
+        "documentation-config": RuleMorphology(
+            selector="documentation-config",
+            finding_ids=(
+                RuleTag(
+                    Scope.REPOSITORY,
+                    Framework.NONE,
+                    Category.MAINTAINABILITY,
+                    "documented-config-duplicate",
+                ),
+                RuleTag(
+                    Scope.REPOSITORY,
+                    Framework.NONE,
+                    Category.CONFIGURATION,
+                    "documented-config-conflict",
+                ),
+                RuleTag(
+                    Scope.REPOSITORY,
+                    Framework.NONE,
+                    Category.CONFIGURATION,
+                    "documented-config-unknown",
+                ),
+            ),
+            concern="documented-configuration-consistency",
+            claim_kind=ClaimKind.RISK,
+            claim=(
+                "Explicit Markdown claims about simple Python defaults are compared "
+                "against statically resolved source values; unsupported or ambiguous "
+                "claims are reported as uncertain."
+            ),
+            mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+            inspected_scope=(
+                "selected-python-source",
+                "selected-markdown",
+                "cross-file",
+            ),
+            languages_formats=("python", "markdown"),
+            evidence_kinds=(
+                "literal-default",
+                "markdown-claim",
+                "symbol-match",
+                "value-comparison",
+            ),
+            evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+        ),
         "file-size": RuleMorphology(
             selector="file-size",
             finding_ids=(

@@ -310,6 +310,39 @@ name = "profile-json"
 arguments = ["--config", "quality-gates.toml", "--profile", "dependency-review", "--run", "--json"]
 
 [[scenario]]
+name = "documentation-config-direct"
+fixture = "documentation-config"
+selectors = ["documentation-config"]
+behavior = ["feature-owned-policy", "cross-file-bounded-heuristic", "stable-conflict-finding"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/repository/none/configuration/documented-config-conflict", path = "docs/guide.md", line = 1 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "documentation-config", "--json"]
+
+[[scenario]]
+name = "documentation-config-profile"
+fixture = "documentation-config"
+selectors = ["documentation-config"]
+behavior = ["explicit-profile-selection", "heuristic-result-adapter", "advisory-warning"]
+expected_exit = 0
+minimum_findings = 1
+expected_step_names = ["config-review"]
+expected_step_rules = ["documentation-config"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/repository/none/configuration/documented-config-conflict", path = "docs/guide.md", line = 1 },
+]
+
+[[scenario.variant]]
+name = "profile-json"
+arguments = ["--config", "quality-gates.toml", "--profile", "documentation-review", "--run", "--json"]
+
+[[scenario]]
 name = "cyclomatic-python-ruff"
 fixture = "cyclomatic-python"
 selectors = ["cyclomatic-complexity"]

@@ -33,7 +33,6 @@ from alphus.policy.intents import (
 from alphus.policy.markdown import MarkdownShellFencesPolicy
 from alphus.policy.metrics import CyclomaticComplexityPolicy
 from alphus.policy.repository import (
-    DocumentationConfigPolicy,
     GitRepositoryPolicy,
     VersionSyncPolicy,
 )
@@ -147,7 +146,6 @@ class CheckPolicies(GeneratedFeaturePolicies):
     script_policy: ScriptPolicy | None = None
     module_roles: ModuleRolePolicy | None = None
     architecture_graph: ArchitectureGraphCheckPolicy | None = None
-    documentation_config: DocumentationConfigPolicy | None = None
     markdown_shell_fences: MarkdownShellFencesPolicy | None = None
     version_sync: VersionSyncPolicy | None = None
     callable_registry: CallableRegistryPolicy | None = None

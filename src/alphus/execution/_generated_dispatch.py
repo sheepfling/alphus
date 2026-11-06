@@ -26,6 +26,14 @@ def _run_feature_dependency_locks(
     return runner(root, files, config)
 
 
+def _run_feature_documentation_config(
+    root: Path, files: Sequence[Path], config: QualityGateConfig
+) -> RuleOutput:
+    module = import_module("alphus.gates.repository.documentation_config")
+    runner = cast(_RuleRunner, module.run_documentation_config_gate)
+    return runner(root, files, config)
+
+
 def _run_feature_file_size(
     root: Path, files: Sequence[Path], config: QualityGateConfig
 ) -> RuleOutput:
@@ -61,6 +69,7 @@ def _run_feature_repository_layout(
 _FEATURE_RULE_RUNNERS: Mapping[QualityRuleName, _RuleRunner] = MappingProxyType(
     {
         "dependency-locks": _run_feature_dependency_locks,
+        "documentation-config": _run_feature_documentation_config,
         "file-size": _run_feature_file_size,
         "line-length": _run_feature_line_length,
         "package-boundaries": _run_feature_package_boundaries,

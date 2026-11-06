@@ -22,6 +22,22 @@ FEATURE_DEFINITIONS: Mapping[str, FeatureDefinition] = MappingProxyType(
             runner_name="run_dependency_lock_gate",
             policy_inputs=("dependency_locks",),
         ),
+        "documentation-config": FeatureDefinition(
+            selector="documentation-config",
+            policy_field="documentation_config",
+            policy_model="alphus.policy.repository.DocumentationConfigPolicy",
+            output_shape="findings",
+            summary=(
+                "Checks documentation links and repository-specific documentation "
+                "configuration."
+            ),
+            applies_to=("markdown", "repository"),
+            domains=(),
+            requires_files=False,
+            runner_module="alphus.gates.repository.documentation_config",
+            runner_name="run_documentation_config_gate",
+            policy_inputs=("documentation_config",),
+        ),
         "file-size": FeatureDefinition(
             selector="file-size",
             policy_field="file_size",
