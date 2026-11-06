@@ -9,6 +9,7 @@ extensions = [".py", ".js", ".cpp", ".java", ".toml"]
 markers = ["TODO", "FIXME", "HACK"]
 
 [orchestration]
+default_profile = "review"
 failure_threshold = "error"
 
 [[orchestration.steps]]
