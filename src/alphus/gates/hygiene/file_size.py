@@ -54,7 +54,7 @@ ALPHUS_CHECK = (
     ("output_shape", "findings"),
     (
         "summary",
-        "Reports source files that exceed configured physical-line or byte limits.",
+        "Reports source files that exceed configured physical-line limits.",
     ),
     ("applies_to", ("configurable-source",)),
     ("domains", ()),
