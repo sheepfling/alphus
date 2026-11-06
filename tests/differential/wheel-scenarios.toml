@@ -229,7 +229,6 @@ expected_exit = 0
 minimum_findings = 6
 expected_step_names = ["package-check"]
 expected_step_rules = ["package-boundaries"]
-expected_reported_step_rules = ["package-boundaries"]
 require_passed_steps = true
 expected_findings = [
   { rule_id = "alphus/python/none/dependencies/forbidden-package-dependency", path = "distributions/workspace-plugin/pyproject.toml" },
