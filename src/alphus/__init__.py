@@ -29,4 +29,4 @@ __all__ = [
 ]
 
 __getattr__ = resolve_public_attribute
-__dir__ = make_public_dir(globals(), __all__)
+__dir__ = make_public_dir(tuple(globals()), __all__)

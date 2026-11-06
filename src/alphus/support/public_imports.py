@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Sequence
 from importlib import import_module
 
 
@@ -20,12 +20,13 @@ def resolve_public_attribute(name: str) -> object:
 
 
 def make_public_dir(
-    namespace: Mapping[str, object], public_names: Sequence[str]
+    module_names: Sequence[str], public_names: Sequence[str]
 ) -> Callable[[], list[str]]:
     """Build module introspection that includes lazy public exports."""
+    initial_names = tuple(module_names)
     exported_names = tuple(public_names)
 
     def public_names_for_module() -> list[str]:
-        return sorted(set(namespace) | set(exported_names))
+        return sorted(set(initial_names) | set(exported_names))
 
     return public_names_for_module
