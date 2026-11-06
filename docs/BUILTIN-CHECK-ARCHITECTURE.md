@@ -772,9 +772,19 @@ catalog entry without changing package-boundaries' independent composite
 inputs. It provides a second repository-package migration case and does not
 imply that other repository checks share this feature shape.
 
+The [repository-layout wheel differential][repository-layout-differential]
+compares reference `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` with candidate
+`4f63bfe6d73f2e2f7cb5fc992ce272ef96f17874`. All 26 manifested scenarios
+match, both catalogs contain the same 62 selectors, and direct plus profile
+repository-layout runs preserve finding IDs, order and exit behavior. Eleven
+selectors now have behavior-level differential evidence; 51 baseline
+selectors still lack it. Selection/config rows and catalog parity do not count
+as semantic evidence for those remaining selectors.
+
 [file-size-differential]: architecture/builtin-check-wheel-differential-c880093-ab0d4ff-file-size.json
 [line-length-differential]: architecture/builtin-check-wheel-differential-c880093-0daeab6-line-length.json
 [composite-differential]: architecture/builtin-check-wheel-differential-c880093-87f01a0-package-composite.json
+[repository-layout-differential]: architecture/builtin-check-wheel-differential-c880093-4f63bfe-repository-layout.json
 
 ## Performance and cache boundary
 
