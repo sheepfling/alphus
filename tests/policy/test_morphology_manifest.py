@@ -244,6 +244,8 @@ def test_feature_definition_generates_catalog_and_lazy_runner_views(
         ("requires_files", True),
         ("runner_module", "alphus.gates.demo_check"),
         ("runner_name", "check_demo"),
+        ("display_name", "Demo check"),
+        ("input_mode", "configured-source-scan"),
     )
     (gates / "demo_check.py").write_text(
         "ALPHUS_CHECK = "
@@ -277,6 +279,8 @@ def test_feature_definition_generates_catalog_and_lazy_runner_views(
     assert [item.selector for item in registration] == ["demo-check"]
     assert '"demo-check": FeatureDefinition(' in definitions
     assert 'policy_model="alphus.policy.sources.DemoPolicy"' in definitions
+    assert 'display_name="Demo check"' in definitions
+    assert 'input_mode="configured-source-scan"' in definitions
     assert "class GeneratedFeaturePolicies(StrictModel):" in policies
     assert "demo_policy: DemoPolicy | None = None" in policies
     assert '"demo-check",' in quality_rules

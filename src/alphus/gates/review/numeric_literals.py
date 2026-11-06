@@ -21,6 +21,8 @@ from alphus.support.source_text import read_python_source
 
 ALPHUS_CHECK: Final = (
     ("selector", "numeric-literals"),
+    ("display_name", "Numeric literals"),
+    ("input_mode", "configured-source-scan"),
     ("finding_contracts", ("numeric-inline",)),
     ("concern", "scientific-constant-reuse"),
     ("claim_kind", "risk"),

@@ -51,8 +51,10 @@ The same literal drives runtime tag resolution and generated morphology, so
 framework-specific wire IDs remain exact while the shared concern is recorded
 once. Both selectors now also derive their strict policy fields, selector
 contracts, `RuleSpec`, inventory and lazy runners from their feature-owned
-`ALPHUS_CHECK` declarations. Their existing checkers and public behavior are
-unchanged.
+`ALPHUS_CHECK` declarations. The paired numeric declarations also own their CLI display
+names and configured source-scan mode, removing two selector lists from the
+CLI while preserving legacy fallbacks for unmigrated checks. Their existing
+checkers and public behavior are unchanged.
 
 The original six-rule pilot is not a complete built-in registration
 migration. Eleven selectors now use feature-owned runtime declarations, while

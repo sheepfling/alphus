@@ -424,9 +424,16 @@ or CLI startup. Typed adapters require the existing policies and call the
 unchanged checkers; matching, output IDs, messages, severities and selection
 semantics are preserved.
 
+The declaration also owns each check's stable CLI display name and its
+configured source-scan inventory mode. Generated metadata feeds the existing
+file-selection and plain-rendering paths, removing these selectors from the
+CLI's legacy source-scan and review-label lists. Legacy selectors still use
+those fallbacks until their own migration.
+
 Tests cover generated strict fields, unknown-field rejection, shared complaint
-IDs, direct and profile reporting, and that selecting one provider leaves the
-other unloaded. The [paired numeric wheel differential]
+IDs, direct and profile reporting, configured source selection, stable plain
+labels, and that selecting one provider leaves the other unloaded. The
+[paired numeric wheel differential]
 [numeric-registration-differential] compares the pinned mainline wheel with
 candidate `409c06d` across 40 manifested scenarios. The 62-selector catalog
 and registration contract match, direct/profile outputs and invalid-config

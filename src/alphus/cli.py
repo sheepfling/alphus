@@ -93,6 +93,7 @@ from alphus.plugins.registry import (
     enabled_plugin_registry,
     installed_plugin_names,
 )
+from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
 from alphus.policy.base import MissingPolicyError
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
 from alphus.policy.function_shape import plan_function_shape
@@ -200,7 +201,6 @@ _SOURCE_SCAN_RULES: frozenset[QualityRuleName] = frozenset(
         "shared-utilities",
         "python-style",
         "runtime-types",
-        "numeric-literals",
         "repeated-numeric-limits",
         "manual-matrix-kernels",
         "manual-elimination",
@@ -215,7 +215,6 @@ _SOURCE_SCAN_RULES: frozenset[QualityRuleName] = frozenset(
         "ecef-enu-transform",
         "ecef-ned-matrix-transform",
         "ned-basis-vectors",
-        "scipy-constants",
         "test-quality",
         "input-contracts",
         "positional-interfaces",
@@ -223,6 +222,10 @@ _SOURCE_SCAN_RULES: frozenset[QualityRuleName] = frozenset(
         "fastapi-practices",
         "sqlalchemy-practices",
     }
+) | frozenset(
+    cast(QualityRuleName, selector)
+    for selector, definition in FEATURE_DEFINITIONS.items()
+    if definition.input_mode == "configured-source-scan"
 )
 _DIRECT_GIT_SUBPROCESS_TAG = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.MAINTAINABILITY, "direct-git-subprocess"
@@ -471,9 +474,7 @@ def _load_audit_manifest(root: Path, path: Path) -> AuditManifest:
 def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
     """Keep concise text summaries while offering a stable JSON format."""
     review_labels = {
-        "numeric-literals": "Numeric literals",
         "repeated-numeric-limits": "Repeated numeric limits",
-        "scipy-constants": "SciPy constants",
         "test-quality": "Test quality",
         "input-contracts": "Input contracts",
         "positional-interfaces": "Positional interface review",
@@ -482,10 +483,16 @@ def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
         "sqlalchemy-practices": "SQLAlchemy practices",
         "suppression-reasons": "Suppression reasons",
     }
-    if rule in review_labels:
+    feature_label = FEATURE_DEFINITIONS.get(rule)
+    display_name = (
+        feature_label.display_name
+        if feature_label is not None and feature_label.display_name is not None
+        else review_labels.get(rule)
+    )
+    if display_name is not None:
         for finding in findings:
             _render_finding(finding)
-        _human_print(f"{review_labels[rule]}: {len(findings)} finding(s)")
+        _human_print(f"{display_name}: {len(findings)} finding(s)")
         _render_severity_totals(findings)
         return
     if rule == "line-length":

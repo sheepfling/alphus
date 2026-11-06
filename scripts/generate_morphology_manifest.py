@@ -80,6 +80,8 @@ class _FeatureRegistration:
     runner_module: str
     runner_name: str
     policy_inputs: tuple[str, ...]
+    display_name: str | None = None
+    input_mode: str = "caller-scope"
 
 
 @dataclass(frozen=True, slots=True)
@@ -362,7 +364,9 @@ def _validate_declaration(
             "runner_name",
         }
     )
-    optional_feature_fields: frozenset[str] = frozenset({"policy_inputs"})
+    optional_feature_fields: frozenset[str] = frozenset(
+        {"policy_inputs", "display_name", "input_mode"}
+    )
     declaration_fields: frozenset[str] = _DECLARATION_COMMON_FIELDS | (
         feature_fields if feature_owned else frozenset[str]()
     )
@@ -370,9 +374,16 @@ def _validate_declaration(
         declaration_fields | {_DIRECT_FINDING_FIELD},
         declaration_fields | {_CONTRACT_FINDING_FIELD},
     )
-    valid_key_sets = (
-        *valid_fields,
-        *(fields | optional_feature_fields for fields in valid_fields if feature_owned),
+    optional_fields = tuple(sorted(optional_feature_fields))
+    valid_key_sets = tuple(
+        fields
+        | frozenset(
+            optional_fields[index]
+            for index in range(len(optional_fields))
+            if mask & (1 << index)
+        )
+        for fields in valid_fields
+        for mask in range(1 << (len(optional_fields) if feature_owned else 0))
     )
     if len(keys) != len(pairs) or keys not in valid_key_sets:
         raise ValueError(
@@ -511,6 +522,21 @@ def _validate_declaration(
                 f"{path}: policy_inputs must include policy_field and use lowercase "
                 "identifiers"
             )
+        display_name: str | None = None
+        if "display_name" in keys:
+            raw_display_name = field("display_name")
+            display_name_value: str | bytes = cast(str | bytes, raw_display_name)
+            if type(display_name_value) is not str or not display_name_value.strip():
+                raise ValueError(f"{path}: display_name must be non-empty text")
+            display_name = display_name_value
+        input_mode_value: str | bytes = cast(
+            str | bytes, field("input_mode") if "input_mode" in keys else "caller-scope"
+        )
+        if type(input_mode_value) is not str or input_mode_value not in {
+            "caller-scope",
+            "configured-source-scan",
+        }:
+            raise ValueError(f"{path}: unsupported input_mode {input_mode_value!r}")
         raw_domains: tuple[object, ...] | list[object] = cast(
             tuple[object, ...] | list[object], field("domains")
         )
@@ -533,6 +559,8 @@ def _validate_declaration(
             runner_module=module_text,
             runner_name=function_text,
             policy_inputs=policy_inputs,
+            display_name=display_name,
+            input_mode=input_mode_value,
         )
     return _Declaration(
         selector=selector_text,
@@ -991,6 +1019,12 @@ def render_feature_manifest(root: Path) -> str:
                 f"            runner_module={_quoted(feature.runner_module)},",
                 f"            runner_name={_quoted(feature.runner_name)},",
                 *_tuple_lines("policy_inputs", feature.policy_inputs),
+                f"            input_mode={_quoted(feature.input_mode)},",
+                *(
+                    _text_argument_lines("display_name", feature.display_name)
+                    if feature.display_name is not None
+                    else []
+                ),
                 "        ),",
             ]
         )

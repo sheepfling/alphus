@@ -154,10 +154,48 @@ def test_shared_numeric_emitters_derive_strict_feature_registration() -> None:
         assert spec.policy_field == policy_field
         assert spec.output_shape is RuleOutputShape.FINDINGS
         assert policy_field in CheckPolicies.model_fields
+        assert definition.input_mode == "configured-source-scan"
+        assert definition.display_name == (
+            "Numeric literals" if selector == "numeric-literals" else "SciPy constants"
+        )
         with pytest.raises(ValidationError):
             CheckPolicies.model_validate(
                 {policy_field: {"extensions": [".py"], "unknown_setting": True}}
             )
+
+
+def test_feature_definition_rejects_invalid_cli_metadata() -> None:
+    definition = FEATURE_DEFINITIONS["numeric-literals"]
+
+    with pytest.raises(ValueError, match="display names"):
+        FeatureDefinition(
+            selector=definition.selector,
+            policy_field=definition.policy_field,
+            policy_model=definition.policy_model,
+            output_shape=definition.output_shape,
+            summary=definition.summary,
+            applies_to=definition.applies_to,
+            domains=definition.domains,
+            requires_files=definition.requires_files,
+            runner_module=definition.runner_module,
+            runner_name=definition.runner_name,
+            display_name=" ",
+        )
+
+    with pytest.raises(ValueError, match="inventory mode"):
+        FeatureDefinition(
+            selector=definition.selector,
+            policy_field=definition.policy_field,
+            policy_model=definition.policy_model,
+            output_shape=definition.output_shape,
+            summary=definition.summary,
+            applies_to=definition.applies_to,
+            domains=definition.domains,
+            requires_files=definition.requires_files,
+            runner_module=definition.runner_module,
+            runner_name=definition.runner_name,
+            input_mode="unbounded-repository",  # type: ignore[arg-type]
+        )
 
 
 def test_feature_definition_rejects_malformed_labels() -> None:

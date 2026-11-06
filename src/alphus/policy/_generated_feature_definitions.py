@@ -19,6 +19,7 @@ FEATURE_DEFINITIONS: Mapping[str, FeatureDefinition] = MappingProxyType(
             runner_module="alphus.gates.hygiene.comment_markers",
             runner_name="run_comment_markers_rule",
             policy_inputs=("comment_markers",),
+            input_mode="caller-scope",
         ),
         "cyclomatic-complexity": FeatureDefinition(
             selector="cyclomatic-complexity",
@@ -34,6 +35,7 @@ FEATURE_DEFINITIONS: Mapping[str, FeatureDefinition] = MappingProxyType(
             runner_module="alphus.gates.source.cyclomatic_complexity",
             runner_name="run_cyclomatic_rule",
             policy_inputs=("cyclomatic_complexity",),
+            input_mode="caller-scope",
         ),
         "dependency-locks": FeatureDefinition(
             selector="dependency-locks",
@@ -49,6 +51,7 @@ FEATURE_DEFINITIONS: Mapping[str, FeatureDefinition] = MappingProxyType(
             runner_module="alphus.gates.repository.dependency_locks",
             runner_name="run_dependency_lock_gate",
             policy_inputs=("dependency_locks",),
+            input_mode="caller-scope",
         ),
         "documentation-config": FeatureDefinition(
             selector="documentation-config",
@@ -65,6 +68,7 @@ FEATURE_DEFINITIONS: Mapping[str, FeatureDefinition] = MappingProxyType(
             runner_module="alphus.gates.repository.documentation_config",
             runner_name="run_documentation_config_gate",
             policy_inputs=("documentation_config",),
+            input_mode="caller-scope",
         ),
         "file-size": FeatureDefinition(
             selector="file-size",
@@ -78,6 +82,7 @@ FEATURE_DEFINITIONS: Mapping[str, FeatureDefinition] = MappingProxyType(
             runner_module="alphus.gates.hygiene.file_size",
             runner_name="check_file_size",
             policy_inputs=("file_size",),
+            input_mode="caller-scope",
         ),
         "line-length": FeatureDefinition(
             selector="line-length",
@@ -91,6 +96,7 @@ FEATURE_DEFINITIONS: Mapping[str, FeatureDefinition] = MappingProxyType(
             runner_module="alphus.gates.hygiene.line_length",
             runner_name="check_line_length",
             policy_inputs=("line_length",),
+            input_mode="caller-scope",
         ),
         "numeric-literals": FeatureDefinition(
             selector="numeric-literals",
@@ -112,6 +118,8 @@ FEATURE_DEFINITIONS: Mapping[str, FeatureDefinition] = MappingProxyType(
             runner_module="alphus.gates.review.numeric_literals",
             runner_name="run_numeric_literals_rule",
             policy_inputs=("numeric_literals",),
+            input_mode="configured-source-scan",
+            display_name="Numeric literals",
         ),
         "output-escaping": FeatureDefinition(
             selector="output-escaping",
@@ -125,6 +133,7 @@ FEATURE_DEFINITIONS: Mapping[str, FeatureDefinition] = MappingProxyType(
             runner_module="alphus.gates.source.output_escaping",
             runner_name="run_output_escaping_rule",
             policy_inputs=("output_escaping",),
+            input_mode="caller-scope",
         ),
         "package-boundaries": FeatureDefinition(
             selector="package-boundaries",
@@ -143,6 +152,7 @@ FEATURE_DEFINITIONS: Mapping[str, FeatureDefinition] = MappingProxyType(
                 "version_sync",
                 "callable_registry",
             ),
+            input_mode="caller-scope",
         ),
         "repository-layout": FeatureDefinition(
             selector="repository-layout",
@@ -158,6 +168,7 @@ FEATURE_DEFINITIONS: Mapping[str, FeatureDefinition] = MappingProxyType(
             runner_module="alphus.gates.repository.repository_layout",
             runner_name="run_repository_layout_gate",
             policy_inputs=("repository_layout",),
+            input_mode="caller-scope",
         ),
         "scipy-constants": FeatureDefinition(
             selector="scipy-constants",
@@ -181,6 +192,8 @@ FEATURE_DEFINITIONS: Mapping[str, FeatureDefinition] = MappingProxyType(
             runner_module="alphus.gates.review.scipy_constants",
             runner_name="run_scipy_constants_rule",
             policy_inputs=("scipy_constants",),
+            input_mode="configured-source-scan",
+            display_name="SciPy constants",
         ),
     }
 )

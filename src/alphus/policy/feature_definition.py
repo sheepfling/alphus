@@ -6,6 +6,8 @@ import re
 from dataclasses import dataclass
 from typing import Literal, TypeAlias, cast
 
+FeatureInputMode = Literal["caller-scope", "configured-source-scan"]
+
 FeatureOutputShape = Literal[
     "findings",
     "messages",
@@ -38,6 +40,8 @@ class FeatureDefinition:
     runner_module: str
     runner_name: str
     policy_inputs: tuple[str, ...] = ()
+    display_name: str | None = None
+    input_mode: FeatureInputMode = "caller-scope"
 
     def __post_init__(self) -> None:
         if _SELECTOR.fullmatch(self.selector) is None:
@@ -59,6 +63,12 @@ class FeatureDefinition:
             )
         if _POLICY_MODEL.fullmatch(self.policy_model) is None:
             raise ValueError("feature policy models must name a built-in policy class")
+        if self.display_name is not None and (
+            type(self.display_name) is not str or not self.display_name.strip()
+        ):
+            raise ValueError("feature display names must be non-empty when provided")
+        if self.input_mode not in ("caller-scope", "configured-source-scan"):
+            raise ValueError("feature input mode must name a supported inventory mode")
         if not self.summary.strip():
             raise ValueError("feature definitions need a summary")
         if self.output_shape not in {
