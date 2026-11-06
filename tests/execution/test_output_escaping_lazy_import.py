@@ -35,7 +35,10 @@ def test_root_package_keeps_lazy_output_escaping_export() -> None:
             sys.executable,
             "-c",
             (
-                "import alphus; "
+                "import sys; import alphus; "
+                "assert 'check_output_escaping' in dir(alphus); "
+                "assert 'alphus.gates.source.output_escaping' "
+                "not in sys.modules; "
                 "from alphus import check_output_escaping; "
                 "assert check_output_escaping.__module__ == "
                 "'alphus.gates.source.output_escaping'"

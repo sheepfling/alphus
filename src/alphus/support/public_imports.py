@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping, Sequence
 from importlib import import_module
 
 
@@ -16,3 +17,15 @@ def resolve_public_attribute(name: str) -> object:
             "alphus.gates.source.output_escaping"
         ).check_output_escaping
     raise AttributeError(f"module 'alphus' has no attribute {name!r}")
+
+
+def make_public_dir(
+    namespace: Mapping[str, object], public_names: Sequence[str]
+) -> Callable[[], list[str]]:
+    """Build module introspection that includes lazy public exports."""
+    exported_names = tuple(public_names)
+
+    def public_names_for_module() -> list[str]:
+        return sorted(set(namespace) | set(exported_names))
+
+    return public_names_for_module
