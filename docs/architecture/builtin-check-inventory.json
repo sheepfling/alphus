@@ -269,7 +269,7 @@
       ],
       "requires_files": true,
       "result_adapter": "alphus.execution.results:RuleEvaluation.from_output/findings",
-      "runner": "alphus.gates.hygiene.runners:<lambda>",
+      "runner": "alphus.gates.hygiene.file_size:check_file_size",
       "selector": "file-size"
     },
     {

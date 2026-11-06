@@ -7,6 +7,7 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from types import MappingProxyType
 
+from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
 from alphus.policy._generated_morphology import MORPHOLOGY_BY_SELECTOR
 from alphus.policy.morphology import RuleMorphology
 
@@ -56,12 +57,6 @@ class RuleSpec:
 
 _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
     {
-        "file-size": RuleSpec(
-            "file_size",
-            RuleOutputShape.FINDINGS,
-            "Reports source files that exceed configured physical-line limits.",
-            ("configurable-source",),
-        ),
         "comment-markers": RuleSpec(
             "comment_markers",
             RuleOutputShape.FINDINGS,
@@ -459,12 +454,33 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
 )
 
 
+_FEATURE_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
+    {
+        selector: RuleSpec(
+            definition.policy_field,
+            RuleOutputShape(definition.output_shape),
+            definition.summary,
+            definition.applies_to,
+            definition.domains,
+            requires_files=definition.requires_files,
+        )
+        for selector, definition in FEATURE_DEFINITIONS.items()
+    }
+)
+
+if set(_LEGACY_RULE_SPECS) & set(_FEATURE_RULE_SPECS):
+    raise RuntimeError("built-in rule has both legacy and feature-owned metadata")
+
+_ALL_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
+    {**_LEGACY_RULE_SPECS, **_FEATURE_RULE_SPECS}
+)
+
 RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
     {
         selector: replace(
             spec,
             morphology=MORPHOLOGY_BY_SELECTOR.get(selector),
         )
-        for selector, spec in _LEGACY_RULE_SPECS.items()
+        for selector, spec in _ALL_RULE_SPECS.items()
     }
 )

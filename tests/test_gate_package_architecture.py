@@ -153,13 +153,16 @@ def test_gate_themes_own_their_runner_mappings() -> None:
         ),
         (
             HYGIENE_RULE_RUNNERS,
-            {"file-size", "line-length", "shared-utilities", "comment-markers"},
+            {"line-length", "shared-utilities", "comment-markers"},
         ),
         (MARKDOWN_RULE_RUNNERS, {"markdown-shell-fences"}),
     )
     for runners, expected in themes:
         assert set(runners) == expected
         assert all(RULE_RUNNERS[name] is runner for name, runner in runners.items())
+    assert RULE_RUNNERS["file-size"].__module__ == (
+        "alphus.execution._generated_dispatch"
+    )
 
 
 def test_review_runner_registry_is_an_explicit_module_export() -> None:

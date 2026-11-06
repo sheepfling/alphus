@@ -13,6 +13,7 @@ from pydantic import TypeAdapter
 from pydantic.fields import FieldInfo
 
 from alphus.execution.dispatch import BUILTIN_RULES
+from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
 from alphus.policy.base import QualityRuleName
 from alphus.policy.catalog import RULE_SPECS
 from alphus.policy.orchestration import CheckPolicies, RuleRunStep
@@ -70,9 +71,13 @@ def test_generated_inventory_covers_runtime_builtins(
         assert spec.policy_field in check.policy_inputs_observed
         assert set(check.policy_inputs_observed) == field_names
         assert all(name in _CHECK_POLICY_FIELDS for name in field_names)
-        assert check.runner == (
-            f"{binding.runner.__module__}:{binding.runner.__qualname__}"
+        feature = FEATURE_DEFINITIONS.get(check.selector)
+        expected_runner = (
+            f"{feature.runner_module}:{feature.runner_name}"
+            if feature is not None
+            else f"{binding.runner.__module__}:{binding.runner.__qualname__}"
         )
+        assert check.runner == expected_runner
         assert check.output_shape == spec.output_shape.value
         assert check.requires_files is spec.requires_files
         assert check.result_adapter.endswith(f"/{spec.output_shape.value}")

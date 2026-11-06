@@ -9,6 +9,11 @@ import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+if __package__:
+    from .generate_morphology_manifest import feature_registrations
+else:
+    from generate_morphology_manifest import feature_registrations
+
 
 @dataclass(frozen=True, slots=True)
 class PolicyField:
@@ -169,7 +174,16 @@ def _catalog_rules(root: Path) -> tuple[_CatalogRule, ...]:
                     requires_files=requires_files,
                 )
             )
-        return tuple(rules)
+        feature_rules = tuple(
+            _CatalogRule(
+                selector=feature.selector,
+                policy_field=feature.policy_field,
+                output_shape=feature.output_shape,
+                requires_files=feature.requires_files,
+            )
+            for feature in feature_registrations(root)
+        )
+        return (*rules, *feature_rules)
     raise ValueError(f"{path} does not define a literal RuleSpec mapping")
 
 
@@ -260,7 +274,47 @@ def _runner_policy_inputs(
                         policy_inputs=tuple(sorted(policy_fields)),
                     )
                 )
+    for feature in feature_registrations(root):
+        path = root.joinpath("src", *feature.runner_module.split(".")).with_suffix(
+            ".py"
+        )
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        function = next(
+            (
+                statement
+                for statement in tree.body
+                if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and statement.name == feature.runner_name
+            ),
+            None,
+        )
+        if function is None:
+            raise ValueError(f"{path}: unknown feature runner {feature.runner_name!r}")
+        policy_fields = {
+            field_name
+            for node in ast.walk(function)
+            if (field_name := _config_policy_field(node)) is not None
+        }
+        bindings.append(
+            _RunnerBinding(
+                selector=feature.selector,
+                module=feature.runner_module,
+                name=feature.runner_name,
+                policy_inputs=tuple(sorted(policy_fields)),
+            )
+        )
     return tuple(bindings)
+
+
+def _config_policy_field(node: ast.AST) -> str | None:
+    match node:
+        case ast.Attribute(
+            attr=field_name,
+            value=ast.Attribute(attr="checks", value=ast.Name(id="config")),
+        ):
+            return field_name
+        case _:
+            return None
 
 
 def inventory(root: Path) -> BuiltinInventory:

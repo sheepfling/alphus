@@ -6,6 +6,7 @@ from dataclasses import fields, replace
 
 import pytest
 
+from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
 from alphus.policy._generated_morphology import MORPHOLOGY_BY_SELECTOR
 from alphus.policy.catalog import _LEGACY_RULE_SPECS, RULE_SPECS
 from alphus.policy.morphology import (
@@ -21,7 +22,7 @@ def test_feature_morphology_is_attached_without_changing_rule_contracts() -> Non
         name for name, spec in RULE_SPECS.items() if spec.morphology is not None
     }
     assert attached_selectors == set(MORPHOLOGY_BY_SELECTOR)
-    assert set(RULE_SPECS) == set(_LEGACY_RULE_SPECS)
+    assert set(RULE_SPECS) == set(_LEGACY_RULE_SPECS) | set(FEATURE_DEFINITIONS)
     for selector, old_spec in _LEGACY_RULE_SPECS.items():
         current = RULE_SPECS[selector]
         assert current.policy_field == old_spec.policy_field

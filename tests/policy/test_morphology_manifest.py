@@ -6,7 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from scripts.generate_morphology_manifest import main, render_manifest
+from scripts.generate_morphology_manifest import (
+    feature_registrations,
+    main,
+    render_feature_manifest,
+    render_manifest,
+)
+from scripts.generate_runner_manifest import render_manifest as render_runner_manifest
 
 _DECLARATION: tuple[tuple[str, object], ...] = (
     ("selector", "demo-check"),
@@ -56,6 +62,59 @@ def test_feature_owned_discovery_accepts_selector_without_central_registry(
     assert "Scope.REPOSITORY" in manifest
     assert "Framework.NONE" in manifest
     assert "Category.TESTING" in manifest
+
+
+def test_feature_definition_generates_catalog_and_lazy_runner_views(
+    tmp_path: Path,
+) -> None:
+    gates = tmp_path / "src/alphus/gates"
+    gates.mkdir(parents=True)
+    feature_declaration = _DECLARATION + (
+        ("policy_field", "demo_policy"),
+        ("output_shape", "findings"),
+        ("summary", "Reports a demo condition."),
+        ("applies_to", ("python",)),
+        ("domains", ()),
+        ("requires_files", True),
+        ("runner_module", "alphus.gates.demo_check"),
+        ("runner_name", "check_demo"),
+    )
+    (gates / "demo_check.py").write_text(
+        "ALPHUS_CHECK = "
+        f"{feature_declaration!r}\n"
+        "def check_demo(root, files, config):\n    return []\n"
+        "rule_tag(Scope.REPOSITORY, Framework.NONE, Category.TESTING, 'demo-check')\n",
+        encoding="utf-8",
+    )
+    policy = tmp_path / "src/alphus/policy"
+    policy.mkdir(parents=True)
+    (policy / "orchestration.py").write_text(
+        "class CheckPolicies:\n    demo_policy: object | None = None\n",
+        encoding="utf-8",
+    )
+    (policy / "base.py").write_text(
+        "from typing import Literal, TypeAlias\n"
+        'QualityRuleName: TypeAlias = Literal["demo-check"]\n',
+        encoding="utf-8",
+    )
+    group = gates / "demo_group"
+    group.mkdir()
+    (group / "runners.py").write_text(
+        "from types import MappingProxyType\n"
+        "DEMO_GROUP_RULE_RUNNERS: object = MappingProxyType({})\n",
+        encoding="utf-8",
+    )
+
+    registration = feature_registrations(tmp_path)
+    definitions = render_feature_manifest(tmp_path)
+    runner_manifest = render_runner_manifest(tmp_path)
+
+    assert [item.selector for item in registration] == ["demo-check"]
+    assert '"demo-check": FeatureDefinition(' in definitions
+    assert "def _run_feature_demo_check(" in runner_manifest
+    assert 'import_module("alphus.gates.demo_check")' in runner_manifest
+    assert "runner = cast(_RuleRunner, module.check_demo)" in runner_manifest
+    assert '"demo-check": _run_feature_demo_check' in runner_manifest
 
 
 def test_discovery_rejects_orphan_finding_complaint(tmp_path: Path) -> None:
@@ -221,8 +280,10 @@ def test_check_detects_stale_generated_manifest(
 ) -> None:
     _module(tmp_path, "demo")
     target = tmp_path / "src/alphus/policy/_generated_morphology.py"
+    feature_target = tmp_path / "src/alphus/policy/_generated_feature_definitions.py"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(render_manifest(tmp_path), encoding="utf-8")
+    feature_target.write_text(render_feature_manifest(tmp_path), encoding="utf-8")
 
     assert main(["--root", str(tmp_path), "--check"]) == 0
     target.write_text(

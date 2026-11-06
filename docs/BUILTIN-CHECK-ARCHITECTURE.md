@@ -37,9 +37,12 @@ their contracts and need are established.
 
 The inventory test verifies the committed baseline by regenerating it from
 the pinned source commit, and compares the current registration fields to that
-baseline. This is an objective registration-contract check, not yet a wheel
+baseline. This is an objective registration-contract check, not a wheel
 behavior differential. The full pinned-wheel equivalence protocol below is a
-prerequisite for the first runtime registration migration.
+prerequisite for broad migration of the remaining selectors. One isolated
+vertical slice may use its own pinned direct/profile differential cases and
+slice-specific lazy-import proof; that limited exception does not establish
+equivalence for other selectors.
 
 This document distinguishes four kinds of statement:
 
@@ -50,11 +53,14 @@ This document distinguishes four kinds of statement:
 - **Open decision** is called out explicitly below and must not be resolved by
   silently changing consumer behavior.
 
-PR #100 is an open draft morphology metadata and safe-discovery pilot. Its six
-feature-local declarations and static generator are useful inputs, but it
-does not generate the selector, config, runner, output, or documentation
-contracts. It therefore does not complete issue #87 or settle the architecture.
-The pilot remains reviewable independently from the migration described here.
+PR #100 is an open draft with a six-check morphology pilot and the first
+feature-owned runtime registration slice for `file-size`. The `ALPHUS_CHECK`
+literal beside that implementation generates its morphology metadata and
+typed `FeatureDefinition`; the same definition generates `RuleSpec` data and
+a lazy runner thunk. The existing strict `CheckPolicies.file_size` field and
+`QualityRuleName` literal remain shared legacy surfaces, so this is a bounded
+registration migration, not end-to-end auto-generation or completion of
+issue #87.
 
 ## Current package ownership and dependency direction
 
@@ -232,29 +238,23 @@ API v1.
 
 ## Developer experience: add a check once
 
-The goal of the 0.0.3 structure is to make a built-in check easy to place and
-register without hand-editing unrelated selector lists. The example below is
-the target shape, not a runtime API implemented by the six-check pilot:
+The first runtime slice implements a constrained static literal beside the
+checker. Adding the checker body and focused tests is still ordinary Python;
+registration views for a migrated feature are generated from this declaration:
 
 ```python
-ALPHUS_CHECK: Final = FeatureDefinition(
-    selector="file-size",
-    policy_field="file_size",
-    policy_type="alphus.policy.sources.FileSizePolicy",
-    summary="Reports source files that exceed configured physical-line limits.",
-    provider=ProviderReference(
-        module="alphus.gates.hygiene.rules",
-        function="check_file_size",
-        language="any",
-        backend="alphus-python",
-        repeatability="same-source-policy-and-runtime",
-    ),
-    output=OutputReference(shape="findings", adapter="rule-findings-v1"),
+ALPHUS_CHECK = (
+    ("selector", "file-size"),
+    ("policy_field", "file_size"),
+    ("output_shape", "findings"),
+    ("runner_module", "alphus.gates.hygiene.file_size"),
+    ("runner_name", "check_file_size"),
+    # The remaining literal pairs declare morphology, claim and evidence.
 )
 ```
 
 The declaration belongs beside the file-size implementation in
-`src/alphus/gates/hygiene/rules.py`. `FileSizePolicy` remains owned by
+`src/alphus/gates/hygiene/file_size.py`. `FileSizePolicy` remains owned by
 `src/alphus/policy/sources.py`; the declaration points to that contract and
 does not move it into the checker package. Its claim is about configured
 physical limits, its provider counts bounded file content, and its evidence is
@@ -262,14 +262,13 @@ the inspected path and measured size. Consumer severity, rollout, and profile
 selection remain in their existing policy and profile locations.
 
 A deterministic build-time AST reader parses only the constrained declaration
-syntax. It sorts source paths and selectors, verifies referenced policy types,
-provider paths and output adapters, and rejects duplicate selectors, duplicate
-finding IDs, missing references, or unsafe paths with source locations. It
-never imports a checker, model, repository module, or plugin. It produces the
-existing selector type, strict `CheckPolicies` fields, `RuleSpec` catalog,
-per-selector lazy dispatch, result adapters, and docs/catalog views from that
-one declaration. Generated changes are checked for freshness and are not
-hand-maintained lists.
+syntax. For `ALPHUS_CHECK`, it validates the existing strict policy field and
+runner path/function without importing a checker or plugin; generated feature
+definitions feed `RuleSpec` and a per-selector lazy runner thunk. It also
+checks selector collisions with the legacy runner views. The file-size slice
+does not yet generate `QualityRuleName` or `CheckPolicies`, nor result
+adapters or every docs/catalog view. Discovery errors stop generation with
+the declaration path and offending reference.
 
 At runtime a consumer still opts in by writing `[checks.file_size]` and
 selecting `file-size` directly or naming it in a profile. Catalog inspection
@@ -301,14 +300,14 @@ generic; do not add selectors, plugins, or language backends to scheduler code.
 
 ### How we will measure the improvement
 
-Today the `file-size` selector is represented in the selector type,
-`CheckPolicies`, `RULE_SPECS`, a theme runner, and generated dispatch. A new
-check also needs its implementation and tests. The pilot does not remove those
-registration edits. The target is one feature-owned declaration plus the
-implementation, focused tests, and user documentation; generated registration
-views require no manual selector-list edits. The exact number of policy files
-still touched depends on whether a check introduces a genuinely new policy
-type or result shape.
+Before this slice, `file-size` duplicated registration in `QualityRuleName`,
+`CheckPolicies`, `RULE_SPECS`, the hygiene runner map, and generated dispatch.
+It now derives `RuleSpec` and a lazy dispatch thunk from the feature-local
+declaration, removing the manual `RULE_SPECS` and hygiene-runner entries. A
+new feature still needs its strict policy field and selector type in shared
+contracts, plus implementation, focused tests and user documentation. The
+next migration goal is to derive those shared contracts safely; this slice
+demonstrates fewer registration edits, not one-edit completion.
 
 Do not claim a time reduction from the design alone. For the first three
 migrated checks, record the commit diff, the count of manually edited
@@ -339,11 +338,12 @@ new check; the migration itself remains a bounded, reviewed change. The full
 exit criterion still requires all current selectors to derive from the same
 declarations and the pinned-wheel proof to pass.
 
-The six-check pilot proves metadata discovery only. It does not yet generate
-runnable registration, strict config, dispatch, result validation, or reporting.
-The expanded differential proves existing runtime behavior for selected
-representatives; it is evidence for the eventual migration, not proof that the
-target flow exists today.
+The six-check morphology pilot proves metadata discovery. The `file-size`
+slice additionally derives `RuleSpec` and lazy runnable dispatch while keeping
+strict config, selector typing, result adaptation and reporting on their
+existing shared paths. Its registration test and pinned direct/profile
+differential cover this selector only; they do not prove the remaining
+selectors or establish completion of issue #87.
 
 ## Existing-check mappings
 
@@ -476,16 +476,18 @@ and built-in optional-provider import tracing. Unit tests cover some plugin
 edge cases. The two wheel virtual environments share the same system-site
 dependency layer, so the run is matched but not hermetic. Both source-archive
 wheels report version `0.0.0`; source commits and wheel hashes identify the
-artifacts. No runtime registration migration is justified yet.
+artifacts. That report alone did not justify a runtime registration migration.
 
-The complete machine-readable run is
-[the c880093-to-d8cc020 behavior and selector-matrix report](architecture/builtin-check-wheel-differential-c880093-d8cc020-dispatch-matrix.json).
+The complete machine-readable run is available in the
+[behavior and selector-matrix report][differential-report].
 It records the frozen fixture snapshot identities, manifest and harness hashes,
 plugin source/wheel hashes, per-scenario native dependencies, selected and
 analyzed file counts, and separate built-in/plugin coverage. Its generated
 matrix also invoked all 26 selectors with configured policies and verified
 strict missing-policy rejection for the other 36. These checks exercise
 selection/config contracts; they do not count as semantic behavior coverage.
+
+[differential-report]: architecture/builtin-check-wheel-differential-c880093-d8cc020-dispatch-matrix.json
 Reproduce it with:
 
 ```sh
@@ -538,11 +540,12 @@ future caches without changing the legacy history digest.
 2. **Typed registration contract.** Define the constrained declaration
    fields, AST-only validation, generator diagnostics, and generated artifact
    boundaries. Preserve the morphology pilot as one consumer of the model.
-3. **One vertical built-in slice.** Convert one existing check end to end,
-   selecting a check that exercises a real output adapter and, where
-   available, lazy optional imports. Prove strict config, explicit profile
-   selection, direct CLI, installed wheel, typed result validation, and no
-   import for unselected implementation.
+3. **One vertical built-in slice (`file-size`; bounded pilot).** This slice
+   derives `RuleSpec` and lazy dispatch from the feature declaration and keeps
+   existing strict config, output adaptation and reporting contracts. Its
+   slice-specific proof must cover direct/profile wheel behavior and unselected
+   provider loading. Selector typing and strict policy fields remain shared
+   contracts and require a later compatible generation step.
 4. **Migrate remaining built-ins by owner package.** Move registration data,
    not semantics. Generate selector typing, strict check fields, `RuleSpec`,
    runner/result bindings, catalog and docs views. Retain per-feature
@@ -577,4 +580,5 @@ Two decisions remain for review:
    addition problem unsolved and should not be called complete.
 
 Until resolved, do not change digest/archive meaning or claim full #87
-acceptance. PR #100 remains a separately reviewable six-check pilot.
+acceptance. PR #100 remains a draft containing the six-check morphology pilot
+and the bounded `file-size` runtime registration slice.
