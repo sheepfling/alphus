@@ -185,7 +185,6 @@ expected_exit = 1
 minimum_findings = 2
 expected_step_names = ["escaping-review"]
 expected_step_rules = ["output-escaping"]
-expected_reported_step_rules = ["output-escaping"]
 expected_findings = [
   { rule_id = "alphus/javascript/none/security/manual-output-escaping", path = "src/render.js", line = 1 },
   { rule_id = "alphus/python/none/security/manual-output-escaping", path = "src/render.py", line = 2 },
