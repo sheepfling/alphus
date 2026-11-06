@@ -63,10 +63,15 @@ class FeatureDefinition:
             )
         if _POLICY_MODEL.fullmatch(self.policy_model) is None:
             raise ValueError("feature policy models must name a built-in policy class")
-        if self.display_name is not None and (
-            type(self.display_name) is not str or not self.display_name.strip()
-        ):
-            raise ValueError("feature display names must be non-empty when provided")
+        match self.display_name:
+            case None:
+                pass
+            case str(label) if label.strip():
+                pass
+            case _:
+                raise ValueError(
+                    "feature display names must be non-empty when provided"
+                )
         if self.input_mode not in ("caller-scope", "configured-source-scan"):
             raise ValueError("feature input mode must name a supported inventory mode")
         if not self.summary.strip():

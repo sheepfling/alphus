@@ -193,40 +193,45 @@ def _reject_duplicate_json_object_keys(
     return MappingProxyType(values)
 
 
-_SOURCE_SCAN_RULES: frozenset[QualityRuleName] = frozenset(
-    {
-        "json-structure",
-        "output-escaping",
-        "path-discovery",
-        "shared-utilities",
-        "python-style",
-        "runtime-types",
-        "repeated-numeric-limits",
-        "manual-matrix-kernels",
-        "manual-elimination",
-        "array-representation-churn",
-        "cholesky-recurrence",
-        "manual-quaternion-conjugation",
-        "manual-quaternion-products",
-        "manual-quaternion-normalization",
-        "manual-quaternion-inversion",
-        "manual-quaternion-vector-rotation",
-        "manual-quaternion-matrix-conversion",
-        "ecef-enu-transform",
-        "ecef-ned-matrix-transform",
-        "ned-basis-vectors",
-        "test-quality",
-        "input-contracts",
-        "positional-interfaces",
-        "pydantic-practices",
-        "fastapi-practices",
-        "sqlalchemy-practices",
-    }
-) | frozenset(
-    cast(QualityRuleName, selector)
-    for selector, definition in FEATURE_DEFINITIONS.items()
-    if definition.input_mode == "configured-source-scan"
+_LEGACY_SOURCE_SCAN_RULES: tuple[QualityRuleName, ...] = (
+    "json-structure",
+    "output-escaping",
+    "path-discovery",
+    "shared-utilities",
+    "python-style",
+    "runtime-types",
+    "repeated-numeric-limits",
+    "manual-matrix-kernels",
+    "manual-elimination",
+    "array-representation-churn",
+    "cholesky-recurrence",
+    "manual-quaternion-conjugation",
+    "manual-quaternion-products",
+    "manual-quaternion-normalization",
+    "manual-quaternion-inversion",
+    "manual-quaternion-vector-rotation",
+    "manual-quaternion-matrix-conversion",
+    "ecef-enu-transform",
+    "ecef-ned-matrix-transform",
+    "ned-basis-vectors",
+    "test-quality",
+    "input-contracts",
+    "positional-interfaces",
+    "pydantic-practices",
+    "fastapi-practices",
+    "sqlalchemy-practices",
 )
+
+
+def _configured_source_scan_rules() -> frozenset[QualityRuleName]:
+    selectors: set[QualityRuleName] = set(_LEGACY_SOURCE_SCAN_RULES)
+    for selector, definition in FEATURE_DEFINITIONS.items():
+        if selector in RULE_SPECS and definition.input_mode == "configured-source-scan":
+            selectors.add(cast(QualityRuleName, selector))
+    return frozenset(selectors)
+
+
+_SOURCE_SCAN_RULES = _configured_source_scan_rules()
 _DIRECT_GIT_SUBPROCESS_TAG = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.MAINTAINABILITY, "direct-git-subprocess"
 )
