@@ -267,6 +267,53 @@ def test_feature_definition_generates_catalog_and_lazy_runner_views(
     assert '"demo-check": _run_feature_demo_check' in runner_manifest
 
 
+def test_feature_policy_imports_wrap_deterministically(tmp_path: Path) -> None:
+    gates = tmp_path / "src/alphus/gates"
+    gates.mkdir(parents=True)
+    policy = tmp_path / "src/alphus/policy"
+    policy.mkdir(parents=True)
+    (policy / "orchestration.py").write_text(
+        "class CheckPolicies:\n    pass\n", encoding="utf-8"
+    )
+    (policy / "sources.py").write_text(
+        "class DemoPolicyWithALongerThanUsualModelNameOne:\n    pass\n"
+        "class DemoPolicyWithALongerThanUsualModelNameTwo:\n    pass\n",
+        encoding="utf-8",
+    )
+    names = (
+        "DemoPolicyWithALongerThanUsualModelNameOne",
+        "DemoPolicyWithALongerThanUsualModelNameTwo",
+    )
+    for index, class_name in enumerate(names, start=1):
+        selector = f"demo-{index}"
+        complaint = f"demo-check-{index}"
+        declaration = _with_field(_DECLARATION, "selector", selector)
+        declaration = _with_field(declaration, "finding_tag_complaints", (complaint,))
+        feature_declaration = declaration + (
+            ("policy_field", f"demo_policy_{index}"),
+            ("policy_model", f"alphus.policy.sources.{class_name}"),
+            ("output_shape", "findings"),
+            ("summary", "Reports a demo condition."),
+            ("applies_to", ("python",)),
+            ("domains", ()),
+            ("requires_files", True),
+            ("runner_module", f"alphus.gates.demo_{index}"),
+            ("runner_name", "check_demo"),
+        )
+        (gates / f"demo_{index}.py").write_text(
+            f"ALPHUS_CHECK = {feature_declaration!r}\n"
+            "def check_demo(root, files, config):\n    return []\n"
+            "rule_tag(Scope.REPOSITORY, Framework.NONE, Category.TESTING, "
+            f"'{complaint}')\n",
+            encoding="utf-8",
+        )
+
+    generated = render_feature_policies(tmp_path)
+
+    assert "from alphus.policy.sources import (" in generated
+    assert generated.index(f"    {names[0]},") < generated.index(f"    {names[1]},")
+
+
 def test_feature_policy_generation_rejects_duplicate_fields(tmp_path: Path) -> None:
     gates = tmp_path / "src/alphus/gates"
     policy = tmp_path / "src/alphus/policy"

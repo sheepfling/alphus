@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from alphus.policy.architecture import PackageBoundaryPolicy
 from alphus.policy.base import StrictModel
-from alphus.policy.repository import DependencyLockPolicy, DocumentationConfigPolicy, RepositoryLayoutPolicy
+from alphus.policy.repository import (
+    DependencyLockPolicy,
+    DocumentationConfigPolicy,
+    RepositoryLayoutPolicy,
+)
 from alphus.policy.sources import FileSizePolicy, LineLengthPolicy
 
 

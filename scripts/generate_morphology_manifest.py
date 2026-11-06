@@ -1028,7 +1028,13 @@ def render_feature_policies(root: Path) -> str:
         "",
     ]
     for module, names in sorted(imports.items()):
-        lines.append(f"from {module} import {', '.join(sorted(names))}")
+        import_line = f"from {module} import {', '.join(sorted(names))}"
+        if len(import_line) <= 88:
+            lines.append(import_line)
+            continue
+        lines.append(f"from {module} import (")
+        lines.extend(f"    {name}," for name in sorted(names))
+        lines.append(")")
     lines.extend(["", "", "class GeneratedFeaturePolicies(StrictModel):"])
     if not fields:
         lines.append("    pass")
