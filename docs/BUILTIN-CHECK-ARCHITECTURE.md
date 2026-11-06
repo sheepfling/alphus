@@ -54,13 +54,14 @@ This document distinguishes four kinds of statement:
   silently changing consumer behavior.
 
 PR #100 remains an open draft. It began with the six-check morphology
-metadata pilot and now has four feature-owned runtime slices: `file-size`,
-`line-length`, `package-boundaries`, and `repository-layout`. Each local
+metadata pilot and now has five feature-owned runtime slices: `file-size`,
+`line-length`, `package-boundaries`, `repository-layout`, and
+`dependency-locks`. Each local
 `ALPHUS_CHECK` literal statically generates
 morphology metadata, typed `FeatureDefinition`, `RuleSpec`, strict policy
 field, selector type, inventory entry, and lazy runner thunk. The established
 `RuleEvaluation` and CLI result adapters remain shared, so adding a feature
-still uses the existing output contract. The other 58 baseline selectors
+still uses the existing output contract. The other 57 baseline selectors
 remain on legacy registration paths; these slices do not complete issue #87
 or establish full selector equivalence.
 
@@ -785,6 +786,31 @@ as semantic evidence for those remaining selectors.
 [line-length-differential]: architecture/builtin-check-wheel-differential-c880093-0daeab6-line-length.json
 [composite-differential]: architecture/builtin-check-wheel-differential-c880093-87f01a0-package-composite.json
 [repository-layout-differential]: architecture/builtin-check-wheel-differential-c880093-4f63bfe-repository-layout.json
+
+## Dependency-lock registration slice: `dependency-locks`
+
+`dependency-locks` now owns its `ALPHUS_CHECK` declaration and typed runner in
+`gates/repository/dependency_locks.py`. Static generation provides its
+`RuleSpec`, strict `CheckPolicies.dependency_locks` field, selector type,
+morphology, audit inventory and lazy dispatch. The repository theme map no
+longer owns this runner. The policy schema, direct selector, finding IDs,
+message text and output adaptation remain unchanged.
+
+Focused tests check the generated definition, strict rejection of unknown
+policy fields, a typed direct dispatch with the established unsatisfied-pin
+finding, and an unselected-run subprocess proving the provider stays unloaded.
+Pinned direct and profile scenarios also exercise its existing severity and
+profile-step behavior.
+
+The [dependency-lock wheel differential][dependency-lock-differential]
+compares the baseline at `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` with
+candidate `f6e3434ab164be102927bd537dc78c3dddb792a4`. All 28 manifested
+scenarios match and both installed-wheel catalogs contain the same 62
+selectors. Twelve selectors now have behavior-level evidence; 50 still lack
+it. Catalog and strict-config checks cover registration shape, not those
+selectors' execution semantics.
+
+[dependency-lock-differential]: architecture/builtin-check-wheel-differential-c880093-f6e3434-dependency-locks.json
 
 ## Performance and cache boundary
 

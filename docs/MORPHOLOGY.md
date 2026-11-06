@@ -80,7 +80,8 @@ readiness.
 
 The six-check morphology pilot is metadata discovery. Draft PR #100 also
 demonstrates feature-owned runtime registration for `file-size`, `line-length`,
-the composite `package-boundaries` feature, and `repository-layout`. Each
+the composite `package-boundaries` feature, `repository-layout`, and
+`dependency-locks`. Each
 declaration generates
 morphology, `FeatureDefinition`, `RuleSpec`, strict primary `CheckPolicies`
 field, selector literal and lazy dispatch. The composite explicitly names its
@@ -91,11 +92,11 @@ proves a new selector can be found without a central selector list; focused
 tests cover strict validation, composite dispatch and unloaded unselected
 providers.
 
-This is still bounded: the other 58 baseline selectors use legacy registration
-paths, and the current eleven-selector differential report is not full wheel
+This is still bounded: the other 57 baseline selectors use legacy registration
+paths, and the current twelve-selector differential report is not full wheel
 equivalence. The [latest pinned report](
-architecture/builtin-check-wheel-differential-c880093-4f63bfe-repository-layout.json)
-includes direct and profile repository-layout execution; 51 baseline selectors
+architecture/builtin-check-wheel-differential-c880093-f6e3434-dependency-locks.json)
+includes direct and profile dependency-lock execution; 50 baseline selectors
 still lack behavior-level differential evidence. Broad migration must continue
 by owner package with direct/profile behavior comparisons, lazy-provider checks,
 and explicit missing/unsupported, partial and error cases. Keep plugin
