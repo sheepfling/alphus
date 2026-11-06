@@ -7,9 +7,10 @@ import logging
 import sys
 import tomllib
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import redirect_stderr, redirect_stdout
 from contextvars import ContextVar
+from importlib import import_module
 from io import StringIO
 from pathlib import Path
 from types import MappingProxyType
@@ -38,6 +39,7 @@ from alphus.config import (
     load_config,
     load_config_stream,
 )
+from alphus.contracts.cyclomatic import CyclomaticPlan, CyclomaticReport
 from alphus.contracts.findings import (
     Finding,
     SeverityCounts,
@@ -67,7 +69,6 @@ from alphus.execution.orchestration import (
     RuleRunResult,
     run_orchestration,
 )
-from alphus.execution.parallel import run_parallel_cyclomatic
 from alphus.execution.profile_analysis import (
     rollup_profile_history,
     summarize_profile_entry,
@@ -87,13 +88,6 @@ from alphus.gates.languages.python.script_policy import launcher_files
 from alphus.gates.languages.python.style import StyleFindings
 from alphus.gates.review.source_families import bounded_source_family_inventory
 from alphus.gates.source.cli_policy import CliPolicyReport, selected_policy_sources
-from alphus.gates.source.cyclomatic_complexity import (
-    CyclomaticReport,
-    build_cyclomatic_plan,
-    plan_payload,
-    report_payload,
-    report_summary,
-)
 from alphus.plugins.registry import (
     PluginRuleBinding,
     enabled_plugin_registry,
@@ -103,6 +97,7 @@ from alphus.policy.base import MissingPolicyError
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
 from alphus.policy.function_shape import plan_function_shape
 from alphus.policy.intents import intent_bindings_for_steps
+from alphus.policy.metrics import CyclomaticComplexityPolicy
 from alphus.policy.orchestration import RuleRunStep
 from alphus.policy.recipes import render_recipe
 from alphus.support.data_access import (
@@ -117,6 +112,51 @@ from alphus.support.reporting import (
 )
 
 QualityRule = RuleSelector
+
+
+def _cyclomatic_report_summary(report: CyclomaticReport) -> str:
+    summarize = cast(
+        Callable[[CyclomaticReport], str],
+        import_module("alphus.gates.source.cyclomatic_complexity").report_summary,
+    )
+    return summarize(report)
+
+
+def _cyclomatic_report_payload(
+    report: CyclomaticReport,
+) -> Mapping[str, JsonValue]:
+    serialize = cast(
+        Callable[[CyclomaticReport], Mapping[str, JsonValue]],
+        import_module("alphus.gates.source.cyclomatic_complexity").report_payload,
+    )
+    return serialize(report)
+
+
+def _cyclomatic_plan_payload(
+    root: Path, policy: CyclomaticComplexityPolicy
+) -> dict[str, JsonValue]:
+    module = import_module("alphus.gates.source.cyclomatic_complexity")
+    build = cast(
+        Callable[[Path, CyclomaticComplexityPolicy], CyclomaticPlan],
+        module.build_cyclomatic_plan,
+    )
+    serialize = cast(
+        Callable[[CyclomaticPlan], Mapping[str, JsonValue]], module.plan_payload
+    )
+    return dict(serialize(build(root, policy)))
+
+
+def _run_parallel_cyclomatic(
+    root: Path,
+    config_path: Path,
+    config: QualityGateConfig,
+    max_jobs: int,
+) -> CyclomaticReport:
+    run = cast(
+        Callable[[Path, Path, QualityGateConfig, int], CyclomaticReport],
+        import_module("alphus.execution.parallel").run_parallel_cyclomatic,
+    )
+    return run(root, config_path, config, max_jobs)
 
 
 class _ProfilePlanPayload(TypedDict):
@@ -226,7 +266,7 @@ def _render_severity_totals(findings: Sequence[Finding]) -> None:
 
 def _render_cyclomatic_report(report: CyclomaticReport) -> None:
     """Render native backend coverage and threshold diagnostics."""
-    _human_print(report_summary(report))
+    _human_print(_cyclomatic_report_summary(report))
     findings = [
         Finding(
             rule_id=item.rule_id,
@@ -728,7 +768,7 @@ def _evaluate_rule(
 
     try:
         if rule == "cyclomatic-complexity" and max_jobs > 1:
-            output = run_parallel_cyclomatic(
+            output = _run_parallel_cyclomatic(
                 checkout, resolved_config, config, max_jobs
             )
         elif already_scheduled:
@@ -783,7 +823,7 @@ def _execute(
                     "the selected configuration has no "
                     "[checks.cyclomatic_complexity] policy"
                 )
-            payload = plan_payload(build_cyclomatic_plan(checkout, policy))
+            payload = _cyclomatic_plan_payload(checkout, policy)
             max_jobs = (
                 jobs
                 if jobs is not None
@@ -835,14 +875,14 @@ def _execute(
     if shape is RuleOutputShape.CYCLOMATIC_REPORT:
         complexity_report = cast(CyclomaticReport, output)
         if json_output:
-            report_data = report_payload(complexity_report)
+            report_data = _cyclomatic_report_payload(complexity_report)
             diagnostics = [item.to_wire() for item in complexity_report.diagnostics]
             typer.echo(
                 json.dumps(
                     {
                         "report": report_data,
                         "diagnostics": diagnostics,
-                        "summary": report_summary(complexity_report),
+                        "summary": _cyclomatic_report_summary(complexity_report),
                     },
                     sort_keys=True,
                 )
@@ -974,8 +1014,8 @@ def run_profile_rule(
     exit_code = ExitCode.QUALITY_FAILURE if evaluation.failed else ExitCode.SUCCESS
     match evaluation.output:
         case CyclomaticReport() as cyclomatic_report:
-            report = report_payload(cyclomatic_report)
-            stdout = report_summary(cyclomatic_report) + "\n"
+            report = _cyclomatic_report_payload(cyclomatic_report)
+            stdout = _cyclomatic_report_summary(cyclomatic_report) + "\n"
             if cyclomatic_report.outcome in {
                 "operational_failure",
                 "incomplete_coverage",

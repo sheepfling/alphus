@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
+from importlib import import_module
 from pathlib import Path
 from types import MappingProxyType
-from typing import TypeAlias
+from typing import TypeAlias, cast
 
 from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.execution.results import RuleOutput
@@ -17,15 +18,32 @@ from alphus.gates.languages.python.script_policy import (
 )
 from alphus.gates.languages.python.style import findings_for as python_style_findings
 from alphus.gates.source.cli_policy import policy_findings as cli_policy_findings
-from alphus.gates.source.cyclomatic_complexity import run_cyclomatic_complexity
 from alphus.gates.source.json_structure import check_json_structure
 from alphus.gates.source.output_escaping import check_output_escaping
 from alphus.gates.source.path_discovery import check_path_discovery
 from alphus.policy.base import require_policy
+from alphus.policy.metrics import CyclomaticComplexityPolicy
 
 SourceRunner: TypeAlias = Callable[
     [Path, Sequence[Path], QualityGateConfig], RuleOutput
 ]
+
+
+def _run_cyclomatic_complexity(
+    root: Path, files: Sequence[Path], config: QualityGateConfig
+) -> RuleOutput:
+    """Load the native analyzer only when its selector is explicitly run."""
+    runner = cast(
+        Callable[[Path, CyclomaticComplexityPolicy], RuleOutput],
+        import_module(
+            "alphus.gates.source.cyclomatic_complexity"
+        ).run_cyclomatic_complexity,
+    )
+    return runner(
+        root,
+        require_policy(config.checks.cyclomatic_complexity, "cyclomatic_complexity"),
+    )
+
 
 SOURCE_RULE_RUNNERS: Mapping[QualityRuleName, SourceRunner] = MappingProxyType(
     {
@@ -62,11 +80,6 @@ SOURCE_RULE_RUNNERS: Mapping[QualityRuleName, SourceRunner] = MappingProxyType(
             files,
             require_policy(config.checks.script_policy, "script_policy"),
         ),
-        "cyclomatic-complexity": lambda root, files, config: run_cyclomatic_complexity(
-            root,
-            require_policy(
-                config.checks.cyclomatic_complexity, "cyclomatic_complexity"
-            ),
-        ),
+        "cyclomatic-complexity": _run_cyclomatic_complexity,
     }
 )

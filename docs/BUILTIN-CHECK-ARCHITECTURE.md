@@ -577,22 +577,22 @@ provenance. Keep backend selection and unsupported/missing-tool outcomes
 explicit. A common complexity concern does not imply equal parsing, counting,
 or coverage guarantees across the three languages.
 
-This check exposes a current lazy-import exception that must be handled before
-its runner moves to feature-owned dispatch. `execution.results` imports
-`CyclomaticReport` from the engine module for its `RuleOutput` union, and the
-source runner map imports `run_cyclomatic_complexity` at module load. The CLI
-and parallel executor also import the engine at top level. An import-time trace
-of `alphus.execution.dispatch` confirms that the cyclomatic engine loads before
-the selector is chosen. Native tools are still invoked only when selected, but
-the Python analyzer module itself is not lazy today.
+This slice removes an existing eager-import seam before moving the selector
+itself to feature-owned registration. `CyclomaticPlan`, backend plans, results,
+metrics and `CyclomaticReport` now live in the lightweight
+`contracts.cyclomatic` module; the engine continues to re-export those names
+for import compatibility. The direct runner, CLI, parallel profile adapter and
+isolated worker use bounded dynamic imports on the selected cyclomatic path.
+Subprocess coverage verifies that importing the CLI, dispatcher and generic
+worker does not import the native analyzer. The full package tests continue to
+cover selected backend behavior and report adaptation.
 
-The migration dependency is to extract stable cyclomatic report value types
-from the engine module into a small contract module, preserve existing imports
-through re-exports, and move CLI/parallel engine imports to the selected
-cyclomatic path where practical. Then test that an unrelated direct selector
-does not import the cyclomatic engine, alongside selected Python/JavaScript/C++
-backend behavior and failure/coverage parity. Do not claim the generated thunk
-alone fixes this existing eager-import seam.
+This resolves module laziness, not selector ownership: cyclomatic complexity
+still uses the legacy selector/config/runner registration. Its eventual
+feature-owned declaration must retain Python/Ruff, JavaScript/ESLint and
+C++/Lizard behavior, including unsupported, missing-tool and coverage
+outcomes. Do not treat the lazy import seam alone as completion of that
+registration migration.
 
 ## Applicability, recommendations and reporting
 
