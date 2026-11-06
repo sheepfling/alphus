@@ -91,8 +91,10 @@ tests cover strict validation, composite dispatch and unloaded unselected
 providers.
 
 This is still bounded: the other 59 baseline selectors use legacy registration
-paths, and the current nine-selector differential report is not full wheel
-equivalence. Broad migration must continue by owner package with direct/profile
+paths, and the current ten-selector differential report is not full wheel
+equivalence. The pinned report includes direct and profile composite execution;
+52 baseline selectors still lack behavior-level differential evidence. Broad
+migration must continue by owner package with direct/profile
 behavior comparisons, lazy-provider checks, and explicit missing/unsupported,
 partial and error cases. Keep plugin discovery behind its API-v1 trust
 boundary, and do not present this tranche as completion of issue #87.

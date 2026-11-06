@@ -69,10 +69,7 @@ def test_composite_config_is_strict_and_dispatch_preserves_finding_contract(
         )
 
 
-def test_unselected_composite_providers_remain_unimported(
-    pytestconfig: pytest.Config,
-) -> None:
-    root = Path(pytestconfig.rootpath)
+def test_unselected_composite_providers_remain_unimported(tmp_path: Path) -> None:
     script = """
 import sys
 from pathlib import Path
@@ -96,11 +93,21 @@ run_builtin_rule("file-size", Path.cwd(), (), QualityGateConfig.model_validate({
         "initializer_limit": 100,
     }},
 }, strict=True))
-print("after", tuple(name in sys.modules for name in providers))
+print("unselected", tuple(name in sys.modules for name in providers))
+package_config = QualityGateConfig.model_validate({
+    "schema_version": 1,
+    "checks": {"package_boundaries": {
+        "metadata_patterns": ["**/pyproject.toml"],
+        "source_directory": "src",
+        "allowed_dependencies": {"workspace": []},
+    }},
+}, strict=True)
+run_builtin_rule("package-boundaries", Path.cwd(), (), package_config)
+print("selected", tuple(name in sys.modules for name in providers))
 """
     result = subprocess.run(
         [sys.executable, "-c", script],
-        cwd=root,
+        cwd=tmp_path,
         capture_output=True,
         text=True,
         check=False,
@@ -109,5 +116,6 @@ print("after", tuple(name in sys.modules for name in providers))
     assert result.returncode == 0, result.stderr
     assert result.stdout.splitlines() == [
         "before (False, False, False, False)",
-        "after (False, False, False, False)",
+        "unselected (False, False, False, False)",
+        "selected (True, False, False, False)",
     ]

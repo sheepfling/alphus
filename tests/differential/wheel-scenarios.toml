@@ -423,8 +423,8 @@ reason = "The installed API-v1 plugin is discovered without import, rejected whe
 
 [[deferred]]
 capability = "unselected-builtin-backend-laziness"
-status = "not-exercised"
-reason = "The plugin path proves unselected third-party modules remain unloaded; built-in optional provider modules still need a selected-versus-unselected import trace before registration migration."
+status = "partial"
+reason = "The installed-wheel self-profile runs a subprocess regression proving the unselected composite stays unloaded and that selected package-boundaries does not load absent graph, version-sync, or callable-registry providers; this import trace is not serialized in the wheel differential report."
 
 [[deferred]]
 capability = "effectful-command-step-compatibility"
