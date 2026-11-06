@@ -54,14 +54,14 @@ This document distinguishes four kinds of statement:
   silently changing consumer behavior.
 
 PR #100 remains an open draft. It began with the six-check morphology
-metadata pilot and now has five feature-owned runtime slices: `file-size`,
-`line-length`, `package-boundaries`, `repository-layout`, and
-`dependency-locks`. Each local
+metadata pilot and now has six feature-owned runtime slices: `file-size`,
+`line-length`, `package-boundaries`, `repository-layout`, `dependency-locks`,
+and `documentation-config`. Each local
 `ALPHUS_CHECK` literal statically generates
 morphology metadata, typed `FeatureDefinition`, `RuleSpec`, strict policy
 field, selector type, inventory entry, and lazy runner thunk. The established
 `RuleEvaluation` and CLI result adapters remain shared, so adding a feature
-still uses the existing output contract. The other 57 baseline selectors
+still uses the existing output contract. The other 56 baseline selectors
 remain on legacy registration paths; these slices do not complete issue #87
 or establish full selector equivalence.
 
@@ -811,6 +811,31 @@ it. Catalog and strict-config checks cover registration shape, not those
 selectors' execution semantics.
 
 [dependency-lock-differential]: architecture/builtin-check-wheel-differential-c880093-f6e3434-dependency-locks.json
+
+## Documentation-config registration slice: `documentation-config`
+
+`documentation-config` now owns its declaration and strict policy binding in
+`gates/repository/documentation_config.py`. The static generator derives its
+`RuleSpec`, `CheckPolicies.documentation_config` field, selector type,
+morphology, audit inventory and lazy dispatch thunk. The repository runner map
+no longer imports this checker. It still reads the Git-backed inventory and
+uses the same bounded syntax/value subset; a heuristic match remains advisory,
+with uncertain claims reported separately from conflicts.
+
+Focused coverage checks the generated feature contract, strict rejection of
+unknown settings, the established conflict finding ID/location/severity, and
+that an unselected run does not import this checker. The pinned direct and
+profile cases exercise a source default and contradictory Markdown claim,
+including the warning-level profile result.
+
+The [documentation-config wheel differential][documentation-config-differential]
+compares main baseline `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` with source
+candidate `66e7eaa37eb7ad00e638722bdfc13f4728d8a449`. All 30 manifested
+scenarios match, catalogs match at 62 selectors, and the registered check
+preserves the conflict ID, location, severity, message and profile behavior.
+Thirteen selectors now have behavior-level evidence; 49 remain without it.
+
+[documentation-config-differential]: architecture/builtin-check-wheel-differential-c880093-66e7eaa-documentation-config.json
 
 ## Performance and cache boundary
 
