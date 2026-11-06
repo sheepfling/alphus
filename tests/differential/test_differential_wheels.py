@@ -62,7 +62,7 @@ def test_report_manifest_derives_selector_coverage_without_a_total_list(
     )
     exercised = {selector for scenario in scenarios for selector in scenario.selectors}
 
-    assert {"file-size", "benchmark-docs"} <= exercised
+    assert {"file-size", "line-length", "benchmark-docs"} <= exercised
     assert {item.selector for item in deferred if item.selector is not None} == {
         "cyclomatic-complexity",
         "package-boundaries",
