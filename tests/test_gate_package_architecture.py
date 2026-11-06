@@ -153,7 +153,7 @@ def test_gate_themes_own_their_runner_mappings() -> None:
         ),
         (
             HYGIENE_RULE_RUNNERS,
-            {"line-length", "shared-utilities", "comment-markers"},
+            {"shared-utilities", "comment-markers"},
         ),
         (MARKDOWN_RULE_RUNNERS, {"markdown-shell-fences"}),
     )

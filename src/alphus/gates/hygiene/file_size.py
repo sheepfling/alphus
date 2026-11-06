@@ -52,6 +52,7 @@ ALPHUS_CHECK: Final = (
         ),
     ),
     ("policy_field", "file_size"),
+    ("policy_model", "alphus.policy.sources.FileSizePolicy"),
     ("output_shape", "findings"),
     (
         "summary",

@@ -10,6 +10,7 @@ FEATURE_DEFINITIONS: Mapping[str, FeatureDefinition] = MappingProxyType(
         "file-size": FeatureDefinition(
             selector="file-size",
             policy_field="file_size",
+            policy_model="alphus.policy.sources.FileSizePolicy",
             output_shape="findings",
             summary="Reports source files that exceed configured physical-line limits.",
             applies_to=("configurable-source",),
@@ -17,6 +18,18 @@ FEATURE_DEFINITIONS: Mapping[str, FeatureDefinition] = MappingProxyType(
             requires_files=True,
             runner_module="alphus.gates.hygiene.file_size",
             runner_name="check_file_size",
+        ),
+        "line-length": FeatureDefinition(
+            selector="line-length",
+            policy_field="line_length",
+            policy_model="alphus.policy.sources.LineLengthPolicy",
+            output_shape="findings",
+            summary="Reports source lines that exceed configured per-extension limits.",
+            applies_to=("configurable-source",),
+            domains=(),
+            requires_files=True,
+            runner_module="alphus.gates.hygiene.line_length",
+            runner_name="check_line_length",
         ),
     }
 )

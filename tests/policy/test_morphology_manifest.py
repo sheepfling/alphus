@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import pytest
@@ -10,7 +11,9 @@ from scripts.generate_morphology_manifest import (
     feature_registrations,
     main,
     render_feature_manifest,
+    render_feature_policies,
     render_manifest,
+    render_quality_rule_names,
 )
 from scripts.generate_runner_manifest import render_manifest as render_runner_manifest
 
@@ -71,6 +74,7 @@ def test_feature_definition_generates_catalog_and_lazy_runner_views(
     gates.mkdir(parents=True)
     feature_declaration = _DECLARATION + (
         ("policy_field", "demo_policy"),
+        ("policy_model", "alphus.policy.sources.DemoPolicy"),
         ("output_shape", "findings"),
         ("summary", "Reports a demo condition."),
         ("applies_to", ("python",)),
@@ -89,13 +93,10 @@ def test_feature_definition_generates_catalog_and_lazy_runner_views(
     policy = tmp_path / "src/alphus/policy"
     policy.mkdir(parents=True)
     (policy / "orchestration.py").write_text(
-        "class CheckPolicies:\n    demo_policy: object | None = None\n",
-        encoding="utf-8",
+        "class CheckPolicies:\n    pass\n", encoding="utf-8"
     )
-    (policy / "base.py").write_text(
-        "from typing import Literal, TypeAlias\n"
-        'QualityRuleName: TypeAlias = Literal["demo-check"]\n',
-        encoding="utf-8",
+    (policy / "sources.py").write_text(
+        "class DemoPolicy:\n    pass\n", encoding="utf-8"
     )
     group = gates / "demo_group"
     group.mkdir()
@@ -107,14 +108,143 @@ def test_feature_definition_generates_catalog_and_lazy_runner_views(
 
     registration = feature_registrations(tmp_path)
     definitions = render_feature_manifest(tmp_path)
+    policies = render_feature_policies(tmp_path)
+    quality_rules = render_quality_rule_names(tmp_path)
     runner_manifest = render_runner_manifest(tmp_path)
 
     assert [item.selector for item in registration] == ["demo-check"]
     assert '"demo-check": FeatureDefinition(' in definitions
+    assert 'policy_model="alphus.policy.sources.DemoPolicy"' in definitions
+    assert "class GeneratedFeaturePolicies(StrictModel):" in policies
+    assert "demo_policy: DemoPolicy | None = None" in policies
+    assert '"demo-check",' in quality_rules
     assert "def _run_feature_demo_check(" in runner_manifest
     assert 'import_module("alphus.gates.demo_check")' in runner_manifest
     assert "runner = cast(_RuleRunner, module.check_demo)" in runner_manifest
     assert '"demo-check": _run_feature_demo_check' in runner_manifest
+
+
+def test_feature_policy_generation_rejects_duplicate_fields(tmp_path: Path) -> None:
+    gates = tmp_path / "src/alphus/gates"
+    policy = tmp_path / "src/alphus/policy"
+    gates.mkdir(parents=True)
+    policy.mkdir(parents=True)
+    (policy / "orchestration.py").write_text("class CheckPolicies: pass\n")
+    (policy / "sources.py").write_text("class DemoPolicy: pass\n")
+
+    for name, selector in (("first", "first-check"), ("second", "second-check")):
+        feature = _with_field(_DECLARATION, "selector", selector)
+        feature = _with_field(feature, "finding_tag_complaints", (selector,))
+        feature_declaration = feature + (
+            ("policy_field", "shared_policy"),
+            ("policy_model", "alphus.policy.sources.DemoPolicy"),
+            ("output_shape", "findings"),
+            ("summary", "Reports a demo condition."),
+            ("applies_to", ("python",)),
+            ("domains", ()),
+            ("requires_files", True),
+            ("runner_module", f"alphus.gates.{name}"),
+            ("runner_name", f"check_{name}"),
+        )
+        (gates / f"{name}.py").write_text(
+            f"ALPHUS_CHECK = {feature_declaration!r}\n"
+            f"def check_{name}(root, files, config):\n    return []\n"
+            "rule_tag(Scope.REPOSITORY, Framework.NONE, Category.TESTING, "
+            f"'{selector}')\n",
+            encoding="utf-8",
+        )
+
+    with pytest.raises(ValueError, match="duplicate feature policy field"):
+        render_feature_policies(tmp_path)
+
+
+def test_selector_generation_falls_back_to_legacy_literal(tmp_path: Path) -> None:
+    policy = tmp_path / "src/alphus/policy"
+    (tmp_path / "src/alphus/gates").mkdir(parents=True)
+    policy.mkdir(parents=True)
+    (policy / "catalog.py").write_text(
+        "from types import MappingProxyType\nRULE_SPECS = MappingProxyType({})\n",
+        encoding="utf-8",
+    )
+    (policy / "base.py").write_text(
+        "from typing import Literal, TypeAlias\n"
+        'QualityRuleName: TypeAlias = Literal["legacy-alpha", "legacy-beta"]\n',
+        encoding="utf-8",
+    )
+
+    result = render_quality_rule_names(tmp_path)
+
+    assert '    "legacy-alpha",' in result
+    assert '    "legacy-beta",' in result
+
+
+def test_feature_policy_root_symlink_is_rejected(tmp_path: Path) -> None:
+    gates = tmp_path / "src/alphus/gates"
+    gates.mkdir(parents=True)
+    outside = tmp_path.with_name(f"{tmp_path.name}-outside-policy")
+    outside.mkdir()
+    (outside / "orchestration.py").write_text("class CheckPolicies: pass\n")
+    (outside / "sources.py").write_text("class DemoPolicy: pass\n")
+    policy_parent = tmp_path / "src/alphus"
+    policy = policy_parent / "policy"
+    policy.symlink_to(outside, target_is_directory=True)
+    feature_declaration = _DECLARATION + (
+        ("policy_field", "demo_policy"),
+        ("policy_model", "alphus.policy.sources.DemoPolicy"),
+        ("output_shape", "findings"),
+        ("summary", "Reports a demo condition."),
+        ("applies_to", ("python",)),
+        ("domains", ()),
+        ("requires_files", True),
+        ("runner_module", "alphus.gates.demo"),
+        ("runner_name", "check_demo"),
+    )
+    (gates / "demo.py").write_text(
+        f"ALPHUS_CHECK = {feature_declaration!r}\n"
+        "def check_demo(root, files, config):\n    return []\n"
+        "rule_tag(Scope.REPOSITORY, Framework.NONE, Category.TESTING, 'demo-check')\n",
+        encoding="utf-8",
+    )
+
+    try:
+        with pytest.raises(ValueError, match="built-in policy root escapes"):
+            feature_registrations(tmp_path)
+    finally:
+        shutil.rmtree(outside)
+
+
+def test_feature_policy_orchestration_symlink_is_rejected(tmp_path: Path) -> None:
+    gates = tmp_path / "src/alphus/gates"
+    policy = tmp_path / "src/alphus/policy"
+    gates.mkdir(parents=True)
+    policy.mkdir(parents=True)
+    outside = tmp_path.with_name(f"{tmp_path.name}-outside-orchestration")
+    outside.write_text("class CheckPolicies: pass\n", encoding="utf-8")
+    (policy / "sources.py").write_text("class DemoPolicy: pass\n", encoding="utf-8")
+    (policy / "orchestration.py").symlink_to(outside)
+    feature_declaration = _DECLARATION + (
+        ("policy_field", "demo_policy"),
+        ("policy_model", "alphus.policy.sources.DemoPolicy"),
+        ("output_shape", "findings"),
+        ("summary", "Reports a demo condition."),
+        ("applies_to", ("python",)),
+        ("domains", ()),
+        ("requires_files", True),
+        ("runner_module", "alphus.gates.demo"),
+        ("runner_name", "check_demo"),
+    )
+    (gates / "demo.py").write_text(
+        f"ALPHUS_CHECK = {feature_declaration!r}\n"
+        "def check_demo(root, files, config):\n    return []\n"
+        "rule_tag(Scope.REPOSITORY, Framework.NONE, Category.TESTING, 'demo-check')\n",
+        encoding="utf-8",
+    )
+
+    try:
+        with pytest.raises(ValueError, match="strict policy declaration escapes"):
+            feature_registrations(tmp_path)
+    finally:
+        outside.unlink()
 
 
 def test_discovery_rejects_orphan_finding_complaint(tmp_path: Path) -> None:
@@ -279,11 +409,30 @@ def test_check_detects_stale_generated_manifest(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     _module(tmp_path, "demo")
+    catalog = tmp_path / "src/alphus/policy/catalog.py"
+    catalog.parent.mkdir(parents=True, exist_ok=True)
+    catalog.write_text(
+        "from types import MappingProxyType\n"
+        '_LEGACY_RULE_SPECS = MappingProxyType({"demo-check": None})\n',
+        encoding="utf-8",
+    )
     target = tmp_path / "src/alphus/policy/_generated_morphology.py"
     feature_target = tmp_path / "src/alphus/policy/_generated_feature_definitions.py"
+    feature_policies_target = (
+        tmp_path / "src/alphus/policy/_generated_feature_policies.py"
+    )
+    quality_rules_target = (
+        tmp_path / "src/alphus/policy/_generated_quality_rule_names.py"
+    )
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(render_manifest(tmp_path), encoding="utf-8")
     feature_target.write_text(render_feature_manifest(tmp_path), encoding="utf-8")
+    feature_policies_target.write_text(
+        render_feature_policies(tmp_path), encoding="utf-8"
+    )
+    quality_rules_target.write_text(
+        render_quality_rule_names(tmp_path), encoding="utf-8"
+    )
 
     assert main(["--root", str(tmp_path), "--check"]) == 0
     target.write_text(

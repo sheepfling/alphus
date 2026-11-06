@@ -48,6 +48,8 @@ _MATURITY = frozenset(
 _SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 _TARGET = Path("src/alphus/policy/_generated_morphology.py")
 _FEATURE_TARGET = Path("src/alphus/policy/_generated_feature_definitions.py")
+_FEATURE_POLICIES_TARGET = Path("src/alphus/policy/_generated_feature_policies.py")
+_QUALITY_RULES_TARGET = Path("src/alphus/policy/_generated_quality_rule_names.py")
 _MAX_FEATURE_MODULES = 2048
 _MAX_SOURCE_MODULE_BYTES = 1_048_576
 _MAX_SCANNED_SOURCE_BYTES = 16_777_216
@@ -67,6 +69,7 @@ def _valid_domain_values(values: tuple[object, ...]) -> bool:
 class _FeatureRegistration:
     selector: str
     policy_field: str
+    policy_model: str
     output_shape: str
     summary: str
     applies_to: tuple[str, ...]
@@ -182,6 +185,7 @@ def _validate_declaration(
     feature_fields = frozenset(
         {
             "policy_field",
+            "policy_model",
             "output_shape",
             "summary",
             "applies_to",
@@ -249,12 +253,14 @@ def _validate_declaration(
     feature: _FeatureRegistration | None = None
     if feature_owned:
         policy_field = field("policy_field")
+        policy_model = field("policy_model")
         output_shape = field("output_shape")
         summary = field("summary")
         requires_files = field("requires_files")
         runner_module = field("runner_module")
         runner_name = field("runner_name")
         policy_text: str | bytes = cast(str | bytes, policy_field)
+        policy_model_text: str | bytes = cast(str | bytes, policy_model)
         shape_text: str | bytes = cast(str | bytes, output_shape)
         summary_text: str | bytes = cast(str | bytes, summary)
         files_value: bool | str = cast(bool | str, requires_files)
@@ -265,6 +271,15 @@ def _validate_declaration(
             or re.fullmatch(r"[a-z][a-z0-9_]*", policy_text) is None
         ):
             raise ValueError(f"{path}: policy_field must be a lowercase identifier")
+        if (
+            type(policy_model_text) is not str
+            or re.fullmatch(
+                r"alphus\.policy(?:\.[a-z][a-z0-9_]*)+\.[A-Z][A-Za-z0-9]*",
+                policy_model_text,
+            )
+            is None
+        ):
+            raise ValueError(f"{path}: policy_model must name a built-in policy class")
         if type(shape_text) is not str or shape_text not in {
             "findings",
             "messages",
@@ -301,6 +316,7 @@ def _validate_declaration(
         feature = _FeatureRegistration(
             selector=selector_text,
             policy_field=policy_text,
+            policy_model=policy_model_text,
             output_shape=shape_text,
             summary=summary_text,
             applies_to=applies_to,
@@ -517,21 +533,58 @@ def _validate_feature_registration(root: Path, declaration: _Declaration) -> Non
             f"function: {feature.runner_module}:{feature.runner_name}"
         )
 
-    policy_path = root / "src" / "alphus" / "policy" / "orchestration.py"
-    policy_tree = ast.parse(
-        policy_path.read_text(encoding="utf-8"), filename=str(policy_path)
+    policy_directory = root / "src" / "alphus" / "policy"
+    repository_root = root.resolve(strict=True)
+    policy_root = policy_directory.resolve(strict=True)
+    if policy_directory.is_symlink() or not policy_root.is_relative_to(repository_root):
+        raise ValueError(
+            f"{declaration.source}: built-in policy root escapes the repository: "
+            f"{policy_directory}"
+        )
+    orchestration_path = policy_directory / "orchestration.py"
+    if orchestration_path.is_symlink() or not orchestration_path.resolve(
+        strict=True
+    ).is_relative_to(policy_root):
+        raise ValueError(
+            f"{declaration.source}: strict policy declaration escapes built-in policy: "
+            f"{orchestration_path}"
+        )
+    orchestration_tree = ast.parse(
+        orchestration_path.read_text(encoding="utf-8"),
+        filename=str(orchestration_path),
     )
-    check_fields = {
+    legacy_fields = {
         member.target.id
-        for statement in policy_tree.body
+        for statement in orchestration_tree.body
         if isinstance(statement, ast.ClassDef) and statement.name == "CheckPolicies"
         for member in statement.body
         if isinstance(member, ast.AnnAssign) and isinstance(member.target, ast.Name)
     }
-    if feature.policy_field not in check_fields:
+    if feature.policy_field in legacy_fields:
         raise ValueError(
-            f"{declaration.source}: feature policy field is missing from strict "
-            f"CheckPolicies: {feature.policy_field}"
+            f"{declaration.source}: feature policy field duplicates a legacy "
+            f"CheckPolicies field: {feature.policy_field}"
+        )
+
+    policy_module, policy_class = feature.policy_model.rsplit(".", 1)
+    policy_path = root.joinpath("src", *policy_module.split(".")).with_suffix(".py")
+    if policy_path.is_symlink() or not policy_path.resolve(strict=True).is_relative_to(
+        policy_root
+    ):
+        raise ValueError(
+            f"{declaration.source}: feature policy model escapes built-in policy: "
+            f"{feature.policy_model}"
+        )
+    policy_tree = ast.parse(
+        policy_path.read_text(encoding="utf-8"), filename=str(policy_path)
+    )
+    if not any(
+        isinstance(statement, ast.ClassDef) and statement.name == policy_class
+        for statement in policy_tree.body
+    ):
+        raise ValueError(
+            f"{declaration.source}: feature policy model does not name a top-level "
+            f"class: {feature.policy_model}"
         )
 
 
@@ -670,6 +723,7 @@ def render_feature_manifest(root: Path) -> str:
                 f"        {_quoted(feature.selector)}: FeatureDefinition(",
                 f"            selector={_quoted(feature.selector)},",
                 f"            policy_field={_quoted(feature.policy_field)},",
+                f"            policy_model={_quoted(feature.policy_model)},",
                 f"            output_shape={_quoted(feature.output_shape)},",
                 f"            summary={_quoted(feature.summary)},",
                 "            applies_to=("
@@ -690,6 +744,115 @@ def render_feature_manifest(root: Path) -> str:
     return "\n".join(lines)
 
 
+def _policy_class(feature: _FeatureRegistration) -> tuple[str, str]:
+    module, class_name = feature.policy_model.rsplit(".", 1)
+    return module, class_name
+
+
+def render_feature_policies(root: Path) -> str:
+    """Render strict check-policy fields owned by statically discovered features."""
+    declarations = feature_registrations(root)
+    fields: dict[str, _FeatureRegistration] = {}
+    for feature in declarations:
+        if feature.policy_field in fields:
+            raise ValueError(f"duplicate feature policy field {feature.policy_field!r}")
+        fields[feature.policy_field] = feature
+    imports: dict[str, set[str]] = {}
+    for feature in fields.values():
+        module, class_name = _policy_class(feature)
+        imports.setdefault(module, set()).add(class_name)
+    lines = [
+        '"""Generated by scripts/generate_morphology_manifest.py; do not edit."""',
+        "",
+        "from __future__ import annotations",
+        "",
+        "from alphus.policy.base import StrictModel",
+    ]
+    for module, names in sorted(imports.items()):
+        lines.append(f"from {module} import {', '.join(sorted(names))}")
+    lines.extend(["", "", "class GeneratedFeaturePolicies(StrictModel):"])
+    if not fields:
+        lines.append("    pass")
+    for policy_field, feature in sorted(fields.items()):
+        _, class_name = _policy_class(feature)
+        lines.append(f"    {policy_field}: {class_name} | None = None")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def render_quality_rule_names(root: Path) -> str:
+    """Render the selector type from legacy contracts and feature declarations."""
+    catalog_path = root / "src" / "alphus" / "policy" / "catalog.py"
+    selectors: set[str] = set()
+    if catalog_path.is_file():
+        catalog_tree = ast.parse(
+            catalog_path.read_text(encoding="utf-8"), filename=str(catalog_path)
+        )
+        for statement in catalog_tree.body:
+            if _assignment_name(statement) != "_LEGACY_RULE_SPECS":
+                continue
+            value = _assignment_value(statement)
+            if (
+                isinstance(value, ast.Call)
+                and isinstance(value.func, ast.Name)
+                and value.func.id == "MappingProxyType"
+            ):
+                value = value.args[0] if value.args else value
+            if isinstance(value, ast.Dict):
+                for key in value.keys:
+                    match key:
+                        case ast.Constant(value=str(selector)):
+                            selectors.add(selector)
+                        case _:
+                            continue
+    if not selectors:
+        base_path = root / "src" / "alphus" / "policy" / "base.py"
+        if base_path.is_file():
+            base_tree = ast.parse(
+                base_path.read_text(encoding="utf-8"), filename=str(base_path)
+            )
+            for statement in base_tree.body:
+                if _assignment_name(statement) != "QualityRuleName":
+                    continue
+                value = _assignment_value(statement)
+                if (
+                    not isinstance(value, ast.Subscript)
+                    or not isinstance(value.value, ast.Name)
+                    or value.value.id != "Literal"
+                ):
+                    continue
+                match value.slice:
+                    case ast.Tuple(elts=items):
+                        candidates: tuple[ast.expr, ...] = tuple(items)
+                    case _:
+                        candidates = (value.slice,)
+                for candidate in candidates:
+                    match candidate:
+                        case ast.Constant(value=str(selector)):
+                            selectors.add(selector)
+                        case _:
+                            continue
+    feature_selectors = {item.selector for item in feature_registrations(root)}
+    if selectors.intersection(feature_selectors):
+        duplicate = min(selectors.intersection(feature_selectors))
+        raise ValueError(f"feature selector duplicates legacy selector {duplicate!r}")
+    selectors.update(feature_selectors)
+    values = sorted(selectors)
+    if not values:
+        raise ValueError("no selectors found for QualityRuleName")
+    lines = [
+        '"""Generated by scripts/generate_morphology_manifest.py; do not edit."""',
+        "",
+        "from typing import Literal, TypeAlias",
+        "",
+        "QualityRuleName: TypeAlias = Literal[",
+        *(f"    {_quoted(value)}," for value in values),
+        "]",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, required=True, help="repository root")
@@ -698,9 +861,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     root: Path = args.root
     target = root / _TARGET
     feature_target = root / _FEATURE_TARGET
+    feature_policies_target = root / _FEATURE_POLICIES_TARGET
+    quality_rules_target = root / _QUALITY_RULES_TARGET
     try:
         expected = render_manifest(root)
         expected_features = render_feature_manifest(root)
+        expected_policies = render_feature_policies(root)
+        expected_quality_rules = render_quality_rule_names(root)
     except (OSError, SyntaxError, TypeError, ValueError) as error:
         print(f"morphology manifest generation failed: {error}", file=sys.stderr)
         return 1
@@ -722,10 +889,31 @@ def main(argv: Sequence[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 1
+        if (
+            not feature_policies_target.is_file()
+            or feature_policies_target.read_text(encoding="utf-8") != expected_policies
+        ):
+            print(
+                f"{feature_policies_target} is stale; regenerate morphology views",
+                file=sys.stderr,
+            )
+            return 1
+        if (
+            not quality_rules_target.is_file()
+            or quality_rules_target.read_text(encoding="utf-8")
+            != expected_quality_rules
+        ):
+            print(
+                f"{quality_rules_target} is stale; regenerate morphology views",
+                file=sys.stderr,
+            )
+            return 1
         return 0
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(expected, encoding="utf-8")
     feature_target.write_text(expected_features, encoding="utf-8")
+    feature_policies_target.write_text(expected_policies, encoding="utf-8")
+    quality_rules_target.write_text(expected_quality_rules, encoding="utf-8")
     return 0
 
 

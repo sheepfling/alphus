@@ -9,9 +9,15 @@ from pathlib import Path
 from typing import NamedTuple
 
 if __package__:
-    from .generate_morphology_manifest import feature_registrations
+    from .generate_morphology_manifest import (
+        feature_registrations,
+        render_quality_rule_names,
+    )
 else:
-    from generate_morphology_manifest import feature_registrations
+    from generate_morphology_manifest import (
+        feature_registrations,
+        render_quality_rule_names,
+    )
 
 
 class _RunnerModule(NamedTuple):
@@ -83,8 +89,9 @@ def _runner_modules(root: Path) -> tuple[_RunnerModule, ...]:
 
 
 def _catalog_selectors(root: Path) -> frozenset[str]:
-    path = root / "src" / "alphus" / "policy" / "base.py"
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    path = root / "src" / "alphus" / "policy" / "_generated_quality_rule_names.py"
+    source = render_quality_rule_names(root)
+    tree = ast.parse(source, filename=str(path))
     for statement in tree.body:
         match statement:
             case ast.AnnAssign(
@@ -166,13 +173,13 @@ def render_manifest(root: Path) -> str:
         [
             "",
             "_RuleRunner = Callable[[Path, Sequence[Path], QualityGateConfig], RuleOutput]",
+            "",
         ]
     )
     for feature in features:
         function_name = f"_run_feature_{feature.selector.replace('-', '_')}"
         lines.extend(
             [
-                "",
                 "",
                 f"def {function_name}(",
                 "    root: Path, files: Sequence[Path], config: QualityGateConfig",

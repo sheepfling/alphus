@@ -18,6 +18,7 @@ def test_generated_feature_definitions_are_immutable() -> None:
         FeatureDefinition(
             selector=definition.selector,
             policy_field=definition.policy_field,
+            policy_model=definition.policy_model,
             output_shape=definition.output_shape,
             summary=definition.summary,
             applies_to=["configurable-source"],  # type: ignore[arg-type]
@@ -35,9 +36,28 @@ def test_feature_definition_rejects_malformed_labels() -> None:
         FeatureDefinition(
             selector=definition.selector,
             policy_field=definition.policy_field,
+            policy_model=definition.policy_model,
             output_shape=definition.output_shape,
             summary=definition.summary,
             applies_to=("configurable-source", "configurable-source"),
+            domains=definition.domains,
+            requires_files=definition.requires_files,
+            runner_module=definition.runner_module,
+            runner_name=definition.runner_name,
+        )
+
+
+def test_feature_definition_rejects_malformed_policy_model() -> None:
+    definition = FEATURE_DEFINITIONS["file-size"]
+
+    with pytest.raises(ValueError, match="built-in policy class"):
+        FeatureDefinition(
+            selector=definition.selector,
+            policy_field=definition.policy_field,
+            policy_model="alphus.policy.not-a-class",
+            output_shape=definition.output_shape,
+            summary=definition.summary,
+            applies_to=definition.applies_to,
             domains=definition.domains,
             requires_files=definition.requires_files,
             runner_module=definition.runner_module,

@@ -16,6 +16,7 @@ FeatureOutputShape = Literal[
 
 _SELECTOR = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
 _POLICY_FIELD = re.compile(r"[a-z][a-z0-9_]*\Z")
+_POLICY_MODEL = re.compile(r"alphus\.policy(?:\.[a-z][a-z0-9_]*)+\.[A-Z][A-Za-z0-9]*\Z")
 _PYTHON_MODULE = re.compile(r"alphus\.gates(?:\.[a-z][a-z0-9_]*)+\Z")
 _FUNCTION = re.compile(r"[a-z_][a-z0-9_]*\Z")
 _TAG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
@@ -28,6 +29,7 @@ class FeatureDefinition:
 
     selector: str
     policy_field: str
+    policy_model: str
     output_shape: FeatureOutputShape
     summary: str
     applies_to: tuple[str, ...]
@@ -41,6 +43,8 @@ class FeatureDefinition:
             raise ValueError("feature selectors must be lowercase slugs")
         if _POLICY_FIELD.fullmatch(self.policy_field) is None:
             raise ValueError("feature policy fields must be lowercase identifiers")
+        if _POLICY_MODEL.fullmatch(self.policy_model) is None:
+            raise ValueError("feature policy models must name a built-in policy class")
         if not self.summary.strip():
             raise ValueError("feature definitions need a summary")
         if self.output_shape not in {

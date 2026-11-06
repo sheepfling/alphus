@@ -26,9 +26,18 @@ def _run_feature_file_size(
     return runner(root, files, config)
 
 
+def _run_feature_line_length(
+    root: Path, files: Sequence[Path], config: QualityGateConfig
+) -> RuleOutput:
+    module = import_module("alphus.gates.hygiene.line_length")
+    runner = cast(_RuleRunner, module.check_line_length)
+    return runner(root, files, config)
+
+
 _FEATURE_RULE_RUNNERS: Mapping[QualityRuleName, _RuleRunner] = MappingProxyType(
     {
         "file-size": _run_feature_file_size,
+        "line-length": _run_feature_line_length,
     }
 )
 

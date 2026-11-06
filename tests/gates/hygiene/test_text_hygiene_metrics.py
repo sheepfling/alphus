@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from alphus.config import FileSizePolicy, LineLengthPolicy, QualityGateConfig
 from alphus.contracts.findings import LineLengthMeasurement
 from alphus.gates.hygiene.file_size import check_file_size
-from alphus.gates.hygiene.rules import check_line_length
+from alphus.gates.hygiene.line_length import check_line_length
 
 
 def line_config(

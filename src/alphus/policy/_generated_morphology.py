@@ -148,6 +148,31 @@ MORPHOLOGY_BY_SELECTOR: Mapping[str, RuleMorphology] = MappingProxyType(
             ),
             evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
         ),
+        "line-length": RuleMorphology(
+            selector="line-length",
+            finding_ids=(
+                RuleTag(
+                    Scope.ANY,
+                    Framework.NONE,
+                    Category.STYLE,
+                    "line-too-long",
+                ),
+                RuleTag(
+                    Scope.ANY,
+                    Framework.NONE,
+                    Category.STYLE,
+                    "invalid-text-encoding",
+                ),
+            ),
+            concern="source-line-bounds",
+            claim_kind=ClaimKind.CONDITION,
+            claim="An included UTF-8 source line exceeds its configured Unicode codepoint limit.",
+            mechanisms=(DetectionMechanism.EXACT_RULE,),
+            inspected_scope=("selected-source-files",),
+            languages_formats=("source-files",),
+            evidence_kinds=("line-length-measurement", "path-line"),
+            evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+        ),
         "positional-semantic-overrides": RuleMorphology(
             selector="positional-semantic-overrides",
             finding_ids=(

@@ -63,12 +63,6 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             "Finds configured TODO-style markers in supported source comments.",
             ("python", "javascript", "c", "cpp"),
         ),
-        "line-length": RuleSpec(
-            "line_length",
-            RuleOutputShape.FINDINGS,
-            "Reports source lines that exceed configured per-extension limits.",
-            ("configurable-source",),
-        ),
         "json-structure": RuleSpec(
             "json_structure",
             RuleOutputShape.FINDINGS,

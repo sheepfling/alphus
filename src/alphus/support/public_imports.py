@@ -9,4 +9,6 @@ def resolve_public_attribute(name: str) -> object:
     """Resolve a legacy root-package checker export on explicit access."""
     if name == "check_file_size":
         return import_module("alphus.gates.hygiene.file_size").check_file_size
+    if name == "check_line_length":
+        return import_module("alphus.gates.hygiene.line_length").check_line_length
     raise AttributeError(f"module 'alphus' has no attribute {name!r}")

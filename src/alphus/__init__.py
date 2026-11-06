@@ -5,7 +5,6 @@ from pathlib import Path
 
 from alphus.config import QualityGateConfig, load_config
 from alphus.contracts.findings import Finding
-from alphus.gates.hygiene.rules import check_line_length
 from alphus.gates.source.json_structure import check_json_structure
 from alphus.gates.source.output_escaping import check_output_escaping
 from alphus.gates.source.path_discovery import check_path_discovery
@@ -15,6 +14,7 @@ from alphus.support.public_imports import resolve_public_attribute
 __getattr__ = resolve_public_attribute
 
 check_file_size: Callable[[Path, Sequence[Path], QualityGateConfig], list[Finding]]
+check_line_length: Callable[[Path, Sequence[Path], QualityGateConfig], list[Finding]]
 
 
 __all__ = [

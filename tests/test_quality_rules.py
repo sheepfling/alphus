@@ -28,7 +28,7 @@ from alphus.execution.results import (
     diagnostics_from_output,
 )
 from alphus.gates.hygiene.file_size import check_file_size
-from alphus.gates.hygiene.rules import check_line_length
+from alphus.gates.hygiene.line_length import check_line_length
 from alphus.gates.languages.python.style import StyleFindings
 from alphus.gates.source import runners as source_runners
 from alphus.support import git, inventory

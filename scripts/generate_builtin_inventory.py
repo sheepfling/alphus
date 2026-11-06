@@ -90,7 +90,14 @@ def _literal_string(node: ast.expr | None, context: str) -> str:
 
 def quality_rule_selectors(root: Path) -> tuple[str, ...]:
     """Read the current public selector Literal without importing its module."""
-    path = root / "src" / "alphus" / "policy" / "base.py"
+    generated_path = (
+        root / "src" / "alphus" / "policy" / "_generated_quality_rule_names.py"
+    )
+    path = (
+        generated_path
+        if generated_path.is_file()
+        else (root / "src" / "alphus" / "policy" / "base.py")
+    )
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     for statement in tree.body:
         if (
@@ -202,6 +209,9 @@ def _check_policy_fields(root: Path) -> tuple[PolicyField, ...]:
                 fields.append(
                     PolicyField(member.target.id, ast.unparse(member.annotation))
                 )
+        for feature in feature_registrations(root):
+            class_name = feature.policy_model.rsplit(".", 1)[1]
+            fields.append(PolicyField(feature.policy_field, f"{class_name} | None"))
         return tuple(fields)
     raise ValueError(f"{path} does not define CheckPolicies")
 

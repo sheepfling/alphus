@@ -9,6 +9,7 @@ from typing import Annotated, Literal, NamedTuple, Self, cast
 from pydantic import Field, field_validator, model_validator
 
 from alphus.contracts.findings import RemediationPriority, Severity
+from alphus.policy._generated_feature_policies import GeneratedFeaturePolicies
 from alphus.policy.architecture import (
     ArchitectureGraphCheckPolicy,
     CallableRegistryPolicy,
@@ -85,9 +86,7 @@ from alphus.policy.sources import (
     CliPolicy,
     CommentMarkerPolicy,
     FileInventoryPolicy,
-    FileSizePolicy,
     FunctionShapePolicy,
-    LineLengthPolicy,
     PathDiscoveryPolicy,
     PythonStylePolicy,
     RuntimeTypePolicy,
@@ -97,12 +96,10 @@ from alphus.policy.sources import (
 )
 
 
-class CheckPolicies(StrictModel):
+class CheckPolicies(GeneratedFeaturePolicies):
     """Settings for the currently available source gates."""
 
-    file_size: FileSizePolicy | None = None
     comment_markers: CommentMarkerPolicy | None = None
-    line_length: LineLengthPolicy | None = None
     json_structure: SourceScanPolicy | None = None
     output_escaping: SourceScanPolicy | None = None
     path_discovery: PathDiscoveryPolicy | None = None
