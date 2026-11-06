@@ -53,14 +53,15 @@ This document distinguishes four kinds of statement:
 - **Open decision** is called out explicitly below and must not be resolved by
   silently changing consumer behavior.
 
-PR #100 is an open draft with a six-check morphology pilot and the first
-feature-owned runtime registration slice for `file-size`. The `ALPHUS_CHECK`
-literal beside that implementation generates its morphology metadata and
-typed `FeatureDefinition`; the same definition generates `RuleSpec` data and
-a lazy runner thunk. The existing strict `CheckPolicies.file_size` field and
-`QualityRuleName` literal remain shared legacy surfaces, so this is a bounded
-registration migration, not end-to-end auto-generation or completion of
-issue #87.
+PR #100 remains an open draft. It began with the six-check morphology
+metadata pilot and now has two feature-owned runtime slices: `file-size` and
+`line-length`. Each local `ALPHUS_CHECK` literal statically generates
+morphology metadata, typed `FeatureDefinition`, `RuleSpec`, strict policy
+field, selector type, inventory entry, and lazy runner thunk. The established
+`RuleEvaluation` and CLI result adapters remain shared, so adding a feature
+still uses the existing output contract. The other 60 baseline selectors
+remain on legacy registration paths; these two slices do not complete issue
+#87 or establish full selector equivalence.
 
 ## Current package ownership and dependency direction
 
@@ -70,8 +71,10 @@ The current public and internal responsibilities are:
   strict TOML models, direct selectors, profile invocation, renderers, and
   exit status.
 - **Built-in selector and policy validation** — `alphus.policy.base` and
-  `alphus.policy.orchestration` own `QualityRuleName`, `CheckPolicies`, and
-  `require_rule`.
+  `alphus.policy.orchestration` expose `QualityRuleName`, `CheckPolicies`, and
+  `require_rule`. For migrated features, selector and strict policy contracts
+  derive from generated views; legacy selectors and policy fields remain
+  explicitly declared in their current source modules.
 - **Rule metadata and catalog** — `alphus.policy.catalog` owns `RuleSpec`,
   `RULE_SPECS`, and `RuleOutputShape`.
 - **Feature implementations** — `alphus.gates.<theme>` and
@@ -190,6 +193,110 @@ without a consumer.
    finding counts. JSON is produced only at process and public serialization
    boundaries.
 
+Not every scheduled task is a finding-producing check, and forcing every
+operation into one `Check` type would lose useful contracts. The current
+surfaces already separate several roles:
+
+- **Discover and plan:** `ProfilePlan` and `alphus --plan` resolve explicit
+  selection and selected inventory; a plan makes no claim that execution ran.
+- **File analysis:** `file-size` and `line-length` share validated policy,
+  paths, provenance and a findings adapter, while keeping their distinct
+  physical-byte, line-count and codepoint evidence.
+- **Composite analysis:** `package-boundaries` plus graph, version-sync and
+  callable-registry policies use one selected gate and ordered finding
+  reduction while retaining multiple effective policies and engine-owned
+  evidence.
+- **Native polyglot analysis:** `cyclomatic-complexity` shares scheduling,
+  scope and reporting while retaining Ruff, ESLint and Lizard metrics,
+  availability and coverage.
+- **Effectful command:** the `latexmk` step in
+  `examples/documents/pdf-structural-check.toml` uses existing
+  `CommandRunStep` and scheduler outcomes; it writes artifacts such as
+  `build/report.pdf` and passes native exit status to later validators.
+
+The small common execution contract is selection, resolved inputs, work
+scheduling, provenance and a typed outcome adapter. Rule analysis can adapt to
+existing `RuleEvaluation`; cyclomatic reports retain their backend-aware
+result; commands retain process status, captured output and effectful build
+artifacts. Plan output remains a plan. Do not make command steps pretend to be
+read-only providers or convert every result to findings. Existing `after`
+relationships order steps only; they do not suppress a step after predecessor
+failure.
+
+This answers “do all tasks fit one form?” at the orchestration boundary, not
+by forcing one domain result shape on them. Planning resolves selection and
+applicability but performs no analysis. File analyzers return file-scoped
+evidence adapted to findings. Composite analyzers consume several effective
+policies and may return merged findings plus diagnostics. Native polyglot
+providers retain backend-specific metrics and availability. Commands report
+process outcome and declared artifacts. The scheduler can schedule all of
+these through `WorkUnit`/`WorkOutcome`; typed role-specific adapters preserve
+their meanings. A new universal `TaskResult` payload or a finding wrapper for
+commands would erase information without improving scheduling.
+
+Concern, language, provider, determinism, cacheability and effects are
+independent axes. A line-length concern can use a shared Python analyzer;
+cyclomatic complexity maps to different language-specific native providers;
+a PDF build command is an effectful operation rather than a source analyzer.
+Determinism describes repeated evidence for the same declared source, policy,
+tool versions and environment. Cacheability additionally requires a complete
+input/dependency identity and no unaccounted effects; deterministic output
+alone does not make an operation safe to skip. Effect declarations are not yet
+a general feature-owned contract, and persistent result reuse remains outside
+0.0.3. These differences are inventoried and planned explicitly, not hidden in
+one morphology enum.
+
+Keep applicability separate from provider capability: a provider may support
+a language in general while a particular repository inventory or configured
+scope has no applicable files. Keep tool and subtool identity separate from
+language, and evidence strength separate from repeatability. For example,
+three cyclomatic providers can be repeatable under pinned versions while
+reporting different supported syntax and metric semantics. “Universal
+concern” means the consumer intent can span languages; it does not make the
+current provider universal.
+
+### Concern scope is not provider coverage
+
+A concern can apply across languages while a provider covers only one language
+or tool. A shared concern never implies a universal detector or equivalent
+semantics:
+
+- `cyclomatic-complexity` names a language-independent metric concern. Current
+  providers are Ruff for Python, ESLint for JavaScript and Lizard for C++;
+  their metrics, versions, unsupported cases and coverage remain distinct.
+- `scipy-constants` names a physical-constant concern, but the current provider
+  scans configured Python arithmetic for selected SciPy constants. This does
+  not claim equivalent C++, JavaScript or other-language coverage.
+- `line-length` is a text-level concern with configured extensions and
+  codepoint measurements; it does not require language parsing.
+- `benchmark-docs` is a prose-risk concern with deterministic lexical
+  matching. Its method can repeat for fixed inputs while its claim remains
+  heuristic and its false-positive limits remain explicit.
+
+When an existing concern gains another language or subtool provider, record
+that provider and its syntax, metric, version, availability, applicability and
+coverage under the owning concern. Keep the selector stable when the consumer
+intent and output contract remain the same; the provider plan chooses a
+supported implementation only for explicitly selected work. A new provider
+must not create a duplicate selector, auto-enable a profile step, or upgrade
+claim strength. Current cyclomatic bindings already live with the metric
+policy and backend plans rather than in a second selector list. Broader
+provider-declaration generation is a later migration seam; 0.0.3 preserves
+these bindings and adds no language or detector support.
+
+The concrete extension point today is `CyclomaticBackendBinding` in
+`policy/metrics.py`. A new backend for the existing cyclomatic concern adds a
+typed binding there, a planned backend/capability mapping and execution/result
+adapter in `gates/source/cyclomatic_complexity.py`, plus backend-specific
+fixtures. It reuses the `cyclomatic-complexity` selector, policy and profile
+step; it must not add a second selector or silently change selected language
+coverage. This is not yet one-declaration registration: several exhaustive
+matches in that feature module must learn the new variant. Keep this cost
+visible in 0.0.3 evidence. If repeated migrations show that those matches
+drift, the next scoped improvement is a provider descriptor colocated with the
+typed backend contract and a single validated dispatch path, not another
+global provider registry.
+
 Evidence should be a typed union of existing or feature-owned result models,
 not a recursive `JsonObject` alias. The current `Finding`, `Diagnostic`,
 `CyclomaticReport`, `RuleEvaluation`, and native report models should be
@@ -238,37 +345,69 @@ API v1.
 
 ## Developer experience: add a check once
 
-The first runtime slice implements a constrained static literal beside the
-checker. Adding the checker body and focused tests is still ordinary Python;
-registration views for a migrated feature are generated from this declaration:
+A feature declaration belongs beside its behavior and points to the
+feature's existing strict policy model without moving policy ownership into
+the checker package. `file-size` lives in
+`src/alphus/gates/hygiene/file_size.py`; `FileSizePolicy` remains in
+`src/alphus/policy/sources.py`. The second migration uses the same path for
+`line-length` and `LineLengthPolicy`:
 
 ```python
 ALPHUS_CHECK = (
-    ("selector", "file-size"),
-    ("policy_field", "file_size"),
+    ("selector", "line-length"),
+    ("policy_field", "line_length"),
+    ("policy_model", "alphus.policy.sources.LineLengthPolicy"),
     ("output_shape", "findings"),
-    ("runner_module", "alphus.gates.hygiene.file_size"),
-    ("runner_name", "check_file_size"),
-    # The remaining literal pairs declare morphology, claim and evidence.
+    ("runner_module", "alphus.gates.hygiene.line_length"),
+    ("runner_name", "check_line_length"),
+    # Additional literal pairs declare morphology, claim and evidence.
 )
 ```
 
-The declaration belongs beside the file-size implementation in
-`src/alphus/gates/hygiene/file_size.py`. `FileSizePolicy` remains owned by
-`src/alphus/policy/sources.py`; the declaration points to that contract and
-does not move it into the checker package. Its claim is about configured
-physical limits, its provider counts bounded file content, and its evidence is
-the inspected path and measured size. Consumer severity, rollout, and profile
-selection remain in their existing policy and profile locations.
+The deterministic AST reader discovers this literal without importing feature
+or plugin code. It validates the policy class, selector, policy field, runner,
+finding tags, paths and duplicate ownership. It generates the immutable
+`FeatureDefinition` catalog, morphology view, `RuleSpec`, strict
+`GeneratedFeaturePolicies` base fields, `QualityRuleName` literal and lazy
+runner thunk. `CheckPolicies` and the public `QualityRuleName` import path stay
+unchanged. Unknown or malformed declarations fail generation with the source
+path and offending reference. Result adaptation still uses the existing
+`RuleEvaluation` and output-shape path.
 
-A deterministic build-time AST reader parses only the constrained declaration
-syntax. For `ALPHUS_CHECK`, it validates the existing strict policy field and
-runner path/function without importing a checker or plugin; generated feature
-definitions feed `RuleSpec` and a per-selector lazy runner thunk. It also
-checks selector collisions with the legacy runner views. The file-size slice
-does not yet generate `QualityRuleName` or `CheckPolicies`, nor result
-adapters or every docs/catalog view. Discovery errors stop generation with
-the declaration path and offending reference.
+At runtime, consumers continue to provide the same `[checks.line_length]`
+policy and select `line-length` directly or in a profile. Catalog inspection
+and config validation do not import the checker. Dispatch imports only the
+selected provider; registration never adds a profile step. The package-level
+`check_line_length` compatibility export resolves lazily on explicit access.
+
+This static complaint rule is intentionally narrow: each migrated file check
+declares complaint slugs whose `rule_tag()` calls are literal in that same
+feature module. It proves a simple one-selector/one-owner case; it is not a
+general rule for shared emitters. Existing numeric checks use the shared
+`gates/review/numeric_catalog.py` engine, which constructs tags from policy
+specifications, and some adapters own tags outside the selector module. Do not
+copy those tags into every feature or weaken static validation to accept
+unresolved strings. Before migrating a shared emitter, introduce one
+feature-local complaint contract at its actual ownership boundary: declare
+the stable `RuleTag` once, identify the permitted selectors/emitters that may
+reference it, and validate each reference against that contract. A shared ID
+is then explicitly shared rather than ambiguously owned by multiple selectors.
+The migration must retain the current IDs and report shape, and tests must
+prove both permitted sharing and rejection of undeclared emitters. This is a
+later bounded migration; it does not change numeric-check behavior in this
+slice.
+
+Likewise, the current `FeatureDefinition.policy_field` and single
+`runner_module` describe a selector's primary compatibility binding, not its
+complete effective-input graph or provider graph. `package-boundaries` uses
+`PackageBoundaryPolicy` together with architecture-graph, version-sync and
+callable-registry inputs; its history digest currently has a separate known
+input gap. Do not infer that graph from one primary field or change legacy
+history cohorts during registration work. A composite migration needs a typed
+effective-input aggregate (or explicit, validated policy-input references)
+and a feature-level router that can plan multiple providers while retaining
+the primary `RuleSpec.policy_field` and public selector. The shape should be
+proved against the existing composite before it becomes a general API.
 
 At runtime a consumer still opts in by writing `[checks.file_size]` and
 selecting `file-size` directly or naming it in a profile. Catalog inspection
@@ -300,14 +439,17 @@ generic; do not add selectors, plugins, or language backends to scheduler code.
 
 ### How we will measure the improvement
 
-Before this slice, `file-size` duplicated registration in `QualityRuleName`,
-`CheckPolicies`, `RULE_SPECS`, the hygiene runner map, and generated dispatch.
-It now derives `RuleSpec` and a lazy dispatch thunk from the feature-local
-declaration, removing the manual `RULE_SPECS` and hygiene-runner entries. A
-new feature still needs its strict policy field and selector type in shared
-contracts, plus implementation, focused tests and user documentation. The
-next migration goal is to derive those shared contracts safely; this slice
-demonstrates fewer registration edits, not one-edit completion.
+Before the two runtime slices, each selector duplicated its registration
+across `QualityRuleName`, `CheckPolicies`, `RULE_SPECS`, a theme runner map and
+dispatch. For `file-size` and `line-length`, the declaration now derives the
+selector type, strict policy field, catalog metadata and lazy dispatch view;
+manual catalog and theme-runner entries have been removed. Their existing
+policy models, checker bodies, result adaptation and CLI reporting remain
+owned by the current modules. A new feature still needs its policy model,
+checker body, declaration, focused tests and user documentation, but no
+selector, config, catalog or runner list edit for these generated surfaces.
+Measure registration edits and review effort from the next migrations rather
+than claiming a time reduction from the design alone.
 
 Do not claim a time reduction from the design alone. For the first three
 migrated checks, record the commit diff, the count of manually edited
@@ -339,11 +481,11 @@ exit criterion still requires all current selectors to derive from the same
 declarations and the pinned-wheel proof to pass.
 
 The six-check morphology pilot proves metadata discovery. The `file-size`
-slice additionally derives `RuleSpec` and lazy runnable dispatch while keeping
-strict config, selector typing, result adaptation and reporting on their
-existing shared paths. Its registration test and pinned direct/profile
-differential cover this selector only; they do not prove the remaining
-selectors or establish completion of issue #87.
+and `line-length` slices additionally derive strict policy fields, selector
+typing, `RuleSpec` and lazy runnable dispatch while retaining existing result
+adaptation and reporting. Focused tests exercise both providers and strict
+configuration. The pinned wheel report below remains the evidence boundary;
+these slices do not prove all 62 selectors or complete issue #87.
 
 ## Existing-check mappings
 
@@ -478,7 +620,7 @@ dependency layer, so the run is matched but not hermetic. Both source-archive
 wheels report version `0.0.0`; source commits and wheel hashes identify the
 artifacts. That report alone did not justify a runtime registration migration.
 
-The complete machine-readable run is available in the
+The latest machine-readable run is available in the
 [behavior and selector-matrix report][differential-report].
 It records the frozen fixture snapshot identities, manifest and harness hashes,
 plugin source/wheel hashes, per-scenario native dependencies, selected and
@@ -487,18 +629,18 @@ matrix also invoked all 26 selectors with configured policies and verified
 strict missing-policy rejection for the other 36. These checks exercise
 selection/config contracts; they do not count as semantic behavior coverage.
 
-[differential-report]: architecture/builtin-check-wheel-differential-c880093-d8cc020-dispatch-matrix.json
+[differential-report]: architecture/builtin-check-wheel-differential-c880093-0daeab6-line-length.json
 Reproduce it with:
 
 ```sh
 PATH="$PWD/node_modules/.bin:$PATH" .venv/bin/python scripts/differential_wheels.py \
   --root . \
   --baseline c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e \
-  --candidate d8cc02081a511c79466c6b52361d02cd2f0238e9 \
-  --output docs/architecture/builtin-check-wheel-differential-c880093-d8cc020-dispatch-matrix.json
+  --candidate 0daeab61069322664226d20822e250b2059c3277 \
+  --output docs/architecture/builtin-check-wheel-differential-c880093-0daeab6-line-length.json
 ```
 
-## First runtime registration slice: `file-size`
+## Runtime registration slices: `file-size` and `line-length`
 
 Commit `22698843ad2ceca12f4b65567cd3cf5cf1340bf2` moves file-size behavior to
 `src/alphus/gates/hygiene/file_size.py` and removes its duplicate entries from
@@ -512,21 +654,26 @@ not yet make strict config or selector typing feature-owned.
 The corrected candidate commit
 `ab0d4ff9c40672943a8690a20b2773efbb9b1c3f` was compared with the pinned
 `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` wheel. The [file-size differential
-report][file-size-differential] records equal 62-selector catalogs and no
-differences across the 21 manifested scenarios. Nine built-in selectors have
-behavior-level evidence in this run, including file-size direct JSON/plain
-output and profile-plan plus serial/parallel execution. The 26 direct selector
+report][file-size-differential] recorded equal 62-selector catalogs and no
+differences across its 21 manifested scenarios. Nine built-in selectors had
+behavior-level evidence, including file-size direct JSON/plain output and
+profile-plan plus serial/parallel execution. The 26 direct selector
 invocations and 36 strict missing-policy rejections verify selection/config
 contracts; they are not semantic coverage for all 62 checks. The existing
 subprocess regression also verifies that importing dispatch leaves the
-file-size implementation unloaded until that selector is run. Installed-wheel
-CI passed the self-profile and all 2,425 package tests (43 skipped).
+file-size implementation unloaded until that selector is run.
 
 The first differential attempt caught a catalog-summary change for
 file-size. The declaration was corrected to preserve the exact mainline
-summary, and the final report above was generated from the corrected commit.
-This is one bounded migration with representative compatibility evidence, not
-full equivalence or completion of issue #87.
+summary. The line-length migration also derives strict config and selector
+contracts. Its [pinned differential report][differential-report] records
+equal catalogs and no differences across 22 scenarios, including direct
+line-length output and profile serial/parallel execution. Nine of the 62
+selectors have behavior-level evidence; the remaining 53 still lack it. The
+26 configured direct invocations and 36 strict missing-policy rejections are
+selection/config evidence, not semantic coverage. Installed-wheel validation
+on the line-length candidate passed 27 self-profile checks and 2,432 tests
+(43 skipped). Neither slice proves full equivalence or completes #87.
 
 [file-size-differential]: architecture/builtin-check-wheel-differential-c880093-ab0d4ff-file-size.json
 
@@ -572,12 +719,11 @@ future caches without changing the legacy history digest.
 2. **Typed registration contract.** Define the constrained declaration
    fields, AST-only validation, generator diagnostics, and generated artifact
    boundaries. Preserve the morphology pilot as one consumer of the model.
-3. **One vertical built-in slice (`file-size`; bounded pilot).** This slice
-   derives `RuleSpec` and lazy dispatch from the feature declaration and keeps
-   existing strict config, output adaptation and reporting contracts. Its
-   slice-specific proof must cover direct/profile wheel behavior and unselected
-   provider loading. Selector typing and strict policy fields remain shared
-   contracts and require a later compatible generation step.
+3. **Bounded feature-owned vertical slices (`file-size`, `line-length`).**
+   These derive strict policy fields, selector typing, `RuleSpec`, inventory
+   and lazy dispatch while keeping existing config names, result adaptation,
+   and reporting behavior. Their direct/profile differential and unselected
+   provider tests establish only these slices.
 4. **Migrate remaining built-ins by owner package.** Move registration data,
    not semantics. Generate selector typing, strict check fields, `RuleSpec`,
    runner/result bindings, catalog and docs views. Retain per-feature

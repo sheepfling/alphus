@@ -63,22 +63,22 @@ readiness.
 
 ## Registration boundary and next tranche
 
-This pilot proves safe discovery of a feature-owned declaration, including a
-synthetic selector absent from any central selector list. It does not register
-that synthetic check for execution. In the application, declarations still
-attach only to selectors already present in the built-in catalog; typed config
-fields, runner bindings, output normalization, and public docs remain
-hand-maintained. The pilot therefore does not meet #87's end-to-end registration
-acceptance.
+The six-check morphology pilot is metadata discovery, while the current #100
+runtime tranche also demonstrates feature-owned execution registration for
+`file-size` and `line-length`. Their declarations generate morphology,
+`FeatureDefinition`, `RuleSpec`, strict `CheckPolicies` fields, the selector
+literal and lazy dispatch. Existing config names, output adaptation, reports,
+selection and exit behavior remain the compatibility contract. Synthetic
+feature discovery proves a new selector can be found without a central
+selector list, and focused tests cover strict policy validation and unloaded
+unselected providers.
 
-The next bounded #87 tranche should derive the selector type, strict
-`CheckPolicies` field contract, `RuleSpec`, runner binding, output validation,
-and docs index from one trusted built-in declaration. A new test check should
-exercise strict config validation, explicit selection, typed dispatch, result
-validation/reporting, and installed-wheel execution. It should also prove that
-registration does not select the check and that an unselected check does not
-initialize its runner or optional backend. Keep third-party plugin discovery
-behind its separate trust boundary.
+This is still bounded: the other 60 baseline selectors use legacy registration
+paths, and the current nine-selector differential report is not full wheel
+equivalence. Broad migration must continue by owner package with direct/profile
+behavior comparisons, lazy-provider checks, and explicit missing/unsupported,
+partial and error cases. Keep plugin discovery behind its API-v1 trust
+boundary, and do not present this tranche as completion of issue #87.
 
 ## Orthogonal policy and run evidence
 
