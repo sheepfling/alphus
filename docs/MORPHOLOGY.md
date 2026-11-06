@@ -31,9 +31,11 @@ remains a 0.0.4 design decision; see the architecture plan.
 
 ## Feature-owned declarations
 
-A feature module may contain a top-level `ALPHUS_MORPHOLOGY` literal. The
-`generate_morphology_manifest.py` script parses only literal data with Python's
-AST parser. It does not import the module or execute check code. It validates
+A morphology-only module may contain a top-level `ALPHUS_MORPHOLOGY` literal;
+a runtime-migrated feature uses `ALPHUS_CHECK` to declare morphology and
+registration together. `generate_morphology_manifest.py` parses only literal
+data with Python's AST parser. It does not import the module or execute check
+code. It validates
 selector syntax and uniqueness, resolves local complaint slugs against static
 `rule_tag` calls in the owning module, and resolves shared `finding_contracts`
 references against a statically parsed `ALPHUS_COMPLAINT_CONTRACTS` literal.
@@ -43,18 +45,20 @@ errors. Discovery rejects symlinked feature modules and a symlinked gates root.
 Runtime metadata validates tuple inputs, typed rule tags, and lowercase
 scope/evidence slugs.
 
-The numeric family is the first shared-emitter example: `numeric-literals` and
+The numeric family is the shared-emitter example: `numeric-literals` and
 `scipy-constants` reference one contract in `gates/review/numeric_catalog.py`.
 The same literal drives runtime tag resolution and generated morphology, so
 framework-specific wire IDs remain exact while the shared concern is recorded
-once. This adds morphology ownership only; selector/config/runner registration
-for those legacy checks is not migrated here.
+once. Both selectors now also derive their strict policy fields, selector
+contracts, `RuleSpec`, inventory and lazy runners from their feature-owned
+`ALPHUS_CHECK` declarations. Their existing checkers and public behavior are
+unchanged.
 
-The original six-rule pilot and the later shared numeric morphology entries
-are not a complete built-in registration migration. Legacy selector/config/
-runner surfaces remain for those checks. The generated morphology view does not
-select or enable any check and does not change existing JSON results, finding
-IDs, gate IDs, or enforcement.
+The original six-rule pilot is not a complete built-in registration
+migration. Eleven selectors now use feature-owned runtime declarations, while
+51 remain on legacy selector/config/runner paths. Generated declarations do not
+select or enable a check and do not change JSON results, finding IDs, gate IDs,
+or enforcement.
 
 ## Pilot examples
 
@@ -78,30 +82,26 @@ readiness.
 
 ## Registration boundary and next tranche
 
-The six-check morphology pilot is metadata discovery. Draft PR #100 also
-demonstrates feature-owned runtime registration for `file-size`, `line-length`,
-the composite `package-boundaries` feature, `repository-layout`,
-`dependency-locks`, and `documentation-config`. Each
-declaration generates
-morphology, `FeatureDefinition`, `RuleSpec`, strict primary `CheckPolicies`
-field, selector literal and lazy dispatch. The composite explicitly names its
-secondary effective policy inputs while retaining their existing strict
-models. Existing config names, output adaptation, reports, selection and exit
-behavior remain the compatibility contract. Synthetic feature discovery
-proves a new selector can be found without a central selector list; focused
-tests cover strict validation, composite dispatch and unloaded unselected
-providers.
+The six-check morphology pilot is metadata discovery. Draft PR #100 now
+has eleven feature-owned runtime selectors, including the package-boundaries
+composite, polyglot cyclomatic and comment readers, output escaping, and the
+paired shared-contract numeric checks. Each declaration generates morphology,
+`FeatureDefinition`, `RuleSpec`, strict primary `CheckPolicies` field, selector
+literal, inventory entry and lazy dispatch. Existing config names, output
+adaptation, reports, selection and exit behavior remain the compatibility
+contract. Synthetic discovery proves a new selector can be found without a
+central selector list; tests cover strict fields, shared complaint ownership,
+composite dispatch and lazy unselected providers.
 
-This is still bounded: the other 53 baseline selectors use legacy registration
-paths, and the current fourteen-selector differential report is not full wheel
+This remains bounded: the other 51 baseline selectors use legacy registration
+paths, and the current fourteen-selector differential evidence is not full wheel
 equivalence. The [latest pinned report](
-architecture/builtin-check-wheel-differential-c880093-5d1a6f5-comment-markers.json)
-includes direct and profile polyglot comment-marker execution; 48 baseline selectors
-still lack behavior-level differential evidence. Broad migration must continue
-by owner package with direct/profile behavior comparisons, lazy-provider checks,
-and explicit missing/unsupported, partial and error cases. Keep plugin
-discovery behind its API-v1 trust boundary, and do not present this tranche as
-completion of issue #87.
+architecture/builtin-check-wheel-differential-c880093-409c06d-numeric-registration.json)
+compares 40 scenarios with no differences and covers direct/profile numeric
+results plus strict config rejection. Forty-eight baseline selectors still lack
+behavior-level differential evidence. Continue migration with direct/profile
+comparisons, lazy-provider checks, and explicit missing/unsupported, partial,
+error, plugin/native and effectful-command cases; this does not complete #87.
 
 ## Orthogonal policy and run evidence
 

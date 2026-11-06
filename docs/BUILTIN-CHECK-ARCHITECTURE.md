@@ -54,14 +54,15 @@ This document distinguishes four kinds of statement:
   silently changing consumer behavior.
 
 PR #100 remains an open draft. It began with the six-check morphology
-metadata pilot and now has nine feature-owned runtime slices: `file-size`,
-`line-length`, `package-boundaries`, `repository-layout`, `dependency-locks`,
-`documentation-config`, `cyclomatic-complexity`, `output-escaping`, and
-`comment-markers`. Each local `ALPHUS_CHECK` literal statically generates
+metadata pilot and now has eleven feature-owned runtime selectors:
+`file-size`, `line-length`, `package-boundaries`, `repository-layout`,
+`dependency-locks`, `documentation-config`, `cyclomatic-complexity`,
+`output-escaping`, `comment-markers`, `numeric-literals`, and
+`scipy-constants`. Each local `ALPHUS_CHECK` literal statically generates
 morphology metadata, typed `FeatureDefinition`, `RuleSpec`, strict policy
 field, selector type, inventory entry, and lazy runner thunk. The established
 `RuleEvaluation` and CLI result adapters remain shared, so adding a feature
-still uses the existing output contract. The other 53 baseline selectors
+still uses the existing output contract. The other 51 baseline selectors
 remain on legacy registration paths; these slices do not complete issue #87
 or establish full selector equivalence.
 
@@ -408,9 +409,30 @@ Repeated IDs are accepted across selectors only when one named contract owns
 the ID and explicitly permits both emitters. Uncontracted duplicate IDs,
 undeclared emitters, unknown contracts, malformed tags and conflicting
 contract ownership fail generation. Tests cover the permitted shared case and
-the rejected neighbors. This establishes a bounded pattern for dynamic/shared
-emitters; it does not migrate the numeric selectors' selector/config/runner
-registration or imply all existing shared checkers fit this contract.
+the rejected neighbors. This establishes a bounded pattern for dynamic/shared emitters; the paired
+numeric selector/config/runner registration now consumes it without changing
+the existing matcher, IDs, diagnostics or selection behavior.
+
+### Paired numeric registration: `numeric-literals` and `scipy-constants`
+
+Both selectors declare their policy model, strict config field, catalog summary,
+applicability, domains, shared complaint-contract name and lazy runner beside
+the existing checker. Generated views provide the strict `CheckPolicies`
+fields, selector types, `RuleSpec`, morphology, inventory and dispatch thunks.
+The central review runner no longer imports these two providers during catalog
+or CLI startup. Typed adapters require the existing policies and call the
+unchanged checkers; matching, output IDs, messages, severities and selection
+semantics are preserved.
+
+Tests cover generated strict fields, unknown-field rejection, shared complaint
+IDs, direct and profile reporting, and that selecting one provider leaves the
+other unloaded. The [paired numeric wheel differential]
+[numeric-registration-differential] compares the pinned mainline wheel with
+candidate `409c06d` across 40 manifested scenarios. The 62-selector catalog
+and registration contract match, direct/profile outputs and invalid-config
+behavior match, and no differences were reported. Numeric selectors already
+had direct behavior evidence before this slice, so this adds profile and strict
+config evidence but does not increase the behaviorally exercised count.
 
 `FeatureDefinition.policy_field` remains the primary compatibility binding.
 Feature declarations can also name validated `policy_inputs`; the
@@ -513,14 +535,14 @@ new check; the migration itself remains a bounded, reviewed change. The full
 exit criterion still requires all current selectors to derive from the same
 declarations and the pinned-wheel proof to pass.
 
-The six-check morphology pilot proves metadata discovery. The subsequent
-feature-owned slices derive strict policy fields, selector typing, `RuleSpec`,
-and lazy runnable dispatch while retaining existing result adaptation and
-reporting. They cover file-local checks, a composite, a bounded cross-file
-heuristic, native polyglot analysis, and separate language-specific providers
-for a shared concern. Focused tests exercise their policies and finding
-contracts. Pinned wheel reports remain the evidence boundary; these slices do
-not prove all 62 selectors or complete issue #87.
+The six-check morphology pilot proves metadata discovery. Eleven selectors
+now use feature-owned runtime registration: generated views derive strict policy
+fields, selector typing, `RuleSpec`, inventory and lazy dispatch while sharing
+the existing result adaptation and reporting. The slices cover file-local
+checks, a composite, bounded heuristics, native polyglot analysis, distinct
+language-specific readers for a shared concern, and two selectors sharing one
+complaint contract. Pinned wheel reports remain the evidence boundary; these
+slices do not prove all 62 selectors or complete issue #87.
 
 ## Existing-check mappings
 
@@ -877,6 +899,8 @@ as semantic evidence for those remaining selectors.
 [cyclomatic-registration-differential]: architecture/cyclomatic-registration-04b4e03.json
 [output-escaping-differential]: architecture/output-escaping-322f27a.json
 [comment-markers-differential]: architecture/builtin-check-wheel-differential-c880093-5d1a6f5-comment-markers.json
+[numeric-registration-differential]:
+  architecture/builtin-check-wheel-differential-c880093-409c06d-numeric-registration.json
 
 ## Dependency-lock registration slice: `dependency-locks`
 
@@ -1011,5 +1035,4 @@ Two decisions remain for review:
 
 Until resolved, do not change digest/archive meaning or claim full #87
 acceptance. PR #100 remains a draft containing the six-check morphology pilot
-and bounded runtime registration slices for `file-size`,
-`cyclomatic-complexity`, and other selectors documented above.
+and bounded runtime registration slices for eleven selectors documented above.
