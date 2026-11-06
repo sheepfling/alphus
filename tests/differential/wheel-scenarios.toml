@@ -130,7 +130,7 @@ required_output = ["src/example.py"]
 name = "json"
 arguments = ["--config", "quality-gates.toml", "--rule", "numeric-literals", "--json"]
 
-
+[[scenario]]
 name = "numeric-literals-feature-owned-plain-label"
 fixture = "numeric-literals"
 selectors = ["numeric-literals"]
@@ -143,7 +143,7 @@ name = "plain"
 arguments = ["--config", "quality-gates.toml", "--rule", "numeric-literals", "--output", "plain"]
 parse_json = false
 
-
+[[scenario]]
 name = "scipy-constants-profile"
 fixture = "scipy-constants"
 selectors = ["scipy-constants"]
@@ -190,7 +190,7 @@ required_output = ["src/example.py"]
 name = "json"
 arguments = ["--config", "quality-gates.toml", "--rule", "scipy-constants", "--json"]
 
-
+[[scenario]]
 name = "scipy-constants-feature-owned-plain-label"
 fixture = "scipy-constants"
 selectors = ["scipy-constants"]
@@ -203,7 +203,7 @@ name = "plain"
 arguments = ["--config", "quality-gates.toml", "--rule", "scipy-constants", "--output", "plain"]
 parse_json = false
 
-
+[[scenario]]
 name = "input-contracts-direct"
 expected_findings = [
   { rule_id = "alphus/python/none/correctness/argument-mutation", path = "src/example.py", line = 2 },
@@ -666,6 +666,7 @@ status = "not-exercised"
 reason = "The architecture plan names the LaTeX build-and-validation step, but the current wheel harness has no command/build scenario; scheduler and command behavior are unchanged by this numeric-contract slice."
 
 
+[[scenario]]
 name = "comment-markers-polyglot-direct"
 fixture = "comment-markers-polyglot"
 selectors = ["comment-markers"]
@@ -717,6 +718,7 @@ name = "profile"
 arguments = ["--config", "quality-gates.toml", "--profile", "review", "--run", "--json"]
 
 
+[[scenario]]
 name = "comment-markers-invalid-config"
 fixture = "comment-markers-invalid-config"
 selectors = ["comment-markers"]
