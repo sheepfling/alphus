@@ -42,11 +42,12 @@ exclude = ["tests/**"]
 
 [checks.output_escaping]
 extensions = [".py"]
-# These tiny fixtures intentionally contain unsafe renderer input to prove the
-# differential scenario reports the finding; their assertions live in that scenario.
+# These fixtures intentionally contain unsafe renderer input to prove the
+# differential scenarios report the findings; assertions live in those scenarios.
 exclude = [
   "tests/gates/review/test_dynamic_markdown_rendering.py",
   "tests/differential/fixtures/output-escaping/src/render.py",
+  "tests/differential/fixtures/output-escaping-polyglot/src/render.py",
 ]
 
 [checks.path_discovery]
