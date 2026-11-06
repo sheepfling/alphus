@@ -421,3 +421,10 @@ def test_materialized_scenario_files_are_safe_and_stay_inside_fixture(
         _validate_materialized_files((("../outside.py", contents),))
     with pytest.raises(ValueError, match="duplicate materialized fixture path"):
         _validate_materialized_files((("src/a.py", "a"), ("src/a.py", "b")))
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (root / "linked").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(ValueError, match="escapes its root"):
+        _materialize_scenario_files(root, (("linked/escaped.py", contents),))
+    assert not (outside / "escaped.py").exists()

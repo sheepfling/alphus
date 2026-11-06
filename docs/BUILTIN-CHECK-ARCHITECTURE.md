@@ -54,14 +54,14 @@ This document distinguishes four kinds of statement:
   silently changing consumer behavior.
 
 PR #100 remains an open draft. It began with the six-check morphology
-metadata pilot and now has eight feature-owned runtime slices: `file-size`,
+metadata pilot and now has nine feature-owned runtime slices: `file-size`,
 `line-length`, `package-boundaries`, `repository-layout`, `dependency-locks`,
-`documentation-config`, `cyclomatic-complexity`, and `output-escaping`. Each local
-`ALPHUS_CHECK` literal statically generates
+`documentation-config`, `cyclomatic-complexity`, `output-escaping`, and
+`comment-markers`. Each local `ALPHUS_CHECK` literal statically generates
 morphology metadata, typed `FeatureDefinition`, `RuleSpec`, strict policy
 field, selector type, inventory entry, and lazy runner thunk. The established
 `RuleEvaluation` and CLI result adapters remain shared, so adding a feature
-still uses the existing output contract. The other 54 baseline selectors
+still uses the existing output contract. The other 53 baseline selectors
 remain on legacy registration paths; these slices do not complete issue #87
 or establish full selector equivalence.
 
@@ -635,6 +635,33 @@ Thirteen selectors have behavior-level differential evidence, leaving 49
 without that evidence. This does not prove full selector equivalence. The slice
 adds no languages, detection behavior or severity changes.
 
+### Shared concern, distinct comment readers: `comment-markers`
+
+`comment-markers` now owns the strict `CommentMarkerPolicy` binding, catalog
+entry, selector, morphology and lazy runner through its declaration in
+`gates/hygiene/comment_markers.py`. The existing Python tokenizer, TOML string-aware
+reader and bounded slash-comment readers are unchanged. They share the
+temporary-work-marker concern and public finding ID, but their parsing limits
+remain distinct; the JavaScript, C-family and Java readers are bounded lexical
+scanners rather than language parsers. This migration adds no detector or
+language behavior. The legacy selector summary and applicability labels remain
+unchanged, while the feature's language/format metadata describes the accepted
+configured suffix families.
+
+The direct and profile wheel scenarios check findings from Python, JavaScript,
+the shared C-family scanner via a `.cpp` fixture, Java and TOML, including
+marker-like strings that must not become findings. They assert the Python
+tokenizer-failure complaint ID as well. The
+strict-config scenario rejects an unknown `comment_markers` field, and a
+subprocess regression verifies an unselected run does not import the checker.
+The installed-wheel report [comment-markers
+differential][comment-markers-differential] compares baseline
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` with candidate
+`5d1a6f5b81d7beebb5437677b897603eb42ce7ec`. All 36 manifested scenarios match;
+the reference and candidate catalogs and registration contracts remain equal
+at 62 selectors. Fourteen selectors now have behavior-level evidence, leaving
+48 without it. This is representative evidence, not full selector equivalence.
+
 ## Applicability, recommendations and reporting
 
 Catalog applicability and domain labels are guidance, not evidence that a
@@ -685,9 +712,12 @@ source commits, wheel hashes, fixture commits and hashes, the manifest and
 harness hashes, package versions, and the declared output normalization. It
 freezes each fixture once for both runs, compares fixture hashes and Git
 commits, and checks that the manifest and harness stay unchanged through the
-run. Exact temporary paths are replaced with stable placeholders in the evidence.
+run. Scenario-declared synthetic files are path-validated, bounded, materialized
+only inside the frozen snapshot, and included in its tree hash; malformed source
+can therefore be tested without placing invalid code in the repository. Exact
+temporary paths are replaced with stable placeholders in the evidence.
 
-The latest comparison used reference
+The initial comparison used reference
 `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` and candidate
 `b4d2d346478986abe1875613c6f051eb7ae7b69b`. The catalog was identical at 62
 selectors. All 23 manifested scenarios produced no differences. They
@@ -846,6 +876,7 @@ as semantic evidence for those remaining selectors.
 [repository-layout-differential]: architecture/builtin-check-wheel-differential-c880093-4f63bfe-repository-layout.json
 [cyclomatic-registration-differential]: architecture/cyclomatic-registration-04b4e03.json
 [output-escaping-differential]: architecture/output-escaping-322f27a.json
+[comment-markers-differential]: architecture/builtin-check-wheel-differential-c880093-5d1a6f5-comment-markers.json
 
 ## Dependency-lock registration slice: `dependency-locks`
 

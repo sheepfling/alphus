@@ -92,11 +92,11 @@ proves a new selector can be found without a central selector list; focused
 tests cover strict validation, composite dispatch and unloaded unselected
 providers.
 
-This is still bounded: the other 56 baseline selectors use legacy registration
-paths, and the current thirteen-selector differential report is not full wheel
+This is still bounded: the other 53 baseline selectors use legacy registration
+paths, and the current fourteen-selector differential report is not full wheel
 equivalence. The [latest pinned report](
-architecture/builtin-check-wheel-differential-c880093-6b41a03-documentation-config.json)
-includes direct and profile documentation-config execution; 49 baseline selectors
+architecture/builtin-check-wheel-differential-c880093-5d1a6f5-comment-markers.json)
+includes direct and profile polyglot comment-marker execution; 48 baseline selectors
 still lack behavior-level differential evidence. Broad migration must continue
 by owner package with direct/profile behavior comparisons, lazy-provider checks,
 and explicit missing/unsupported, partial and error cases. Keep plugin
