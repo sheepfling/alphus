@@ -54,14 +54,14 @@ This document distinguishes four kinds of statement:
   silently changing consumer behavior.
 
 PR #100 remains an open draft. It began with the six-check morphology
-metadata pilot and now has six feature-owned runtime slices: `file-size`,
+metadata pilot and now has eight feature-owned runtime slices: `file-size`,
 `line-length`, `package-boundaries`, `repository-layout`, `dependency-locks`,
-and `documentation-config`. Each local
+`documentation-config`, `cyclomatic-complexity`, and `output-escaping`. Each local
 `ALPHUS_CHECK` literal statically generates
 morphology metadata, typed `FeatureDefinition`, `RuleSpec`, strict policy
 field, selector type, inventory entry, and lazy runner thunk. The established
 `RuleEvaluation` and CLI result adapters remain shared, so adding a feature
-still uses the existing output contract. The other 56 baseline selectors
+still uses the existing output contract. The other 54 baseline selectors
 remain on legacy registration paths; these slices do not complete issue #87
 or establish full selector equivalence.
 
@@ -513,12 +513,14 @@ new check; the migration itself remains a bounded, reviewed change. The full
 exit criterion still requires all current selectors to derive from the same
 declarations and the pinned-wheel proof to pass.
 
-The six-check morphology pilot proves metadata discovery. The `file-size`
-and `line-length` slices additionally derive strict policy fields, selector
-typing, `RuleSpec` and lazy runnable dispatch while retaining existing result
-adaptation and reporting. Focused tests exercise both providers and strict
-configuration. The pinned wheel report below remains the evidence boundary;
-these slices do not prove all 62 selectors or complete issue #87.
+The six-check morphology pilot proves metadata discovery. The subsequent
+feature-owned slices derive strict policy fields, selector typing, `RuleSpec`,
+and lazy runnable dispatch while retaining existing result adaptation and
+reporting. They cover file-local checks, a composite, a bounded cross-file
+heuristic, native polyglot analysis, and separate language-specific providers
+for a shared concern. Focused tests exercise their policies and finding
+contracts. Pinned wheel reports remain the evidence boundary; these slices do
+not prove all 62 selectors or complete issue #87.
 
 ## Existing-check mappings
 
@@ -604,6 +606,34 @@ backends, and partial coverage. Thirteen built-in selectors have behavior-level
 differential evidence, leaving 49 baseline selectors without that evidence.
 This proves the cyclomatic registration slice against manifested scenarios,
 not full 62-selector equivalence.
+
+### Cross-language bounded heuristic: `output-escaping`
+
+`output-escaping` now owns an `ALPHUS_CHECK` declaration and a static
+complaint contract in `gates/source/output_escaping.py`. The contract binds
+one human concern to the existing Python and JavaScript `RuleTag` identities;
+the runtime adapter selects the tag by the provider's language scope. This
+avoids duplicate ID declarations while retaining distinct language-specific
+implementations and findings.
+
+The declaration generates the existing strict `checks.output_escaping`
+policy field, selector, `RuleSpec`, inventory entry, morphology metadata and
+lazy runner thunk. `SourceScanPolicy`, its TOML keys, the checker implementation,
+plain output and result adaptation remain unchanged. The `alphus` root-package
+export is resolved lazily to preserve its public import path while keeping both
+language providers unloaded during ordinary CLI startup.
+
+The wheel matrix exercises strict unknown-field rejection, Python and
+JavaScript findings with their original scoped IDs, and direct plus profile
+result adaptation. The [pinned output-escaping differential report][output-escaping-differential]
+compares baseline `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` with candidate
+`322f27a67f23aa9de917881590c030585a2c1cc9`. All 33 manifested scenarios match
+with zero differences; both 62-selector catalogs and their registration
+contracts are equal. The new direct and profile scenarios verify both scoped
+finding IDs, and the invalid-config scenario rejects an unknown policy field.
+Thirteen selectors have behavior-level differential evidence, leaving 49
+without that evidence. This does not prove full selector equivalence. The slice
+adds no languages, detection behavior or severity changes.
 
 ## Applicability, recommendations and reporting
 
@@ -815,6 +845,7 @@ as semantic evidence for those remaining selectors.
 [composite-differential]: architecture/builtin-check-wheel-differential-c880093-87f01a0-package-composite.json
 [repository-layout-differential]: architecture/builtin-check-wheel-differential-c880093-4f63bfe-repository-layout.json
 [cyclomatic-registration-differential]: architecture/cyclomatic-registration-04b4e03.json
+[output-escaping-differential]: architecture/output-escaping-322f27a.json
 
 ## Dependency-lock registration slice: `dependency-locks`
 
