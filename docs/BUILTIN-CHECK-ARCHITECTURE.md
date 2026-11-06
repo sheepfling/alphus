@@ -595,6 +595,16 @@ analyzer. Differential wheel scenarios and the full package suite cover
 selected Python/Ruff, JavaScript/ESLint, and C++/Lizard behavior, including
 report, failure, unsupported and coverage outcomes.
 
+The [pinned cyclomatic registration report][cyclomatic-registration-differential]
+compares reference `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` with candidate
+`04b4e0378b2f24edf9f1ddacefec18c85d409c38`. All 30 manifested scenarios match;
+the 62-selector catalogs and registration contracts are equal. The matrix
+exercises Python/Ruff, JavaScript/ESLint, C++/Lizard, missing and mismatched
+backends, and partial coverage. Thirteen built-in selectors have behavior-level
+differential evidence, leaving 49 baseline selectors without that evidence.
+This proves the cyclomatic registration slice against manifested scenarios,
+not full 62-selector equivalence.
+
 ## Applicability, recommendations and reporting
 
 Catalog applicability and domain labels are guidance, not evidence that a
@@ -804,6 +814,7 @@ as semantic evidence for those remaining selectors.
 [line-length-differential]: architecture/builtin-check-wheel-differential-c880093-0daeab6-line-length.json
 [composite-differential]: architecture/builtin-check-wheel-differential-c880093-87f01a0-package-composite.json
 [repository-layout-differential]: architecture/builtin-check-wheel-differential-c880093-4f63bfe-repository-layout.json
+[cyclomatic-registration-differential]: architecture/builtin-check-wheel-differential-c880093-04b4e03-cyclomatic-registration.json
 
 ## Dependency-lock registration slice: `dependency-locks`
 
@@ -938,4 +949,5 @@ Two decisions remain for review:
 
 Until resolved, do not change digest/archive meaning or claim full #87
 acceptance. PR #100 remains a draft containing the six-check morphology pilot
-and the bounded `file-size` runtime registration slice.
+and bounded runtime registration slices for `file-size`,
+`cyclomatic-complexity`, and other selectors documented above.
