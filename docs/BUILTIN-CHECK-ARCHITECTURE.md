@@ -814,7 +814,7 @@ as semantic evidence for those remaining selectors.
 [line-length-differential]: architecture/builtin-check-wheel-differential-c880093-0daeab6-line-length.json
 [composite-differential]: architecture/builtin-check-wheel-differential-c880093-87f01a0-package-composite.json
 [repository-layout-differential]: architecture/builtin-check-wheel-differential-c880093-4f63bfe-repository-layout.json
-[cyclomatic-registration-differential]: architecture/builtin-check-wheel-differential-c880093-04b4e03-cyclomatic-registration.json
+[cyclomatic-registration-differential]: architecture/cyclomatic-registration-04b4e03.json
 
 ## Dependency-lock registration slice: `dependency-locks`
 
