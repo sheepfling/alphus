@@ -577,6 +577,23 @@ provenance. Keep backend selection and unsupported/missing-tool outcomes
 explicit. A common complexity concern does not imply equal parsing, counting,
 or coverage guarantees across the three languages.
 
+This check exposes a current lazy-import exception that must be handled before
+its runner moves to feature-owned dispatch. `execution.results` imports
+`CyclomaticReport` from the engine module for its `RuleOutput` union, and the
+source runner map imports `run_cyclomatic_complexity` at module load. The CLI
+and parallel executor also import the engine at top level. An import-time trace
+of `alphus.execution.dispatch` confirms that the cyclomatic engine loads before
+the selector is chosen. Native tools are still invoked only when selected, but
+the Python analyzer module itself is not lazy today.
+
+The migration dependency is to extract stable cyclomatic report value types
+from the engine module into a small contract module, preserve existing imports
+through re-exports, and move CLI/parallel engine imports to the selected
+cyclomatic path where practical. Then test that an unrelated direct selector
+does not import the cyclomatic engine, alongside selected Python/JavaScript/C++
+backend behavior and failure/coverage parity. Do not claim the generated thunk
+alone fixes this existing eager-import seam.
+
 ## Applicability, recommendations and reporting
 
 Catalog applicability and domain labels are guidance, not evidence that a
