@@ -54,14 +54,15 @@ This document distinguishes four kinds of statement:
   silently changing consumer behavior.
 
 PR #100 remains an open draft. It began with the six-check morphology
-metadata pilot and now has two feature-owned runtime slices: `file-size` and
-`line-length`. Each local `ALPHUS_CHECK` literal statically generates
+metadata pilot and now has four feature-owned runtime slices: `file-size`,
+`line-length`, `package-boundaries`, and `repository-layout`. Each local
+`ALPHUS_CHECK` literal statically generates
 morphology metadata, typed `FeatureDefinition`, `RuleSpec`, strict policy
 field, selector type, inventory entry, and lazy runner thunk. The established
 `RuleEvaluation` and CLI result adapters remain shared, so adding a feature
-still uses the existing output contract. The other 60 baseline selectors
-remain on legacy registration paths; these two slices do not complete issue
-#87 or establish full selector equivalence.
+still uses the existing output contract. The other 58 baseline selectors
+remain on legacy registration paths; these slices do not complete issue #87
+or establish full selector equivalence.
 
 ## Current package ownership and dependency direction
 
@@ -748,6 +749,28 @@ differential evidence, leaving 52 baseline selectors without that evidence.
 The provider import trace is also exercised by the installed-wheel self-profile
 test, while remaining a separate non-serialized capability in the comparison
 report.
+
+## Repository layout registration slice: `repository-layout`
+
+`repository-layout` now declares its feature metadata beside
+`check_repository_layout` in `gates/repository/repository_layout.py`. That
+declaration generates its `RuleSpec`, strict `CheckPolicies.repository_layout`
+field, selector type, morphology catalog, audit inventory and lazy dispatch
+thunk. The theme runner no longer imports or lists this checker, and the
+existing `RepositoryLayoutPolicy`, TOML field name, tracked-file inventory,
+finding IDs, human renderer and result adapter remain intact.
+
+Focused tests exercise strict config rejection, typed direct dispatch, the
+stable `path-required` finding, profile selection with the existing severity
+override, and the fact that an unselected run does not import the feature
+module. The pinned wheel matrix now contains direct and profile cases for this
+selector; a final matched-fixture differential report is still pending and
+must be recorded before claiming slice equivalence.
+
+The change moves one selector out of the repository theme map and legacy
+catalog entry without changing package-boundaries' independent composite
+inputs. It provides a second repository-package migration case and does not
+imply that other repository checks share this feature shape.
 
 [file-size-differential]: architecture/builtin-check-wheel-differential-c880093-ab0d4ff-file-size.json
 [line-length-differential]: architecture/builtin-check-wheel-differential-c880093-0daeab6-line-length.json

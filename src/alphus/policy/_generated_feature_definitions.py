@@ -51,5 +51,20 @@ FEATURE_DEFINITIONS: Mapping[str, FeatureDefinition] = MappingProxyType(
                 "callable_registry",
             ),
         ),
+        "repository-layout": FeatureDefinition(
+            selector="repository-layout",
+            policy_field="repository_layout",
+            policy_model="alphus.policy.repository.RepositoryLayoutPolicy",
+            output_shape="findings",
+            summary=(
+                "Checks configured repository paths, required files, and layout rules."
+            ),
+            applies_to=("repository",),
+            domains=(),
+            requires_files=True,
+            runner_module="alphus.gates.repository.repository_layout",
+            runner_name="run_repository_layout_gate",
+            policy_inputs=("repository_layout",),
+        ),
     }
 )

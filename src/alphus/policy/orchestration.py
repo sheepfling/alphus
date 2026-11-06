@@ -36,7 +36,6 @@ from alphus.policy.repository import (
     DependencyLockPolicy,
     DocumentationConfigPolicy,
     GitRepositoryPolicy,
-    RepositoryLayoutPolicy,
     VersionSyncPolicy,
 )
 from alphus.policy.review import (
@@ -149,7 +148,6 @@ class CheckPolicies(GeneratedFeaturePolicies):
     script_policy: ScriptPolicy | None = None
     module_roles: ModuleRolePolicy | None = None
     architecture_graph: ArchitectureGraphCheckPolicy | None = None
-    repository_layout: RepositoryLayoutPolicy | None = None
     documentation_config: DocumentationConfigPolicy | None = None
     markdown_shell_fences: MarkdownShellFencesPolicy | None = None
     version_sync: VersionSyncPolicy | None = None

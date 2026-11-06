@@ -42,11 +42,20 @@ def _run_feature_package_boundaries(
     return runner(root, files, config)
 
 
+def _run_feature_repository_layout(
+    root: Path, files: Sequence[Path], config: QualityGateConfig
+) -> RuleOutput:
+    module = import_module("alphus.gates.repository.repository_layout")
+    runner = cast(_RuleRunner, module.run_repository_layout_gate)
+    return runner(root, files, config)
+
+
 _FEATURE_RULE_RUNNERS: Mapping[QualityRuleName, _RuleRunner] = MappingProxyType(
     {
         "file-size": _run_feature_file_size,
         "line-length": _run_feature_line_length,
         "package-boundaries": _run_feature_package_boundaries,
+        "repository-layout": _run_feature_repository_layout,
     }
 )
 

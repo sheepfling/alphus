@@ -123,12 +123,6 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             "Checks consistency and pairing of configured dependency lockfiles.",
             ("python", "javascript"),
         ),
-        "repository-layout": RuleSpec(
-            "repository_layout",
-            RuleOutputShape.FINDINGS,
-            "Checks configured repository paths, required files, and layout rules.",
-            ("repository",),
-        ),
         "documentation-config": RuleSpec(
             "documentation_config",
             RuleOutputShape.FINDINGS,

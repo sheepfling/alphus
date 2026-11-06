@@ -7,18 +7,78 @@ import tomllib
 from collections.abc import Sequence
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
+from typing import Final
 
-from alphus.config import InstructionRouterPolicy, RepositoryLayoutPolicy
+from alphus.config import (
+    InstructionRouterPolicy,
+    QualityGateConfig,
+    RepositoryLayoutPolicy,
+)
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.policy.base import require_policy
 from alphus.support.data_access import (
     contains_member,
     is_nonempty_mapping,
     nested_value,
     validate_json_value,
 )
-from alphus.support.inventory import matches_path
+from alphus.support.inventory import matches_path, tracked_files
 from alphus.support.source_text import read_python_source, read_utf8_text
+
+ALPHUS_CHECK: Final = (
+    ("selector", "repository-layout"),
+    ("concern", "repository-contracts"),
+    ("claim_kind", "condition"),
+    (
+        "claim",
+        (
+            "Configured repository paths, manifests, tracked files, and instruction "
+            "routers satisfy their declared constraints."
+        ),
+    ),
+    ("mechanisms", ("exact-rule",)),
+    ("inspected_scope", ("repository", "tracked-files", "configured-paths")),
+    ("languages_formats", ("repository", "json", "python", "toml", "markdown")),
+    (
+        "evidence_kinds",
+        ("path-existence", "manifest-value", "python-symbol", "tracked-path"),
+    ),
+    ("evaluation_maturity", "synthetic-only"),
+    (
+        "finding_tag_complaints",
+        (
+            "router-root-missing",
+            "bridge-root-missing",
+            "bridge-root-marker-missing",
+            "router-area-missing",
+            "bridge-area-missing",
+            "bridge-scope-missing",
+            "bridge-router-import-missing",
+            "path-required",
+            "path-forbidden",
+            "glob-forbidden",
+            "json-array-value-required",
+            "python-symbol-required",
+            "toml-table-required",
+            "tracked-suffix-forbidden",
+            "tracked-path-forbidden",
+            "root-document-forbidden",
+        ),
+    ),
+    ("policy_field", "repository_layout"),
+    ("policy_model", "alphus.policy.repository.RepositoryLayoutPolicy"),
+    ("output_shape", "findings"),
+    (
+        "summary",
+        "Checks configured repository paths, required files, and layout rules.",
+    ),
+    (("applies_to", ("repository",))),
+    (("domains", ())),
+    ("requires_files", True),
+    ("runner_module", "alphus.gates.repository.repository_layout"),
+    ("runner_name", "run_repository_layout_gate"),
+)
 
 
 class LayoutRuleId(StrEnum):
@@ -320,3 +380,11 @@ def check_repository_layout(
     if policy.instruction_router is not None:
         findings.extend(_router_findings(checkout, policy.instruction_router))
     return findings
+
+
+def run_repository_layout_gate(
+    root: Path, _files: Sequence[Path], config: QualityGateConfig
+) -> list[Finding]:
+    """Run the feature-owned repository layout check with tracked-path evidence."""
+    policy = require_policy(config.checks.repository_layout, "repository_layout")
+    return check_repository_layout(root, policy, tracked_files(root))

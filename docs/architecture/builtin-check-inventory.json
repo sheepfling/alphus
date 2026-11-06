@@ -845,7 +845,7 @@
       ],
       "requires_files": true,
       "result_adapter": "alphus.execution.results:RuleEvaluation.from_output/findings",
-      "runner": "alphus.gates.repository.runners:<lambda>",
+      "runner": "alphus.gates.repository.repository_layout:run_repository_layout_gate",
       "selector": "repository-layout"
     },
     {

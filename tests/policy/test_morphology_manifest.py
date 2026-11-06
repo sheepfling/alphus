@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import ast
 import shutil
 from pathlib import Path
 
 import pytest
 
 from scripts.generate_morphology_manifest import (
+    _text_argument_lines,
     feature_registrations,
     main,
     render_feature_manifest,
@@ -29,6 +31,21 @@ _DECLARATION: tuple[tuple[str, object], ...] = (
     ("evidence_kinds", ("path-line",)),
     ("evaluation_maturity", "synthetic-only"),
 )
+
+
+def test_generated_text_arguments_wrap_without_changing_their_value() -> None:
+    value = (
+        "Checks configured repository paths, manifests, tracked files, and "
+        "layout rules while preserving the current repository contract."
+    )
+    lines = _text_argument_lines("summary", value)
+
+    assert len(lines) > 1
+    assert all(len(line) <= 88 for line in lines)
+    module = ast.parse("FeatureDefinition(\n" + "\n".join(lines) + "\n)")
+    call = module.body[0].value
+    assert isinstance(call, ast.Call)
+    assert ast.literal_eval(call.keywords[0].value) == value
 
 
 def _with_field(

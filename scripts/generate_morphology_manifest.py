@@ -846,23 +846,23 @@ def _tuple_lines(name: str, values: tuple[str, ...]) -> list[str]:
     ]
 
 
-def _claim_lines(claim: str) -> list[str]:
-    inline = f"            claim={_quoted(claim)},"
+def _text_argument_lines(name: str, value: str) -> list[str]:
+    inline = f"            {name}={_quoted(value)},"
     if len(inline) <= 88:
         return [inline]
-    quoted_claim = _quoted(claim)
-    if len(quoted_claim) + 16 <= 88:
+    quoted_value = _quoted(value)
+    if len(quoted_value) + 16 <= 88:
         return [
-            "            claim=(",
-            f"                {quoted_claim}",
+            f"            {name}=(",
+            f"                {quoted_value}",
             "            ),",
         ]
     parts = textwrap.wrap(
-        claim, width=68, break_long_words=True, break_on_hyphens=False
+        value, width=68, break_long_words=True, break_on_hyphens=False
     )
     if len(parts) == 1:
         return [
-            "            claim=(",
+            f"            {name}=(",
             f"                {_quoted(parts[0])}",
             "            ),",
         ]
@@ -871,10 +871,14 @@ def _claim_lines(claim: str) -> list[str]:
         for index, part in enumerate(parts)
     ]
     return [
-        "            claim=(",
+        f"            {name}=(",
         *(f"                {part}" for part in quoted),
         "            ),",
     ]
+
+
+def _claim_lines(claim: str) -> list[str]:
+    return _text_argument_lines("claim", claim)
 
 
 def _mechanism_lines(values: tuple[str, ...]) -> list[str]:
@@ -980,7 +984,7 @@ def render_feature_manifest(root: Path) -> str:
                 f"            policy_field={_quoted(feature.policy_field)},",
                 f"            policy_model={_quoted(feature.policy_model)},",
                 f"            output_shape={_quoted(feature.output_shape)},",
-                f"            summary={_quoted(feature.summary)},",
+                *_text_argument_lines("summary", feature.summary),
                 "            applies_to=("
                 + ", ".join(_quoted(value) for value in feature.applies_to)
                 + ("," if len(feature.applies_to) == 1 else "")

@@ -79,8 +79,9 @@ readiness.
 ## Registration boundary and next tranche
 
 The six-check morphology pilot is metadata discovery. Draft PR #100 also
-demonstrates feature-owned runtime registration for `file-size`, `line-length`
-and the composite `package-boundaries` feature. Its declaration generates
+demonstrates feature-owned runtime registration for `file-size`, `line-length`,
+the composite `package-boundaries` feature, and `repository-layout`. Each
+declaration generates
 morphology, `FeatureDefinition`, `RuleSpec`, strict primary `CheckPolicies`
 field, selector literal and lazy dispatch. The composite explicitly names its
 secondary effective policy inputs while retaining their existing strict
@@ -90,7 +91,7 @@ proves a new selector can be found without a central selector list; focused
 tests cover strict validation, composite dispatch and unloaded unselected
 providers.
 
-This is still bounded: the other 59 baseline selectors use legacy registration
+This is still bounded: the other 58 baseline selectors use legacy registration
 paths, and the current ten-selector differential report is not full wheel
 equivalence. The [pinned report](architecture/builtin-check-wheel-differential-c880093-87f01a0-package-composite.json)
 includes direct and profile composite execution; 52 baseline selectors still
