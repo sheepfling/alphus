@@ -387,15 +387,28 @@ general rule for shared emitters. Existing numeric checks use the shared
 `gates/review/numeric_catalog.py` engine, which constructs tags from policy
 specifications, and some adapters own tags outside the selector module. Do not
 copy those tags into every feature or weaken static validation to accept
-unresolved strings. Before migrating a shared emitter, introduce one
-feature-local complaint contract at its actual ownership boundary: declare
-the stable `RuleTag` once, identify the permitted selectors/emitters that may
-reference it, and validate each reference against that contract. A shared ID
-is then explicitly shared rather than ambiguously owned by multiple selectors.
-The migration must retain the current IDs and report shape, and tests must
-prove both permitted sharing and rejection of undeclared emitters. This is a
-later bounded migration; it does not change numeric-check behavior in this
-slice.
+unresolved strings.
+
+The numeric family now exercises the explicit shared-contract case. Its
+`ALPHUS_COMPLAINT_CONTRACTS` literal lives beside the shared emitter in
+`gates/review/numeric_catalog.py`. `numeric-literals` and `scipy-constants`
+reference the same `numeric-inline` contract rather than copying complaint
+strings. That contract lists each permitted emitter and its exact existing
+`RuleTag` IDs; the runtime matcher resolves from the same literal using the
+configured `constant` or `conversion` kind. Static discovery validates the
+contract and derives each selector's morphology tags without importing the
+emitter. The IDs remain `alphus/python/none/style/inline-*` and
+`alphus/python/scipy/style/inline-*`; strict policy, selection, messages and
+reports are unchanged. A separate contract covers the existing generic C++
+numeric-matcher adapter test, without adding a C++ selector or provider.
+
+Repeated IDs are accepted across selectors only when one named contract owns
+the ID and explicitly permits both emitters. Uncontracted duplicate IDs,
+undeclared emitters, unknown contracts, malformed tags and conflicting
+contract ownership fail generation. Tests cover the permitted shared case and
+the rejected neighbors. This establishes a bounded pattern for dynamic/shared
+emitters; it does not migrate the numeric selectors' selector/config/runner
+registration or imply all existing shared checkers fit this contract.
 
 Likewise, the current `FeatureDefinition.policy_field` and single
 `runner_module` describe a selector's primary compatibility binding, not its
@@ -408,6 +421,26 @@ effective-input aggregate (or explicit, validated policy-input references)
 and a feature-level router that can plan multiple providers while retaining
 the primary `RuleSpec.policy_field` and public selector. The shape should be
 proved against the existing composite before it becomes a general API.
+
+### Human-facing smell names and stable finding IDs
+
+Rick's example `types.opaque-return` is a useful human-facing name: a category
+plus a smell, with language and provider recorded separately. It should be a
+display/grouping alias over morphology metadata, not a replacement for a
+current wire ID or a selector. Current findings use canonical IDs of the form
+`alphus/<scope>/<framework>/<category>/<complaint>`; selectors, history,
+profiles and consumers may depend on them. Preserve these IDs and outputs
+through 0.0.3, even when the scope component is language-specific.
+
+For 0.0.4 naming design, compare a short alias such as `types.opaque-return`
+with the existing `typing` category vocabulary and explicit aliases attached
+to one or more stable IDs. Reject accidental alias collisions. If the same
+human concept intentionally spans languages, group the variants under one
+concern while retaining distinct stable IDs and documented provider limits;
+do not assume that identical words or thresholds imply identical semantics.
+Whether aliases are only presentation labels or selectable public identifiers
+is an unresolved 0.0.4 decision. No new naming scheme is active runtime
+behavior in this 0.0.3 work.
 
 At runtime a consumer still opts in by writing `[checks.file_size]` and
 selecting `file-size` directly or naming it in a profile. Catalog inspection
@@ -596,13 +629,15 @@ freezes each fixture once for both runs, compares fixture hashes and Git
 commits, and checks that the manifest and harness stay unchanged through the
 run. Exact temporary paths are replaced with stable placeholders in the evidence.
 
-The comparison used reference `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`
-and candidate `d8cc02081a511c79466c6b52361d02cd2f0238e9`. The catalog was
-identical at 62 selectors. The 21 manifested behavior scenarios produced no differences. They
-behaviorally exercised 9 built-in selectors and one API-v1 plugin selector;
-53 built-in selectors remain without behavior-level wheel evidence. Cases cover
+The latest comparison used reference
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` and candidate
+`b4d2d346478986abe1875613c6f051eb7ae7b69b`. The catalog was identical at 62
+selectors. All 23 manifested scenarios produced no differences. They
+behaviorally exercised 10 built-in selectors and one API-v1 plugin selector;
+52 built-in selectors remain without behavior-level wheel evidence. Cases cover
 strict invalid-config rejection, direct JSON and plain output, profile selection,
-serial/parallel profile output, exact findings and locations, a composite
+serial/parallel profile output, exact findings and locations, shared numeric
+complaints from `numeric-literals` and `scipy-constants`, a composite
 package-boundaries check over package, architecture graph, version-sync and
 callable-registry policy, and Python Ruff, JavaScript ESLint, and C++ Lizard
 providers. The plugin scenarios verify discovery without importing the plugin,
@@ -615,13 +650,16 @@ The comparison is representative, not full equivalence. The report defers the
 legacy package-boundaries history digest, plan-level unsupported-capability
 details, invalid plugin return values and duplicate entry points at wheel level,
 and built-in optional-provider import tracing. Unit tests cover some plugin
-edge cases. The two wheel virtual environments share the same system-site
-dependency layer, so the run is matched but not hermetic. Both source-archive
-wheels report version `0.0.0`; source commits and wheel hashes identify the
-artifacts. That report alone did not justify a runtime registration migration.
+edge cases. The current differential manifest also has no effectful command or
+build scenario; its PDF build example is an architecture probe, not wheel-level
+equivalence evidence. Scheduler and command semantics remain unchanged in this
+slice. The two wheel virtual environments share the same system-site dependency
+layer, so the run is matched but not hermetic. Both source-archive wheels report
+version `0.0.0`; source commits and wheel hashes identify the artifacts. That
+report alone did not justify a runtime registration migration.
 
 The latest machine-readable run is available in the
-[behavior and selector-matrix report][differential-report].
+[latest behavior and selector-matrix report][differential-report].
 It records the frozen fixture snapshot identities, manifest and harness hashes,
 plugin source/wheel hashes, per-scenario native dependencies, selected and
 analyzed file counts, and separate built-in/plugin coverage. Its generated
@@ -629,15 +667,15 @@ matrix also invoked all 26 selectors with configured policies and verified
 strict missing-policy rejection for the other 36. These checks exercise
 selection/config contracts; they do not count as semantic behavior coverage.
 
-[differential-report]: architecture/builtin-check-wheel-differential-c880093-0daeab6-line-length.json
+[differential-report]: architecture/builtin-check-wheel-differential-c880093-b4d2d34-numeric-contract.json
 Reproduce it with:
 
 ```sh
 PATH="$PWD/node_modules/.bin:$PATH" .venv/bin/python scripts/differential_wheels.py \
   --root . \
   --baseline c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e \
-  --candidate 0daeab61069322664226d20822e250b2059c3277 \
-  --output docs/architecture/builtin-check-wheel-differential-c880093-0daeab6-line-length.json
+  --candidate b4d2d346478986abe1875613c6f051eb7ae7b69b \
+  --output docs/architecture/builtin-check-wheel-differential-c880093-b4d2d34-numeric-contract.json
 ```
 
 ## Runtime registration slices: `file-size` and `line-length`
@@ -666,7 +704,7 @@ file-size implementation unloaded until that selector is run.
 The first differential attempt caught a catalog-summary change for
 file-size. The declaration was corrected to preserve the exact mainline
 summary. The line-length migration also derives strict config and selector
-contracts. Its [pinned differential report][differential-report] records
+contracts. Its [pinned line-length differential report][line-length-differential] records
 equal catalogs and no differences across 22 scenarios, including direct
 line-length output and profile serial/parallel execution. Nine of the 62
 selectors have behavior-level evidence; the remaining 53 still lack it. The
@@ -676,6 +714,7 @@ on the line-length candidate passed 27 self-profile checks and 2,432 tests
 (43 skipped). Neither slice proves full equivalence or completes #87.
 
 [file-size-differential]: architecture/builtin-check-wheel-differential-c880093-ab0d4ff-file-size.json
+[line-length-differential]: architecture/builtin-check-wheel-differential-c880093-0daeab6-line-length.json
 
 ## Performance and cache boundary
 

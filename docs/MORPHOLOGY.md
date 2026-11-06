@@ -23,23 +23,38 @@ execution coverage. The same rule can be selected but inapplicable, partially
 analyzed, or unable to start. None of those run outcomes can be inferred from
 its morphology metadata.
 
+Human-facing names such as `types.opaque-return` may be useful category-plus-
+smell aliases, but 0.0.3 preserves the existing `alphus/<scope>/<framework>/
+<category>/<complaint>` finding IDs and output fields. Whether aliases are
+presentation-only or selectable identifiers, and how they resolve collisions,
+remains a 0.0.4 design decision; see the architecture plan.
+
 ## Feature-owned declarations
 
 A feature module may contain a top-level `ALPHUS_MORPHOLOGY` literal. The
 `generate_morphology_manifest.py` script parses only literal data with Python's
 AST parser. It does not import the module or execute check code. It validates
-selector syntax and uniqueness, matches declared complaint slugs to static
-`rule_tag` calls in the owning module, requires exactly one matching tag per
-complaint, rejects duplicate declarations, and generates the typed
-`policy/_generated_morphology.py` view. Discovery rejects symlinked feature
-modules and a symlinked gates root. Runtime metadata validates tuple inputs,
-typed rule tags, and lowercase scope/evidence slugs.
+selector syntax and uniqueness, resolves local complaint slugs against static
+`rule_tag` calls in the owning module, and resolves shared `finding_contracts`
+references against a statically parsed `ALPHUS_COMPLAINT_CONTRACTS` literal.
+Shared finding IDs are accepted across selectors only when a named contract
+owns them and lists each permitted emitter; uncontracted duplicate IDs remain
+errors. Discovery rejects symlinked feature modules and a symlinked gates root.
+Runtime metadata validates tuple inputs, typed rule tags, and lowercase
+scope/evidence slugs.
 
-This is a six-rule pilot, not a complete built-in registration migration. The
-selector type, policy fields, runner adapters, output normalization, and CLI
-catalog remain on their existing paths in this tranche. The generated
-morphology view does not select or enable any check and does not change existing
-JSON results, finding IDs, gate IDs, or enforcement.
+The numeric family is the first shared-emitter example: `numeric-literals` and
+`scipy-constants` reference one contract in `gates/review/numeric_catalog.py`.
+The same literal drives runtime tag resolution and generated morphology, so
+framework-specific wire IDs remain exact while the shared concern is recorded
+once. This adds morphology ownership only; selector/config/runner registration
+for those legacy checks is not migrated here.
+
+The original six-rule pilot and the later shared numeric morphology entries
+are not a complete built-in registration migration. Legacy selector/config/
+runner surfaces remain for those checks. The generated morphology view does not
+select or enable any check and does not change existing JSON results, finding
+IDs, gate IDs, or enforcement.
 
 ## Pilot examples
 
