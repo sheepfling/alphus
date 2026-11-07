@@ -70,6 +70,8 @@ def test_pinned_npm_tools_install_into_a_scenario_local_bin_directory(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     calls: list[tuple[str, ...]] = []
+    node_executable = tmp_path / "system-node"
+    node_executable.write_text("node", encoding="utf-8")
 
     def record_install(
         arguments: Sequence[str], **_options: object
@@ -79,11 +81,17 @@ def test_pinned_npm_tools_install_into_a_scenario_local_bin_directory(
         return subprocess.CompletedProcess(arguments, 0, "", "")
 
     monkeypatch.setattr(differential_wheels.subprocess, "run", record_install)
+    monkeypatch.setattr(
+        differential_wheels.shutil,
+        "which",
+        lambda name: str(node_executable) if name == "node" else None,
+    )
     destination = tmp_path / "npm-tools"
 
     binary_directory = _install_npm_packages(("eslint@10.13.0",), destination)
 
     assert binary_directory == destination / "node_modules" / ".bin"
+    assert (binary_directory / "node").resolve() == node_executable.resolve()
     assert calls == [
         (
             "npm",

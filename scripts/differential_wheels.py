@@ -766,6 +766,10 @@ def _install_npm_packages(packages: Sequence[str], destination: Path) -> Path:
         raise ValueError(
             f"npm install did not create executable directory: {packages!r}"
         )
+    node_executable = shutil.which("node")
+    if node_executable is None:
+        raise RuntimeError("Node.js is required for pinned npm scenario tools")
+    (binary_directory / "node").symlink_to(node_executable)
     return binary_directory
 
 
