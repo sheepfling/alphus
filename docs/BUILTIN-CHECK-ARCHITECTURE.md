@@ -1335,8 +1335,9 @@ TOML field, selector, finding IDs and output shape. The legacy catalog entry,
 runner entry, CLI label fallback and duplicate hand-maintained policy field were
 removed. A source-mirroring registration test exercises strict config, direct
 dispatch, the composite application path when the optional test extra is
-available, and an unselected-provider import trace. The wheel comparison adds direct JSON, serial and parallel profile JSON, and
-invalid-config scenarios. Against reference `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`, candidate
+available, and an unselected-provider import trace. Wheel scenarios cover
+direct JSON, serial and parallel profile JSON, and invalid config. Against
+reference `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`, candidate
 `f53f46cdecb33edf890fd4ad49092dfe17dc0fbf` produced identical 62-selector
 catalogs and no differences across 71 scenarios. The three FastAPI scenarios
 used identical fixture SHA-256 and Git identities in both installs; direct and
