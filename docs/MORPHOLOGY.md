@@ -148,3 +148,12 @@ loaded only when the application setting is present. Its existing selector,
 strict TOML field, catalog applicability/summary, finding IDs and result shape
 remain unchanged. Its differential evidence is recorded in the [FastAPI
 registration slice](BUILTIN-CHECK-ARCHITECTURE.md#fastapi-review-registration-slice).
+
+The six Python quaternion checks have also moved to feature-owned typed
+registrations. Their shared concern and bounded-heuristic mechanism are
+described in morphology metadata, while each checker keeps its own configured
+policy and syntax evidence. The migration preserves the existing catalog
+applicability labels, selectors, strict TOML fields, finding IDs and result
+shape. See the [quaternion registration
+slice](BUILTIN-CHECK-ARCHITECTURE.md#quaternion-registration-slice) for the
+exact files and pinned-wheel evidence.

@@ -1316,8 +1316,8 @@ Two decisions remain for review:
 
 Until resolved, do not change digest/archive meaning or claim full #87
 acceptance. PR #100 remains a draft containing the six-check morphology pilot
-and bounded runtime registration slices for twenty-five selectors documented
-above.
+and bounded runtime registration slices for thirty-one selectors documented
+below.
 
 ## FastAPI review registration slice
 
@@ -1346,8 +1346,10 @@ serial/parallel profiles matched. The reference/candidate wheel SHA-256 values
 were
 `94833f60a8acaeb2630bb8a0f1adb36be75dfcb6c948781c9696aa9cd0db284e` and
 `36bce052f851bd3c9190056f93b9b5e9f215393f6154e7aff8aa208188673aa2`. The
-report is `/tmp/alphus-morphology-fastapi-f53f46c.json`. Twenty-five selectors
-have behavior-level differential evidence; 37 still lack that evidence. The
+report from that run was written to
+`/tmp/alphus-morphology-fastapi-f53f46c.json`. At that candidate, 25 selectors
+had behavior-level evidence and 37 lacked it; the later quaternion slice below
+adds six selectors to the current evidence set. The
 registered optional application/OpenAPI branch is covered by unit contracts;
 the local registration test skips when the optional FastAPI test dependency is
 absent. The wheel scenarios keep dependencies matched to the existing fixture
@@ -1358,3 +1360,50 @@ source line, while Ruff, formatting and typing still inspect it.
 The full local wheel self-quality run on `f53f46c` passed: 2,508 package tests,
 27 profile checks, and the Markdown shell review; 44 tests were skipped and
 four profile checks were provisional. No profile checks failed.
+
+## Quaternion registration slice
+
+The six configured Python quaternion checks now own their typed
+`FeatureDefinition`, `RuleMorphology`, and `BuiltinFeature` in the checker
+modules under `src/alphus/gates/review/numerical/quaternions/`. Each feature declares its
+existing strict policy type and field, stable selector, finding output shape,
+catalog description, and typed runner. Its morphology metadata records the
+shared quaternion-operation concern, bounded-heuristic claim, Python scope,
+evidence kinds, and synthetic-only evaluation maturity. The detectors remain
+separate because each recognizes a different syntax shape and policy; this
+does not claim that all quaternion implementations or other languages are
+covered.
+
+The legacy runner, catalog, CLI fallback and duplicate `CheckPolicies` fields
+for these selectors were removed. Generated policy fields and entry points
+continue to support strict TOML validation and lazy feature loading. Existing
+catalog JSON is unchanged: `applies_to` still contains `python` and
+`numerical`, with an empty `domains` list. The audit test derives its numerical
+selector set from those catalog applicability labels instead of keeping a
+second selector list. New direct JSON scenarios assert each finding ID and
+detector evidence line; a profile scenario asserts the selected rule order and
+all six findings, and an invalid-config scenario checks rejection of an
+unknown setting.
+
+The pinned-wheel comparison used baseline
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` and candidate
+`6e6ad89860d82019c13910062f9182aa3cbdfae3`. Its 79 scenarios produced
+identical 62-selector catalogs and no differences. The reference and candidate
+wheel SHA-256 values were
+`8b2e87e83ca2edf6ad60f71bfd51a70560c976b5d603d9bba6d60768f3d867c6` and
+`b4637522b6d374ff64e4842a0d6fb7c07ca98e0b6f3044b6013b4207551c9e08`.
+The local report was written to `/tmp/alphus-morphology-differential-6e6ad89.json`
+and was not checked into the repository. Its behavioral coverage is 31 of 62
+selectors; 31 remain without behavior-level
+scenario evidence. The dispatch matrix directly invoked 26 configured
+selectors and checked strict missing-policy rejection for 36 others. This is
+slice evidence, not full built-in equivalence.
+
+The differential harness also now installs exact-pinned Python analyzer
+packages into each temporary wheel environment, installs the pinned ESLint
+package into one shared temporary npm prefix, and isolates native scenario
+PATH while exposing Git and the required Node runtime. This closes a local
+environment gap where global Ruff metadata did not provide a matching CLI and
+ESLint was unavailable. The reports record the npm tool-tree digest and each
+scenario's native isolation inputs. Existing selectors and native result
+contracts remain unchanged.
