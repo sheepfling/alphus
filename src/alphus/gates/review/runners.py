@@ -23,14 +23,7 @@ from alphus.gates.review.positional_interfaces import check_positional_interface
 from alphus.gates.review.positional_semantic_overrides import (
     check_positional_semantic_overrides,
 )
-from alphus.gates.review.prose_as_control import (
-    check_lossy_text_rewrite,
-    check_prose_as_control,
-)
 from alphus.gates.review.provenance_ownership import check_provenance_ownership
-from alphus.gates.review.rendered_value_reparsed import (
-    check_rendered_value_reparsed,
-)
 from alphus.gates.review.repeated_numeric_limits import (
     check_repeated_numeric_limits,
 )
@@ -72,25 +65,6 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
                 require_policy(
                     config.checks.typing_stub_suggestions, "typing_stub_suggestions"
                 ),
-            )
-        ),
-        "prose-as-control": lambda root, files, config: (
-            check_prose_as_control(
-                root,
-                files,
-                require_policy(config.checks.prose_as_control, "prose_as_control"),
-            )
-            + check_lossy_text_rewrite(
-                root,
-                files,
-                require_policy(config.checks.prose_as_control, "prose_as_control"),
-            )
-        ),
-        "rendered-value-reparsed": lambda root, files, config: (
-            check_rendered_value_reparsed(
-                root,
-                files,
-                require_policy(config.checks.prose_as_control, "prose_as_control"),
             )
         ),
         "positional-semantic-overrides": lambda root, files, config: (

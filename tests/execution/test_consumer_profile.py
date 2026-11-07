@@ -15,7 +15,9 @@ from alphus.config import (
     RuleRunStep,
     load_config,
 )
-from alphus.gates.review import runners as review_runners
+from alphus.contracts.findings import Finding
+from alphus.gates.review import rendered_value_reparsed
+from alphus.plugins.builtin_registry import load_builtin_feature
 
 
 @pytest.fixture
@@ -65,24 +67,26 @@ def test_rendered_feedback_is_dispatched_only_by_its_dedicated_rule(
 
     def rendered_result(
         root: Path, files: Sequence[Path], policy: ProseAsControlPolicy
-    ) -> list[str]:
+    ) -> list[Finding]:
         calls.append("rendered")
-        return ["rendered finding"]
+        return []
 
     monkeypatch.setattr(
-        review_runners, "check_rendered_value_reparsed", rendered_result
+        rendered_value_reparsed,
+        "check_rendered_value_reparsed",
+        rendered_result,
     )
 
-    prose_findings = review_runners.REVIEW_RULE_RUNNERS["prose-as-control"](
+    prose_findings = load_builtin_feature("prose-as-control").runner(
         Path("."), (), config
     )
     assert prose_findings == []
     assert calls == []
 
-    rendered_findings = review_runners.REVIEW_RULE_RUNNERS["rendered-value-reparsed"](
+    rendered_findings = load_builtin_feature("rendered-value-reparsed").runner(
         Path("."), (), config
     )
-    assert rendered_findings == ["rendered finding"]
+    assert rendered_findings == []
     assert calls == ["rendered"]
 
 

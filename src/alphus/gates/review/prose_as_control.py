@@ -6,16 +6,67 @@ import ast
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
+from typing import Final
 
-from alphus.config import ProseAsControlPolicy
+from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
+from alphus.plugins.builtin import BuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import ProseAsControlPolicy
 from alphus.support.ast_visitors import (
     visit_class_definition_header,
     visit_exception_handler_bindings,
 )
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="prose-as-control",
+    policy_field="prose_as_control",
+    policy_model=ProseAsControlPolicy,
+    output_shape="findings",
+    summary="Reviews prose that controls adjacent source behavior.",
+    applies_to=("python", "documentation"),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="prose-as-control",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.MAINTAINABILITY,
+            "prose-as-control",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.CORRECTNESS,
+            "lossy-text-rewrite",
+        ),
+    ),
+    concern="prose-controls-code-or-loses-source-meaning",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "Configured prose comparisons or lossy rewrites can couple source behavior "
+        "to wording; static syntax does not prove an incorrect outcome."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("configured-python-source", "branch-literals", "regex-rewrites"),
+    languages_formats=("python",),
+    evidence_kinds=("configured-source-path", "ast-pattern-match", "source-location"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
 
 _RULE_ID = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.MAINTAINABILITY, "prose-as-control"
@@ -837,3 +888,21 @@ def check_lossy_text_rewrite(
                 )
             )
     return findings
+
+
+def _run_builtin_prose_as_control(
+    root: Path,
+    files: Sequence[Path],
+    config: QualityGateConfig,
+) -> list[Finding]:
+    policy = require_policy(config.checks.prose_as_control, "prose_as_control")
+    return check_prose_as_control(root, files, policy) + check_lossy_text_rewrite(
+        root, files, policy
+    )
+
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=_run_builtin_prose_as_control,
+)

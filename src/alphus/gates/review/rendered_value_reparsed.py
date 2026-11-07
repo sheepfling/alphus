@@ -5,13 +5,61 @@ from __future__ import annotations
 import ast
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
-from typing import NamedTuple
+from typing import Final, NamedTuple
 
-from alphus.config import ProseAsControlPolicy
+from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
+from alphus.plugins.builtin import BuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import ProseAsControlPolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="rendered-value-reparsed",
+    policy_field="prose_as_control",
+    policy_model=ProseAsControlPolicy,
+    output_shape="findings",
+    summary="Reviews rendered values that are parsed again as source.",
+    applies_to=("python",),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="rendered-value-reparsed",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.CORRECTNESS,
+            "rendered-value-reparsed",
+        ),
+    ),
+    concern="rendered-value-reused-as-source-predicate",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "A configured rendered string feeds a later predicate; this pattern can "
+        "couple semantics to presentation but does not prove incorrect behavior."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("configured-python-source", "render-helper-calls", "predicates"),
+    languages_formats=("python",),
+    evidence_kinds=(
+        "configured-helper-name",
+        "ast-binding-analysis",
+        "source-location",
+    ),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
 
 _RULE_ID = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.CORRECTNESS, "rendered-value-reparsed"
@@ -874,3 +922,19 @@ def check_rendered_value_reparsed(
                 )
             )
     return findings
+
+
+def _run_builtin_rendered_value_reparsed(
+    root: Path,
+    files: Sequence[Path],
+    config: QualityGateConfig,
+) -> list[Finding]:
+    policy = require_policy(config.checks.prose_as_control, "prose_as_control")
+    return check_rendered_value_reparsed(root, files, policy)
+
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=_run_builtin_rendered_value_reparsed,
+)

@@ -266,6 +266,70 @@ arguments = ["--config", "quality-gates.toml", "--rule", "dynamic-markdown"]
 parse_json = false
 
 [[scenario]]
+name = "prose-as-control-direct"
+fixture = "review-prose"
+selectors = ["prose-as-control"]
+behavior = ["shared-feature-policy", "bounded-prose-and-rewrite-findings"]
+expected_exit = 0
+minimum_findings = 2
+expected_findings = [
+  { rule_id = "alphus/python/none/maintainability/prose-as-control", path = "src/render/review.py", line = 9 },
+  { rule_id = "alphus/python/none/correctness/lossy-text-rewrite", path = "src/render/review.py", line = 14 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "prose-as-control", "--json"]
+
+[[scenario]]
+name = "rendered-value-reparsed-direct"
+fixture = "review-prose"
+selectors = ["rendered-value-reparsed"]
+behavior = ["shared-feature-policy", "configured-render-helper-predicate"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/python/none/correctness/rendered-value-reparsed", path = "src/render/review.py", line = 16 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "rendered-value-reparsed", "--json"]
+
+[[scenario]]
+name = "review-prose-profile"
+fixture = "review-prose"
+selectors = ["prose-as-control", "rendered-value-reparsed"]
+behavior = ["typed-profile-dispatch", "shared-strict-policy", "stable-step-order"]
+expected_exit = 0
+minimum_findings = 3
+expected_step_names = ["Prose as control", "Rendered value reparsed"]
+expected_step_rules = ["prose-as-control", "rendered-value-reparsed"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/python/none/maintainability/prose-as-control", path = "src/render/review.py", line = 9 },
+  { rule_id = "alphus/python/none/correctness/lossy-text-rewrite", path = "src/render/review.py", line = 14 },
+  { rule_id = "alphus/python/none/correctness/rendered-value-reparsed", path = "src/render/review.py", line = 16 },
+]
+
+[[scenario.variant]]
+name = "profile-json"
+arguments = ["--config", "quality-gates.toml", "--profile", "review-prose", "--run", "--json"]
+
+[[scenario]]
+name = "prose-as-control-invalid-config"
+fixture = "review-prose-invalid-config"
+selectors = ["prose-as-control"]
+behavior = ["shared-feature-policy-strict-config", "unknown-field-rejected"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-config"
+arguments = ["--config", "quality-gates.toml", "--rule", "prose-as-control"]
+parse_json = false
+
+[[scenario]]
 name = "input-contracts-direct"
 expected_findings = [
   { rule_id = "alphus/python/none/correctness/argument-mutation", path = "src/example.py", line = 2 },

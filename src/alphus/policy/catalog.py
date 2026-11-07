@@ -114,18 +114,6 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             "Suggests compatible typing stub packages for declared dependencies.",
             ("python", "typing"),
         ),
-        "prose-as-control": RuleSpec(
-            "prose_as_control",
-            RuleOutputShape.FINDINGS,
-            "Reviews prose that controls adjacent source behavior.",
-            ("python", "documentation"),
-        ),
-        "rendered-value-reparsed": RuleSpec(
-            "prose_as_control",
-            RuleOutputShape.FINDINGS,
-            "Reviews rendered values that are parsed again as source.",
-            ("python",),
-        ),
         "positional-semantic-overrides": RuleSpec(
             "positional_semantic_overrides",
             RuleOutputShape.FINDINGS,

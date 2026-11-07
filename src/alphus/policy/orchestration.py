@@ -37,7 +37,6 @@ from alphus.policy.review import (
     PatchCascadePolicy,
     PositionalInterfacePolicy,
     PositionalSemanticOverridePolicy,
-    ProseAsControlPolicy,
     ProvenanceOwnershipPolicy,
     RepeatedNumericLimitPolicy,
     RunArtifactPolicy,
@@ -64,7 +63,6 @@ class CheckPolicies(GeneratedFeaturePolicies):
 
     repeated_numeric_limits: RepeatedNumericLimitPolicy | None = None
     typing_stub_suggestions: TypingStubSuggestionPolicy | None = None
-    prose_as_control: ProseAsControlPolicy | None = None
     positional_semantic_overrides: PositionalSemanticOverridePolicy | None = None
     unexplained_empty_results: UnexplainedEmptyResultPolicy | None = None
     heuristic_total_consumption: HeuristicTotalConsumptionPolicy | None = None

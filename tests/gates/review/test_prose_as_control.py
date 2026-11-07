@@ -10,11 +10,29 @@ from alphus.gates.review.prose_as_control import (
     lossy_rewrite_lines,
     prose_control_literals,
 )
+from alphus.plugins.builtin_registry import load_builtin_feature
+from alphus.policy.base import QualityRuleName
+from alphus.policy.catalog import RULE_SPECS
+from alphus.policy.orchestration import CheckPolicies, RuleRunStep
 
 _SENTENCE = (
     "Source-derived normative statement retained at clause scope; "
     "no modeled transition was asserted."
 )
+
+
+def test_prose_as_control_is_registered_with_its_existing_shared_policy() -> None:
+    rule: QualityRuleName = "prose-as-control"
+
+    assert RULE_SPECS[rule].policy_field == "prose_as_control"
+    assert RULE_SPECS[rule].summary == (
+        "Reviews prose that controls adjacent source behavior."
+    )
+    assert "prose_as_control" in CheckPolicies.model_fields
+    feature = load_builtin_feature(rule)
+    assert feature.definition.selector == rule
+    assert feature.definition.policy_field == "prose_as_control"
+    assert RuleRunStep(kind="rule", name="Prose review", rule=rule).rule == rule
 
 
 def _policy(**overrides: object) -> ProseAsControlPolicy:
