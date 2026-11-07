@@ -8,13 +8,60 @@ from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from string import Formatter
-from typing import Protocol, cast
+from typing import Final, Protocol, cast
 
-from alphus.config import DynamicMarkdownPolicy
+from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding, Severity
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
+from alphus.plugins.builtin import BuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import DynamicMarkdownPolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="dynamic-markdown",
+    policy_field="dynamic_markdown",
+    policy_model=DynamicMarkdownPolicy,
+    output_shape="findings",
+    summary=(
+        "Reviews Python string assembly that places dynamic values into Markdown "
+        "structure."
+    ),
+    applies_to=("python", "markdown"),
+    domains=("documentation-generation", "markdown-publishing"),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="dynamic-markdown",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.MAINTAINABILITY,
+            "dynamic-markdown-assembly",
+        ),
+    ),
+    concern="dynamic-markdown-structure-assembly",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "A configured Python producer places dynamic values into Markdown "
+        "structure; this is not proof of invalid rendered output."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("configured-python-producers", "markdown-string-construction"),
+    languages_formats=("python", "markdown"),
+    evidence_kinds=("configured-producer-path", "ast-pattern-match", "source-location"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
 
 _RULE_ID = rule_tag(
     Scope.PYTHON,
@@ -748,3 +795,19 @@ def check_dynamic_markdown(
             )
         )
     return findings
+
+
+def _run_builtin_dynamic_markdown(
+    root: Path,
+    files: Sequence[Path],
+    config: QualityGateConfig,
+) -> list[Finding]:
+    policy = require_policy(config.checks.dynamic_markdown, "dynamic_markdown")
+    return check_dynamic_markdown(root, files, policy)
+
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=_run_builtin_dynamic_markdown,
+)

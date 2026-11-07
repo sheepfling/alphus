@@ -7,6 +7,10 @@ from alphus.gates.review.embedded_semantic_overrides import (
     check_embedded_semantic_overrides,
     embedded_override_sites,
 )
+from alphus.plugins.builtin_registry import load_builtin_feature
+from alphus.policy.base import QualityRuleName
+from alphus.policy.catalog import RULE_SPECS
+from alphus.policy.orchestration import CheckPolicies, RuleRunStep
 
 
 def _policy(*, exclude: tuple[str, ...] = ()) -> EmbeddedSemanticOverridePolicy:
@@ -16,6 +20,21 @@ def _policy(*, exclude: tuple[str, ...] = ()) -> EmbeddedSemanticOverridePolicy:
         replacement_maps=("fixed_paragraphs",),
         source_anchor_helpers=("source_anchor",),
         exclude=exclude,
+    )
+
+
+def test_embedded_semantic_overrides_is_registered_as_a_findings_rule() -> None:
+    rule: QualityRuleName = "embedded-semantic-overrides"
+
+    assert RULE_SPECS[rule].policy_field == "embedded_semantic_overrides"
+    assert RULE_SPECS[rule].output_shape.value == "findings"
+    assert "embedded_semantic_overrides" in CheckPolicies.model_fields
+    feature = load_builtin_feature(rule)
+    assert feature.definition.selector == rule
+    assert feature.definition.policy_field == "embedded_semantic_overrides"
+    assert (
+        RuleRunStep(kind="rule", name="Embedded semantic overrides", rule=rule).rule
+        == rule
     )
 
 

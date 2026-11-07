@@ -17,7 +17,7 @@ from alphus.gates.review.dynamic_markdown import (
     check_dynamic_markdown,
     dynamic_markdown_findings,
 )
-from alphus.gates.review.runners import REVIEW_RULE_RUNNERS
+from alphus.plugins.builtin_registry import load_builtin_feature
 from alphus.policy.base import MissingPolicyError, QualityRuleName
 from alphus.policy.catalog import RULE_SPECS
 from alphus.policy.orchestration import CheckPolicies, RuleRunStep
@@ -438,7 +438,9 @@ def test_dynamic_markdown_is_registered_as_a_findings_rule() -> None:
     assert RULE_SPECS[rule].policy_field == "dynamic_markdown"
     assert RULE_SPECS[rule].output_shape.value == "findings"
     assert "dynamic_markdown" in CheckPolicies.model_fields
-    assert rule in REVIEW_RULE_RUNNERS
+    feature = load_builtin_feature(rule)
+    assert feature.definition.selector == rule
+    assert feature.definition.policy_field == "dynamic_markdown"
     assert RuleRunStep(kind="rule", name="Markdown review", rule=rule).rule == rule
 
 

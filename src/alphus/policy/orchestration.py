@@ -32,8 +32,6 @@ from alphus.policy.intents import (
 from alphus.policy.repository import VersionSyncPolicy
 from alphus.policy.review import (
     CiWorkflowPolicy,
-    DynamicMarkdownPolicy,
-    EmbeddedSemanticOverridePolicy,
     HeuristicTotalConsumptionPolicy,
     ParallelNormalizationPolicy,
     PatchCascadePolicy,
@@ -69,7 +67,6 @@ class CheckPolicies(GeneratedFeaturePolicies):
     prose_as_control: ProseAsControlPolicy | None = None
     positional_semantic_overrides: PositionalSemanticOverridePolicy | None = None
     unexplained_empty_results: UnexplainedEmptyResultPolicy | None = None
-    embedded_semantic_overrides: EmbeddedSemanticOverridePolicy | None = None
     heuristic_total_consumption: HeuristicTotalConsumptionPolicy | None = None
     provenance_ownership: ProvenanceOwnershipPolicy | None = None
     semantic_work_presentation: SemanticWorkPresentationPolicy | None = None
@@ -80,7 +77,6 @@ class CheckPolicies(GeneratedFeaturePolicies):
     source_test_coverage: SourceTestCoveragePolicy | None = None
     source_families: SourceFamilyPolicy | None = None
     positional_interfaces: PositionalInterfacePolicy | None = None
-    dynamic_markdown: DynamicMarkdownPolicy | None = None
     suppression_reasons: SuppressionReasonPolicy | None = None
     shared_utilities: SharedUtilitiesPolicy | None = None
     python_style: PythonStylePolicy | None = None

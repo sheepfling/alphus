@@ -204,6 +204,68 @@ arguments = ["--config", "quality-gates.toml", "--rule", "scipy-constants", "--o
 parse_json = false
 
 [[scenario]]
+name = "dynamic-markdown-direct"
+fixture = "review-text"
+selectors = ["dynamic-markdown"]
+behavior = ["feature-owned-direct-dispatch", "scoped-python-markdown-heuristic"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/python/none/maintainability/dynamic-markdown-assembly", path = "src/render/demo.py", line = 17 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "dynamic-markdown", "--json"]
+
+[[scenario]]
+name = "embedded-semantic-overrides-direct"
+fixture = "review-text"
+selectors = ["embedded-semantic-overrides"]
+behavior = ["feature-owned-direct-dispatch", "configured-source-anchor-heuristic"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/python/none/correctness/embedded-semantic-override", path = "src/render/demo.py", line = 15 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "embedded-semantic-overrides", "--json"]
+
+[[scenario]]
+name = "review-text-profile"
+fixture = "review-text"
+selectors = ["dynamic-markdown", "embedded-semantic-overrides"]
+behavior = ["typed-profile-dispatch", "stable-step-and-finding-order"]
+expected_exit = 0
+minimum_findings = 2
+expected_step_names = ["Dynamic Markdown", "Embedded semantic overrides"]
+expected_step_rules = ["dynamic-markdown", "embedded-semantic-overrides"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/python/none/maintainability/dynamic-markdown-assembly", path = "src/render/demo.py", line = 17 },
+  { rule_id = "alphus/python/none/correctness/embedded-semantic-override", path = "src/render/demo.py", line = 15 },
+]
+
+[[scenario.variant]]
+name = "profile-json"
+arguments = ["--config", "quality-gates.toml", "--profile", "review-text", "--run", "--json"]
+
+[[scenario]]
+name = "dynamic-markdown-invalid-config"
+fixture = "review-text-invalid-config"
+selectors = ["dynamic-markdown"]
+behavior = ["feature-owned-strict-policy", "unknown-field-rejected-before-run"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-config"
+arguments = ["--config", "quality-gates.toml", "--rule", "dynamic-markdown"]
+parse_json = false
+
+[[scenario]]
 name = "input-contracts-direct"
 expected_findings = [
   { rule_id = "alphus/python/none/correctness/argument-mutation", path = "src/example.py", line = 2 },

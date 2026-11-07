@@ -138,12 +138,6 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             "Reviews empty results without an evident explanation.",
             ("python",),
         ),
-        "embedded-semantic-overrides": RuleSpec(
-            "embedded_semantic_overrides",
-            RuleOutputShape.FINDINGS,
-            "Reviews semantic overrides embedded in source text.",
-            ("python",),
-        ),
         "heuristic-total-consumption": RuleSpec(
             "heuristic_total_consumption",
             RuleOutputShape.FINDINGS,
@@ -192,13 +186,6 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             RuleOutputShape.FINDINGS,
             "Reviews configured positional parameters at Python call and API boundaries.",
             ("python",),
-        ),
-        "dynamic-markdown": RuleSpec(
-            "dynamic_markdown",
-            RuleOutputShape.FINDINGS,
-            "Reviews Python string assembly that places dynamic values into Markdown structure.",
-            ("python", "markdown"),
-            ("documentation-generation", "markdown-publishing"),
         ),
         "suppression-reasons": RuleSpec(
             "suppression_reasons",

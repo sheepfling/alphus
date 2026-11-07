@@ -14,10 +14,6 @@ from typing import TypeAlias
 from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.execution.results import RuleOutput
 from alphus.gates.review.ci_workflows import check_ci_workflows
-from alphus.gates.review.dynamic_markdown import check_dynamic_markdown
-from alphus.gates.review.embedded_semantic_overrides import (
-    check_embedded_semantic_overrides,
-)
 from alphus.gates.review.heuristic_total_consumption import (
     check_heuristic_total_consumption,
 )
@@ -117,16 +113,6 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
                 ),
             )
         ),
-        "embedded-semantic-overrides": lambda root, files, config: (
-            check_embedded_semantic_overrides(
-                root,
-                files,
-                require_policy(
-                    config.checks.embedded_semantic_overrides,
-                    "embedded_semantic_overrides",
-                ),
-            )
-        ),
         "heuristic-total-consumption": lambda root, files, config: (
             check_heuristic_total_consumption(
                 root,
@@ -198,11 +184,6 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
                     config.checks.positional_interfaces, "positional_interfaces"
                 ),
             )
-        ),
-        "dynamic-markdown": lambda root, files, config: check_dynamic_markdown(
-            root,
-            files,
-            require_policy(config.checks.dynamic_markdown, "dynamic_markdown"),
         ),
         "suppression-reasons": lambda root, files, config: check_suppression_reasons(
             root,
