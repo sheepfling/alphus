@@ -61,8 +61,8 @@ by a typed `BuiltinFeature` with direct runner and specialized-operation
 references.
 
 The original six-rule pilot is not a complete built-in registration
-migration. Twenty selectors now use feature-owned runtime declarations,
-while 42 remain on legacy selector/config/runner paths. Generated declarations do not
+migration. Twenty-two selectors now use feature-owned runtime declarations,
+while 40 remain on legacy selector/config/runner paths. Generated declarations do not
 select or enable a check and do not change JSON results, finding IDs, gate IDs,
 or enforcement.
 
@@ -89,23 +89,26 @@ readiness.
 ## Registration boundary and next tranche
 
 The six-check morphology pilot is metadata discovery. Draft PR #100 now
-has twenty feature-owned runtime selectors, including the package-boundaries
-composite, polyglot cyclomatic and comment readers, output escaping, paired
-shared-contract numeric checks, Python/JavaScript source checks, and two
-distinct Markdown review checks. Each declaration generates morphology,
-`FeatureDefinition`, `RuleSpec`, strict primary `CheckPolicies` field, selector
-literal, inventory entry and lazy dispatch. Existing config names, output
-adaptation, reports, selection and exit behavior remain the compatibility
-contract. Synthetic discovery proves a new selector can be found without a
-central selector list; tests cover strict fields, shared complaint ownership,
-composite dispatch and lazy unselected providers.
+has twenty-two feature-owned runtime selectors, including the package-boundaries
+composite, polyglot cyclomatic and comment readers, paired shared-contract
+numeric checks, document reviewers, and Python test-quality and input-contract
+review. Each declaration generates morphology, `FeatureDefinition`, `RuleSpec`,
+strict primary `CheckPolicies` field, selector literal, inventory entry and
+lazy dispatch. Existing config names, output adaptation, reports, selection
+and exit behavior remain the compatibility contract. Synthetic discovery
+proves a new selector can be found without a central selector list; tests
+cover strict fields, shared complaint ownership, composite dispatch and lazy
+unselected providers.
 
-This remains bounded: the other 42 baseline selectors use legacy registration
-paths, and the current evidence is not full wheel equivalence. The pinned run
-for candidate `d26a8fe19f5039ff8cad5e16dcaf2097981cdf84` compares 58 scenarios
-against baseline `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` with no differences;
-22 selectors have behavior-level scenarios. Forty baseline selectors still
-lack behavior-level differential evidence.
+This remains bounded: the other 40 baseline selectors use legacy registration
+paths, and the current evidence is not full wheel equivalence. Candidate
+`c603b1eaf0f9ea5ab53b7f8b1c86a14f55bee70f` matched the pinned baseline
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` across 62 manifested scenarios
+with no differences. The equal catalogs contain 62 selectors; behavior-level
+scenarios exercise 22 selectors, leaving 40 without scenario-level evidence.
+Direct invocation covers 26 selectors and strict missing-policy rejection
+covers 36. The report is
+`/tmp/alphus-morphology-python-review-c603b1e.json`.
 Continue migration with direct/profile comparisons, lazy-provider checks, and
 explicit missing/unsupported, partial, error, plugin/native and effectful-command
 cases; this does not complete #87.

@@ -79,22 +79,22 @@ This document distinguishes four kinds of statement:
   silently changing consumer behavior.
 
 PR #100 remains an open draft. It began with the six-check morphology
-metadata pilot and now has twenty selectors moved onto feature-owned generated
-runtime views:
+metadata pilot and now has twenty-two selectors moved onto feature-owned
+generated runtime views:
 `file-size`, `line-length`, `package-boundaries`, `repository-layout`,
 `dependency-locks`, `documentation-config`, `cyclomatic-complexity`,
 `output-escaping`, `comment-markers`, `numeric-literals`, `scipy-constants`,
 `module-roles`, `markdown-shell-fences`, `git-ignores`, `git-attributes`,
-`git-history`, `json-structure`, `path-discovery`, `document-style`, and
-`benchmark-docs`. Each local
+`git-history`, `json-structure`, `path-discovery`, `document-style`,
+`benchmark-docs`, `test-quality`, and `input-contracts`. Each local
 `ALPHUS_CHECK` declaration statically generates
 morphology metadata, typed `FeatureDefinition`, `RuleSpec`, strict policy
 field, selector type, and inventory entry. Each feature module exposes one
 typed `ALPHUS_FEATURE` object with a direct callback for lazy execution. The established
 `RuleEvaluation` and CLI result adapters remain shared, so adding a feature
-still uses the existing output contract. The other 42 baseline selectors
+still uses the existing output contract. The other 40 baseline selectors
 remain on legacy registration paths; these slices do not complete issue #87
-or establish full selector equivalence. These twenty declarations are now
+or establish full selector equivalence. These declarations are now
 typed `FeatureDefinition(...)` calls paired with immutable
 `RuleMorphology(...)` values rather than the former tuple-pair `ALPHUS_CHECK`
 format. Static discovery validates them without importing gate implementations.
@@ -102,7 +102,7 @@ The PEP 517 backend generates installed-wheel entry-point metadata without a
 per-check `pyproject.toml` edit. Aggregate policy/config/dispatch views are
 ignored build artifacts rather than checked-in shared files, so independent
 feature branches do not edit the same generated outputs. Runtime entry points
-target the typed feature object; the remaining 42 selectors still use legacy
+target the typed feature object; the remaining 40 selectors still use legacy
 registration maps.
 
 The latest source-discovery slice moves `json-structure` and `path-discovery`
@@ -137,6 +137,21 @@ scenarios with no differences. The catalogs remain 62 selectors; 22 have
 behavior-level scenarios. The report is at
 `/tmp/alphus-morphology-document-review-d26a8fe.json`; the result does not
 establish full selector equivalence.
+
+The next review slice migrates `test-quality` and `input-contracts`. They
+are Python-specific bounded heuristics that return existing structured
+findings, but cover different concerns and strict policy models. Feature-owned
+named complaint contracts now provide the stable IDs, including the
+`manual-schema-validation` ID shared by two input-contract analysis paths.
+The checker policies and finding messages are unchanged. Direct and profile
+wheel scenarios assert the existing findings; separate invalid-policy fixtures
+prove unknown fields are still rejected. Candidate
+`c603b1eaf0f9ea5ab53b7f8b1c86a14f55bee70f` matched baseline
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` across 62 scenarios with zero
+differences. Both catalogs contain 62 selectors; direct invocation covers 26,
+strict missing-policy rejection 36, and behavior scenarios exercise 22
+selectors. The 40 remaining selectors still lack behavior-level evidence.
+Report: `/tmp/alphus-morphology-python-review-c603b1e.json`.
 
 ## Current package ownership and dependency direction
 
@@ -384,7 +399,7 @@ JSON/text shapes and legacy IDs.
 
 ## Feature-owned registration and imports
 
-The current twenty-selector flow is:
+The current twenty-two-selector flow is:
 
 ```text
 typed, feature-owned FeatureDefinition and RuleMorphology
@@ -410,7 +425,7 @@ rejects duplicate selector names before loading a selected runner. Catalog and
 config inspection do not import the migrated checker modules. A registration
 never selects or enables a check: consumer profile steps remain the selection
 source, and strict config continues to reject invalid or unknown fields. This
-production path currently covers twenty selectors; remaining selectors still
+production path currently covers twenty-two selectors; the other 40 still
 use legacy theme maps. The five aggregate views are no longer tracked: the
 build regenerates them as ignored source files for each worktree, and
 `MANIFEST.in` includes them in source archives. Separate feature branches
@@ -1283,4 +1298,4 @@ Two decisions remain for review:
 
 Until resolved, do not change digest/archive meaning or claim full #87
 acceptance. PR #100 remains a draft containing the six-check morphology pilot
-and bounded runtime registration slices for twenty selectors documented above.
+and bounded runtime registration slices for twenty-two selectors documented above.
