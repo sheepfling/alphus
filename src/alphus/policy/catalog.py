@@ -75,12 +75,6 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             "Finds duplicated shared-helper implementations and direct Git calls.",
             ("python",),
         ),
-        "module-roles": RuleSpec(
-            "module_roles",
-            RuleOutputShape.FINDINGS,
-            "Checks configured Python module-role and ownership conventions.",
-            ("python",),
-        ),
         "python-style": RuleSpec(
             "python_style",
             RuleOutputShape.PYTHON_STYLE,

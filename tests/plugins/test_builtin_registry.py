@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 import sys
 from collections.abc import Sequence
-from importlib.metadata import Distribution, EntryPoint
+from importlib.metadata import Distribution
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
@@ -17,7 +17,6 @@ from alphus.contracts.findings import Finding
 from alphus.plugins import builtin_registry
 from alphus.plugins.builtin import BuiltinFeature
 from alphus.plugins.builtin_registry import (
-    BUILTIN_CHECK_ENTRY_POINT_GROUP,
     builtin_check_entry_points,
     load_builtin_feature,
 )
@@ -55,28 +54,48 @@ def test_installed_entry_points_match_feature_selectors_and_load_lazily() -> Non
 def test_duplicate_installed_entry_points_fail_before_loading(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    first = EntryPoint(
-        name="duplicate-check",
-        value="alphus.gates.hygiene.file_size:ALPHUS_FEATURE",
-        group=BUILTIN_CHECK_ENTRY_POINT_GROUP,
-    )
-    second = EntryPoint(
-        name="duplicate-check",
-        value="alphus.gates.hygiene.line_length:ALPHUS_FEATURE",
-        group=BUILTIN_CHECK_ENTRY_POINT_GROUP,
-    )
+    installed = tuple(builtin_check_entry_points().values())
+    first = installed[0]
     fake_distribution = SimpleNamespace(
-        metadata={"Name": "alphus"}, entry_points=(first, second)
+        metadata={"Name": "alphus"}, entry_points=(*installed, first)
     )
     monkeypatch.setattr(
         builtin_registry,
-        "distribution",
-        lambda _name: cast(Distribution, fake_distribution),
+        "distributions",
+        lambda **_kwargs: cast(Sequence[Distribution], (fake_distribution,)),
     )
     builtin_check_entry_points.cache_clear()
     try:
         with pytest.raises(RuntimeError, match="duplicate built-in check"):
             builtin_check_entry_points()
+    finally:
+        builtin_check_entry_points.cache_clear()
+
+
+def test_stale_source_metadata_does_not_shadow_matching_installed_distribution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    installed = tuple(builtin_check_entry_points().values())
+    stale_distribution = SimpleNamespace(
+        metadata={"Name": "alphus"},
+        entry_points=tuple(
+            point for point in installed if point.name != "module-roles"
+        ),
+    )
+    current_distribution = SimpleNamespace(
+        metadata={"Name": "alphus"}, entry_points=installed
+    )
+    monkeypatch.setattr(
+        builtin_registry,
+        "distributions",
+        lambda **_kwargs: cast(
+            Sequence[Distribution], (stale_distribution, current_distribution)
+        ),
+    )
+    builtin_check_entry_points.cache_clear()
+    try:
+        points = builtin_check_entry_points()
+        assert set(points) == set(FEATURE_DEFINITIONS)
     finally:
         builtin_check_entry_points.cache_clear()
 

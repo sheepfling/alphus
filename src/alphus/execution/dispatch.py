@@ -122,14 +122,8 @@ class PluginRuleExecution:
         ]
 
 
-_BUILTIN_ENTRY_POINTS = builtin_check_entry_points()
+builtin_check_entry_points()
 _FEATURE_SELECTORS = frozenset(FEATURE_DEFINITIONS)
-if frozenset(_BUILTIN_ENTRY_POINTS) != _FEATURE_SELECTORS:
-    raise RuntimeError(
-        "built-in feature definitions and installed entry points differ: "
-        f"definitions={sorted(_FEATURE_SELECTORS)}, "
-        f"entry_points={sorted(_BUILTIN_ENTRY_POINTS)}"
-    )
 _LEGACY_SELECTORS = frozenset(RULE_SPECS) - _FEATURE_SELECTORS
 if _LEGACY_SELECTORS != frozenset(RULE_RUNNERS):
     raise RuntimeError("legacy built-in rule metadata and runner registries differ")

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from functools import lru_cache
-from importlib.metadata import EntryPoint, distribution
+from importlib.metadata import Distribution, EntryPoint, distributions
 from inspect import isasyncgenfunction, iscoroutinefunction, signature
 from pathlib import Path
 from types import MappingProxyType
@@ -13,6 +13,7 @@ from typing import TypeGuard, get_args, get_origin, get_type_hints
 from alphus.contracts.cyclomatic import CyclomaticReport
 from alphus.contracts.findings import Finding
 from alphus.plugins.builtin import BuiltinFeature
+from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
 
 BUILTIN_CHECK_ENTRY_POINT_GROUP = "alphus.builtin_checks.v1"
 
@@ -50,31 +51,63 @@ def _is_builtin_feature(target: object) -> TypeGuard[BuiltinFeature]:
 def builtin_check_entry_points() -> Mapping[str, EntryPoint]:
     """Index only Alphus-owned entry points; do not import check modules."""
     try:
-        owner = distribution("alphus")
-        candidates = tuple(
-            point
-            for point in owner.entry_points
-            if point.group == BUILTIN_CHECK_ENTRY_POINT_GROUP
-        )
+        owners = tuple(distributions(name="alphus"))
     except Exception as error:
         raise RuntimeError(
             f"could not discover built-in check entry points: {error}"
         ) from error
 
-    ordered = tuple(sorted(candidates, key=lambda point: (point.name, point.value)))
-    by_selector: dict[str, EntryPoint] = {}
-    duplicates: set[str] = set()
-    for point in ordered:
-        if point.name in by_selector:
-            duplicates.add(point.name)
-        else:
-            by_selector[point.name] = point
-    if duplicates:
-        raise RuntimeError(
-            "duplicate built-in check entry point names: "
-            f"{', '.join(sorted(duplicates))}"
+    expected = frozenset(FEATURE_DEFINITIONS)
+    matching: list[tuple[tuple[EntryPoint, ...], Distribution]] = []
+    discovered: list[tuple[str, tuple[str, ...]]] = []
+    for owner in owners:
+        ordered = tuple(
+            sorted(
+                (
+                    point
+                    for point in owner.entry_points
+                    if point.group == BUILTIN_CHECK_ENTRY_POINT_GROUP
+                ),
+                key=lambda point: (point.name, point.value),
+            )
         )
-    return MappingProxyType(by_selector)
+        discovered.append(
+            (
+                str(owner.metadata.get("Name", "")),
+                tuple(point.name for point in ordered),
+            )
+        )
+        names = frozenset(point.name for point in ordered)
+        if names != expected:
+            continue
+        duplicates = {
+            name for name in names if sum(point.name == name for point in ordered) > 1
+        }
+        if duplicates:
+            raise RuntimeError(
+                "duplicate built-in check entry point names: "
+                f"{', '.join(sorted(duplicates))}"
+            )
+        matching.append((ordered, owner))
+
+    if not matching:
+        raise RuntimeError(
+            "no Alphus distribution has built-in entry points matching the "
+            f"generated feature catalog: expected={sorted(expected)}, "
+            f"discovered={discovered}"
+        )
+    entry_points = {point.name: point for point in matching[0][0]}
+    mismatched_owners = tuple(
+        (str(owner.metadata.get("Name", "")), tuple(point.value for point in points))
+        for points, owner in matching[1:]
+        if tuple(point.value for point in points)
+        != tuple(point.value for point in matching[0][0])
+    )
+    if mismatched_owners:
+        raise RuntimeError(
+            "multiple Alphus distributions provide conflicting built-in entry points"
+        )
+    return MappingProxyType(entry_points)
 
 
 @lru_cache(maxsize=64)

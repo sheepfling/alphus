@@ -13,7 +13,6 @@ from alphus.policy._generated_feature_policies import GeneratedFeaturePolicies
 from alphus.policy.architecture import (
     ArchitectureGraphCheckPolicy,
     CallableRegistryPolicy,
-    ModuleRolePolicy,
 )
 from alphus.policy.base import (
     QualityRuleName,
@@ -136,7 +135,6 @@ class CheckPolicies(GeneratedFeaturePolicies):
     runtime_types: RuntimeTypePolicy | None = None
     cli: CliPolicy | None = None
     script_policy: ScriptPolicy | None = None
-    module_roles: ModuleRolePolicy | None = None
     architecture_graph: ArchitectureGraphCheckPolicy | None = None
     markdown_shell_fences: MarkdownShellFencesPolicy | None = None
     version_sync: VersionSyncPolicy | None = None

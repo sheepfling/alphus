@@ -1,0 +1,27 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py"]
+exclude = []
+
+[checks.module_roles]
+[[checks.module_roles.modules]]
+path = "src/provider.py"
+role = "composition"
+forbidden_imports = ["internal.transport"]
+forbidden_module_assignments = ["RegistryProvider"]
+
+[orchestration]
+default_profile = "module-role-review"
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "module-role-boundary"
+rule = "module-roles"
+severity = "warning"
+priority = "normal"
+
+[[orchestration.profiles]]
+name = "module-role-review"
+steps = ["module-role-boundary"]
