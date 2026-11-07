@@ -89,7 +89,7 @@ readiness.
 ## Registration boundary and remaining work
 
 The six-check morphology pilot was metadata discovery. Draft PR #100 now
-has forty feature-owned runtime selectors, including the package-boundaries
+has forty-two feature-owned runtime selectors, including the package-boundaries
 composite, polyglot cyclomatic and comment readers, paired shared-contract
 numeric checks, document reviewers, and Python test-quality and input-contract
 review. The Pydantic and SQLAlchemy Python framework reviewers now use the same
@@ -112,9 +112,12 @@ labels are generated from those declarations. The pinned wheel manifest now
 includes direct, profile and unknown-policy cases for each selector.
 
 At candidate `0c31a41`, 24 selectors had been migrated; that report is a
-historical snapshot, not the current migration count. At candidate `33cf712`,
-40 of the 62 baseline selectors use feature-owned runtime registration; 22
-still use legacy paths, and the current evidence is not full wheel equivalence.
+historical snapshot, not the current migration count. Candidate `33cf712`
+migrated 40 of 62 baseline selectors. Candidate `6bc8a0c` migrates 42; 20
+still use legacy registration paths, and the evidence is not full wheel
+equivalence. The latest shared-policy prose slice matched 98 installed-wheel
+scenarios with zero differences; it is described in the [architecture
+document's shared-policy section](BUILTIN-CHECK-ARCHITECTURE.md#shared-policy-prose-registration-slice).
 Candidate
 `0c31a41b61a006ccff08d611fcec23100c403443` matched the pinned baseline
 `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` across 68 manifested scenarios
@@ -124,9 +127,9 @@ Direct invocation covers 26 selectors and strict missing-policy rejection
 covers 36. Report: `/tmp/alphus-morphology-framework-practices-0c31a41.json`.
 Continue migration with direct/profile comparisons, lazy-provider checks, and
 explicit missing/unsupported, partial, error, plugin/native and effectful-command
-cases; this does not complete #87. The latest text-analysis slice and its
-94-scenario installed-wheel result are recorded in the [architecture document's
-text-analysis section](BUILTIN-CHECK-ARCHITECTURE.md#python-text-analysis-registration-slice).
+cases; this does not complete #87. The latest shared-policy prose slice and its
+98-scenario installed-wheel result are recorded in the [architecture document's
+shared-policy section](BUILTIN-CHECK-ARCHITECTURE.md#shared-policy-prose-registration-slice).
 
 ## Orthogonal policy and run evidence
 

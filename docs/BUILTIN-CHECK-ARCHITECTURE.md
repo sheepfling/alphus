@@ -94,7 +94,7 @@ morphology metadata, typed `FeatureDefinition`, `RuleSpec`, strict policy
 field, selector type, and inventory entry. Each feature module exposes one
 typed `ALPHUS_FEATURE` object with a direct callback for lazy execution. The established
 `RuleEvaluation` and CLI result adapters remain shared, so adding a feature
-still uses the existing output contract. The other 22 baseline selectors
+still uses the existing output contract. The other 20 baseline selectors
 remain on legacy registration paths; these slices do not complete issue #87
 or establish full selector equivalence. These declarations are now
 typed `FeatureDefinition(...)` calls paired with immutable
@@ -104,7 +104,7 @@ The PEP 517 backend generates installed-wheel entry-point metadata without a
 per-check `pyproject.toml` edit. Aggregate policy/config/dispatch views are
 ignored build artifacts rather than checked-in shared files, so independent
 feature branches do not edit the same generated outputs. Runtime entry points
-target the typed feature object; 22 selectors still use legacy registration
+target the typed feature object; 20 selectors still use legacy registration
 maps.
 
 The latest source-discovery slice moves `json-structure` and `path-discovery`
@@ -1510,3 +1510,35 @@ self-profile passed 27 checks with no failures and four provisional passes.
 This closes the direct/profile/config evidence for this paired slice only.
 It does not establish behavior equivalence for the 22 legacy registration
 selectors or complete the 0.0.3 rearchitecture.
+
+## Shared-policy prose registration slice
+
+Commit `6bc8a0cda4a82286e893f96f42b13a66337c481a` moves
+`prose-as-control` and `rendered-value-reparsed` into typed feature-owned
+registrations. They are distinct selectors with distinct concerns and finding
+IDs; both intentionally consume the same existing `prose_as_control` policy
+model and strict TOML section. The prose check still combines its two existing
+analyzers in the same result order. The rendered-value analyzer remains a
+separate selected check. Their policies, syntax analysis, finding messages,
+severities, selection and result adapters are unchanged. The central catalog
+and runner entries were removed, while the single shared strict policy field
+is generated from the feature declarations.
+
+The fixture exercises the prose comparison, configured lossy rewrite, and
+rendered-output predicate. Direct scenarios check each selector; the profile
+checks combined findings and step order; an unknown field remains rejected.
+The pinned wheel comparison with baseline
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` matched all 98 manifested scenarios
+with zero differences. Both catalogs retain 62 selectors. Behavior scenarios
+exercise 42 selectors, leaving 20 without behavior-level scenarios. Direct
+dispatch covers 26 selectors; strict missing-policy rejection covers 36.
+Reference and candidate wheel SHA-256 values are
+`a82f5cc90c495763aba876cd48f8ef2213f3fd086746df1052a2016efcc7118a` and
+`e955e6bfc7d910f29019010811ab83a66d045cdc212ad82152d9975c6d2d7090`. The
+report is `/tmp/alphus-morphology-shared-prose-6bc8a0c.json` and is not
+committed.
+
+The installed-wheel CI passed 2,510 package tests (44 skipped); its self-profile
+passed 27 checks with zero failures and four provisional passes. This is
+evidence for the paired shared-policy migration, not complete selector or
+issue #87 equivalence.
