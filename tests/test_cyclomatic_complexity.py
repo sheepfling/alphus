@@ -819,7 +819,10 @@ steps = ["Cyclomatic", "Existing command"]
         selected_file_count=1,
         analyzed_file_count=1,
         record_scope="violations_only",
-        effective_options=(("maximum", "3"), ("select", "C901")),
+        effective_options=(
+            complexity.CyclomaticOption("maximum", "3"),
+            complexity.CyclomaticOption("select", "C901"),
+        ),
     )
     clean_report = complexity.CyclomaticReport(
         metric="cyclomatic",
@@ -828,6 +831,13 @@ steps = ["Cyclomatic", "Existing command"]
         functions=(),
         diagnostics=(),
     )
+    assert [option.name for option in backend.effective_options] == [
+        "maximum",
+        "select",
+    ]
+    assert complexity.report_payload(clean_report)["backends"][0][
+        "effective_options"
+    ] == [["maximum", "3"], ["select", "C901"]]
     monkeypatch.setattr(cli, "run_builtin_rule", lambda *_: clean_report)
 
     assert main(["--root", str(root), "--config", str(config), "--run", "--json"]) == 0

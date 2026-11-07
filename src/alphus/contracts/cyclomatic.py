@@ -61,6 +61,20 @@ class CyclomaticPlan:
 
 
 @dataclass(frozen=True, slots=True)
+class CyclomaticOption:
+    """One named effective option sent to or interpreted by a native backend."""
+
+    name: str
+    value: str
+
+    def __post_init__(self) -> None:
+        if not self.name or not self.name.strip():
+            raise ValueError("cyclomatic option names must be non-empty")
+        if not self.value or not self.value.strip():
+            raise ValueError("cyclomatic option values must be non-empty")
+
+
+@dataclass(frozen=True, slots=True)
 class CyclomaticBackendResult:
     """One backend's tool/version provenance and analyzed-file coverage."""
 
@@ -77,7 +91,7 @@ class CyclomaticBackendResult:
     selected_file_count: int
     analyzed_file_count: int
     record_scope: Literal["all_functions", "violations_only"]
-    effective_options: tuple[tuple[str, str], ...]
+    effective_options: tuple[CyclomaticOption, ...]
     failure: str | None = None
 
 

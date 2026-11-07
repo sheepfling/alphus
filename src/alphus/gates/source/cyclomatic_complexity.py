@@ -10,7 +10,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import asdict
 from pathlib import Path
 from types import MappingProxyType
-from typing import Annotated, Final, TypeAlias
+from typing import Annotated, Final, TypeAlias, cast
 
 from packaging.version import InvalidVersion, Version
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
@@ -20,6 +20,7 @@ from alphus.contracts.cyclomatic import (
     CyclomaticBackendPlan,
     CyclomaticBackendResult,
     CyclomaticFunctionMetric,
+    CyclomaticOption,
     CyclomaticPlan,
     CyclomaticReport,
 )
@@ -39,6 +40,7 @@ from alphus.policy.metrics import (
     LizardCyclomaticBinding,
     RuffCyclomaticBinding,
 )
+from alphus.support.data_access import JsonValue
 from alphus.support.inventory import candidate_files
 from alphus.support.platform_utils import is_windows
 from alphus.support.python_runtime import current_python_executable
@@ -599,20 +601,20 @@ def _result(
 
 def _effective_options(
     plan: CyclomaticBackendPlan,
-) -> tuple[tuple[str, str], ...]:
+) -> tuple[CyclomaticOption, ...]:
     """List native options and common policy controls in stable order."""
     options = [
-        ("maximum", str(plan.maximum)),
-        ("severity", plan.severity),
-        ("variant", plan.variant or "backend-default"),
+        CyclomaticOption("maximum", str(plan.maximum)),
+        CyclomaticOption("severity", plan.severity),
+        CyclomaticOption("variant", plan.variant or "backend-default"),
     ]
     if plan.backend == "ruff":
-        options.append(("select", "C901"))
+        options.append(CyclomaticOption("select", "C901"))
     elif plan.backend == "eslint":
-        options.append(("complexity_rule", "error"))
+        options.append(CyclomaticOption("complexity_rule", "error"))
     else:
         extension = "mccabe" if plan.variant == "modified" else "none"
-        options.append(("extension", extension))
+        options.append(CyclomaticOption("extension", extension))
     return tuple(options)
 
 
@@ -931,11 +933,20 @@ def plan_payload(plan: CyclomaticPlan) -> dict[str, object]:
 
 
 # opaque-boundary: Dataclass serialization preserves native report fields.
-def report_payload(report: CyclomaticReport) -> dict[str, object]:
+def report_payload(report: CyclomaticReport) -> dict[str, JsonValue]:
     """Serialize the structured report for JSON output and orchestration."""
     payload = asdict(report)
     payload["diagnostics"] = [item.to_wire() for item in report.diagnostics]
-    return payload
+    payload["backends"] = [
+        {
+            **asdict(backend),
+            "effective_options": [
+                [option.name, option.value] for option in backend.effective_options
+            ],
+        }
+        for backend in report.backends
+    ]
+    return cast(dict[str, JsonValue], payload)
 
 
 def report_summary(report: CyclomaticReport) -> str:
