@@ -19,10 +19,6 @@ from alphus.gates.review.embedded_semantic_overrides import (
     check_embedded_semantic_overrides,
 )
 from alphus.gates.review.frameworks.fastapi_practices import check_fastapi_practices
-from alphus.gates.review.frameworks.pydantic.practices import check_pydantic_practices
-from alphus.gates.review.frameworks.sqlalchemy_practices import (
-    check_sqlalchemy_practices,
-)
 from alphus.gates.review.heuristic_total_consumption import (
     check_heuristic_total_consumption,
 )
@@ -352,20 +348,10 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
                 ),
             )
         ),
-        "pydantic-practices": lambda root, files, config: check_pydantic_practices(
-            root,
-            files,
-            require_policy(config.checks.pydantic_practices, "pydantic_practices"),
-        ),
         "fastapi-practices": lambda root, files, config: check_fastapi_practices(
             root,
             files,
             require_policy(config.checks.fastapi_practices, "fastapi_practices"),
-        ),
-        "sqlalchemy-practices": lambda root, files, config: check_sqlalchemy_practices(
-            root,
-            files,
-            require_policy(config.checks.sqlalchemy_practices, "sqlalchemy_practices"),
         ),
         "dynamic-markdown": lambda root, files, config: check_dynamic_markdown(
             root,

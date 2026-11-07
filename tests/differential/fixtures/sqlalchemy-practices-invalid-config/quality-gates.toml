@@ -1,0 +1,4 @@
+schema_version = 1
+
+[checks.sqlalchemy_practices]
+not_a_policy_field = true

@@ -5,13 +5,25 @@ from __future__ import annotations
 import ast
 import re
 from collections.abc import Iterable, Mapping, MutableMapping, MutableSet, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
-from typing import Literal
+from typing import Final, Literal
 
-from alphus.config import SqlAlchemyPracticePolicy
+from alphus.config import QualityGateConfig
+from alphus.contracts.complaints import ComplaintContract, ComplaintEntry
 from alphus.contracts.findings import Finding, Severity
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
+from alphus.plugins.builtin import BuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import SqlAlchemyPracticePolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_scanning import (
     ImportAliases,
@@ -93,53 +105,55 @@ RuleName = Literal[
     "module-session",
     "repository-commit",
 ]
+
+
+@dataclass(frozen=True, slots=True)
+class _RuleDescription:
+    severity: Severity
+    message: str
+
+
 NameKind = Literal[
     "session", "session-factory", "session-registry", "engine", "connection"
 ]
-_RULES: Mapping[RuleName, tuple[Category, Severity, str]] = MappingProxyType(
+_RULES: Mapping[RuleName, _RuleDescription] = MappingProxyType(
     {
-        "legacy-query": (
-            Category.STYLE,
+        "legacy-query": _RuleDescription(
             "warning",
             (
                 "Session.query() and Query are legacy ORM query APIs; prefer select() "
                 "with Session.scalars() or Session.execute()"
             ),
         ),
-        "legacy-declarative-base": (
-            Category.STYLE,
+        "legacy-declarative-base": _RuleDescription(
             "warning",
             (
                 "declarative_base() creates the legacy ORM base style; prefer DeclarativeBase "
                 "for new models"
             ),
         ),
-        "legacy-backref": (
-            Category.STYLE,
+        "legacy-backref": _RuleDescription(
             "warning",
             (
                 "relationship(backref=...) creates an implicit reverse attribute; prefer "
                 "typed relationships with back_populates"
             ),
         ),
-        "literal-execute": (
-            Category.CORRECTNESS,
+        "literal-execute": _RuleDescription(
             "warning",
             (
                 "SQLAlchemy 2.x execute() does not accept a plain SQL string; use text() "
                 "or exec_driver_sql()"
             ),
         ),
-        "module-session": (
-            Category.ARCHITECTURE,
+        "module-session": _RuleDescription(
             "warning",
             (
                 "create mutable SQLAlchemy sessions at call time or inside a context manager, "
                 "not during module import"
             ),
         ),
-        "repository-commit": (
-            Category.ARCHITECTURE,
+        "repository-commit": _RuleDescription(
             "warning",
             (
                 "review this repository commit() call against the consumer's transaction "
@@ -148,6 +162,124 @@ _RULES: Mapping[RuleName, tuple[Category, Severity, str]] = MappingProxyType(
         ),
     }
 )
+
+ALPHUS_COMPLAINT_CONTRACTS: Final = (
+    ComplaintContract(
+        name="sqlalchemy-practices",
+        emitters=("sqlalchemy-practices",),
+        entries=(
+            ComplaintEntry(
+                emitter="sqlalchemy-practices",
+                tag=RuleTag(
+                    Scope.PYTHON, Framework.SQLALCHEMY, Category.STYLE, "legacy-query"
+                ),
+            ),
+            ComplaintEntry(
+                emitter="sqlalchemy-practices",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.SQLALCHEMY,
+                    Category.STYLE,
+                    "legacy-declarative-base",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="sqlalchemy-practices",
+                tag=RuleTag(
+                    Scope.PYTHON, Framework.SQLALCHEMY, Category.STYLE, "legacy-backref"
+                ),
+            ),
+            ComplaintEntry(
+                emitter="sqlalchemy-practices",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.SQLALCHEMY,
+                    Category.CORRECTNESS,
+                    "literal-execute",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="sqlalchemy-practices",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.SQLALCHEMY,
+                    Category.ARCHITECTURE,
+                    "module-session",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="sqlalchemy-practices",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.SQLALCHEMY,
+                    Category.ARCHITECTURE,
+                    "repository-commit",
+                ),
+            ),
+        ),
+    ),
+)
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="sqlalchemy-practices",
+    display_name="SQLAlchemy practices",
+    policy_field="sqlalchemy_practices",
+    policy_model=SqlAlchemyPracticePolicy,
+    output_shape="findings",
+    summary="Reviews configured SQLAlchemy model, query, and session practices.",
+    applies_to=("python", "sqlalchemy"),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="sqlalchemy-practices",
+    finding_ids=(
+        RuleTag(Scope.PYTHON, Framework.SQLALCHEMY, Category.STYLE, "legacy-query"),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.SQLALCHEMY,
+            Category.STYLE,
+            "legacy-declarative-base",
+        ),
+        RuleTag(Scope.PYTHON, Framework.SQLALCHEMY, Category.STYLE, "legacy-backref"),
+        RuleTag(
+            Scope.PYTHON, Framework.SQLALCHEMY, Category.CORRECTNESS, "literal-execute"
+        ),
+        RuleTag(
+            Scope.PYTHON, Framework.SQLALCHEMY, Category.ARCHITECTURE, "module-session"
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.SQLALCHEMY,
+            Category.ARCHITECTURE,
+            "repository-commit",
+        ),
+    ),
+    finding_contracts=("sqlalchemy-practices",),
+    concern="sqlalchemy-source-practices",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "Selected source patterns may warrant review of SQLAlchemy API and "
+        "transaction boundaries."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=(
+        "configured-python-source",
+        "sqlalchemy-call-patterns",
+        "session-lifetimes",
+    ),
+    languages_formats=("python",),
+    evidence_kinds=("python-ast-pattern", "source-location", "declared-contract"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
+
+
+def _sqlalchemy_rule_id(name: RuleName) -> str:
+    for entry in ALPHUS_COMPLAINT_CONTRACTS[0].entries:
+        if entry.emitter == "sqlalchemy-practices" and entry.tag.complaint == name:
+            return entry.tag.rule_id
+    raise ValueError(f"unknown SQLAlchemy complaint {name!r}")
 
 
 def _target_names(target: ast.expr) -> set[str]:
@@ -954,13 +1086,11 @@ def sqlalchemy_practice_findings(
     return sorted(
         (
             Finding(
-                rule_id=rule_tag(
-                    Scope.PYTHON, Framework.SQLALCHEMY, _RULES[name][0], name
-                ),
+                rule_id=_sqlalchemy_rule_id(name),
                 path=path,
                 line=line,
-                severity=_RULES[name][1],
-                message=_RULES[name][2],
+                severity=_RULES[name].severity,
+                message=_RULES[name].message,
             )
             for name, lines in findings.items()
             for line in lines
@@ -984,3 +1114,21 @@ def check_sqlalchemy_practices(
         source = read_python_source(checkout / relative)
         findings.extend(sqlalchemy_practice_findings(source, policy, path=name))
     return findings
+
+
+def run_sqlalchemy_practices_rule(
+    root: Path, paths: Sequence[Path], config: QualityGateConfig
+) -> list[Finding]:
+    """Adapt the feature-owned policy to the built-in runner contract."""
+    return check_sqlalchemy_practices(
+        root,
+        paths,
+        require_policy(config.checks.sqlalchemy_practices, "sqlalchemy_practices"),
+    )
+
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_sqlalchemy_practices_rule,
+)

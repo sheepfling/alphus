@@ -271,23 +271,11 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             "Reviews configured positional parameters at Python call and API boundaries.",
             ("python",),
         ),
-        "pydantic-practices": RuleSpec(
-            "pydantic_practices",
-            RuleOutputShape.FINDINGS,
-            "Reviews configured Pydantic model declarations and validation practices.",
-            ("python", "pydantic"),
-        ),
         "fastapi-practices": RuleSpec(
             "fastapi_practices",
             RuleOutputShape.FINDINGS,
             "Reviews configured FastAPI route and dependency practices.",
             ("python", "fastapi"),
-        ),
-        "sqlalchemy-practices": RuleSpec(
-            "sqlalchemy_practices",
-            RuleOutputShape.FINDINGS,
-            "Reviews configured SQLAlchemy model, query, and session practices.",
-            ("python", "sqlalchemy"),
         ),
         "dynamic-markdown": RuleSpec(
             "dynamic_markdown",

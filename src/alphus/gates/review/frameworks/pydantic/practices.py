@@ -5,19 +5,32 @@ from __future__ import annotations
 import ast
 from collections.abc import Iterable, Sequence
 from collections.abc import Set as AbstractSet
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Final, Literal, TypeAlias
 
 from alphus.config import (
     FiniteStateContract,
     PydanticDomainReturnContract,
-    PydanticPracticePolicy,
+    QualityGateConfig,
     UtcPersistenceContract,
 )
+from alphus.contracts.complaints import ComplaintContract, ComplaintEntry
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
 from alphus.gates.review.frameworks.pydantic.manual_validation import (
     manual_model_validation_lines,
 )
+from alphus.plugins.builtin import BuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import PydanticPracticePolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_scanning import (
     ImportAliases,
@@ -25,6 +38,272 @@ from alphus.support.source_scanning import (
     import_aliases,
 )
 from alphus.support.source_text import read_python_source
+
+PydanticComplaint: TypeAlias = Literal[
+    "model-dump-domain-return",
+    "finite-state-string-selector",
+    "non-utc-persistence",
+    "dump-revalidation",
+    "implicit-mutability",
+    "deprecated-v1-api",
+    "unvalidated-construct",
+    "unvalidated-copy-update",
+    "validator-fallthrough",
+    "field-positional-default",
+    "static-mutable-default-factory",
+    "custom-init",
+    "public-unconstrained-any",
+    "external-schema-documentation",
+]
+
+
+@dataclass(frozen=True, slots=True)
+class _OptionalFindingRule:
+    enabled: bool
+    complaint: PydanticComplaint
+    lines: list[int]
+    message: str
+
+
+ALPHUS_COMPLAINT_CONTRACTS: Final = (
+    ComplaintContract(
+        name="pydantic-practices",
+        emitters=("pydantic-practices",),
+        entries=(
+            ComplaintEntry(
+                emitter="pydantic-practices",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.PYDANTIC,
+                    Category.CORRECTNESS,
+                    "model-dump-domain-return",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="pydantic-practices",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.PYDANTIC,
+                    Category.STYLE,
+                    "finite-state-string-selector",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="pydantic-practices",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.PYDANTIC,
+                    Category.CORRECTNESS,
+                    "non-utc-persistence",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="pydantic-practices",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.PYDANTIC,
+                    Category.VALIDATION,
+                    "dump-revalidation",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="pydantic-practices",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.PYDANTIC,
+                    Category.CORRECTNESS,
+                    "implicit-mutability",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="pydantic-practices",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.PYDANTIC,
+                    Category.CORRECTNESS,
+                    "deprecated-v1-api",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="pydantic-practices",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.PYDANTIC,
+                    Category.VALIDATION,
+                    "unvalidated-construct",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="pydantic-practices",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.PYDANTIC,
+                    Category.VALIDATION,
+                    "unvalidated-copy-update",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="pydantic-practices",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.PYDANTIC,
+                    Category.CORRECTNESS,
+                    "validator-fallthrough",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="pydantic-practices",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.PYDANTIC,
+                    Category.STYLE,
+                    "field-positional-default",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="pydantic-practices",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.PYDANTIC,
+                    Category.STYLE,
+                    "static-mutable-default-factory",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="pydantic-practices",
+                tag=RuleTag(
+                    Scope.PYTHON, Framework.PYDANTIC, Category.VALIDATION, "custom-init"
+                ),
+            ),
+            ComplaintEntry(
+                emitter="pydantic-practices",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.PYDANTIC,
+                    Category.VALIDATION,
+                    "public-unconstrained-any",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="pydantic-practices",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.PYDANTIC,
+                    Category.METADATA,
+                    "external-schema-documentation",
+                ),
+            ),
+        ),
+    ),
+)
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="pydantic-practices",
+    display_name="Pydantic practices",
+    policy_field="pydantic_practices",
+    policy_model=PydanticPracticePolicy,
+    output_shape="findings",
+    summary="Reviews configured Pydantic model declarations and validation practices.",
+    applies_to=("python", "pydantic"),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="pydantic-practices",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.PYDANTIC,
+            Category.CORRECTNESS,
+            "model-dump-domain-return",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.PYDANTIC,
+            Category.STYLE,
+            "finite-state-string-selector",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.PYDANTIC,
+            Category.CORRECTNESS,
+            "non-utc-persistence",
+        ),
+        RuleTag(
+            Scope.PYTHON, Framework.PYDANTIC, Category.VALIDATION, "dump-revalidation"
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.PYDANTIC,
+            Category.CORRECTNESS,
+            "implicit-mutability",
+        ),
+        RuleTag(
+            Scope.PYTHON, Framework.PYDANTIC, Category.CORRECTNESS, "deprecated-v1-api"
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.PYDANTIC,
+            Category.VALIDATION,
+            "unvalidated-construct",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.PYDANTIC,
+            Category.VALIDATION,
+            "unvalidated-copy-update",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.PYDANTIC,
+            Category.CORRECTNESS,
+            "validator-fallthrough",
+        ),
+        RuleTag(
+            Scope.PYTHON, Framework.PYDANTIC, Category.STYLE, "field-positional-default"
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.PYDANTIC,
+            Category.STYLE,
+            "static-mutable-default-factory",
+        ),
+        RuleTag(Scope.PYTHON, Framework.PYDANTIC, Category.VALIDATION, "custom-init"),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.PYDANTIC,
+            Category.VALIDATION,
+            "public-unconstrained-any",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.PYDANTIC,
+            Category.METADATA,
+            "external-schema-documentation",
+        ),
+    ),
+    finding_contracts=("pydantic-practices",),
+    concern="pydantic-validation-practices",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "Configured source patterns may warrant review of Pydantic validation "
+        "and model boundaries."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("configured-python-source", "pydantic-models", "validation-calls"),
+    languages_formats=("python",),
+    evidence_kinds=("python-ast-pattern", "source-location", "declared-contract"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
+
+
+def _pydantic_rule_id(complaint: PydanticComplaint) -> str:
+    for entry in ALPHUS_COMPLAINT_CONTRACTS[0].entries:
+        if entry.emitter == "pydantic-practices" and entry.tag.complaint == complaint:
+            return entry.tag.rule_id
+    raise ValueError(f"unknown Pydantic complaint {complaint!r}")
+
 
 _DUMP_METHODS = frozenset({"model_dump", "model_dump_json"})
 _VALIDATION_METHODS = frozenset(
@@ -1550,12 +1829,7 @@ def pydantic_practice_findings(
         ):
             findings.append(
                 Finding(
-                    rule_id=rule_tag(
-                        Scope.PYTHON,
-                        Framework.PYDANTIC,
-                        Category.CORRECTNESS,
-                        "model-dump-domain-return",
-                    ),
+                    rule_id=_pydantic_rule_id("model-dump-domain-return"),
                     path=path,
                     line=line,
                     severity=policy.domain_return_severity,
@@ -1574,12 +1848,7 @@ def pydantic_practice_findings(
         for line in _finite_state_selector_lines(module, contract, aliases):
             findings.append(
                 Finding(
-                    rule_id=rule_tag(
-                        Scope.PYTHON,
-                        Framework.PYDANTIC,
-                        Category.STYLE,
-                        "finite-state-string-selector",
-                    ),
+                    rule_id=_pydantic_rule_id("finite-state-string-selector"),
                     path=path,
                     line=line,
                     severity="info",
@@ -1599,12 +1868,7 @@ def pydantic_practice_findings(
         for line in _utc_persistence_lines(module, contract, aliases):
             findings.append(
                 Finding(
-                    rule_id=rule_tag(
-                        Scope.PYTHON,
-                        Framework.PYDANTIC,
-                        Category.CORRECTNESS,
-                        "non-utc-persistence",
-                    ),
+                    rule_id=_pydantic_rule_id("non-utc-persistence"),
                     path=path,
                     line=line,
                     severity="warning",
@@ -1619,12 +1883,7 @@ def pydantic_practice_findings(
     if policy.report_dump_revalidation:
         findings.extend(
             Finding(
-                rule_id=rule_tag(
-                    Scope.PYTHON,
-                    Framework.PYDANTIC,
-                    Category.VALIDATION,
-                    "dump-revalidation",
-                ),
+                rule_id=_pydantic_rule_id("dump-revalidation"),
                 path=path,
                 line=line,
                 severity="warning",
@@ -1638,12 +1897,7 @@ def pydantic_practice_findings(
     if policy.require_explicit_frozen:
         findings.extend(
             Finding(
-                rule_id=rule_tag(
-                    Scope.PYTHON,
-                    Framework.PYDANTIC,
-                    Category.CORRECTNESS,
-                    "implicit-mutability",
-                ),
+                rule_id=_pydantic_rule_id("implicit-mutability"),
                 path=path,
                 line=line,
                 severity="warning",
@@ -1651,45 +1905,39 @@ def pydantic_practice_findings(
             )
             for line in _implicit_mutability_lines(module)
         )
-    optional_rules = (
-        (
+    optional_rules: tuple[_OptionalFindingRule, ...] = (
+        _OptionalFindingRule(
             policy.report_deprecated_v1_apis,
-            Category.CORRECTNESS,
             "deprecated-v1-api",
             _deprecated_v1_lines(module, aliases, models),
             "review this Pydantic v1 API before migrating to v2",
         ),
-        (
+        _OptionalFindingRule(
             policy.report_unvalidated_construct,
-            Category.VALIDATION,
             "unvalidated-construct",
             _new_api_lines(module, models, "model_construct"),
             "model_construct bypasses validation; use only with trusted, prevalidated data",
         ),
-        (
+        _OptionalFindingRule(
             policy.report_unvalidated_copy_update,
-            Category.VALIDATION,
             "unvalidated-copy-update",
             _new_api_lines(module, models, "model_copy"),
             "model_copy(update=...) does not validate updated values",
         ),
-        (
+        _OptionalFindingRule(
             policy.report_validator_fallthrough,
-            Category.CORRECTNESS,
             "validator-fallthrough",
             _validator_fallthrough_lines(module, aliases),
             "this Pydantic validator may reach its end without returning a value",
         ),
-        (
+        _OptionalFindingRule(
             policy.report_field_positional_default,
-            Category.STYLE,
             "field-positional-default",
             _field_positional_lines(module, aliases, models),
             "use Field(default=...) to make the field default explicit",
         ),
-        (
+        _OptionalFindingRule(
             policy.prefer_static_mutable_defaults,
-            Category.STYLE,
             "static-mutable-default-factory",
             _static_mutable_default_factory_lines(module, aliases, models),
             (
@@ -1698,9 +1946,8 @@ def pydantic_practice_findings(
                 "for isolation"
             ),
         ),
-        (
+        _OptionalFindingRule(
             policy.report_custom_init,
-            Category.VALIDATION,
             "custom-init",
             manual_model_validation_lines(module, models),
             (
@@ -1709,36 +1956,31 @@ def pydantic_practice_findings(
             ),
         ),
     )
-    for enabled, category, name, lines, message in optional_rules:
-        if enabled:
+    for rule in optional_rules:
+        if rule.enabled:
             findings.extend(
                 Finding(
-                    rule_id=rule_tag(Scope.PYTHON, Framework.PYDANTIC, category, name),
+                    rule_id=_pydantic_rule_id(rule.complaint),
                     path=path,
                     line=line,
                     severity="info"
-                    if name
+                    if rule.complaint
                     in {
                         "field-positional-default",
                         "static-mutable-default-factory",
                         "custom-init",
                     }
                     else "warning",
-                    message=message,
+                    message=rule.message,
                 )
-                for line in lines
+                for line in rule.lines
             )
     if policy.report_unconstrained_any and any(
         matches_path(path, pattern) for pattern in policy.public_model_paths
     ):
         findings.extend(
             Finding(
-                rule_id=rule_tag(
-                    Scope.PYTHON,
-                    Framework.PYDANTIC,
-                    Category.VALIDATION,
-                    "public-unconstrained-any",
-                ),
+                rule_id=_pydantic_rule_id("public-unconstrained-any"),
                 path=path,
                 line=line,
                 severity="warning",
@@ -1752,12 +1994,7 @@ def pydantic_practice_findings(
     if policy.report_external_model_docs:
         findings.extend(
             Finding(
-                rule_id=rule_tag(
-                    Scope.PYTHON,
-                    Framework.PYDANTIC,
-                    Category.METADATA,
-                    "external-schema-documentation",
-                ),
+                rule_id=_pydantic_rule_id("external-schema-documentation"),
                 path=path,
                 line=line,
                 severity="info",
@@ -1785,3 +2022,21 @@ def check_pydantic_practices(
         source = read_python_source(checkout / relative)
         findings.extend(pydantic_practice_findings(source, policy, path=name))
     return findings
+
+
+def run_pydantic_practices_rule(
+    root: Path, paths: Sequence[Path], config: QualityGateConfig
+) -> list[Finding]:
+    """Adapt the feature-owned policy to the built-in runner contract."""
+    return check_pydantic_practices(
+        root,
+        paths,
+        require_policy(config.checks.pydantic_practices, "pydantic_practices"),
+    )
+
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_pydantic_practices_rule,
+)

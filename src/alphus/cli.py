@@ -483,9 +483,7 @@ def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
         "test-quality": "Test quality",
         "input-contracts": "Input contracts",
         "positional-interfaces": "Positional interface review",
-        "pydantic-practices": "Pydantic practices",
         "fastapi-practices": "FastAPI practices",
-        "sqlalchemy-practices": "SQLAlchemy practices",
         "suppression-reasons": "Suppression reasons",
     }
     feature_label = FEATURE_DEFINITIONS.get(rule)

@@ -49,7 +49,6 @@ from alphus.policy.review import (
     PositionalSemanticOverridePolicy,
     ProseAsControlPolicy,
     ProvenanceOwnershipPolicy,
-    PydanticPracticePolicy,
     QuaternionConjugationPolicy,
     QuaternionInversionPolicy,
     QuaternionMatrixConversionPolicy,
@@ -60,7 +59,6 @@ from alphus.policy.review import (
     RunArtifactPolicy,
     SemanticWorkPresentationPolicy,
     SourceFamilyPolicy,
-    SqlAlchemyPracticePolicy,
     SuppressionReasonPolicy,
     TypingStubSuggestionPolicy,
     UnexplainedEmptyResultPolicy,
@@ -109,9 +107,7 @@ class CheckPolicies(GeneratedFeaturePolicies):
     source_test_coverage: SourceTestCoveragePolicy | None = None
     source_families: SourceFamilyPolicy | None = None
     positional_interfaces: PositionalInterfacePolicy | None = None
-    pydantic_practices: PydanticPracticePolicy | None = None
     fastapi_practices: FastApiPracticePolicy | None = None
-    sqlalchemy_practices: SqlAlchemyPracticePolicy | None = None
     dynamic_markdown: DynamicMarkdownPolicy | None = None
     suppression_reasons: SuppressionReasonPolicy | None = None
     shared_utilities: SharedUtilitiesPolicy | None = None

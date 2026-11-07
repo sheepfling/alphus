@@ -80,6 +80,8 @@ exclude = [
   "scripts/registry_spike/provider_factory.py",
   "tests/differential/fixtures/input-contracts/src/example.py",
   "tests/differential/fixtures/package-boundaries/registry.py",
+  # Positive dump/revalidation fixture exercises the same dynamic mapping shape.
+  "tests/differential/fixtures/pydantic-practices/src/example.py",
 ]
 opaque_boundary_paths = [
   "src/alphus/config.py",
@@ -210,7 +212,9 @@ max_findings = 10
 
 [checks.pydantic_practices]
 extensions = [".py"]
-exclude = []
+# This positive wheel fixture intentionally triggers dump revalidation; the
+# differential scenarios retain and assert its warning and stable source line.
+exclude = ["tests/differential/fixtures/pydantic-practices/src/example.py"]
 report_dump_revalidation = true
 require_explicit_frozen = false
 report_deprecated_v1_apis = false
@@ -230,7 +234,9 @@ exclude = []
 [checks.sqlalchemy_practices]
 target_sqlalchemy = ">=2.0,<3.0"
 extensions = [".py"]
-exclude = []
+# This positive wheel fixture intentionally triggers legacy query review; the
+# differential scenarios retain and assert its warning and stable source line.
+exclude = ["tests/differential/fixtures/sqlalchemy-practices/src/example.py"]
 report_legacy_query = true
 report_legacy_declarative_base = true
 report_backref = true

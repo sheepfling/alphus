@@ -220,6 +220,98 @@ name = "json"
 arguments = ["--config", "quality-gates.toml", "--rule", "input-contracts", "--json"]
 
 [[scenario]]
+name = "pydantic-practices-direct"
+fixture = "pydantic-practices"
+selectors = ["pydantic-practices"]
+behavior = ["direct-selector", "framework-ast-heuristic", "stable-finding-id"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/python/pydantic/validation/dump-revalidation", path = "src/example.py", line = 13 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "pydantic-practices", "--json"]
+
+[[scenario]]
+name = "pydantic-practices-profile"
+fixture = "pydantic-practices"
+selectors = ["pydantic-practices"]
+behavior = ["feature-owned-profile-dispatch", "typed-result-adapter"]
+expected_exit = 0
+minimum_findings = 1
+expected_step_names = ["pydantic-review"]
+expected_step_rules = ["pydantic-practices"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/python/pydantic/validation/dump-revalidation", path = "src/example.py", line = 13 },
+]
+
+[[scenario.variant]]
+name = "profile-json"
+arguments = ["--config", "quality-gates.toml", "--profile", "pydantic-review", "--run", "--json"]
+
+[[scenario]]
+name = "sqlalchemy-practices-direct"
+fixture = "sqlalchemy-practices"
+selectors = ["sqlalchemy-practices"]
+behavior = ["direct-selector", "framework-ast-heuristic", "stable-finding-id"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/python/sqlalchemy/style/legacy-query", path = "src/example.py", line = 9 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "sqlalchemy-practices", "--json"]
+
+[[scenario]]
+name = "sqlalchemy-practices-profile"
+fixture = "sqlalchemy-practices"
+selectors = ["sqlalchemy-practices"]
+behavior = ["feature-owned-profile-dispatch", "typed-result-adapter"]
+expected_exit = 0
+minimum_findings = 1
+expected_step_names = ["sqlalchemy-review"]
+expected_step_rules = ["sqlalchemy-practices"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/python/sqlalchemy/style/legacy-query", path = "src/example.py", line = 9 },
+]
+
+[[scenario.variant]]
+name = "profile-json"
+arguments = ["--config", "quality-gates.toml", "--profile", "sqlalchemy-review", "--run", "--json"]
+
+[[scenario]]
+name = "pydantic-practices-invalid-config"
+fixture = "pydantic-practices-invalid-config"
+selectors = ["pydantic-practices"]
+behavior = ["feature-owned-strict-policy", "unknown-field-rejected-before-run"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-config"
+arguments = ["--config", "quality-gates.toml", "--rule", "pydantic-practices"]
+parse_json = false
+
+[[scenario]]
+name = "sqlalchemy-practices-invalid-config"
+fixture = "sqlalchemy-practices-invalid-config"
+selectors = ["sqlalchemy-practices"]
+behavior = ["feature-owned-strict-policy", "unknown-field-rejected-before-run"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-config"
+arguments = ["--config", "quality-gates.toml", "--rule", "sqlalchemy-practices"]
+parse_json = false
+
+[[scenario]]
 name = "test-quality-direct"
 fixture = "test-quality"
 selectors = ["test-quality"]
