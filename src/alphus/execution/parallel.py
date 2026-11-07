@@ -8,7 +8,6 @@ from collections.abc import Callable, Mapping, Sequence
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass, replace
 from functools import partial
-from importlib import import_module
 from io import StringIO
 from pathlib import Path
 from typing import cast
@@ -27,6 +26,7 @@ from alphus.execution.commands import (
     step_directory,
     windows_shell_required,
 )
+from alphus.execution.dispatch import cyclomatic_rule_operations
 from alphus.execution.processes import run_captured_process
 from alphus.execution.scheduler import WorkOutcome, WorkUnit, run_work_units
 from alphus.execution.step_results import RuleRunResult
@@ -54,61 +54,33 @@ def backend_failure(
     message: str,
 ) -> BackendRun:
     """Load the native result adapter only when a cyclomatic worker fails."""
-    adapt = cast(
-        Callable[[CyclomaticBackendPlan, CyclomaticComplexityPolicy, str], BackendRun],
-        import_module("alphus.gates.source.cyclomatic_complexity").backend_failure,
-    )
-    return adapt(plan, policy, message)
+    return cyclomatic_rule_operations().backend_failure(plan, policy, message)
 
 
 def build_cyclomatic_plan(
     root: Path, policy: CyclomaticComplexityPolicy
 ) -> CyclomaticPlan:
     """Resolve native tool plans only for an explicitly selected profile step."""
-    build = cast(
-        Callable[[Path, CyclomaticComplexityPolicy], CyclomaticPlan],
-        import_module(
-            "alphus.gates.source.cyclomatic_complexity"
-        ).build_cyclomatic_plan,
-    )
-    return build(root, policy)
+    return cyclomatic_rule_operations().build_plan(root, policy)
 
 
 def combine_cyclomatic_backends(
     policy: CyclomaticComplexityPolicy, runs: Sequence[BackendRun]
 ) -> CyclomaticReport:
     """Reduce native backend results on the selected cyclomatic path."""
-    combine = cast(
-        Callable[[CyclomaticComplexityPolicy, Sequence[BackendRun]], CyclomaticReport],
-        import_module(
-            "alphus.gates.source.cyclomatic_complexity"
-        ).combine_cyclomatic_backends,
-    )
-    return combine(policy, runs)
+    return cyclomatic_rule_operations().combine_backends(policy, runs)
 
 
 def report_exit_code(report: CyclomaticReport, threshold: Severity) -> int:
-    resolve = cast(
-        Callable[[CyclomaticReport, Severity], int],
-        import_module("alphus.gates.source.cyclomatic_complexity").report_exit_code,
-    )
-    return resolve(report, threshold)
+    return cyclomatic_rule_operations().report_exit_code(report, threshold)
 
 
 def report_payload(report: CyclomaticReport) -> Mapping[str, JsonValue]:
-    serialize = cast(
-        Callable[[CyclomaticReport], Mapping[str, JsonValue]],
-        import_module("alphus.gates.source.cyclomatic_complexity").report_payload,
-    )
-    return serialize(report)
+    return cyclomatic_rule_operations().report_payload(report)
 
 
 def report_summary(report: CyclomaticReport) -> str:
-    summarize = cast(
-        Callable[[CyclomaticReport], str],
-        import_module("alphus.gates.source.cyclomatic_complexity").report_summary,
-    )
-    return summarize(report)
+    return cyclomatic_rule_operations().report_summary(report)
 
 
 @dataclass(frozen=True, slots=True)
