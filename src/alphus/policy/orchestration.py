@@ -40,7 +40,6 @@ from alphus.policy.review import (
     EmbeddedSemanticOverridePolicy,
     FastApiPracticePolicy,
     HeuristicTotalConsumptionPolicy,
-    InputContractPolicy,
     ManualEliminationPolicy,
     ManualMatrixKernelPolicy,
     NedBasisVectorsPolicy,
@@ -63,7 +62,6 @@ from alphus.policy.review import (
     SourceFamilyPolicy,
     SqlAlchemyPracticePolicy,
     SuppressionReasonPolicy,
-    TestQualityPolicy,
     TypingStubSuggestionPolicy,
     UnexplainedEmptyResultPolicy,
 )
@@ -109,8 +107,6 @@ class CheckPolicies(GeneratedFeaturePolicies):
     run_artifacts: RunArtifactPolicy | None = None
     ci_workflows: CiWorkflowPolicy | None = None
     source_test_coverage: SourceTestCoveragePolicy | None = None
-    test_quality: TestQualityPolicy | None = None
-    input_contracts: InputContractPolicy | None = None
     source_families: SourceFamilyPolicy | None = None
     positional_interfaces: PositionalInterfacePolicy | None = None
     pydantic_practices: PydanticPracticePolicy | None = None

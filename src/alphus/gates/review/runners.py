@@ -26,7 +26,6 @@ from alphus.gates.review.frameworks.sqlalchemy_practices import (
 from alphus.gates.review.heuristic_total_consumption import (
     check_heuristic_total_consumption,
 )
-from alphus.gates.review.input_contracts import check_input_contracts
 from alphus.gates.review.numerical.frames.ecef_enu_transform import (
     check_ecef_enu_transform,
 )
@@ -90,7 +89,6 @@ from alphus.gates.review.semantic_work_presentation import (
 from alphus.gates.review.source_families import check_source_families
 from alphus.gates.review.source_test_coverage import check_source_test_coverage
 from alphus.gates.review.suppression_reasons import check_suppression_reasons
-from alphus.gates.review.test_quality import check_test_quality
 from alphus.gates.review.typing_stub_suggestions import check_typing_stub_suggestions
 from alphus.gates.review.unexplained_empty_results import (
     check_unexplained_empty_results,
@@ -339,16 +337,6 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
             root,
             files,
             require_policy(config.checks.source_test_coverage, "source_test_coverage"),
-        ),
-        "test-quality": lambda root, files, config: check_test_quality(
-            root,
-            files,
-            require_policy(config.checks.test_quality, "test_quality"),
-        ),
-        "input-contracts": lambda root, files, config: check_input_contracts(
-            root,
-            files,
-            require_policy(config.checks.input_contracts, "input_contracts"),
         ),
         "source-families": lambda root, files, config: check_source_families(
             root,

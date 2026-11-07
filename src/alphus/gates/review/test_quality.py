@@ -7,12 +7,24 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from textwrap import dedent
+from typing import Final
 
 from pydantic import JsonValue, RootModel, ValidationError
 
-from alphus.config import TestQualityPolicy as _TestQualityPolicy
+from alphus.config import QualityGateConfig
+from alphus.contracts.complaints import ComplaintContract, ComplaintEntry
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
+from alphus.plugins.builtin import BuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import TestQualityPolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 
@@ -61,6 +73,103 @@ class _Scope:
         self.strings.pop(name, None)
         self.paths.pop(name, None)
         self.oracle_values.pop(name, None)
+
+
+ALPHUS_COMPLAINT_CONTRACTS: Final = (
+    ComplaintContract(
+        name="test-quality",
+        emitters=("test-quality",),
+        entries=(
+            ComplaintEntry(
+                emitter="test-quality",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.TESTING,
+                    "large-prose-assertion",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="test-quality",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.TESTING,
+                    "shared-oracle",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="test-quality",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.TESTING,
+                    "ephemeral-plan-dependency",
+                ),
+            ),
+        ),
+    ),
+)
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="test-quality",
+    policy_field="test_quality",
+    policy_model=TestQualityPolicy,
+    output_shape="findings",
+    summary=(
+        "Reviews configured Python tests for brittle prose assertions and "
+        "transient-document handling."
+    ),
+    applies_to=("python",),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="test-quality",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.TESTING,
+            "large-prose-assertion",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.TESTING,
+            "shared-oracle",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.TESTING,
+            "ephemeral-plan-dependency",
+        ),
+    ),
+    finding_contracts=("test-quality",),
+    concern="test-evidence-quality",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "Configured Python tests may use brittle narrative assertions, depend "
+        "on ephemeral documents, or compare a production calculation with itself."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("configured-python-test-files", "assertions", "local-path-reads"),
+    languages_formats=("python",),
+    evidence_kinds=("syntax-tree-pattern", "source-location"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
+
+
+def _test_quality_tag(complaint: str) -> str:
+    for contract in ALPHUS_COMPLAINT_CONTRACTS:
+        if contract.name != "test-quality":
+            continue
+        for entry in contract.entries:
+            if entry.emitter == "test-quality" and entry.tag.complaint == complaint:
+                return entry.tag.rule_id
+    raise ValueError(f"unknown test-quality complaint {complaint!r}")
 
 
 def _symbol(node: ast.expr, scope: _Scope) -> str | None:
@@ -171,7 +280,7 @@ def _bound_names(statements: Sequence[ast.stmt]) -> set[str]:
     return names
 
 
-def _is_prose(value: str, policy: _TestQualityPolicy) -> bool:
+def _is_prose(value: str, policy: TestQualityPolicy) -> bool:
     if (
         len(value) < policy.large_prose_min_chars
         or len(value.split()) < policy.large_prose_min_words
@@ -202,7 +311,7 @@ def _calls_in_order(node: ast.AST) -> Iterable[ast.Call]:
 
 
 class _TestScanner:
-    def __init__(self, path: str, policy: _TestQualityPolicy) -> None:
+    def __init__(self, path: str, policy: TestQualityPolicy) -> None:
         self.path = path
         self.policy = policy
         self.findings: list[Finding] = []
@@ -212,12 +321,7 @@ class _TestScanner:
     def add(self, category: str, line: int, message: str) -> None:
         self.findings.append(
             Finding(
-                rule_tag(
-                    Scope.PYTHON,
-                    Framework.NONE,
-                    Category.TESTING,
-                    category.replace("_", "-"),
-                ),
+                _test_quality_tag(category.replace("_", "-")),
                 self.path,
                 message,
                 line,
@@ -533,9 +637,7 @@ class _TestScanner:
                     pass
 
 
-def python_findings(
-    source: str, path: str, policy: _TestQualityPolicy
-) -> list[Finding]:
+def python_findings(source: str, path: str, policy: TestQualityPolicy) -> list[Finding]:
     """Inspect a module without reading any document mentioned by its tests."""
     scanner = _TestScanner(path, policy)
     scanner.block(ast.parse(source, filename=path).body, _Scope(), testing=False)
@@ -546,7 +648,7 @@ def python_findings(
 
 
 def check_test_quality(
-    root: Path, paths: Iterable[Path], policy: _TestQualityPolicy
+    root: Path, paths: Iterable[Path], policy: TestQualityPolicy
 ) -> list[Finding]:
     """Inspect selected Python test files and return deterministic warnings."""
     findings: list[Finding] = []
@@ -563,3 +665,18 @@ def check_test_quality(
         if path.is_file():
             findings.extend(python_findings(read_python_source(path), name, policy))
     return findings
+
+
+def run_test_quality_rule(
+    root: Path, files: Sequence[Path], config: QualityGateConfig
+) -> list[Finding]:
+    """Adapt the existing configured test scan to built-in feature dispatch."""
+    policy = require_policy(config.checks.test_quality, "test_quality")
+    return check_test_quality(root, files, policy)
+
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_test_quality_rule,
+)

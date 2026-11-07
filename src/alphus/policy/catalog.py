@@ -102,19 +102,6 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             ("repository",),
             requires_files=False,
         ),
-        "test-quality": RuleSpec(
-            "test_quality",
-            RuleOutputShape.FINDINGS,
-            "Reviews configured Python tests for brittle prose assertions and "
-            "transient-document handling.",
-            ("python",),
-        ),
-        "input-contracts": RuleSpec(
-            "input_contracts",
-            RuleOutputShape.FINDINGS,
-            "Reviews local Python collection mutation and read-only input contracts.",
-            ("python",),
-        ),
         "source-families": RuleSpec(
             "source_families",
             RuleOutputShape.FINDINGS,

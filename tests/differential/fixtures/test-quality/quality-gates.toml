@@ -6,3 +6,17 @@ exclude = []
 
 [checks.test_quality]
 extensions = [".py"]
+
+[orchestration]
+default_profile = "test-quality-review"
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "test-quality-review"
+rule = "test-quality"
+severity = "warning"
+
+[[orchestration.profiles]]
+name = "test-quality-review"
+steps = ["test-quality-review"]

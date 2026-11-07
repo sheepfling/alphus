@@ -1,0 +1,7 @@
+schema_version = 1
+[files]
+include = ["*.py", "tests/**"]
+exclude = []
+[checks.test_quality]
+extensions = [".py"]
+unknown_setting = true
