@@ -26,9 +26,9 @@ ALPHUS_CHECK: Final = FeatureDefinition(
     policy_field="git",
     policy_model=GitRepositoryPolicy,
     output_shape="findings",
-    summary="Checks committed root attributes and declared effective attributes.",
-    applies_to=("repository",),
-    domains=("repository",),
+    summary="Checks configured Git attributes for tracked repository paths.",
+    applies_to=("git", "repository"),
+    domains=(),
     requires_files=False,
 )
 

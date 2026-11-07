@@ -26,9 +26,9 @@ ALPHUS_CHECK: Final = FeatureDefinition(
     policy_field="git",
     policy_model=GitRepositoryPolicy,
     output_shape="findings",
-    summary="Checks repository ignore rules and tracked generated paths.",
-    applies_to=("repository",),
-    domains=("repository",),
+    summary="Checks tracked paths against configured Git ignore expectations.",
+    applies_to=("git", "repository"),
+    domains=(),
     requires_files=False,
 )
 

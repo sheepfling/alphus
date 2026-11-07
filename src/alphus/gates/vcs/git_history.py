@@ -26,9 +26,9 @@ ALPHUS_CHECK: Final = FeatureDefinition(
     policy_field="git",
     policy_model=GitRepositoryPolicy,
     output_shape="findings",
-    summary="Reviews reachable Git history for large blobs and generated paths.",
-    applies_to=("repository",),
-    domains=("repository",),
+    summary="Reviews repository history for configured commit and change patterns.",
+    applies_to=("git", "repository"),
+    domains=(),
     requires_files=False,
 )
 
