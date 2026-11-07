@@ -61,8 +61,8 @@ by a typed `BuiltinFeature` with direct runner and specialized-operation
 references.
 
 The original six-rule pilot is not a complete built-in registration
-migration. Twenty-two selectors now use feature-owned runtime declarations,
-while 40 remain on legacy selector/config/runner paths. Generated declarations do not
+migration. Twenty-four selectors now use feature-owned runtime declarations,
+while 38 remain on legacy selector/config/runner paths. Generated declarations do not
 select or enable a check and do not change JSON results, finding IDs, gate IDs,
 or enforcement.
 
@@ -86,13 +86,15 @@ establish a production positive for semantic corruption, so
 `public-sample-reviewed` does not mean measured precision or enforcement
 readiness.
 
-## Registration boundary and next tranche
+## Registration boundary and remaining work
 
 The six-check morphology pilot is metadata discovery. Draft PR #100 now
-has twenty-two feature-owned runtime selectors, including the package-boundaries
+has twenty-four feature-owned runtime selectors, including the package-boundaries
 composite, polyglot cyclomatic and comment readers, paired shared-contract
 numeric checks, document reviewers, and Python test-quality and input-contract
-review. Each declaration generates morphology, `FeatureDefinition`, `RuleSpec`,
+review. The Pydantic and SQLAlchemy Python framework reviewers now use the same
+feature-owned registration/result shape while retaining separate policies and
+analyzers. Each declaration generates morphology, `FeatureDefinition`, `RuleSpec`,
 strict primary `CheckPolicies` field, selector literal, inventory entry and
 lazy dispatch. Existing config names, output adaptation, reports, selection
 and exit behavior remain the compatibility contract. Synthetic discovery
@@ -100,15 +102,23 @@ proves a new selector can be found without a central selector list; tests
 cover strict fields, shared complaint ownership, composite dispatch and lazy
 unselected providers.
 
-This remains bounded: the other 40 baseline selectors use legacy registration
+This paired source-review slice moved `pydantic-practices` and
+`sqlalchemy-practices` from the theme runner/catalog into declarations beside
+their Python analyzers. Both return the existing finding result shape, while
+the Pydantic validation heuristics and SQLAlchemy session/query analysis remain
+feature-specific. Their complaint contracts preserve all existing RuleTag IDs;
+strict policy fields, catalog summaries, lazy runner entry points and display
+labels are generated from those declarations. The pinned wheel manifest now
+includes direct, profile and unknown-policy cases for each selector.
+
+This remains bounded: the other 38 baseline selectors use legacy registration
 paths, and the current evidence is not full wheel equivalence. Candidate
-`c603b1eaf0f9ea5ab53b7f8b1c86a14f55bee70f` matched the pinned baseline
-`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` across 62 manifested scenarios
-with no differences. The equal catalogs contain 62 selectors; behavior-level
-scenarios exercise 22 selectors, leaving 40 without scenario-level evidence.
+`0c31a41b61a006ccff08d611fcec23100c403443` matched the pinned baseline
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` across 68 manifested scenarios
+with zero differences. Both catalogs contain the same 62 selectors; behavior
+scenarios exercise 24 selectors, leaving 38 without behavior-level evidence.
 Direct invocation covers 26 selectors and strict missing-policy rejection
-covers 36. The report is
-`/tmp/alphus-morphology-python-review-c603b1e.json`.
+covers 36. Report: `/tmp/alphus-morphology-framework-practices-0c31a41.json`.
 Continue migration with direct/profile comparisons, lazy-provider checks, and
 explicit missing/unsupported, partial, error, plugin/native and effectful-command
 cases; this does not complete #87.
