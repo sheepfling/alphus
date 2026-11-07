@@ -319,7 +319,7 @@ behavior = ["direct-selector", "framework-ast-heuristic", "stable-finding-id"]
 expected_exit = 0
 minimum_findings = 1
 expected_findings = [
-  { rule_id = "alphus/python/fastapi/correctness/literal-http-status", path = "src/api.py", line = 3 },
+  { rule_id = "alphus/python/fastapi/correctness/literal-http-status", path = "src/api.py", line = 6 },
 ]
 
 [[scenario.variant]]
@@ -337,7 +337,7 @@ expected_step_names = ["fastapi-review"]
 expected_step_rules = ["fastapi-practices"]
 require_passed_steps = true
 expected_findings = [
-  { rule_id = "alphus/python/fastapi/correctness/literal-http-status", path = "src/api.py", line = 3 },
+  { rule_id = "alphus/python/fastapi/correctness/literal-http-status", path = "src/api.py", line = 6 },
 ]
 
 [[scenario.variant]]

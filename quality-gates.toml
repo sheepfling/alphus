@@ -229,7 +229,9 @@ external_model_names = [
 
 [checks.fastapi_practices]
 extensions = [".py"]
-exclude = []
+# This positive wheel fixture intentionally triggers a literal-status finding;
+# its differential scenario retains and asserts the stable ID and source line.
+exclude = ["tests/differential/fixtures/fastapi-practices/src/api.py"]
 
 [checks.sqlalchemy_practices]
 target_sqlalchemy = ">=2.0,<3.0"
