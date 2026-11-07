@@ -57,18 +57,6 @@ class RuleSpec:
 
 _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
     {
-        "json-structure": RuleSpec(
-            "json_structure",
-            RuleOutputShape.FINDINGS,
-            "Checks configured structural expectations in JSON documents.",
-            ("json",),
-        ),
-        "path-discovery": RuleSpec(
-            "path_discovery",
-            RuleOutputShape.FINDINGS,
-            "Reviews Python filesystem discovery and path handling patterns.",
-            ("python",),
-        ),
         "shared-utilities": RuleSpec(
             "shared_utilities",
             RuleOutputShape.SHARED_UTILITIES,

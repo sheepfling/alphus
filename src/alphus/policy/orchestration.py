@@ -74,20 +74,16 @@ from alphus.policy.sources import (
     CliPolicy,
     FileInventoryPolicy,
     FunctionShapePolicy,
-    PathDiscoveryPolicy,
     PythonStylePolicy,
     RuntimeTypePolicy,
     ScriptPolicy,
     SharedUtilitiesPolicy,
-    SourceScanPolicy,
 )
 
 
 class CheckPolicies(GeneratedFeaturePolicies):
     """Settings for the currently available source gates."""
 
-    json_structure: SourceScanPolicy | None = None
-    path_discovery: PathDiscoveryPolicy | None = None
     repeated_numeric_limits: RepeatedNumericLimitPolicy | None = None
     typing_stub_suggestions: TypingStubSuggestionPolicy | None = None
     prose_as_control: ProseAsControlPolicy | None = None

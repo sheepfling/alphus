@@ -911,3 +911,89 @@ required_output = ["Invalid quality policy"]
 name = "invalid-config"
 arguments = ["--config", "quality-gates.toml", "--rule", "comment-markers"]
 parse_json = false
+
+[[scenario]]
+name = "json-structure-polyglot-direct"
+fixture = "source-discovery"
+materialized_files = [
+  { path = "src/example.py", contents = "from pathlib import Path\nroot = Path.cwd()\nimport json\nvalue = json.loads(source)\n" },
+  { path = "src/client.js", contents = "const root = process.cwd();\nconst value = JSON.parse(source);\n" },
+]
+selectors = ["json-structure"]
+behavior = ["feature-owned-registration", "python-javascript-providers", "stable-finding-ids"]
+expected_exit = 1
+minimum_findings = 2
+expected_findings = [
+  { rule_id = "alphus/javascript/none/validation/unvalidated-json-decode", path = "src/client.js", line = 2 },
+  { rule_id = "alphus/python/none/validation/unvalidated-json-decode", path = "src/example.py", line = 4 },
+]
+required_output = ["src/client.js", "src/example.py"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "json-structure", "--json"]
+
+[[scenario]]
+name = "path-discovery-polyglot-direct"
+fixture = "source-discovery"
+materialized_files = [
+  { path = "src/example.py", contents = "from pathlib import Path\nroot = Path.cwd()\nimport json\nvalue = json.loads(source)\n" },
+  { path = "src/client.js", contents = "const root = process.cwd();\nconst value = JSON.parse(source);\n" },
+]
+selectors = ["path-discovery"]
+behavior = ["feature-owned-registration", "language-specific-path-analysis", "stable-finding-ids"]
+expected_exit = 1
+minimum_findings = 2
+expected_findings = [
+  { rule_id = "alphus/javascript/none/portability/implicit-working-directory", path = "src/client.js", line = 1 },
+  { rule_id = "alphus/python/none/portability/implicit-working-directory", path = "src/example.py", line = 2 },
+]
+required_output = ["src/client.js", "src/example.py"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "path-discovery", "--json"]
+
+[[scenario]]
+name = "source-discovery-profile-serial-parallel"
+fixture = "source-discovery"
+materialized_files = [
+  { path = "src/example.py", contents = "from pathlib import Path\nroot = Path.cwd()\nimport json\nvalue = json.loads(source)\n" },
+  { path = "src/client.js", contents = "const root = process.cwd();\nconst value = JSON.parse(source);\n" },
+]
+selectors = ["json-structure", "path-discovery"]
+behavior = ["explicit-profile-selection", "polyglot-source-checks", "ordered-results", "serial-parallel"]
+expected_exit = 0
+minimum_findings = 4
+expected_step_names = ["json-decode-review", "path-discovery-review"]
+expected_step_rules = ["json-structure", "path-discovery"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/javascript/none/validation/unvalidated-json-decode", path = "src/client.js", line = 2 },
+  { rule_id = "alphus/python/none/validation/unvalidated-json-decode", path = "src/example.py", line = 4 },
+  { rule_id = "alphus/javascript/none/portability/implicit-working-directory", path = "src/client.js", line = 1 },
+  { rule_id = "alphus/python/none/portability/implicit-working-directory", path = "src/example.py", line = 2 },
+]
+required_output = ["src/client.js", "src/example.py"]
+
+[[scenario.variant]]
+name = "serial"
+arguments = ["--config", "quality-gates.toml", "--profile", "source-discovery-review", "--run", "--json", "--jobs", "1"]
+
+[[scenario.variant]]
+name = "parallel"
+arguments = ["--config", "quality-gates.toml", "--profile", "source-discovery-review", "--run", "--json", "--jobs", "2"]
+compare_within_build = true
+
+[[scenario]]
+name = "json-structure-invalid-config"
+fixture = "source-discovery-invalid"
+selectors = ["json-structure"]
+behavior = ["strict-feature-policy", "unknown-policy-field-rejected"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-config"
+arguments = ["--config", "quality-gates.toml", "--rule", "json-structure"]
+parse_json = false
