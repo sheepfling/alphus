@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import subprocess
+from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
-from typing import get_args
+from typing import cast, get_args
 
 import pytest
 from pydantic import ValidationError
@@ -13,6 +15,8 @@ from pydantic import ValidationError
 from alphus.cli import main
 from alphus.config import CheckPolicies, QualityGateConfig, QualityRuleName, load_config
 from alphus.contracts.cyclomatic import CyclomaticReport
+from alphus.contracts.findings import Finding
+from alphus.execution import dispatch
 from alphus.execution.dispatch import (
     BUILTIN_RULES,
     RULE_RUNNERS,
@@ -21,7 +25,11 @@ from alphus.execution.dispatch import (
 )
 from alphus.gates.hygiene.file_size import check_file_size
 from alphus.gates.hygiene.line_length import check_line_length
-from alphus.plugins.builtin_registry import builtin_check_entry_points
+from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin_registry import (
+    builtin_check_entry_points,
+    load_builtin_feature,
+)
 from alphus.policy.base import MissingPolicyError
 from alphus.policy.catalog import RULE_SPECS
 
@@ -203,6 +211,49 @@ def test_entrypoint_dispatch_keeps_findings_and_native_report_shapes(
     assert findings
     assert isinstance(report, CyclomaticReport)
     assert report.outcome == "no_matching_files"
+
+
+def test_entrypoint_dispatch_rejects_coercible_finding_mappings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def malformed_runner(
+        _root: Path, _files: Sequence[Path], _config: QualityGateConfig
+    ) -> list[Finding]:
+        return cast(
+            list[Finding],
+            [
+                {
+                    "rule_id": "alphus/python/none/maintainability/file-exceeds-hard-limit",
+                    "path": "sample.py",
+                    "message": "too large",
+                }
+            ],
+        )
+
+    feature = replace(load_builtin_feature("file-size"), runner=malformed_runner)
+
+    def load_malformed_feature(_selector: str) -> BuiltinFeature:
+        return feature
+
+    monkeypatch.setattr(dispatch, "load_builtin_feature", load_malformed_feature)
+    config = QualityGateConfig.model_validate(
+        {
+            "schema_version": 1,
+            "checks": {
+                "file_size": {
+                    "code_extensions": [".py"],
+                    "code_limit": 1,
+                    "hard_limit": 1,
+                    "initializer_name": "__init__.py",
+                    "initializer_limit": 1,
+                }
+            },
+        },
+        strict=True,
+    )
+
+    with pytest.raises(ValidationError):
+        run_builtin_rule("file-size", tmp_path, (), config)
 
 
 def test_cli_catalog_exposes_domain_recommendation_metadata(

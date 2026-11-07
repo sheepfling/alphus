@@ -818,8 +818,11 @@ def _resolve_policy_model(node: ast.expr, path: Path) -> str:
                     imports[alias.asname or alias.name] = f"{module}.{alias.name}"
             case ast.Import(names=aliases):
                 for alias in aliases:
-                    bound_name = alias.asname or alias.name.split(".", 1)[0]
-                    imports[bound_name] = alias.name
+                    if alias.asname is None:
+                        bound_name = alias.name.split(".", 1)[0]
+                        imports[bound_name] = bound_name
+                    else:
+                        imports[alias.asname] = alias.name
             case _:
                 continue
 
@@ -1307,6 +1310,7 @@ def _validate_feature_registration(root: Path, declaration: _Declaration) -> Non
         raise ValueError(
             f"{declaration.source}: feature registration escapes built-in gates"
         )
+    _validate_builtin_feature_export(registration_path, feature.selector)
 
     policy_directory = root / "src" / "alphus" / "policy"
     repository_root = root.resolve(strict=True)
@@ -1370,6 +1374,92 @@ def _validate_feature_registration(root: Path, declaration: _Declaration) -> Non
         raise ValueError(
             f"{declaration.source}: feature policy model does not name a top-level "
             f"class: {feature.policy_model}"
+        )
+
+
+def _validate_builtin_feature_export(path: Path, selector: str) -> None:
+    """Require a statically linked, local provider for each package entry point."""
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    exports = [
+        _assignment_value(statement)
+        for statement in tree.body
+        if _assignment_name(statement) == "ALPHUS_FEATURE"
+    ]
+    if len(exports) != 1 or exports[0] is None:
+        raise ValueError(
+            f"{path}: feature {selector!r} must define exactly one ALPHUS_FEATURE"
+        )
+    match exports[0]:
+        case ast.Call(
+            func=ast.Name(id="BuiltinFeature") | ast.Attribute(attr="BuiltinFeature"),
+            args=args,
+            keywords=keywords,
+        ):
+            pass
+        case _:
+            raise ValueError(
+                f"{path}: ALPHUS_FEATURE must construct a typed BuiltinFeature"
+            )
+    fields: dict[str, ast.expr] = {}
+    positional_names = ("definition", "morphology", "runner", "cyclomatic_operations")
+    if len(args) > len(positional_names):
+        raise ValueError(f"{path}: ALPHUS_FEATURE has too many positional arguments")
+    fields.update(zip(positional_names, args, strict=False))
+    for keyword in keywords:
+        if keyword.arg is None or keyword.arg in fields:
+            raise ValueError(f"{path}: ALPHUS_FEATURE has duplicate or expanded fields")
+        fields[keyword.arg] = keyword.value
+    if set(fields) - set(positional_names) or not {
+        "definition",
+        "morphology",
+        "runner",
+    } <= set(fields):
+        raise ValueError(f"{path}: ALPHUS_FEATURE fields are incomplete or unsupported")
+    match (fields["definition"], fields["morphology"]):
+        case (
+            ast.Name(id="ALPHUS_CHECK"),
+            ast.Name(id="ALPHUS_MORPHOLOGY"),
+        ):
+            pass
+        case _:
+            raise ValueError(
+                f"{path}: ALPHUS_FEATURE must link its local check and morphology declarations"
+            )
+    match fields["runner"]:
+        case ast.Name(id=runner_name):
+            pass
+        case _:
+            raise ValueError(f"{path}: ALPHUS_FEATURE runner must be a local function")
+    providers: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
+    for statement in tree.body:
+        match statement:
+            case ast.FunctionDef(name=name) | ast.AsyncFunctionDef(name=name) if (
+                name == runner_name
+            ):
+                providers.append(statement)
+            case _:
+                continue
+    if len(providers) != 1:
+        raise ValueError(
+            f"{path}: ALPHUS_FEATURE runner {runner_name!r} must be one local sync function"
+        )
+    provider = providers[0]
+    match provider:
+        case ast.FunctionDef(args=args):
+            pass
+        case _:
+            raise ValueError(
+                f"{path}: ALPHUS_FEATURE runner {runner_name!r} must be synchronous"
+            )
+    parameters = (*provider.args.posonlyargs, *provider.args.args)
+    if (
+        len(parameters) != 3
+        or args.vararg is not None
+        or args.kwarg is not None
+        or args.kwonlyargs
+    ):
+        raise ValueError(
+            f"{path}: ALPHUS_FEATURE runner {runner_name!r} must accept three positional inputs"
         )
 
 

@@ -87,6 +87,17 @@ def _feature_source(declaration: tuple[tuple[str, object], ...]) -> str:
         ]
     )
     lines.extend(morphology)
+    lines.extend(
+        [
+            "def _registered_demo_runner(root, files, config):\n",
+            "    return []\n",
+            "ALPHUS_FEATURE = BuiltinFeature(\n",
+            "    definition=ALPHUS_CHECK,\n",
+            "    morphology=ALPHUS_MORPHOLOGY,\n",
+            "    runner=_registered_demo_runner,\n",
+            ")\n",
+        ]
+    )
     return f"from {policy_module} import {policy_class}\n" + "".join(lines)
 
 
@@ -374,6 +385,12 @@ def test_feature_definition_supports_qualified_constructor_and_selector_constant
         "SELECTOR = 'demo-check'\nALPHUS_CHECK = metadata.FeatureDefinition(",
         1,
     ).replace("selector='demo-check',", "selector=SELECTOR,", 1)
+    source = source.replace(
+        "from alphus.policy.sources import DemoPolicy\n",
+        "import alphus.policy.sources\n",
+    ).replace(
+        "policy_model=DemoPolicy,", "policy_model=alphus.policy.sources.DemoPolicy,"
+    )
     (gates / "demo_check.py").write_text(
         "import metadata\n"
         + source
@@ -399,6 +416,36 @@ def test_feature_definition_supports_qualified_constructor_and_selector_constant
     registration = feature_registrations(tmp_path)
 
     assert [item.selector for item in registration] == ["demo-check"]
+
+
+def test_feature_registration_without_export_fails_during_static_discovery(
+    tmp_path: Path,
+) -> None:
+    gates = tmp_path / "src/alphus/gates"
+    policy = tmp_path / "src/alphus/policy"
+    gates.mkdir(parents=True)
+    policy.mkdir(parents=True)
+    feature_declaration = _DECLARATION + (
+        ("policy_field", "demo_policy"),
+        ("policy_model", "alphus.policy.sources.DemoPolicy"),
+        ("output_shape", "findings"),
+        ("summary", "Reports a demo condition."),
+        ("applies_to", ("python",)),
+        ("domains", ()),
+        ("requires_files", True),
+    )
+    source = _feature_source(feature_declaration).split(
+        "def _registered_demo_runner", 1
+    )[0]
+    source += (
+        "rule_tag(Scope.REPOSITORY, Framework.NONE, Category.TESTING, 'demo-check')\n"
+    )
+    (gates / "demo.py").write_text(source, encoding="utf-8")
+    (policy / "orchestration.py").write_text("class CheckPolicies: pass\n")
+    (policy / "sources.py").write_text("class DemoPolicy: pass\n")
+
+    with pytest.raises(ValueError, match="must define exactly one ALPHUS_FEATURE"):
+        feature_registrations(tmp_path)
 
 
 def test_feature_policy_imports_wrap_deterministically(tmp_path: Path) -> None:

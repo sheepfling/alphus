@@ -237,7 +237,10 @@ def diagnostics_from_output(rule: RuleSelector, output: RuleOutput) -> list[Diag
         return _DIAGNOSTICS.validate_python(output)
     shape = spec.output_shape
     if shape is RuleOutputShape.FINDINGS:
-        return [item.as_diagnostic() for item in _FINDINGS.validate_python(output)]
+        return [
+            item.as_diagnostic()
+            for item in _FINDINGS.validate_python(output, strict=True)
+        ]
     if shape is RuleOutputShape.MESSAGES:
         if rule == "cli" and isinstance(output, CliPolicyReport):
             return _cli_policy_diagnostics(output)
