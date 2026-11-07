@@ -31,14 +31,10 @@ from alphus.policy.intents import (
 )
 from alphus.policy.repository import VersionSyncPolicy
 from alphus.policy.review import (
-    ArrayRepresentationPolicy,
-    CholeskyRecurrencePolicy,
     CiWorkflowPolicy,
     DynamicMarkdownPolicy,
     EmbeddedSemanticOverridePolicy,
     HeuristicTotalConsumptionPolicy,
-    ManualEliminationPolicy,
-    ManualMatrixKernelPolicy,
     ParallelNormalizationPolicy,
     PatchCascadePolicy,
     PositionalInterfacePolicy,
@@ -79,10 +75,6 @@ class CheckPolicies(GeneratedFeaturePolicies):
     semantic_work_presentation: SemanticWorkPresentationPolicy | None = None
     parallel_normalization: ParallelNormalizationPolicy | None = None
     patch_cascade: PatchCascadePolicy | None = None
-    manual_matrix_kernels: ManualMatrixKernelPolicy | None = None
-    manual_elimination: ManualEliminationPolicy | None = None
-    array_representation_churn: ArrayRepresentationPolicy | None = None
-    cholesky_recurrence: CholeskyRecurrencePolicy | None = None
     run_artifacts: RunArtifactPolicy | None = None
     ci_workflows: CiWorkflowPolicy | None = None
     source_test_coverage: SourceTestCoveragePolicy | None = None

@@ -3,14 +3,64 @@
 from __future__ import annotations
 
 import ast
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from pathlib import Path
+from typing import Final
 
-from alphus.config import CholeskyRecurrencePolicy
+from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
+from alphus.plugins.builtin import BuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import CholeskyRecurrencePolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="cholesky-recurrence",
+    input_mode="configured-source-scan",
+    policy_field="cholesky_recurrence",
+    policy_model=CholeskyRecurrencePolicy,
+    output_shape="findings",
+    summary="Reviews configured hand-written Cholesky recurrence patterns.",
+    applies_to=("python", "numerical"),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="cholesky-recurrence",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.MAINTAINABILITY,
+            "manual-cholesky-recurrence",
+        ),
+    ),
+    concern="cholesky-factorization-implementation",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "A configured Python function matches a coordinated lower-factor "
+        "recurrence; this is a review signal, not proof of an invalid result."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("configured-python-files", "factorization-recurrences"),
+    languages_formats=("python",),
+    evidence_kinds=(
+        "configured-source-path",
+        "ast-pattern-match",
+        "source-location",
+    ),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
 
 _RULE_ID = rule_tag(
     Scope.PYTHON,
@@ -391,3 +441,19 @@ def check_cholesky_recurrence(
                 )
             )
     return findings
+
+
+def _run_builtin_cholesky_recurrence(
+    root: Path,
+    files: Sequence[Path],
+    config: QualityGateConfig,
+) -> list[Finding]:
+    policy = require_policy(config.checks.cholesky_recurrence, "cholesky_recurrence")
+    return check_cholesky_recurrence(root, files, policy)
+
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=_run_builtin_cholesky_recurrence,
+)

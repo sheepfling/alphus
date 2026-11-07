@@ -174,30 +174,6 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             "Reviews ordered patch operations that can cascade across edits.",
             ("python",),
         ),
-        "manual-matrix-kernels": RuleSpec(
-            "manual_matrix_kernels",
-            RuleOutputShape.FINDINGS,
-            "Reviews configured hand-written matrix kernel patterns.",
-            ("python", "numerical"),
-        ),
-        "manual-elimination": RuleSpec(
-            "manual_elimination",
-            RuleOutputShape.FINDINGS,
-            "Reviews configured hand-written elimination patterns.",
-            ("python", "numerical"),
-        ),
-        "array-representation-churn": RuleSpec(
-            "array_representation_churn",
-            RuleOutputShape.FINDINGS,
-            "Reviews configured array representation conversion patterns.",
-            ("python", "numerical"),
-        ),
-        "cholesky-recurrence": RuleSpec(
-            "cholesky_recurrence",
-            RuleOutputShape.FINDINGS,
-            "Reviews configured hand-written Cholesky recurrence patterns.",
-            ("python", "numerical"),
-        ),
         "ci-workflows": RuleSpec(
             "ci_workflows",
             RuleOutputShape.FINDINGS,

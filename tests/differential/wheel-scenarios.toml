@@ -1475,3 +1475,97 @@ required_output = ["Invalid quality policy"]
 name = "invalid-config"
 arguments = ["--config", "quality-gates.toml", "--rule", "ecef-enu-transform"]
 parse_json = false
+
+[[scenario]]
+name = "linear-algebra-manual-matrix-kernels-direct"
+fixture = "linear-algebra"
+selectors = ["manual-matrix-kernels"]
+behavior = ["feature-owned-configured-scan", "nested-product-heuristic", "stable-finding-id"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/python/none/maintainability/manual-matrix-kernel", path = "src/numerics/matrix_kernel.py", line = 11 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "manual-matrix-kernels", "--json"]
+
+[[scenario]]
+name = "linear-algebra-manual-elimination-direct"
+fixture = "linear-algebra"
+selectors = ["manual-elimination"]
+behavior = ["feature-owned-configured-scan", "pivot-swap-normalize-eliminate", "stable-finding-id"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/python/none/maintainability/manual-elimination", path = "src/numerics/elimination.py", line = 3 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "manual-elimination", "--json"]
+
+[[scenario]]
+name = "linear-algebra-array-representation-direct"
+fixture = "linear-algebra"
+selectors = ["array-representation-churn"]
+behavior = ["feature-owned-configured-scan", "array-list-roundtrip", "stable-finding-id"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/python/none/maintainability/array-representation-churn", path = "src/numerics/representation.py", line = 18 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "array-representation-churn", "--json"]
+
+[[scenario]]
+name = "linear-algebra-cholesky-direct"
+fixture = "linear-algebra"
+selectors = ["cholesky-recurrence"]
+behavior = ["feature-owned-configured-scan", "coordinated-factorization-recurrence", "stable-finding-id"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/python/none/maintainability/manual-cholesky-recurrence", path = "src/numerics/cholesky.py", line = 7 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "cholesky-recurrence", "--json"]
+
+[[scenario]]
+name = "linear-algebra-profile"
+fixture = "linear-algebra"
+selectors = ["manual-matrix-kernels", "manual-elimination", "array-representation-churn", "cholesky-recurrence"]
+behavior = ["feature-owned-profile-dispatch", "ordered-results", "typed-result-adapter"]
+expected_exit = 0
+minimum_findings = 4
+expected_step_names = ["Manual matrix kernels", "Manual elimination", "Array representation churn", "Cholesky recurrence"]
+expected_step_rules = ["manual-matrix-kernels", "manual-elimination", "array-representation-churn", "cholesky-recurrence"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/python/none/maintainability/manual-matrix-kernel", path = "src/numerics/matrix_kernel.py", line = 11 },
+  { rule_id = "alphus/python/none/maintainability/manual-elimination", path = "src/numerics/elimination.py", line = 3 },
+  { rule_id = "alphus/python/none/maintainability/array-representation-churn", path = "src/numerics/representation.py", line = 18 },
+  { rule_id = "alphus/python/none/maintainability/manual-cholesky-recurrence", path = "src/numerics/cholesky.py", line = 7 },
+]
+
+[[scenario.variant]]
+name = "profile-json"
+arguments = ["--config", "quality-gates.toml", "--profile", "linear-algebra", "--run", "--json"]
+
+[[scenario]]
+name = "linear-algebra-invalid-config"
+fixture = "linear-algebra-invalid-config"
+selectors = ["manual-matrix-kernels"]
+behavior = ["feature-owned-strict-policy", "unknown-field-rejected-before-run"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-config"
+arguments = ["--config", "quality-gates.toml", "--rule", "manual-matrix-kernels"]
+parse_json = false

@@ -80,6 +80,9 @@ exclude = [
   "scripts/registry_spike/provider_factory.py",
   "tests/differential/fixtures/input-contracts/src/example.py",
   "tests/differential/fixtures/package-boundaries/registry.py",
+  # This differential fixture intentionally accepts a mutable matrix and mutates it
+  # to prove the manual-elimination check without creating unrelated style findings.
+  "tests/differential/fixtures/linear-algebra/src/numerics/elimination.py",
   # Positive dump/revalidation fixture exercises the same dynamic mapping shape.
   "tests/differential/fixtures/pydantic-practices/src/example.py",
 ]
@@ -170,7 +173,12 @@ ephemeral_document_patterns = ["docs/**"]
 extensions = [".py"]
 # The fixture intentionally mutates its input so the differential scenario can
 # assert the input-contract finding.
-exclude = ["tests/differential/fixtures/input-contracts/src/example.py"]
+exclude = [
+  "tests/differential/fixtures/input-contracts/src/example.py",
+  # The elimination fixture mutates its matrix to exercise that advisory check;
+  # the pinned-wheel scenario asserts its existing finding and source location.
+  "tests/differential/fixtures/linear-algebra/src/numerics/elimination.py",
+]
 sequence_narrowing_paths = ["src/alphus/gates/review/positional_interfaces.py"]
 
 [checks.typing_stub_suggestions]

@@ -21,18 +21,6 @@ from alphus.gates.review.embedded_semantic_overrides import (
 from alphus.gates.review.heuristic_total_consumption import (
     check_heuristic_total_consumption,
 )
-from alphus.gates.review.numerical.linear_algebra.array_representation import (
-    check_array_representation,
-)
-from alphus.gates.review.numerical.linear_algebra.cholesky_recurrence import (
-    check_cholesky_recurrence,
-)
-from alphus.gates.review.numerical.linear_algebra.manual_elimination import (
-    check_manual_elimination,
-)
-from alphus.gates.review.numerical.linear_algebra.manual_matrix_kernels import (
-    check_manual_matrix_kernels,
-)
 from alphus.gates.review.parallel_normalization import check_parallel_normalization
 from alphus.gates.review.patch_cascade import check_patch_cascade
 from alphus.gates.review.positional_interfaces import check_positional_interfaces
@@ -181,35 +169,6 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
             root,
             files,
             require_policy(config.checks.patch_cascade, "patch_cascade"),
-        ),
-        "manual-matrix-kernels": lambda root, files, config: (
-            check_manual_matrix_kernels(
-                root,
-                files,
-                require_policy(
-                    config.checks.manual_matrix_kernels, "manual_matrix_kernels"
-                ),
-            )
-        ),
-        "manual-elimination": lambda root, files, config: check_manual_elimination(
-            root,
-            files,
-            require_policy(config.checks.manual_elimination, "manual_elimination"),
-        ),
-        "array-representation-churn": lambda root, files, config: (
-            check_array_representation(
-                root,
-                files,
-                require_policy(
-                    config.checks.array_representation_churn,
-                    "array_representation_churn",
-                ),
-            )
-        ),
-        "cholesky-recurrence": lambda root, files, config: check_cholesky_recurrence(
-            root,
-            files,
-            require_policy(config.checks.cholesky_recurrence, "cholesky_recurrence"),
         ),
         "run-artifacts": lambda root, files, config: check_run_artifacts(
             root,
