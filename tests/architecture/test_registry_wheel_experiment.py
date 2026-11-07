@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import sys
 from dataclasses import dataclass
-from importlib.metadata import version
 from pathlib import Path
 
 from packaging.version import Version
@@ -75,11 +74,17 @@ typeCheckingMode = "strict"
     FixtureSource(
         "build_backend.py",
         """from pathlib import Path
+import setuptools
 from setuptools import build_meta as delegate
 
 
 def _generate_entry_points() -> None:
     root = Path(__file__).resolve().parent
+    metadata = root / ".registry-build"
+    metadata.mkdir(parents=True, exist_ok=True)
+    (metadata / "setuptools-version.txt").write_text(
+        setuptools.__version__ + "\\n", encoding="utf-8"
+    )
     registrations = sorted(
         (root / "src" / "morphology_spike" / "checks").glob("*_registration.py")
     )
@@ -88,8 +93,7 @@ def _generate_entry_points() -> None:
         f"{path.stem} = morphology_spike.checks.{path.stem}:register_check"
         for path in registrations
     )
-    output = root / ".registry-build" / "entry_points.txt"
-    output.parent.mkdir(parents=True, exist_ok=True)
+    output = metadata / "entry_points.txt"
     output.write_text("\\n".join(lines) + "\\n", encoding="utf-8")
 
 
@@ -427,11 +431,11 @@ def _run(root: Path, *arguments: str) -> str:
 
 
 def _run_installed_registry(
-    site: Path, cwd: Path, source: str
+    site: Path, cwd: Path, source: str, setuptools_version: str
 ) -> InstalledRegistryReport:
     code = f"""import json, sys
 sys.path.insert(0, {str(site)!r})
-from importlib.metadata import distribution, version
+from importlib.metadata import distribution
 from pathlib import Path
 import sys
 from morphology_spike.registry import CheckRegistry
@@ -472,7 +476,7 @@ module_origin = str(Path(__import__("morphology_spike").__file__).resolve())
 print(json.dumps({{
     "discovery": {source!r},
     "module_origin": module_origin,
-    "setuptools_version": version("setuptools"),
+    "setuptools_version": {setuptools_version!r},
     "entry_point_targets": list(entry_point_targets),
     "selectors": list(registry.definitions),
     "exact_shape": exact.shape.value,
@@ -538,8 +542,7 @@ def test_two_independent_rule_shapes_merge_build_and_run_from_installed_wheel(
     (fixtures / "two.py").write_text("MAGIC\n", encoding="utf-8")
     wheelhouse = tmp_path / "wheelhouse"
     wheelhouse.mkdir()
-    setuptools_version = version("setuptools")
-    assert Version(setuptools_version) >= Version("80")
+    build_version_path = project / ".registry-build" / "setuptools-version.txt"
     _run(project, sys.executable, "-m", "pyright", "--project", "pyproject.toml")
     _run(
         project,
@@ -548,13 +551,14 @@ def test_two_independent_rule_shapes_merge_build_and_run_from_installed_wheel(
         "pip",
         "wheel",
         "--no-deps",
-        "--no-build-isolation",
         "--wheel-dir",
         str(wheelhouse),
         ".",
     )
     wheels = tuple(wheelhouse.glob("morphology_spike_demo-*.whl"))
     assert len(wheels) == 1
+    setuptools_version = build_version_path.read_text(encoding="utf-8").strip()
+    assert Version(setuptools_version) >= Version("80")
     generated_entry_points = project / ".registry-build" / "entry_points.txt"
     metadata_text = generated_entry_points.read_text(encoding="utf-8")
     assert (
@@ -579,8 +583,12 @@ def test_two_independent_rule_shapes_merge_build_and_run_from_installed_wheel(
         str(site),
         str(wheels[0]),
     )
-    package_scan = _run_installed_registry(site, tmp_path, "package")
-    entry_points = _run_installed_registry(site, tmp_path, "entry-points")
+    package_scan = _run_installed_registry(
+        site, tmp_path, "package", setuptools_version
+    )
+    entry_points = _run_installed_registry(
+        site, tmp_path, "entry-points", setuptools_version
+    )
 
     for report in (package_scan, entry_points):
         assert report.module_origin.startswith(str(site))
