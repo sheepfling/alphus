@@ -330,6 +330,68 @@ arguments = ["--config", "quality-gates.toml", "--rule", "prose-as-control"]
 parse_json = false
 
 [[scenario]]
+name = "heuristic-total-consumption-direct"
+fixture = "review-advisories"
+selectors = ["heuristic-total-consumption"]
+behavior = ["feature-owned-direct-dispatch", "configured-token-consumption-heuristic"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/python/none/correctness/heuristic-total-consumption", path = "src/example.py", line = 8 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "heuristic-total-consumption", "--json"]
+
+[[scenario]]
+name = "unexplained-empty-results-direct"
+fixture = "review-advisories"
+selectors = ["unexplained-empty-results"]
+behavior = ["feature-owned-direct-dispatch", "configured-empty-result-heuristic"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/python/none/validation/unexplained-empty-result", path = "src/example.py", line = 13 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "unexplained-empty-results", "--json"]
+
+[[scenario]]
+name = "review-advisories-profile"
+fixture = "review-advisories"
+selectors = ["heuristic-total-consumption", "unexplained-empty-results"]
+behavior = ["typed-profile-dispatch", "distinct-semantic-findings", "stable-step-order"]
+expected_exit = 0
+minimum_findings = 2
+expected_step_names = ["Heuristic total consumption", "Unexplained empty results"]
+expected_step_rules = ["heuristic-total-consumption", "unexplained-empty-results"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/python/none/correctness/heuristic-total-consumption", path = "src/example.py", line = 8 },
+  { rule_id = "alphus/python/none/validation/unexplained-empty-result", path = "src/example.py", line = 13 },
+]
+
+[[scenario.variant]]
+name = "profile-json"
+arguments = ["--config", "quality-gates.toml", "--profile", "review-advisories", "--run", "--json"]
+
+[[scenario]]
+name = "heuristic-total-consumption-invalid-config"
+fixture = "review-advisories-invalid-config"
+selectors = ["heuristic-total-consumption"]
+behavior = ["feature-owned-strict-policy", "unknown-field-rejected-before-run"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-config"
+arguments = ["--config", "quality-gates.toml", "--rule", "heuristic-total-consumption"]
+parse_json = false
+
+[[scenario]]
 name = "input-contracts-direct"
 expected_findings = [
   { rule_id = "alphus/python/none/correctness/argument-mutation", path = "src/example.py", line = 2 },

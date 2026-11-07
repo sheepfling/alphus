@@ -14,9 +14,6 @@ from typing import TypeAlias
 from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.execution.results import RuleOutput
 from alphus.gates.review.ci_workflows import check_ci_workflows
-from alphus.gates.review.heuristic_total_consumption import (
-    check_heuristic_total_consumption,
-)
 from alphus.gates.review.parallel_normalization import check_parallel_normalization
 from alphus.gates.review.patch_cascade import check_patch_cascade
 from alphus.gates.review.positional_interfaces import check_positional_interfaces
@@ -35,9 +32,6 @@ from alphus.gates.review.source_families import check_source_families
 from alphus.gates.review.source_test_coverage import check_source_test_coverage
 from alphus.gates.review.suppression_reasons import check_suppression_reasons
 from alphus.gates.review.typing_stub_suggestions import check_typing_stub_suggestions
-from alphus.gates.review.unexplained_empty_results import (
-    check_unexplained_empty_results,
-)
 from alphus.policy.base import require_policy
 
 ReviewRunner: TypeAlias = Callable[
@@ -74,26 +68,6 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
                 require_policy(
                     config.checks.positional_semantic_overrides,
                     "positional_semantic_overrides",
-                ),
-            )
-        ),
-        "unexplained-empty-results": lambda root, files, config: (
-            check_unexplained_empty_results(
-                root,
-                files,
-                require_policy(
-                    config.checks.unexplained_empty_results,
-                    "unexplained_empty_results",
-                ),
-            )
-        ),
-        "heuristic-total-consumption": lambda root, files, config: (
-            check_heuristic_total_consumption(
-                root,
-                files,
-                require_policy(
-                    config.checks.heuristic_total_consumption,
-                    "heuristic_total_consumption",
                 ),
             )
         ),

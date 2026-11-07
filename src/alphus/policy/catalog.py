@@ -120,18 +120,6 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             "Reviews positional arguments that override semantic defaults.",
             ("python",),
         ),
-        "unexplained-empty-results": RuleSpec(
-            "unexplained_empty_results",
-            RuleOutputShape.FINDINGS,
-            "Reviews empty results without an evident explanation.",
-            ("python",),
-        ),
-        "heuristic-total-consumption": RuleSpec(
-            "heuristic_total_consumption",
-            RuleOutputShape.FINDINGS,
-            "Reviews heuristic assumptions about total input consumption.",
-            ("python",),
-        ),
         "provenance-as-ownership": RuleSpec(
             "provenance_ownership",
             RuleOutputShape.FINDINGS,

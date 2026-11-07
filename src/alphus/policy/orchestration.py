@@ -32,7 +32,6 @@ from alphus.policy.intents import (
 from alphus.policy.repository import VersionSyncPolicy
 from alphus.policy.review import (
     CiWorkflowPolicy,
-    HeuristicTotalConsumptionPolicy,
     ParallelNormalizationPolicy,
     PatchCascadePolicy,
     PositionalInterfacePolicy,
@@ -44,7 +43,6 @@ from alphus.policy.review import (
     SourceFamilyPolicy,
     SuppressionReasonPolicy,
     TypingStubSuggestionPolicy,
-    UnexplainedEmptyResultPolicy,
 )
 from alphus.policy.source_test_coverage import SourceTestCoveragePolicy
 from alphus.policy.sources import (
@@ -64,8 +62,6 @@ class CheckPolicies(GeneratedFeaturePolicies):
     repeated_numeric_limits: RepeatedNumericLimitPolicy | None = None
     typing_stub_suggestions: TypingStubSuggestionPolicy | None = None
     positional_semantic_overrides: PositionalSemanticOverridePolicy | None = None
-    unexplained_empty_results: UnexplainedEmptyResultPolicy | None = None
-    heuristic_total_consumption: HeuristicTotalConsumptionPolicy | None = None
     provenance_ownership: ProvenanceOwnershipPolicy | None = None
     semantic_work_presentation: SemanticWorkPresentationPolicy | None = None
     parallel_normalization: ParallelNormalizationPolicy | None = None
