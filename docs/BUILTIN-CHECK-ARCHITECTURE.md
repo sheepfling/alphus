@@ -1426,3 +1426,16 @@ behavior-level coverage for three additional selectors; together with the
 previous 31, 34 of 62 selectors now have direct behavior scenarios. The
 remaining 28 are not behaviorally covered by the pinned-wheel harness yet.
 This is another bounded slice, not full issue #87 completion.
+
+The pinned installed-wheel run compared baseline
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` with candidate
+`69115c6bd61d606dc850f660d50eb9370138715e`. All 84 manifested scenarios
+matched, the 62-selector catalog and registration contract were identical,
+and the report contains no differences. The reference and candidate wheel
+SHA-256 values are
+`0cf5247f46c38a5c4cc09a3b59b07f3dd3c3042c241f0dc71122c3094f110f90` and
+`53a0b95c24b97287e4a52e1fa5949334e1063c5e73ed7e6a0c7afe7aa25ddc48`.
+The auxiliary selector-dispatch matrix directly invoked 26 minimal
+configured selectors and rejected missing strict policy for 36; those counts
+are distinct from the 34 selectors with behavior scenarios. The full report
+is `/tmp/alphus-morphology-differential-69115c6.json` and is not committed.
