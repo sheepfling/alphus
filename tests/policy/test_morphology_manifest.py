@@ -116,6 +116,18 @@ def test_generated_text_arguments_wrap_without_changing_their_value() -> None:
     assert ast.literal_eval(call.keywords[0].value) == value
 
 
+def test_generated_feature_definition_imports_are_sorted(
+    pytestconfig: pytest.Config,
+) -> None:
+    imports = tuple(
+        line
+        for line in render_feature_manifest(Path(pytestconfig.rootpath)).splitlines()
+        if line.startswith("from alphus.policy.")
+    )
+
+    assert imports == tuple(sorted(imports))
+
+
 def test_generated_feature_tuples_wrap_without_changing_their_values() -> None:
     values = (
         "scientific-computing",

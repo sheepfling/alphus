@@ -1600,7 +1600,9 @@ def render_manifest(root: Path) -> str:
 def render_feature_manifest(root: Path) -> str:
     """Render typed runtime registration data from feature-owned declarations."""
     declarations = [item for item in _declarations(root) if item.feature is not None]
-    policy_imports: dict[str, set[str]] = {}
+    policy_imports: dict[str, set[str]] = {
+        "alphus.policy.feature_definition": {"FeatureDefinition"}
+    }
     for declaration in declarations:
         feature = declaration.feature
         if feature is None:
@@ -1613,7 +1615,6 @@ def render_feature_manifest(root: Path) -> str:
         "from collections.abc import Mapping",
         "from types import MappingProxyType",
         "",
-        "from alphus.policy.feature_definition import FeatureDefinition",
     ]
     for module, class_names in sorted(policy_imports.items()):
         names = ", ".join(sorted(class_names))

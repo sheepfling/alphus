@@ -38,7 +38,6 @@ from alphus.policy.review import (
     EcefEnuTransformPolicy,
     EcefNedMatrixTransformPolicy,
     EmbeddedSemanticOverridePolicy,
-    FastApiPracticePolicy,
     HeuristicTotalConsumptionPolicy,
     ManualEliminationPolicy,
     ManualMatrixKernelPolicy,
@@ -107,7 +106,6 @@ class CheckPolicies(GeneratedFeaturePolicies):
     source_test_coverage: SourceTestCoveragePolicy | None = None
     source_families: SourceFamilyPolicy | None = None
     positional_interfaces: PositionalInterfacePolicy | None = None
-    fastapi_practices: FastApiPracticePolicy | None = None
     dynamic_markdown: DynamicMarkdownPolicy | None = None
     suppression_reasons: SuppressionReasonPolicy | None = None
     shared_utilities: SharedUtilitiesPolicy | None = None

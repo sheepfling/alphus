@@ -312,6 +312,57 @@ arguments = ["--config", "quality-gates.toml", "--rule", "sqlalchemy-practices"]
 parse_json = false
 
 [[scenario]]
+name = "fastapi-practices-direct"
+fixture = "fastapi-practices"
+selectors = ["fastapi-practices"]
+behavior = ["direct-selector", "framework-ast-heuristic", "stable-finding-id"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/python/fastapi/correctness/literal-http-status", path = "src/api.py", line = 3 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "fastapi-practices", "--json"]
+
+[[scenario]]
+name = "fastapi-practices-profile"
+fixture = "fastapi-practices"
+selectors = ["fastapi-practices"]
+behavior = ["feature-owned-profile-dispatch", "typed-result-adapter"]
+expected_exit = 0
+minimum_findings = 1
+expected_step_names = ["fastapi-review"]
+expected_step_rules = ["fastapi-practices"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/python/fastapi/correctness/literal-http-status", path = "src/api.py", line = 3 },
+]
+
+[[scenario.variant]]
+name = "profile-serial"
+arguments = ["--config", "quality-gates.toml", "--profile", "fastapi-review", "--run", "--json", "--jobs", "1"]
+
+[[scenario.variant]]
+name = "profile-parallel"
+arguments = ["--config", "quality-gates.toml", "--profile", "fastapi-review", "--run", "--json", "--jobs", "2"]
+compare_within_build = true
+
+[[scenario]]
+name = "fastapi-practices-invalid-config"
+fixture = "fastapi-practices-invalid-config"
+selectors = ["fastapi-practices"]
+behavior = ["feature-owned-strict-policy", "unknown-field-rejected-before-run"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-config"
+arguments = ["--config", "quality-gates.toml", "--rule", "fastapi-practices"]
+parse_json = false
+
+[[scenario]]
 name = "test-quality-direct"
 fixture = "test-quality"
 selectors = ["test-quality"]

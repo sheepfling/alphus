@@ -218,7 +218,6 @@ _LEGACY_SOURCE_SCAN_RULES: tuple[QualityRuleName, ...] = (
     "input-contracts",
     "positional-interfaces",
     "pydantic-practices",
-    "fastapi-practices",
     "sqlalchemy-practices",
 )
 
@@ -483,7 +482,6 @@ def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
         "test-quality": "Test quality",
         "input-contracts": "Input contracts",
         "positional-interfaces": "Positional interface review",
-        "fastapi-practices": "FastAPI practices",
         "suppression-reasons": "Suppression reasons",
     }
     feature_label = FEATURE_DEFINITIONS.get(rule)

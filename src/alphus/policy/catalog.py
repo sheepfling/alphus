@@ -271,12 +271,6 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             "Reviews configured positional parameters at Python call and API boundaries.",
             ("python",),
         ),
-        "fastapi-practices": RuleSpec(
-            "fastapi_practices",
-            RuleOutputShape.FINDINGS,
-            "Reviews configured FastAPI route and dependency practices.",
-            ("python", "fastapi"),
-        ),
         "dynamic-markdown": RuleSpec(
             "dynamic_markdown",
             RuleOutputShape.FINDINGS,

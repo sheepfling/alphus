@@ -1,0 +1,22 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py"]
+exclude = []
+
+[checks.fastapi_practices]
+extensions = [".py"]
+
+[orchestration]
+default_profile = "fastapi-review"
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "fastapi-review"
+rule = "fastapi-practices"
+severity = "warning"
+
+[[orchestration.profiles]]
+name = "fastapi-review"
+steps = ["fastapi-review"]

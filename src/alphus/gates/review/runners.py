@@ -18,7 +18,6 @@ from alphus.gates.review.dynamic_markdown import check_dynamic_markdown
 from alphus.gates.review.embedded_semantic_overrides import (
     check_embedded_semantic_overrides,
 )
-from alphus.gates.review.frameworks.fastapi_practices import check_fastapi_practices
 from alphus.gates.review.heuristic_total_consumption import (
     check_heuristic_total_consumption,
 )
@@ -347,11 +346,6 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
                     config.checks.positional_interfaces, "positional_interfaces"
                 ),
             )
-        ),
-        "fastapi-practices": lambda root, files, config: check_fastapi_practices(
-            root,
-            files,
-            require_policy(config.checks.fastapi_practices, "fastapi_practices"),
         ),
         "dynamic-markdown": lambda root, files, config: check_dynamic_markdown(
             root,
