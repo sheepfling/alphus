@@ -18,6 +18,14 @@ from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
 BUILTIN_CHECK_ENTRY_POINT_GROUP = "alphus.builtin_checks.v1"
 
 
+def _distribution_name(owner: Distribution) -> str:
+    """Read the standard distribution name without relying on untyped ``get``."""
+    try:
+        return str(owner.metadata["Name"])
+    except KeyError:
+        return ""
+
+
 def _is_builtin_feature(target: object) -> TypeGuard[BuiltinFeature]:
     """Validate a first-party feature object and its synchronous result contract."""
     match target:
@@ -73,7 +81,7 @@ def builtin_check_entry_points() -> Mapping[str, EntryPoint]:
         )
         discovered.append(
             (
-                str(owner.metadata.get("Name", "")),
+                _distribution_name(owner),
                 tuple(point.name for point in ordered),
             )
         )
@@ -98,7 +106,7 @@ def builtin_check_entry_points() -> Mapping[str, EntryPoint]:
         )
     entry_points = {point.name: point for point in matching[0][0]}
     mismatched_owners = tuple(
-        (str(owner.metadata.get("Name", "")), tuple(point.value for point in points))
+        (_distribution_name(owner), tuple(point.value for point in points))
         for points, owner in matching[1:]
         if tuple(point.value for point in points)
         != tuple(point.value for point in matching[0][0])
