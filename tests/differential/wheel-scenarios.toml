@@ -1306,7 +1306,7 @@ behavior = ["direct-selector", "feature-owned-typed-runner", "bounded-python-ast
 expected_exit = 0
 minimum_findings = 1
 expected_findings = [
-  { rule_id = "alphus/python/none/maintainability/manual-quaternion-normalization", path = "src/geometry/operations.py", line = 55 },
+  { rule_id = "alphus/python/none/maintainability/manual-quaternion-normalization", path = "src/geometry/operations.py", line = 53 },
 ]
 required_output = ["src/geometry/operations.py"]
 
@@ -1322,7 +1322,7 @@ behavior = ["direct-selector", "feature-owned-typed-runner", "bounded-python-ast
 expected_exit = 0
 minimum_findings = 1
 expected_findings = [
-  { rule_id = "alphus/python/none/maintainability/manual-quaternion-inversion", path = "src/geometry/operations.py", line = 61 },
+  { rule_id = "alphus/python/none/maintainability/manual-quaternion-inversion", path = "src/geometry/operations.py", line = 59 },
 ]
 required_output = ["src/geometry/operations.py"]
 
@@ -1338,7 +1338,7 @@ behavior = ["direct-selector", "feature-owned-typed-runner", "bounded-python-ast
 expected_exit = 0
 minimum_findings = 1
 expected_findings = [
-  { rule_id = "alphus/python/none/maintainability/manual-quaternion-vector-rotation", path = "src/geometry/operations.py", line = 68 },
+  { rule_id = "alphus/python/none/maintainability/manual-quaternion-vector-rotation", path = "src/geometry/operations.py", line = 66 },
 ]
 required_output = ["src/geometry/operations.py"]
 
@@ -1354,7 +1354,7 @@ behavior = ["direct-selector", "feature-owned-typed-runner", "bounded-python-ast
 expected_exit = 0
 minimum_findings = 1
 expected_findings = [
-  { rule_id = "alphus/python/none/maintainability/manual-quaternion-matrix-conversion", path = "src/geometry/operations.py", line = 69 },
+  { rule_id = "alphus/python/none/maintainability/manual-quaternion-matrix-conversion", path = "src/geometry/operations.py", line = 70 },
 ]
 required_output = ["src/geometry/operations.py"]
 
@@ -1375,10 +1375,10 @@ minimum_findings = 6
 expected_findings = [
   { rule_id = "alphus/python/none/maintainability/manual-quaternion-conjugation", path = "src/geometry/operations.py", line = 29 },
   { rule_id = "alphus/python/none/maintainability/manual-quaternion-kernel", path = "src/geometry/operations.py", line = 43 },
-  { rule_id = "alphus/python/none/maintainability/manual-quaternion-normalization", path = "src/geometry/operations.py", line = 55 },
-  { rule_id = "alphus/python/none/maintainability/manual-quaternion-inversion", path = "src/geometry/operations.py", line = 61 },
-  { rule_id = "alphus/python/none/maintainability/manual-quaternion-vector-rotation", path = "src/geometry/operations.py", line = 68 },
-  { rule_id = "alphus/python/none/maintainability/manual-quaternion-matrix-conversion", path = "src/geometry/operations.py", line = 69 },
+  { rule_id = "alphus/python/none/maintainability/manual-quaternion-normalization", path = "src/geometry/operations.py", line = 53 },
+  { rule_id = "alphus/python/none/maintainability/manual-quaternion-inversion", path = "src/geometry/operations.py", line = 59 },
+  { rule_id = "alphus/python/none/maintainability/manual-quaternion-vector-rotation", path = "src/geometry/operations.py", line = 66 },
+  { rule_id = "alphus/python/none/maintainability/manual-quaternion-matrix-conversion", path = "src/geometry/operations.py", line = 70 },
 ]
 
 [[scenario.variant]]
