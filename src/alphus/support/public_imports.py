@@ -12,6 +12,10 @@ def resolve_public_attribute(name: str) -> object:
         return import_module("alphus.gates.hygiene.file_size").check_file_size
     if name == "check_line_length":
         return import_module("alphus.gates.hygiene.line_length").check_line_length
+    if name == "check_json_structure":
+        return import_module("alphus.gates.source.json_structure").check_json_structure
+    if name == "check_path_discovery":
+        return import_module("alphus.gates.source.path_discovery").check_path_discovery
     if name == "check_output_escaping":
         return import_module(
             "alphus.gates.source.output_escaping"

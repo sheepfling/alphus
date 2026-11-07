@@ -6,8 +6,8 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from alphus.contracts.cyclomatic import CyclomaticReport
+from scripts.registry_spike.contracts import CheckProvider
 from scripts.registry_spike.toy_policy import ToyPolicy
-from scripts.typed_registry_spike import CheckProvider
 
 
 class ToyAnalyzer:

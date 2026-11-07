@@ -9,33 +9,25 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from importlib.metadata import EntryPoint, entry_points
+from importlib.metadata import EntryPoint, distribution
+from inspect import signature
 from pathlib import Path
 from types import MappingProxyType
-from typing import Generic, Protocol, TypeVar, runtime_checkable
+from typing import Generic, Protocol, TypeVar, cast, runtime_checkable
 
 from alphus.contracts.model import StrictModel
 from alphus.contracts.rule_tags import RuleTag
-from alphus.plugins.registry import load_enabled_plugins
+from alphus.plugins.api import PluginFinding
+from alphus.plugins.registry import PluginRuleBinding, load_enabled_plugins
 from alphus.policy.morphology import RuleMorphology
+from scripts.registry_spike.contracts import CheckProvider
 
 BUILTIN_SPIKE_ENTRY_POINT_GROUP = "alphus.builtin_checks.spike.v1"
-PROVIDER_SPIKE_ENTRY_POINT_GROUP = "alphus.check_providers.spike.v1"
 _SELECTOR = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
 
-SettingsT_contra = TypeVar("SettingsT_contra", bound=StrictModel, contravariant=True)
-EvidenceT_co = TypeVar("EvidenceT_co", covariant=True)
 SettingsT = TypeVar("SettingsT", bound=StrictModel)
 EvidenceT = TypeVar("EvidenceT")
 OutputT = TypeVar("OutputT")
-
-
-class CheckProvider(Protocol[SettingsT_contra, EvidenceT_co]):
-    """A provider's typed analysis boundary."""
-
-    def analyze(
-        self, root: Path, files: Sequence[Path], settings: SettingsT_contra
-    ) -> EvidenceT_co: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,10 +61,11 @@ class ComplaintContract:
 
 @dataclass(frozen=True, slots=True)
 class BuiltinCheckDefinition(Generic[SettingsT, EvidenceT, OutputT]):
-    """Typed check metadata with a deferred provider factory and result adapter."""
+    """Typed check metadata with a typed, deferred provider factory."""
 
     selector: str
     settings_model: type[SettingsT]
+    validate_settings: Callable[[StrictModel | None], SettingsT]
     summary: str
     morphology: RuleMorphology
     complaint_contract: ComplaintContract
@@ -98,52 +91,105 @@ class BuiltinCheckDefinition(Generic[SettingsT, EvidenceT, OutputT]):
             raise ValueError("built-in checks need a non-empty summary")
 
     def execute(
+        self, root: Path, files: Sequence[Path], settings: StrictModel | None
+    ) -> object:
+        """Validate dynamic registry input and preserve the adapted object."""
+        validated_settings = self.validate_settings(settings)
+        evidence = self.provider_factory().analyze(root, files, validated_settings)
+        return self.adapt_result(evidence)
+
+    def execute_typed(
         self, root: Path, files: Sequence[Path], settings: SettingsT
     ) -> OutputT:
-        """Run the selected provider and preserve its declared output type."""
+        """Run a typed provider for direct callers with a known settings model."""
         evidence = self.provider_factory().analyze(root, files, settings)
         return self.adapt_result(evidence)
 
 
 @dataclass(frozen=True, slots=True)
-class EntryPointProviderFactory(Generic[SettingsT, EvidenceT]):
-    """Resolve the selected provider through a standard provider entry point."""
+class PluginCheckEntry:
+    """Adapt a validated API v1 plugin binding to the shared registry shape."""
 
-    selector: str
+    binding: PluginRuleBinding
 
-    def __call__(self) -> CheckProvider[SettingsT, EvidenceT]:
-        candidates = tuple(
-            point
-            for point in entry_points(group=PROVIDER_SPIKE_ENTRY_POINT_GROUP)
-            if point.name == self.selector
+    @property
+    def selector(self) -> str:
+        return self.binding.selector
+
+    def execute(self, root: Path, files: Sequence[Path], settings: object) -> object:
+        validated_settings = self.binding.rule.config_model.model_validate(
+            settings, strict=True
         )
-        if len(candidates) != 1:
-            raise ValueError(
-                f"expected one provider entry point for {self.selector!r}; "
-                f"found {len(candidates)}"
-            )
-        factory: Callable[[], CheckProvider[SettingsT, EvidenceT]] = candidates[
-            0
-        ].load()
-        return factory()
+        return _validated_plugin_findings(
+            self.binding.rule.check(root, files, validated_settings)
+        )
 
 
+@runtime_checkable
 class CheckRegistryEntry(Protocol):
-    """Shared identity view over built-in and plugin registration records."""
+    """Shared executable contract for built-in and API v1 plugin entries."""
 
     @property
     def selector(self) -> str: ...
 
+    def execute(
+        self, root: Path, files: Sequence[Path], settings: StrictModel | None
+    ) -> object: ...
 
-@runtime_checkable
+
 class _DefinitionFactory(Protocol):
-    def __call__(self) -> CheckRegistryEntry: ...
+    def __call__(self) -> object: ...
+
+
+def _distribution_entry_points(group: str) -> tuple[EntryPoint, ...]:
+    """Read first-party registrations only from the installed Alphus dist."""
+    return tuple(
+        point for point in distribution("alphus").entry_points if point.group == group
+    )
+
+
+def _require_registry_entry(value: object, selector: str) -> CheckRegistryEntry:
+    match value:
+        case CheckRegistryEntry() as entry if callable(entry.execute):
+            try:
+                signature(entry.execute).bind(Path("."), (), None)
+            except (TypeError, ValueError) as error:
+                raise TypeError(
+                    f"registration factory for {selector!r} must return an "
+                    "executable check accepting root, files, and settings"
+                ) from error
+            return entry
+        case _:
+            raise TypeError(
+                f"registration factory for {selector!r} must return an executable check"
+            )
+
+
+def _validated_plugin_findings(value: object) -> list[PluginFinding]:
+    """Mirror the API v1 result boundary for a heterogeneous registry entry."""
+    findings: list[PluginFinding] = []
+    match value:
+        case Sequence():
+            items = cast(Sequence[object], value)
+            for item in items:
+                match item:
+                    case PluginFinding() as finding:
+                        findings.append(finding)
+                    case _:
+                        raise TypeError(
+                            "plugin checkers must return PluginFinding records"
+                        )
+            return findings
+        case _:
+            raise TypeError("plugin checkers must return a sequence of PluginFinding")
 
 
 class CheckRegistry:
     """Combine first-party metadata with explicitly enabled plugin v1 rules."""
 
     def __init__(self, definitions: Mapping[str, CheckRegistryEntry]) -> None:
+        if any(selector != entry.selector for selector, entry in definitions.items()):
+            raise ValueError("registry keys must match each check's selector")
         self._definitions = MappingProxyType(dict(definitions))
 
     @classmethod
@@ -153,17 +199,28 @@ class CheckRegistry:
         group: str = BUILTIN_SPIKE_ENTRY_POINT_GROUP,
     ) -> CheckRegistry:
         """Load metadata factories, then reuse the production plugin loader."""
-        candidates: tuple[EntryPoint, ...] = tuple(entry_points(group=group))
+        candidates = _distribution_entry_points(group)
         ordered = tuple(sorted(candidates, key=lambda point: (point.name, point.value)))
+        names: set[str] = set()
+        duplicates: set[str] = set()
+        for point in ordered:
+            if point.name in names:
+                duplicates.add(point.name)
+            names.add(point.name)
+        if duplicates:
+            raise ValueError(
+                "duplicate built-in check entry points: "
+                f"{', '.join(sorted(duplicates))}"
+            )
+
         definitions: dict[str, CheckRegistryEntry] = {}
         for point in ordered:
-            if point.name in definitions:
-                raise ValueError(f"duplicate built-in check entry point {point.name!r}")
             factory: _DefinitionFactory = point.load()
-            definition = factory()
+            definition = _require_registry_entry(factory(), point.name)
             if definition.selector != point.name:
                 raise ValueError("entry point name must match its check selector")
             definitions[point.name] = definition
+
         plugin_definitions = load_enabled_plugins(enabled_plugins)
         duplicate_selectors = set(definitions).intersection(plugin_definitions)
         if duplicate_selectors:
@@ -171,21 +228,25 @@ class CheckRegistry:
                 "duplicate check selectors across registration sources: "
                 f"{', '.join(sorted(duplicate_selectors))}"
             )
-        definitions.update(plugin_definitions)
+        definitions.update(
+            {
+                selector: PluginCheckEntry(binding)
+                for selector, binding in plugin_definitions.items()
+            }
+        )
         return cls(definitions)
 
     @property
     def definitions(self) -> Mapping[str, CheckRegistryEntry]:
-        """Return the deterministic, immutable metadata index."""
+        """Return the deterministic, immutable executable index."""
         return self._definitions
 
 
 __all__ = [
     "BuiltinCheckDefinition",
-    "CheckProvider",
     "CheckRegistry",
     "CheckRegistryEntry",
     "ComplaintContract",
     "ComplaintTag",
-    "EntryPointProviderFactory",
+    "PluginCheckEntry",
 ]

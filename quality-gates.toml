@@ -76,6 +76,8 @@ extensions = [".py"]
 # Positive differential fixtures retain the concrete input and registry shapes
 # needed to assert their findings; their scenario contracts verify those reports.
 exclude = [
+  # The spike exercises a typed lazy import; Ruff, Pyright, and its tests still scan it.
+  "scripts/registry_spike/provider_factory.py",
   "tests/differential/fixtures/input-contracts/src/example.py",
   "tests/differential/fixtures/package-boundaries/registry.py",
 ]

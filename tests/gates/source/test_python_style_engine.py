@@ -164,6 +164,16 @@ def test_function_local_and_type_checking_imports_are_detected() -> None:
     ) == {
         "type_checking_imports",
     }
+
+
+def test_provider_annotation_does_not_exempt_function_local_imports() -> None:
+    source = (
+        "def load_provider() -> CheckProvider[Settings, Evidence]:\n"
+        "    from os import getcwd\n"
+        "    return getcwd()\n"
+    )
+
+    assert findings(source) == {"local_imports"}
     assert findings("from typing import TYPE_CHECKING as TC\nif TC:\n import os") == {
         "type_checking_imports",
     }
