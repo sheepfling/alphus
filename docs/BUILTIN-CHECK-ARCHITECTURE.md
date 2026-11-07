@@ -32,7 +32,7 @@ belong in the future feature definition and need dedicated validation.
 
 Rick identified tuple-pair `ALPHUS_CHECK` declarations as opaque and the
 built-in path as parallel to the existing plugin registry. The current
-candidate replaces that tuple format for thirteen feature-owned checks with
+candidate replaces that tuple format for sixteen feature-owned checks with
 immutable `FeatureDefinition` and `RuleMorphology` values plus a typed
 `BuiltinFeature` execution object. A PEP 517 build
 backend statically reads those declarations and writes standard
@@ -79,19 +79,20 @@ This document distinguishes four kinds of statement:
   silently changing consumer behavior.
 
 PR #100 remains an open draft. It began with the six-check morphology
-metadata pilot and now has thirteen selectors moved onto feature-owned generated
+metadata pilot and now has sixteen selectors moved onto feature-owned generated
 runtime views:
 `file-size`, `line-length`, `package-boundaries`, `repository-layout`,
 `dependency-locks`, `documentation-config`, `cyclomatic-complexity`,
 `output-escaping`, `comment-markers`, `numeric-literals`, `scipy-constants`,
-`module-roles`, and `markdown-shell-fences`. Each local `ALPHUS_CHECK` declaration statically generates
+`module-roles`, `markdown-shell-fences`, `git-ignores`, `git-attributes`, and
+`git-history`. Each local `ALPHUS_CHECK` declaration statically generates
 morphology metadata, typed `FeatureDefinition`, `RuleSpec`, strict policy
 field, selector type, and inventory entry. Each feature module exposes one
 typed `ALPHUS_FEATURE` object with a direct callback for lazy execution. The established
 `RuleEvaluation` and CLI result adapters remain shared, so adding a feature
-still uses the existing output contract. The other 50 baseline selectors
+still uses the existing output contract. The other 46 baseline selectors
 remain on legacy registration paths; these slices do not complete issue #87
-or establish full selector equivalence. These thirteen declarations are now
+or establish full selector equivalence. These sixteen declarations are now
 typed `FeatureDefinition(...)` calls paired with immutable
 `RuleMorphology(...)` values rather than the former tuple-pair `ALPHUS_CHECK`
 format. Static discovery validates them without importing gate implementations.
@@ -99,7 +100,7 @@ The PEP 517 backend generates installed-wheel entry-point metadata without a
 per-check `pyproject.toml` edit. Aggregate policy/config/dispatch views are
 ignored build artifacts rather than checked-in shared files, so independent
 feature branches do not edit the same generated outputs. Runtime entry points
-target the typed feature object; the remaining 49 selectors still use legacy
+target the typed feature object; the remaining 46 selectors still use legacy
 registration maps.
 
 ## Current package ownership and dependency direction
@@ -348,7 +349,7 @@ JSON/text shapes and legacy IDs.
 
 ## Feature-owned registration and imports
 
-The current thirteen-selector flow is:
+The current sixteen-selector flow is:
 
 ```text
 typed, feature-owned FeatureDefinition and RuleMorphology
@@ -374,7 +375,7 @@ rejects duplicate selector names before loading a selected runner. Catalog and
 config inspection do not import the migrated checker modules. A registration
 never selects or enables a check: consumer profile steps remain the selection
 source, and strict config continues to reject invalid or unknown fields. This
-production path currently covers thirteen selectors; remaining selectors still
+production path currently covers sixteen selectors; remaining selectors still
 use legacy theme maps. The five aggregate views are no longer tracked: the
 build regenerates them as ignored source files for each worktree, and
 `MANIFEST.in` includes them in source archives. Separate feature branches
@@ -424,7 +425,7 @@ The PEP 517 backend statically reads feature declarations and writes standard
 directory. The runtime registry indexes entry points from Alphus-named
 distributions whose selector set matches the generated feature catalog,
 rejects duplicate selectors, and imports a runner only after explicit
-selection. Adding one of the thirteen migrated checks did not
+selection. Adding one of the sixteen migrated checks did not
 require editing a central runner map or the `pyproject.toml` entry-point table.
 The PEP 517 build also regenerates aggregate policy/config/dispatch views as
 ignored source files and includes them in wheels and source archives. Those
@@ -1098,7 +1099,7 @@ run in serial and parallel. Against baseline
 selectors and no differences across 47 scenarios. The exact wheel SHA-256
 values were `9686d9217ee8de379a5e823ae90905d9648f31c60e877c7be44b682667f41fe5`
 and `54d46acd540e0875e97c5187adf711811cd7441d83e355daa3f5a08de403782f`.
-Sixteen selectors have behavior-level differential evidence; 46 still lack
+Nineteen selectors have behavior-level differential evidence; 43 still lack
 it. The run report is `/tmp/alphus-morphology-markdown-shell-a39dcd3.json`.
 
 This slice adds one declaration and one typed adapter beside the analyzer,
@@ -1108,6 +1109,37 @@ that registration ergonomics scale indefinitely inside monolithic gate files.
 The static reader requires the declaration and synchronous adapter in the
 same module as the implementation. For new features, prefer a small
 feature-owned implementation module with its mirrored `tests/gates/...`
+
+## Shared Git policy registration slice
+
+The three repository Git selectors now each own a typed declaration and
+runner adapter beside the checker in `src/alphus/gates/vcs/`. They share the
+existing strict `GitRepositoryPolicy` under the existing TOML key
+`checks.git`; the manifest generator coalesces declarations that use the same
+policy field only when their model types match, and rejects conflicting model
+types. This keeps the shared policy contract while removing the VCS runner map
+and the three legacy catalog registrations. The declarations preserve the
+baseline catalog summaries, applicability labels, empty domain list, public
+selectors, and finding IDs. Their named complaint contracts remain shared by
+all three emitters.
+
+`tests/differential/fixtures/vcs-git/` provides one fixture with a real
+generated-output contract, an effective Git attribute mismatch, and a tracked
+generated history path. The wheel manifest invokes each selector directly and
+runs all three in an explicitly selected profile with serial and parallel job
+settings. Against baseline
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`, candidate
+`17cb1000ee06e645b128afea712f5ac2f7edaae8` retained identical 62-selector
+catalogs and had no differences across all 51 manifested scenarios. The
+registered-check profile result order, IDs, locations, message and exit
+semantics matched. Reference and candidate wheel SHA-256 values were
+`64e1d0b402d226d09675267bd7733688cfe56a112025d5e91c7a20bc53db66a0` and
+`d9f2c96b35ed226f3e937bd3c280377be2ef058ce8df0c94e7d74158a6ba04f6`.
+The harness records 19 behaviorally exercised selectors; 43 still lack
+behavior-level evidence. The exact report is
+`/tmp/alphus-morphology-git-vcs-17cb100.json`. This batch demonstrates shared
+typed policy ownership across three feature registrations, not universal
+equivalence for the remaining selector inventory.
 module; when an existing implementation is oversized, split it only as a
 separately reviewed behavior-preserving move.
 
@@ -1216,4 +1248,4 @@ Two decisions remain for review:
 
 Until resolved, do not change digest/archive meaning or claim full #87
 acceptance. PR #100 remains a draft containing the six-check morphology pilot
-and bounded runtime registration slices for thirteen selectors documented above.
+and bounded runtime registration slices for sixteen selectors documented above.
