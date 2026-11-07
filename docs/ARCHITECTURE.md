@@ -164,7 +164,7 @@ JSON output shape, summary, supported surfaces, and advisory domain tags.
 enabling checks. Policy validation and profile diagnostic decoding share that
 catalog. Direct gate theme packages own their runner mappings, named
 `<THEME>_RULE_RUNNERS` in each theme's `runners.py`. Run
-`python scripts/generate_runner_manifest.py --root .` to parse those literal mappings,
+`python -m scripts.generate_runner_manifest --root .` to parse those literal mappings,
 reject duplicate selectors, verify exact `QualityRuleName` coverage, and emit
 the sorted static imports in `execution/_generated_dispatch.py`. The package
 tests run the generator in check mode and fail if the checked-in manifest is

@@ -147,7 +147,8 @@ def test_committed_baseline_matches_its_pinned_source(
     generated = subprocess.run(
         [
             sys.executable,
-            str(root / "scripts" / "generate_builtin_inventory.py"),
+            "-m",
+            "scripts.generate_builtin_inventory",
             "--root",
             str(reference_root),
             "--output",
@@ -170,7 +171,8 @@ def test_inventory_generator_check_mode_is_current(
     completed = subprocess.run(
         [
             sys.executable,
-            str(root / "scripts" / "generate_builtin_inventory.py"),
+            "-m",
+            "scripts.generate_builtin_inventory",
             "--root",
             str(root),
             "--check",

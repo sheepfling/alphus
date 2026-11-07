@@ -24,9 +24,10 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Annotated, TypeAlias, cast
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
+from pydantic import ConfigDict, Field, TypeAdapter, ValidationError
 from typing_extensions import TypedDict
 
+from alphus.contracts.model import StrictModel
 from alphus.support import git
 from alphus.support.data_access import JsonValue, validate_json_value
 
@@ -37,8 +38,8 @@ VOLATILE_JSON_PATHS = (
 )
 
 
-class _StrictDocument(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
+class _StrictDocument(StrictModel):
+    """Use Alphus's shared strict immutable model for harness documents."""
 
 
 class _ExpectedFindingDocument(_StrictDocument):
@@ -54,7 +55,7 @@ class _MaterializedFileDocument(_StrictDocument):
 
 class _VariantDocument(_StrictDocument):
     name: str
-    arguments: Annotated[list[str], Field(default_factory=list)]
+    arguments: Annotated[tuple[str, ...], Field(default_factory=tuple)]
     compare_within_build: bool = False
     parse_json: bool | None = None
     plugin_import_expected: bool | None = None
@@ -72,27 +73,29 @@ class _ScenarioDocument(_StrictDocument):
     name: str
     fixture: str | None = None
     plugin_package: str | None = None
-    python_distributions: Annotated[list[str], Field(default_factory=list)]
-    selectors: Annotated[list[str], Field(default_factory=list)]
-    behavior: list[str]
+    python_distributions: Annotated[tuple[str, ...], Field(default_factory=tuple)]
+    selectors: Annotated[tuple[str, ...], Field(default_factory=tuple)]
+    behavior: tuple[str, ...]
     expected_exit: int
     minimum_findings: int = 0
-    expected_step_names: Annotated[list[str], Field(default_factory=list)]
-    expected_step_rules: Annotated[list[str], Field(default_factory=list)]
-    expected_reported_step_rules: Annotated[list[str], Field(default_factory=list)]
+    expected_step_names: Annotated[tuple[str, ...], Field(default_factory=tuple)]
+    expected_step_rules: Annotated[tuple[str, ...], Field(default_factory=tuple)]
+    expected_reported_step_rules: Annotated[
+        tuple[str, ...], Field(default_factory=tuple)
+    ]
     require_passed_steps: bool = False
-    required_output: Annotated[list[str], Field(default_factory=list)]
+    required_output: Annotated[tuple[str, ...], Field(default_factory=tuple)]
     expected_findings: Annotated[
-        list[_ExpectedFindingDocument], Field(default_factory=list)
+        tuple[_ExpectedFindingDocument, ...], Field(default_factory=tuple)
     ]
     materialized_files: Annotated[
-        list[_MaterializedFileDocument], Field(default_factory=list)
+        tuple[_MaterializedFileDocument, ...], Field(default_factory=tuple)
     ]
     expected_cyclomatic_outcome: str | None = None
     expected_cyclomatic_backends: Annotated[
-        list[_ExpectedCyclomaticBackendDocument], Field(default_factory=list)
+        tuple[_ExpectedCyclomaticBackendDocument, ...], Field(default_factory=tuple)
     ]
-    variant: list[_VariantDocument]
+    variant: tuple[_VariantDocument, ...]
 
 
 class _DeferredDocument(_StrictDocument):
@@ -104,8 +107,8 @@ class _DeferredDocument(_StrictDocument):
 
 class _ManifestDocument(_StrictDocument):
     schema_version: int
-    scenario: Annotated[list[_ScenarioDocument], Field(default_factory=list)]
-    deferred: Annotated[list[_DeferredDocument], Field(default_factory=list)]
+    scenario: Annotated[tuple[_ScenarioDocument, ...], Field(default_factory=tuple)]
+    deferred: Annotated[tuple[_DeferredDocument, ...], Field(default_factory=tuple)]
 
 
 class _CatalogRule(_StrictDocument):
@@ -117,7 +120,7 @@ class _CatalogRule(_StrictDocument):
 
 class _CatalogDocument(_StrictDocument):
     model_config = ConfigDict(extra="allow", strict=True)
-    rules: list[_CatalogRule]
+    rules: tuple[_CatalogRule, ...]
 
 
 class _InstallationProbe(_StrictDocument):
@@ -127,7 +130,7 @@ class _InstallationProbe(_StrictDocument):
     distribution_root: str
     distribution_owns_module: bool
     version: str
-    packages: list[tuple[str, str]]
+    packages: tuple[tuple[str, str], ...]
 
 
 class _ProfileFinding(_StrictDocument):
@@ -143,12 +146,12 @@ class _ProfileStep(_StrictDocument):
     name: str
     rule: str | None = None
     status: str | None = None
-    findings: Annotated[list[_ProfileFinding], Field(default_factory=list)]
+    findings: Annotated[tuple[_ProfileFinding, ...], Field(default_factory=tuple)]
 
 
 class _ProfileDocument(_StrictDocument):
     model_config = ConfigDict(extra="allow", strict=True)
-    steps: list[_ProfileStep]
+    steps: tuple[_ProfileStep, ...]
 
 
 class _CyclomaticBackendDocument(_StrictDocument):
@@ -164,13 +167,13 @@ class _CyclomaticBackendDocument(_StrictDocument):
 class _CyclomaticReportDocument(_StrictDocument):
     model_config = ConfigDict(extra="allow", strict=True)
     outcome: str
-    backends: list[_CyclomaticBackendDocument]
+    backends: tuple[_CyclomaticBackendDocument, ...]
 
 
 class _CyclomaticEnvelopeDocument(_StrictDocument):
     model_config = ConfigDict(extra="allow", strict=True)
     report: _CyclomaticReportDocument
-    diagnostics: list[_ProfileFinding]
+    diagnostics: tuple[_ProfileFinding, ...]
     summary: str
 
 
@@ -183,14 +186,16 @@ class _ProfileOrchestrationStep(_StrictDocument):
 
 class _ProfileOrchestration(_StrictDocument):
     model_config = ConfigDict(extra="ignore", strict=True)
-    steps: Annotated[list[_ProfileOrchestrationStep], Field(default_factory=list)]
+    steps: Annotated[
+        tuple[_ProfileOrchestrationStep, ...], Field(default_factory=tuple)
+    ]
 
 
 class _ProfileFixtureConfig(_StrictDocument):
     model_config = ConfigDict(extra="ignore", strict=True)
     orchestration: Annotated[
         _ProfileOrchestration,
-        Field(default_factory=lambda: _ProfileOrchestration(steps=[])),
+        Field(default_factory=lambda: _ProfileOrchestration(steps=())),
     ]
 
 
@@ -218,10 +223,10 @@ class _ScenarioRunReport(_StrictDocument):
     fixture_sha256: str
     fixture_git_commit: str
     plugin_package: str | None = None
-    python_distributions: Annotated[list[str], Field(default_factory=list)]
-    selectors: list[str]
+    python_distributions: Annotated[tuple[str, ...], Field(default_factory=tuple)]
+    selectors: tuple[str, ...]
     execution_classification: str
-    behavior: list[str]
+    behavior: tuple[str, ...]
     variants: dict[str, ProcessResultWire]
     within_build_equal: bool
     build: str
@@ -232,20 +237,20 @@ class _WheelBuildReport(_StrictDocument):
     wheel_sha256: str
     installation: _InstallationProbe
     wheel_module_record: WheelModuleRecord
-    selectors: list[str]
+    selectors: tuple[str, ...]
 
 
 class _CoverageReport(_StrictDocument):
     catalog_selector_count: int
     catalog_equal: bool
     catalog_registration_contract_equal: bool
-    directly_invoked_selectors: list[str]
-    strict_missing_policy_rejection_selectors: list[str]
-    behaviorally_exercised_selectors: list[str]
-    behaviorally_exercised_plugin_selectors: list[str]
-    selectors_in_plan_only_scenarios: list[str]
-    selectors_not_behaviorally_exercised: list[str]
-    deferred_capabilities: list[_DeferredDocument]
+    directly_invoked_selectors: tuple[str, ...]
+    strict_missing_policy_rejection_selectors: tuple[str, ...]
+    behaviorally_exercised_selectors: tuple[str, ...]
+    behaviorally_exercised_plugin_selectors: tuple[str, ...]
+    selectors_in_plan_only_scenarios: tuple[str, ...]
+    selectors_not_behaviorally_exercised: tuple[str, ...]
+    deferred_capabilities: tuple[_DeferredDocument, ...]
 
 
 class _PluginWheelReport(_StrictDocument):
@@ -278,28 +283,28 @@ class _SelectorDispatchMatrix(_StrictDocument):
     catalog_selector_count: int
     directly_invoked_count: int
     strict_missing_policy_rejection_count: int
-    outcomes: list[_SelectorDispatchEntry]
+    outcomes: tuple[_SelectorDispatchEntry, ...]
 
 
 class _DifferentialReport(_StrictDocument):
     schema_version: int
     reference: _WheelBuildReport
     candidate: _WheelBuildReport
-    plugin_wheels: list[_PluginWheelReport]
-    shared_dependency_versions: list[tuple[str, str]]
-    volatile_json_paths_removed: list[str]
+    plugin_wheels: tuple[_PluginWheelReport, ...]
+    shared_dependency_versions: tuple[tuple[str, str], ...]
+    volatile_json_paths_removed: tuple[str, ...]
     fixture_mutation_check: str
     manifest_sha256: str
     harness_sha256: str
     fixture_snapshot_check: str
-    scenario_classification: dict[str, list[str]]
+    scenario_classification: dict[str, tuple[str, ...]]
     environment_model: str
     temporary_path_normalization: str
     build_python: str
     scenario_results: dict[str, dict[str, _ScenarioRunReport]]
     selector_dispatch_matrix: _SelectorDispatchMatrix
     coverage: _CoverageReport
-    differences: list[str]
+    differences: tuple[str, ...]
     equivalent_for_manifested_scenarios: bool
 
 
@@ -1202,7 +1207,7 @@ def _selector_dispatch_matrix(
             catalog_selector_count=len(baseline_rules),
             directly_invoked_count=len(directly_invoked),
             strict_missing_policy_rejection_count=len(strict_rejected),
-            outcomes=outcomes,
+            outcomes=tuple(outcomes),
         ),
         differences,
     )
@@ -1541,10 +1546,10 @@ def _run_scenarios(
             fixture_sha256=before,
             fixture_git_commit=fixture_commit,
             plugin_package=scenario.plugin_package,
-            python_distributions=list(scenario.python_distributions),
-            selectors=list(scenario.selectors),
+            python_distributions=scenario.python_distributions,
+            selectors=scenario.selectors,
             execution_classification=_scenario_classification(scenario),
-            behavior=list(scenario.behavior),
+            behavior=scenario.behavior,
             variants={name: result.to_wire() for name, result in results.items()},
             within_build_equal=all(
                 results[left.name] == results[right.name]
@@ -1701,7 +1706,7 @@ def run(
                 catalog_selector_count=len(baseline_catalog.rules),
                 directly_invoked_count=0,
                 strict_missing_policy_rejection_count=0,
-                outcomes=[],
+                outcomes=(),
             )
             selector_dispatch_differences = catalog_contract_differences
         else:
@@ -1761,23 +1766,23 @@ def run(
                 )
         report = _DifferentialReport(
             schema_version=3,
-            plugin_wheels=plugin_wheels,
+            plugin_wheels=tuple(plugin_wheels),
             reference=_WheelBuildReport(
                 commit=baseline,
                 wheel_sha256=_sha256(baseline_wheel),
                 installation=baseline_install,
                 wheel_module_record=baseline_wheel_module,
-                selectors=list(baseline_selectors),
+                selectors=baseline_selectors,
             ),
             candidate=_WheelBuildReport(
                 commit=candidate,
                 wheel_sha256=_sha256(candidate_wheel),
                 installation=candidate_install,
                 wheel_module_record=candidate_wheel_module,
-                selectors=list(candidate_selectors),
+                selectors=candidate_selectors,
             ),
             shared_dependency_versions=baseline_packages,
-            volatile_json_paths_removed=list(VOLATILE_JSON_PATHS),
+            volatile_json_paths_removed=VOLATILE_JSON_PATHS,
             fixture_mutation_check="sha256 tree before/after every process; unchanged",
             manifest_sha256=manifest_sha256,
             harness_sha256=harness_sha256,
@@ -1786,21 +1791,21 @@ def run(
                 "and compared by tree SHA-256 and Git commit"
             ),
             scenario_classification={
-                "behavioral": [
+                "behavioral": tuple(
                     scenario.name
                     for scenario in scenarios
                     if _scenario_executes(scenario)
-                ],
-                "planned_only": [
+                ),
+                "planned_only": tuple(
                     scenario.name
                     for scenario in scenarios
                     if _scenario_classification(scenario) == "planned-only"
-                ],
-                "control": [
+                ),
+                "control": tuple(
                     scenario.name
                     for scenario in scenarios
                     if _scenario_classification(scenario) == "control"
-                ],
+                ),
             },
             environment_model=(
                 "separate Alphus venvs with identical shared system-site packages; "
@@ -1823,55 +1828,67 @@ def run(
                 catalog_registration_contract_equal=(
                     catalog_registration_contract_equal
                 ),
-                directly_invoked_selectors=sorted(
-                    entry.selector
-                    for entry in selector_dispatch_matrix.outcomes
-                    if entry.case == "configured-direct-invocation"
+                directly_invoked_selectors=tuple(
+                    sorted(
+                        entry.selector
+                        for entry in selector_dispatch_matrix.outcomes
+                        if entry.case == "configured-direct-invocation"
+                    )
                 ),
-                strict_missing_policy_rejection_selectors=sorted(
-                    entry.selector
-                    for entry in selector_dispatch_matrix.outcomes
-                    if entry.case == "strict-missing-policy-rejection"
+                strict_missing_policy_rejection_selectors=tuple(
+                    sorted(
+                        entry.selector
+                        for entry in selector_dispatch_matrix.outcomes
+                        if entry.case == "strict-missing-policy-rejection"
+                    )
                 ),
-                behaviorally_exercised_selectors=sorted(
-                    {
-                        selector
-                        for scenario in scenarios
-                        if _scenario_executes(scenario)
-                        for selector in scenario.selectors
-                        if selector in baseline_selectors
-                    }
+                behaviorally_exercised_selectors=tuple(
+                    sorted(
+                        {
+                            selector
+                            for scenario in scenarios
+                            if _scenario_executes(scenario)
+                            for selector in scenario.selectors
+                            if selector in baseline_selectors
+                        }
+                    )
                 ),
-                behaviorally_exercised_plugin_selectors=sorted(
-                    {
-                        selector
-                        for scenario in scenarios
-                        if _scenario_executes(scenario)
-                        for selector in scenario.selectors
-                        if selector not in baseline_selectors
-                    }
+                behaviorally_exercised_plugin_selectors=tuple(
+                    sorted(
+                        {
+                            selector
+                            for scenario in scenarios
+                            if _scenario_executes(scenario)
+                            for selector in scenario.selectors
+                            if selector not in baseline_selectors
+                        }
+                    )
                 ),
-                selectors_in_plan_only_scenarios=sorted(
-                    {
-                        selector
-                        for scenario in scenarios
-                        if _scenario_classification(scenario) == "planned-only"
-                        for selector in scenario.selectors
-                        if selector in baseline_selectors
-                    }
+                selectors_in_plan_only_scenarios=tuple(
+                    sorted(
+                        {
+                            selector
+                            for scenario in scenarios
+                            if _scenario_classification(scenario) == "planned-only"
+                            for selector in scenario.selectors
+                            if selector in baseline_selectors
+                        }
+                    )
                 ),
-                selectors_not_behaviorally_exercised=sorted(
-                    set(baseline_selectors)
-                    - {
-                        selector
-                        for scenario in scenarios
-                        if _scenario_executes(scenario)
-                        for selector in scenario.selectors
-                    }
+                selectors_not_behaviorally_exercised=tuple(
+                    sorted(
+                        set(baseline_selectors)
+                        - {
+                            selector
+                            for scenario in scenarios
+                            if _scenario_executes(scenario)
+                            for selector in scenario.selectors
+                        }
+                    )
                 ),
-                deferred_capabilities=list(deferred),
+                deferred_capabilities=deferred,
             ),
-            differences=differences,
+            differences=tuple(differences),
             equivalent_for_manifested_scenarios=not differences
             and baseline_selectors == candidate_selectors,
         )

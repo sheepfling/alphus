@@ -112,8 +112,13 @@ def test_explicit_runner_adapters_cover_the_public_rule_catalog() -> None:
 def _run_manifest_generator(
     repository: Path, fixture: Path, *, check: bool = True
 ) -> subprocess.CompletedProcess[str]:
-    script = repository / "scripts" / "generate_runner_manifest.py"
-    arguments = [sys.executable, str(script), "--root", str(fixture)]
+    arguments = [
+        sys.executable,
+        "-m",
+        "scripts.generate_runner_manifest",
+        "--root",
+        str(fixture),
+    ]
     if check:
         arguments.append("--check")
     return subprocess.run(

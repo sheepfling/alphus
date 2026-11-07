@@ -9,10 +9,7 @@ import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-if __package__:
-    from .generate_morphology_manifest import feature_registrations
-else:
-    from generate_morphology_manifest import feature_registrations
+from scripts.generate_morphology_manifest import feature_registrations
 
 
 @dataclass(frozen=True, slots=True)

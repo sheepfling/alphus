@@ -72,6 +72,29 @@ def test_report_manifest_derives_selector_coverage_without_a_total_list(
     assert any(item.capability.startswith("plugin-api-v1") for item in deferred)
 
 
+def test_immutable_scenario_report_keeps_json_array_wire_shape() -> None:
+    report = _ScenarioRunReport.model_validate(
+        {
+            "fixture_sha256": "fixture-hash",
+            "fixture_git_commit": "fixture-commit",
+            "python_distributions": ["lizard==1.24.2"],
+            "selectors": ["cyclomatic-complexity"],
+            "execution_classification": "behavioral",
+            "behavior": ["native-backend-report"],
+            "variants": {},
+            "within_build_equal": True,
+            "build": "candidate",
+        }
+    )
+
+    encoded = report.model_dump_json()
+    decoded = json.loads(encoded)
+
+    assert decoded["python_distributions"] == ["lizard==1.24.2"]
+    assert decoded["selectors"] == ["cyclomatic-complexity"]
+    assert decoded["behavior"] == ["native-backend-report"]
+
+
 @pytest.mark.parametrize(
     "finding",
     [

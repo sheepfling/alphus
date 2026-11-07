@@ -16,7 +16,9 @@ from pydantic import ValidationError
 
 from alphus.cli import main
 from alphus.config import load_config, load_config_stream
+from alphus.contracts.findings import Diagnostic
 from alphus.contracts.model import StrictModel
+from alphus.execution.dispatch import resolve_rule
 from alphus.plugins import PluginFinding, PluginRuleSpec, RulePlugin, registry
 from alphus.plugins.api import PLUGIN_ENTRY_POINT_GROUP
 from alphus.plugins.registry import load_enabled_plugins
@@ -150,6 +152,35 @@ def test_example_plugin_runs_as_a_profile_rule(
             "source": "plugin:example",
         }
     ]
+
+
+def test_plugin_and_builtin_resolve_through_shared_rule_binding(
+    tmp_path: Path, example_entry_point: _EntryPoint
+) -> None:
+    del example_entry_point
+    config = load_config_stream(StringIO(_plugin_policy()))
+    plugin = resolve_rule("example:markdown-title", config)
+    assert plugin.selector == "example:markdown-title"
+    assert plugin.requires_files is True
+
+    source = tmp_path / "README.md"
+    source.write_text("No heading here.\n", encoding="utf-8")
+    diagnostics = plugin.run(tmp_path, (Path("README.md"),), config)
+    assert diagnostics == [
+        Diagnostic(
+            source="plugin:example",
+            rule_id="example:markdown-title/missing-title",
+            path="README.md",
+            line=1,
+            message="document has no level 1 heading",
+            severity="warning",
+        )
+    ]
+
+    builtin_config = load_config(Path("quality-gates.toml"))
+    builtin = resolve_rule("line-length", builtin_config)
+    assert builtin.selector == "line-length"
+    assert builtin.requires_files is True
 
 
 def test_catalog_lists_only_enabled_plugin_rules(

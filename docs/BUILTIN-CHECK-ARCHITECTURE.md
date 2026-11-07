@@ -28,9 +28,11 @@ belong in the future feature definition and need dedicated validation.
 ## Registration design review
 
 Rick identified tuple-pair `ALPHUS_CHECK` declarations as opaque and the
-built-in path as parallel to the existing plugin registry. Broad runtime
-migration is paused while that design is reviewed. A bounded typed-registry
-spike and its trade-offs are recorded in the
+built-in path as parallel to the existing plugin registry. A bounded
+production dispatch adapter now shares a typed `RuleBinding` shape across
+built-in and API v1 plugin execution; it does not yet unify feature-owned
+registration or generated catalog/config views. Broad registration migration
+still needs a production discovery and build-generation design. The spike and its trade-offs are recorded in the
 [check registry spike](architecture/check-registry-spike.md). The spike
 does not replace existing declarations or establish the production
 discovery source.

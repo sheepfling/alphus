@@ -263,24 +263,23 @@ are conflict-free.
 
 ## Owner review comments and disposition
 
-These are design dispositions only. No GitHub review threads were replied to,
-resolved, or otherwise changed.
+These dispositions record implemented fixes and remaining design decisions. No
+GitHub review threads were replied to, resolved, or otherwise changed.
 
-- **Committed JSON inventory and baselines:** retain the small selector and
-  effective-input inventory only if tests consume it as an audit artifact.
-  Move full per-scenario wheel reports to CI artifacts; commit a compact
-  evidence summary with exact wheel hashes, scenario-manifest and harness
-  hashes, coverage and differences. The large source-derived baseline dump
-  should be regenerated in tests rather than maintained as another JSON
-  catalog. No artifact cleanup is included in this spike.
+- **Committed JSON inventory and baselines:** the pinned source baseline is
+  consumed by `tests/policy/test_builtin_inventory.py`, and wheel reports
+  preserve exact run identities and coverage. They are evidence artifacts,
+  not authored registrations. Their placement and volume remain under review;
+  the source-derived inventory must not become a second selector catalog. No
+  artifact cleanup is included in this slice.
 - **Pydantic models in `differential_wheels.py`:** use Alphus's existing
-  `StrictModel` for strict documents and explicit model overrides only where
-  the report intentionally permits extra fields. The harness should follow
-  the same typed boundary it evaluates. This is not changed by the spike.
-- **`generate_builtin_inventory.py` script import branch:** make `scripts` an
-  explicit package and invoke package modules consistently, or move shared
-  generator APIs into a package intended for imports. Keep command-line script
-  execution covered. No scripts packaging change is included here.
+  `StrictModel` for strict immutable documents and tuple fields for arrays;
+  explicit model overrides remain only where reports intentionally permit
+  extra fields. The harness now follows that boundary, covered by manifest,
+  inventory, and wheel-experiment tests.
+- **Generator import branches:** `scripts` is an explicit package; generators
+  import shared code through `scripts.*`, and inventory tests invoke the module
+  with `python -m`. This keeps one import path for tests and command-line use.
 - **Cyclomatic `tuple[str, str]` effective options:** replace the positional
   pair with a named immutable `CyclomaticOption(name, value)` record and adapt
   at the public report boundary to preserve the current JSON representation.
@@ -288,7 +287,8 @@ resolved, or otherwise changed.
 - **Parallel cyclomatic imports:** centralize typed provider resolution behind
   the check registry; remove the parallel module's repeated import strings and
   casts only after serial/parallel behavior has differential coverage. Keep
-  scheduler ordering semantics unchanged.
+  scheduler ordering semantics unchanged. The shared dispatch adapter below
+  does not yet resolve the parallel cyclomatic helper functions.
 - **`comment_markers.py` tuple registration:** the spike demonstrates the
   proposed semantic shape but does not edit production declarations. Do not
   mechanically wrap `ALPHUS_CHECK` in a dataclass. Replace the production
@@ -306,14 +306,14 @@ dispatch, result adaptation and reporting. That fixture does not satisfy the
 Alphus production gate: the real package still needs the same path through its
 catalog, CLI/profile, native outputs and v1 plugin boundary.
 
-## Production slice: cyclomatic result boundary
+## Production slices: result and dispatch boundaries
 
 The fixture result selected one design candidate, not a production registration
 architecture: build-generated standard entry points avoid per-check packaging
 edits and keep runtime resolution on the standard metadata API. That result does
 not settle how Alphus should generate its existing tracked catalog/config/runner
 views, and it does not demonstrate conflict-free merges for those production
-views. The production registry migration is still paused at that boundary.
+views. Production feature registration remains unresolved at that boundary.
 
 A separate behavior-preserving native-result slice now improves the real
 `cyclomatic-complexity` path. The actual catalog and strict
@@ -324,19 +324,26 @@ records instead of unnamed string pairs. `report_payload()` explicitly adapts
 them to the existing JSON array-of-pairs shape, so this type cleanup does not
 change the public report schema. Parallel execution keeps its current lazy
 adapter lookup: direct function-local imports were rejected by Alphus's existing
-Python-style policy, so this slice does not claim to resolve the duplicated
-parallel helper wiring. That wiring should move only with a registry migration
-that preserves cold CLI startup and passes the existing style contract.
+Python-style policy, so this slice does not resolve the parallel helper wiring.
 
 The existing `alphus.rules.v1` API remains the third-party registration
 contract. Its installed-wheel profile test continues to prove explicit plugin
 enablement, strict settings, namespaced findings and report adaptation. This
 slice exercises the built-in catalog/config/native report path and the v1
-plugin path separately; it does not yet place both sources in a new common
-production registry. Nor does it prove production feature additions avoid edits
-to generated tracked views. The fixture test's two independent declarations
-prove that property only for its disposable package, where generated entry-point
-metadata is build output and not tracked source.
+plugin path separately. A production dispatch seam now makes both sources
+implement `RuleBinding`: `BuiltinRuleBinding` preserves the selected-policy
+check and specialized `RuleOutput`, while `PluginRuleExecution` keeps API v1's
+allowlisting, strict settings validation, finding validation, and namespaced
+diagnostics. `resolve_rule()` is shared by execution and the requires-files
+query. Independent review found no behavior change in this seam.
+
+This is a typed dispatch adapter over existing registries, not automatic
+feature registration. Built-ins still come from `RULE_SPECS` and generated
+`RULE_RUNNERS`; feature declarations still use tuple-pair `ALPHUS_CHECK`; and
+`execution.parallel` has separate cyclomatic helper lookup. The fixture test's
+two independent declarations prove conflict-free registration only for its
+disposable package, where generated entry-point metadata is build output and
+not tracked source.
 
 The remaining production design decision is where generated built-in views
 live. Keeping generated catalogs tracked preserves readable source artifacts
@@ -345,6 +352,6 @@ Generating them into build output avoids that shared-file conflict but requires
 Alphus build and editable-install integration, plus equivalent strict-config
 and CLI/profile tests. The next migration must exercise two distinct production
 check shapes and verify both branches regenerate identical merged views from
-feature-owned declarations before that approach is adopted. Until then, this
-slice changes the typed native result contract only and does not claim to
-complete issue #87 or the authoring-friction goal.
+feature-owned declarations before that approach is adopted. These bounded
+production improvements do not complete issue #87 or prove that Alphus check
+authors avoid the shared-view conflict.

@@ -1167,7 +1167,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.check:
         if not target.is_file() or target.read_text(encoding="utf-8") != expected:
             print(
-                f"{target} is stale; run scripts/generate_morphology_manifest.py "
+                f"{target} is stale; run python -m scripts.generate_morphology_manifest "
                 "--root .",
                 file=sys.stderr,
             )
@@ -1178,7 +1178,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         ):
             print(
                 f"{feature_target} is stale; run "
-                "scripts/generate_morphology_manifest.py --root .",
+                "python -m scripts.generate_morphology_manifest --root .",
                 file=sys.stderr,
             )
             return 1

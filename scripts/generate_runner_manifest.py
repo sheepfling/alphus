@@ -8,16 +8,10 @@ import sys
 from pathlib import Path
 from typing import NamedTuple
 
-if __package__:
-    from .generate_morphology_manifest import (
-        feature_registrations,
-        render_quality_rule_names,
-    )
-else:
-    from generate_morphology_manifest import (
-        feature_registrations,
-        render_quality_rule_names,
-    )
+from scripts.generate_morphology_manifest import (
+    feature_registrations,
+    render_quality_rule_names,
+)
 
 
 class _RunnerModule(NamedTuple):
@@ -236,7 +230,7 @@ def main() -> int:
     if args.check:
         if not target.is_file() or target.read_text(encoding="utf-8") != expected:
             print(
-                f"{target} is stale; run scripts/generate_runner_manifest.py --root .",
+                f"{target} is stale; run python -m scripts.generate_runner_manifest --root .",
                 file=sys.stderr,
             )
             return 1
