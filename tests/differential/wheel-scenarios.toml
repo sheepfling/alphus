@@ -432,6 +432,44 @@ arguments = ["--config", "quality-gates.toml", "--rule", "module-roles", "--json
 parse_json = false
 
 [[scenario]]
+name = "markdown-shell-direct"
+fixture = "markdown-shell"
+selectors = ["markdown-shell-fences"]
+behavior = ["configured-markdown-scan", "bounded-shell-evidence", "stable-finding"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/markdown/none/portability/shell-fence-mismatch", path = "docs/guide.md", line = 4 },
+]
+
+[[scenario.variant]]
+name = "direct-json"
+arguments = ["--config", "quality-gates.toml", "--rule", "markdown-shell-fences", "--json"]
+
+[[scenario]]
+name = "markdown-shell-profile-serial-parallel"
+fixture = "markdown-shell"
+selectors = ["markdown-shell-fences"]
+behavior = ["explicit-profile-selection", "threshold-preserved", "ordered-findings"]
+expected_exit = 0
+minimum_findings = 1
+expected_step_names = ["shell-fence-check"]
+expected_step_rules = ["markdown-shell-fences"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/markdown/none/portability/shell-fence-mismatch", path = "docs/guide.md", line = 4 },
+]
+
+[[scenario.variant]]
+name = "serial"
+arguments = ["--config", "quality-gates.toml", "--profile", "markdown-review", "--run", "--json", "--jobs", "1"]
+
+[[scenario.variant]]
+name = "parallel"
+arguments = ["--config", "quality-gates.toml", "--profile", "markdown-review", "--run", "--json", "--jobs", "2"]
+compare_within_build = true
+
+[[scenario]]
 name = "repository-layout-direct"
 fixture = "repository-layout"
 selectors = ["repository-layout"]

@@ -29,7 +29,6 @@ from alphus.policy.intents import (
     SharedQualityIntent,
     resolve_intent_bindings,
 )
-from alphus.policy.markdown import MarkdownShellFencesPolicy
 from alphus.policy.repository import (
     GitRepositoryPolicy,
     VersionSyncPolicy,
@@ -136,7 +135,6 @@ class CheckPolicies(GeneratedFeaturePolicies):
     cli: CliPolicy | None = None
     script_policy: ScriptPolicy | None = None
     architecture_graph: ArchitectureGraphCheckPolicy | None = None
-    markdown_shell_fences: MarkdownShellFencesPolicy | None = None
     version_sync: VersionSyncPolicy | None = None
     callable_registry: CallableRegistryPolicy | None = None
     git: GitRepositoryPolicy | None = None

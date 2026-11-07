@@ -154,13 +154,6 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             "Flags flat similarly named source families for human architectural review.",
             ("configurable-source",),
         ),
-        "markdown-shell-fences": RuleSpec(
-            "markdown_shell_fences",
-            RuleOutputShape.FINDINGS,
-            "Checks fenced shell examples for bounded heredoc termination errors.",
-            ("markdown", "shell"),
-            requires_files=False,
-        ),
         "typing-stub-suggestions": RuleSpec(
             "typing_stub_suggestions",
             RuleOutputShape.FINDINGS,
