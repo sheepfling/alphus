@@ -198,30 +198,12 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             "Reviews configured hand-written Cholesky recurrence patterns.",
             ("python", "numerical"),
         ),
-        "ecef-enu-transform": RuleSpec(
-            "ecef_enu_transform",
-            RuleOutputShape.FINDINGS,
-            "Reviews configured ECEF-to-ENU transform patterns.",
-            ("python", "geospatial"),
-        ),
-        "ecef-ned-matrix-transform": RuleSpec(
-            "ecef_ned_matrix_transform",
-            RuleOutputShape.FINDINGS,
-            "Reviews configured ECEF-to-NED matrix patterns.",
-            ("python", "geospatial"),
-        ),
         "ci-workflows": RuleSpec(
             "ci_workflows",
             RuleOutputShape.FINDINGS,
             "Reviews selected CI workflow commands for repeated job work.",
             ("yaml", "ci"),
             requires_files=False,
-        ),
-        "ned-basis-vectors": RuleSpec(
-            "ned_basis_vectors",
-            RuleOutputShape.FINDINGS,
-            "Reviews configured NED basis vector construction patterns.",
-            ("python", "geospatial"),
         ),
         "run-artifacts": RuleSpec(
             "run_artifacts",

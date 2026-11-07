@@ -21,15 +21,6 @@ from alphus.gates.review.embedded_semantic_overrides import (
 from alphus.gates.review.heuristic_total_consumption import (
     check_heuristic_total_consumption,
 )
-from alphus.gates.review.numerical.frames.ecef_enu_transform import (
-    check_ecef_enu_transform,
-)
-from alphus.gates.review.numerical.frames.ecef_ned_matrix_transform import (
-    check_ecef_ned_matrix_transform,
-)
-from alphus.gates.review.numerical.frames.ned_basis_vectors import (
-    check_ned_basis_vectors,
-)
 from alphus.gates.review.numerical.linear_algebra.array_representation import (
     check_array_representation,
 )
@@ -219,26 +210,6 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
             root,
             files,
             require_policy(config.checks.cholesky_recurrence, "cholesky_recurrence"),
-        ),
-        "ecef-enu-transform": lambda root, files, config: check_ecef_enu_transform(
-            root,
-            files,
-            require_policy(config.checks.ecef_enu_transform, "ecef_enu_transform"),
-        ),
-        "ecef-ned-matrix-transform": lambda root, files, config: (
-            check_ecef_ned_matrix_transform(
-                root,
-                files,
-                require_policy(
-                    config.checks.ecef_ned_matrix_transform,
-                    "ecef_ned_matrix_transform",
-                ),
-            )
-        ),
-        "ned-basis-vectors": lambda root, files, config: check_ned_basis_vectors(
-            root,
-            files,
-            require_policy(config.checks.ned_basis_vectors, "ned_basis_vectors"),
         ),
         "run-artifacts": lambda root, files, config: check_run_artifacts(
             root,

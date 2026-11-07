@@ -61,8 +61,8 @@ by a typed `BuiltinFeature` with direct runner and specialized-operation
 references.
 
 The original six-rule pilot is not a complete built-in registration
-migration. Twenty-five selectors now use feature-owned runtime
-declarations, while 37 remain on legacy selector/config/runner paths.
+migration. Thirty-four selectors now use feature-owned runtime
+declarations, while 28 remain on legacy selector/config/runner paths.
 Generated declarations do not select or enable a check and do not change JSON results, finding IDs, gate IDs,
 or enforcement.
 
@@ -157,3 +157,12 @@ applicability labels, selectors, strict TOML fields, finding IDs and result
 shape. See the [quaternion registration
 slice](BUILTIN-CHECK-ARCHITECTURE.md#quaternion-registration-slice) for the
 exact files and pinned-wheel evidence.
+
+The three configured coordinate-frame checks now use the same registration
+shape: ECEF-to-ENU tuple formulas, ECEF-to-NED matrix formulas, and NED basis
+vectors each own their policy model, morphology and typed runner beside the
+checker. Their concerns and policy contracts remain distinct. Direct JSON
+scenarios assert the stable finding IDs and source lines, a profile scenario
+asserts ordered results, and an invalid-config scenario proves strict
+validation. The [coordinate-frame registration slice](BUILTIN-CHECK-ARCHITECTURE.md#coordinate-frame-registration-slice)
+records the compatibility result.

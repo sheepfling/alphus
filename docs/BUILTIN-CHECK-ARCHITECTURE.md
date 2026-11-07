@@ -1407,3 +1407,22 @@ environment gap where global Ruff metadata did not provide a matching CLI and
 ESLint was unavailable. The reports record the npm tool-tree digest and each
 scenario's native isolation inputs. Existing selectors and native result
 contracts remain unchanged.
+
+## Coordinate-frame registration slice
+
+The three configured coordinate-frame checks now declare their typed policy,
+existing selector and result shape, morphology, and direct runner in their
+own checker modules: `ecef-enu-transform`, `ecef-ned-matrix-transform`, and
+`ned-basis-vectors`. Their strict policy fields are generated into the
+existing `[checks.*]` contract, while the source-scanning algorithms and
+public finding IDs stay unchanged. The feature-owned concerns describe
+coordinate transforms and local basis construction separately; all three
+remain bounded Python syntax checks with advisory findings.
+
+The differential fixture exercises the three direct selectors and their
+ordered profile, and rejects an unknown policy key before execution. It
+asserts each existing rule ID, path, and finding line. These scenarios add
+behavior-level coverage for three additional selectors; together with the
+previous 31, 34 of 62 selectors now have direct behavior scenarios. The
+remaining 28 are not behaviorally covered by the pinned-wheel harness yet.
+This is another bounded slice, not full issue #87 completion.

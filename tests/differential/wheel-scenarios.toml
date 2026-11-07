@@ -1397,3 +1397,81 @@ required_output = ["Invalid quality policy"]
 name = "invalid-config"
 arguments = ["--config", "quality-gates.toml", "--rule", "manual-quaternion-products"]
 parse_json = false
+
+[[scenario]]
+name = "coordinate-frames-ecef-enu-direct"
+fixture = "coordinate-frames"
+selectors = ["ecef-enu-transform"]
+behavior = ["feature-owned-configured-scan", "exact-frame-fingerprint", "stable-finding-id"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/python/none/maintainability/ecef-enu-transform-reuse", path = "src/geometry/frames.py", line = 15 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "ecef-enu-transform", "--json"]
+
+[[scenario]]
+name = "coordinate-frames-ecef-ned-direct"
+fixture = "coordinate-frames"
+selectors = ["ecef-ned-matrix-transform"]
+behavior = ["feature-owned-configured-scan", "exact-matrix-fingerprint", "stable-finding-id"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/python/none/maintainability/ecef-ned-matrix-transform-reuse", path = "src/geometry/frames.py", line = 29 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "ecef-ned-matrix-transform", "--json"]
+
+[[scenario]]
+name = "coordinate-frames-ned-basis-direct"
+fixture = "coordinate-frames"
+selectors = ["ned-basis-vectors"]
+behavior = ["feature-owned-configured-scan", "exact-basis-fingerprint", "stable-finding-id"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/python/none/maintainability/ned-basis-vector-transform-reuse", path = "src/geometry/frames.py", line = 49 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "ned-basis-vectors", "--json"]
+
+[[scenario]]
+name = "coordinate-frames-profile"
+fixture = "coordinate-frames"
+selectors = ["ecef-enu-transform", "ecef-ned-matrix-transform", "ned-basis-vectors"]
+behavior = ["feature-owned-profile-dispatch", "ordered-results", "typed-result-adapter"]
+expected_exit = 0
+minimum_findings = 3
+expected_step_names = ["ECEF to ENU", "ECEF to NED matrix", "NED basis vectors"]
+expected_step_rules = ["ecef-enu-transform", "ecef-ned-matrix-transform", "ned-basis-vectors"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/python/none/maintainability/ecef-enu-transform-reuse", path = "src/geometry/frames.py", line = 15 },
+  { rule_id = "alphus/python/none/maintainability/ecef-ned-matrix-transform-reuse", path = "src/geometry/frames.py", line = 29 },
+  { rule_id = "alphus/python/none/maintainability/ned-basis-vector-transform-reuse", path = "src/geometry/frames.py", line = 49 },
+]
+
+[[scenario.variant]]
+name = "profile-json"
+arguments = ["--config", "quality-gates.toml", "--profile", "coordinate-frames", "--run", "--json"]
+
+[[scenario]]
+name = "coordinate-frames-invalid-config"
+fixture = "coordinate-frames-invalid-config"
+selectors = ["ecef-enu-transform"]
+behavior = ["feature-owned-strict-policy", "unknown-field-rejected-before-run"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-config"
+arguments = ["--config", "quality-gates.toml", "--rule", "ecef-enu-transform"]
+parse_json = false

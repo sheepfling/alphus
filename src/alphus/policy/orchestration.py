@@ -35,13 +35,10 @@ from alphus.policy.review import (
     CholeskyRecurrencePolicy,
     CiWorkflowPolicy,
     DynamicMarkdownPolicy,
-    EcefEnuTransformPolicy,
-    EcefNedMatrixTransformPolicy,
     EmbeddedSemanticOverridePolicy,
     HeuristicTotalConsumptionPolicy,
     ManualEliminationPolicy,
     ManualMatrixKernelPolicy,
-    NedBasisVectorsPolicy,
     ParallelNormalizationPolicy,
     PatchCascadePolicy,
     PositionalInterfacePolicy,
@@ -86,9 +83,6 @@ class CheckPolicies(GeneratedFeaturePolicies):
     manual_elimination: ManualEliminationPolicy | None = None
     array_representation_churn: ArrayRepresentationPolicy | None = None
     cholesky_recurrence: CholeskyRecurrencePolicy | None = None
-    ecef_enu_transform: EcefEnuTransformPolicy | None = None
-    ecef_ned_matrix_transform: EcefNedMatrixTransformPolicy | None = None
-    ned_basis_vectors: NedBasisVectorsPolicy | None = None
     run_artifacts: RunArtifactPolicy | None = None
     ci_workflows: CiWorkflowPolicy | None = None
     source_test_coverage: SourceTestCoveragePolicy | None = None
