@@ -32,7 +32,7 @@ belong in the future feature definition and need dedicated validation.
 
 Rick identified tuple-pair `ALPHUS_CHECK` declarations as opaque and the
 built-in path as parallel to the existing plugin registry. The current
-candidate replaces that tuple format for eighteen feature-owned checks with
+candidate replaces that tuple format for twenty feature-owned checks with
 immutable `FeatureDefinition` and `RuleMorphology` values plus a typed
 `BuiltinFeature` execution object. A PEP 517 build
 backend statically reads those declarations and writes standard
@@ -79,21 +79,22 @@ This document distinguishes four kinds of statement:
   silently changing consumer behavior.
 
 PR #100 remains an open draft. It began with the six-check morphology
-metadata pilot and now has eighteen selectors moved onto feature-owned generated
+metadata pilot and now has twenty selectors moved onto feature-owned generated
 runtime views:
 `file-size`, `line-length`, `package-boundaries`, `repository-layout`,
 `dependency-locks`, `documentation-config`, `cyclomatic-complexity`,
 `output-escaping`, `comment-markers`, `numeric-literals`, `scipy-constants`,
 `module-roles`, `markdown-shell-fences`, `git-ignores`, `git-attributes`,
-`git-history`, `json-structure`, and `path-discovery`. Each local
+`git-history`, `json-structure`, `path-discovery`, `document-style`, and
+`benchmark-docs`. Each local
 `ALPHUS_CHECK` declaration statically generates
 morphology metadata, typed `FeatureDefinition`, `RuleSpec`, strict policy
 field, selector type, and inventory entry. Each feature module exposes one
 typed `ALPHUS_FEATURE` object with a direct callback for lazy execution. The established
 `RuleEvaluation` and CLI result adapters remain shared, so adding a feature
-still uses the existing output contract. The other 44 baseline selectors
+still uses the existing output contract. The other 42 baseline selectors
 remain on legacy registration paths; these slices do not complete issue #87
-or establish full selector equivalence. These eighteen declarations are now
+or establish full selector equivalence. These twenty declarations are now
 typed `FeatureDefinition(...)` calls paired with immutable
 `RuleMorphology(...)` values rather than the former tuple-pair `ALPHUS_CHECK`
 format. Static discovery validates them without importing gate implementations.
@@ -101,7 +102,7 @@ The PEP 517 backend generates installed-wheel entry-point metadata without a
 per-check `pyproject.toml` edit. Aggregate policy/config/dispatch views are
 ignored build artifacts rather than checked-in shared files, so independent
 feature branches do not edit the same generated outputs. Runtime entry points
-target the typed feature object; the remaining 44 selectors still use legacy
+target the typed feature object; the remaining 42 selectors still use legacy
 registration maps.
 
 The latest source-discovery slice moves `json-structure` and `path-discovery`
@@ -122,6 +123,20 @@ exercise 21 distinct selectors. This is evidence for those manifested
 scenarios, not complete 62-selector equivalence. The report is reproducible
 with `scripts/differential_wheels.py` and is kept outside the repository at
 `/tmp/alphus-morphology-source-discovery-5987a18.json`.
+
+The next slice migrates `document-style` and `benchmark-docs`. Their typed
+feature declarations replace tuple morphology; policy models, selectors,
+catalog metadata and runners now derive from their owning analyzers. The
+style-preference check retains its Markdown/LaTeX/HTML applicability and the
+benchmark check retains its bounded Markdown risk claim. Direct tests preserve
+finding IDs, severity, paths and locations; wheel scenarios also exercise
+strict config rejection and ordered serial/parallel profile reporting.
+Candidate `d26a8fe19f5039ff8cad5e16dcaf2097981cdf84` matched the pinned
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` wheel across 58 manifested
+scenarios with no differences. The catalogs remain 62 selectors; 22 have
+behavior-level scenarios. The report is at
+`/tmp/alphus-morphology-document-review-d26a8fe.json`; the result does not
+establish full selector equivalence.
 
 ## Current package ownership and dependency direction
 
@@ -369,7 +384,7 @@ JSON/text shapes and legacy IDs.
 
 ## Feature-owned registration and imports
 
-The current eighteen-selector flow is:
+The current twenty-selector flow is:
 
 ```text
 typed, feature-owned FeatureDefinition and RuleMorphology
@@ -395,7 +410,7 @@ rejects duplicate selector names before loading a selected runner. Catalog and
 config inspection do not import the migrated checker modules. A registration
 never selects or enables a check: consumer profile steps remain the selection
 source, and strict config continues to reject invalid or unknown fields. This
-production path currently covers eighteen selectors; remaining selectors still
+production path currently covers twenty selectors; remaining selectors still
 use legacy theme maps. The five aggregate views are no longer tracked: the
 build regenerates them as ignored source files for each worktree, and
 `MANIFEST.in` includes them in source archives. Separate feature branches
@@ -445,7 +460,7 @@ The PEP 517 backend statically reads feature declarations and writes standard
 directory. The runtime registry indexes entry points from Alphus-named
 distributions whose selector set matches the generated feature catalog,
 rejects duplicate selectors, and imports a runner only after explicit
-selection. Adding one of the eighteen migrated checks did not
+selection. Adding one of the twenty migrated checks did not
 require editing a central runner map or the `pyproject.toml` entry-point table.
 The PEP 517 build also regenerates aggregate policy/config/dispatch views as
 ignored source files and includes them in wheels and source archives. Those
@@ -1268,4 +1283,4 @@ Two decisions remain for review:
 
 Until resolved, do not change digest/archive meaning or claim full #87
 acceptance. PR #100 remains a draft containing the six-check morphology pilot
-and bounded runtime registration slices for eighteen selectors documented above.
+and bounded runtime registration slices for twenty selectors documented above.

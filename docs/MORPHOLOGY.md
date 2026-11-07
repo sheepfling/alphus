@@ -61,8 +61,8 @@ by a typed `BuiltinFeature` with direct runner and specialized-operation
 references.
 
 The original six-rule pilot is not a complete built-in registration
-migration. Eighteen selectors now use feature-owned runtime declarations,
-while 44 remain on legacy selector/config/runner paths. Generated declarations do not
+migration. Twenty selectors now use feature-owned runtime declarations,
+while 42 remain on legacy selector/config/runner paths. Generated declarations do not
 select or enable a check and do not change JSON results, finding IDs, gate IDs,
 or enforcement.
 
@@ -76,8 +76,8 @@ or enforcement.
   branches and semantic-field assignments; public samples reviewed.
 - `benchmark-docs`: bounded heuristic for prose risk; lexical matches in
   selected Markdown sections; synthetic tests only.
-- `document-style`: exact rule for a style preference; heading patterns and
-  format-specific locations; synthetic tests only.
+- `document-style`: bounded heuristic for a style preference; heading patterns
+  and format-specific locations; synthetic tests only.
 - `cyclomatic-complexity`: native tool and exact threshold; selected Python,
   JavaScript, and C++ functions with tool identity; synthetic tests only.
 
@@ -89,9 +89,10 @@ readiness.
 ## Registration boundary and next tranche
 
 The six-check morphology pilot is metadata discovery. Draft PR #100 now
-has eighteen feature-owned runtime selectors, including the package-boundaries
+has twenty feature-owned runtime selectors, including the package-boundaries
 composite, polyglot cyclomatic and comment readers, output escaping, paired
-shared-contract numeric checks, and Python/JavaScript source checks. Each declaration generates morphology,
+shared-contract numeric checks, Python/JavaScript source checks, and two
+distinct Markdown review checks. Each declaration generates morphology,
 `FeatureDefinition`, `RuleSpec`, strict primary `CheckPolicies` field, selector
 literal, inventory entry and lazy dispatch. Existing config names, output
 adaptation, reports, selection and exit behavior remain the compatibility
@@ -99,11 +100,11 @@ contract. Synthetic discovery proves a new selector can be found without a
 central selector list; tests cover strict fields, shared complaint ownership,
 composite dispatch and lazy unselected providers.
 
-This remains bounded: the other 44 baseline selectors use legacy registration
+This remains bounded: the other 42 baseline selectors use legacy registration
 paths, and the current evidence is not full wheel equivalence. The pinned run
-for candidate `5987a183dee35c948ae771d852c2be4a458953b9` compares 55 scenarios
+for candidate `d26a8fe19f5039ff8cad5e16dcaf2097981cdf84` compares 58 scenarios
 against baseline `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` with no differences;
-21 selectors have behavior-level scenarios. Forty-one baseline selectors still
+22 selectors have behavior-level scenarios. Forty baseline selectors still
 lack behavior-level differential evidence.
 Continue migration with direct/profile comparisons, lazy-provider checks, and
 explicit missing/unsupported, partial, error, plugin/native and effectful-command
