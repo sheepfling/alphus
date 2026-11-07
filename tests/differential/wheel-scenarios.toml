@@ -387,7 +387,7 @@ expected_exit = 1
 minimum_findings = 2
 expected_findings = [
   { rule_id = "alphus/python/none/architecture/forbidden-module-import", path = "src/provider.py", line = 1 },
-  { rule_id = "alphus/python/none/architecture/forbidden-module-assignment", path = "src/provider.py", line = 2 },
+  { rule_id = "alphus/python/none/architecture/forbidden-module-assignment", path = "src/provider.py", line = 3 },
 ]
 
 [[scenario.variant]]
@@ -406,7 +406,7 @@ expected_step_rules = ["module-roles"]
 require_passed_steps = true
 expected_findings = [
   { rule_id = "alphus/python/none/architecture/forbidden-module-import", path = "src/provider.py", line = 1 },
-  { rule_id = "alphus/python/none/architecture/forbidden-module-assignment", path = "src/provider.py", line = 2 },
+  { rule_id = "alphus/python/none/architecture/forbidden-module-assignment", path = "src/provider.py", line = 3 },
 ]
 
 [[scenario.variant]]
