@@ -705,6 +705,7 @@ def _install_python_distributions(python: Path, distributions: Sequence[str]) ->
                 "-m",
                 "pip",
                 "install",
+                "--ignore-installed",
                 "--disable-pip-version-check",
                 distribution,
             ],

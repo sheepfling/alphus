@@ -714,6 +714,7 @@ arguments = ["--config", "quality-gates.toml", "--profile", "documentation-revie
 [[scenario]]
 name = "cyclomatic-python-ruff"
 fixture = "cyclomatic-python"
+python_distributions = ["ruff==0.16.1"]
 selectors = ["cyclomatic-complexity"]
 behavior = ["native-ruff", "cyclomatic-report", "finding-and-coverage-provenance"]
 expected_exit = 0
@@ -770,6 +771,7 @@ arguments = ["--config", "quality-gates.toml", "--rule", "cyclomatic-complexity"
 [[scenario]]
 name = "cyclomatic-unsupported-version"
 fixture = "cyclomatic-unsupported-version"
+python_distributions = ["ruff==0.16.1"]
 selectors = ["cyclomatic-complexity"]
 behavior = ["native-version-mismatch", "operational-failure-report", "no-analysis-coverage"]
 expected_exit = 2

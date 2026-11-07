@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
 
+from scripts import differential_wheels
 from scripts.differential_wheels import (
     ProcessResult,
     Scenario,
@@ -18,6 +21,7 @@ from scripts.differential_wheels import (
     _compare_reports,
     _configured_policy_sections,
     _dispatch_case,
+    _install_python_distributions,
     _materialize_scenario_files,
     _missing_policy_error,
     _scenario_classification,
@@ -29,6 +33,35 @@ from scripts.differential_wheels import (
     remove_path,
     replace_known_path,
 )
+
+
+def test_exact_scenario_distributions_shadow_shared_site_packages(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls: list[tuple[str, ...]] = []
+
+    def record_install(
+        arguments: Sequence[str], **_options: object
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append(tuple(arguments))
+        return subprocess.CompletedProcess(arguments, 0, "", "")
+
+    monkeypatch.setattr(differential_wheels.subprocess, "run", record_install)
+    interpreter = tmp_path / "bin" / "python"
+
+    _install_python_distributions(interpreter, ("ruff==0.16.1",))
+
+    assert calls == [
+        (
+            str(interpreter),
+            "-m",
+            "pip",
+            "install",
+            "--ignore-installed",
+            "--disable-pip-version-check",
+            "ruff==0.16.1",
+        )
+    ]
 
 
 def test_normalizer_removes_only_declared_volatile_paths() -> None:
