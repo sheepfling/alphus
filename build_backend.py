@@ -42,7 +42,7 @@ def _write_builtin_entry_points() -> None:
     metadata.mkdir(parents=True, exist_ok=True)
     lines = ["[alphus.builtin_checks.v1]"]
     lines.extend(
-        f"{feature.selector} = {feature.runner_module}:{feature.runner_name}"
+        f"{feature.selector} = {feature.registration_module}:ALPHUS_FEATURE"
         for feature in features
     )
     (metadata / "entry_points.txt").write_text(

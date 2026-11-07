@@ -44,10 +44,8 @@ def test_repository_layout_definition_owns_strict_policy_and_runner() -> None:
     assert definition.summary == (
         "Checks configured repository paths, required files, and layout rules."
     )
-    assert definition.runner_module == "alphus.gates.repository.repository_layout"
-    assert definition.runner_name == "run_repository_layout_gate"
     assert builtin_check_entry_points()["repository-layout"].value == (
-        f"{definition.runner_module}:{definition.runner_name}"
+        "alphus.gates.repository.repository_layout:ALPHUS_FEATURE"
     )
 
 

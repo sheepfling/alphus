@@ -4,16 +4,16 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Final, Literal, TypeAlias
+from typing import Final
 
-from alphus.config import QualityGateConfig, SourceScanPolicy
+from alphus.config import QualityGateConfig
+from alphus.contracts.complaints import ComplaintContract, ComplaintEntry
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import (
     Category,
     Framework,
     RuleTag,
     Scope,
-    rule_tag,
 )
 from alphus.gates.languages.javascript.output_escaping import (
     escape_findings as js_escape_findings,
@@ -21,6 +21,7 @@ from alphus.gates.languages.javascript.output_escaping import (
 from alphus.gates.languages.python.output_escaping import (
     escape_findings as python_escape_findings,
 )
+from alphus.plugins.builtin import BuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -29,34 +30,27 @@ from alphus.policy.morphology import (
     EvaluationMaturity,
     RuleMorphology,
 )
+from alphus.policy.sources import SourceScanPolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_utf8_sig_text
 
-_OutputEscapingEmitter: TypeAlias = Literal["output-escaping"]
-_OutputEscapingContractTag: TypeAlias = tuple[_OutputEscapingEmitter, str]
-_OutputEscapingContract: TypeAlias = tuple[
-    str,
-    tuple[_OutputEscapingEmitter, ...],
-    tuple[_OutputEscapingContractTag, ...],
-]
-
-ALPHUS_COMPLAINT_CONTRACTS: Final[tuple[_OutputEscapingContract, ...]] = (
-    (
-        "output-escaping",
-        ("output-escaping",),
-        (
-            (
-                "output-escaping",
-                rule_tag(
+ALPHUS_COMPLAINT_CONTRACTS: Final = (
+    ComplaintContract(
+        name="output-escaping",
+        emitters=("output-escaping",),
+        entries=(
+            ComplaintEntry(
+                emitter="output-escaping",
+                tag=RuleTag(
                     Scope.PYTHON,
                     Framework.NONE,
                     Category.SECURITY,
                     "manual-output-escaping",
                 ),
             ),
-            (
-                "output-escaping",
-                rule_tag(
+            ComplaintEntry(
+                emitter="output-escaping",
+                tag=RuleTag(
                     Scope.JAVASCRIPT,
                     Framework.NONE,
                     Category.SECURITY,
@@ -70,14 +64,12 @@ ALPHUS_COMPLAINT_CONTRACTS: Final[tuple[_OutputEscapingContract, ...]] = (
 ALPHUS_CHECK: Final = FeatureDefinition(
     selector="output-escaping",
     policy_field="output_escaping",
-    policy_model="alphus.policy.sources.SourceScanPolicy",
+    policy_model=SourceScanPolicy,
     output_shape="findings",
     summary="Reviews dynamic values at configured HTML or shell output sinks.",
     applies_to=("python", "javascript"),
     domains=(),
     requires_files=True,
-    runner_module="alphus.gates.source.output_escaping",
-    runner_name="run_output_escaping_rule",
     policy_inputs=("output_escaping",),
 )
 
@@ -113,13 +105,15 @@ ALPHUS_MORPHOLOGY: Final = RuleMorphology(
 
 
 def _output_escaping_tag(scope: Scope) -> RuleTag:
-    for contract_name, emitters, entries in ALPHUS_COMPLAINT_CONTRACTS:
-        if contract_name != "output-escaping" or "output-escaping" not in emitters:
+    for contract in ALPHUS_COMPLAINT_CONTRACTS:
+        if (
+            contract.name != "output-escaping"
+            or "output-escaping" not in contract.emitters
+        ):
             continue
-        for emitter, rule_id in entries:
-            tag = RuleTag.parse(rule_id)
-            if emitter == "output-escaping" and tag.scope is scope:
-                return tag
+        for entry in contract.entries:
+            if entry.emitter == "output-escaping" and entry.tag.scope is scope:
+                return entry.tag
     raise ValueError(f"no output-escaping finding contract for scope {scope.value}")
 
 
@@ -164,3 +158,10 @@ def run_output_escaping_rule(
     """Adapt the feature-owned strict source scope to the legacy checker."""
     policy = require_policy(config.checks.output_escaping, "output_escaping")
     return check_output_escaping(root, files, policy)
+
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_output_escaping_rule,
+)

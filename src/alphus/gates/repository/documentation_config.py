@@ -11,9 +11,10 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Final, NamedTuple, TypeAlias
 
-from alphus.config import DocumentationConfigPolicy, QualityGateConfig
+from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
+from alphus.plugins.builtin import BuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -22,13 +23,14 @@ from alphus.policy.morphology import (
     EvaluationMaturity,
     RuleMorphology,
 )
+from alphus.policy.repository import DocumentationConfigPolicy
 from alphus.support.inventory import git_files, matches_path
 from alphus.support.source_text import read_python_source, read_utf8_text
 
 ALPHUS_CHECK: Final = FeatureDefinition(
     selector="documentation-config",
     policy_field="documentation_config",
-    policy_model="alphus.policy.repository.DocumentationConfigPolicy",
+    policy_model=DocumentationConfigPolicy,
     output_shape="findings",
     summary=(
         "Checks documentation links and repository-specific documentation "
@@ -37,8 +39,6 @@ ALPHUS_CHECK: Final = FeatureDefinition(
     applies_to=("markdown", "repository"),
     domains=(),
     requires_files=False,
-    runner_module="alphus.gates.repository.documentation_config",
-    runner_name="run_documentation_config_gate",
 )
 
 ALPHUS_MORPHOLOGY: Final = RuleMorphology(
@@ -860,3 +860,10 @@ def run_documentation_config_gate(
     """Run documentation/config comparison with its validated strict policy."""
     policy = require_policy(config.checks.documentation_config, "documentation_config")
     return check_documentation_config(root, policy)
+
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_documentation_config_gate,
+)

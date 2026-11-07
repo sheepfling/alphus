@@ -18,11 +18,6 @@ from pathlib import Path
 from typing import TypeAlias, cast
 
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
-from alphus.policy.feature_definition import (
-    FeatureDefinition,
-    FeatureInputMode,
-    FeatureOutputShape,
-)
 from alphus.policy.morphology import (
     ClaimKind,
     DetectionMechanism,
@@ -101,8 +96,7 @@ class _FeatureRegistration:
     applies_to: tuple[str, ...]
     domains: tuple[str, ...]
     requires_files: bool
-    runner_module: str
-    runner_name: str
+    registration_module: str
     policy_inputs: tuple[str, ...]
     display_name: str | None = None
     input_mode: str = "caller-scope"
@@ -219,7 +213,7 @@ def _parse_rule_id(root: Path, value: object, source: Path) -> str:
 def _static_rule_id(root: Path, node: ast.expr, source: Path) -> str:
     match node:
         case ast.Call(
-            func=ast.Name(id="rule_tag"),
+            func=ast.Name(id="rule_tag") | ast.Name(id="RuleTag"),
             args=[
                 ast.Attribute(value=ast.Name(id="Scope"), attr=scope),
                 ast.Attribute(value=ast.Name(id="Framework"), attr=framework),
@@ -266,11 +260,10 @@ def _static_complaint_contracts(
         if not isinstance(raw_records, ast.Tuple):
             raise TypeError(f"{path}:{_COMPLAINT_CONTRACTS_NAME} must be a tuple")
         for record in raw_records.elts:
-            if not isinstance(record, ast.Tuple) or len(record.elts) != 3:
-                raise ValueError(
-                    f"{path}:{_COMPLAINT_CONTRACTS_NAME} entries must be triples"
-                )
-            name_raw: object = ast.literal_eval(record.elts[0])
+            contract_fields = _named_call_fields(record, "ComplaintContract", path)
+            if set(contract_fields) != {"name", "emitters", "entries"}:
+                raise ValueError(f"{path}: ComplaintContract fields are incomplete")
+            name_raw: object = ast.literal_eval(contract_fields["name"])
             name_value: str | bytes = cast(str | bytes, name_raw)
             if type(name_value) is not str or not _SLUG.fullmatch(name_value):
                 raise ValueError(
@@ -278,24 +271,30 @@ def _static_complaint_contracts(
                 )
             if name_value in contracts:
                 raise ValueError(f"{path}: duplicate complaint contract {name_value!r}")
-            raw_emitters: object = ast.literal_eval(record.elts[1])
+            raw_emitters: object = ast.literal_eval(contract_fields["emitters"])
             emitters = _string_tuple(raw_emitters, "complaint contract emitters")
             if any(not _SLUG.fullmatch(emitter) for emitter in emitters):
                 raise ValueError(f"{path}: complaint contract emitters must be slugs")
-            tag_records = record.elts[2]
-            if not isinstance(tag_records, ast.Tuple) or not tag_records.elts:
-                raise ValueError(f"{path}: complaint contract tags must be a tuple")
+            tag_records = contract_fields["entries"]
+            match tag_records:
+                case ast.Tuple(elts=tag_nodes) if tag_nodes:
+                    pass
+                case _:
+                    raise ValueError(
+                        f"{path}: complaint contract tags must be a non-empty tuple"
+                    )
             tags: list[tuple[str, str]] = []
-            for tag_record in tag_records.elts:
-                if not isinstance(tag_record, ast.Tuple) or len(tag_record.elts) != 2:
-                    raise ValueError(f"{path}: complaint contract tags must be pairs")
-                emitter_raw: object = ast.literal_eval(tag_record.elts[0])
+            for tag_record in tag_nodes:
+                entry_fields = _named_call_fields(tag_record, "ComplaintEntry", path)
+                if set(entry_fields) != {"emitter", "tag"}:
+                    raise ValueError(f"{path}: ComplaintEntry fields are incomplete")
+                emitter_raw: object = ast.literal_eval(entry_fields["emitter"])
                 emitter_value: str | bytes = cast(str | bytes, emitter_raw)
                 if type(emitter_value) is not str or emitter_value not in emitters:
                     raise ValueError(
                         f"{path}: complaint tag emitter must be declared by its contract"
                     )
-                rule_id = _static_rule_id(root, tag_record.elts[1], path)
+                rule_id = _static_rule_id(root, entry_fields["tag"], path)
                 if (emitter_value, rule_id) in tags:
                     raise ValueError(
                         f"{path}: duplicate complaint tag for {emitter_value!r}"
@@ -326,6 +325,23 @@ def _static_complaint_contracts(
                 rule_ids_by_emitter=tuple(tags),
             )
     return contracts
+
+
+def _named_call_fields(
+    node: ast.expr, class_name: str, path: Path
+) -> dict[str, ast.expr]:
+    match node:
+        case ast.Call(func=ast.Name(id=found), args=[], keywords=keywords) if (
+            found == class_name
+        ):
+            fields: dict[str, ast.expr] = {}
+            for keyword in keywords:
+                if keyword.arg is None or keyword.arg in fields:
+                    raise ValueError(f"{path}: invalid {class_name} field")
+                fields[keyword.arg] = keyword.value
+            return fields
+        case _:
+            raise ValueError(f"{path}: complaint records must use {class_name}")
 
 
 def _string_tuple(value: object, field: str) -> tuple[str, ...]:
@@ -384,8 +400,6 @@ def _validate_declaration(
             "applies_to",
             "domains",
             "requires_files",
-            "runner_module",
-            "runner_name",
         }
     )
     optional_feature_fields: frozenset[str] = frozenset(
@@ -488,15 +502,11 @@ def _validate_declaration(
         output_shape = field("output_shape")
         summary = field("summary")
         requires_files = field("requires_files")
-        runner_module = field("runner_module")
-        runner_name = field("runner_name")
         policy_text: str | bytes = cast(str | bytes, policy_field)
         policy_model_text: str | bytes = cast(str | bytes, policy_model)
         shape_text: str | bytes = cast(str | bytes, output_shape)
         summary_text: str | bytes = cast(str | bytes, summary)
         files_value: bool | str = cast(bool | str, requires_files)
-        module_text: str | bytes = cast(str | bytes, runner_module)
-        function_text: str | bytes = cast(str | bytes, runner_name)
         if (
             type(policy_text) is not str
             or re.fullmatch(r"[a-z][a-z0-9_]*", policy_text) is None
@@ -523,16 +533,6 @@ def _validate_declaration(
             raise ValueError(f"{path}: summary must be non-empty text")
         if type(files_value) is not bool:
             raise ValueError(f"{path}: requires_files must be a boolean literal")
-        if (
-            type(module_text) is not str
-            or re.fullmatch(r"alphus\.gates(?:\.[a-z][a-z0-9_]*)+", module_text) is None
-        ):
-            raise ValueError(f"{path}: runner_module must be a built-in gates module")
-        if (
-            type(function_text) is not str
-            or re.fullmatch(r"[a-z_][a-z0-9_]*", function_text) is None
-        ):
-            raise ValueError(f"{path}: runner_name must be a function identifier")
         applies_to = _string_tuple(field("applies_to"), "applies_to")
         policy_inputs = (
             _string_tuple(field("policy_inputs"), "policy_inputs")
@@ -580,8 +580,7 @@ def _validate_declaration(
             applies_to=applies_to,
             domains=cast(tuple[str, ...], domain_items),
             requires_files=files_value,
-            runner_module=module_text,
-            runner_name=function_text,
+            registration_module="",
             policy_inputs=policy_inputs,
             display_name=display_name,
             input_mode=input_mode_value,
@@ -621,11 +620,64 @@ def _declaration_records(raw: object) -> tuple[object, ...]:
     return values
 
 
-def _parse_feature_definition(node: ast.expr, path: Path) -> _FeatureRegistration:
+def _is_feature_definition_call(node: ast.expr) -> bool:
+    match node:
+        case ast.Call(func=ast.Name(id="FeatureDefinition")):
+            return True
+        case ast.Call(func=ast.Attribute(attr="FeatureDefinition")):
+            return True
+        case _:
+            return False
+
+
+def _static_source_constants(tree: ast.Module, path: Path) -> Mapping[str, ast.expr]:
+    values: dict[str, ast.expr] = {}
+    for statement in tree.body:
+        name = _assignment_name(statement)
+        expression = _assignment_value(statement)
+        if name is None or expression is None:
+            continue
+        values[name] = expression
+    return values
+
+
+def _literal_expression(
+    node: ast.expr,
+    *,
+    constants: Mapping[str, ast.expr],
+    path: Path,
+    field_name: str,
+) -> _FeatureLiteral:
+    visited: set[str] = set()
+    while isinstance(node, ast.Name):
+        if node.id in visited or node.id not in constants:
+            raise ValueError(
+                f"{path}: FeatureDefinition {field_name} must resolve to a literal"
+            )
+        visited.add(node.id)
+        node = constants[node.id]
+    try:
+        value: object = ast.literal_eval(node)
+    except (ValueError, TypeError, SyntaxError) as error:
+        raise ValueError(
+            f"{path}: FeatureDefinition fields must resolve to literals"
+        ) from error
+    return cast(_FeatureLiteral, value)
+
+
+def _parse_feature_definition(
+    node: ast.expr,
+    path: Path,
+    *,
+    constants: Mapping[str, ast.expr],
+) -> _FeatureRegistration:
     """Read one typed FeatureDefinition call without importing gate modules."""
     match node:
         case ast.Call(
-            func=ast.Name(id="FeatureDefinition"), args=[], keywords=keywords
+            func=ast.Name(id="FeatureDefinition")
+            | ast.Attribute(attr="FeatureDefinition"),
+            args=[],
+            keywords=keywords,
         ):
             fields: dict[str, ast.expr] = {}
             for keyword in keywords:
@@ -644,8 +696,6 @@ def _parse_feature_definition(node: ast.expr, path: Path) -> _FeatureRegistratio
         "applies_to",
         "domains",
         "requires_files",
-        "runner_module",
-        "runner_name",
         "policy_inputs",
         "display_name",
         "input_mode",
@@ -660,13 +710,12 @@ def _parse_feature_definition(node: ast.expr, path: Path) -> _FeatureRegistratio
         expression = fields.get(name)
         if expression is None:
             return default
-        try:
-            value: object = ast.literal_eval(expression)
-        except (ValueError, TypeError, SyntaxError) as error:
-            raise ValueError(
-                f"{path}: FeatureDefinition fields must be literals"
-            ) from error
-        return cast(_FeatureLiteral, value)
+        return _literal_expression(
+            expression,
+            constants=constants,
+            path=path,
+            field_name=name,
+        )
 
     def text_field(name: str) -> str:
         value = literal(name)
@@ -690,6 +739,8 @@ def _parse_feature_definition(node: ast.expr, path: Path) -> _FeatureRegistratio
             raise ValueError(f"{path}: FeatureDefinition {name} must be a string tuple")
         return cast(tuple[str, ...], candidate)
 
+    policy_model = _resolve_policy_model(fields["policy_model"], path)
+
     requires_files = literal("requires_files")
     if type(requires_files) is not bool:
         raise ValueError(f"{path}: FeatureDefinition requires_files must be boolean")
@@ -700,36 +751,103 @@ def _parse_feature_definition(node: ast.expr, path: Path) -> _FeatureRegistratio
     if type(input_mode) is not str:
         raise ValueError(f"{path}: FeatureDefinition input_mode must be text")
 
-    feature = FeatureDefinition(
-        selector=text_field("selector"),
-        policy_field=text_field("policy_field"),
-        policy_model=text_field("policy_model"),
-        output_shape=cast(FeatureOutputShape, text_field("output_shape")),
-        summary=text_field("summary"),
-        applies_to=text_tuple("applies_to"),
-        domains=text_tuple("domains"),
-        requires_files=requires_files,
-        runner_module=text_field("runner_module"),
-        runner_name=text_field("runner_name"),
-        policy_inputs=text_tuple("policy_inputs", default=()),
-        display_name=display_name,
-        input_mode=cast(FeatureInputMode, input_mode),
-    )
+    selector = text_field("selector")
+    policy_field = text_field("policy_field")
+    output_shape = text_field("output_shape")
+    summary = text_field("summary")
+    applies_to = text_tuple("applies_to")
+    domains = text_tuple("domains")
+    policy_inputs = text_tuple("policy_inputs", default=())
+    if not policy_inputs:
+        policy_inputs = (policy_field,)
+    if (
+        _SLUG.fullmatch(selector) is None
+        or re.fullmatch(r"[a-z][a-z0-9_]*", policy_field) is None
+    ):
+        raise ValueError(f"{path}: invalid FeatureDefinition selector or policy field")
+    if output_shape not in {
+        "findings",
+        "messages",
+        "python-style",
+        "shared-utilities",
+        "cyclomatic-report",
+    }:
+        raise ValueError(f"{path}: unsupported FeatureDefinition output shape")
+    if not summary.strip():
+        raise ValueError(f"{path}: FeatureDefinition summary must be non-empty")
+    if (
+        not applies_to
+        or not _valid_domain_values(applies_to)
+        or not _valid_domain_values(domains)
+    ):
+        raise ValueError(f"{path}: invalid FeatureDefinition applicability labels")
+    if (
+        len(policy_inputs) != len(set(policy_inputs))
+        or policy_field not in policy_inputs
+        or any(re.fullmatch(r"[a-z][a-z0-9_]*", item) is None for item in policy_inputs)
+    ):
+        raise ValueError(f"{path}: invalid FeatureDefinition policy inputs")
+    if display_name is not None and not display_name.strip():
+        raise ValueError(f"{path}: FeatureDefinition display name must be non-empty")
+    if input_mode not in ("caller-scope", "configured-source-scan"):
+        raise ValueError(f"{path}: unsupported FeatureDefinition input mode")
     return _FeatureRegistration(
-        selector=feature.selector,
-        policy_field=feature.policy_field,
-        policy_model=feature.policy_model,
-        output_shape=feature.output_shape,
-        summary=feature.summary,
-        applies_to=feature.applies_to,
-        domains=feature.domains,
-        requires_files=feature.requires_files,
-        runner_module=feature.runner_module,
-        runner_name=feature.runner_name,
-        policy_inputs=feature.policy_inputs,
-        display_name=feature.display_name,
-        input_mode=feature.input_mode,
+        selector=selector,
+        policy_field=policy_field,
+        policy_model=policy_model,
+        output_shape=output_shape,
+        summary=summary,
+        applies_to=applies_to,
+        domains=domains,
+        requires_files=requires_files,
+        registration_module="",
+        policy_inputs=policy_inputs,
+        display_name=display_name,
+        input_mode=input_mode,
     )
+
+
+def _resolve_policy_model(node: ast.expr, path: Path) -> str:
+    """Resolve a statically imported policy class without importing its module."""
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imports: dict[str, str] = {}
+    for statement in tree.body:
+        match statement:
+            case ast.ImportFrom(module=module, names=aliases) if module is not None:
+                for alias in aliases:
+                    imports[alias.asname or alias.name] = f"{module}.{alias.name}"
+            case ast.Import(names=aliases):
+                for alias in aliases:
+                    bound_name = alias.asname or alias.name.split(".", 1)[0]
+                    imports[bound_name] = alias.name
+            case _:
+                continue
+
+    match node:
+        case ast.Name(id=name):
+            qualified = imports.get(name)
+        case ast.Attribute():
+            parts: list[str] = []
+            current: ast.expr = node
+            while isinstance(current, ast.Attribute):
+                parts.append(current.attr)
+                current = current.value
+            if not isinstance(current, ast.Name):
+                qualified = None
+            else:
+                prefix = imports.get(current.id, current.id)
+                qualified = ".".join((prefix, *reversed(parts)))
+        case _:
+            qualified = None
+    if (
+        qualified is None
+        or not qualified.startswith("alphus.policy.")
+        or not qualified.rsplit(".", 1)[-1][:1].isupper()
+    ):
+        raise ValueError(
+            f"{path}: FeatureDefinition policy_model must be an imported policy class"
+        )
+    return qualified
 
 
 def _enum_member(node: ast.expr, enum_name: str, path: Path) -> object:
@@ -962,15 +1080,21 @@ def _declarations(
                     raise ValueError(f"{path} must assign {assignment_name}")
                 values_by_name[assignment_name].append(value)
         local_ids = _static_rule_ids(tree)
+        source_constants = _static_source_constants(tree, path)
         feature_values = values_by_name[_CHECK_DECLARATION_NAME]
         typed_feature: _FeatureRegistration | None = None
         if len(feature_values) == 1 and isinstance(feature_values[0], ast.Call):
             call = feature_values[0]
-            function: ast.Name | ast.Attribute = cast(
-                ast.Name | ast.Attribute, call.func
-            )
-            if isinstance(function, ast.Name) and function.id == "FeatureDefinition":
-                typed_feature = _parse_feature_definition(call, path)
+            if _is_feature_definition_call(call):
+                typed_feature = _parse_feature_definition(
+                    call, path, constants=source_constants
+                )
+                registration_module = ".".join(
+                    path.relative_to(root / "src").with_suffix("").parts
+                )
+                typed_feature = replace(
+                    typed_feature, registration_module=registration_module
+                )
 
         parsed_items: list[tuple[object, bool]] = []
         if typed_feature is not None:
@@ -1176,26 +1300,12 @@ def _validate_feature_registration(root: Path, declaration: _Declaration) -> Non
     if feature is None:
         return
     gates_root = (root / "src" / "alphus" / "gates").resolve(strict=True)
-    module_parts = feature.runner_module.split(".")
-    runner_path = root.joinpath("src", *module_parts).with_suffix(".py")
-    if runner_path.is_symlink() or not runner_path.resolve(strict=True).is_relative_to(
-        gates_root
-    ):
+    registration_path = root / Path(declaration.source)
+    if registration_path.is_symlink() or not registration_path.resolve(
+        strict=True
+    ).is_relative_to(gates_root):
         raise ValueError(
-            f"{declaration.source}: feature runner escapes built-in gates: "
-            f"{feature.runner_module}"
-        )
-    runner_tree = ast.parse(
-        runner_path.read_text(encoding="utf-8"), filename=str(runner_path)
-    )
-    if not any(
-        isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef))
-        and statement.name == feature.runner_name
-        for statement in runner_tree.body
-    ):
-        raise ValueError(
-            f"{declaration.source}: feature runner does not name a top-level "
-            f"function: {feature.runner_module}:{feature.runner_name}"
+            f"{declaration.source}: feature registration escapes built-in gates"
         )
 
     policy_directory = root / "src" / "alphus" / "policy"
@@ -1400,6 +1510,13 @@ def render_manifest(root: Path) -> str:
 def render_feature_manifest(root: Path) -> str:
     """Render typed runtime registration data from feature-owned declarations."""
     declarations = [item for item in _declarations(root) if item.feature is not None]
+    policy_imports: dict[str, set[str]] = {}
+    for declaration in declarations:
+        feature = declaration.feature
+        if feature is None:
+            continue
+        module, class_name = _policy_class(feature)
+        policy_imports.setdefault(module, set()).add(class_name)
     lines = [
         '"""Generated by scripts/generate_morphology_manifest.py; do not edit."""',
         "",
@@ -1407,10 +1524,27 @@ def render_feature_manifest(root: Path) -> str:
         "from types import MappingProxyType",
         "",
         "from alphus.policy.feature_definition import FeatureDefinition",
-        "",
-        "FEATURE_DEFINITIONS: Mapping[str, FeatureDefinition] = MappingProxyType(",
-        "    {",
     ]
+    for module, class_names in sorted(policy_imports.items()):
+        names = ", ".join(sorted(class_names))
+        import_line = f"from {module} import {names}"
+        if len(import_line) <= 88:
+            lines.append(import_line)
+        else:
+            lines.extend(
+                [
+                    f"from {module} import (",
+                    *(f"    {name}," for name in sorted(class_names)),
+                    ")",
+                ]
+            )
+    lines.extend(
+        [
+            "",
+            "FEATURE_DEFINITIONS: Mapping[str, FeatureDefinition] = MappingProxyType(",
+            "    {",
+        ]
+    )
     for declaration in declarations:
         feature = declaration.feature
         if feature is None:
@@ -1420,14 +1554,12 @@ def render_feature_manifest(root: Path) -> str:
                 f"        {_quoted(feature.selector)}: FeatureDefinition(",
                 f"            selector={_quoted(feature.selector)},",
                 f"            policy_field={_quoted(feature.policy_field)},",
-                f"            policy_model={_quoted(feature.policy_model)},",
+                f"            policy_model={_policy_class(feature)[1]},",
                 f"            output_shape={_quoted(feature.output_shape)},",
                 *_text_argument_lines("summary", feature.summary),
                 *_tuple_lines("applies_to", feature.applies_to),
                 *_tuple_lines("domains", feature.domains),
                 f"            requires_files={feature.requires_files!r},",
-                f"            runner_module={_quoted(feature.runner_module)},",
-                f"            runner_name={_quoted(feature.runner_name)},",
                 *_tuple_lines("policy_inputs", feature.policy_inputs),
                 f"            input_mode={_quoted(feature.input_mode)},",
                 *(

@@ -8,7 +8,8 @@ from enum import StrEnum
 from typing import Final, Literal, TypeAlias
 
 from alphus.config import NumericLiteralSpec
-from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
+from alphus.contracts.complaints import ComplaintContract, ComplaintEntry
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
 
 NumericComplaintEmitter: TypeAlias = Literal[
     "numeric-literals", "scipy-constants", "numeric-cpp-adapter"
@@ -16,76 +17,53 @@ NumericComplaintEmitter: TypeAlias = Literal[
 NumericComplaintContractName: TypeAlias = Literal[
     "numeric-inline", "numeric-inline-cpp-adapter"
 ]
-_NumericComplaintEntry: TypeAlias = tuple[NumericComplaintEmitter, str]
-_NumericComplaintContract: TypeAlias = tuple[
-    str, tuple[NumericComplaintEmitter, ...], tuple[_NumericComplaintEntry, ...]
-]
-
 # One static source for the tags emitted by the shared numeric matcher and
 # referenced by both owning checks' morphology declarations.
-ALPHUS_COMPLAINT_CONTRACTS: Final[tuple[_NumericComplaintContract, ...]] = (
-    (
-        "numeric-inline",
-        ("numeric-literals", "scipy-constants"),
-        (
-            (
-                "numeric-literals",
-                rule_tag(
-                    Scope.PYTHON,
-                    Framework.NONE,
-                    Category.STYLE,
-                    "inline-constant",
+ALPHUS_COMPLAINT_CONTRACTS: Final = (
+    ComplaintContract(
+        name="numeric-inline",
+        emitters=("numeric-literals", "scipy-constants"),
+        entries=(
+            ComplaintEntry(
+                emitter="numeric-literals",
+                tag=RuleTag(
+                    Scope.PYTHON, Framework.NONE, Category.STYLE, "inline-constant"
                 ),
             ),
-            (
-                "numeric-literals",
-                rule_tag(
-                    Scope.PYTHON,
-                    Framework.NONE,
-                    Category.STYLE,
-                    "inline-conversion",
+            ComplaintEntry(
+                emitter="numeric-literals",
+                tag=RuleTag(
+                    Scope.PYTHON, Framework.NONE, Category.STYLE, "inline-conversion"
                 ),
             ),
-            (
-                "scipy-constants",
-                rule_tag(
-                    Scope.PYTHON,
-                    Framework.SCIPY,
-                    Category.STYLE,
-                    "inline-constant",
+            ComplaintEntry(
+                emitter="scipy-constants",
+                tag=RuleTag(
+                    Scope.PYTHON, Framework.SCIPY, Category.STYLE, "inline-constant"
                 ),
             ),
-            (
-                "scipy-constants",
-                rule_tag(
-                    Scope.PYTHON,
-                    Framework.SCIPY,
-                    Category.STYLE,
-                    "inline-conversion",
+            ComplaintEntry(
+                emitter="scipy-constants",
+                tag=RuleTag(
+                    Scope.PYTHON, Framework.SCIPY, Category.STYLE, "inline-conversion"
                 ),
             ),
         ),
     ),
-    (
-        "numeric-inline-cpp-adapter",
-        ("numeric-cpp-adapter",),
-        (
-            (
-                "numeric-cpp-adapter",
-                rule_tag(
-                    Scope.CPP,
-                    Framework.NONE,
-                    Category.STYLE,
-                    "inline-constant",
+    ComplaintContract(
+        name="numeric-inline-cpp-adapter",
+        emitters=("numeric-cpp-adapter",),
+        entries=(
+            ComplaintEntry(
+                emitter="numeric-cpp-adapter",
+                tag=RuleTag(
+                    Scope.CPP, Framework.NONE, Category.STYLE, "inline-constant"
                 ),
             ),
-            (
-                "numeric-cpp-adapter",
-                rule_tag(
-                    Scope.CPP,
-                    Framework.NONE,
-                    Category.STYLE,
-                    "inline-conversion",
+            ComplaintEntry(
+                emitter="numeric-cpp-adapter",
+                tag=RuleTag(
+                    Scope.CPP, Framework.NONE, Category.STYLE, "inline-conversion"
                 ),
             ),
         ),
@@ -100,17 +78,17 @@ def _numeric_rule_tag(
     framework: Framework,
     complaint: str,
 ) -> RuleTag:
-    for contract_name, emitters, tags in ALPHUS_COMPLAINT_CONTRACTS:
-        if contract_name != contract_id or emitter not in emitters:
+    for contract in ALPHUS_COMPLAINT_CONTRACTS:
+        if contract.name != contract_id or emitter not in contract.emitters:
             continue
-        for tag_emitter, rule_id in tags:
-            if tag_emitter != emitter:
+        for entry in contract.entries:
+            if entry.emitter != emitter:
                 continue
-            tag = RuleTag.parse(rule_id)
+            tag = entry.tag
             if tag.complaint == complaint:
                 if tag.scope != scope or tag.framework != framework:
                     raise ValueError(
-                        f"{contract_name} does not permit {scope}/{framework} "
+                        f"{contract.name} does not permit {scope}/{framework} "
                         f"for emitter {emitter} complaint {complaint!r}"
                     )
                 return tag

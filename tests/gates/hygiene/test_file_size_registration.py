@@ -11,6 +11,7 @@ from pydantic import ValidationError
 
 from alphus import check_file_size, check_line_length
 from alphus.config import QualityGateConfig
+from alphus.plugins.builtin_registry import load_builtin_feature
 from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
 from alphus.policy.catalog import RULE_SPECS
 
@@ -22,9 +23,7 @@ def test_feature_definition_generates_the_existing_catalog_contract() -> None:
     assert definition.policy_field == spec.policy_field == "file_size"
     assert definition.output_shape == spec.output_shape.value == "findings"
     assert definition.summary == spec.summary
-    assert definition.runner_module == "alphus.gates.hygiene.file_size"
-    assert definition.runner_name == "check_file_size"
-    assert check_file_size.__module__ == definition.runner_module
+    assert load_builtin_feature("file-size").runner is check_file_size
     line_definition = FEATURE_DEFINITIONS["line-length"]
     line_spec = RULE_SPECS["line-length"]
     assert line_definition.policy_field == line_spec.policy_field == "line_length"
@@ -34,10 +33,8 @@ def test_feature_definition_generates_the_existing_catalog_contract() -> None:
         == line_spec.summary
         == ("Reports source lines that exceed configured per-extension limits.")
     )
-    assert line_definition.policy_model == "alphus.policy.sources.LineLengthPolicy"
-    assert line_definition.runner_module == "alphus.gates.hygiene.line_length"
-    assert line_definition.runner_name == "check_line_length"
-    assert check_line_length.__module__ == line_definition.runner_module
+    assert line_definition.policy_model.__name__ == "LineLengthPolicy"
+    assert load_builtin_feature("line-length").runner is check_line_length
 
 
 def test_feature_owned_policies_remain_strict() -> None:

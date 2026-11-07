@@ -2,38 +2,48 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from functools import lru_cache
 from importlib.metadata import EntryPoint, distribution
-from inspect import signature
+from inspect import isasyncgenfunction, iscoroutinefunction, signature
 from pathlib import Path
 from types import MappingProxyType
-from typing import Protocol, TypeGuard, runtime_checkable
+from typing import TypeGuard, get_args, get_origin, get_type_hints
 
-from alphus.config import QualityGateConfig
-from alphus.execution.results import RuleOutput
+from alphus.contracts.cyclomatic import CyclomaticReport
+from alphus.contracts.findings import Finding
+from alphus.plugins.builtin import BuiltinFeature
 
 BUILTIN_CHECK_ENTRY_POINT_GROUP = "alphus.builtin_checks.v1"
 
 
-@runtime_checkable
-class BuiltinRunner(Protocol):
-    """Callable contract required by an installed built-in runner target."""
-
-    def __call__(
-        self, root: Path, files: Sequence[Path], config: QualityGateConfig
-    ) -> RuleOutput: ...
-
-
-def _is_builtin_runner(target: object) -> TypeGuard[BuiltinRunner]:
-    """Validate callability and positional compatibility at the metadata boundary."""
-    if not callable(target):
+def _is_builtin_feature(target: object) -> TypeGuard[BuiltinFeature]:
+    """Validate a first-party feature object and its synchronous result contract."""
+    match target:
+        case BuiltinFeature() as feature:
+            pass
+        case _:
+            return False
+    runner = feature.runner
+    if iscoroutinefunction(runner) or isasyncgenfunction(runner):
+        return False
+    if not callable(runner):
         return False
     try:
-        signature(target).bind(Path("."), (), object())
+        signature(runner).bind(Path("."), (), object())
+        return_annotation = get_type_hints(runner).get("return")
     except (TypeError, ValueError):
         return False
-    return True
+    if return_annotation is None:
+        return False
+    shape = feature.definition.output_shape
+    if shape == "cyclomatic-report":
+        return return_annotation is CyclomaticReport
+    if shape == "findings":
+        return get_origin(return_annotation) is list and get_args(
+            return_annotation
+        ) == (Finding,)
+    return False
 
 
 @lru_cache(maxsize=1)
@@ -68,21 +78,30 @@ def builtin_check_entry_points() -> Mapping[str, EntryPoint]:
 
 
 @lru_cache(maxsize=64)
-def load_builtin_runner(selector: str) -> BuiltinRunner:
-    """Import one registered implementation only after explicit selection."""
+def load_builtin_feature(selector: str) -> BuiltinFeature:
+    """Load one typed feature provider only after explicit selection."""
     point = builtin_check_entry_points().get(selector)
     if point is None:
         raise ValueError(f"built-in selector {selector!r} has no entry point")
     target: object = point.load()
-    if not _is_builtin_runner(target):
+    if not _is_builtin_feature(target):
         raise TypeError(
-            f"built-in entry point {selector!r} must accept root, files, and config"
+            f"built-in entry point {selector!r} must be a typed synchronous feature"
         )
-    return target
+    match target:
+        case BuiltinFeature() as feature:
+            if feature.definition.selector != selector:
+                raise ValueError(
+                    f"built-in feature {feature.definition.selector!r} does not "
+                    f"match entry point {selector!r}"
+                )
+            return feature
+        case _:
+            raise TypeError("validated built-in feature lost its runtime type")
 
 
 __all__ = [
     "BUILTIN_CHECK_ENTRY_POINT_GROUP",
     "builtin_check_entry_points",
-    "load_builtin_runner",
+    "load_builtin_feature",
 ]

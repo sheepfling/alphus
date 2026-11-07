@@ -23,6 +23,7 @@ from alphus.contracts.cyclomatic import (
     CyclomaticOption,
     CyclomaticPlan,
     CyclomaticReport,
+    CyclomaticRuleOperations,
 )
 from alphus.contracts.findings import (
     Finding,
@@ -32,6 +33,7 @@ from alphus.contracts.findings import (
 from alphus.contracts.process import ExitCode
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
 from alphus.gates.source._lizard_contracts import LizardWorkerResponse as _LizardPayload
+from alphus.plugins.builtin import BuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.metrics import (
@@ -55,14 +57,12 @@ from alphus.support.python_runtime import current_python_executable
 ALPHUS_CHECK: Final = FeatureDefinition(
     selector="cyclomatic-complexity",
     policy_field="cyclomatic_complexity",
-    policy_model="alphus.policy.metrics.CyclomaticComplexityPolicy",
+    policy_model=CyclomaticComplexityPolicy,
     output_shape="cyclomatic-report",
     summary="Measures bounded cyclomatic complexity for supported source backends.",
     applies_to=("python", "javascript", "cpp"),
     domains=(),
     requires_files=False,
-    runner_module="alphus.gates.source.cyclomatic_complexity",
-    runner_name="run_cyclomatic_rule",
 )
 
 ALPHUS_MORPHOLOGY: Final = RuleMorphology(
@@ -980,3 +980,18 @@ def report_summary(report: CyclomaticReport) -> str:
     return f"Cyclomatic complexity: {report.outcome}" + (
         f" ({details})" if details else ""
     )
+
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_cyclomatic_rule,
+    cyclomatic_operations=CyclomaticRuleOperations(
+        build_plan=build_cyclomatic_plan,
+        backend_failure=backend_failure,
+        combine_backends=combine_cyclomatic_backends,
+        report_exit_code=report_exit_code,
+        report_payload=report_payload,
+        report_summary=report_summary,
+    ),
+)

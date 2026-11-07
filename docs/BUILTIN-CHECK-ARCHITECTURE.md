@@ -33,15 +33,19 @@ belong in the future feature definition and need dedicated validation.
 Rick identified tuple-pair `ALPHUS_CHECK` declarations as opaque and the
 built-in path as parallel to the existing plugin registry. The current
 candidate replaces that tuple format for eleven feature-owned checks with
-immutable `FeatureDefinition` and `RuleMorphology` values. A PEP 517 build
+immutable `FeatureDefinition` and `RuleMorphology` values plus a typed
+`BuiltinFeature` execution object. A PEP 517 build
 backend statically reads those declarations and writes standard
 `alphus.builtin_checks.v1` metadata into ignored build output. Runtime lookup
 uses `importlib.metadata` against only the installed Alphus distribution and
-imports the selected runner on demand. The third-party `alphus.rules.v1`
-contract remains separate and allowlisted. This is a production registration
-path, but not yet the complete target: runner module and function names remain
-string fields, the loader does not validate a callable's full signature/result
-contract, and the remaining selectors still use legacy maps. The history and
+imports only the selected feature object on demand. Its object owns direct typed
+runner references and the cyclomatic-specific operations contract. Entry-point
+metadata targets `ALPHUS_FEATURE`; selector and policy metadata no longer store
+runner module/function strings, and policy models are class objects derived
+from `StrictModel`. The loader rejects asynchronous providers and checks the
+result annotation against the declared output shape before dispatch. The
+third-party `alphus.rules.v1` contract remains separate and allowlisted. This is
+still a partial migration: the remaining selectors use legacy maps. The history and
 trade-offs are recorded in the [check registry spike](architecture/check-registry-spike.md).
 
 ## Release boundary and status vocabulary
@@ -79,9 +83,10 @@ runtime views:
 `file-size`, `line-length`, `package-boundaries`, `repository-layout`,
 `dependency-locks`, `documentation-config`, `cyclomatic-complexity`,
 `output-escaping`, `comment-markers`, `numeric-literals`, and
-`scipy-constants`. Each local `ALPHUS_CHECK` literal statically generates
+`scipy-constants`. Each local `ALPHUS_CHECK` declaration statically generates
 morphology metadata, typed `FeatureDefinition`, `RuleSpec`, strict policy
-field, selector type, inventory entry, and lazy runner thunk. The established
+field, selector type, and inventory entry. Each feature module exposes one
+typed `ALPHUS_FEATURE` object with a direct callback for lazy execution. The established
 `RuleEvaluation` and CLI result adapters remain shared, so adding a feature
 still uses the existing output contract. The other 51 baseline selectors
 remain on legacy registration paths; these slices do not complete issue #87
@@ -92,10 +97,9 @@ format. Static discovery validates them without importing gate implementations.
 The PEP 517 backend generates installed-wheel entry-point metadata without a
 per-check `pyproject.toml` edit. Aggregate policy/config/dispatch views are
 ignored build artifacts rather than checked-in shared files, so independent
-feature branches do not edit the same generated outputs. The declaration's
-string runner target is validated for module/function shape but is not yet a
-statically typed callable reference; runtime loading checks positional
-compatibility but not the complete result contract. These remain known limits.
+feature branches do not edit the same generated outputs. Runtime entry points
+target the typed feature object; the remaining 51 selectors still use legacy
+registration maps.
 
 ## Current package ownership and dependency direction
 
@@ -392,17 +396,25 @@ into the checker package. `file-size` lives in
 `src/alphus/policy/sources.py`. Its declaration has this shape:
 
 ```python
+from alphus.plugins.builtin import BuiltinFeature
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.sources import LineLengthPolicy
+
 ALPHUS_CHECK: Final = FeatureDefinition(
     selector="line-length",
     policy_field="line_length",
-    policy_model="alphus.policy.sources.LineLengthPolicy",
-    output_shape="python-style",
+    policy_model=LineLengthPolicy,
+    output_shape="findings",
     summary="Checks configured source lines against a maximum length.",
     applies_to=("python",),
     domains=(),
     requires_files=True,
-    runner_module="alphus.gates.hygiene.line_length",
-    runner_name="run_line_length_rule",
+)
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=check_line_length,
 )
 ```
 
@@ -417,10 +429,9 @@ ignored source files and includes them in wheels and source archives. Those
 outputs no longer appear in feature-branch diffs, so independent additions do
 not collide on generated files. The bootstrap requirement is that each
 worktree build or editable install regenerate the views before source imports.
-Also, the declaration stores
-runner module/function names as strings, and runtime loading does not yet
-validate a complete typed callback/result contract. Those gaps remain before
-this can be called the final developer interface.
+The wheel entry point names the feature object, which owns direct typed runner
+references. The loader validates that the selected runner is synchronous and
+returns the result required by the feature's output shape.
 
 At runtime, consumers continue to provide the same `[checks.line_length]`
 policy and select `line-length` directly or in a profile. Catalog inspection
@@ -428,17 +439,13 @@ and config validation do not import the checker. Dispatch imports only the
 selected provider; registration never adds a profile step. The package-level
 `check_line_length` compatibility export resolves lazily on explicit access.
 
-Static complaint validation is intentionally narrow: each migrated file check
-declares complaint slugs whose `rule_tag()` calls are literal in that same
-feature module. It proves a simple one-selector/one-owner case; it is not a
-general rule for shared emitters. Existing numeric checks use the shared
-`gates/review/numeric_catalog.py` engine, which constructs tags from policy
-specifications, and some adapters own tags outside the selector module. Do not
-copy those tags into every feature or weaken static validation to accept
-unresolved strings.
+Static complaint validation supports both local literal tags and shared named
+contracts. These use immutable `ComplaintContract` and `ComplaintEntry`
+records carrying actual `RuleTag` values, not positional string pairs. Static
+discovery parses those calls without importing the emitter.
 
 The numeric family now exercises the explicit shared-contract case. Its
-`ALPHUS_COMPLAINT_CONTRACTS` literal lives beside the shared emitter in
+`ALPHUS_COMPLAINT_CONTRACTS` declaration lives beside the shared emitter in
 `gates/review/numeric_catalog.py`. `numeric-literals` and `scipy-constants`
 reference the same `numeric-inline` contract rather than copying complaint
 strings. That contract lists each permitted emitter and its exact existing

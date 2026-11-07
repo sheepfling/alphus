@@ -10,6 +10,7 @@ from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding, LineLengthMeasurement
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
 from alphus.gates.hygiene.rules import path_override
+from alphus.plugins.builtin import BuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -18,19 +19,18 @@ from alphus.policy.morphology import (
     EvaluationMaturity,
     RuleMorphology,
 )
+from alphus.policy.sources import LineLengthPolicy
 from alphus.support.inventory import matches_path
 
 ALPHUS_CHECK: Final = FeatureDefinition(
     selector="line-length",
     policy_field="line_length",
-    policy_model="alphus.policy.sources.LineLengthPolicy",
+    policy_model=LineLengthPolicy,
     output_shape="findings",
     summary="Reports source lines that exceed configured per-extension limits.",
     applies_to=("configurable-source",),
     domains=(),
     requires_files=True,
-    runner_module="alphus.gates.hygiene.line_length",
-    runner_name="check_line_length",
 )
 
 ALPHUS_MORPHOLOGY: Final = RuleMorphology(
@@ -121,3 +121,8 @@ def check_line_length(
             continue
         findings.extend(file_findings)
     return findings
+
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK, morphology=ALPHUS_MORPHOLOGY, runner=check_line_length
+)

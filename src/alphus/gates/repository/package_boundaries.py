@@ -16,14 +16,14 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 from alphus.config import (
     CallableRegistryPolicy,
-    PackageBoundaryPolicy,
     QualityGateConfig,
     VersionSyncPolicy,
 )
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
 from alphus.gates.repository.composite_contracts import package_boundary_rule_tag
-from alphus.policy.architecture import ArchitectureGraphPolicy
+from alphus.plugins.builtin import BuiltinFeature
+from alphus.policy.architecture import ArchitectureGraphPolicy, PackageBoundaryPolicy
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -44,14 +44,12 @@ ALPHUS_CHECK: Final = FeatureDefinition(
         "version_sync",
         "callable_registry",
     ),
-    policy_model="alphus.policy.architecture.PackageBoundaryPolicy",
+    policy_model=PackageBoundaryPolicy,
     output_shape="findings",
     summary="Checks configured Python import and package-boundary rules.",
     applies_to=("python",),
     domains=(),
     requires_files=True,
-    runner_module="alphus.gates.repository.package_boundaries",
-    runner_name="run_package_boundary_gate",
 )
 
 ALPHUS_MORPHOLOGY: Final = RuleMorphology(
@@ -965,3 +963,10 @@ def check_package_boundaries(
     findings.extend(_cycle_findings(distributions, allowed))
     findings.extend(_source_findings(checkout, distributions, allowed, policy))
     return findings
+
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_package_boundary_gate,
+)

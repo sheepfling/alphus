@@ -14,9 +14,10 @@ from packaging.specifiers import Specifier
 from packaging.utils import canonicalize_name
 from packaging.version import Version
 
-from alphus.config import DependencyLockPolicy, QualityGateConfig
+from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
+from alphus.plugins.builtin import BuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -25,20 +26,19 @@ from alphus.policy.morphology import (
     EvaluationMaturity,
     RuleMorphology,
 )
+from alphus.policy.repository import DependencyLockPolicy
 from alphus.support.data_access import contained_file
 from alphus.support.source_text import read_utf8_text
 
 ALPHUS_CHECK: Final = FeatureDefinition(
     selector="dependency-locks",
     policy_field="dependency_locks",
-    policy_model="alphus.policy.repository.DependencyLockPolicy",
+    policy_model=DependencyLockPolicy,
     output_shape="findings",
     summary="Checks consistency and pairing of configured dependency lockfiles.",
     applies_to=("python", "javascript"),
     domains=(),
     requires_files=True,
-    runner_module="alphus.gates.repository.dependency_locks",
-    runner_name="run_dependency_lock_gate",
 )
 
 ALPHUS_MORPHOLOGY: Final = RuleMorphology(
@@ -469,3 +469,10 @@ def run_dependency_lock_gate(
     """Run the feature-owned dependency-lock check with its strict policy."""
     policy = require_policy(config.checks.dependency_locks, "dependency_locks")
     return check_dependency_locks(root, policy)
+
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_dependency_lock_gate,
+)

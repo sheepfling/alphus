@@ -5,57 +5,28 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
-from importlib import import_module
 from pathlib import Path
 from types import MappingProxyType
 from typing import Protocol, cast
 
 from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.contracts.cyclomatic import (
-    CyclomaticBackendPlan,
-    CyclomaticBackendResult,
-    CyclomaticFunctionMetric,
-    CyclomaticPlan,
-    CyclomaticReport,
+    CyclomaticRuleOperations,
 )
-from alphus.contracts.findings import Diagnostic, Finding, Severity
-from alphus.contracts.process import ExitCode
+from alphus.contracts.findings import Diagnostic
 from alphus.execution._generated_dispatch import RULE_RUNNERS
-from alphus.execution.results import RuleOutput
+from alphus.execution.results import RuleOutput, diagnostics_from_output
 from alphus.plugins.api import PluginFinding
 from alphus.plugins.builtin_registry import (
     builtin_check_entry_points,
-    load_builtin_runner,
+    load_builtin_feature,
 )
 from alphus.plugins.registry import PluginRuleBinding, enabled_plugin_registry
 from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
 from alphus.policy.base import RuleSelector
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape, RuleSpec
-from alphus.policy.metrics import CyclomaticComplexityPolicy
-from alphus.support.data_access import JsonValue
 
 RuleRunner = Callable[[Path, Sequence[Path], QualityGateConfig], RuleOutput]
-CyclomaticBackendRun = tuple[
-    CyclomaticBackendResult,
-    Sequence[CyclomaticFunctionMetric],
-    Sequence[Finding],
-]
-
-
-@dataclass(frozen=True, slots=True)
-class CyclomaticRuleOperations:
-    """Role-specific operations owned by a registered specialized result shape."""
-
-    build_plan: Callable[[Path, CyclomaticComplexityPolicy], CyclomaticPlan]
-    backend_failure: Callable[
-        [CyclomaticBackendPlan, CyclomaticComplexityPolicy, str], CyclomaticBackendRun
-    ]
-    combine_backends: Callable[
-        [CyclomaticComplexityPolicy, Sequence[CyclomaticBackendRun]], CyclomaticReport
-    ]
-    report_exit_code: Callable[[CyclomaticReport, Severity], ExitCode]
-    report_payload: Callable[[CyclomaticReport], Mapping[str, JsonValue]]
-    report_summary: Callable[[CyclomaticReport], str]
 
 
 class RuleBinding(Protocol):
@@ -106,7 +77,10 @@ class EntryPointBuiltinRuleBinding:
         self, root: Path, files: Sequence[Path], config: QualityGateConfig
     ) -> RuleOutput:
         config.checks.require_rule(self.selector)
-        return load_builtin_runner(self.selector)(root, files, config)
+        feature = load_builtin_feature(self.selector)
+        output: RuleOutput = feature.runner(root, files, config)
+        diagnostics_from_output(self.selector, output)
+        return output
 
 
 @dataclass(frozen=True, slots=True)
@@ -211,37 +185,13 @@ def cyclomatic_rule_operations() -> CyclomaticRuleOperations:
         raise RuntimeError(
             "the built-in registry must provide exactly one cyclomatic-report binding"
         )
-    module = import_module("alphus.gates.source.cyclomatic_complexity")
-
-    return CyclomaticRuleOperations(
-        build_plan=cast(
-            Callable[[Path, CyclomaticComplexityPolicy], CyclomaticPlan],
-            module.build_cyclomatic_plan,
-        ),
-        backend_failure=cast(
-            Callable[
-                [CyclomaticBackendPlan, CyclomaticComplexityPolicy, str],
-                CyclomaticBackendRun,
-            ],
-            module.backend_failure,
-        ),
-        combine_backends=cast(
-            Callable[
-                [CyclomaticComplexityPolicy, Sequence[CyclomaticBackendRun]],
-                CyclomaticReport,
-            ],
-            module.combine_cyclomatic_backends,
-        ),
-        report_exit_code=cast(
-            Callable[[CyclomaticReport, Severity], ExitCode],
-            module.report_exit_code,
-        ),
-        report_payload=cast(
-            Callable[[CyclomaticReport], Mapping[str, JsonValue]],
-            module.report_payload,
-        ),
-        report_summary=cast(Callable[[CyclomaticReport], str], module.report_summary),
-    )
+    feature = load_builtin_feature("cyclomatic-complexity")
+    operations = feature.cyclomatic_operations
+    if operations is None:
+        raise RuntimeError(
+            "the cyclomatic-complexity feature is missing its typed operations"
+        )
+    return operations
 
 
 def run_rule(

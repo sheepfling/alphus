@@ -38,7 +38,8 @@ data with Python's AST parser. It does not import the module or execute check
 code. It validates
 selector syntax and uniqueness, resolves local complaint slugs against static
 `rule_tag` calls in the owning module, and resolves shared `finding_contracts`
-references against a statically parsed `ALPHUS_COMPLAINT_CONTRACTS` literal.
+references against statically parsed `ComplaintContract` and `ComplaintEntry`
+records in `ALPHUS_COMPLAINT_CONTRACTS`.
 Shared finding IDs are accepted across selectors only when a named contract
 owns them and lists each permitted emitter; uncontracted duplicate IDs remain
 errors. Discovery rejects symlinked feature modules and a symlinked gates root.
@@ -54,7 +55,10 @@ contracts, `RuleSpec`, inventory and lazy runners from their feature-owned
 `ALPHUS_CHECK` declarations. The paired numeric declarations also own their CLI display
 names and configured source-scan mode, removing two selector lists from the
 CLI while preserving legacy fallbacks for unmigrated checks. Their existing
-checkers and public behavior are unchanged.
+checkers and public behavior are unchanged. `FeatureDefinition` stores each
+policy's `StrictModel` subclass directly, and each selected provider is owned
+by a typed `BuiltinFeature` with direct runner and specialized-operation
+references.
 
 The original six-rule pilot is not a complete built-in registration
 migration. Eleven selectors now use feature-owned runtime declarations, while

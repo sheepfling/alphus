@@ -140,7 +140,7 @@ def render_manifest(root: Path) -> str:
                 f"duplicate selector {feature.selector!r} in theme {previous!r} "
                 "and feature declaration"
             )
-        owners[feature.selector] = feature.runner_module
+        owners[feature.selector] = feature.registration_module
 
     expected = _catalog_selectors(root)
     found = set(owners)

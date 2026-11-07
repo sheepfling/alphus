@@ -45,10 +45,8 @@ def test_documentation_config_definition_owns_heuristic_and_runner() -> None:
         "Checks documentation links and repository-specific documentation "
         "configuration."
     )
-    assert definition.runner_module == "alphus.gates.repository.documentation_config"
-    assert definition.runner_name == "run_documentation_config_gate"
     assert builtin_check_entry_points()["documentation-config"].value == (
-        f"{definition.runner_module}:{definition.runner_name}"
+        "alphus.gates.repository.documentation_config:ALPHUS_FEATURE"
     )
 
 

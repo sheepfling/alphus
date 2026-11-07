@@ -10,11 +10,12 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Final
 
-from alphus.config import NumericLiteralPolicy, NumericLiteralSpec, QualityGateConfig
+from alphus.config import NumericLiteralSpec, QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
 from alphus.gates.review.numeric_catalog import NumericLiteralFinding
 from alphus.gates.review.numeric_engine import scan_numeric_literals
+from alphus.plugins.builtin import BuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -23,6 +24,7 @@ from alphus.policy.morphology import (
     EvaluationMaturity,
     RuleMorphology,
 )
+from alphus.policy.review import NumericLiteralPolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 
@@ -31,7 +33,7 @@ ALPHUS_CHECK: Final = FeatureDefinition(
     display_name="Numeric literals",
     input_mode="configured-source-scan",
     policy_field="numeric_literals",
-    policy_model="alphus.policy.review.NumericLiteralPolicy",
+    policy_model=NumericLiteralPolicy,
     output_shape="findings",
     summary=(
         "Matches configured exact numeric constants in Python arithmetic; it does "
@@ -45,8 +47,6 @@ ALPHUS_CHECK: Final = FeatureDefinition(
         "trajectory-analysis",
     ),
     requires_files=True,
-    runner_module="alphus.gates.review.numeric_literals",
-    runner_name="run_numeric_literals_rule",
 )
 
 ALPHUS_MORPHOLOGY: Final = RuleMorphology(
@@ -149,3 +149,10 @@ def run_numeric_literals_rule(
         paths,
         require_policy(config.checks.numeric_literals, "numeric_literals"),
     )
+
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_numeric_literals_rule,
+)

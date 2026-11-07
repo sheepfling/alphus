@@ -44,16 +44,19 @@ def _feature_source(declaration: tuple[tuple[str, object], ...]) -> str:
         "applies_to",
         "domains",
         "requires_files",
-        "runner_module",
-        "runner_name",
         "policy_inputs",
         "display_name",
         "input_mode",
     }
+    policy_model = dict(declaration).get("policy_model")
+    if not isinstance(policy_model, str):
+        raise TypeError("test feature declarations need a policy model path")
+    policy_module, policy_class = policy_model.rsplit(".", 1)
     lines = ["ALPHUS_CHECK = FeatureDefinition(\n"]
     for key, value in declaration:
         if key == "selector" or key in feature_fields:
-            lines.append(f"    {key}={value!r},\n")
+            rendered = policy_class if key == "policy_model" else repr(value)
+            lines.append(f"    {key}={rendered},\n")
     lines.append(")\n")
     values = dict(declaration)
     complaints = values.get("finding_tag_complaints", ())
@@ -84,7 +87,7 @@ def _feature_source(declaration: tuple[tuple[str, object], ...]) -> str:
         ]
     )
     lines.extend(morphology)
-    return "".join(lines)
+    return f"from {policy_module} import {policy_class}\n" + "".join(lines)
 
 
 def test_generated_text_arguments_wrap_without_changing_their_value() -> None:
@@ -149,11 +152,15 @@ def _write_contract_fixture(root: Path, *, shared_rule_id: str) -> None:
     gates = root / "src/alphus/gates"
     gates.mkdir(parents=True, exist_ok=True)
     (gates / "shared_catalog.py").write_text(
-        "ALPHUS_COMPLAINT_CONTRACTS = (\n"
-        "    ('shared-demo', ('demo-one', 'demo-two'), (\n"
-        f"        ('demo-one', {rule_tag_call}),\n"
-        f"        ('demo-two', {rule_tag_call}),\n"
-        "    )),\n"
+        "ALPHUS_COMPLAINT_CONTRACTS: Final = (\n"
+        "    ComplaintContract(\n"
+        "        name='shared-demo',\n"
+        "        emitters=('demo-one', 'demo-two'),\n"
+        "        entries=(\n"
+        f"            ComplaintEntry(emitter='demo-one', tag={rule_tag_call}),\n"
+        f"            ComplaintEntry(emitter='demo-two', tag={rule_tag_call}),\n"
+        "        ),\n"
+        "    ),\n"
         ")\n",
         encoding="utf-8",
     )
@@ -239,12 +246,16 @@ def test_complaint_contract_rejects_ambiguous_runtime_tag_lookup(
     )
     (tmp_path / "src/alphus/gates/shared_catalog.py").write_text(
         "ALPHUS_COMPLAINT_CONTRACTS = (\n"
-        "    ('shared-demo', ('demo-one',), (\n"
-        "        ('demo-one', rule_tag(Scope.REPOSITORY, Framework.NONE, "
-        "Category.TESTING, 'shared-demo')),\n"
-        "        ('demo-one', rule_tag(Scope.REPOSITORY, Framework.NONE, "
-        "Category.STYLE, 'shared-demo')),\n"
-        "    )),\n"
+        "    ComplaintContract(\n"
+        "        name='shared-demo',\n"
+        "        emitters=('demo-one',),\n"
+        "        entries=(\n"
+        "            ComplaintEntry(emitter='demo-one', tag=rule_tag("
+        "Scope.REPOSITORY, Framework.NONE, Category.TESTING, 'shared-demo')),\n"
+        "            ComplaintEntry(emitter='demo-one', tag=rule_tag("
+        "Scope.REPOSITORY, Framework.NONE, Category.STYLE, 'shared-demo')),\n"
+        "        ),\n"
+        "    ),\n"
         ")\n",
         encoding="utf-8",
     )
@@ -296,8 +307,6 @@ def test_feature_definition_generates_catalog_and_lazy_runner_views(
         ("applies_to", ("python",)),
         ("domains", ()),
         ("requires_files", True),
-        ("runner_module", "alphus.gates.demo_check"),
-        ("runner_name", "check_demo"),
         ("display_name", "Demo check"),
         ("input_mode", "configured-source-scan"),
     )
@@ -331,7 +340,7 @@ def test_feature_definition_generates_catalog_and_lazy_runner_views(
 
     assert [item.selector for item in registration] == ["demo-check"]
     assert '"demo-check": FeatureDefinition(' in definitions
-    assert 'policy_model="alphus.policy.sources.DemoPolicy"' in definitions
+    assert "policy_model=DemoPolicy" in definitions
     assert 'display_name="Demo check"' in definitions
     assert 'input_mode="configured-source-scan"' in definitions
     assert "class GeneratedFeaturePolicies(StrictModel):" in policies
@@ -341,6 +350,55 @@ def test_feature_definition_generates_catalog_and_lazy_runner_views(
     assert 'import_module("alphus.gates.demo_check")' not in runner_manifest
     assert '"demo-check": _run_feature_demo_check' not in runner_manifest
     assert "**DEMO_GROUP_RULE_RUNNERS," in runner_manifest
+
+
+def test_feature_definition_supports_qualified_constructor_and_selector_constant(
+    tmp_path: Path,
+) -> None:
+    gates = tmp_path / "src/alphus/gates"
+    gates.mkdir(parents=True)
+    source = _feature_source(
+        _DECLARATION
+        + (
+            ("policy_field", "demo_policy"),
+            ("policy_model", "alphus.policy.sources.DemoPolicy"),
+            ("output_shape", "findings"),
+            ("summary", "Reports a demo condition."),
+            ("applies_to", ("python",)),
+            ("domains", ()),
+            ("requires_files", True),
+        )
+    )
+    source = source.replace(
+        "ALPHUS_CHECK = FeatureDefinition(",
+        "SELECTOR = 'demo-check'\nALPHUS_CHECK = metadata.FeatureDefinition(",
+        1,
+    ).replace("selector='demo-check',", "selector=SELECTOR,", 1)
+    (gates / "demo_check.py").write_text(
+        "import metadata\n"
+        + source
+        + "rule_tag(Scope.REPOSITORY, Framework.NONE, Category.TESTING, 'demo-check')\n",
+        encoding="utf-8",
+    )
+    policy = tmp_path / "src/alphus/policy"
+    policy.mkdir(parents=True)
+    (policy / "orchestration.py").write_text(
+        "class CheckPolicies:\n    pass\n", encoding="utf-8"
+    )
+    (policy / "sources.py").write_text(
+        "class DemoPolicy:\n    pass\n", encoding="utf-8"
+    )
+    group = gates / "demo_group"
+    group.mkdir()
+    (group / "runners.py").write_text(
+        "from types import MappingProxyType\n"
+        "DEMO_GROUP_RULE_RUNNERS: object = MappingProxyType({})\n",
+        encoding="utf-8",
+    )
+
+    registration = feature_registrations(tmp_path)
+
+    assert [item.selector for item in registration] == ["demo-check"]
 
 
 def test_feature_policy_imports_wrap_deterministically(tmp_path: Path) -> None:
@@ -373,8 +431,6 @@ def test_feature_policy_imports_wrap_deterministically(tmp_path: Path) -> None:
             ("applies_to", ("python",)),
             ("domains", ()),
             ("requires_files", True),
-            ("runner_module", f"alphus.gates.demo_{index}"),
-            ("runner_name", "check_demo"),
         )
         (gates / f"demo_{index}.py").write_text(
             _feature_source(feature_declaration)
@@ -409,8 +465,6 @@ def test_feature_policy_generation_rejects_duplicate_fields(tmp_path: Path) -> N
             ("applies_to", ("python",)),
             ("domains", ()),
             ("requires_files", True),
-            ("runner_module", f"alphus.gates.{name}"),
-            ("runner_name", f"check_{name}"),
         )
         (gates / f"{name}.py").write_text(
             _feature_source(feature_declaration)
@@ -462,8 +516,6 @@ def test_feature_policy_root_symlink_is_rejected(tmp_path: Path) -> None:
         ("applies_to", ("python",)),
         ("domains", ()),
         ("requires_files", True),
-        ("runner_module", "alphus.gates.demo"),
-        ("runner_name", "check_demo"),
     )
     (gates / "demo.py").write_text(
         _feature_source(feature_declaration)
@@ -496,8 +548,6 @@ def test_feature_policy_orchestration_symlink_is_rejected(tmp_path: Path) -> Non
         ("applies_to", ("python",)),
         ("domains", ()),
         ("requires_files", True),
-        ("runner_module", "alphus.gates.demo"),
-        ("runner_name", "check_demo"),
     )
     (gates / "demo.py").write_text(
         _feature_source(feature_declaration)

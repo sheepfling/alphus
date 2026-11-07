@@ -28,8 +28,6 @@ def test_generated_feature_definitions_are_immutable() -> None:
             applies_to=["configurable-source"],  # type: ignore[arg-type]
             domains=definition.domains,
             requires_files=definition.requires_files,
-            runner_module=definition.runner_module,
-            runner_name=definition.runner_name,
         )
 
     default_inputs = FeatureDefinition(
@@ -41,8 +39,6 @@ def test_generated_feature_definitions_are_immutable() -> None:
         applies_to=definition.applies_to,
         domains=definition.domains,
         requires_files=definition.requires_files,
-        runner_module=definition.runner_module,
-        runner_name=definition.runner_name,
     )
     assert default_inputs.policy_inputs == (definition.policy_field,)
 
@@ -56,8 +52,6 @@ def test_generated_feature_definitions_are_immutable() -> None:
             applies_to=definition.applies_to,
             domains=definition.domains,
             requires_files=definition.requires_files,
-            runner_module=definition.runner_module,
-            runner_name=definition.runner_name,
             policy_inputs=[definition.policy_field],  # type: ignore[arg-type]
         )
 
@@ -67,11 +61,9 @@ def test_polyglot_cyclomatic_gate_uses_feature_owned_registration() -> None:
     spec = RULE_SPECS["cyclomatic-complexity"]
 
     assert definition.policy_field == "cyclomatic_complexity"
-    assert definition.policy_model == "alphus.policy.metrics.CyclomaticComplexityPolicy"
+    assert definition.policy_model.__name__ == "CyclomaticComplexityPolicy"
     assert definition.output_shape == "cyclomatic-report"
     assert definition.applies_to == ("python", "javascript", "cpp")
-    assert definition.runner_module == "alphus.gates.source.cyclomatic_complexity"
-    assert definition.runner_name == "run_cyclomatic_rule"
     assert spec.policy_field == definition.policy_field
     assert spec.output_shape is RuleOutputShape.CYCLOMATIC_REPORT
     assert spec.requires_files is False
@@ -83,9 +75,7 @@ def test_comment_markers_uses_feature_owned_polyglot_registration() -> None:
     morphology = MORPHOLOGY_BY_SELECTOR["comment-markers"]
 
     assert definition.policy_field == "comment_markers"
-    assert definition.policy_model == "alphus.policy.sources.CommentMarkerPolicy"
-    assert definition.runner_module == "alphus.gates.hygiene.comment_markers"
-    assert definition.runner_name == "run_comment_markers_rule"
+    assert definition.policy_model.__name__ == "CommentMarkerPolicy"
     assert definition.applies_to == ("python", "javascript", "c", "cpp")
     assert morphology.languages_formats == (
         "python",
@@ -116,8 +106,7 @@ def test_output_escaping_registration_owns_both_language_tags() -> None:
     morphology = MORPHOLOGY_BY_SELECTOR["output-escaping"]
 
     assert definition.policy_field == "output_escaping"
-    assert definition.policy_model == "alphus.policy.sources.SourceScanPolicy"
-    assert definition.runner_name == "run_output_escaping_rule"
+    assert definition.policy_model.__name__ == "SourceScanPolicy"
     assert definition.applies_to == ("python", "javascript")
     assert spec.policy_field == definition.policy_field
     assert spec.output_shape is RuleOutputShape.FINDINGS
@@ -132,25 +121,19 @@ def test_shared_numeric_emitters_derive_strict_feature_registration() -> None:
         (
             "numeric-literals",
             "numeric_literals",
-            "alphus.policy.review.NumericLiteralPolicy",
-            "alphus.gates.review.numeric_literals",
-            "run_numeric_literals_rule",
+            "NumericLiteralPolicy",
         ),
         (
             "scipy-constants",
             "scipy_constants",
-            "alphus.policy.review.ScipyConstantsPolicy",
-            "alphus.gates.review.scipy_constants",
-            "run_scipy_constants_rule",
+            "ScipyConstantsPolicy",
         ),
     )
-    for selector, policy_field, policy_model, runner_module, runner_name in expected:
+    for selector, policy_field, policy_model in expected:
         definition = FEATURE_DEFINITIONS[selector]
         spec = RULE_SPECS[selector]
         assert definition.policy_field == policy_field
-        assert definition.policy_model == policy_model
-        assert definition.runner_module == runner_module
-        assert definition.runner_name == runner_name
+        assert definition.policy_model.__name__ == policy_model
         assert spec.policy_field == policy_field
         assert spec.output_shape is RuleOutputShape.FINDINGS
         assert policy_field in CheckPolicies.model_fields
@@ -177,8 +160,6 @@ def test_feature_definition_rejects_invalid_cli_metadata() -> None:
             applies_to=definition.applies_to,
             domains=definition.domains,
             requires_files=definition.requires_files,
-            runner_module=definition.runner_module,
-            runner_name=definition.runner_name,
             display_name=" ",
         )
 
@@ -192,8 +173,6 @@ def test_feature_definition_rejects_invalid_cli_metadata() -> None:
             applies_to=definition.applies_to,
             domains=definition.domains,
             requires_files=definition.requires_files,
-            runner_module=definition.runner_module,
-            runner_name=definition.runner_name,
             input_mode="unbounded-repository",  # type: ignore[arg-type]
         )
 
@@ -211,24 +190,20 @@ def test_feature_definition_rejects_malformed_labels() -> None:
             applies_to=("configurable-source", "configurable-source"),
             domains=definition.domains,
             requires_files=definition.requires_files,
-            runner_module=definition.runner_module,
-            runner_name=definition.runner_name,
         )
 
 
 def test_feature_definition_rejects_malformed_policy_model() -> None:
     definition = FEATURE_DEFINITIONS["file-size"]
 
-    with pytest.raises(ValueError, match="built-in policy class"):
+    with pytest.raises(TypeError, match="StrictModel subclasses"):
         FeatureDefinition(
             selector=definition.selector,
             policy_field=definition.policy_field,
-            policy_model="alphus.policy.not-a-class",
+            policy_model=int,  # type: ignore[arg-type]
             output_shape=definition.output_shape,
             summary=definition.summary,
             applies_to=definition.applies_to,
             domains=definition.domains,
             requires_files=definition.requires_files,
-            runner_module=definition.runner_module,
-            runner_name=definition.runner_name,
         )

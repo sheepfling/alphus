@@ -10,11 +10,12 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Final
 
-from alphus.config import NumericLiteralSpec, QualityGateConfig, ScipyConstantsPolicy
+from alphus.config import NumericLiteralSpec, QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
 from alphus.gates.review.numeric_catalog import NumericLiteralFinding
 from alphus.gates.review.numeric_engine import scan_numeric_literals
+from alphus.plugins.builtin import BuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -23,6 +24,7 @@ from alphus.policy.morphology import (
     EvaluationMaturity,
     RuleMorphology,
 )
+from alphus.policy.review import ScipyConstantsPolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 
@@ -31,7 +33,7 @@ ALPHUS_CHECK: Final = FeatureDefinition(
     display_name="SciPy constants",
     input_mode="configured-source-scan",
     policy_field="scipy_constants",
-    policy_model="alphus.policy.review.ScipyConstantsPolicy",
+    policy_model=ScipyConstantsPolicy,
     output_shape="findings",
     summary=(
         "Finds selected SciPy physical constants and unit-conversion factors in "
@@ -46,8 +48,6 @@ ALPHUS_CHECK: Final = FeatureDefinition(
         "physical-units",
     ),
     requires_files=True,
-    runner_module="alphus.gates.review.scipy_constants",
-    runner_name="run_scipy_constants_rule",
 )
 
 ALPHUS_MORPHOLOGY: Final = RuleMorphology(
@@ -216,3 +216,10 @@ def run_scipy_constants_rule(
         paths,
         require_policy(config.checks.scipy_constants, "scipy_constants"),
     )
+
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_scipy_constants_rule,
+)

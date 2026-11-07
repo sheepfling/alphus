@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Literal
+from pathlib import Path
+from typing import Literal, TypeAlias
 
-from alphus.contracts.findings import Diagnostic, Severity
+from alphus.contracts.findings import Diagnostic, Finding, Severity
+from alphus.policy.metrics import CyclomaticComplexityPolicy
+from alphus.support.data_access import JsonValue
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,3 +114,26 @@ class CyclomaticReport:
     backends: tuple[CyclomaticBackendResult, ...]
     functions: tuple[CyclomaticFunctionMetric, ...]
     diagnostics: tuple[Diagnostic, ...]
+
+
+CyclomaticBackendRun: TypeAlias = tuple[
+    CyclomaticBackendResult,
+    Sequence[CyclomaticFunctionMetric],
+    Sequence[Finding],
+]
+
+
+@dataclass(frozen=True, slots=True)
+class CyclomaticRuleOperations:
+    """Feature-owned operations for the specialized cyclomatic result shape."""
+
+    build_plan: Callable[[Path, CyclomaticComplexityPolicy], CyclomaticPlan]
+    backend_failure: Callable[
+        [CyclomaticBackendPlan, CyclomaticComplexityPolicy, str], CyclomaticBackendRun
+    ]
+    combine_backends: Callable[
+        [CyclomaticComplexityPolicy, Sequence[CyclomaticBackendRun]], CyclomaticReport
+    ]
+    report_exit_code: Callable[[CyclomaticReport, Severity], int]
+    report_payload: Callable[[CyclomaticReport], Mapping[str, JsonValue]]
+    report_summary: Callable[[CyclomaticReport], str]

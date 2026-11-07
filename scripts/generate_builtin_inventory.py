@@ -282,21 +282,57 @@ def _runner_policy_inputs(
                     )
                 )
     for feature in feature_registrations(root):
-        path = root.joinpath("src", *feature.runner_module.split(".")).with_suffix(
-            ".py"
-        )
+        path = root.joinpath(
+            "src", *feature.registration_module.split(".")
+        ).with_suffix(".py")
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        statements: tuple[ast.stmt, ...] = tuple(tree.body)
+        registration: ast.expr | None = None
+        for statement in statements:
+            match statement:
+                case ast.AnnAssign(
+                    target=ast.Name(id="ALPHUS_FEATURE"),
+                    value=ast.expr() as value,
+                ):
+                    registration = value
+                    break
+                case _:
+                    pass
+        match registration:
+            case ast.Call(
+                func=ast.Name(id="BuiltinFeature"), args=args, keywords=keywords
+            ):
+                pass
+            case _:
+                raise ValueError(
+                    f"{path}: ALPHUS_FEATURE must construct BuiltinFeature"
+                )
+        runner = (
+            args[2]
+            if len(args) > 2
+            else next(
+                (keyword.value for keyword in keywords if keyword.arg == "runner"),
+                None,
+            )
+        )
+        match runner:
+            case ast.Name(id=runner_name):
+                pass
+            case _:
+                raise TypeError(
+                    f"{path}: ALPHUS_FEATURE runner must be a named function"
+                )
         function = next(
             (
                 statement
                 for statement in tree.body
                 if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef))
-                and statement.name == feature.runner_name
+                and statement.name == runner_name
             ),
             None,
         )
         if function is None:
-            raise ValueError(f"{path}: unknown feature runner {feature.runner_name!r}")
+            raise ValueError(f"{path}: unknown feature runner {runner_name!r}")
         policy_fields = {
             field_name
             for node in ast.walk(function)
@@ -305,8 +341,8 @@ def _runner_policy_inputs(
         bindings.append(
             _RunnerBinding(
                 selector=feature.selector,
-                module=feature.runner_module,
-                name=feature.runner_name,
+                module=feature.registration_module,
+                name="ALPHUS_FEATURE",
                 policy_inputs=tuple(sorted(policy_fields)),
             )
         )

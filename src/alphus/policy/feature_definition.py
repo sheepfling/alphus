@@ -6,6 +6,8 @@ import re
 from dataclasses import dataclass
 from typing import Literal, TypeAlias, cast
 
+from alphus.policy.base import StrictModel
+
 FeatureInputMode = Literal["caller-scope", "configured-source-scan"]
 
 FeatureOutputShape = Literal[
@@ -18,9 +20,6 @@ FeatureOutputShape = Literal[
 
 _SELECTOR = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
 _POLICY_FIELD = re.compile(r"[a-z][a-z0-9_]*\Z")
-_POLICY_MODEL = re.compile(r"alphus\.policy(?:\.[a-z][a-z0-9_]*)+\.[A-Z][A-Za-z0-9]*\Z")
-_PYTHON_MODULE = re.compile(r"alphus\.gates(?:\.[a-z][a-z0-9_]*)+\Z")
-_FUNCTION = re.compile(r"[a-z_][a-z0-9_]*\Z")
 _TAG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 _StringLabels: TypeAlias = tuple[str, ...] | list[str]
 
@@ -31,14 +30,12 @@ class FeatureDefinition:
 
     selector: str
     policy_field: str
-    policy_model: str
+    policy_model: type[StrictModel]
     output_shape: FeatureOutputShape
     summary: str
     applies_to: tuple[str, ...]
     domains: tuple[str, ...]
     requires_files: bool
-    runner_module: str
-    runner_name: str
     policy_inputs: tuple[str, ...] = ()
     display_name: str | None = None
     input_mode: FeatureInputMode = "caller-scope"
@@ -61,8 +58,8 @@ class FeatureDefinition:
             raise ValueError(
                 "feature policy inputs must uniquely include the primary policy field"
             )
-        if _POLICY_MODEL.fullmatch(self.policy_model) is None:
-            raise ValueError("feature policy models must name a built-in policy class")
+        if not _is_policy_model(self.policy_model):
+            raise TypeError("feature policy models must be StrictModel subclasses")
         match self.display_name:
             case None:
                 pass
@@ -92,10 +89,6 @@ class FeatureDefinition:
             raise ValueError("feature definitions need valid applicability labels")
         if not _valid_labels(domain_tuple, allow_empty=True):
             raise ValueError("feature domain labels must be unique lowercase slugs")
-        if _PYTHON_MODULE.fullmatch(self.runner_module) is None:
-            raise ValueError("feature runner must use a built-in Alphus module")
-        if _FUNCTION.fullmatch(self.runner_name) is None:
-            raise ValueError("feature runner must name a top-level function")
 
 
 def _valid_labels(values: tuple[str, ...], *, allow_empty: bool) -> bool:
@@ -109,6 +102,18 @@ def _valid_labels(values: tuple[str, ...], *, allow_empty: bool) -> bool:
             case _:
                 return False
     return len(normalized) == len(set(normalized))
+
+
+def _is_policy_model(value: object) -> bool:
+    match value:
+        case type() as policy_type:
+            pass
+        case _:
+            return False
+    try:
+        return issubclass(policy_type, StrictModel)
+    except TypeError:
+        return False
 
 
 def _require_tuple(values: _StringLabels, description: str) -> tuple[str, ...]:

@@ -12,6 +12,7 @@ from typing import Final, NamedTuple
 from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
+from alphus.plugins.builtin import BuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -35,14 +36,12 @@ _RAW_STRING = re.compile(r'R"(?P<delimiter>[^\s()\\"]{0,16})\(')
 ALPHUS_CHECK: Final = FeatureDefinition(
     selector="comment-markers",
     policy_field="comment_markers",
-    policy_model="alphus.policy.sources.CommentMarkerPolicy",
+    policy_model=CommentMarkerPolicy,
     output_shape="findings",
     summary="Finds configured TODO-style markers in supported source comments.",
     applies_to=("python", "javascript", "c", "cpp"),
     domains=(),
     requires_files=True,
-    runner_module="alphus.gates.hygiene.comment_markers",
-    runner_name="run_comment_markers_rule",
 )
 
 ALPHUS_MORPHOLOGY: Final = RuleMorphology(
@@ -248,3 +247,10 @@ def run_comment_markers_rule(
     """Adapt the feature-owned policy to the existing comment scanners."""
     policy = require_policy(config.checks.comment_markers, "comment_markers")
     return check_comment_markers(root, paths, policy)
+
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_comment_markers_rule,
+)

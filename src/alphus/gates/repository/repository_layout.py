@@ -12,10 +12,10 @@ from typing import Final
 from alphus.config import (
     InstructionRouterPolicy,
     QualityGateConfig,
-    RepositoryLayoutPolicy,
 )
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
+from alphus.plugins.builtin import BuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -24,6 +24,7 @@ from alphus.policy.morphology import (
     EvaluationMaturity,
     RuleMorphology,
 )
+from alphus.policy.repository import RepositoryLayoutPolicy
 from alphus.support.data_access import (
     contains_member,
     is_nonempty_mapping,
@@ -36,14 +37,12 @@ from alphus.support.source_text import read_python_source, read_utf8_text
 ALPHUS_CHECK: Final = FeatureDefinition(
     selector="repository-layout",
     policy_field="repository_layout",
-    policy_model="alphus.policy.repository.RepositoryLayoutPolicy",
+    policy_model=RepositoryLayoutPolicy,
     output_shape="findings",
     summary="Checks configured repository paths, required files, and layout rules.",
     applies_to=("repository",),
     domains=(),
     requires_files=True,
-    runner_module="alphus.gates.repository.repository_layout",
-    runner_name="run_repository_layout_gate",
 )
 
 ALPHUS_MORPHOLOGY: Final = RuleMorphology(
@@ -472,3 +471,10 @@ def run_repository_layout_gate(
     """Run the feature-owned repository layout check with tracked-path evidence."""
     policy = require_policy(config.checks.repository_layout, "repository_layout")
     return check_repository_layout(root, policy, tracked_files(root))
+
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_repository_layout_gate,
+)

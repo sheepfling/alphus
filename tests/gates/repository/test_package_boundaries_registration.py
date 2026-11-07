@@ -45,10 +45,8 @@ def test_composite_definition_owns_its_registration_and_policy_inputs() -> None:
     )
     assert spec.output_shape.value == definition.output_shape == "findings"
     assert spec.summary == definition.summary
-    assert definition.runner_module == "alphus.gates.repository.package_boundaries"
-    assert definition.runner_name == "run_package_boundary_gate"
     assert builtin_check_entry_points()["package-boundaries"].value == (
-        f"{definition.runner_module}:{definition.runner_name}"
+        "alphus.gates.repository.package_boundaries:ALPHUS_FEATURE"
     )
 
 

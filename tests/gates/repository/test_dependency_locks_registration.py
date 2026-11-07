@@ -47,10 +47,8 @@ def test_dependency_lock_definition_owns_its_policy_and_runner() -> None:
     assert definition.summary == (
         "Checks consistency and pairing of configured dependency lockfiles."
     )
-    assert definition.runner_module == "alphus.gates.repository.dependency_locks"
-    assert definition.runner_name == "run_dependency_lock_gate"
     assert builtin_check_entry_points()["dependency-locks"].value == (
-        f"{definition.runner_module}:{definition.runner_name}"
+        "alphus.gates.repository.dependency_locks:ALPHUS_FEATURE"
     )
 
 
