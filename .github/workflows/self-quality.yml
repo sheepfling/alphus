@@ -200,7 +200,7 @@ jobs:
             tests/gates/review/test_scipy_constants_engine.py \
             tests/gates/review/frameworks/test_fastapi_contracts_engine.py \
             examples/consumer/fastapi/tests \
-            tests/test_review_cli.py::test_scipy_direct_rule_uses_its_own_label 2>&1); then
+            tests/test_review_cli.py::test_numeric_direct_rule_uses_its_feature_label 2>&1); then
             printf '%s\n' "$output"
             exit 1
           fi
