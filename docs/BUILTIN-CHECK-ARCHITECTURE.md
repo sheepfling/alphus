@@ -32,13 +32,14 @@ belong in the future feature definition and need dedicated validation.
 
 Rick identified tuple-pair `ALPHUS_CHECK` declarations as opaque and the
 built-in path as parallel to the existing plugin registry. The current
-candidate replaces that tuple format for eleven feature-owned checks with
+candidate replaces that tuple format for twelve feature-owned checks with
 immutable `FeatureDefinition` and `RuleMorphology` values plus a typed
 `BuiltinFeature` execution object. A PEP 517 build
 backend statically reads those declarations and writes standard
 `alphus.builtin_checks.v1` metadata into ignored build output. Runtime lookup
-uses `importlib.metadata` against only the installed Alphus distribution and
-imports only the selected feature object on demand. Its object owns direct typed
+uses `importlib.metadata` against Alphus-named distributions and selects the
+entry-point catalog matching generated feature definitions. It imports only the
+selected feature object on demand. Its object owns direct typed
 runner references and the cyclomatic-specific operations contract. Entry-point
 metadata targets `ALPHUS_FEATURE`; selector and policy metadata no longer store
 runner module/function strings, and policy models are class objects derived
@@ -78,19 +79,19 @@ This document distinguishes four kinds of statement:
   silently changing consumer behavior.
 
 PR #100 remains an open draft. It began with the six-check morphology
-metadata pilot and now has eleven selectors moved onto feature-owned generated
+metadata pilot and now has twelve selectors moved onto feature-owned generated
 runtime views:
 `file-size`, `line-length`, `package-boundaries`, `repository-layout`,
 `dependency-locks`, `documentation-config`, `cyclomatic-complexity`,
-`output-escaping`, `comment-markers`, `numeric-literals`, and
-`scipy-constants`. Each local `ALPHUS_CHECK` declaration statically generates
+`output-escaping`, `comment-markers`, `numeric-literals`, `scipy-constants`,
+and `module-roles`. Each local `ALPHUS_CHECK` declaration statically generates
 morphology metadata, typed `FeatureDefinition`, `RuleSpec`, strict policy
 field, selector type, and inventory entry. Each feature module exposes one
 typed `ALPHUS_FEATURE` object with a direct callback for lazy execution. The established
 `RuleEvaluation` and CLI result adapters remain shared, so adding a feature
-still uses the existing output contract. The other 51 baseline selectors
+still uses the existing output contract. The other 50 baseline selectors
 remain on legacy registration paths; these slices do not complete issue #87
-or establish full selector equivalence. These eleven declarations are now
+or establish full selector equivalence. These twelve declarations are now
 typed `FeatureDefinition(...)` calls paired with immutable
 `RuleMorphology(...)` values rather than the former tuple-pair `ALPHUS_CHECK`
 format. Static discovery validates them without importing gate implementations.
@@ -98,7 +99,7 @@ The PEP 517 backend generates installed-wheel entry-point metadata without a
 per-check `pyproject.toml` edit. Aggregate policy/config/dispatch views are
 ignored build artifacts rather than checked-in shared files, so independent
 feature branches do not edit the same generated outputs. Runtime entry points
-target the typed feature object; the remaining 51 selectors still use legacy
+target the typed feature object; the remaining 50 selectors still use legacy
 registration maps.
 
 ## Current package ownership and dependency direction
@@ -347,7 +348,7 @@ JSON/text shapes and legacy IDs.
 
 ## Feature-owned registration and imports
 
-The current eleven-selector flow is:
+The current twelve-selector flow is:
 
 ```text
 typed, feature-owned FeatureDefinition and RuleMorphology
@@ -373,7 +374,7 @@ rejects duplicate selector names before loading a selected runner. Catalog and
 config inspection do not import the migrated checker modules. A registration
 never selects or enables a check: consumer profile steps remain the selection
 source, and strict config continues to reject invalid or unknown fields. This
-production path currently covers eleven selectors; remaining selectors still
+production path currently covers twelve selectors; remaining selectors still
 use legacy theme maps. The five aggregate views are no longer tracked: the
 build regenerates them as ignored source files for each worktree, and
 `MANIFEST.in` includes them in source archives. Separate feature branches
@@ -420,9 +421,10 @@ ALPHUS_FEATURE: Final = BuiltinFeature(
 
 The PEP 517 backend statically reads feature declarations and writes standard
 `alphus.builtin_checks.v1` metadata under the ignored `.registry-build/`
-directory. The runtime registry indexes only entry points from the installed
-Alphus distribution, rejects duplicate selectors, and imports a runner only
-after explicit selection. Adding one of the eleven migrated checks did not
+directory. The runtime registry indexes entry points from Alphus-named
+distributions whose selector set matches the generated feature catalog,
+rejects duplicate selectors, and imports a runner only after explicit
+selection. Adding one of the twelve migrated checks did not
 require editing a central runner map or the `pyproject.toml` entry-point table.
 The PEP 517 build also regenerates aggregate policy/config/dispatch views as
 ignored source files and includes them in wheels and source archives. Those
@@ -599,7 +601,7 @@ new check; the migration itself remains a bounded, reviewed change. The full
 exit criterion still requires all current selectors to derive from the same
 declarations and the pinned-wheel proof to pass.
 
-The six-check morphology pilot proves metadata discovery. Eleven selectors
+The six-check morphology pilot proves metadata discovery. Twelve selectors
 now use feature-owned runtime registration: generated views derive strict policy
 fields, selector typing, `RuleSpec`, inventory and lazy dispatch while sharing
 the existing result adaptation and reporting. The slices cover file-local
@@ -1011,6 +1013,69 @@ scenarios match, catalogs match at 62 selectors, and the registered check
 preserves the conflict ID, location, severity, message, and profile behavior.
 Thirteen selectors now have behavior-level evidence; 49 remain without it.
 
+## Module-role registration slice: `module-roles`
+
+`module-roles` now owns its `FeatureDefinition`, morphology, and typed runner
+beside the existing analyzer in `src/alphus/gates/python/module_roles.py`. The
+generated feature-policy base now supplies `CheckPolicies.module_roles`; the
+legacy catalog entry and repository runner-map entry were removed. The
+`ModuleRolePolicy` class, TOML field names, selector, finding IDs and messages,
+ordering, and public JSON/profile behavior remain unchanged. The checker still
+analyzes only paths named by its strict policy; this migration adds no source
+discovery or new rule semantics.
+
+The source-mirroring engine tests continue to cover the detailed AST cases. The
+wheel matrix adds direct findings and stable IDs, explicit profile execution
+with warning-threshold behavior compared serially and in parallel, and strict
+rejection of an unknown policy field. Against pinned main
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`, candidate
+`ea3d412677f82580fd5f9f5960f8459b6a898872` produced identical catalogs at 62
+selectors and no differences across 45 manifested scenarios. The exact wheels
+had SHA-256 `278908f16ddc0f6595f8e2308e8ba7dfc121b6aac2637114b1a38b84e5cbd8f5`
+and `b4f0bf32093a66d79ebf02c5e6afd99998a9f8cd1c6caca6c4639e29b7e48d85`
+respectively. Fifteen selectors have behavior-level differential evidence;
+47 still lack it. The other 26 direct selector dispatches and 36 strict
+missing-policy rejections establish selection/config contracts, not semantic
+equivalence. The run report was written outside the repository at
+`/tmp/alphus-morphology-module-roles-ea3d412.json`.
+
+### Static declaration reader cost and boundary
+
+Feature additions use ordinary typed Python declarations, but build-time
+discovery does not execute them. `scripts/generate_morphology_manifest.py`
+statically recognizes module-level `ALPHUS_CHECK`, `ALPHUS_MORPHOLOGY`, and
+`ALPHUS_FEATURE` assignments. Its supported forms are bounded: typed
+constructors, literal strings/booleans/tuples, imported policy-model classes,
+literal `RuleTag` calls, and an `ALPHUS_FEATURE` linking the local declarations
+to one synchronous local runner. It rejects computed metadata, expanded
+arguments, indirect providers, and arbitrary helper evaluation at build time.
+This is a static reader for that contract, not a general Python interpreter.
+
+The migration did not add expression handling to the reader. One feature
+declaration and runner were added beside the check; the legacy catalog entry,
+runner-map entry, and policy field were removed. Generated selector/config/
+catalog/dispatch views and wheel metadata followed from the declaration. The
+differential adds three behavior cases and a small fixture. The normal addition
+still requires a local morphology declaration listing its stable complaint
+tags, while avoiding central selector/config/runner edits.
+
+The maintenance cost is real: the complete generator is currently 1,846 lines
+and its focused tests are 803 lines; those totals include inventory, code
+generation, filesystem boundaries, and safety validation in addition to
+declaration parsing. Keep the accepted syntax documented and test every
+extension with positive and rejected-neighbor cases. Do not grow an expression
+evaluator for convenience. If production checks repeatedly require dynamic
+declaration expressions, re-evaluate the source format and packaging boundary
+as a design decision instead of approximating Python semantics incrementally.
+
+The migration also exposed an editable-install metadata edge: source
+`alphus.egg-info` can lag the installed editable distribution. Runtime lookup
+now considers only Alphus-named distributions and selects a catalog whose
+selector set exactly matches generated feature definitions. A stale source
+metadata copy cannot shadow the current editable install; absence of a matching
+catalog or conflicting matching distributions fails closed. This metadata
+check imports no gate modules, and a selected feature remains lazy until run.
+
 ## Performance and cache boundary
 
 Measure startup/import time, inventory construction, parsing, native tool
@@ -1093,4 +1158,4 @@ Two decisions remain for review:
 
 Until resolved, do not change digest/archive meaning or claim full #87
 acceptance. PR #100 remains a draft containing the six-check morphology pilot
-and bounded runtime registration slices for eleven selectors documented above.
+and bounded runtime registration slices for twelve selectors documented above.
