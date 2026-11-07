@@ -734,7 +734,7 @@ name = "git-ignores-direct"
 fixture = "vcs-git"
 materialized_files = [
   { path = "data/generated/client.txt", contents = "generated\n" },
-  { path = ".env", contents = "TOKEN=fixture\n" },
+  { path = "dist/package.whl", contents = "fixture wheel content\n" },
 ]
 selectors = ["git-ignores"]
 behavior = ["feature-owned-git-check", "shared-strict-policy", "tracked-output-contract"]
@@ -754,7 +754,7 @@ name = "git-attributes-direct"
 fixture = "vcs-git"
 materialized_files = [
   { path = "data/generated/client.txt", contents = "generated\n" },
-  { path = ".env", contents = "TOKEN=fixture\n" },
+  { path = "dist/package.whl", contents = "fixture wheel content\n" },
 ]
 selectors = ["git-attributes"]
 behavior = ["feature-owned-git-check", "effective-native-attribute", "stable-finding-id"]
@@ -774,16 +774,16 @@ name = "git-history-direct"
 fixture = "vcs-git"
 materialized_files = [
   { path = "data/generated/client.txt", contents = "generated\n" },
-  { path = ".env", contents = "TOKEN=fixture\n" },
+  { path = "dist/package.whl", contents = "fixture wheel content\n" },
 ]
 selectors = ["git-history"]
 behavior = ["feature-owned-git-check", "reachable-history", "stable-finding-id"]
 expected_exit = 1
 minimum_findings = 1
 expected_findings = [
-  { rule_id = "alphus/repository/git/hygiene/historical-artifact", path = ".env" },
+  { rule_id = "alphus/python/git/hygiene/historical-artifact", path = "dist/package.whl" },
 ]
-required_output = [".env"]
+required_output = ["dist/package.whl"]
 
 [[scenario.variant]]
 name = "json"
@@ -794,7 +794,7 @@ name = "git-checks-profile-serial-parallel"
 fixture = "vcs-git"
 materialized_files = [
   { path = "data/generated/client.txt", contents = "generated\n" },
-  { path = ".env", contents = "TOKEN=fixture\n" },
+  { path = "dist/package.whl", contents = "fixture wheel content\n" },
 ]
 selectors = ["git-ignores", "git-attributes", "git-history"]
 behavior = ["explicit-profile-selection", "shared-policy-field", "ordered-results", "serial-parallel"]
@@ -806,9 +806,9 @@ require_passed_steps = true
 expected_findings = [
   { rule_id = "alphus/repository/git/hygiene/tracked-generated-output", path = "data/generated/client.txt" },
   { rule_id = "alphus/repository/git/hygiene/attribute-mismatch", path = "javascript/example.js" },
-  { rule_id = "alphus/repository/git/hygiene/historical-artifact", path = ".env" },
+  { rule_id = "alphus/python/git/hygiene/historical-artifact", path = "dist/package.whl" },
 ]
-required_output = ["data/generated/client.txt", "javascript/example.js", ".env"]
+required_output = ["data/generated/client.txt", "javascript/example.js", "dist/package.whl"]
 
 [[scenario.variant]]
 name = "serial"
