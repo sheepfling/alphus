@@ -74,6 +74,8 @@ class _ScenarioDocument(_StrictDocument):
     fixture: str | None = None
     plugin_package: str | None = None
     python_distributions: Annotated[tuple[str, ...], Field(default_factory=tuple)]
+    npm_packages: Annotated[tuple[str, ...], Field(default_factory=tuple)]
+    isolate_native_tools: bool = False
     selectors: Annotated[tuple[str, ...], Field(default_factory=tuple)]
     behavior: tuple[str, ...]
     expected_exit: int
@@ -224,6 +226,9 @@ class _ScenarioRunReport(_StrictDocument):
     fixture_git_commit: str
     plugin_package: str | None = None
     python_distributions: Annotated[tuple[str, ...], Field(default_factory=tuple)]
+    npm_packages: Annotated[tuple[str, ...], Field(default_factory=tuple)]
+    isolate_native_tools: bool = False
+    npm_tool_tree_sha256: str | None = None
     selectors: tuple[str, ...]
     execution_classification: str
     behavior: tuple[str, ...]
@@ -341,6 +346,8 @@ class Scenario:
     expected_cyclomatic_backends: tuple[tuple[str, str, str, int, int], ...] = ()
     plugin_package: str | None = None
     python_distributions: tuple[str, ...] = ()
+    npm_packages: tuple[str, ...] = ()
+    isolate_native_tools: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -460,6 +467,17 @@ def _parse_manifest(
             raise ValueError(
                 f"scenario {name!r} native Python dependencies must use exact pins"
             )
+        if any(
+            re.fullmatch(
+                r"(?:@[A-Za-z0-9][A-Za-z0-9._-]*/)?"
+                r"[A-Za-z0-9][A-Za-z0-9._-]*@"
+                r"[A-Za-z0-9][A-Za-z0-9._+-]*",
+                package,
+            )
+            is None
+            for package in row.npm_packages
+        ):
+            raise ValueError(f"scenario {name!r} npm dependencies must use exact pins")
         if row.plugin_package is None and any(
             variant.plugin_import_expected is not None for variant in row.variant
         ):
@@ -556,6 +574,8 @@ def _parse_manifest(
                 ),
                 plugin_package=row.plugin_package,
                 python_distributions=tuple(row.python_distributions),
+                npm_packages=tuple(row.npm_packages),
+                isolate_native_tools=row.isolate_native_tools,
                 variants=variants,
             )
         )
@@ -718,6 +738,35 @@ def _install_python_distributions(python: Path, distributions: Sequence[str]) ->
                 f"native Python dependency installation failed for {distribution}:\n"
                 f"{result.stderr}"
             )
+
+
+def _install_npm_packages(packages: Sequence[str], destination: Path) -> Path:
+    destination.mkdir(parents=True, exist_ok=False)
+    result = subprocess.run(
+        [
+            "npm",
+            "install",
+            "--prefix",
+            str(destination),
+            "--no-audit",
+            "--no-fund",
+            "--save-exact",
+            *packages,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"npm dependency installation failed for {packages!r}:\n{result.stderr}"
+        )
+    binary_directory = destination / "node_modules" / ".bin"
+    if not binary_directory.is_dir():
+        raise ValueError(
+            f"npm install did not create executable directory: {packages!r}"
+        )
+    return binary_directory
 
 
 def _python_environment(wheel: Path, destination: Path) -> Path:
@@ -1292,6 +1341,8 @@ def _run_variant(
     variant: RunVariant,
     *,
     empty_path: Path,
+    native_tool_directories: Sequence[Path] = (),
+    isolate_native_tools: bool = False,
     plugin_marker: Path | None = None,
 ) -> ProcessResult:
     arguments = [
@@ -1300,10 +1351,15 @@ def _run_variant(
         str(root),
         *[argument.replace("{root}", str(root)) for argument in variant.arguments],
     ]
-    environment = _process_environment(
-        python,
-        path_override=str(empty_path) if "{empty_path}" in variant.arguments else None,
+    native_path = os.pathsep.join(
+        [str(path) for path in native_tool_directories] + [str(empty_path)]
     )
+    path_override = (
+        native_path
+        if isolate_native_tools or "{empty_path}" in variant.arguments
+        else None
+    )
+    environment = _process_environment(python, path_override=path_override)
     if plugin_marker is not None:
         environment["ALPHUS_PLUGIN_IMPORT_MARKER"] = str(plugin_marker)
     if "{empty_path}" in arguments:
@@ -1506,6 +1562,7 @@ def _run_scenarios(
     fixture_snapshots: Mapping[str, FixtureSnapshot],
     temporary_root: Path,
     label: str,
+    npm_tool_paths: Mapping[str, Path],
 ) -> dict[str, _ScenarioRunReport]:
     report: dict[str, _ScenarioRunReport] = {}
     empty_path = temporary_root / "no-native-tools"
@@ -1522,6 +1579,13 @@ def _run_scenarios(
             )
         if scenario.python_distributions:
             _install_python_distributions(python, scenario.python_distributions)
+        npm_tool_path = npm_tool_paths.get(scenario.name)
+        npm_tool_digest = (
+            _tree_digest(npm_tool_path.parent.parent)
+            if npm_tool_path is not None
+            else None
+        )
+        native_tool_directories = (npm_tool_path,) if npm_tool_path is not None else ()
         results: dict[str, ProcessResult] = {}
         for variant in scenario.variants:
             plugin_marker = None
@@ -1537,8 +1601,15 @@ def _run_scenarios(
                 fixture,
                 variant,
                 empty_path=empty_path,
+                native_tool_directories=native_tool_directories,
+                isolate_native_tools=scenario.isolate_native_tools,
                 plugin_marker=plugin_marker,
             )
+        if (
+            npm_tool_path is not None
+            and _tree_digest(npm_tool_path.parent.parent) != npm_tool_digest
+        ):
+            raise ValueError(f"scenario modified its pinned npm tools: {scenario.name}")
         if _tree_digest(fixture) != before:
             raise ValueError(f"scenario changed fixture contents: {scenario.name}")
         for variant_name, result in results.items():
@@ -1548,6 +1619,9 @@ def _run_scenarios(
             fixture_git_commit=fixture_commit,
             plugin_package=scenario.plugin_package,
             python_distributions=scenario.python_distributions,
+            npm_packages=scenario.npm_packages,
+            isolate_native_tools=scenario.isolate_native_tools,
+            npm_tool_tree_sha256=npm_tool_digest,
             selectors=scenario.selectors,
             execution_classification=_scenario_classification(scenario),
             behavior=scenario.behavior,
@@ -1637,6 +1711,13 @@ def run(
         fixture_snapshots = _snapshot_fixtures(
             repository, scenarios, temporary_root / "fixture-snapshots"
         )
+        npm_tool_paths: dict[str, Path] = {}
+        for scenario in scenarios:
+            if scenario.npm_packages:
+                npm_tool_paths[scenario.name] = _install_npm_packages(
+                    scenario.npm_packages,
+                    temporary_root / "npm-tools" / scenario.name,
+                )
         plugin_snapshots = _snapshot_plugin_packages(
             repository, scenarios, temporary_root / "plugin-snapshots"
         )
@@ -1728,6 +1809,7 @@ def run(
             fixture_snapshots,
             temporary_root / "runs-baseline",
             "reference",
+            npm_tool_paths,
         )
         candidate_runs = _run_scenarios(
             candidate_python,
@@ -1735,6 +1817,7 @@ def run(
             fixture_snapshots,
             temporary_root / "runs-candidate",
             "candidate",
+            npm_tool_paths,
         )
         baseline_install = _probe_installation(baseline_python, probe_root)
         candidate_install = _probe_installation(candidate_python, probe_root)
@@ -1810,8 +1893,9 @@ def run(
             },
             environment_model=(
                 "separate Alphus venvs with identical shared system-site packages; "
-                "exactly pinned scenario-native Python packages are installed in both; "
-                "not hermetic"
+                "exactly pinned Python tools are installed in both; pinned npm tools "
+                "are installed once and shared; selected native-tool scenarios isolate "
+                "PATH; not hermetic"
             ),
             temporary_path_normalization=(
                 "Exact wheel-run root replaced by $WHEEL_RUN_ROOT; exact CLI fixture "

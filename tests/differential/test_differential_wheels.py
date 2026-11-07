@@ -21,6 +21,7 @@ from scripts.differential_wheels import (
     _compare_reports,
     _configured_policy_sections,
     _dispatch_case,
+    _install_npm_packages,
     _install_python_distributions,
     _materialize_scenario_files,
     _missing_policy_error,
@@ -62,6 +63,57 @@ def test_exact_scenario_distributions_shadow_shared_site_packages(
             "ruff==0.16.1",
         )
     ]
+
+
+def test_pinned_npm_tools_install_into_a_scenario_local_bin_directory(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls: list[tuple[str, ...]] = []
+
+    def record_install(
+        arguments: Sequence[str], **_options: object
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append(tuple(arguments))
+        (Path(arguments[3]) / "node_modules" / ".bin").mkdir(parents=True)
+        return subprocess.CompletedProcess(arguments, 0, "", "")
+
+    monkeypatch.setattr(differential_wheels.subprocess, "run", record_install)
+    destination = tmp_path / "npm-tools"
+
+    binary_directory = _install_npm_packages(("eslint@10.13.0",), destination)
+
+    assert binary_directory == destination / "node_modules" / ".bin"
+    assert calls == [
+        (
+            "npm",
+            "install",
+            "--prefix",
+            str(destination),
+            "--no-audit",
+            "--no-fund",
+            "--save-exact",
+            "eslint@10.13.0",
+        )
+    ]
+
+
+def test_manifest_rejects_unpinned_npm_dependencies(tmp_path: Path) -> None:
+    manifest = tmp_path / "scenarios.toml"
+    manifest.write_text(
+        "schema_version = 1\n\n[[scenario]]\n"
+        'name = "unpinned-npm"\n'
+        'npm_packages = ["eslint"]\n'
+        'behavior = ["manifest-validation"]\n'
+        "expected_exit = 0\n\n"
+        "[[scenario.variant]]\n"
+        'name = "help"\n'
+        'arguments = ["--help"]\n'
+        "parse_json = false\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="npm dependencies must use exact pins"):
+        load_manifest(manifest)
 
 
 def test_normalizer_removes_only_declared_volatile_paths() -> None:
@@ -223,6 +275,8 @@ def test_report_comparison_rejects_different_fixture_snapshots() -> None:
         scenario.name: _ScenarioRunReport(
             fixture_sha256="reference-fixture",
             fixture_git_commit="reference-commit",
+            python_distributions=(),
+            npm_packages=(),
             selectors=list(scenario.selectors),
             execution_classification="behavioral",
             behavior=list(scenario.behavior),
@@ -235,6 +289,8 @@ def test_report_comparison_rejects_different_fixture_snapshots() -> None:
         scenario.name: _ScenarioRunReport(
             fixture_sha256="different-fixture",
             fixture_git_commit="candidate-commit",
+            python_distributions=(),
+            npm_packages=(),
             selectors=list(scenario.selectors),
             execution_classification="behavioral",
             behavior=list(scenario.behavior),
@@ -347,6 +403,7 @@ def test_plugin_import_observation_is_part_of_differential_result() -> None:
             fixture_git_commit="same-commit",
             plugin_package=scenario.plugin_package,
             python_distributions=[],
+            npm_packages=[],
             selectors=list(scenario.selectors),
             execution_classification="control",
             behavior=list(scenario.behavior),
@@ -365,6 +422,7 @@ def test_plugin_import_observation_is_part_of_differential_result() -> None:
             fixture_git_commit="same-commit",
             plugin_package=scenario.plugin_package,
             python_distributions=[],
+            npm_packages=[],
             selectors=list(scenario.selectors),
             execution_classification="control",
             behavior=list(scenario.behavior),

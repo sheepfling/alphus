@@ -715,6 +715,7 @@ arguments = ["--config", "quality-gates.toml", "--profile", "documentation-revie
 name = "cyclomatic-python-ruff"
 fixture = "cyclomatic-python"
 python_distributions = ["ruff==0.16.1"]
+isolate_native_tools = true
 selectors = ["cyclomatic-complexity"]
 behavior = ["native-ruff", "cyclomatic-report", "finding-and-coverage-provenance"]
 expected_exit = 0
@@ -734,6 +735,7 @@ arguments = ["--config", "quality-gates.toml", "--rule", "cyclomatic-complexity"
 [[scenario]]
 name = "cyclomatic-missing-polyglot"
 fixture = "cyclomatic-missing-polyglot"
+isolate_native_tools = true
 selectors = ["cyclomatic-complexity"]
 behavior = ["javascript-and-cpp-backend-selection", "missing-native-provider", "operational-failure-report"]
 expected_exit = 2
@@ -755,6 +757,7 @@ arguments = ["--config", "quality-gates.toml", "--rule", "cyclomatic-complexity"
 [[scenario]]
 name = "cyclomatic-partial-coverage"
 fixture = "cyclomatic-partial"
+isolate_native_tools = true
 selectors = ["cyclomatic-complexity"]
 behavior = ["polyglot-selection", "no-matching-provider", "incomplete-coverage-exit"]
 expected_exit = 2
@@ -772,6 +775,7 @@ arguments = ["--config", "quality-gates.toml", "--rule", "cyclomatic-complexity"
 name = "cyclomatic-unsupported-version"
 fixture = "cyclomatic-unsupported-version"
 python_distributions = ["ruff==0.16.1"]
+isolate_native_tools = true
 selectors = ["cyclomatic-complexity"]
 behavior = ["native-version-mismatch", "operational-failure-report", "no-analysis-coverage"]
 expected_exit = 2
@@ -792,6 +796,8 @@ arguments = ["--config", "quality-gates.toml", "--rule", "cyclomatic-complexity"
 [[scenario]]
 name = "cyclomatic-javascript-eslint"
 fixture = "cyclomatic-javascript"
+isolate_native_tools = true
+npm_packages = ["eslint@10.13.0"]
 selectors = ["cyclomatic-complexity"]
 behavior = ["native-eslint", "javascript-provider", "finding-and-coverage-provenance"]
 expected_exit = 0
@@ -812,6 +818,7 @@ arguments = ["--config", "quality-gates.toml", "--rule", "cyclomatic-complexity"
 name = "cyclomatic-cpp-lizard"
 fixture = "cyclomatic-cpp"
 python_distributions = ["lizard==1.24.2"]
+isolate_native_tools = true
 selectors = ["cyclomatic-complexity"]
 behavior = ["native-lizard", "cpp-provider", "finding-and-coverage-provenance"]
 expected_exit = 0
