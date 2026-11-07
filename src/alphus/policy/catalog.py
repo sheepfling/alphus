@@ -309,18 +309,6 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             ("python", "markdown"),
             ("documentation-generation", "markdown-publishing"),
         ),
-        "document-style": RuleSpec(
-            "document_style",
-            RuleOutputShape.FINDINGS,
-            "Reviews heading styles in selected Markdown, LaTeX, and source HTML documents.",
-            ("markdown", "latex", "html"),
-        ),
-        "benchmark-docs": RuleSpec(
-            "benchmark_docs",
-            RuleOutputShape.FINDINGS,
-            "Reviews benchmark documentation for required result context.",
-            ("markdown", "benchmarking"),
-        ),
         "suppression-reasons": RuleSpec(
             "suppression_reasons",
             RuleOutputShape.FINDINGS,

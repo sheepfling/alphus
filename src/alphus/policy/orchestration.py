@@ -32,10 +32,8 @@ from alphus.policy.intents import (
 from alphus.policy.repository import VersionSyncPolicy
 from alphus.policy.review import (
     ArrayRepresentationPolicy,
-    BenchmarkDocPolicy,
     CholeskyRecurrencePolicy,
     CiWorkflowPolicy,
-    DocumentStylePolicy,
     DynamicMarkdownPolicy,
     EcefEnuTransformPolicy,
     EcefNedMatrixTransformPolicy,
@@ -114,13 +112,11 @@ class CheckPolicies(GeneratedFeaturePolicies):
     test_quality: TestQualityPolicy | None = None
     input_contracts: InputContractPolicy | None = None
     source_families: SourceFamilyPolicy | None = None
-    benchmark_docs: BenchmarkDocPolicy | None = None
     positional_interfaces: PositionalInterfacePolicy | None = None
     pydantic_practices: PydanticPracticePolicy | None = None
     fastapi_practices: FastApiPracticePolicy | None = None
     sqlalchemy_practices: SqlAlchemyPracticePolicy | None = None
     dynamic_markdown: DynamicMarkdownPolicy | None = None
-    document_style: DocumentStylePolicy | None = None
     suppression_reasons: SuppressionReasonPolicy | None = None
     shared_utilities: SharedUtilitiesPolicy | None = None
     python_style: PythonStylePolicy | None = None

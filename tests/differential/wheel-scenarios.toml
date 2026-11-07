@@ -997,3 +997,57 @@ required_output = ["Invalid quality policy"]
 name = "invalid-config"
 arguments = ["--config", "quality-gates.toml", "--rule", "json-structure"]
 parse_json = false
+
+[[scenario]]
+name = "document-style-direct"
+fixture = "document-review"
+selectors = ["document-style"]
+behavior = ["feature-owned-style-preference", "stable-finding-id", "markdown-location"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/any/none/style/rhetorical-heading-density", path = "docs/headings.md", line = 1 },
+]
+required_output = ["docs/headings.md"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "document-style", "--json"]
+
+[[scenario]]
+name = "document-review-profile-serial-parallel"
+fixture = "document-review"
+selectors = ["document-style", "benchmark-docs"]
+behavior = ["explicit-profile-selection", "heuristic-and-style-shapes", "ordered-results", "serial-parallel"]
+expected_exit = 0
+minimum_findings = 2
+expected_step_names = ["heading-style-review", "benchmark-context-review"]
+expected_step_rules = ["document-style", "benchmark-docs"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/any/none/style/rhetorical-heading-density", path = "docs/headings.md", line = 1 },
+  { rule_id = "alphus/markdown/none/maintainability/brittle-benchmark-prose", path = "docs/performance.md", line = 1 },
+]
+required_output = ["docs/headings.md", "docs/performance.md"]
+
+[[scenario.variant]]
+name = "serial"
+arguments = ["--config", "quality-gates.toml", "--profile", "document-review", "--run", "--json", "--jobs", "1"]
+
+[[scenario.variant]]
+name = "parallel"
+arguments = ["--config", "quality-gates.toml", "--profile", "document-review", "--run", "--json", "--jobs", "2"]
+compare_within_build = true
+
+[[scenario]]
+name = "document-style-invalid-config"
+fixture = "document-review-invalid"
+selectors = ["document-style"]
+behavior = ["strict-feature-policy", "unknown-policy-field-rejected"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-config"
+arguments = ["--config", "quality-gates.toml", "--rule", "document-style"]
+parse_json = false
