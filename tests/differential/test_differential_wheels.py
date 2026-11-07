@@ -25,6 +25,7 @@ from scripts.differential_wheels import (
     _install_python_distributions,
     _materialize_scenario_files,
     _missing_policy_error,
+    _prepare_isolated_native_path,
     _scenario_classification,
     _scenario_executes,
     _ScenarioRunReport,
@@ -114,6 +115,24 @@ def test_manifest_rejects_unpinned_npm_dependencies(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="npm dependencies must use exact pins"):
         load_manifest(manifest)
+
+
+def test_isolated_native_path_exposes_git_only(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    git_executable = tmp_path / "system-git"
+    git_executable.write_text("git", encoding="utf-8")
+    native_path = tmp_path / "native-tools"
+    monkeypatch.setattr(
+        differential_wheels.shutil,
+        "which",
+        lambda name: str(git_executable) if name == "git" else None,
+    )
+
+    _prepare_isolated_native_path(native_path)
+
+    assert sorted(path.name for path in native_path.iterdir()) == ["git"]
+    assert (native_path / "git").resolve() == git_executable.resolve()
 
 
 def test_normalizer_removes_only_declared_volatile_paths() -> None:

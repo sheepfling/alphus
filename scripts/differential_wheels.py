@@ -799,6 +799,14 @@ def _process_environment(
     return environment
 
 
+def _prepare_isolated_native_path(path: Path) -> None:
+    path.mkdir(parents=True, exist_ok=True)
+    git_executable = shutil.which("git")
+    if git_executable is None:
+        raise RuntimeError("Git is required to run isolated wheel scenarios")
+    (path / "git").symlink_to(git_executable)
+
+
 def _probe_installation(python: Path, directory: Path) -> _InstallationProbe:
     probe = """
 import hashlib
@@ -1566,7 +1574,7 @@ def _run_scenarios(
 ) -> dict[str, _ScenarioRunReport]:
     report: dict[str, _ScenarioRunReport] = {}
     empty_path = temporary_root / "no-native-tools"
-    empty_path.mkdir(parents=True)
+    _prepare_isolated_native_path(empty_path)
     for scenario in scenarios:
         snapshot = fixture_snapshots[scenario.name]
         fixture = _fixture_root(snapshot, temporary_root / "fixtures" / scenario.name)
