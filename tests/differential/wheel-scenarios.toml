@@ -1256,3 +1256,135 @@ required_output = ["Invalid quality policy"]
 name = "invalid-config"
 arguments = ["--config", "quality-gates.toml", "--rule", "input-contracts"]
 parse_json = false
+
+[[scenario]]
+name = "manual-quaternion-conjugation-direct"
+fixture = "quaternion-family"
+selectors = ["manual-quaternion-conjugation"]
+behavior = ["direct-selector", "feature-owned-typed-runner", "bounded-python-ast-shape", "finding-id", "source-location"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/python/none/maintainability/manual-quaternion-conjugation", path = "src/geometry/operations.py", line = 29 },
+]
+required_output = ["src/geometry/operations.py"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "manual-quaternion-conjugation", "--json"]
+
+[[scenario]]
+name = "manual-quaternion-products-direct"
+fixture = "quaternion-family"
+selectors = ["manual-quaternion-products"]
+behavior = ["direct-selector", "feature-owned-typed-runner", "bounded-python-ast-shape", "finding-id", "source-location"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/python/none/maintainability/manual-quaternion-kernel", path = "src/geometry/operations.py", line = 43 },
+]
+required_output = ["src/geometry/operations.py"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "manual-quaternion-products", "--json"]
+
+[[scenario]]
+name = "manual-quaternion-normalization-direct"
+fixture = "quaternion-family"
+selectors = ["manual-quaternion-normalization"]
+behavior = ["direct-selector", "feature-owned-typed-runner", "bounded-python-ast-shape", "finding-id", "source-location"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/python/none/maintainability/manual-quaternion-normalization", path = "src/geometry/operations.py", line = 55 },
+]
+required_output = ["src/geometry/operations.py"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "manual-quaternion-normalization", "--json"]
+
+[[scenario]]
+name = "manual-quaternion-inversion-direct"
+fixture = "quaternion-family"
+selectors = ["manual-quaternion-inversion"]
+behavior = ["direct-selector", "feature-owned-typed-runner", "bounded-python-ast-shape", "finding-id", "source-location"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/python/none/maintainability/manual-quaternion-inversion", path = "src/geometry/operations.py", line = 61 },
+]
+required_output = ["src/geometry/operations.py"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "manual-quaternion-inversion", "--json"]
+
+[[scenario]]
+name = "manual-quaternion-vector-rotation-direct"
+fixture = "quaternion-family"
+selectors = ["manual-quaternion-vector-rotation"]
+behavior = ["direct-selector", "feature-owned-typed-runner", "bounded-python-ast-shape", "finding-id", "source-location"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/python/none/maintainability/manual-quaternion-vector-rotation", path = "src/geometry/operations.py", line = 68 },
+]
+required_output = ["src/geometry/operations.py"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "manual-quaternion-vector-rotation", "--json"]
+
+[[scenario]]
+name = "manual-quaternion-matrix-conversion-direct"
+fixture = "quaternion-family"
+selectors = ["manual-quaternion-matrix-conversion"]
+behavior = ["direct-selector", "feature-owned-typed-runner", "bounded-python-ast-shape", "finding-id", "source-location"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/python/none/maintainability/manual-quaternion-matrix-conversion", path = "src/geometry/operations.py", line = 69 },
+]
+required_output = ["src/geometry/operations.py"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "manual-quaternion-matrix-conversion", "--json"]
+
+[[scenario]]
+name = "quaternion-family-profile"
+fixture = "quaternion-family"
+selectors = ["manual-quaternion-conjugation", "manual-quaternion-products", "manual-quaternion-normalization", "manual-quaternion-inversion", "manual-quaternion-vector-rotation", "manual-quaternion-matrix-conversion"]
+behavior = ["explicit-profile-selection", "all-six-numerical-checks", "typed-feature-dispatch", "ordered-results"]
+expected_exit = 0
+expected_step_names = ["quaternion-conjugation", "quaternion-products", "quaternion-normalization", "quaternion-inversion", "quaternion-vector-rotation", "quaternion-matrix-conversion"]
+expected_step_rules = ["manual-quaternion-conjugation", "manual-quaternion-products", "manual-quaternion-normalization", "manual-quaternion-inversion", "manual-quaternion-vector-rotation", "manual-quaternion-matrix-conversion"]
+require_passed_steps = true
+minimum_findings = 6
+expected_findings = [
+  { rule_id = "alphus/python/none/maintainability/manual-quaternion-conjugation", path = "src/geometry/operations.py", line = 29 },
+  { rule_id = "alphus/python/none/maintainability/manual-quaternion-kernel", path = "src/geometry/operations.py", line = 43 },
+  { rule_id = "alphus/python/none/maintainability/manual-quaternion-normalization", path = "src/geometry/operations.py", line = 55 },
+  { rule_id = "alphus/python/none/maintainability/manual-quaternion-inversion", path = "src/geometry/operations.py", line = 61 },
+  { rule_id = "alphus/python/none/maintainability/manual-quaternion-vector-rotation", path = "src/geometry/operations.py", line = 68 },
+  { rule_id = "alphus/python/none/maintainability/manual-quaternion-matrix-conversion", path = "src/geometry/operations.py", line = 69 },
+]
+
+[[scenario.variant]]
+name = "profile-json"
+arguments = ["--config", "quality-gates.toml", "--profile", "quaternion-review", "--run", "--json"]
+
+[[scenario]]
+name = "quaternion-family-invalid-config"
+fixture = "quaternion-family-invalid-config"
+selectors = ["manual-quaternion-products"]
+behavior = ["feature-owned-strict-policy", "unknown-field-rejected-before-run"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-config"
+arguments = ["--config", "quality-gates.toml", "--rule", "manual-quaternion-products"]
+parse_json = false

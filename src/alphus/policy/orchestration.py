@@ -48,12 +48,6 @@ from alphus.policy.review import (
     PositionalSemanticOverridePolicy,
     ProseAsControlPolicy,
     ProvenanceOwnershipPolicy,
-    QuaternionConjugationPolicy,
-    QuaternionInversionPolicy,
-    QuaternionMatrixConversionPolicy,
-    QuaternionNormalizationPolicy,
-    QuaternionProductPolicy,
-    QuaternionVectorRotationPolicy,
     RepeatedNumericLimitPolicy,
     RunArtifactPolicy,
     SemanticWorkPresentationPolicy,
@@ -92,12 +86,6 @@ class CheckPolicies(GeneratedFeaturePolicies):
     manual_elimination: ManualEliminationPolicy | None = None
     array_representation_churn: ArrayRepresentationPolicy | None = None
     cholesky_recurrence: CholeskyRecurrencePolicy | None = None
-    manual_quaternion_conjugation: QuaternionConjugationPolicy | None = None
-    manual_quaternion_products: QuaternionProductPolicy | None = None
-    manual_quaternion_normalization: QuaternionNormalizationPolicy | None = None
-    manual_quaternion_inversion: QuaternionInversionPolicy | None = None
-    manual_quaternion_vector_rotation: QuaternionVectorRotationPolicy | None = None
-    manual_quaternion_matrix_conversion: QuaternionMatrixConversionPolicy | None = None
     ecef_enu_transform: EcefEnuTransformPolicy | None = None
     ecef_ned_matrix_transform: EcefNedMatrixTransformPolicy | None = None
     ned_basis_vectors: NedBasisVectorsPolicy | None = None

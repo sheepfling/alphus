@@ -198,42 +198,6 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             "Reviews configured hand-written Cholesky recurrence patterns.",
             ("python", "numerical"),
         ),
-        "manual-quaternion-products": RuleSpec(
-            "manual_quaternion_products",
-            RuleOutputShape.FINDINGS,
-            "Reviews configured hand-written quaternion product patterns.",
-            ("python", "numerical"),
-        ),
-        "manual-quaternion-conjugation": RuleSpec(
-            "manual_quaternion_conjugation",
-            RuleOutputShape.FINDINGS,
-            "Reviews configured hand-written quaternion conjugation patterns.",
-            ("python", "numerical"),
-        ),
-        "manual-quaternion-normalization": RuleSpec(
-            "manual_quaternion_normalization",
-            RuleOutputShape.FINDINGS,
-            "Reviews configured hand-written quaternion normalization patterns.",
-            ("python", "numerical"),
-        ),
-        "manual-quaternion-inversion": RuleSpec(
-            "manual_quaternion_inversion",
-            RuleOutputShape.FINDINGS,
-            "Reviews configured hand-written quaternion inversion patterns.",
-            ("python", "numerical"),
-        ),
-        "manual-quaternion-vector-rotation": RuleSpec(
-            "manual_quaternion_vector_rotation",
-            RuleOutputShape.FINDINGS,
-            "Reviews configured hand-written quaternion vector rotations.",
-            ("python", "numerical"),
-        ),
-        "manual-quaternion-matrix-conversion": RuleSpec(
-            "manual_quaternion_matrix_conversion",
-            RuleOutputShape.FINDINGS,
-            "Reviews configured quaternion-to-matrix conversions.",
-            ("python", "numerical"),
-        ),
         "ecef-enu-transform": RuleSpec(
             "ecef_enu_transform",
             RuleOutputShape.FINDINGS,

@@ -1,0 +1,5 @@
+schema_version = 1
+
+[checks.manual_quaternion_products]
+extensions = [".py"]
+unknown_setting = true

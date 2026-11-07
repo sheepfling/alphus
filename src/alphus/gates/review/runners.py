@@ -42,24 +42,6 @@ from alphus.gates.review.numerical.linear_algebra.manual_elimination import (
 from alphus.gates.review.numerical.linear_algebra.manual_matrix_kernels import (
     check_manual_matrix_kernels,
 )
-from alphus.gates.review.numerical.quaternions.manual_quaternion_conjugation import (
-    check_manual_quaternion_conjugation,
-)
-from alphus.gates.review.numerical.quaternions.manual_quaternion_inversion import (
-    check_manual_quaternion_inversion,
-)
-from alphus.gates.review.numerical.quaternions.manual_quaternion_matrix_conversion import (
-    check_manual_quaternion_matrix_conversion,
-)
-from alphus.gates.review.numerical.quaternions.manual_quaternion_normalization import (
-    check_manual_quaternion_normalization,
-)
-from alphus.gates.review.numerical.quaternions.manual_quaternion_product import (
-    check_manual_quaternion_products,
-)
-from alphus.gates.review.numerical.quaternions.manual_quaternion_vector_rotation import (
-    check_manual_quaternion_vector_rotation,
-)
 from alphus.gates.review.parallel_normalization import check_parallel_normalization
 from alphus.gates.review.patch_cascade import check_patch_cascade
 from alphus.gates.review.positional_interfaces import check_positional_interfaces
@@ -237,66 +219,6 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
             root,
             files,
             require_policy(config.checks.cholesky_recurrence, "cholesky_recurrence"),
-        ),
-        "manual-quaternion-products": lambda root, files, config: (
-            check_manual_quaternion_products(
-                root,
-                files,
-                require_policy(
-                    config.checks.manual_quaternion_products,
-                    "manual_quaternion_products",
-                ),
-            )
-        ),
-        "manual-quaternion-conjugation": lambda root, files, config: (
-            check_manual_quaternion_conjugation(
-                root,
-                files,
-                require_policy(
-                    config.checks.manual_quaternion_conjugation,
-                    "manual_quaternion_conjugation",
-                ),
-            )
-        ),
-        "manual-quaternion-normalization": lambda root, files, config: (
-            check_manual_quaternion_normalization(
-                root,
-                files,
-                require_policy(
-                    config.checks.manual_quaternion_normalization,
-                    "manual_quaternion_normalization",
-                ),
-            )
-        ),
-        "manual-quaternion-inversion": lambda root, files, config: (
-            check_manual_quaternion_inversion(
-                root,
-                files,
-                require_policy(
-                    config.checks.manual_quaternion_inversion,
-                    "manual_quaternion_inversion",
-                ),
-            )
-        ),
-        "manual-quaternion-vector-rotation": lambda root, files, config: (
-            check_manual_quaternion_vector_rotation(
-                root,
-                files,
-                require_policy(
-                    config.checks.manual_quaternion_vector_rotation,
-                    "manual_quaternion_vector_rotation",
-                ),
-            )
-        ),
-        "manual-quaternion-matrix-conversion": lambda root, files, config: (
-            check_manual_quaternion_matrix_conversion(
-                root,
-                files,
-                require_policy(
-                    config.checks.manual_quaternion_matrix_conversion,
-                    "manual_quaternion_matrix_conversion",
-                ),
-            )
         ),
         "ecef-enu-transform": lambda root, files, config: check_ecef_enu_transform(
             root,

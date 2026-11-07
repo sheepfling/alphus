@@ -35,22 +35,10 @@ def _write_manifest(
     )
 
 
-_NUMERICAL_SOURCE_RULES: tuple[QualityRuleName, ...] = (
-    "numeric-literals",
-    "scipy-constants",
-    "manual-matrix-kernels",
-    "manual-elimination",
-    "array-representation-churn",
-    "cholesky-recurrence",
-    "manual-quaternion-conjugation",
-    "manual-quaternion-products",
-    "manual-quaternion-normalization",
-    "manual-quaternion-inversion",
-    "manual-quaternion-vector-rotation",
-    "manual-quaternion-matrix-conversion",
-    "ecef-enu-transform",
-    "ecef-ned-matrix-transform",
-    "ned-basis-vectors",
+_NUMERICAL_SOURCE_RULES: tuple[QualityRuleName, ...] = tuple(
+    cast(QualityRuleName, selector)
+    for selector, spec in RULE_SPECS.items()
+    if "numerical" in spec.domains
 )
 
 
