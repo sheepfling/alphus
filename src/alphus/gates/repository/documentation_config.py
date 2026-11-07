@@ -13,54 +13,73 @@ from typing import Final, NamedTuple, TypeAlias
 
 from alphus.config import DocumentationConfigPolicy, QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
 from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
 from alphus.support.inventory import git_files, matches_path
 from alphus.support.source_text import read_python_source, read_utf8_text
 
-ALPHUS_CHECK: Final = (
-    ("selector", "documentation-config"),
-    ("concern", "documented-configuration-consistency"),
-    ("claim_kind", "risk"),
-    (
-        "claim",
-        (
-            "Explicit Markdown claims about simple Python defaults are compared "
-            "against statically resolved source values; unsupported or ambiguous "
-            "claims are reported as uncertain."
-        ),
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="documentation-config",
+    policy_field="documentation_config",
+    policy_model="alphus.policy.repository.DocumentationConfigPolicy",
+    output_shape="findings",
+    summary=(
+        "Checks documentation links and repository-specific documentation "
+        "configuration."
     ),
-    ("mechanisms", ("bounded-heuristic",)),
-    (
-        "inspected_scope",
-        ("selected-python-source", "selected-markdown", "cross-file"),
-    ),
-    ("languages_formats", ("python", "markdown")),
-    (
-        "evidence_kinds",
-        ("literal-default", "markdown-claim", "symbol-match", "value-comparison"),
-    ),
-    ("evaluation_maturity", "synthetic-only"),
-    (
-        "finding_tag_complaints",
-        (
+    applies_to=("markdown", "repository"),
+    domains=(),
+    requires_files=False,
+    runner_module="alphus.gates.repository.documentation_config",
+    runner_name="run_documentation_config_gate",
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="documentation-config",
+    finding_ids=(
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.MAINTAINABILITY,
             "documented-config-duplicate",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.CONFIGURATION,
             "documented-config-conflict",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.CONFIGURATION,
             "documented-config-unknown",
         ),
     ),
-    ("policy_field", "documentation_config"),
-    ("policy_model", "alphus.policy.repository.DocumentationConfigPolicy"),
-    ("output_shape", "findings"),
-    (
-        "summary",
-        "Checks documentation links and repository-specific documentation configuration.",
+    concern="documented-configuration-consistency",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "Explicit Markdown claims about simple Python defaults are compared "
+        "against statically resolved source values; unsupported or ambiguous "
+        "claims are reported as uncertain."
     ),
-    ("applies_to", ("markdown", "repository")),
-    ("domains", ()),
-    ("requires_files", False),
-    ("runner_module", "alphus.gates.repository.documentation_config"),
-    ("runner_name", "run_documentation_config_gate"),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("selected-python-source", "selected-markdown", "cross-file"),
+    languages_formats=("python", "markdown"),
+    evidence_kinds=(
+        "literal-default",
+        "markdown-claim",
+        "symbol-match",
+        "value-comparison",
+    ),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
 )
 
 Scalar: TypeAlias = str | int | float | bool | None

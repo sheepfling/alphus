@@ -16,55 +16,114 @@ from packaging.version import Version
 
 from alphus.config import DependencyLockPolicy, QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
 from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
 from alphus.support.data_access import contained_file
 from alphus.support.source_text import read_utf8_text
 
-ALPHUS_CHECK: Final = (
-    ("selector", "dependency-locks"),
-    ("concern", "dependency-lock-consistency"),
-    ("claim_kind", "condition"),
-    (
-        "claim",
-        "Configured requirement declarations and lock entries are consistent "
-        "under their declared version and source constraints.",
-    ),
-    ("mechanisms", ("exact-rule", "bounded-heuristic")),
-    ("inspected_scope", ("repository", "requirement-files", "lock-files")),
-    ("languages_formats", ("python-requirements", "pep508-metadata")),
-    (
-        "evidence_kinds",
-        ("resolved-requirement", "version-specifier", "include-edge", "marker"),
-    ),
-    ("evaluation_maturity", "synthetic-only"),
-    (
-        "finding_tag_complaints",
-        (
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="dependency-locks",
+    policy_field="dependency_locks",
+    policy_model="alphus.policy.repository.DependencyLockPolicy",
+    output_shape="findings",
+    summary="Checks consistency and pairing of configured dependency lockfiles.",
+    applies_to=("python", "javascript"),
+    domains=(),
+    requires_files=True,
+    runner_module="alphus.gates.repository.dependency_locks",
+    runner_name="run_dependency_lock_gate",
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="dependency-locks",
+    finding_ids=(
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.DEPENDENCIES,
             "lock-include-cycle",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.DEPENDENCIES,
             "lock-input-missing",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.DEPENDENCIES,
             "requirement-pin-not-exact",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.DEPENDENCIES,
             "requirement-unlocked",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.DEPENDENCIES,
             "lock-include-invalid",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.DEPENDENCIES,
             "requirement-invalid",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.DEPENDENCIES,
             "duplicate-requirement-conflict",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.DEPENDENCIES,
             "duplicate-requirement-marker-uncertain",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.DEPENDENCIES,
             "lock-source-mismatch",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.DEPENDENCIES,
             "requirement-pin-unsatisfied",
         ),
     ),
-    ("policy_field", "dependency_locks"),
-    ("policy_model", "alphus.policy.repository.DependencyLockPolicy"),
-    ("output_shape", "findings"),
-    (
-        "summary",
-        "Checks consistency and pairing of configured dependency lockfiles.",
+    concern="dependency-lock-consistency",
+    claim_kind=ClaimKind.CONDITION,
+    claim=(
+        "Configured requirement declarations and lock entries are consistent "
+        "under their declared version and source constraints."
     ),
-    (("applies_to", ("python", "javascript"))),
-    (("domains", ())),
-    ("requires_files", True),
-    ("runner_module", "alphus.gates.repository.dependency_locks"),
-    ("runner_name", "run_dependency_lock_gate"),
+    mechanisms=(
+        DetectionMechanism.EXACT_RULE,
+        DetectionMechanism.BOUNDED_HEURISTIC,
+    ),
+    inspected_scope=("repository", "requirement-files", "lock-files"),
+    languages_formats=("python-requirements", "pep508-metadata"),
+    evidence_kinds=(
+        "resolved-requirement",
+        "version-specifier",
+        "include-edge",
+        "marker",
+    ),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
 )
 
 

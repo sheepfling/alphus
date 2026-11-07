@@ -248,7 +248,9 @@ def diagnostics_from_output(rule: RuleSelector, output: RuleOutput) -> list[Diag
         payload = _PYTHON_STYLE.validate_python(output)
         return _style_diagnostics(payload)
     if shape is RuleOutputShape.CYCLOMATIC_REPORT:
-        return list(output.diagnostics) if isinstance(output, CyclomaticReport) else []
+        if not isinstance(output, CyclomaticReport):
+            raise TypeError("cyclomatic-complexity runner must return CyclomaticReport")
+        return list(output.diagnostics)
     if shape is not RuleOutputShape.SHARED_UTILITIES:
         raise ValueError(f"rule {rule!r} has no output normalizer")
     report = _SHARED_REPORT.validate_python(output)

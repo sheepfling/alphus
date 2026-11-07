@@ -22,6 +22,13 @@ from alphus.gates.languages.python.output_escaping import (
     escape_findings as python_escape_findings,
 )
 from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_utf8_sig_text
 
@@ -60,39 +67,48 @@ ALPHUS_COMPLAINT_CONTRACTS: Final[tuple[_OutputEscapingContract, ...]] = (
     ),
 )
 
-ALPHUS_CHECK: Final = (
-    ("selector", "output-escaping"),
-    ("finding_contracts", ("output-escaping",)),
-    ("concern", "manual-output-escaping"),
-    ("claim_kind", "risk"),
-    (
-        "claim",
-        (
-            "Configured Python and JavaScript output sinks may use manual escaping "
-            "instead of a tested shared utility."
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="output-escaping",
+    policy_field="output_escaping",
+    policy_model="alphus.policy.sources.SourceScanPolicy",
+    output_shape="findings",
+    summary="Reviews dynamic values at configured HTML or shell output sinks.",
+    applies_to=("python", "javascript"),
+    domains=(),
+    requires_files=True,
+    runner_module="alphus.gates.source.output_escaping",
+    runner_name="run_output_escaping_rule",
+    policy_inputs=("output_escaping",),
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="output-escaping",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.SECURITY,
+            "manual-output-escaping",
+        ),
+        RuleTag(
+            Scope.JAVASCRIPT,
+            Framework.NONE,
+            Category.SECURITY,
+            "manual-output-escaping",
         ),
     ),
-    (("mechanisms", ("bounded-heuristic",))),
-    (("inspected_scope", ("selected-source-files", "configured-extensions"))),
-    (("languages_formats", ("python", "javascript"))),
-    (
-        "evidence_kinds",
-        ("bounded-source-pattern", "document-path", "line-location"),
+    concern="manual-output-escaping",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "Configured Python and JavaScript output sinks may use manual escaping "
+        "instead of a tested shared utility."
     ),
-    (("evaluation_maturity", "synthetic-only")),
-    ("policy_field", "output_escaping"),
-    ("policy_model", "alphus.policy.sources.SourceScanPolicy"),
-    ("output_shape", "findings"),
-    (
-        "summary",
-        "Reviews dynamic values at configured HTML or shell output sinks.",
-    ),
-    ("applies_to", ("python", "javascript")),
-    ("domains", ()),
-    ("requires_files", True),
-    ("runner_module", "alphus.gates.source.output_escaping"),
-    ("runner_name", "run_output_escaping_rule"),
-    ("policy_inputs", ("output_escaping",)),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("selected-source-files", "configured-extensions"),
+    languages_formats=("python", "javascript"),
+    evidence_kinds=("bounded-source-pattern", "document-path", "line-location"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+    finding_contracts=("output-escaping",),
 )
 
 

@@ -12,7 +12,11 @@ from typing import get_args
 
 import pytest
 
-from alphus.execution.dispatch import RULE_RUNNERS
+from alphus.execution.dispatch import (
+    BUILTIN_RULES,
+    RULE_RUNNERS,
+    EntryPointBuiltinRuleBinding,
+)
 from alphus.gates.hygiene.runners import HYGIENE_RULE_RUNNERS
 from alphus.gates.markdown.runners import MARKDOWN_RULE_RUNNERS
 from alphus.gates.repository.runners import REPOSITORY_RULE_RUNNERS
@@ -20,6 +24,7 @@ from alphus.gates.review import runners as review_runners
 from alphus.gates.review.runners import REVIEW_RULE_RUNNERS
 from alphus.gates.source.runners import SOURCE_RULE_RUNNERS
 from alphus.gates.vcs.runners import VCS_RULE_RUNNERS
+from alphus.plugins.builtin_registry import builtin_check_entry_points
 from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
 from alphus.policy.base import QualityRuleName
 from alphus.policy.catalog import RULE_SPECS
@@ -89,16 +94,20 @@ def test_gate_themes_own_their_runner_mappings() -> None:
     )
     legacy_selectors = set().union(*(set(runners) for runners in themes))
     feature_selectors = set(FEATURE_DEFINITIONS)
+    entry_points = builtin_check_entry_points()
 
     assert legacy_selectors.isdisjoint(feature_selectors)
     assert legacy_selectors | feature_selectors == set(RULE_SPECS)
-    assert set(RULE_RUNNERS) == set(RULE_SPECS) == set(get_args(QualityRuleName))
+    assert set(RULE_RUNNERS) == legacy_selectors
+    assert set(entry_points) == feature_selectors
+    assert set(RULE_SPECS) == set(get_args(QualityRuleName))
     for runners in themes:
         assert all(RULE_RUNNERS[name] is runner for name, runner in runners.items())
     assert all(
-        RULE_RUNNERS[name].__module__ == "alphus.execution._generated_dispatch"
+        isinstance(BUILTIN_RULES[name], EntryPointBuiltinRuleBinding)
         for name in feature_selectors
     )
+    assert all(name in BUILTIN_RULES for name in RULE_SPECS)
 
 
 def test_review_runner_registry_is_an_explicit_module_export() -> None:
@@ -106,7 +115,9 @@ def test_review_runner_registry_is_an_explicit_module_export() -> None:
 
 
 def test_explicit_runner_adapters_cover_the_public_rule_catalog() -> None:
-    assert set(RULE_RUNNERS) == set(get_args(QualityRuleName))
+    assert set(RULE_RUNNERS) | set(builtin_check_entry_points()) == set(
+        get_args(QualityRuleName)
+    )
 
 
 def _run_manifest_generator(

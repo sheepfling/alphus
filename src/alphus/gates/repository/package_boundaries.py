@@ -21,48 +21,258 @@ from alphus.config import (
     VersionSyncPolicy,
 )
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
 from alphus.gates.repository.composite_contracts import package_boundary_rule_tag
 from alphus.policy.architecture import ArchitectureGraphPolicy
 from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source, read_utf8_text
 
-ALPHUS_CHECK: Final = (
-    ("selector", "package-boundaries"),
-    ("concern", "package-architecture-contracts"),
-    ("claim_kind", "condition"),
-    (
-        "claim",
-        "Configured package, architecture, version, and callable contracts are satisfied.",
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="package-boundaries",
+    policy_field="package_boundaries",
+    policy_inputs=(
+        "package_boundaries",
+        "architecture_graph",
+        "version_sync",
+        "callable_registry",
     ),
-    (("mechanisms", ("exact-rule", "bounded-heuristic"))),
-    (("inspected_scope", ("repository", "python-source", "package-metadata"))),
-    (("languages_formats", ("python", "toml", "mermaid"))),
-    (
-        "evidence_kinds",
-        ("package-metadata", "import-edge", "architecture-graph", "callable-map"),
-    ),
-    (("evaluation_maturity", "synthetic-only")),
-    (("finding_contracts", ("package-boundaries-composite",))),
-    ("policy_field", "package_boundaries"),
-    (
-        "policy_inputs",
-        (
-            "package_boundaries",
-            "architecture_graph",
-            "version_sync",
-            "callable_registry",
+    policy_model="alphus.policy.architecture.PackageBoundaryPolicy",
+    output_shape="findings",
+    summary="Checks configured Python import and package-boundary rules.",
+    applies_to=("python",),
+    domains=(),
+    requires_files=True,
+    runner_module="alphus.gates.repository.package_boundaries",
+    runner_name="run_package_boundary_gate",
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="package-boundaries",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.ARCHITECTURE,
+            "file-backed-module-loading",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.ARCHITECTURE,
+            "forbidden-import",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.ARCHITECTURE,
+            "forbidden-import-root",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.ARCHITECTURE,
+            "loose-module-import",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.ARCHITECTURE,
+            "opaque-dynamic-import",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.ARCHITECTURE,
+            "undeclared-import",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.CONFIGURATION,
+            "duplicate-package-import-root",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.CONFIGURATION,
+            "package-contract-missing",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.CONFIGURATION,
+            "package-import-root-missing",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.DEPENDENCIES,
+            "forbidden-package-dependency",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.DEPENDENCIES,
+            "missing-package-dependency",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.DEPENDENCIES,
+            "package-dependency-cycle",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.DEPENDENCIES,
+            "unknown-package-dependency",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.METADATA,
+            "package-entry-point-invalid",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.METADATA,
+            "package-metadata-invalid",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.METADATA,
+            "package-metadata-path-invalid",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.SECURITY,
+            "python-path-mutation",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.ARCHITECTURE,
+            "edge-forbidden",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.ARCHITECTURE,
+            "edge-missing",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.ARCHITECTURE,
+            "graph-missing",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.ARCHITECTURE,
+            "graph-syntax-mismatch",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.ARCHITECTURE,
+            "node-missing",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.METADATA,
+            "version-mismatch",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.ARCHITECTURE,
+            "callable-mapping-missing",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.ARCHITECTURE,
+            "callable-mapping-not-literal",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.ARCHITECTURE,
+            "callable-registry-file-missing",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.ARCHITECTURE,
+            "public-callable-unregistered",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.CORRECTNESS,
+            "callable-key-not-literal",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.CORRECTNESS,
+            "callable-key-target-mismatch",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.CORRECTNESS,
+            "duplicate-callable",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.CORRECTNESS,
+            "unknown-callable",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.TYPING,
+            "callable-mapping-untyped",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.TYPING,
+            "callable-protocol-untyped",
         ),
     ),
-    ("policy_model", "alphus.policy.architecture.PackageBoundaryPolicy"),
-    ("output_shape", "findings"),
-    ("summary", "Checks configured Python import and package-boundary rules."),
-    (("applies_to", ("python",))),
-    (("domains", ())),
-    ("requires_files", True),
-    ("runner_module", "alphus.gates.repository.package_boundaries"),
-    ("runner_name", "run_package_boundary_gate"),
+    concern="package-architecture-contracts",
+    claim_kind=ClaimKind.CONDITION,
+    claim="Configured package, architecture, version, and callable contracts are satisfied.",
+    mechanisms=(
+        DetectionMechanism.EXACT_RULE,
+        DetectionMechanism.BOUNDED_HEURISTIC,
+    ),
+    inspected_scope=("repository", "python-source", "package-metadata"),
+    languages_formats=("python", "toml", "mermaid"),
+    evidence_kinds=(
+        "package-metadata",
+        "import-edge",
+        "architecture-graph",
+        "callable-map",
+    ),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+    finding_contracts=("package-boundaries-composite",),
 )
 
 

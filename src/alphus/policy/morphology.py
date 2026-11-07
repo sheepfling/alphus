@@ -57,6 +57,22 @@ def _immutable_rule_tags(value: object) -> tuple[RuleTag, ...]:
     return values
 
 
+def _immutable_contract_names(value: object) -> tuple[str, ...]:
+    candidate: tuple[object, ...] | list[object] = cast(
+        tuple[object, ...] | list[object], value
+    )
+    if type(candidate) is not tuple:
+        raise TypeError("morphology finding_contracts must be an immutable tuple")
+    names: list[str] = []
+    for raw_value in candidate:
+        name = _slug_text("finding_contracts", raw_value)
+        names.append(name)
+    result = tuple(names)
+    if len(result) != len(set(result)):
+        raise ValueError("morphology finding_contracts must be unique")
+    return result
+
+
 def _immutable_mechanisms(value: object) -> tuple[DetectionMechanism, ...]:
     candidate: tuple[object, ...] | list[object] = cast(
         tuple[object, ...] | list[object], value
@@ -118,6 +134,7 @@ class RuleMorphology:
     languages_formats: tuple[str, ...]
     evidence_kinds: tuple[str, ...]
     evaluation_maturity: EvaluationMaturity
+    finding_contracts: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         _slug_text("selector", self.selector)
@@ -127,6 +144,7 @@ class RuleMorphology:
         if type(claim) is not str or not claim.strip():
             raise ValueError("morphology claims must not be empty")
         _immutable_rule_tags(self.finding_ids)
+        _immutable_contract_names(self.finding_contracts)
         _immutable_slug_tuple("inspected_scope", self.inspected_scope)
         _immutable_slug_tuple("languages_formats", self.languages_formats)
         _immutable_slug_tuple("evidence_kinds", self.evidence_kinds)

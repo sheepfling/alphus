@@ -10,59 +10,88 @@ from typing import Final
 
 from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
 from alphus.gates.hygiene.rules import path_override
 from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 
-ALPHUS_CHECK: Final = (
-    ("selector", "file-size"),
-    ("concern", "source-file-bounds"),
-    ("claim_kind", "condition"),
-    (
-        "claim",
-        (
-            "A selected file exceeds a configured physical-line or byte limit, or "
-            "a Python package initializer contains disallowed structure."
-        ),
-    ),
-    ("mechanisms", ("exact-rule",)),
-    ("inspected_scope", ("selected-files", "python-initializers")),
-    ("languages_formats", ("source-files", "markdown", "python")),
-    (
-        "evidence_kinds",
-        (
-            "physical-line-count",
-            "raw-byte-count",
-            "top-level-ast-declaration",
-            "path-line",
-        ),
-    ),
-    ("evaluation_maturity", "synthetic-only"),
-    (
-        "finding_tag_complaints",
-        (
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="file-size",
+    policy_field="file_size",
+    policy_model="alphus.policy.sources.FileSizePolicy",
+    output_shape="findings",
+    summary="Reports source files that exceed configured physical-line limits.",
+    applies_to=("configurable-source",),
+    domains=(),
+    requires_files=True,
+    runner_module="alphus.gates.hygiene.file_size",
+    runner_name="check_file_size",
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="file-size",
+    finding_ids=(
+        RuleTag(
+            Scope.ANY,
+            Framework.NONE,
+            Category.MAINTAINABILITY,
             "file-exceeds-hard-limit",
+        ),
+        RuleTag(
+            Scope.ANY,
+            Framework.NONE,
+            Category.MAINTAINABILITY,
             "code-file-too-large",
+        ),
+        RuleTag(
+            Scope.ANY,
+            Framework.NONE,
+            Category.MAINTAINABILITY,
             "file-exceeds-byte-limit",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.MAINTAINABILITY,
             "initializer-too-large",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.ARCHITECTURE,
             "initializer-contains-definition",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.STYLE,
             "initializer-wildcard-import",
         ),
     ),
-    ("policy_field", "file_size"),
-    ("policy_model", "alphus.policy.sources.FileSizePolicy"),
-    ("output_shape", "findings"),
-    (
-        "summary",
-        "Reports source files that exceed configured physical-line limits.",
+    concern="source-file-bounds",
+    claim_kind=ClaimKind.CONDITION,
+    claim=(
+        "A selected file exceeds a configured physical-line or byte limit, or a "
+        "Python package initializer contains disallowed structure."
     ),
-    ("applies_to", ("configurable-source",)),
-    ("domains", ()),
-    ("requires_files", True),
-    ("runner_module", "alphus.gates.hygiene.file_size"),
-    ("runner_name", "check_file_size"),
+    mechanisms=(DetectionMechanism.EXACT_RULE,),
+    inspected_scope=("selected-files", "python-initializers"),
+    languages_formats=("source-files", "markdown", "python"),
+    evidence_kinds=(
+        "physical-line-count",
+        "raw-byte-count",
+        "top-level-ast-declaration",
+        "path-line",
+    ),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
 )
 
 

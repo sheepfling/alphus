@@ -808,6 +808,11 @@ def test_rule_evaluation_validates_structured_output_before_rendering() -> None:
         diagnostics_from_output("line-length", ["not a Finding"])
 
 
+def test_cyclomatic_runner_rejects_a_result_with_the_wrong_shape() -> None:
+    with pytest.raises(TypeError, match="must return CyclomaticReport"):
+        diagnostics_from_output("cyclomatic-complexity", [])
+
+
 def test_direct_rule_uses_threshold_and_report_mode_overrides_it(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:

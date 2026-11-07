@@ -23,7 +23,12 @@ from alphus.contracts.process import ExitCode
 from alphus.execution._generated_dispatch import RULE_RUNNERS
 from alphus.execution.results import RuleOutput
 from alphus.plugins.api import PluginFinding
+from alphus.plugins.builtin_registry import (
+    builtin_check_entry_points,
+    load_builtin_runner,
+)
 from alphus.plugins.registry import PluginRuleBinding, enabled_plugin_registry
+from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
 from alphus.policy.base import RuleSelector
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape, RuleSpec
 from alphus.policy.metrics import CyclomaticComplexityPolicy
@@ -87,6 +92,24 @@ class BuiltinRuleBinding:
 
 
 @dataclass(frozen=True, slots=True)
+class EntryPointBuiltinRuleBinding:
+    """One selected feature rule resolved through standard package metadata."""
+
+    selector: QualityRuleName
+    spec: RuleSpec
+
+    @property
+    def requires_files(self) -> bool:
+        return self.spec.requires_files
+
+    def run(
+        self, root: Path, files: Sequence[Path], config: QualityGateConfig
+    ) -> RuleOutput:
+        config.checks.require_rule(self.selector)
+        return load_builtin_runner(self.selector)(root, files, config)
+
+
+@dataclass(frozen=True, slots=True)
 class PluginRuleExecution:
     """Adapt an explicitly enabled plugin rule to the common execution shape."""
 
@@ -125,18 +148,33 @@ class PluginRuleExecution:
         ]
 
 
-if set(RULE_SPECS) != set(RULE_RUNNERS):
-    raise RuntimeError("built-in rule metadata and runner registries differ")
+_BUILTIN_ENTRY_POINTS = builtin_check_entry_points()
+_FEATURE_SELECTORS = frozenset(FEATURE_DEFINITIONS)
+if frozenset(_BUILTIN_ENTRY_POINTS) != _FEATURE_SELECTORS:
+    raise RuntimeError(
+        "built-in feature definitions and installed entry points differ: "
+        f"definitions={sorted(_FEATURE_SELECTORS)}, "
+        f"entry_points={sorted(_BUILTIN_ENTRY_POINTS)}"
+    )
+_LEGACY_SELECTORS = frozenset(RULE_SPECS) - _FEATURE_SELECTORS
+if _LEGACY_SELECTORS != frozenset(RULE_RUNNERS):
+    raise RuntimeError("legacy built-in rule metadata and runner registries differ")
 
-BUILTIN_RULES: Mapping[str, BuiltinRuleBinding] = MappingProxyType(
-    {
-        selector: BuiltinRuleBinding(
-            cast(QualityRuleName, selector),
-            spec,
-            RULE_RUNNERS[cast(QualityRuleName, selector)],
-        )
-        for selector, spec in RULE_SPECS.items()
-    }
+BUILTIN_RULES: Mapping[str, BuiltinRuleBinding | EntryPointBuiltinRuleBinding] = (
+    MappingProxyType(
+        {
+            selector: (
+                EntryPointBuiltinRuleBinding(cast(QualityRuleName, selector), spec)
+                if selector in _FEATURE_SELECTORS
+                else BuiltinRuleBinding(
+                    cast(QualityRuleName, selector),
+                    spec,
+                    RULE_RUNNERS[cast(QualityRuleName, selector)],
+                )
+            )
+            for selector, spec in RULE_SPECS.items()
+        }
+    )
 )
 
 

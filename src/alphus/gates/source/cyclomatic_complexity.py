@@ -30,9 +30,10 @@ from alphus.contracts.findings import (
     severity_meets_threshold,
 )
 from alphus.contracts.process import ExitCode
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
 from alphus.gates.source._lizard_contracts import LizardWorkerResponse as _LizardPayload
 from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.metrics import (
     CyclomaticBackendBinding,
     CyclomaticComplexityPolicy,
@@ -40,46 +41,65 @@ from alphus.policy.metrics import (
     LizardCyclomaticBinding,
     RuffCyclomaticBinding,
 )
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
 from alphus.support.data_access import JsonValue
 from alphus.support.inventory import candidate_files
 from alphus.support.platform_utils import is_windows
 from alphus.support.python_runtime import current_python_executable
 
-ALPHUS_CHECK: Final = (
-    ("selector", "cyclomatic-complexity"),
-    ("concern", "function-complexity"),
-    ("claim_kind", "condition"),
-    (
-        "claim",
-        (
-            "A selected function exceeds its configured complexity threshold under the "
-            "selected native backend, or that backend fails explicitly."
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="cyclomatic-complexity",
+    policy_field="cyclomatic_complexity",
+    policy_model="alphus.policy.metrics.CyclomaticComplexityPolicy",
+    output_shape="cyclomatic-report",
+    summary="Measures bounded cyclomatic complexity for supported source backends.",
+    applies_to=("python", "javascript", "cpp"),
+    domains=(),
+    requires_files=False,
+    runner_module="alphus.gates.source.cyclomatic_complexity",
+    runner_name="run_cyclomatic_rule",
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="cyclomatic-complexity",
+    finding_ids=(
+        RuleTag(
+            Scope.ANY,
+            Framework.NONE,
+            Category.MAINTAINABILITY,
+            "cyclomatic-complexity-threshold",
+        ),
+        RuleTag(
+            Scope.ANY,
+            Framework.NONE,
+            Category.CONFIGURATION,
+            "cyclomatic-backend-failure",
         ),
     ),
-    ("mechanisms", ("native-tool", "exact-rule")),
-    ("inspected_scope", ("selected-functions", "configured-thresholds")),
-    ("languages_formats", ("python", "javascript", "cpp")),
-    (
-        "evidence_kinds",
-        ("native-tool-result", "tool-version", "function-identity", "path-line"),
+    concern="function-complexity",
+    claim_kind=ClaimKind.CONDITION,
+    claim=(
+        "A selected function exceeds its configured complexity threshold under "
+        "the selected native backend, or that backend fails explicitly."
     ),
-    ("evaluation_maturity", "synthetic-only"),
-    (
-        "finding_tag_complaints",
-        ("cyclomatic-complexity-threshold", "cyclomatic-backend-failure"),
+    mechanisms=(
+        DetectionMechanism.NATIVE_TOOL,
+        DetectionMechanism.EXACT_RULE,
     ),
-    ("policy_field", "cyclomatic_complexity"),
-    ("policy_model", "alphus.policy.metrics.CyclomaticComplexityPolicy"),
-    ("output_shape", "cyclomatic-report"),
-    (
-        "summary",
-        "Measures bounded cyclomatic complexity for supported source backends.",
+    inspected_scope=("selected-functions", "configured-thresholds"),
+    languages_formats=("python", "javascript", "cpp"),
+    evidence_kinds=(
+        "native-tool-result",
+        "tool-version",
+        "function-identity",
+        "path-line",
     ),
-    ("applies_to", ("python", "javascript", "cpp")),
-    ("domains", ()),
-    ("requires_files", False),
-    ("runner_module", "alphus.gates.source.cyclomatic_complexity"),
-    ("runner_name", "run_cyclomatic_rule"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
 )
 
 

@@ -1,26 +1,19 @@
 """Portable repository quality gates driven by validated TOML policy."""
 
-from collections.abc import Callable, Iterable, Sequence
-from pathlib import Path
+from __future__ import annotations
 
-from alphus.config import (
-    PathDiscoveryPolicy,
-    QualityGateConfig,
-    SourceScanPolicy,
-    load_config,
-)
-from alphus.contracts.findings import Finding
-from alphus.support.inventory import candidate_files, git_files
 from alphus.support.public_imports import make_public_dir, resolve_public_attribute
 
-check_file_size: Callable[[Path, Sequence[Path], QualityGateConfig], list[Finding]]
-check_line_length: Callable[[Path, Sequence[Path], QualityGateConfig], list[Finding]]
-check_json_structure: Callable[[Path, Iterable[Path], SourceScanPolicy], list[Finding]]
-check_path_discovery: Callable[
-    [Path, Iterable[Path], PathDiscoveryPolicy], list[Finding]
-]
-check_output_escaping: Callable[[Path, Iterable[Path], SourceScanPolicy], list[Finding]]
-
+Finding: type[object]
+QualityGateConfig: type[object]
+candidate_files: object
+check_file_size: object
+check_json_structure: object
+check_line_length: object
+check_output_escaping: object
+check_path_discovery: object
+git_files: object
+load_config: object
 
 __all__ = [
     "Finding",

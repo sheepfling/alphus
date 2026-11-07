@@ -8,37 +8,55 @@ from typing import Final
 
 from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding, LineLengthMeasurement
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
 from alphus.gates.hygiene.rules import path_override
 from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
 from alphus.support.inventory import matches_path
 
-ALPHUS_CHECK: Final = (
-    ("selector", "line-length"),
-    ("concern", "source-line-bounds"),
-    ("claim_kind", "condition"),
-    (
-        "claim",
-        "An included UTF-8 source line exceeds its configured Unicode codepoint limit.",
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="line-length",
+    policy_field="line_length",
+    policy_model="alphus.policy.sources.LineLengthPolicy",
+    output_shape="findings",
+    summary="Reports source lines that exceed configured per-extension limits.",
+    applies_to=("configurable-source",),
+    domains=(),
+    requires_files=True,
+    runner_module="alphus.gates.hygiene.line_length",
+    runner_name="check_line_length",
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="line-length",
+    finding_ids=(
+        RuleTag(
+            Scope.ANY,
+            Framework.NONE,
+            Category.STYLE,
+            "line-too-long",
+        ),
+        RuleTag(
+            Scope.ANY,
+            Framework.NONE,
+            Category.STYLE,
+            "invalid-text-encoding",
+        ),
     ),
-    (("mechanisms", ("exact-rule",))),
-    (("inspected_scope", ("selected-source-files",))),
-    (("languages_formats", ("source-files",))),
-    (("evidence_kinds", ("line-length-measurement", "path-line"))),
-    (("evaluation_maturity", "synthetic-only")),
-    (
-        "finding_tag_complaints",
-        ("line-too-long", "invalid-text-encoding"),
-    ),
-    ("policy_field", "line_length"),
-    ("policy_model", "alphus.policy.sources.LineLengthPolicy"),
-    ("output_shape", "findings"),
-    ("summary", "Reports source lines that exceed configured per-extension limits."),
-    ("applies_to", ("configurable-source",)),
-    ("domains", ()),
-    ("requires_files", True),
-    ("runner_module", "alphus.gates.hygiene.line_length"),
-    ("runner_name", "check_line_length"),
+    concern="source-line-bounds",
+    claim_kind=ClaimKind.CONDITION,
+    claim="An included UTF-8 source line exceeds its configured Unicode codepoint limit.",
+    mechanisms=(DetectionMechanism.EXACT_RULE,),
+    inspected_scope=("selected-source-files",),
+    languages_formats=("source-files",),
+    evidence_kinds=("line-length-measurement", "path-line"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
 )
 
 

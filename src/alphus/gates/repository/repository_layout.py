@@ -15,8 +15,15 @@ from alphus.config import (
     RepositoryLayoutPolicy,
 )
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
 from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
 from alphus.support.data_access import (
     contains_member,
     is_nonempty_mapping,
@@ -26,58 +33,135 @@ from alphus.support.data_access import (
 from alphus.support.inventory import matches_path, tracked_files
 from alphus.support.source_text import read_python_source, read_utf8_text
 
-ALPHUS_CHECK: Final = (
-    ("selector", "repository-layout"),
-    ("concern", "repository-contracts"),
-    ("claim_kind", "condition"),
-    (
-        "claim",
-        (
-            "Configured repository paths, manifests, tracked files, and instruction "
-            "routers satisfy their declared constraints."
-        ),
-    ),
-    ("mechanisms", ("exact-rule",)),
-    ("inspected_scope", ("repository", "tracked-files", "configured-paths")),
-    ("languages_formats", ("repository", "json", "python", "toml", "markdown")),
-    (
-        "evidence_kinds",
-        ("path-existence", "manifest-value", "python-symbol", "tracked-path"),
-    ),
-    ("evaluation_maturity", "synthetic-only"),
-    (
-        "finding_tag_complaints",
-        (
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="repository-layout",
+    policy_field="repository_layout",
+    policy_model="alphus.policy.repository.RepositoryLayoutPolicy",
+    output_shape="findings",
+    summary="Checks configured repository paths, required files, and layout rules.",
+    applies_to=("repository",),
+    domains=(),
+    requires_files=True,
+    runner_module="alphus.gates.repository.repository_layout",
+    runner_name="run_repository_layout_gate",
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="repository-layout",
+    finding_ids=(
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.CONFIGURATION,
             "router-root-missing",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.CONFIGURATION,
             "bridge-root-missing",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.CONFIGURATION,
             "bridge-root-marker-missing",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.CONFIGURATION,
             "router-area-missing",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.CONFIGURATION,
             "bridge-area-missing",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.CONFIGURATION,
             "bridge-scope-missing",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.CONFIGURATION,
             "bridge-router-import-missing",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.CONFIGURATION,
             "path-required",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.CONFIGURATION,
             "path-forbidden",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.CONFIGURATION,
             "glob-forbidden",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.CONFIGURATION,
             "json-array-value-required",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.CONFIGURATION,
             "python-symbol-required",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.CONFIGURATION,
             "toml-table-required",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.HYGIENE,
             "tracked-suffix-forbidden",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.HYGIENE,
             "tracked-path-forbidden",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.HYGIENE,
             "root-document-forbidden",
         ),
     ),
-    ("policy_field", "repository_layout"),
-    ("policy_model", "alphus.policy.repository.RepositoryLayoutPolicy"),
-    ("output_shape", "findings"),
-    (
-        "summary",
-        "Checks configured repository paths, required files, and layout rules.",
+    concern="repository-contracts",
+    claim_kind=ClaimKind.CONDITION,
+    claim=(
+        "Configured repository paths, manifests, tracked files, and instruction "
+        "routers satisfy their declared constraints."
     ),
-    (("applies_to", ("repository",))),
-    (("domains", ())),
-    ("requires_files", True),
-    ("runner_module", "alphus.gates.repository.repository_layout"),
-    ("runner_name", "run_repository_layout_gate"),
+    mechanisms=(DetectionMechanism.EXACT_RULE,),
+    inspected_scope=("repository", "tracked-files", "configured-paths"),
+    languages_formats=("repository", "json", "python", "toml", "markdown"),
+    evidence_kinds=(
+        "path-existence",
+        "manifest-value",
+        "python-symbol",
+        "tracked-path",
+    ),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
 )
 
 

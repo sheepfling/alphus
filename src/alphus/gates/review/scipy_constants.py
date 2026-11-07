@@ -12,59 +12,72 @@ from typing import Final
 
 from alphus.config import NumericLiteralSpec, QualityGateConfig, ScipyConstantsPolicy
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Framework
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
 from alphus.gates.review.numeric_catalog import NumericLiteralFinding
 from alphus.gates.review.numeric_engine import scan_numeric_literals
 from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 
-ALPHUS_CHECK: Final = (
-    ("selector", "scipy-constants"),
-    ("display_name", "SciPy constants"),
-    ("input_mode", "configured-source-scan"),
-    ("finding_contracts", ("numeric-inline",)),
-    ("concern", "scientific-constant-reuse"),
-    ("claim_kind", "risk"),
-    (
-        "claim",
-        (
-            "Arithmetic matches a selected SciPy constant or unit factor; this review "
-            "does not validate dimensions or coordinate systems."
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="scipy-constants",
+    display_name="SciPy constants",
+    input_mode="configured-source-scan",
+    policy_field="scipy_constants",
+    policy_model="alphus.policy.review.ScipyConstantsPolicy",
+    output_shape="findings",
+    summary=(
+        "Finds selected SciPy physical constants and unit-conversion factors in "
+        "Python arithmetic; it does not validate units or coordinate systems."
+    ),
+    applies_to=("python",),
+    domains=(
+        "scientific-computing",
+        "simulation",
+        "earth-science",
+        "trajectory-analysis",
+        "physical-units",
+    ),
+    requires_files=True,
+    runner_module="alphus.gates.review.scipy_constants",
+    runner_name="run_scipy_constants_rule",
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="scipy-constants",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.SCIPY,
+            Category.STYLE,
+            "inline-constant",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.SCIPY,
+            Category.STYLE,
+            "inline-conversion",
         ),
     ),
-    ("mechanisms", ("bounded-heuristic",)),
-    ("inspected_scope", ("selected-python-files", "arithmetic-expressions")),
-    ("languages_formats", ("python",)),
-    (
-        "evidence_kinds",
-        ("configured-literal-match", "operation", "source-location"),
+    concern="scientific-constant-reuse",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "Arithmetic matches a selected SciPy constant or unit factor; this "
+        "review does not validate dimensions or coordinate systems."
     ),
-    ("evaluation_maturity", "synthetic-only"),
-    ("policy_field", "scipy_constants"),
-    ("policy_model", "alphus.policy.review.ScipyConstantsPolicy"),
-    ("output_shape", "findings"),
-    (
-        "summary",
-        (
-            "Finds selected SciPy physical constants and unit-conversion factors "
-            "in Python arithmetic; it does not validate units or coordinate systems."
-        ),
-    ),
-    ("applies_to", ("python",)),
-    (
-        "domains",
-        (
-            "scientific-computing",
-            "simulation",
-            "earth-science",
-            "trajectory-analysis",
-            "physical-units",
-        ),
-    ),
-    ("requires_files", True),
-    ("runner_module", "alphus.gates.review.scipy_constants"),
-    ("runner_name", "run_scipy_constants_rule"),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("selected-python-files", "arithmetic-expressions"),
+    languages_formats=("python",),
+    evidence_kinds=("configured-literal-match", "operation", "source-location"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+    finding_contracts=("numeric-inline",),
 )
 
 _PHYSICAL_CONSTANTS = (

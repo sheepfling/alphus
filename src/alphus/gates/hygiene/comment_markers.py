@@ -11,8 +11,15 @@ from typing import Final, NamedTuple
 
 from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
 from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
 from alphus.policy.sources import CommentMarkerPolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_utf8_sig_text
@@ -25,29 +32,46 @@ class CommentLine(NamedTuple):
 
 _RAW_STRING = re.compile(r'R"(?P<delimiter>[^\s()\\"]{0,16})\(')
 
-ALPHUS_CHECK: Final = (
-    ("selector", "comment-markers"),
-    ("concern", "temporary-work-markers"),
-    ("claim_kind", "condition"),
-    (
-        "claim",
-        "Reports configured TODO-style markers found in supported source comments.",
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="comment-markers",
+    policy_field="comment_markers",
+    policy_model="alphus.policy.sources.CommentMarkerPolicy",
+    output_shape="findings",
+    summary="Finds configured TODO-style markers in supported source comments.",
+    applies_to=("python", "javascript", "c", "cpp"),
+    domains=(),
+    requires_files=True,
+    runner_module="alphus.gates.hygiene.comment_markers",
+    runner_name="run_comment_markers_rule",
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="comment-markers",
+    finding_ids=(
+        RuleTag(
+            Scope.ANY,
+            Framework.NONE,
+            Category.HYGIENE,
+            "comment-scan-failed",
+        ),
+        RuleTag(
+            Scope.ANY,
+            Framework.NONE,
+            Category.HYGIENE,
+            "comment-marker-found",
+        ),
     ),
-    (("mechanisms", ("exact-rule", "bounded-heuristic"))),
-    (("inspected_scope", ("configured-source-files",))),
-    (("languages_formats", ("python", "toml", "javascript", "c", "cpp", "java"))),
-    (("evidence_kinds", ("comment-text", "source-line"))),
-    (("evaluation_maturity", "synthetic-only")),
-    ("finding_tag_complaints", ("comment-scan-failed", "comment-marker-found")),
-    ("policy_field", "comment_markers"),
-    ("policy_model", "alphus.policy.sources.CommentMarkerPolicy"),
-    ("output_shape", "findings"),
-    ("summary", "Finds configured TODO-style markers in supported source comments."),
-    ("applies_to", ("python", "javascript", "c", "cpp")),
-    ("domains", ()),
-    ("requires_files", True),
-    ("runner_module", "alphus.gates.hygiene.comment_markers"),
-    ("runner_name", "run_comment_markers_rule"),
+    concern="temporary-work-markers",
+    claim_kind=ClaimKind.CONDITION,
+    claim="Reports configured TODO-style markers found in supported source comments.",
+    mechanisms=(
+        DetectionMechanism.EXACT_RULE,
+        DetectionMechanism.BOUNDED_HEURISTIC,
+    ),
+    inspected_scope=("configured-source-files",),
+    languages_formats=("python", "toml", "javascript", "c", "cpp", "java"),
+    evidence_kinds=("comment-text", "source-line"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
 )
 
 

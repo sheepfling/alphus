@@ -7,7 +7,18 @@ from importlib import import_module
 
 
 def resolve_public_attribute(name: str) -> object:
-    """Resolve a legacy root-package checker export on explicit access."""
+    """Resolve one root-package compatibility export on explicit access."""
+    if name == "Finding":
+        return import_module("alphus.contracts.findings").Finding
+    if name in {
+        "PathDiscoveryPolicy",
+        "QualityGateConfig",
+        "SourceScanPolicy",
+        "load_config",
+    }:
+        return getattr(import_module("alphus.config"), name)
+    if name in {"candidate_files", "git_files"}:
+        return getattr(import_module("alphus.support.inventory"), name)
     if name == "check_file_size":
         return import_module("alphus.gates.hygiene.file_size").check_file_size
     if name == "check_line_length":

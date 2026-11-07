@@ -12,7 +12,8 @@ from pydantic import ValidationError
 
 from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.execution.dispatch import RULE_RUNNERS, run_builtin_rule
+from alphus.execution.dispatch import run_builtin_rule
+from alphus.plugins.builtin_registry import builtin_check_entry_points
 from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
 from alphus.policy.catalog import RULE_SPECS
 from alphus.support.git import run_git
@@ -46,8 +47,8 @@ def test_documentation_config_definition_owns_heuristic_and_runner() -> None:
     )
     assert definition.runner_module == "alphus.gates.repository.documentation_config"
     assert definition.runner_name == "run_documentation_config_gate"
-    assert RULE_RUNNERS["documentation-config"].__module__ == (
-        "alphus.execution._generated_dispatch"
+    assert builtin_check_entry_points()["documentation-config"].value == (
+        f"{definition.runner_module}:{definition.runner_name}"
     )
 
 

@@ -31,14 +31,18 @@ belong in the future feature definition and need dedicated validation.
 ## Registration design review
 
 Rick identified tuple-pair `ALPHUS_CHECK` declarations as opaque and the
-built-in path as parallel to the existing plugin registry. A bounded
-production dispatch adapter now shares a typed `RuleBinding` shape across
-built-in and API v1 plugin execution; it does not yet unify feature-owned
-registration or generated catalog/config views. Broad registration migration
-still needs a production discovery and build-generation design. The spike and its trade-offs are recorded in the
-[check registry spike](architecture/check-registry-spike.md). The spike
-does not replace existing declarations or establish the production
-discovery source.
+built-in path as parallel to the existing plugin registry. The current
+candidate replaces that tuple format for eleven feature-owned checks with
+immutable `FeatureDefinition` and `RuleMorphology` values. A PEP 517 build
+backend statically reads those declarations and writes standard
+`alphus.builtin_checks.v1` metadata into ignored build output. Runtime lookup
+uses `importlib.metadata` against only the installed Alphus distribution and
+imports the selected runner on demand. The third-party `alphus.rules.v1`
+contract remains separate and allowlisted. This is a production registration
+path, but not yet the complete target: runner module and function names remain
+string fields, the loader does not validate a callable's full signature/result
+contract, and the remaining selectors still use legacy maps. The history and
+trade-offs are recorded in the [check registry spike](architecture/check-registry-spike.md).
 
 ## Release boundary and status vocabulary
 
@@ -81,10 +85,17 @@ field, selector type, inventory entry, and lazy runner thunk. The established
 `RuleEvaluation` and CLI result adapters remain shared, so adding a feature
 still uses the existing output contract. The other 51 baseline selectors
 remain on legacy registration paths; these slices do not complete issue #87
-or establish full selector equivalence.
-The pilot's `ALPHUS_CHECK` tuple-pair literals are migration scaffolding, not
-the accepted authoring interface; replacing them with the reviewed typed
-registry is still required.
+or establish full selector equivalence. These eleven declarations are now
+typed `FeatureDefinition(...)` calls paired with immutable
+`RuleMorphology(...)` values rather than the former tuple-pair `ALPHUS_CHECK`
+format. Static discovery validates them without importing gate implementations.
+The PEP 517 backend generates installed-wheel entry-point metadata without a
+per-check `pyproject.toml` edit. Aggregate policy/config/dispatch views are
+ignored build artifacts rather than checked-in shared files, so independent
+feature branches do not edit the same generated outputs. The declaration's
+string runner target is validated for module/function shape but is not yet a
+statically typed callable reference; runtime loading checks positional
+compatibility but not the complete result contract. These remain known limits.
 
 ## Current package ownership and dependency direction
 
@@ -332,14 +343,15 @@ JSON/text shapes and legacy IDs.
 
 ## Feature-owned registration and imports
 
-The intended target flow is:
+The current eleven-selector flow is:
 
 ```text
-typed, feature-owned registration module
-       │  build hook scans names and writes standard entry-point metadata
+typed, feature-owned FeatureDefinition and RuleMorphology
+       │  build hook statically reads declarations and writes standard metadata
        ▼
-standard built-in entry point; typed registry validates first-party factories
-and derives selector/config/catalog/runner/docs views
+standard built-in entry point; runtime registry loads the selected runner
+       ▼
+ignored generated selector/config/catalog/dispatch source views
        │
        ▼
 validated consumer config + explicit profile/direct selection
@@ -352,14 +364,18 @@ typed evaluation → existing render/report/history boundaries
 Each generated view is derived from the same declaration; none becomes an
 independent authored list. Build-time discovery scans only the first-party
 registration-module filenames and does not execute feature, consumer or plugin
-code. Runtime registry discovery loads registration factories only from the
-installed Alphus distribution and validates duplicate selector names before
-loading them. Those metadata modules cannot import optional analyzers; their
-typed provider factories import the checker only after explicit selection.
-Catalog/config inspection does not initialize checker implementations. A
-registration never selects or enables a check: consumer profile steps remain
-the selection source, and strict config continues to reject invalid or
-unknown fields. This is the design target, not yet the current production path.
+code. Runtime discovery reads only the installed Alphus distribution and
+rejects duplicate selector names before loading a selected runner. Catalog and
+config inspection do not import the migrated checker modules. A registration
+never selects or enables a check: consumer profile steps remain the selection
+source, and strict config continues to reject invalid or unknown fields. This
+production path currently covers eleven selectors; remaining selectors still
+use legacy theme maps. The five aggregate views are no longer tracked: the
+build regenerates them as ignored source files for each worktree, and
+`MANIFEST.in` includes them in source archives. Separate feature branches
+therefore do not commit or merge the same generated output. A checkout must run
+the editable-install/build bootstrap before importing runtime modules or
+running source tests; `AGENTS.md` already requires that editable install.
 
 Preserve TOML section and field names, `QualityRuleName` selectors, existing
 `RuleTag` finding IDs, gate IDs, profile step names, output formats, ordering,
@@ -369,41 +385,42 @@ API v1.
 
 ## Developer experience: add a check once
 
-A feature declaration should be a typed, feature-owned entry-point factory
-beside its behavior. It references the existing strict policy model without
-moving policy ownership into the checker package. `file-size` lives in
+A migrated feature currently declares typed metadata beside its behavior. It
+references the existing strict policy model without moving policy ownership
+into the checker package. `file-size` lives in
 `src/alphus/gates/hygiene/file_size.py`; `FileSizePolicy` remains in
-`src/alphus/policy/sources.py`. A target registration module for
-`line-length` would own one typed definition:
+`src/alphus/policy/sources.py`. Its declaration has this shape:
 
 ```python
-def register_line_length() -> BuiltinCheckDefinition[
-    LineLengthPolicy, LineLengthEvidence, tuple[Finding, ...]
-]:
-    return BuiltinCheckDefinition(
-        selector="line-length",
-        settings_model=LineLengthPolicy,
-        validate_settings=validate_line_length_settings,
-        provider_factory=load_line_length_provider,
-        adapt_result=adapt_line_length_evidence,
-        morphology=LINE_LENGTH_MORPHOLOGY,
-        complaint_contract=LINE_LENGTH_COMPLAINTS,
-    )
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="line-length",
+    policy_field="line_length",
+    policy_model="alphus.policy.sources.LineLengthPolicy",
+    output_shape="python-style",
+    summary="Checks configured source lines against a maximum length.",
+    applies_to=("python",),
+    domains=(),
+    requires_files=True,
+    runner_module="alphus.gates.hygiene.line_length",
+    runner_name="run_line_length_rule",
+)
 ```
 
-The packaging build hook discovers `*_registration.py` feature modules and
-generates standard `alphus.builtin_checks.v1` entry-point metadata in the build
-directory, not in a tracked shared file. The runtime registry loads only
-entry-points owned by the installed Alphus distribution, validates duplicate
-names before loading factories, and imports only lightweight registration
-modules. Analyzer/provider factories use statically checked callbacks and
-import their implementation only after explicit selection. Build-generated
-views supply selector, strict config, `RuleSpec`, catalog and documentation
-contracts from those typed definitions. Adding an independent check should
-require its feature registration and tests, not edits to a selector map,
-runner map, or `pyproject.toml` entry-point table. This is the reviewed target;
-the current tuple-pair generator and most generated views have not been
-replaced yet.
+The PEP 517 backend statically reads feature declarations and writes standard
+`alphus.builtin_checks.v1` metadata under the ignored `.registry-build/`
+directory. The runtime registry indexes only entry points from the installed
+Alphus distribution, rejects duplicate selectors, and imports a runner only
+after explicit selection. Adding one of the eleven migrated checks did not
+require editing a central runner map or the `pyproject.toml` entry-point table.
+The PEP 517 build also regenerates aggregate policy/config/dispatch views as
+ignored source files and includes them in wheels and source archives. Those
+outputs no longer appear in feature-branch diffs, so independent additions do
+not collide on generated files. The bootstrap requirement is that each
+worktree build or editable install regenerate the views before source imports.
+Also, the declaration stores
+runner module/function names as strings, and runtime loading does not yet
+validate a complete typed callback/result contract. Those gaps remain before
+this can be called the final developer interface.
 
 At runtime, consumers continue to provide the same `[checks.line_length]`
 policy and select `line-length` directly or in a profile. Catalog inspection
@@ -411,7 +428,7 @@ and config validation do not import the checker. Dispatch imports only the
 selected provider; registration never adds a profile step. The package-level
 `check_line_length` compatibility export resolves lazily on explicit access.
 
-This static complaint rule is intentionally narrow: each migrated file check
+Static complaint validation is intentionally narrow: each migrated file check
 declares complaint slugs whose `rule_tag()` calls are literal in that same
 feature module. It proves a simple one-selector/one-owner case; it is not a
 general rule for shared emitters. Existing numeric checks use the shared

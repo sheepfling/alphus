@@ -13,9 +13,22 @@ import re
 import sys
 import textwrap
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import cast
+from typing import TypeAlias, cast
+
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
+from alphus.policy.feature_definition import (
+    FeatureDefinition,
+    FeatureInputMode,
+    FeatureOutputShape,
+)
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
 
 _DECLARATION_NAME = "ALPHUS_MORPHOLOGY"
 _CHECK_DECLARATION_NAME = "ALPHUS_CHECK"
@@ -55,6 +68,17 @@ _QUALITY_RULES_TARGET = Path("src/alphus/policy/_generated_quality_rule_names.py
 _MAX_FEATURE_MODULES = 2048
 _MAX_SOURCE_MODULE_BYTES = 1_048_576
 _MAX_SCANNED_SOURCE_BYTES = 16_777_216
+_FeatureLiteral: TypeAlias = (
+    str
+    | bool
+    | int
+    | float
+    | complex
+    | bytes
+    | None
+    | tuple[str | bool | int | float | bytes | None, ...]
+    | list[str | bool | int | float | bytes | None]
+)
 
 
 def _valid_domain_values(values: tuple[object, ...]) -> bool:
@@ -597,6 +621,281 @@ def _declaration_records(raw: object) -> tuple[object, ...]:
     return values
 
 
+def _parse_feature_definition(node: ast.expr, path: Path) -> _FeatureRegistration:
+    """Read one typed FeatureDefinition call without importing gate modules."""
+    match node:
+        case ast.Call(
+            func=ast.Name(id="FeatureDefinition"), args=[], keywords=keywords
+        ):
+            fields: dict[str, ast.expr] = {}
+            for keyword in keywords:
+                if keyword.arg is None or keyword.arg in fields:
+                    raise ValueError(f"{path}: invalid FeatureDefinition keyword")
+                fields[keyword.arg] = keyword.value
+        case _:
+            raise ValueError(f"{path}: ALPHUS_CHECK must construct FeatureDefinition")
+
+    allowed = {
+        "selector",
+        "policy_field",
+        "policy_model",
+        "output_shape",
+        "summary",
+        "applies_to",
+        "domains",
+        "requires_files",
+        "runner_module",
+        "runner_name",
+        "policy_inputs",
+        "display_name",
+        "input_mode",
+    }
+    required = allowed - {"policy_inputs", "display_name", "input_mode"}
+    if set(fields) - allowed or required - set(fields):
+        raise ValueError(
+            f"{path}: FeatureDefinition fields are incomplete or unsupported"
+        )
+
+    def literal(name: str, default: _FeatureLiteral = None) -> _FeatureLiteral:
+        expression = fields.get(name)
+        if expression is None:
+            return default
+        try:
+            value: object = ast.literal_eval(expression)
+        except (ValueError, TypeError, SyntaxError) as error:
+            raise ValueError(
+                f"{path}: FeatureDefinition fields must be literals"
+            ) from error
+        return cast(_FeatureLiteral, value)
+
+    def text_field(name: str) -> str:
+        value = literal(name)
+        if type(value) is not str:
+            raise ValueError(f"{path}: FeatureDefinition {name} must be text")
+        return value
+
+    def text_tuple(name: str, *, default: tuple[str, ...] = ()) -> tuple[str, ...]:
+        value = literal(name, default)
+        candidate: (
+            tuple[str | bool | int | float | bytes | None, ...]
+            | list[str | bool | int | float | bytes | None]
+        ) = cast(
+            tuple[str | bool | int | float | bytes | None, ...]
+            | list[str | bool | int | float | bytes | None],
+            value,
+        )
+        if type(candidate) is not tuple or any(
+            type(item) is not str for item in candidate
+        ):
+            raise ValueError(f"{path}: FeatureDefinition {name} must be a string tuple")
+        return cast(tuple[str, ...], candidate)
+
+    requires_files = literal("requires_files")
+    if type(requires_files) is not bool:
+        raise ValueError(f"{path}: FeatureDefinition requires_files must be boolean")
+    display_name = literal("display_name")
+    input_mode = literal("input_mode", "caller-scope")
+    if display_name is not None and type(display_name) is not str:
+        raise ValueError(f"{path}: FeatureDefinition display_name must be text")
+    if type(input_mode) is not str:
+        raise ValueError(f"{path}: FeatureDefinition input_mode must be text")
+
+    feature = FeatureDefinition(
+        selector=text_field("selector"),
+        policy_field=text_field("policy_field"),
+        policy_model=text_field("policy_model"),
+        output_shape=cast(FeatureOutputShape, text_field("output_shape")),
+        summary=text_field("summary"),
+        applies_to=text_tuple("applies_to"),
+        domains=text_tuple("domains"),
+        requires_files=requires_files,
+        runner_module=text_field("runner_module"),
+        runner_name=text_field("runner_name"),
+        policy_inputs=text_tuple("policy_inputs", default=()),
+        display_name=display_name,
+        input_mode=cast(FeatureInputMode, input_mode),
+    )
+    return _FeatureRegistration(
+        selector=feature.selector,
+        policy_field=feature.policy_field,
+        policy_model=feature.policy_model,
+        output_shape=feature.output_shape,
+        summary=feature.summary,
+        applies_to=feature.applies_to,
+        domains=feature.domains,
+        requires_files=feature.requires_files,
+        runner_module=feature.runner_module,
+        runner_name=feature.runner_name,
+        policy_inputs=feature.policy_inputs,
+        display_name=feature.display_name,
+        input_mode=feature.input_mode,
+    )
+
+
+def _enum_member(node: ast.expr, enum_name: str, path: Path) -> object:
+    match node:
+        case ast.Attribute(value=ast.Name(id=found_enum), attr=member) if (
+            found_enum == enum_name
+        ):
+            try:
+                return getattr(
+                    {
+                        "ClaimKind": ClaimKind,
+                        "DetectionMechanism": DetectionMechanism,
+                        "EvaluationMaturity": EvaluationMaturity,
+                    }[enum_name],
+                    member,
+                )
+            except (KeyError, AttributeError) as error:
+                raise ValueError(
+                    f"{path}: unsupported {enum_name} member {member!r}"
+                ) from error
+        case _:
+            raise ValueError(f"{path}: expected {enum_name} member")
+
+
+def _rule_tag_from_ast(node: ast.expr, path: Path) -> RuleTag:
+    match node:
+        case ast.Call(
+            func=ast.Name(id="RuleTag"),
+            args=[
+                ast.Attribute(value=ast.Name(id="Scope"), attr=scope),
+                ast.Attribute(value=ast.Name(id="Framework"), attr=framework),
+                ast.Attribute(value=ast.Name(id="Category"), attr=category),
+                ast.Constant(value=complaint),
+            ],
+            keywords=[],
+        ):
+            complaint_value: str | bytes | int | float | complex | bool | None = cast(
+                str | bytes | int | float | complex | bool | None, complaint
+            )
+            if type(complaint_value) is not str:
+                raise ValueError(f"{path}: RuleTag complaint must be text")
+            try:
+                return RuleTag(
+                    Scope[scope],
+                    Framework[framework],
+                    Category[category],
+                    complaint_value,
+                )
+            except KeyError as error:
+                raise ValueError(f"{path}: unsupported RuleTag enum member") from error
+        case _:
+            raise ValueError(f"{path}: finding_ids must contain RuleTag calls")
+
+
+def _tuple_literal(node: ast.expr, path: Path, field: str) -> tuple[object, ...]:
+    try:
+        value: object = ast.literal_eval(node)
+    except (ValueError, TypeError, SyntaxError) as error:
+        raise ValueError(f"{path}: morphology {field} must be literal") from error
+    candidate: tuple[object, ...] | list[object] = cast(
+        tuple[object, ...] | list[object], value
+    )
+    if type(candidate) is not tuple:
+        raise ValueError(f"{path}: morphology {field} must be an immutable tuple")
+    return candidate
+
+
+def _tuple_expressions(node: ast.expr, path: Path, field: str) -> tuple[ast.expr, ...]:
+    match node:
+        case ast.Tuple(elts=elements):
+            return tuple(elements)
+        case _:
+            raise ValueError(f"{path}: morphology {field} must be a tuple literal")
+
+
+def _parse_rule_morphology(node: ast.expr, path: Path) -> RuleMorphology:
+    match node:
+        case ast.Call(func=ast.Name(id="RuleMorphology"), args=[], keywords=keywords):
+            values: dict[str, ast.expr] = {}
+            for keyword in keywords:
+                if keyword.arg is None or keyword.arg in values:
+                    raise ValueError(f"{path}: invalid RuleMorphology keyword")
+                values[keyword.arg] = keyword.value
+        case _:
+            raise ValueError(f"{path}: ALPHUS_MORPHOLOGY must construct RuleMorphology")
+    required = {
+        "selector",
+        "finding_ids",
+        "concern",
+        "claim_kind",
+        "claim",
+        "mechanisms",
+        "inspected_scope",
+        "languages_formats",
+        "evidence_kinds",
+        "evaluation_maturity",
+    }
+    if required - set(values) or set(values) - (required | {"finding_contracts"}):
+        raise ValueError(f"{path}: RuleMorphology fields are incomplete or unsupported")
+
+    def text(name: str) -> str:
+        try:
+            value: (
+                str
+                | bytes
+                | int
+                | float
+                | complex
+                | bool
+                | None
+                | tuple[str | bool | int | float | bytes | None, ...]
+                | list[str | bool | int | float | bytes | None]
+            ) = cast(_FeatureLiteral, ast.literal_eval(values[name]))
+        except (ValueError, TypeError, SyntaxError) as error:
+            raise ValueError(
+                f"{path}: morphology {name} must be literal text"
+            ) from error
+        match value:
+            case str() as literal_text:
+                return literal_text
+            case _:
+                raise ValueError(f"{path}: morphology {name} must be literal text")
+
+    raw_tags = _tuple_expressions(values["finding_ids"], path, "finding_ids")
+    tags = tuple(_rule_tag_from_ast(item, path) for item in raw_tags)
+    raw_mechanisms = _tuple_expressions(values["mechanisms"], path, "mechanisms")
+    mechanisms = tuple(
+        cast(DetectionMechanism, _enum_member(item, "DetectionMechanism", path))
+        for item in raw_mechanisms
+    )
+    return RuleMorphology(
+        selector=text("selector"),
+        finding_ids=tags,
+        concern=text("concern"),
+        claim_kind=cast(
+            ClaimKind, _enum_member(values["claim_kind"], "ClaimKind", path)
+        ),
+        claim=text("claim"),
+        mechanisms=mechanisms,
+        inspected_scope=cast(
+            tuple[str, ...],
+            _tuple_literal(values["inspected_scope"], path, "inspected_scope"),
+        ),
+        languages_formats=cast(
+            tuple[str, ...],
+            _tuple_literal(values["languages_formats"], path, "languages_formats"),
+        ),
+        evidence_kinds=cast(
+            tuple[str, ...],
+            _tuple_literal(values["evidence_kinds"], path, "evidence_kinds"),
+        ),
+        evaluation_maturity=cast(
+            EvaluationMaturity,
+            _enum_member(values["evaluation_maturity"], "EvaluationMaturity", path),
+        ),
+        finding_contracts=(
+            cast(
+                tuple[str, ...],
+                _tuple_literal(values["finding_contracts"], path, "finding_contracts"),
+            )
+            if "finding_contracts" in values
+            else ()
+        ),
+    )
+
+
 def _declarations(
     root: Path, *, require_declarations: bool = True
 ) -> tuple[_Declaration, ...]:
@@ -663,70 +962,176 @@ def _declarations(
                     raise ValueError(f"{path} must assign {assignment_name}")
                 values_by_name[assignment_name].append(value)
         local_ids = _static_rule_ids(tree)
-        for declaration_name, values in values_by_name.items():
-            if not values:
-                continue
-            if len(values) != 1:
-                raise ValueError(f"{path} must define exactly one {declaration_name}")
-            try:
-                raw: object = ast.literal_eval(values[0])
-            except (ValueError, TypeError, SyntaxError) as error:
+        feature_values = values_by_name[_CHECK_DECLARATION_NAME]
+        typed_feature: _FeatureRegistration | None = None
+        if len(feature_values) == 1 and isinstance(feature_values[0], ast.Call):
+            call = feature_values[0]
+            function: ast.Name | ast.Attribute = cast(
+                ast.Name | ast.Attribute, call.func
+            )
+            if isinstance(function, ast.Name) and function.id == "FeatureDefinition":
+                typed_feature = _parse_feature_definition(call, path)
+
+        parsed_items: list[tuple[object, bool]] = []
+        if typed_feature is not None:
+            morphology_values = values_by_name[_DECLARATION_NAME]
+            if len(morphology_values) != 1:
                 raise ValueError(
-                    f"{path}:{declaration_name} must be a literal"
-                ) from error
-            records = _declaration_records(raw)
-            for item in records:
-                declaration = _validate_declaration(
-                    item,
-                    path,
-                    feature_owned=declaration_name == _CHECK_DECLARATION_NAME,
-                    complaint_contracts=complaint_contracts,
+                    f"{path}: typed feature registration needs exactly one "
+                    f"{_DECLARATION_NAME} declaration"
                 )
-                resolved_ids: list[str] = []
-                if declaration.finding_contracts:
-                    contract_name = declaration.finding_contracts[0]
-                    contract = complaint_contracts[contract_name]
-                    resolved_ids.extend(
-                        rule_id
-                        for emitter, rule_id in contract.rule_ids_by_emitter
-                        if emitter == declaration.selector
+            morphology_node = morphology_values[0]
+            if (
+                isinstance(morphology_node, ast.Call)
+                and isinstance(morphology_node.func, ast.Name)
+                and morphology_node.func.id == "RuleMorphology"
+            ):
+                morphology = _parse_rule_morphology(morphology_node, path)
+                if morphology.selector != typed_feature.selector:
+                    raise ValueError(
+                        f"{path}: typed feature selector does not match morphology selector"
                     )
-                    if not resolved_ids:
+                if morphology.finding_contracts:
+                    expected_ids: list[str] = []
+                    for contract_name in morphology.finding_contracts:
+                        contract = complaint_contracts.get(contract_name)
+                        if (
+                            contract is None
+                            or morphology.selector not in contract.emitters
+                        ):
+                            raise ValueError(
+                                f"{path}: invalid finding contract {contract_name!r} "
+                                f"for {morphology.selector!r}"
+                            )
+                        expected_ids.extend(
+                            rule_id
+                            for emitter, rule_id in contract.rule_ids_by_emitter
+                            if emitter == morphology.selector
+                        )
+                    if tuple(tag.rule_id for tag in morphology.finding_ids) != tuple(
+                        expected_ids
+                    ):
                         raise ValueError(
-                            f"{path}: finding contract {contract_name!r} declares no "
-                            f"rule IDs for {declaration.selector!r}"
+                            f"{path}: typed finding IDs do not match their complaint contract"
                         )
                 else:
-                    for complaint in declaration.finding_ids:
-                        matches = local_ids.get(complaint, ())
-                        if not matches:
+                    for tag in morphology.finding_ids:
+                        matches = local_ids.get(tag.complaint, ())
+                        if (
+                            not matches
+                            or len(matches) != 1
+                            or matches[0] != tag.rule_id
+                        ):
                             raise ValueError(
-                                f"{path}: finding complaint {complaint!r} is not declared "
-                                "by this feature"
+                                f"{path}: typed finding ID {tag.rule_id!r} is not "
+                                "unambiguously emitted by this feature"
                             )
-                        if len(matches) != 1:
-                            raise ValueError(
-                                f"{path}: finding complaint {complaint!r} resolves to multiple "
-                                f"rule tags: {matches}"
-                            )
-                        resolved_ids.append(matches[0])
                 declarations.append(
                     _Declaration(
-                        selector=declaration.selector,
-                        finding_ids=tuple(resolved_ids),
-                        finding_contracts=declaration.finding_contracts,
-                        concern=declaration.concern,
-                        claim_kind=declaration.claim_kind,
-                        claim=declaration.claim,
-                        mechanisms=declaration.mechanisms,
-                        inspected_scope=declaration.inspected_scope,
-                        languages_formats=declaration.languages_formats,
-                        evidence_kinds=declaration.evidence_kinds,
-                        evaluation_maturity=declaration.evaluation_maturity,
-                        source=declaration.source,
-                        feature=declaration.feature,
+                        selector=morphology.selector,
+                        finding_ids=tuple(
+                            tag.rule_id for tag in morphology.finding_ids
+                        ),
+                        finding_contracts=morphology.finding_contracts,
+                        concern=morphology.concern,
+                        claim_kind=morphology.claim_kind.value,
+                        claim=morphology.claim,
+                        mechanisms=tuple(item.value for item in morphology.mechanisms),
+                        inspected_scope=morphology.inspected_scope,
+                        languages_formats=morphology.languages_formats,
+                        evidence_kinds=morphology.evidence_kinds,
+                        evaluation_maturity=morphology.evaluation_maturity.value,
+                        source=path.as_posix(),
+                        feature=typed_feature,
                     )
                 )
+                continue
+            try:
+                morphology_raw: object = ast.literal_eval(morphology_values[0])
+            except (ValueError, TypeError, SyntaxError) as error:
+                raise ValueError(
+                    f"{path}:{_DECLARATION_NAME} must be a literal"
+                ) from error
+            parsed_items.extend(
+                (item, False) for item in _declaration_records(morphology_raw)
+            )
+        else:
+            for declaration_name, values in values_by_name.items():
+                if not values:
+                    continue
+                if len(values) != 1:
+                    raise ValueError(
+                        f"{path} must define exactly one {declaration_name}"
+                    )
+                try:
+                    raw: object = ast.literal_eval(values[0])
+                except (ValueError, TypeError, SyntaxError) as error:
+                    raise ValueError(
+                        f"{path}:{declaration_name} must be a literal"
+                    ) from error
+                parsed_items.extend(
+                    (item, declaration_name == _CHECK_DECLARATION_NAME)
+                    for item in _declaration_records(raw)
+                )
+
+        for item, feature_owned in parsed_items:
+            declaration = _validate_declaration(
+                item,
+                path,
+                feature_owned=feature_owned,
+                complaint_contracts=complaint_contracts,
+            )
+            if typed_feature is not None:
+                if declaration.selector != typed_feature.selector:
+                    raise ValueError(
+                        f"{path}: typed feature selector does not match morphology selector"
+                    )
+                declaration = replace(declaration, feature=typed_feature)
+            resolved_ids: list[str] = []
+            if declaration.finding_contracts:
+                contract_name = declaration.finding_contracts[0]
+                contract = complaint_contracts[contract_name]
+                resolved_ids.extend(
+                    rule_id
+                    for emitter, rule_id in contract.rule_ids_by_emitter
+                    if emitter == declaration.selector
+                )
+                if not resolved_ids:
+                    raise ValueError(
+                        f"{path}: finding contract {contract_name!r} declares no "
+                        f"rule IDs for {declaration.selector!r}"
+                    )
+            else:
+                for complaint in declaration.finding_ids:
+                    matches = local_ids.get(complaint, ())
+                    if not matches:
+                        raise ValueError(
+                            f"{path}: finding complaint {complaint!r} is not declared "
+                            "by this feature"
+                        )
+                    if len(matches) != 1:
+                        raise ValueError(
+                            f"{path}: finding complaint {complaint!r} resolves to multiple "
+                            f"rule tags: {matches}"
+                        )
+                    resolved_ids.append(matches[0])
+            declarations.append(
+                _Declaration(
+                    selector=declaration.selector,
+                    finding_ids=tuple(resolved_ids),
+                    finding_contracts=declaration.finding_contracts,
+                    concern=declaration.concern,
+                    claim_kind=declaration.claim_kind,
+                    claim=declaration.claim,
+                    mechanisms=declaration.mechanisms,
+                    inspected_scope=declaration.inspected_scope,
+                    languages_formats=declaration.languages_formats,
+                    evidence_kinds=declaration.evidence_kinds,
+                    evaluation_maturity=declaration.evaluation_maturity,
+                    source=declaration.source,
+                    feature=declaration.feature,
+                )
+            )
 
     owners: dict[str, str] = {}
     finding_owners: dict[str, str] = {}
@@ -979,6 +1384,11 @@ def render_manifest(root: Path) -> str:
                 (
                     "            evaluation_maturity=EvaluationMaturity."
                     f"{item.evaluation_maturity.upper().replace('-', '_')},"
+                ),
+                *(
+                    _tuple_lines("finding_contracts", item.finding_contracts)
+                    if item.finding_contracts
+                    else []
                 ),
                 "        ),",
             ]

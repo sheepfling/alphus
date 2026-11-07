@@ -34,6 +34,59 @@ _DECLARATION: tuple[tuple[str, object], ...] = (
 )
 
 
+def _feature_source(declaration: tuple[tuple[str, object], ...]) -> str:
+    """Render synthetic feature input using typed semantic contracts."""
+    feature_fields = {
+        "policy_field",
+        "policy_model",
+        "output_shape",
+        "summary",
+        "applies_to",
+        "domains",
+        "requires_files",
+        "runner_module",
+        "runner_name",
+        "policy_inputs",
+        "display_name",
+        "input_mode",
+    }
+    lines = ["ALPHUS_CHECK = FeatureDefinition(\n"]
+    for key, value in declaration:
+        if key == "selector" or key in feature_fields:
+            lines.append(f"    {key}={value!r},\n")
+    lines.append(")\n")
+    values = dict(declaration)
+    complaints = values.get("finding_tag_complaints", ())
+    morphology = [
+        "ALPHUS_MORPHOLOGY = RuleMorphology(\n",
+        f"    selector={values['selector']!r},\n",
+        "    finding_ids=(\n",
+    ]
+    for complaint in complaints:
+        morphology.extend(
+            [
+                "        RuleTag(Scope.REPOSITORY, Framework.NONE, ",
+                f"Category.TESTING, {complaint!r}),\n",
+            ]
+        )
+    morphology.extend(
+        [
+            "    ),\n",
+            f"    concern={values['concern']!r},\n",
+            "    claim_kind=ClaimKind.CONDITION,\n",
+            f"    claim={values['claim']!r},\n",
+            "    mechanisms=(DetectionMechanism.EXACT_RULE,),\n",
+            f"    inspected_scope={values['inspected_scope']!r},\n",
+            f"    languages_formats={values['languages_formats']!r},\n",
+            f"    evidence_kinds={values['evidence_kinds']!r},\n",
+            "    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,\n",
+            ")\n",
+        ]
+    )
+    lines.extend(morphology)
+    return "".join(lines)
+
+
 def test_generated_text_arguments_wrap_without_changing_their_value() -> None:
     value = (
         "Checks configured repository paths, manifests, tracked files, and "
@@ -160,7 +213,8 @@ def test_explicit_complaint_contract_shares_one_tag_across_emitters(
 
     assert '"demo-one": RuleMorphology(' in manifest
     assert '"demo-two": RuleMorphology(' in manifest
-    assert manifest.count('"shared-demo"') == 2
+    assert manifest.count('"shared-demo"') == 4
+    assert manifest.count('finding_contracts=("shared-demo",)') == 2
 
 
 def test_complaint_contract_rejects_undeclared_emitter(tmp_path: Path) -> None:
@@ -248,9 +302,8 @@ def test_feature_definition_generates_catalog_and_lazy_runner_views(
         ("input_mode", "configured-source-scan"),
     )
     (gates / "demo_check.py").write_text(
-        "ALPHUS_CHECK = "
-        f"{feature_declaration!r}\n"
-        "def check_demo(root, files, config):\n    return []\n"
+        _feature_source(feature_declaration)
+        + "def check_demo(root, files, config):\n    return []\n"
         "rule_tag(Scope.REPOSITORY, Framework.NONE, Category.TESTING, 'demo-check')\n",
         encoding="utf-8",
     )
@@ -284,10 +337,10 @@ def test_feature_definition_generates_catalog_and_lazy_runner_views(
     assert "class GeneratedFeaturePolicies(StrictModel):" in policies
     assert "demo_policy: DemoPolicy | None = None" in policies
     assert '"demo-check",' in quality_rules
-    assert "def _run_feature_demo_check(" in runner_manifest
-    assert 'import_module("alphus.gates.demo_check")' in runner_manifest
-    assert "runner = cast(_RuleRunner, module.check_demo)" in runner_manifest
-    assert '"demo-check": _run_feature_demo_check' in runner_manifest
+    assert "def _run_feature_demo_check(" not in runner_manifest
+    assert 'import_module("alphus.gates.demo_check")' not in runner_manifest
+    assert '"demo-check": _run_feature_demo_check' not in runner_manifest
+    assert "**DEMO_GROUP_RULE_RUNNERS," in runner_manifest
 
 
 def test_feature_policy_imports_wrap_deterministically(tmp_path: Path) -> None:
@@ -324,8 +377,8 @@ def test_feature_policy_imports_wrap_deterministically(tmp_path: Path) -> None:
             ("runner_name", "check_demo"),
         )
         (gates / f"demo_{index}.py").write_text(
-            f"ALPHUS_CHECK = {feature_declaration!r}\n"
-            "def check_demo(root, files, config):\n    return []\n"
+            _feature_source(feature_declaration)
+            + "def check_demo(root, files, config):\n    return []\n"
             "rule_tag(Scope.REPOSITORY, Framework.NONE, Category.TESTING, "
             f"'{complaint}')\n",
             encoding="utf-8",
@@ -360,8 +413,8 @@ def test_feature_policy_generation_rejects_duplicate_fields(tmp_path: Path) -> N
             ("runner_name", f"check_{name}"),
         )
         (gates / f"{name}.py").write_text(
-            f"ALPHUS_CHECK = {feature_declaration!r}\n"
-            f"def check_{name}(root, files, config):\n    return []\n"
+            _feature_source(feature_declaration)
+            + f"def check_{name}(root, files, config):\n    return []\n"
             "rule_tag(Scope.REPOSITORY, Framework.NONE, Category.TESTING, "
             f"'{selector}')\n",
             encoding="utf-8",
@@ -413,8 +466,8 @@ def test_feature_policy_root_symlink_is_rejected(tmp_path: Path) -> None:
         ("runner_name", "check_demo"),
     )
     (gates / "demo.py").write_text(
-        f"ALPHUS_CHECK = {feature_declaration!r}\n"
-        "def check_demo(root, files, config):\n    return []\n"
+        _feature_source(feature_declaration)
+        + "def check_demo(root, files, config):\n    return []\n"
         "rule_tag(Scope.REPOSITORY, Framework.NONE, Category.TESTING, 'demo-check')\n",
         encoding="utf-8",
     )
@@ -447,8 +500,8 @@ def test_feature_policy_orchestration_symlink_is_rejected(tmp_path: Path) -> Non
         ("runner_name", "check_demo"),
     )
     (gates / "demo.py").write_text(
-        f"ALPHUS_CHECK = {feature_declaration!r}\n"
-        "def check_demo(root, files, config):\n    return []\n"
+        _feature_source(feature_declaration)
+        + "def check_demo(root, files, config):\n    return []\n"
         "rule_tag(Scope.REPOSITORY, Framework.NONE, Category.TESTING, 'demo-check')\n",
         encoding="utf-8",
     )
