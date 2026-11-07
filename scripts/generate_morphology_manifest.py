@@ -1674,9 +1674,14 @@ def render_feature_policies(root: Path) -> str:
     declarations = feature_registrations(root)
     fields: dict[str, _FeatureRegistration] = {}
     for feature in declarations:
-        if feature.policy_field in fields:
-            raise ValueError(f"duplicate feature policy field {feature.policy_field!r}")
-        fields[feature.policy_field] = feature
+        previous = fields.get(feature.policy_field)
+        if previous is None:
+            fields[feature.policy_field] = feature
+        elif previous.policy_model != feature.policy_model:
+            raise ValueError(
+                f"feature policy field {feature.policy_field!r} has conflicting "
+                "policy models"
+            )
     imports: dict[str, set[str]] = {"alphus.policy.base": {"StrictModel"}}
     for feature in fields.values():
         module, class_name = _policy_class(feature)

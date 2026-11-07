@@ -9,29 +9,7 @@ from typing import TypeAlias
 
 from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.execution.results import RuleOutput
-from alphus.gates.vcs.git_quality import check_attributes, check_history, check_ignores
-from alphus.policy.base import require_policy
 
 VcsRunner: TypeAlias = Callable[[Path, Sequence[Path], QualityGateConfig], RuleOutput]
 
-VCS_RULE_RUNNERS: Mapping[QualityRuleName, VcsRunner] = MappingProxyType(
-    {
-        "git-ignores": lambda root, _files, config: _check_ignores(root, config),
-        "git-attributes": lambda root, _files, config: check_attributes(
-            root, require_policy(config.checks.git, "git").attributes
-        ),
-        "git-history": lambda root, _files, config: check_history(
-            root, require_policy(config.checks.git, "git").max_blob_mib
-        ),
-    }
-)
-
-
-def _check_ignores(root: Path, config: QualityGateConfig) -> RuleOutput:
-    policy = require_policy(config.checks.git, "git")
-    return check_ignores(
-        root,
-        policy.languages,
-        policy.generated_outputs,
-        policy.generated_provenance,
-    )
+VCS_RULE_RUNNERS: Mapping[QualityRuleName, VcsRunner] = MappingProxyType({})

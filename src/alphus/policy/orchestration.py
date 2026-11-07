@@ -29,10 +29,7 @@ from alphus.policy.intents import (
     SharedQualityIntent,
     resolve_intent_bindings,
 )
-from alphus.policy.repository import (
-    GitRepositoryPolicy,
-    VersionSyncPolicy,
-)
+from alphus.policy.repository import VersionSyncPolicy
 from alphus.policy.review import (
     ArrayRepresentationPolicy,
     BenchmarkDocPolicy,
@@ -137,7 +134,6 @@ class CheckPolicies(GeneratedFeaturePolicies):
     architecture_graph: ArchitectureGraphCheckPolicy | None = None
     version_sync: VersionSyncPolicy | None = None
     callable_registry: CallableRegistryPolicy | None = None
-    git: GitRepositoryPolicy | None = None
     function_shape: FunctionShapePolicy | None = None
 
     def require_rule(self, rule: QualityRuleName) -> None:

@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 
 from alphus.config import QualityGateConfig
+from alphus.execution.dispatch import run_builtin_rule
 from alphus.gates.vcs.git_quality import check_attributes, check_ignores
-from alphus.gates.vcs.runners import VCS_RULE_RUNNERS
 from alphus.policy.repository import (
     GitAttributeRequirement,
     GitRepositoryPolicy,
@@ -170,7 +170,7 @@ def test_git_ignores_runner_uses_declared_generated_output_contract(
         }
     )
 
-    findings = VCS_RULE_RUNNERS["git-ignores"](tmp_path, (), config)
+    findings = run_builtin_rule("git-ignores", tmp_path, (), config)
     generated = [
         item
         for item in findings

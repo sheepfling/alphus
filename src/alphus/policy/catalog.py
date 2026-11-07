@@ -99,27 +99,6 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             "Checks configured Python and Node launcher/script conventions.",
             ("python", "javascript"),
         ),
-        "git-ignores": RuleSpec(
-            "git",
-            RuleOutputShape.FINDINGS,
-            "Checks tracked paths against configured Git ignore expectations.",
-            ("git", "repository"),
-            requires_files=False,
-        ),
-        "git-attributes": RuleSpec(
-            "git",
-            RuleOutputShape.FINDINGS,
-            "Checks configured Git attributes for tracked repository paths.",
-            ("git", "repository"),
-            requires_files=False,
-        ),
-        "git-history": RuleSpec(
-            "git",
-            RuleOutputShape.FINDINGS,
-            "Reviews repository history for configured commit and change patterns.",
-            ("git", "repository"),
-            requires_files=False,
-        ),
         "repeated-numeric-limits": RuleSpec(
             "repeated_numeric_limits",
             RuleOutputShape.FINDINGS,

@@ -493,7 +493,9 @@ def test_feature_policy_imports_wrap_deterministically(tmp_path: Path) -> None:
     assert generated.index(f"    {names[0]},") < generated.index(f"    {names[1]},")
 
 
-def test_feature_policy_generation_rejects_duplicate_fields(tmp_path: Path) -> None:
+def test_feature_policy_generation_shares_identical_policy_models(
+    tmp_path: Path,
+) -> None:
     gates = tmp_path / "src/alphus/gates"
     policy = tmp_path / "src/alphus/policy"
     gates.mkdir(parents=True)
@@ -521,7 +523,47 @@ def test_feature_policy_generation_rejects_duplicate_fields(tmp_path: Path) -> N
             encoding="utf-8",
         )
 
-    with pytest.raises(ValueError, match="duplicate feature policy field"):
+    generated = render_feature_policies(tmp_path)
+
+    assert generated.count("shared_policy: DemoPolicy | None = None") == 1
+
+
+def test_feature_policy_generation_rejects_conflicting_shared_models(
+    tmp_path: Path,
+) -> None:
+    gates = tmp_path / "src/alphus/gates"
+    policy = tmp_path / "src/alphus/policy"
+    gates.mkdir(parents=True)
+    policy.mkdir(parents=True)
+    (policy / "orchestration.py").write_text("class CheckPolicies: pass\n")
+    (policy / "sources.py").write_text(
+        "class DemoPolicy:\n    pass\nclass OtherPolicy:\n    pass\n"
+    )
+
+    for name, selector, policy_model in (
+        ("first", "first-check", "DemoPolicy"),
+        ("second", "second-check", "OtherPolicy"),
+    ):
+        feature = _with_field(_DECLARATION, "selector", selector)
+        feature = _with_field(feature, "finding_tag_complaints", (selector,))
+        feature_declaration = feature + (
+            ("policy_field", "shared_policy"),
+            ("policy_model", f"alphus.policy.sources.{policy_model}"),
+            ("output_shape", "findings"),
+            ("summary", "Reports a demo condition."),
+            ("applies_to", ("python",)),
+            ("domains", ()),
+            ("requires_files", True),
+        )
+        (gates / f"{name}.py").write_text(
+            _feature_source(feature_declaration)
+            + f"def check_{name}(root, files, config):\n    return []\n"
+            "rule_tag(Scope.REPOSITORY, Framework.NONE, Category.TESTING, "
+            f"'{selector}')\n",
+            encoding="utf-8",
+        )
+
+    with pytest.raises(ValueError, match="conflicting policy models"):
         render_feature_policies(tmp_path)
 
 

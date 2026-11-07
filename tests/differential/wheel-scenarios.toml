@@ -729,6 +729,96 @@ name = "profile"
 arguments = ["--config", "quality-gates.toml", "--profile", "docs", "--run", "--json"]
 plugin_import_expected = true
 
+[[scenario]]
+name = "git-ignores-direct"
+fixture = "vcs-git"
+materialized_files = [
+  { path = "data/generated/client.txt", contents = "generated\n" },
+  { path = ".env", contents = "TOKEN=fixture\n" },
+]
+selectors = ["git-ignores"]
+behavior = ["feature-owned-git-check", "shared-strict-policy", "tracked-output-contract"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/repository/git/hygiene/tracked-generated-output", path = "data/generated/client.txt" },
+]
+required_output = ["data/generated/client.txt", "tools/generate.py"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "git-ignores", "--json"]
+
+[[scenario]]
+name = "git-attributes-direct"
+fixture = "vcs-git"
+materialized_files = [
+  { path = "data/generated/client.txt", contents = "generated\n" },
+  { path = ".env", contents = "TOKEN=fixture\n" },
+]
+selectors = ["git-attributes"]
+behavior = ["feature-owned-git-check", "effective-native-attribute", "stable-finding-id"]
+expected_exit = 1
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/repository/git/hygiene/attribute-mismatch", path = "javascript/example.js" },
+]
+required_output = ["Git attribute eol is 'crlf'; expected 'lf'"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "git-attributes", "--json"]
+
+[[scenario]]
+name = "git-history-direct"
+fixture = "vcs-git"
+materialized_files = [
+  { path = "data/generated/client.txt", contents = "generated\n" },
+  { path = ".env", contents = "TOKEN=fixture\n" },
+]
+selectors = ["git-history"]
+behavior = ["feature-owned-git-check", "reachable-history", "stable-finding-id"]
+expected_exit = 1
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/repository/git/hygiene/historical-artifact", path = ".env" },
+]
+required_output = [".env"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "git-history", "--json"]
+
+[[scenario]]
+name = "git-checks-profile-serial-parallel"
+fixture = "vcs-git"
+materialized_files = [
+  { path = "data/generated/client.txt", contents = "generated\n" },
+  { path = ".env", contents = "TOKEN=fixture\n" },
+]
+selectors = ["git-ignores", "git-attributes", "git-history"]
+behavior = ["explicit-profile-selection", "shared-policy-field", "ordered-results", "serial-parallel"]
+expected_exit = 0
+minimum_findings = 3
+expected_step_names = ["git-ignore-review", "git-attributes-review", "git-history-review"]
+expected_step_rules = ["git-ignores", "git-attributes", "git-history"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/repository/git/hygiene/tracked-generated-output", path = "data/generated/client.txt" },
+  { rule_id = "alphus/repository/git/hygiene/attribute-mismatch", path = "javascript/example.js" },
+  { rule_id = "alphus/repository/git/hygiene/historical-artifact", path = ".env" },
+]
+required_output = ["data/generated/client.txt", "javascript/example.js", ".env"]
+
+[[scenario.variant]]
+name = "serial"
+arguments = ["--config", "quality-gates.toml", "--profile", "git-review", "--run", "--json", "--jobs", "1"]
+
+[[scenario.variant]]
+name = "parallel"
+arguments = ["--config", "quality-gates.toml", "--profile", "git-review", "--run", "--json", "--jobs", "2"]
+compare_within_build = true
+
 [[deferred]]
 capability = "package-boundaries-history-digest-identity"
 status = "not-exercised"
