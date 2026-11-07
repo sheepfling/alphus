@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -137,3 +139,39 @@ def test_direct_cli_reports_file_and_line(
     human = capsys.readouterr().out
     assert "sample.py:1: temporary-work marker HACK in comment" in human
     assert "Comment markers: 1 violation(s)" in human
+
+
+def test_malformed_python_reports_the_scan_failure_contract(tmp_path: Path) -> None:
+    relative = Path("sample.py")
+    (tmp_path / relative).write_text("value = '''unterminated\n", encoding="utf-8")
+    policy = CommentMarkerPolicy(extensions=(".py",), markers=("TODO",))
+
+    findings = check_comment_markers(tmp_path, [relative], policy)
+
+    assert [(finding.rule_id, finding.path) for finding in findings] == [
+        ("alphus/any/none/hygiene/comment-scan-failed", "sample.py")
+    ]
+    assert re.fullmatch(
+        r"cannot scan Python comments: \('EOF in multi-line string', \(1, \d+\)\)",
+        findings[0].message,
+    )
+
+
+def test_unselected_comment_marker_provider_stays_unloaded() -> None:
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; import alphus.cli; "
+                "import alphus.execution.dispatch; "
+                "assert 'alphus.gates.hygiene.comment_markers' "
+                "not in sys.modules"
+            ),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr

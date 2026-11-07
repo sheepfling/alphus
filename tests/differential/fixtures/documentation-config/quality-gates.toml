@@ -1,0 +1,23 @@
+schema_version = 1
+
+[files]
+include = ["**/*.py", "**/*.md"]
+exclude = []
+
+[checks.documentation_config]
+source_patterns = ["src/**/*.py"]
+documentation_patterns = ["docs/**/*.md"]
+
+[orchestration]
+failure_threshold = "error"
+default_profile = "documentation-review"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "config-review"
+rule = "documentation-config"
+severity = "warning"
+
+[[orchestration.profiles]]
+name = "documentation-review"
+steps = ["config-review"]

@@ -1,0 +1,27 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py"]
+exclude = []
+
+[checks.scipy_constants]
+extensions = [".py"]
+exclude = []
+physical_constants = true
+unit_conversions = true
+inverse_conversions = true
+
+[orchestration]
+default_profile = "scipy-review"
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "scipy-constants"
+rule = "scipy-constants"
+severity = "warning"
+priority = "normal"
+
+[[orchestration.profiles]]
+name = "scipy-review"
+steps = ["scipy-constants"]

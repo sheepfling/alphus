@@ -22,6 +22,32 @@ from alphus.support.data_access import JsonValue, contained_file
 from alphus.support.git import git_value, run_git
 from alphus.support.source_text import read_utf8_text
 
+ALPHUS_MORPHOLOGY = (
+    ("selector", "source-test-coverage"),
+    ("concern", "declared-source-test-evidence"),
+    ("claim_kind", "condition"),
+    (
+        "claim",
+        (
+            "Declared source-to-test relationships agree with revision-matched test-execution "
+            "evidence."
+        ),
+    ),
+    ("mechanisms", ("exact-rule",)),
+    (
+        "inspected_scope",
+        ("declared-source-test-relationships", "revision-matched-test-evidence"),
+    ),
+    ("languages_formats", ("repository", "json", "toml")),
+    (
+        "evidence_kinds",
+        ("declared-relationship", "revision-matched-execution-status", "tracked-paths"),
+    ),
+    ("evaluation_maturity", "synthetic-only"),
+    ("finding_tag_complaints", ("source-test-coverage",)),
+)
+
+
 _RULE_ID = rule_tag(
     Scope.REPOSITORY, Framework.NONE, Category.TESTING, "source-test-coverage"
 )

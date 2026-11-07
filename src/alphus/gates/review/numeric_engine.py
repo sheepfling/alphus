@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from alphus.config import NumericLiteralSpec
 from alphus.contracts.rule_tags import Framework, Scope
 from alphus.gates.review.numeric_catalog import (
+    NumericComplaintContractName,
+    NumericComplaintEmitter,
     NumericLiteralFinding,
     NumericOperation,
     NumericUse,
@@ -196,11 +198,18 @@ def scan_numeric_literals(
     source: str,
     specs: tuple[NumericLiteralSpec, ...],
     *,
+    complaint_contract: NumericComplaintContractName,
+    emitter: NumericComplaintEmitter,
     framework: Framework,
 ) -> list[NumericLiteralFinding]:
     """Scan arithmetic for exact catalog values without evaluating expressions."""
     visitor = _NumericVisitor()
     visitor.visit(ast.parse(source))
     return match_numeric_uses(
-        visitor.uses, specs, scope=Scope.PYTHON, framework=framework
+        visitor.uses,
+        specs,
+        complaint_contract=complaint_contract,
+        emitter=emitter,
+        scope=Scope.PYTHON,
+        framework=framework,
     )

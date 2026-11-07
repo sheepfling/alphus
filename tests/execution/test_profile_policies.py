@@ -4,16 +4,32 @@ from __future__ import annotations
 
 import json
 import subprocess
+from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
-from typing import get_args
+from typing import cast, get_args
 
 import pytest
 from pydantic import ValidationError
 
 from alphus.cli import main
-from alphus.config import CheckPolicies, QualityRuleName, load_config
-from alphus.execution.dispatch import BUILTIN_RULES, RULE_RUNNERS
-from alphus.gates.hygiene.rules import check_file_size, check_line_length
+from alphus.config import CheckPolicies, QualityGateConfig, QualityRuleName, load_config
+from alphus.contracts.cyclomatic import CyclomaticReport
+from alphus.contracts.findings import Finding
+from alphus.execution import dispatch
+from alphus.execution.dispatch import (
+    BUILTIN_RULES,
+    RULE_RUNNERS,
+    EntryPointBuiltinRuleBinding,
+    run_builtin_rule,
+)
+from alphus.gates.hygiene.file_size import check_file_size
+from alphus.gates.hygiene.line_length import check_line_length
+from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin_registry import (
+    builtin_check_entry_points,
+    load_builtin_feature,
+)
 from alphus.policy.base import MissingPolicyError
 from alphus.policy.catalog import RULE_SPECS
 
@@ -135,16 +151,109 @@ def test_each_selected_portable_rule_requires_its_policy(rule: QualityRuleName) 
 
 def test_rule_catalog_covers_every_public_selector_and_policy_field() -> None:
     assert set(RULE_SPECS) == set(get_args(QualityRuleName))
-    assert set(RULE_RUNNERS) == set(RULE_SPECS)
+    entry_points = builtin_check_entry_points()
+    assert set(RULE_RUNNERS) | set(entry_points) == set(RULE_SPECS)
     assert set(BUILTIN_RULES) == set(RULE_SPECS)
-    assert all(
-        BUILTIN_RULES[selector].spec is spec
-        and BUILTIN_RULES[selector].runner is RULE_RUNNERS[selector]
-        for selector, spec in RULE_SPECS.items()
-    )
+    for selector, spec in RULE_SPECS.items():
+        binding = BUILTIN_RULES[selector]
+        assert binding.spec is spec
+        if selector in entry_points:
+            assert isinstance(binding, EntryPointBuiltinRuleBinding)
+        else:
+            assert binding.runner is RULE_RUNNERS[selector]
     assert all(
         spec.policy_field in CheckPolicies.model_fields for spec in RULE_SPECS.values()
     )
+
+
+def test_entrypoint_dispatch_keeps_findings_and_native_report_shapes(
+    tmp_path: Path,
+) -> None:
+    file_root = tmp_path / "file-check"
+    file_root.mkdir()
+    source = file_root / "sample.py"
+    source.write_text("one\ntwo\nthree\n", encoding="utf-8")
+    config = QualityGateConfig.model_validate(
+        {
+            "schema_version": 1,
+            "checks": {
+                "file_size": {
+                    "code_extensions": [".py"],
+                    "code_limit": 1,
+                    "hard_limit": 1,
+                    "initializer_name": "__init__.py",
+                    "initializer_limit": 10,
+                },
+                "cyclomatic_complexity": {
+                    "metric": "cyclomatic",
+                    "maximum": 5,
+                    "files": {"include": ["**/*.py"]},
+                    "backends": [
+                        {
+                            "language": "python",
+                            "backend": "ruff",
+                            "version": "0.16.1",
+                        }
+                    ],
+                },
+            },
+        },
+        strict=True,
+    )
+
+    findings = run_builtin_rule("file-size", file_root, (Path("sample.py"),), config)
+    report_root = tmp_path / "native-report-check"
+    report_root.mkdir()
+    subprocess.run(["git", "init", "--quiet", str(report_root)], check=True)
+    report = run_builtin_rule("cyclomatic-complexity", report_root, (), config)
+
+    assert isinstance(findings, list)
+    assert findings
+    assert isinstance(report, CyclomaticReport)
+    assert report.outcome == "no_matching_files"
+
+
+def test_entrypoint_dispatch_rejects_coercible_finding_mappings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def malformed_runner(
+        _root: Path, _files: Sequence[Path], _config: QualityGateConfig
+    ) -> list[Finding]:
+        return cast(
+            list[Finding],
+            [
+                {
+                    "rule_id": "alphus/python/none/maintainability/file-exceeds-hard-limit",
+                    "path": "sample.py",
+                    "message": "too large",
+                }
+            ],
+        )
+
+    feature = replace(load_builtin_feature("file-size"), runner=malformed_runner)
+
+    def load_malformed_feature(_selector: str) -> BuiltinFeature:
+        return feature
+
+    monkeypatch.setattr(dispatch, "load_builtin_feature", load_malformed_feature)
+    config = QualityGateConfig.model_validate(
+        {
+            "schema_version": 1,
+            "checks": {
+                "file_size": {
+                    "code_extensions": [".py"],
+                    "code_limit": 1,
+                    "hard_limit": 1,
+                    "initializer_name": "__init__.py",
+                    "initializer_limit": 1,
+                }
+            },
+        },
+        strict=True,
+    )
+
+    with pytest.raises(ValidationError):
+        run_builtin_rule("file-size", tmp_path, (), config)
 
 
 def test_cli_catalog_exposes_domain_recommendation_metadata(

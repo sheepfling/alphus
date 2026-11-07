@@ -8,17 +8,63 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
+from typing import Final
 
 from markdown_it import MarkdownIt
 
-from alphus.config import MarkdownShellFencesPolicy
+from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
+from alphus.plugins.builtin import BuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.markdown import MarkdownShellFencesPolicy
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
 from alphus.support.inventory import git_files, matches_path
 from alphus.support.source_text import read_utf8_text
 
 _RULE_ID = rule_tag(
     Scope.MARKDOWN, Framework.NONE, Category.PORTABILITY, "shell-fence-mismatch"
+)
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="markdown-shell-fences",
+    policy_field="markdown_shell_fences",
+    policy_model=MarkdownShellFencesPolicy,
+    output_shape="findings",
+    summary="Checks fenced shell examples for bounded heredoc termination errors.",
+    applies_to=("markdown", "shell"),
+    domains=(),
+    requires_files=False,
+    input_mode="configured-source-scan",
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="markdown-shell-fences",
+    finding_ids=(
+        RuleTag(
+            Scope.MARKDOWN,
+            Framework.NONE,
+            Category.PORTABILITY,
+            "shell-fence-mismatch",
+        ),
+    ),
+    concern="shell-fence-portability",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "Reports Markdown shell fences containing bounded syntax evidence that "
+        "may conflict with the declared shell."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("configured-markdown-files",),
+    languages_formats=("markdown", "bash", "powershell", "cmd"),
+    evidence_kinds=("markdown-fence", "shell-token", "source-line"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
 )
 _LABELS: Mapping[str, str] = MappingProxyType(
     {
@@ -1005,3 +1051,20 @@ def check_markdown_shell_fences(
                 for evidence in _fence_evidence(fence)
             )
     return findings
+
+
+def run_markdown_shell_fences_gate(
+    root: Path, _files: Sequence[Path], config: QualityGateConfig
+) -> list[Finding]:
+    """Run the configured Markdown source scan through the shared dispatcher."""
+    policy = require_policy(
+        config.checks.markdown_shell_fences, "markdown_shell_fences"
+    )
+    return check_markdown_shell_fences(root, policy)
+
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_markdown_shell_fences_gate,
+)

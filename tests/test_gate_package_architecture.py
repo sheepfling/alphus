@@ -12,7 +12,11 @@ from typing import get_args
 
 import pytest
 
-from alphus.execution.dispatch import RULE_RUNNERS
+from alphus.execution.dispatch import (
+    BUILTIN_RULES,
+    RULE_RUNNERS,
+    EntryPointBuiltinRuleBinding,
+)
 from alphus.gates.hygiene.runners import HYGIENE_RULE_RUNNERS
 from alphus.gates.markdown.runners import MARKDOWN_RULE_RUNNERS
 from alphus.gates.repository.runners import REPOSITORY_RULE_RUNNERS
@@ -20,7 +24,10 @@ from alphus.gates.review import runners as review_runners
 from alphus.gates.review.runners import REVIEW_RULE_RUNNERS
 from alphus.gates.source.runners import SOURCE_RULE_RUNNERS
 from alphus.gates.vcs.runners import VCS_RULE_RUNNERS
+from alphus.plugins.builtin_registry import builtin_check_entry_points
+from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
 from alphus.policy.base import QualityRuleName
+from alphus.policy.catalog import RULE_SPECS
 
 
 def test_shared_support_modules_do_not_import_gate_implementations() -> None:
@@ -78,88 +85,29 @@ def test_policy_models_do_not_import_execution_or_gate_packages() -> None:
 
 def test_gate_themes_own_their_runner_mappings() -> None:
     themes = (
-        (
-            REVIEW_RULE_RUNNERS,
-            {
-                "numeric-literals",
-                "repeated-numeric-limits",
-                "typing-stub-suggestions",
-                "prose-as-control",
-                "rendered-value-reparsed",
-                "positional-semantic-overrides",
-                "unexplained-empty-results",
-                "embedded-semantic-overrides",
-                "heuristic-total-consumption",
-                "provenance-as-ownership",
-                "semantic-work-in-presentation",
-                "parallel-normalization",
-                "patch-cascade",
-                "manual-matrix-kernels",
-                "manual-elimination",
-                "array-representation-churn",
-                "cholesky-recurrence",
-                "manual-quaternion-conjugation",
-                "manual-quaternion-products",
-                "manual-quaternion-normalization",
-                "manual-quaternion-inversion",
-                "manual-quaternion-vector-rotation",
-                "manual-quaternion-matrix-conversion",
-                "ecef-enu-transform",
-                "ecef-ned-matrix-transform",
-                "ned-basis-vectors",
-                "scipy-constants",
-                "test-quality",
-                "input-contracts",
-                "source-families",
-                "source-test-coverage",
-                "benchmark-docs",
-                "positional-interfaces",
-                "pydantic-practices",
-                "fastapi-practices",
-                "sqlalchemy-practices",
-                "run-artifacts",
-                "ci-workflows",
-                "dynamic-markdown",
-                "document-style",
-                "suppression-reasons",
-            },
-        ),
-        (
-            SOURCE_RULE_RUNNERS,
-            {
-                "json-structure",
-                "output-escaping",
-                "path-discovery",
-                "python-style",
-                "runtime-types",
-                "cli",
-                "script-policy",
-                "cyclomatic-complexity",
-            },
-        ),
-        (
-            REPOSITORY_RULE_RUNNERS,
-            {
-                "module-roles",
-                "package-boundaries",
-                "dependency-locks",
-                "repository-layout",
-                "documentation-config",
-            },
-        ),
-        (
-            VCS_RULE_RUNNERS,
-            {"git-ignores", "git-attributes", "git-history"},
-        ),
-        (
-            HYGIENE_RULE_RUNNERS,
-            {"file-size", "line-length", "shared-utilities", "comment-markers"},
-        ),
-        (MARKDOWN_RULE_RUNNERS, {"markdown-shell-fences"}),
+        REVIEW_RULE_RUNNERS,
+        SOURCE_RULE_RUNNERS,
+        REPOSITORY_RULE_RUNNERS,
+        VCS_RULE_RUNNERS,
+        HYGIENE_RULE_RUNNERS,
+        MARKDOWN_RULE_RUNNERS,
     )
-    for runners, expected in themes:
-        assert set(runners) == expected
+    legacy_selectors = set().union(*(set(runners) for runners in themes))
+    feature_selectors = set(FEATURE_DEFINITIONS)
+    entry_points = builtin_check_entry_points()
+
+    assert legacy_selectors.isdisjoint(feature_selectors)
+    assert legacy_selectors | feature_selectors == set(RULE_SPECS)
+    assert set(RULE_RUNNERS) == legacy_selectors
+    assert set(entry_points) == feature_selectors
+    assert set(RULE_SPECS) == set(get_args(QualityRuleName))
+    for runners in themes:
         assert all(RULE_RUNNERS[name] is runner for name, runner in runners.items())
+    assert all(
+        isinstance(BUILTIN_RULES[name], EntryPointBuiltinRuleBinding)
+        for name in feature_selectors
+    )
+    assert all(name in BUILTIN_RULES for name in RULE_SPECS)
 
 
 def test_review_runner_registry_is_an_explicit_module_export() -> None:
@@ -167,14 +115,21 @@ def test_review_runner_registry_is_an_explicit_module_export() -> None:
 
 
 def test_explicit_runner_adapters_cover_the_public_rule_catalog() -> None:
-    assert set(RULE_RUNNERS) == set(get_args(QualityRuleName))
+    assert set(RULE_RUNNERS) | set(builtin_check_entry_points()) == set(
+        get_args(QualityRuleName)
+    )
 
 
 def _run_manifest_generator(
     repository: Path, fixture: Path, *, check: bool = True
 ) -> subprocess.CompletedProcess[str]:
-    script = repository / "scripts" / "generate_runner_manifest.py"
-    arguments = [sys.executable, str(script), "--root", str(fixture)]
+    arguments = [
+        sys.executable,
+        "-m",
+        "scripts.generate_runner_manifest",
+        "--root",
+        str(fixture),
+    ]
     if check:
         arguments.append("--check")
     return subprocess.run(

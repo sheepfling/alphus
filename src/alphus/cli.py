@@ -7,9 +7,10 @@ import logging
 import sys
 import tomllib
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import redirect_stderr, redirect_stdout
 from contextvars import ContextVar
+from importlib import import_module
 from io import StringIO
 from pathlib import Path
 from types import MappingProxyType
@@ -38,6 +39,7 @@ from alphus.config import (
     load_config,
     load_config_stream,
 )
+from alphus.contracts.cyclomatic import CyclomaticPlan, CyclomaticReport
 from alphus.contracts.findings import (
     Finding,
     SeverityCounts,
@@ -67,7 +69,6 @@ from alphus.execution.orchestration import (
     RuleRunResult,
     run_orchestration,
 )
-from alphus.execution.parallel import run_parallel_cyclomatic
 from alphus.execution.profile_analysis import (
     rollup_profile_history,
     summarize_profile_entry,
@@ -87,22 +88,17 @@ from alphus.gates.languages.python.script_policy import launcher_files
 from alphus.gates.languages.python.style import StyleFindings
 from alphus.gates.review.source_families import bounded_source_family_inventory
 from alphus.gates.source.cli_policy import CliPolicyReport, selected_policy_sources
-from alphus.gates.source.cyclomatic_complexity import (
-    CyclomaticReport,
-    build_cyclomatic_plan,
-    plan_payload,
-    report_payload,
-    report_summary,
-)
 from alphus.plugins.registry import (
     PluginRuleBinding,
     enabled_plugin_registry,
     installed_plugin_names,
 )
+from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
 from alphus.policy.base import MissingPolicyError
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
 from alphus.policy.function_shape import plan_function_shape
 from alphus.policy.intents import intent_bindings_for_steps
+from alphus.policy.metrics import CyclomaticComplexityPolicy
 from alphus.policy.orchestration import RuleRunStep
 from alphus.policy.recipes import render_recipe
 from alphus.support.data_access import (
@@ -117,6 +113,51 @@ from alphus.support.reporting import (
 )
 
 QualityRule = RuleSelector
+
+
+def _cyclomatic_report_summary(report: CyclomaticReport) -> str:
+    summarize = cast(
+        Callable[[CyclomaticReport], str],
+        import_module("alphus.gates.source.cyclomatic_complexity").report_summary,
+    )
+    return summarize(report)
+
+
+def _cyclomatic_report_payload(
+    report: CyclomaticReport,
+) -> Mapping[str, JsonValue]:
+    serialize = cast(
+        Callable[[CyclomaticReport], Mapping[str, JsonValue]],
+        import_module("alphus.gates.source.cyclomatic_complexity").report_payload,
+    )
+    return serialize(report)
+
+
+def _cyclomatic_plan_payload(
+    root: Path, policy: CyclomaticComplexityPolicy
+) -> dict[str, JsonValue]:
+    module = import_module("alphus.gates.source.cyclomatic_complexity")
+    build = cast(
+        Callable[[Path, CyclomaticComplexityPolicy], CyclomaticPlan],
+        module.build_cyclomatic_plan,
+    )
+    serialize = cast(
+        Callable[[CyclomaticPlan], Mapping[str, JsonValue]], module.plan_payload
+    )
+    return dict(serialize(build(root, policy)))
+
+
+def _run_parallel_cyclomatic(
+    root: Path,
+    config_path: Path,
+    config: QualityGateConfig,
+    max_jobs: int,
+) -> CyclomaticReport:
+    run = cast(
+        Callable[[Path, Path, QualityGateConfig, int], CyclomaticReport],
+        import_module("alphus.execution.parallel").run_parallel_cyclomatic,
+    )
+    return run(root, config_path, config, max_jobs)
 
 
 class _ProfilePlanPayload(TypedDict):
@@ -152,38 +193,45 @@ def _reject_duplicate_json_object_keys(
     return MappingProxyType(values)
 
 
-_SOURCE_SCAN_RULES: frozenset[QualityRuleName] = frozenset(
-    {
-        "json-structure",
-        "output-escaping",
-        "path-discovery",
-        "shared-utilities",
-        "python-style",
-        "runtime-types",
-        "numeric-literals",
-        "repeated-numeric-limits",
-        "manual-matrix-kernels",
-        "manual-elimination",
-        "array-representation-churn",
-        "cholesky-recurrence",
-        "manual-quaternion-conjugation",
-        "manual-quaternion-products",
-        "manual-quaternion-normalization",
-        "manual-quaternion-inversion",
-        "manual-quaternion-vector-rotation",
-        "manual-quaternion-matrix-conversion",
-        "ecef-enu-transform",
-        "ecef-ned-matrix-transform",
-        "ned-basis-vectors",
-        "scipy-constants",
-        "test-quality",
-        "input-contracts",
-        "positional-interfaces",
-        "pydantic-practices",
-        "fastapi-practices",
-        "sqlalchemy-practices",
-    }
+_LEGACY_SOURCE_SCAN_RULES: tuple[QualityRuleName, ...] = (
+    "json-structure",
+    "output-escaping",
+    "path-discovery",
+    "shared-utilities",
+    "python-style",
+    "runtime-types",
+    "repeated-numeric-limits",
+    "manual-matrix-kernels",
+    "manual-elimination",
+    "array-representation-churn",
+    "cholesky-recurrence",
+    "manual-quaternion-conjugation",
+    "manual-quaternion-products",
+    "manual-quaternion-normalization",
+    "manual-quaternion-inversion",
+    "manual-quaternion-vector-rotation",
+    "manual-quaternion-matrix-conversion",
+    "ecef-enu-transform",
+    "ecef-ned-matrix-transform",
+    "ned-basis-vectors",
+    "test-quality",
+    "input-contracts",
+    "positional-interfaces",
+    "pydantic-practices",
+    "fastapi-practices",
+    "sqlalchemy-practices",
 )
+
+
+def _configured_source_scan_rules() -> frozenset[QualityRuleName]:
+    selectors: set[QualityRuleName] = set(_LEGACY_SOURCE_SCAN_RULES)
+    for selector, definition in FEATURE_DEFINITIONS.items():
+        if selector in RULE_SPECS and definition.input_mode == "configured-source-scan":
+            selectors.add(cast(QualityRuleName, selector))
+    return frozenset(selectors)
+
+
+_SOURCE_SCAN_RULES = _configured_source_scan_rules()
 _DIRECT_GIT_SUBPROCESS_TAG = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.MAINTAINABILITY, "direct-git-subprocess"
 )
@@ -226,7 +274,7 @@ def _render_severity_totals(findings: Sequence[Finding]) -> None:
 
 def _render_cyclomatic_report(report: CyclomaticReport) -> None:
     """Render native backend coverage and threshold diagnostics."""
-    _human_print(report_summary(report))
+    _human_print(_cyclomatic_report_summary(report))
     findings = [
         Finding(
             rule_id=item.rule_id,
@@ -431,9 +479,7 @@ def _load_audit_manifest(root: Path, path: Path) -> AuditManifest:
 def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
     """Keep concise text summaries while offering a stable JSON format."""
     review_labels = {
-        "numeric-literals": "Numeric literals",
         "repeated-numeric-limits": "Repeated numeric limits",
-        "scipy-constants": "SciPy constants",
         "test-quality": "Test quality",
         "input-contracts": "Input contracts",
         "positional-interfaces": "Positional interface review",
@@ -442,10 +488,16 @@ def _render(rule: QualityRule, findings: Sequence[Finding]) -> None:
         "sqlalchemy-practices": "SQLAlchemy practices",
         "suppression-reasons": "Suppression reasons",
     }
-    if rule in review_labels:
+    feature_label = FEATURE_DEFINITIONS.get(rule)
+    display_name = (
+        feature_label.display_name
+        if feature_label is not None and feature_label.display_name is not None
+        else review_labels.get(rule)
+    )
+    if display_name is not None:
         for finding in findings:
             _render_finding(finding)
-        _human_print(f"{review_labels[rule]}: {len(findings)} finding(s)")
+        _human_print(f"{display_name}: {len(findings)} finding(s)")
         _render_severity_totals(findings)
         return
     if rule == "line-length":
@@ -728,7 +780,7 @@ def _evaluate_rule(
 
     try:
         if rule == "cyclomatic-complexity" and max_jobs > 1:
-            output = run_parallel_cyclomatic(
+            output = _run_parallel_cyclomatic(
                 checkout, resolved_config, config, max_jobs
             )
         elif already_scheduled:
@@ -783,7 +835,7 @@ def _execute(
                     "the selected configuration has no "
                     "[checks.cyclomatic_complexity] policy"
                 )
-            payload = plan_payload(build_cyclomatic_plan(checkout, policy))
+            payload = _cyclomatic_plan_payload(checkout, policy)
             max_jobs = (
                 jobs
                 if jobs is not None
@@ -835,14 +887,14 @@ def _execute(
     if shape is RuleOutputShape.CYCLOMATIC_REPORT:
         complexity_report = cast(CyclomaticReport, output)
         if json_output:
-            report_data = report_payload(complexity_report)
+            report_data = _cyclomatic_report_payload(complexity_report)
             diagnostics = [item.to_wire() for item in complexity_report.diagnostics]
             typer.echo(
                 json.dumps(
                     {
                         "report": report_data,
                         "diagnostics": diagnostics,
-                        "summary": report_summary(complexity_report),
+                        "summary": _cyclomatic_report_summary(complexity_report),
                     },
                     sort_keys=True,
                 )
@@ -974,8 +1026,8 @@ def run_profile_rule(
     exit_code = ExitCode.QUALITY_FAILURE if evaluation.failed else ExitCode.SUCCESS
     match evaluation.output:
         case CyclomaticReport() as cyclomatic_report:
-            report = report_payload(cyclomatic_report)
-            stdout = report_summary(cyclomatic_report) + "\n"
+            report = _cyclomatic_report_payload(cyclomatic_report)
+            stdout = _cyclomatic_report_summary(cyclomatic_report) + "\n"
             if cyclomatic_report.outcome in {
                 "operational_failure",
                 "incomplete_coverage",

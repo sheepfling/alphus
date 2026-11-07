@@ -36,6 +36,8 @@ def _write_manifest(
 
 
 _NUMERICAL_SOURCE_RULES: tuple[QualityRuleName, ...] = (
+    "numeric-literals",
+    "scipy-constants",
     "manual-matrix-kernels",
     "manual-elimination",
     "array-representation-churn",

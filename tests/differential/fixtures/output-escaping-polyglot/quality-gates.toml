@@ -1,0 +1,23 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py", "src/**/*.js"]
+exclude = []
+
+[checks.output_escaping]
+extensions = [".py", ".js"]
+exclude = []
+
+[orchestration]
+failure_threshold = "error"
+default_profile = "security-review"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "escaping-review"
+rule = "output-escaping"
+severity = "error"
+
+[[orchestration.profiles]]
+name = "security-review"
+steps = ["escaping-review"]

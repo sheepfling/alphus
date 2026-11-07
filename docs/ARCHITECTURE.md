@@ -3,6 +3,11 @@
 See the [documentation map](README.md) for consumer setup, rule ownership,
 C++ examples, and self-check verification.
 
+For the proposed behavior-preserving built-in registration migration, see the
+[built-in check architecture and migration plan](BUILTIN-CHECK-ARCHITECTURE.md).
+This page describes current ownership and runtime boundaries; the linked plan
+records the target architecture and migration proof separately.
+
 Alphus is a Python package for running policy-driven quality checks
 against Git repositories. Each consumer owns its TOML policy. The package
 contains reusable policy models, file inventory, checkers, typed findings,
@@ -159,7 +164,7 @@ JSON output shape, summary, supported surfaces, and advisory domain tags.
 enabling checks. Policy validation and profile diagnostic decoding share that
 catalog. Direct gate theme packages own their runner mappings, named
 `<THEME>_RULE_RUNNERS` in each theme's `runners.py`. Run
-`python scripts/generate_runner_manifest.py --root .` to parse those literal mappings,
+`python -m scripts.generate_runner_manifest --root .` to parse those literal mappings,
 reject duplicate selectors, verify exact `QualityRuleName` coverage, and emit
 the sorted static imports in `execution/_generated_dispatch.py`. The package
 tests run the generator in check mode and fail if the checked-in manifest is
@@ -213,8 +218,9 @@ This keeps upstream rule ownership intact while Alphus aggregates profile
 status.
 
 The [extension and diagnostics guide](EXTENSIBILITY.md) describes current rule
-discovery and third-party packages alongside the remaining category and
-finding migration work.
+discovery and third-party packages. The catalog and theme maps above are the
+current registration implementation; the built-in architecture plan records
+the proposed generated feature-owned replacement.
 
 The default profile runs when `alphus` is invoked in a repository with
 `quality-gates.toml`; `--profile` selects a different profile. Review command

@@ -3,6 +3,11 @@
 This document records Alphus's diagnostic-tag contract and future extension
 design. It does not add a plugin loader or change which checks run.
 
+The current built-in multi-registry and proposed 0.0.3 migration are described
+in the [built-in check architecture](BUILTIN-CHECK-ARCHITECTURE.md). Use that
+page as the single design entry point; this guide remains focused on diagnostic
+and extension contracts.
+
 ## Current contracts
 
 Each portable checker receives an explicit repository root, validated policy,
@@ -64,8 +69,8 @@ expose a general hook system.
 
 ## Check discovery and domain recommendations
 
-`alphus.policy.catalog.RULE_SPECS` is the source of truth for built-in check
-discovery. Every selector records a short summary, the source or framework
+`alphus.policy.catalog.RULE_SPECS` is the current source of truth for built-in
+check discovery. Every selector records a short summary, the source or framework
 surfaces it supports, an optional set of domain tags, its policy section, and
 whether it needs a file inventory. Inspect the complete catalog with
 `alphus --catalog`; use `alphus --catalog --json` for machine-readable output.

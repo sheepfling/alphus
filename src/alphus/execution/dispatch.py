@@ -4,20 +4,43 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from types import MappingProxyType
-from typing import cast
+from typing import Protocol, cast
 
 from alphus.config import QualityGateConfig, QualityRuleName
+from alphus.contracts.cyclomatic import (
+    CyclomaticRuleOperations,
+)
 from alphus.contracts.findings import Diagnostic
 from alphus.execution._generated_dispatch import RULE_RUNNERS
-from alphus.execution.results import RuleOutput
+from alphus.execution.results import RuleOutput, diagnostics_from_output
 from alphus.plugins.api import PluginFinding
-from alphus.plugins.registry import enabled_plugin_registry
+from alphus.plugins.builtin_registry import (
+    builtin_check_entry_points,
+    load_builtin_feature,
+)
+from alphus.plugins.registry import PluginRuleBinding, enabled_plugin_registry
+from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
 from alphus.policy.base import RuleSelector
-from alphus.policy.catalog import RULE_SPECS, RuleSpec
+from alphus.policy.catalog import RULE_SPECS, RuleOutputShape, RuleSpec
 
 RuleRunner = Callable[[Path, Sequence[Path], QualityGateConfig], RuleOutput]
+
+
+class RuleBinding(Protocol):
+    """Shared execution contract for selected built-in and plugin rules."""
+
+    @property
+    def selector(self) -> RuleSelector: ...
+
+    @property
+    def requires_files(self) -> bool: ...
+
+    def run(
+        self, root: Path, files: Sequence[Path], config: QualityGateConfig
+    ) -> RuleOutput: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,19 +51,98 @@ class BuiltinRuleBinding:
     spec: RuleSpec
     runner: RuleRunner
 
+    @property
+    def requires_files(self) -> bool:
+        return self.spec.requires_files
 
-if set(RULE_SPECS) != set(RULE_RUNNERS):
-    raise RuntimeError("built-in rule metadata and runner registries differ")
+    def run(
+        self, root: Path, files: Sequence[Path], config: QualityGateConfig
+    ) -> RuleOutput:
+        config.checks.require_rule(self.selector)
+        return self.runner(root, files, config)
 
-BUILTIN_RULES: Mapping[str, BuiltinRuleBinding] = MappingProxyType(
-    {
-        selector: BuiltinRuleBinding(
-            cast(QualityRuleName, selector),
-            spec,
-            RULE_RUNNERS[cast(QualityRuleName, selector)],
+
+@dataclass(frozen=True, slots=True)
+class EntryPointBuiltinRuleBinding:
+    """One selected feature rule resolved through standard package metadata."""
+
+    selector: QualityRuleName
+    spec: RuleSpec
+
+    @property
+    def requires_files(self) -> bool:
+        return self.spec.requires_files
+
+    def run(
+        self, root: Path, files: Sequence[Path], config: QualityGateConfig
+    ) -> RuleOutput:
+        config.checks.require_rule(self.selector)
+        feature = load_builtin_feature(self.selector)
+        output: RuleOutput = feature.runner(root, files, config)
+        diagnostics_from_output(self.selector, output)
+        return output
+
+
+@dataclass(frozen=True, slots=True)
+class PluginRuleExecution:
+    """Adapt an explicitly enabled plugin rule to the common execution shape."""
+
+    binding: PluginRuleBinding
+
+    @property
+    def selector(self) -> RuleSelector:
+        return self.binding.selector
+
+    @property
+    def requires_files(self) -> bool:
+        return self.binding.rule.requires_files
+
+    def run(
+        self, root: Path, files: Sequence[Path], config: QualityGateConfig
+    ) -> RuleOutput:
+        if config.files is None and self.binding.rule.requires_files:
+            raise ValueError(
+                f"plugin rule {self.selector!r} requires a top-level [files] inventory"
+            )
+        settings = self.binding.rule.config_model.model_validate(
+            config.plugins.settings_for(self.selector), strict=True
         )
-        for selector, spec in RULE_SPECS.items()
-    }
+        raw_findings = _plugin_findings(self.binding.rule.check(root, files, settings))
+        return [
+            Diagnostic(
+                source=f"plugin:{self.binding.plugin.name}",
+                rule_id=f"{self.selector}/{finding.rule_id}",
+                message=finding.message,
+                severity=finding.severity,
+                path=finding.path,
+                line=finding.line,
+                priority=finding.priority,
+            )
+            for finding in raw_findings
+        ]
+
+
+builtin_check_entry_points()
+_FEATURE_SELECTORS = frozenset(FEATURE_DEFINITIONS)
+_LEGACY_SELECTORS = frozenset(RULE_SPECS) - _FEATURE_SELECTORS
+if _LEGACY_SELECTORS != frozenset(RULE_RUNNERS):
+    raise RuntimeError("legacy built-in rule metadata and runner registries differ")
+
+BUILTIN_RULES: Mapping[str, BuiltinRuleBinding | EntryPointBuiltinRuleBinding] = (
+    MappingProxyType(
+        {
+            selector: (
+                EntryPointBuiltinRuleBinding(cast(QualityRuleName, selector), spec)
+                if selector in _FEATURE_SELECTORS
+                else BuiltinRuleBinding(
+                    cast(QualityRuleName, selector),
+                    spec,
+                    RULE_RUNNERS[cast(QualityRuleName, selector)],
+                )
+            )
+            for selector, spec in RULE_SPECS.items()
+        }
+    )
 )
 
 
@@ -51,8 +153,39 @@ def run_builtin_rule(
     config: QualityGateConfig,
 ) -> RuleOutput:
     """Run one selected checker after validating its required policy."""
-    config.checks.require_rule(rule)
-    return BUILTIN_RULES[rule].runner(root, files, config)
+    return BUILTIN_RULES[rule].run(root, files, config)
+
+
+def resolve_rule(selector: RuleSelector, config: QualityGateConfig) -> RuleBinding:
+    """Resolve one explicitly selected rule to its typed execution adapter."""
+    builtin = BUILTIN_RULES.get(selector)
+    if builtin is not None:
+        return builtin
+    plugin = enabled_plugin_registry(config.plugins).get(selector)
+    if plugin is None:
+        raise ValueError(f"unknown or disabled rule selector {selector!r}")
+    return PluginRuleExecution(plugin)
+
+
+@lru_cache(maxsize=1)
+def cyclomatic_rule_operations() -> CyclomaticRuleOperations:
+    """Load the registered native-report operations only for that result shape."""
+    matches = tuple(
+        binding
+        for binding in BUILTIN_RULES.values()
+        if binding.spec.output_shape is RuleOutputShape.CYCLOMATIC_REPORT
+    )
+    if len(matches) != 1:
+        raise RuntimeError(
+            "the built-in registry must provide exactly one cyclomatic-report binding"
+        )
+    feature = load_builtin_feature("cyclomatic-complexity")
+    operations = feature.cyclomatic_operations
+    if operations is None:
+        raise RuntimeError(
+            "the cyclomatic-complexity feature is missing its typed operations"
+        )
+    return operations
 
 
 def run_rule(
@@ -62,33 +195,7 @@ def run_rule(
     config: QualityGateConfig,
 ) -> RuleOutput:
     """Run a validated built-in rule or one explicitly enabled plugin rule."""
-    if selector in RULE_SPECS:
-        return run_builtin_rule(cast(QualityRuleName, selector), root, files, config)
-    binding = enabled_plugin_registry(config.plugins).get(selector)
-    if binding is None:
-        raise ValueError(f"unknown or disabled rule selector {selector!r}")
-    if config.files is None and binding.rule.requires_files:
-        raise ValueError(
-            f"plugin rule {selector!r} requires a top-level [files] inventory"
-        )
-    settings = binding.rule.config_model.model_validate(
-        config.plugins.settings_for(selector), strict=True
-    )
-    raw_findings = _plugin_findings(binding.rule.check(root, files, settings))
-    findings: list[Diagnostic] = []
-    for finding in raw_findings:
-        findings.append(
-            Diagnostic(
-                source=f"plugin:{binding.plugin.name}",
-                rule_id=f"{selector}/{finding.rule_id}",
-                message=finding.message,
-                severity=finding.severity,
-                path=finding.path,
-                line=finding.line,
-                priority=finding.priority,
-            )
-        )
-    return findings
+    return resolve_rule(selector, config).run(root, files, config)
 
 
 def _plugin_findings(value: object) -> Sequence[PluginFinding]:
@@ -111,10 +218,4 @@ def _plugin_findings(value: object) -> Sequence[PluginFinding]:
 
 def rule_requires_files(selector: RuleSelector, config: QualityGateConfig) -> bool:
     """Return the inventory requirement declared by a selected rule."""
-    builtin = BUILTIN_RULES.get(selector)
-    if builtin is not None:
-        return builtin.spec.requires_files
-    binding = enabled_plugin_registry(config.plugins).get(selector)
-    if binding is None:
-        raise ValueError(f"unknown or disabled rule selector {selector!r}")
-    return binding.rule.requires_files
+    return resolve_rule(selector, config).requires_files

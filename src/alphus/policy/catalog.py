@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from types import MappingProxyType
+
+from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
+from alphus.policy._generated_morphology import MORPHOLOGY_BY_SELECTOR
+from alphus.policy.morphology import RuleMorphology
 
 
 class RuleOutputShape(StrEnum):
@@ -26,6 +30,7 @@ class RuleSpec:
     applies_to: tuple[str, ...]
     domains: tuple[str, ...] = ()
     requires_files: bool = True
+    morphology: RuleMorphology | None = None
 
     def __post_init__(self) -> None:
         """Reject incomplete or malformed metadata used by agent discovery."""
@@ -50,54 +55,12 @@ class RuleSpec:
                 )
 
 
-RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
+_LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
     {
-        "file-size": RuleSpec(
-            "file_size",
-            RuleOutputShape.FINDINGS,
-            "Reports source files that exceed configured physical-line limits.",
-            ("configurable-source",),
-        ),
-        "comment-markers": RuleSpec(
-            "comment_markers",
-            RuleOutputShape.FINDINGS,
-            "Finds configured TODO-style markers in supported source comments.",
-            ("python", "javascript", "c", "cpp"),
-        ),
-        "line-length": RuleSpec(
-            "line_length",
-            RuleOutputShape.FINDINGS,
-            "Reports source lines that exceed configured per-extension limits.",
-            ("configurable-source",),
-        ),
-        "json-structure": RuleSpec(
-            "json_structure",
-            RuleOutputShape.FINDINGS,
-            "Checks configured structural expectations in JSON documents.",
-            ("json",),
-        ),
-        "output-escaping": RuleSpec(
-            "output_escaping",
-            RuleOutputShape.FINDINGS,
-            "Reviews dynamic values at configured HTML or shell output sinks.",
-            ("python", "javascript"),
-        ),
-        "path-discovery": RuleSpec(
-            "path_discovery",
-            RuleOutputShape.FINDINGS,
-            "Reviews Python filesystem discovery and path handling patterns.",
-            ("python",),
-        ),
         "shared-utilities": RuleSpec(
             "shared_utilities",
             RuleOutputShape.SHARED_UTILITIES,
             "Finds duplicated shared-helper implementations and direct Git calls.",
-            ("python",),
-        ),
-        "module-roles": RuleSpec(
-            "module_roles",
-            RuleOutputShape.FINDINGS,
-            "Checks configured Python module-role and ownership conventions.",
             ("python",),
         ),
         "python-style": RuleSpec(
@@ -124,84 +87,11 @@ RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             "Checks configured Python and Node launcher/script conventions.",
             ("python", "javascript"),
         ),
-        "package-boundaries": RuleSpec(
-            "package_boundaries",
-            RuleOutputShape.FINDINGS,
-            "Checks configured Python import and package-boundary rules.",
-            ("python",),
-        ),
-        "dependency-locks": RuleSpec(
-            "dependency_locks",
-            RuleOutputShape.FINDINGS,
-            "Checks consistency and pairing of configured dependency lockfiles.",
-            ("python", "javascript"),
-        ),
-        "repository-layout": RuleSpec(
-            "repository_layout",
-            RuleOutputShape.FINDINGS,
-            "Checks configured repository paths, required files, and layout rules.",
-            ("repository",),
-        ),
-        "documentation-config": RuleSpec(
-            "documentation_config",
-            RuleOutputShape.FINDINGS,
-            "Checks documentation links and repository-specific documentation configuration.",
-            ("markdown", "repository"),
-            requires_files=False,
-        ),
-        "git-ignores": RuleSpec(
-            "git",
-            RuleOutputShape.FINDINGS,
-            "Checks tracked paths against configured Git ignore expectations.",
-            ("git", "repository"),
-            requires_files=False,
-        ),
-        "git-attributes": RuleSpec(
-            "git",
-            RuleOutputShape.FINDINGS,
-            "Checks configured Git attributes for tracked repository paths.",
-            ("git", "repository"),
-            requires_files=False,
-        ),
-        "git-history": RuleSpec(
-            "git",
-            RuleOutputShape.FINDINGS,
-            "Reviews repository history for configured commit and change patterns.",
-            ("git", "repository"),
-            requires_files=False,
-        ),
-        "numeric-literals": RuleSpec(
-            "numeric_literals",
-            RuleOutputShape.FINDINGS,
-            "Matches configured exact numeric constants in Python arithmetic; "
-            "it does not inspect model semantics.",
-            ("python",),
-            (
-                "scientific-computing",
-                "simulation",
-                "earth-science",
-                "trajectory-analysis",
-            ),
-        ),
         "repeated-numeric-limits": RuleSpec(
             "repeated_numeric_limits",
             RuleOutputShape.FINDINGS,
             "Reviews repeated numeric thresholds in explicitly selected Python analysis paths.",
             ("python",),
-        ),
-        "scipy-constants": RuleSpec(
-            "scipy_constants",
-            RuleOutputShape.FINDINGS,
-            "Finds selected SciPy physical constants and unit-conversion factors "
-            "in Python arithmetic; it does not validate units or coordinate systems.",
-            ("python",),
-            (
-                "scientific-computing",
-                "simulation",
-                "earth-science",
-                "trajectory-analysis",
-                "physical-units",
-            ),
         ),
         "source-test-coverage": RuleSpec(
             "source_test_coverage",
@@ -230,13 +120,6 @@ RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             RuleOutputShape.FINDINGS,
             "Flags flat similarly named source families for human architectural review.",
             ("configurable-source",),
-        ),
-        "markdown-shell-fences": RuleSpec(
-            "markdown_shell_fences",
-            RuleOutputShape.FINDINGS,
-            "Checks fenced shell examples for bounded heredoc termination errors.",
-            ("markdown", "shell"),
-            requires_files=False,
         ),
         "typing-stub-suggestions": RuleSpec(
             "typing_stub_suggestions",
@@ -426,30 +309,43 @@ RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             ("python", "markdown"),
             ("documentation-generation", "markdown-publishing"),
         ),
-        "document-style": RuleSpec(
-            "document_style",
-            RuleOutputShape.FINDINGS,
-            "Reviews heading styles in selected Markdown, LaTeX, and source HTML documents.",
-            ("markdown", "latex", "html"),
-        ),
-        "benchmark-docs": RuleSpec(
-            "benchmark_docs",
-            RuleOutputShape.FINDINGS,
-            "Reviews benchmark documentation for required result context.",
-            ("markdown", "benchmarking"),
-        ),
         "suppression-reasons": RuleSpec(
             "suppression_reasons",
             RuleOutputShape.FINDINGS,
             "Reviews selected Ruff suppressions for documented reasons.",
             ("python", "ruff"),
         ),
-        "cyclomatic-complexity": RuleSpec(
-            "cyclomatic_complexity",
-            RuleOutputShape.CYCLOMATIC_REPORT,
-            "Measures bounded cyclomatic complexity for supported source backends.",
-            ("python", "javascript", "cpp"),
-            requires_files=False,
-        ),
+    }
+)
+
+
+_FEATURE_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
+    {
+        selector: RuleSpec(
+            definition.policy_field,
+            RuleOutputShape(definition.output_shape),
+            definition.summary,
+            definition.applies_to,
+            definition.domains,
+            requires_files=definition.requires_files,
+        )
+        for selector, definition in FEATURE_DEFINITIONS.items()
+    }
+)
+
+if set(_LEGACY_RULE_SPECS) & set(_FEATURE_RULE_SPECS):
+    raise RuntimeError("built-in rule has both legacy and feature-owned metadata")
+
+_ALL_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
+    {**_LEGACY_RULE_SPECS, **_FEATURE_RULE_SPECS}
+)
+
+RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
+    {
+        selector: replace(
+            spec,
+            morphology=MORPHOLOGY_BY_SELECTOR.get(selector),
+        )
+        for selector, spec in _ALL_RULE_SPECS.items()
     }
 )

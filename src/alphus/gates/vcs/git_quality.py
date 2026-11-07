@@ -6,9 +6,11 @@ from collections.abc import Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final, Literal
 
+from alphus.contracts.complaints import ComplaintContract, ComplaintEntry
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
 from alphus.policy.repository import (
     GitAttributeRequirement,
     TrackedGeneratedOutput,
@@ -17,6 +19,165 @@ from alphus.policy.repository import (
 from alphus.support.git import git_output as _git
 from alphus.support.git import run_git
 from alphus.support.inventory import matches_path
+
+ALPHUS_COMPLAINT_CONTRACTS: Final = (
+    ComplaintContract(
+        name="git-repository-checks",
+        emitters=("git-ignores", "git-attributes", "git-history"),
+        entries=(
+            ComplaintEntry(
+                emitter="git-ignores",
+                tag=RuleTag(
+                    Scope.REPOSITORY,
+                    Framework.GIT,
+                    Category.HYGIENE,
+                    "missing-ignore-rule",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="git-ignores",
+                tag=RuleTag(
+                    Scope.PYTHON, Framework.GIT, Category.HYGIENE, "missing-ignore-rule"
+                ),
+            ),
+            ComplaintEntry(
+                emitter="git-ignores",
+                tag=RuleTag(
+                    Scope.JAVASCRIPT,
+                    Framework.GIT,
+                    Category.HYGIENE,
+                    "missing-ignore-rule",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="git-ignores",
+                tag=RuleTag(
+                    Scope.CPP, Framework.GIT, Category.HYGIENE, "missing-ignore-rule"
+                ),
+            ),
+            ComplaintEntry(
+                emitter="git-ignores",
+                tag=RuleTag(
+                    Scope.REPOSITORY,
+                    Framework.GIT,
+                    Category.HYGIENE,
+                    "tracked-generated-file",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="git-ignores",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.GIT,
+                    Category.HYGIENE,
+                    "tracked-generated-file",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="git-ignores",
+                tag=RuleTag(
+                    Scope.JAVASCRIPT,
+                    Framework.GIT,
+                    Category.HYGIENE,
+                    "tracked-generated-file",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="git-ignores",
+                tag=RuleTag(
+                    Scope.CPP, Framework.GIT, Category.HYGIENE, "tracked-generated-file"
+                ),
+            ),
+            ComplaintEntry(
+                emitter="git-ignores",
+                tag=RuleTag(
+                    Scope.REPOSITORY,
+                    Framework.GIT,
+                    Category.HYGIENE,
+                    "tracked-generated-output",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="git-attributes",
+                tag=RuleTag(
+                    Scope.REPOSITORY,
+                    Framework.GIT,
+                    Category.HYGIENE,
+                    "attributes-file-untracked",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="git-attributes",
+                tag=RuleTag(
+                    Scope.REPOSITORY,
+                    Framework.GIT,
+                    Category.HYGIENE,
+                    "attribute-mismatch",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="git-history",
+                tag=RuleTag(
+                    Scope.REPOSITORY,
+                    Framework.GIT,
+                    Category.HYGIENE,
+                    "large-historical-blob",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="git-history",
+                tag=RuleTag(
+                    Scope.REPOSITORY,
+                    Framework.GIT,
+                    Category.HYGIENE,
+                    "historical-artifact",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="git-history",
+                tag=RuleTag(
+                    Scope.PYTHON, Framework.GIT, Category.HYGIENE, "historical-artifact"
+                ),
+            ),
+            ComplaintEntry(
+                emitter="git-history",
+                tag=RuleTag(
+                    Scope.JAVASCRIPT,
+                    Framework.GIT,
+                    Category.HYGIENE,
+                    "historical-artifact",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="git-history",
+                tag=RuleTag(
+                    Scope.CPP, Framework.GIT, Category.HYGIENE, "historical-artifact"
+                ),
+            ),
+        ),
+    ),
+)
+
+
+def _git_contract_rule_id(
+    emitter: Literal["git-ignores", "git-attributes", "git-history"],
+    scope: Scope,
+    complaint: str,
+) -> str:
+    """Resolve one emitted identity from the shared static complaint contract."""
+    for contract in ALPHUS_COMPLAINT_CONTRACTS:
+        if emitter not in contract.emitters:
+            continue
+        for entry in contract.entries:
+            if (
+                entry.emitter == emitter
+                and entry.tag.scope is scope
+                and entry.tag.complaint == complaint
+            ):
+                return entry.tag.rule_id
+    raise ValueError(
+        f"Git complaint {complaint!r} is not declared for {emitter} in {scope}"
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,10 +269,9 @@ def check_ignores(
             if result.returncode == 1:
                 findings.append(
                     Finding(
-                        rule_id=rule_tag(
+                        rule_id=_git_contract_rule_id(
+                            "git-ignores",
                             Scope(rule.language),
-                            Framework.GIT,
-                            Category.HYGIENE,
                             "missing-ignore-rule",
                         ),
                         path=sample,
@@ -148,10 +308,9 @@ def check_ignores(
                 )
                 findings.append(
                     Finding(
-                        rule_id=rule_tag(
+                        rule_id=_git_contract_rule_id(
+                            "git-ignores",
                             Scope(rule.language),
-                            Framework.GIT,
-                            Category.HYGIENE,
                             "tracked-generated-file",
                         ),
                         path=path,
@@ -167,10 +326,9 @@ def check_ignores(
             if matches_path(path, contract.pattern):
                 findings.append(
                     Finding(
-                        rule_id=rule_tag(
+                        rule_id=_git_contract_rule_id(
+                            "git-ignores",
                             Scope.REPOSITORY,
-                            Framework.GIT,
-                            Category.HYGIENE,
                             "tracked-generated-output",
                         ),
                         path=path,
@@ -196,11 +354,8 @@ def check_attributes(
     if ".gitattributes" not in tracked:
         findings.append(
             Finding(
-                rule_id=rule_tag(
-                    Scope.REPOSITORY,
-                    Framework.GIT,
-                    Category.HYGIENE,
-                    "attributes-file-untracked",
+                rule_id=_git_contract_rule_id(
+                    "git-attributes", Scope.REPOSITORY, "attributes-file-untracked"
                 ),
                 path=".gitattributes",
                 message="Root .gitattributes must be tracked",
@@ -227,11 +382,8 @@ def check_attributes(
         if actual != requirement.value:
             findings.append(
                 Finding(
-                    rule_id=rule_tag(
-                        Scope.REPOSITORY,
-                        Framework.GIT,
-                        Category.HYGIENE,
-                        "attribute-mismatch",
+                    rule_id=_git_contract_rule_id(
+                        "git-attributes", Scope.REPOSITORY, "attribute-mismatch"
                     ),
                     path=requirement.path,
                     message=(
@@ -266,11 +418,8 @@ def check_history(root: Path, max_blob_mib: float = 5.0) -> list[Finding]:
             if kind == b"blob" and int(size) >= limit:
                 findings.append(
                     Finding(
-                        rule_id=rule_tag(
-                            Scope.REPOSITORY,
-                            Framework.GIT,
-                            Category.HYGIENE,
-                            "large-historical-blob",
+                        rule_id=_git_contract_rule_id(
+                            "git-history", Scope.REPOSITORY, "large-historical-blob"
                         ),
                         path=objects[oid] or ".",
                         message=(
@@ -291,10 +440,9 @@ def check_history(root: Path, max_blob_mib: float = 5.0) -> list[Finding]:
             if matches_path(path, rule.pattern):
                 findings.append(
                     Finding(
-                        rule_id=rule_tag(
+                        rule_id=_git_contract_rule_id(
+                            "git-history",
                             Scope(rule.language),
-                            Framework.GIT,
-                            Category.HYGIENE,
                             "historical-artifact",
                         ),
                         path=path,

@@ -1,0 +1,1053 @@
+schema_version = 1
+
+[[scenario]]
+name = "catalog"
+fixture = "catalog"
+behavior = ["built-in-selector-catalog", "catalog-schema"]
+expected_exit = 0
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--catalog", "--json"]
+
+[[scenario]]
+name = "strict-config-rejection"
+fixture = "invalid-config"
+behavior = ["strict-config-validation", "invalid-config-exit", "diagnostic-output"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "plan-json"
+arguments = ["--config", "quality-gates.toml", "--plan", "--json"]
+parse_json = false
+
+[[scenario]]
+name = "file-size-direct"
+expected_findings = [
+  { rule_id = "alphus/any/none/maintainability/code-file-too-large", path = "src/example.py" },
+]
+fixture = "file-size"
+selectors = ["file-size"]
+behavior = ["direct-selector", "exact-file-policy", "finding-id", "json-result"]
+expected_exit = 1
+minimum_findings = 1
+required_output = ["src/example.py"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "file-size", "--json"]
+
+[[scenario]]
+name = "line-length-direct"
+expected_findings = [
+  { rule_id = "alphus/any/none/style/line-too-long", path = "src/example.py", line = 3 },
+  { rule_id = "alphus/any/none/style/line-too-long", path = "src/example.py", line = 4 },
+]
+fixture = "profile"
+selectors = ["line-length"]
+behavior = ["direct-selector", "strict-feature-policy", "finding-id", "json-result"]
+expected_exit = 1
+minimum_findings = 2
+required_output = ["src/example.py"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "line-length", "--json"]
+
+[[scenario]]
+name = "file-size-plain"
+fixture = "file-size"
+selectors = ["file-size"]
+behavior = ["direct-selector", "plain-output", "finding-id"]
+expected_exit = 1
+required_output = ["code-file-too-large", "src/example.py", "File size: 1 violation(s)"]
+
+[[scenario.variant]]
+name = "plain"
+arguments = ["--config", "quality-gates.toml", "--rule", "file-size", "--output", "plain"]
+
+[[scenario]]
+name = "benchmark-docs-direct"
+expected_findings = [
+  { rule_id = "alphus/markdown/none/maintainability/brittle-benchmark-prose", path = "docs/quatops-style.md", line = 1 },
+]
+fixture = "benchmark-docs"
+selectors = ["benchmark-docs"]
+behavior = ["direct-selector", "deterministic-prose-heuristic", "finding-id", "json-result"]
+expected_exit = 0
+minimum_findings = 1
+required_output = ["docs/quatops-style.md"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "benchmark-docs", "--json"]
+
+[[scenario]]
+name = "numeric-literals-profile"
+fixture = "numeric-literals"
+selectors = ["numeric-literals"]
+behavior = ["feature-owned-profile-dispatch", "shared-complaint-contract", "typed-result-adapter"]
+expected_exit = 0
+minimum_findings = 1
+expected_step_names = ["numeric-constants"]
+expected_step_rules = ["numeric-literals"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/python/none/style/inline-constant", path = "src/example.py", line = 2 },
+]
+
+[[scenario.variant]]
+name = "profile-json"
+arguments = ["--config", "quality-gates.toml", "--profile", "numeric-review", "--run", "--json"]
+
+[[scenario]]
+name = "numeric-literals-invalid-config"
+fixture = "numeric-literals-invalid-config"
+selectors = ["numeric-literals"]
+behavior = ["feature-owned-strict-policy", "unknown-field-rejected-before-run"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-config"
+arguments = ["--config", "quality-gates.toml", "--rule", "numeric-literals"]
+parse_json = false
+
+[[scenario]]
+name = "numeric-literals-direct"
+expected_findings = [
+  { rule_id = "alphus/python/none/style/inline-constant", path = "src/example.py", line = 2 },
+]
+fixture = "numeric-literals"
+selectors = ["numeric-literals"]
+behavior = ["direct-selector", "deterministic-numeric-heuristic", "finding-id", "json-result"]
+expected_exit = 0
+minimum_findings = 1
+required_output = ["src/example.py"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "numeric-literals", "--json"]
+
+[[scenario]]
+name = "numeric-literals-feature-owned-plain-label"
+fixture = "numeric-literals"
+selectors = ["numeric-literals"]
+behavior = ["feature-owned-display-name", "plain-output-compatibility"]
+expected_exit = 0
+required_output = ["Numeric literals: 1 finding(s)"]
+
+[[scenario.variant]]
+name = "plain"
+arguments = ["--config", "quality-gates.toml", "--rule", "numeric-literals", "--output", "plain"]
+parse_json = false
+
+[[scenario]]
+name = "scipy-constants-profile"
+fixture = "scipy-constants"
+selectors = ["scipy-constants"]
+behavior = ["feature-owned-profile-dispatch", "shared-complaint-contract", "typed-result-adapter"]
+expected_exit = 0
+minimum_findings = 1
+expected_step_names = ["scipy-constants"]
+expected_step_rules = ["scipy-constants"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/python/scipy/style/inline-constant", path = "src/example.py", line = 2 },
+]
+
+[[scenario.variant]]
+name = "profile-json"
+arguments = ["--config", "quality-gates.toml", "--profile", "scipy-review", "--run", "--json"]
+
+[[scenario]]
+name = "scipy-constants-invalid-config"
+fixture = "scipy-constants-invalid-config"
+selectors = ["scipy-constants"]
+behavior = ["feature-owned-strict-policy", "unknown-field-rejected-before-run"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-config"
+arguments = ["--config", "quality-gates.toml", "--rule", "scipy-constants"]
+parse_json = false
+
+[[scenario]]
+name = "scipy-constants-direct"
+expected_findings = [
+  { rule_id = "alphus/python/scipy/style/inline-constant", path = "src/example.py", line = 2 },
+]
+fixture = "scipy-constants"
+selectors = ["scipy-constants"]
+behavior = ["direct-selector", "deterministic-numeric-heuristic", "finding-id", "json-result"]
+expected_exit = 0
+minimum_findings = 1
+required_output = ["src/example.py"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "scipy-constants", "--json"]
+
+[[scenario]]
+name = "scipy-constants-feature-owned-plain-label"
+fixture = "scipy-constants"
+selectors = ["scipy-constants"]
+behavior = ["feature-owned-display-name", "plain-output-compatibility"]
+expected_exit = 0
+required_output = ["SciPy constants: 1 finding(s)"]
+
+[[scenario.variant]]
+name = "plain"
+arguments = ["--config", "quality-gates.toml", "--rule", "scipy-constants", "--output", "plain"]
+parse_json = false
+
+[[scenario]]
+name = "input-contracts-direct"
+expected_findings = [
+  { rule_id = "alphus/python/none/correctness/argument-mutation", path = "src/example.py", line = 2 },
+]
+fixture = "input-contracts"
+selectors = ["input-contracts"]
+behavior = ["direct-selector", "python-semantic-heuristic", "finding-id", "json-result"]
+expected_exit = 0
+minimum_findings = 1
+required_output = ["src/example.py"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "input-contracts", "--json"]
+
+[[scenario]]
+name = "test-quality-direct"
+fixture = "test-quality"
+selectors = ["test-quality"]
+behavior = ["direct-selector", "test-assertion-prose-heuristic", "finding-id", "json-result"]
+expected_exit = 0
+minimum_findings = 1
+required_output = ["tests/report_fixture.py"]
+expected_findings = [
+  { rule_id = "alphus/python/none/testing/large-prose-assertion", path = "tests/report_fixture.py", line = 6 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "test-quality", "--json"]
+
+[[scenario]]
+name = "output-escaping-direct-plain"
+fixture = "output-escaping"
+selectors = ["output-escaping"]
+behavior = ["direct-selector", "security-finding", "plain-output"]
+expected_exit = 1
+required_output = ["alphus/python/none/security/manual-output-escaping", "src/render.py:2", "Output escaping: 1 finding(s)"]
+
+[[scenario.variant]]
+name = "plain"
+arguments = ["--config", "quality-gates.toml", "--rule", "output-escaping"]
+parse_json = false
+
+[[scenario]]
+name = "output-escaping-polyglot-direct"
+fixture = "output-escaping-polyglot"
+selectors = ["output-escaping"]
+behavior = ["feature-owned-complaint-contract", "python-javascript-provider-tags"]
+expected_exit = 1
+minimum_findings = 2
+expected_findings = [
+  { rule_id = "alphus/javascript/none/security/manual-output-escaping", path = "src/render.js", line = 1 },
+  { rule_id = "alphus/python/none/security/manual-output-escaping", path = "src/render.py", line = 2 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "output-escaping", "--json"]
+
+[[scenario]]
+name = "output-escaping-polyglot-profile"
+fixture = "output-escaping-polyglot"
+selectors = ["output-escaping"]
+behavior = ["explicit-profile-selection", "feature-owned-result-adapter", "language-scoped-tags"]
+expected_exit = 1
+minimum_findings = 2
+expected_step_names = ["escaping-review"]
+expected_step_rules = ["output-escaping"]
+expected_findings = [
+  { rule_id = "alphus/javascript/none/security/manual-output-escaping", path = "src/render.js", line = 1 },
+  { rule_id = "alphus/python/none/security/manual-output-escaping", path = "src/render.py", line = 2 },
+]
+
+[[scenario.variant]]
+name = "profile"
+arguments = ["--config", "quality-gates.toml", "--profile", "security-review", "--run", "--json"]
+
+[[scenario]]
+name = "output-escaping-invalid-config"
+fixture = "output-escaping-invalid-config"
+selectors = ["output-escaping"]
+behavior = ["feature-owned-strict-policy", "unknown-field-rejected-before-run"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-config"
+arguments = ["--config", "quality-gates.toml", "--rule", "output-escaping"]
+parse_json = false
+
+[[scenario]]
+name = "profile-plan-selection"
+fixture = "profile"
+selectors = ["file-size", "line-length"]
+behavior = ["resolved-profile-selection", "selected-selector-list"]
+expected_exit = 0
+expected_step_names = ["source-size", "source-lines"]
+expected_step_rules = ["file-size", "line-length"]
+expected_reported_step_rules = ["file-size", "line-length"]
+
+[[scenario.variant]]
+name = "plan"
+arguments = ["--config", "quality-gates.toml", "--profile", "check", "--plan", "--json"]
+
+[[scenario]]
+name = "profile-serial-parallel"
+expected_findings = [
+  { rule_id = "alphus/any/none/maintainability/code-file-too-large", path = "src/example.py" },
+  { rule_id = "alphus/any/none/style/line-too-long", path = "src/example.py", line = 3 },
+  { rule_id = "alphus/any/none/style/line-too-long", path = "src/example.py", line = 4 },
+]
+fixture = "profile"
+selectors = ["file-size", "line-length"]
+behavior = ["explicit-profile-selection", "severity-priority", "ordered-results", "serial-parallel"]
+expected_exit = 0
+minimum_findings = 2
+expected_step_names = ["source-size", "source-lines"]
+expected_step_rules = ["file-size", "line-length"]
+require_passed_steps = true
+required_output = ["src/example.py", "warning", "high", "normal"]
+
+[[scenario.variant]]
+name = "serial"
+arguments = ["--config", "quality-gates.toml", "--profile", "check", "--run", "--json", "--jobs", "1"]
+
+[[scenario.variant]]
+name = "parallel"
+arguments = ["--config", "quality-gates.toml", "--profile", "check", "--run", "--json", "--jobs", "2"]
+compare_within_build = true
+
+[[scenario]]
+name = "package-boundaries-composite"
+fixture = "package-boundaries"
+selectors = ["package-boundaries"]
+behavior = ["composite-package-policy", "effective-package-policy-inputs", "cross-file-findings"]
+expected_exit = 1
+minimum_findings = 6
+expected_findings = [
+  { rule_id = "alphus/python/none/dependencies/forbidden-package-dependency", path = "distributions/workspace-plugin/pyproject.toml" },
+  { rule_id = "alphus/python/none/architecture/forbidden-import", path = "distributions/workspace-plugin/src/workspace_plugin/__init__.py", line = 1 },
+  { rule_id = "alphus/repository/none/architecture/edge-missing", path = "docs/architecture.md" },
+  { rule_id = "alphus/repository/none/architecture/edge-forbidden", path = "docs/architecture.md" },
+  { rule_id = "alphus/repository/none/metadata/version-mismatch", path = "pyproject.toml" },
+  { rule_id = "alphus/python/none/architecture/public-callable-unregistered", path = "registry.py" },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "package-boundaries", "--json"]
+
+[[scenario]]
+name = "package-boundaries-profile-dispatch"
+fixture = "package-boundaries"
+selectors = ["package-boundaries"]
+behavior = ["explicit-profile-selection", "composite-effective-policy-inputs", "profile-result-adapter"]
+expected_exit = 0
+minimum_findings = 6
+expected_step_names = ["package-check"]
+expected_step_rules = ["package-boundaries"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/python/none/dependencies/forbidden-package-dependency", path = "distributions/workspace-plugin/pyproject.toml" },
+  { rule_id = "alphus/python/none/architecture/forbidden-import", path = "distributions/workspace-plugin/src/workspace_plugin/__init__.py", line = 1 },
+  { rule_id = "alphus/repository/none/architecture/edge-missing", path = "docs/architecture.md" },
+  { rule_id = "alphus/repository/none/architecture/edge-forbidden", path = "docs/architecture.md" },
+  { rule_id = "alphus/repository/none/metadata/version-mismatch", path = "pyproject.toml" },
+  { rule_id = "alphus/python/none/architecture/public-callable-unregistered", path = "registry.py" },
+]
+
+[[scenario.variant]]
+name = "profile-json"
+arguments = ["--config", "quality-gates.toml", "--profile", "package-review", "--run", "--json"]
+
+[[scenario]]
+name = "module-roles-direct"
+fixture = "module-roles"
+selectors = ["module-roles"]
+behavior = ["feature-owned-policy", "configured-ast-boundary", "stable-findings"]
+expected_exit = 1
+minimum_findings = 2
+expected_findings = [
+  { rule_id = "alphus/python/none/architecture/forbidden-module-import", path = "src/provider.py", line = 1 },
+  { rule_id = "alphus/python/none/architecture/forbidden-module-assignment", path = "src/provider.py", line = 3 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "module-roles", "--json"]
+
+[[scenario]]
+name = "module-roles-profile-serial-parallel"
+fixture = "module-roles"
+selectors = ["module-roles"]
+behavior = ["explicit-profile-selection", "warning-threshold", "ordered-findings"]
+expected_exit = 0
+minimum_findings = 2
+expected_step_names = ["module-role-boundary"]
+expected_step_rules = ["module-roles"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/python/none/architecture/forbidden-module-import", path = "src/provider.py", line = 1 },
+  { rule_id = "alphus/python/none/architecture/forbidden-module-assignment", path = "src/provider.py", line = 3 },
+]
+
+[[scenario.variant]]
+name = "serial"
+arguments = ["--config", "quality-gates.toml", "--profile", "module-role-review", "--run", "--json", "--jobs", "1"]
+
+[[scenario.variant]]
+name = "parallel"
+arguments = ["--config", "quality-gates.toml", "--profile", "module-role-review", "--run", "--json", "--jobs", "2"]
+compare_within_build = true
+
+[[scenario]]
+name = "module-roles-invalid-config"
+fixture = "module-roles-invalid-config"
+selectors = ["module-roles"]
+behavior = ["strict-policy-rejection", "unknown-field-rejected-before-run"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-config"
+arguments = ["--config", "quality-gates.toml", "--rule", "module-roles", "--json"]
+parse_json = false
+
+[[scenario]]
+name = "markdown-shell-direct"
+fixture = "markdown-shell"
+selectors = ["markdown-shell-fences"]
+behavior = ["configured-markdown-scan", "bounded-shell-evidence", "stable-finding"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/markdown/none/portability/shell-fence-mismatch", path = "docs/guide.md", line = 4 },
+]
+
+[[scenario.variant]]
+name = "direct-json"
+arguments = ["--config", "quality-gates.toml", "--rule", "markdown-shell-fences", "--json"]
+
+[[scenario]]
+name = "markdown-shell-profile-serial-parallel"
+fixture = "markdown-shell"
+selectors = ["markdown-shell-fences"]
+behavior = ["explicit-profile-selection", "threshold-preserved", "ordered-findings"]
+expected_exit = 0
+minimum_findings = 1
+expected_step_names = ["shell-fence-check"]
+expected_step_rules = ["markdown-shell-fences"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/markdown/none/portability/shell-fence-mismatch", path = "docs/guide.md", line = 4 },
+]
+
+[[scenario.variant]]
+name = "serial"
+arguments = ["--config", "quality-gates.toml", "--profile", "markdown-review", "--run", "--json", "--jobs", "1"]
+
+[[scenario.variant]]
+name = "parallel"
+arguments = ["--config", "quality-gates.toml", "--profile", "markdown-review", "--run", "--json", "--jobs", "2"]
+compare_within_build = true
+
+[[scenario]]
+name = "repository-layout-direct"
+fixture = "repository-layout"
+selectors = ["repository-layout"]
+behavior = ["feature-owned-strict-policy", "direct-selector", "stable-finding-id"]
+expected_exit = 1
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/repository/none/configuration/path-required", path = "src/required.py" },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "repository-layout", "--json"]
+
+[[scenario]]
+name = "repository-layout-profile"
+fixture = "repository-layout"
+selectors = ["repository-layout"]
+behavior = ["explicit-profile-selection", "feature-result-adapter", "severity-override"]
+expected_exit = 0
+minimum_findings = 1
+expected_step_names = ["layout-check"]
+expected_step_rules = ["repository-layout"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/repository/none/configuration/path-required", path = "src/required.py" },
+]
+
+[[scenario.variant]]
+name = "profile-json"
+arguments = ["--config", "quality-gates.toml", "--profile", "layout-review", "--run", "--json"]
+
+[[scenario]]
+name = "dependency-locks-direct"
+fixture = "dependency-locks"
+selectors = ["dependency-locks"]
+behavior = ["feature-owned-strict-policy", "direct-selector", "stable-finding-id"]
+expected_exit = 1
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/repository/none/dependencies/requirement-pin-unsatisfied", path = "locks.txt" },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "dependency-locks", "--json"]
+
+[[scenario]]
+name = "dependency-locks-profile"
+fixture = "dependency-locks"
+selectors = ["dependency-locks"]
+behavior = ["explicit-profile-selection", "feature-result-adapter", "severity-override"]
+expected_exit = 0
+minimum_findings = 1
+expected_step_names = ["dependency-check"]
+expected_step_rules = ["dependency-locks"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/repository/none/dependencies/requirement-pin-unsatisfied", path = "locks.txt" },
+]
+
+[[scenario.variant]]
+name = "profile-json"
+arguments = ["--config", "quality-gates.toml", "--profile", "dependency-review", "--run", "--json"]
+
+[[scenario]]
+name = "documentation-config-direct"
+fixture = "documentation-config"
+selectors = ["documentation-config"]
+behavior = ["feature-owned-policy", "cross-file-bounded-heuristic", "stable-conflict-finding"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/repository/none/configuration/documented-config-conflict", path = "docs/guide.md", line = 1 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "documentation-config", "--json"]
+
+[[scenario]]
+name = "documentation-config-profile"
+fixture = "documentation-config"
+selectors = ["documentation-config"]
+behavior = ["explicit-profile-selection", "heuristic-result-adapter", "advisory-warning"]
+expected_exit = 0
+minimum_findings = 1
+expected_step_names = ["config-review"]
+expected_step_rules = ["documentation-config"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/repository/none/configuration/documented-config-conflict", path = "docs/guide.md", line = 1 },
+]
+
+[[scenario.variant]]
+name = "profile-json"
+arguments = ["--config", "quality-gates.toml", "--profile", "documentation-review", "--run", "--json"]
+
+[[scenario]]
+name = "cyclomatic-python-ruff"
+fixture = "cyclomatic-python"
+selectors = ["cyclomatic-complexity"]
+behavior = ["native-ruff", "cyclomatic-report", "finding-and-coverage-provenance"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/any/none/maintainability/cyclomatic-complexity-threshold", path = "src/example.py", line = 1 },
+]
+expected_cyclomatic_outcome = "violations"
+expected_cyclomatic_backends = [
+  { language = "python", backend = "ruff", status = "violations", selected_files = 1, analyzed_files = 1 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "cyclomatic-complexity", "--json"]
+
+[[scenario]]
+name = "cyclomatic-missing-polyglot"
+fixture = "cyclomatic-missing-polyglot"
+selectors = ["cyclomatic-complexity"]
+behavior = ["javascript-and-cpp-backend-selection", "missing-native-provider", "operational-failure-report"]
+expected_exit = 2
+minimum_findings = 2
+expected_findings = [
+  { rule_id = "alphus/any/none/configuration/cyclomatic-backend-failure", path = "src/example.cpp" },
+  { rule_id = "alphus/any/none/configuration/cyclomatic-backend-failure", path = "src/example.js" },
+]
+expected_cyclomatic_outcome = "operational_failure"
+expected_cyclomatic_backends = [
+  { language = "cpp", backend = "lizard", status = "operational_failure", selected_files = 1, analyzed_files = 0 },
+  { language = "javascript", backend = "eslint", status = "operational_failure", selected_files = 1, analyzed_files = 0 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "cyclomatic-complexity", "--json"]
+
+[[scenario]]
+name = "cyclomatic-partial-coverage"
+fixture = "cyclomatic-partial"
+selectors = ["cyclomatic-complexity"]
+behavior = ["polyglot-selection", "no-matching-provider", "incomplete-coverage-exit"]
+expected_exit = 2
+expected_cyclomatic_outcome = "incomplete_coverage"
+expected_cyclomatic_backends = [
+  { language = "javascript", backend = "eslint", status = "no_matching_files", selected_files = 0, analyzed_files = 0 },
+  { language = "python", backend = "ruff", status = "clean", selected_files = 1, analyzed_files = 1 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "cyclomatic-complexity", "--json"]
+
+[[scenario]]
+name = "cyclomatic-unsupported-version"
+fixture = "cyclomatic-unsupported-version"
+selectors = ["cyclomatic-complexity"]
+behavior = ["native-version-mismatch", "operational-failure-report", "no-analysis-coverage"]
+expected_exit = 2
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/any/none/configuration/cyclomatic-backend-failure", path = "src/example.py" },
+]
+expected_cyclomatic_outcome = "operational_failure"
+expected_cyclomatic_backends = [
+  { language = "python", backend = "ruff", status = "operational_failure", selected_files = 1, analyzed_files = 0 },
+]
+required_output = ["unsupported ruff version 0.16.1; expected 0.15.0"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "cyclomatic-complexity", "--json"]
+
+[[scenario]]
+name = "cyclomatic-javascript-eslint"
+fixture = "cyclomatic-javascript"
+selectors = ["cyclomatic-complexity"]
+behavior = ["native-eslint", "javascript-provider", "finding-and-coverage-provenance"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/any/none/maintainability/cyclomatic-complexity-threshold", path = "src/example.js", line = 1 },
+]
+expected_cyclomatic_outcome = "violations"
+expected_cyclomatic_backends = [
+  { language = "javascript", backend = "eslint", status = "violations", selected_files = 1, analyzed_files = 1 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "cyclomatic-complexity", "--json"]
+
+[[scenario]]
+name = "cyclomatic-cpp-lizard"
+fixture = "cyclomatic-cpp"
+python_distributions = ["lizard==1.24.2"]
+selectors = ["cyclomatic-complexity"]
+behavior = ["native-lizard", "cpp-provider", "finding-and-coverage-provenance"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/any/none/maintainability/cyclomatic-complexity-threshold", path = "src/example.cpp", line = 1 },
+]
+expected_cyclomatic_outcome = "violations"
+expected_cyclomatic_backends = [
+  { language = "cpp", backend = "lizard", status = "violations", selected_files = 1, analyzed_files = 1 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "cyclomatic-complexity", "--json"]
+
+[[scenario]]
+name = "plugin-unselected-lazy"
+fixture = "plugin-unselected"
+plugin_package = "example"
+behavior = ["installed-plugin-discovery", "not-enabled", "module-not-imported"]
+expected_exit = 0
+required_output = ["\"name\":\"diff\"", "\"enabled\":false", "\"rules_loaded\":false"]
+
+[[scenario.variant]]
+name = "catalog"
+arguments = ["--config", "quality-gates.toml", "--catalog", "--json"]
+plugin_import_expected = false
+
+[[scenario]]
+name = "plugin-unenabled-settings-rejected"
+fixture = "plugin-unenabled-settings"
+plugin_package = "example"
+behavior = ["strict-plugin-config", "enablement-required", "module-not-imported"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-config"
+arguments = ["--config", "quality-gates.toml", "--catalog", "--json"]
+parse_json = false
+plugin_import_expected = false
+
+[[scenario]]
+name = "plugin-enabled-profile"
+fixture = "plugin-enabled"
+plugin_package = "example"
+selectors = ["diff:heading"]
+behavior = ["api-v1-installed-wheel", "explicit-plugin-enablement", "profile-selection", "plugin-finding-report"]
+expected_exit = 0
+minimum_findings = 1
+expected_step_names = ["markdown-title"]
+expected_step_rules = ["diff:heading"]
+expected_findings = [
+  { rule_id = "diff:heading/missing-title", path = "README.md", line = 1 },
+]
+
+[[scenario.variant]]
+name = "profile"
+arguments = ["--config", "quality-gates.toml", "--profile", "docs", "--run", "--json"]
+plugin_import_expected = true
+
+[[scenario]]
+name = "git-ignores-direct"
+fixture = "vcs-git"
+materialized_files = [
+  { path = "data/generated/client.txt", contents = "generated\n" },
+  { path = "dist/package.whl", contents = "fixture wheel content\n" },
+]
+selectors = ["git-ignores"]
+behavior = ["feature-owned-git-check", "shared-strict-policy", "tracked-output-contract"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/repository/git/hygiene/tracked-generated-output", path = "data/generated/client.txt" },
+]
+required_output = ["data/generated/client.txt", "tools/generate.py"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "git-ignores", "--json"]
+
+[[scenario]]
+name = "git-attributes-direct"
+fixture = "vcs-git"
+materialized_files = [
+  { path = "data/generated/client.txt", contents = "generated\n" },
+  { path = "dist/package.whl", contents = "fixture wheel content\n" },
+]
+selectors = ["git-attributes"]
+behavior = ["feature-owned-git-check", "effective-native-attribute", "stable-finding-id"]
+expected_exit = 1
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/repository/git/hygiene/attribute-mismatch", path = "javascript/example.js" },
+]
+required_output = ["Git attribute eol is 'crlf'; expected 'lf'"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "git-attributes", "--json"]
+
+[[scenario]]
+name = "git-history-direct"
+fixture = "vcs-git"
+materialized_files = [
+  { path = "data/generated/client.txt", contents = "generated\n" },
+  { path = "dist/package.whl", contents = "fixture wheel content\n" },
+]
+selectors = ["git-history"]
+behavior = ["feature-owned-git-check", "reachable-history", "stable-finding-id"]
+expected_exit = 1
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/python/git/hygiene/historical-artifact", path = "dist/package.whl" },
+]
+required_output = ["dist/package.whl"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "git-history", "--json"]
+
+[[scenario]]
+name = "git-checks-profile-serial-parallel"
+fixture = "vcs-git"
+materialized_files = [
+  { path = "data/generated/client.txt", contents = "generated\n" },
+  { path = "dist/package.whl", contents = "fixture wheel content\n" },
+]
+selectors = ["git-ignores", "git-attributes", "git-history"]
+behavior = ["explicit-profile-selection", "shared-policy-field", "ordered-results", "serial-parallel"]
+expected_exit = 0
+minimum_findings = 3
+expected_step_names = ["git-ignore-review", "git-attributes-review", "git-history-review"]
+expected_step_rules = ["git-ignores", "git-attributes", "git-history"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/repository/git/hygiene/tracked-generated-output", path = "data/generated/client.txt" },
+  { rule_id = "alphus/repository/git/hygiene/attribute-mismatch", path = "javascript/example.js" },
+  { rule_id = "alphus/python/git/hygiene/historical-artifact", path = "dist/package.whl" },
+]
+required_output = ["data/generated/client.txt", "javascript/example.js", "dist/package.whl"]
+
+[[scenario.variant]]
+name = "serial"
+arguments = ["--config", "quality-gates.toml", "--profile", "git-review", "--run", "--json", "--jobs", "1"]
+
+[[scenario.variant]]
+name = "parallel"
+arguments = ["--config", "quality-gates.toml", "--profile", "git-review", "--run", "--json", "--jobs", "2"]
+compare_within_build = true
+
+[[deferred]]
+capability = "package-boundaries-history-digest-identity"
+status = "not-exercised"
+reason = "The composite runtime scenario exercises package, graph, version-sync, and callable-registry policies; changing legacy history cohort identity remains separately scoped."
+selector = "package-boundaries"
+
+[[deferred]]
+capability = "native-tool-unsupported-capability-plan"
+status = "not-exercised"
+reason = "Successful Python, JavaScript, and C++ providers plus missing, version-mismatch, and no-matching partial outcomes are exercised; plan-level unsupported-capability detail remains unasserted."
+selector = "cyclomatic-complexity"
+
+[[deferred]]
+capability = "plugin-api-v1-conformance-edge-cases"
+status = "partial"
+reason = "The installed API-v1 plugin is discovered without import, rejected when unenabled settings are supplied, and explicitly selected in a profile; invalid plugin return values and duplicate entry points remain covered only by unit tests."
+
+[[deferred]]
+capability = "unselected-builtin-backend-laziness"
+status = "partial"
+reason = "The installed-wheel self-profile runs a subprocess regression proving the unselected composite stays unloaded and that selected package-boundaries does not load absent graph, version-sync, or callable-registry providers; this import trace is not serialized in the wheel differential report."
+
+[[deferred]]
+capability = "effectful-command-step-compatibility"
+status = "not-exercised"
+reason = "The architecture plan names the LaTeX build-and-validation step, but the current wheel harness has no command/build scenario; scheduler and command behavior are unchanged by this numeric-contract slice."
+
+
+[[scenario]]
+name = "comment-markers-polyglot-direct"
+fixture = "comment-markers-polyglot"
+selectors = ["comment-markers"]
+behavior = ["feature-owned-registration", "polyglot-comment-scanners", "stable-finding-identity", "python-parse-failure"]
+expected_exit = 1
+minimum_findings = 6
+required_output = ["EOF in multi-line string"]
+materialized_files = [
+  { path = "src/malformed.py", contents = "value = '''unterminated\n" },
+]
+expected_findings = [
+  { rule_id = "alphus/any/none/hygiene/comment-marker-found", path = "docs/guide.toml", line = 2 },
+  { rule_id = "alphus/any/none/hygiene/comment-marker-found", path = "src/example.cpp", line = 2 },
+  { rule_id = "alphus/any/none/hygiene/comment-marker-found", path = "src/example.java", line = 2 },
+  { rule_id = "alphus/any/none/hygiene/comment-marker-found", path = "src/example.js", line = 2 },
+  { rule_id = "alphus/any/none/hygiene/comment-marker-found", path = "src/example.py", line = 2 },
+  { rule_id = "alphus/any/none/hygiene/comment-scan-failed", path = "src/malformed.py" },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "comment-markers", "--json"]
+
+[[scenario]]
+name = "comment-markers-polyglot-profile"
+fixture = "comment-markers-polyglot"
+selectors = ["comment-markers"]
+behavior = ["feature-owned-profile-dispatch", "polyglot-result-adapter", "ordered-findings", "python-parse-failure"]
+expected_exit = 0
+minimum_findings = 6
+required_output = ["EOF in multi-line string"]
+materialized_files = [
+  { path = "src/malformed.py", contents = "value = '''unterminated\n" },
+]
+expected_step_names = ["comments"]
+expected_step_rules = ["comment-markers"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/any/none/hygiene/comment-marker-found", path = "docs/guide.toml", line = 2 },
+  { rule_id = "alphus/any/none/hygiene/comment-marker-found", path = "src/example.cpp", line = 2 },
+  { rule_id = "alphus/any/none/hygiene/comment-marker-found", path = "src/example.java", line = 2 },
+  { rule_id = "alphus/any/none/hygiene/comment-marker-found", path = "src/example.js", line = 2 },
+  { rule_id = "alphus/any/none/hygiene/comment-marker-found", path = "src/example.py", line = 2 },
+  { rule_id = "alphus/any/none/hygiene/comment-scan-failed", path = "src/malformed.py" },
+]
+
+[[scenario.variant]]
+name = "profile"
+arguments = ["--config", "quality-gates.toml", "--profile", "review", "--run", "--json"]
+
+
+[[scenario]]
+name = "comment-markers-invalid-config"
+fixture = "comment-markers-invalid-config"
+selectors = ["comment-markers"]
+behavior = ["feature-owned-strict-config", "reject-unknown-policy-field"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-config"
+arguments = ["--config", "quality-gates.toml", "--rule", "comment-markers"]
+parse_json = false
+
+[[scenario]]
+name = "json-structure-polyglot-direct"
+fixture = "source-discovery"
+materialized_files = [
+  { path = "src/example.py", contents = "from pathlib import Path\nroot = Path.cwd()\nimport json\nvalue = json.loads(source)\n" },
+  { path = "src/client.js", contents = "const root = process.cwd();\nconst value = JSON.parse(source);\n" },
+]
+selectors = ["json-structure"]
+behavior = ["feature-owned-registration", "python-javascript-providers", "stable-finding-ids"]
+expected_exit = 1
+minimum_findings = 2
+expected_findings = [
+  { rule_id = "alphus/javascript/none/validation/unvalidated-json-decode", path = "src/client.js", line = 2 },
+  { rule_id = "alphus/python/none/validation/unvalidated-json-decode", path = "src/example.py", line = 4 },
+]
+required_output = ["src/client.js", "src/example.py"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "json-structure", "--json"]
+
+[[scenario]]
+name = "path-discovery-polyglot-direct"
+fixture = "source-discovery"
+materialized_files = [
+  { path = "src/example.py", contents = "from pathlib import Path\nroot = Path.cwd()\nimport json\nvalue = json.loads(source)\n" },
+  { path = "src/client.js", contents = "const root = process.cwd();\nconst value = JSON.parse(source);\n" },
+]
+selectors = ["path-discovery"]
+behavior = ["feature-owned-registration", "language-specific-path-analysis", "stable-finding-ids"]
+expected_exit = 1
+minimum_findings = 2
+expected_findings = [
+  { rule_id = "alphus/javascript/none/portability/implicit-working-directory", path = "src/client.js", line = 1 },
+  { rule_id = "alphus/python/none/portability/implicit-working-directory", path = "src/example.py", line = 2 },
+]
+required_output = ["src/client.js", "src/example.py"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "path-discovery", "--json"]
+
+[[scenario]]
+name = "source-discovery-profile-serial-parallel"
+fixture = "source-discovery"
+materialized_files = [
+  { path = "src/example.py", contents = "from pathlib import Path\nroot = Path.cwd()\nimport json\nvalue = json.loads(source)\n" },
+  { path = "src/client.js", contents = "const root = process.cwd();\nconst value = JSON.parse(source);\n" },
+]
+selectors = ["json-structure", "path-discovery"]
+behavior = ["explicit-profile-selection", "polyglot-source-checks", "ordered-results", "serial-parallel"]
+expected_exit = 0
+minimum_findings = 4
+expected_step_names = ["json-decode-review", "path-discovery-review"]
+expected_step_rules = ["json-structure", "path-discovery"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/javascript/none/validation/unvalidated-json-decode", path = "src/client.js", line = 2 },
+  { rule_id = "alphus/python/none/validation/unvalidated-json-decode", path = "src/example.py", line = 4 },
+  { rule_id = "alphus/javascript/none/portability/implicit-working-directory", path = "src/client.js", line = 1 },
+  { rule_id = "alphus/python/none/portability/implicit-working-directory", path = "src/example.py", line = 2 },
+]
+required_output = ["src/client.js", "src/example.py"]
+
+[[scenario.variant]]
+name = "serial"
+arguments = ["--config", "quality-gates.toml", "--profile", "source-discovery-review", "--run", "--json", "--jobs", "1"]
+
+[[scenario.variant]]
+name = "parallel"
+arguments = ["--config", "quality-gates.toml", "--profile", "source-discovery-review", "--run", "--json", "--jobs", "2"]
+compare_within_build = true
+
+[[scenario]]
+name = "json-structure-invalid-config"
+fixture = "source-discovery-invalid"
+selectors = ["json-structure"]
+behavior = ["strict-feature-policy", "unknown-policy-field-rejected"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-config"
+arguments = ["--config", "quality-gates.toml", "--rule", "json-structure"]
+parse_json = false
+
+[[scenario]]
+name = "document-style-direct"
+fixture = "document-review"
+selectors = ["document-style"]
+behavior = ["feature-owned-style-preference", "stable-finding-id", "markdown-location"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/any/none/style/rhetorical-heading-density", path = "docs/headings.md", line = 1 },
+]
+required_output = ["docs/headings.md"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "document-style", "--json"]
+
+[[scenario]]
+name = "document-review-profile-serial-parallel"
+fixture = "document-review"
+selectors = ["document-style", "benchmark-docs"]
+behavior = ["explicit-profile-selection", "heuristic-and-style-shapes", "ordered-results", "serial-parallel"]
+expected_exit = 0
+minimum_findings = 2
+expected_step_names = ["heading-style-review", "benchmark-context-review"]
+expected_step_rules = ["document-style", "benchmark-docs"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/any/none/style/rhetorical-heading-density", path = "docs/headings.md", line = 1 },
+  { rule_id = "alphus/markdown/none/maintainability/brittle-benchmark-prose", path = "docs/performance.md", line = 1 },
+]
+required_output = ["docs/headings.md", "docs/performance.md"]
+
+[[scenario.variant]]
+name = "serial"
+arguments = ["--config", "quality-gates.toml", "--profile", "document-review", "--run", "--json", "--jobs", "1"]
+
+[[scenario.variant]]
+name = "parallel"
+arguments = ["--config", "quality-gates.toml", "--profile", "document-review", "--run", "--json", "--jobs", "2"]
+compare_within_build = true
+
+[[scenario]]
+name = "document-style-invalid-config"
+fixture = "document-review-invalid"
+selectors = ["document-style"]
+behavior = ["strict-feature-policy", "unknown-policy-field-rejected"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-config"
+arguments = ["--config", "quality-gates.toml", "--rule", "document-style"]
+parse_json = false

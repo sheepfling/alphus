@@ -13,9 +13,7 @@ from typing import TypeAlias
 
 from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.execution.results import RuleOutput
-from alphus.gates.review.benchmark_docs import check_benchmark_docs
 from alphus.gates.review.ci_workflows import check_ci_workflows
-from alphus.gates.review.document_style import check_document_style
 from alphus.gates.review.dynamic_markdown import check_dynamic_markdown
 from alphus.gates.review.embedded_semantic_overrides import (
     check_embedded_semantic_overrides,
@@ -29,7 +27,6 @@ from alphus.gates.review.heuristic_total_consumption import (
     check_heuristic_total_consumption,
 )
 from alphus.gates.review.input_contracts import check_input_contracts
-from alphus.gates.review.numeric_literals import check_numeric_literals
 from alphus.gates.review.numerical.frames.ecef_enu_transform import (
     check_ecef_enu_transform,
 )
@@ -87,7 +84,6 @@ from alphus.gates.review.repeated_numeric_limits import (
     check_repeated_numeric_limits,
 )
 from alphus.gates.review.run_artifacts import check_run_artifacts
-from alphus.gates.review.scipy_constants import check_scipy_constants
 from alphus.gates.review.semantic_work_presentation import (
     check_semantic_work_presentation,
 )
@@ -109,11 +105,6 @@ __all__ = ["REVIEW_RULE_RUNNERS"]
 
 REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
     {
-        "numeric-literals": lambda root, files, config: check_numeric_literals(
-            root,
-            files,
-            require_policy(config.checks.numeric_literals, "numeric_literals"),
-        ),
         "repeated-numeric-limits": lambda root, files, config: (
             check_repeated_numeric_limits(
                 root,
@@ -334,11 +325,6 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
             files,
             require_policy(config.checks.ned_basis_vectors, "ned_basis_vectors"),
         ),
-        "scipy-constants": lambda root, files, config: check_scipy_constants(
-            root,
-            files,
-            require_policy(config.checks.scipy_constants, "scipy_constants"),
-        ),
         "run-artifacts": lambda root, files, config: check_run_artifacts(
             root,
             files,
@@ -369,11 +355,6 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
             files,
             require_policy(config.checks.source_families, "source_families"),
         ),
-        "benchmark-docs": lambda root, files, config: check_benchmark_docs(
-            root,
-            files,
-            require_policy(config.checks.benchmark_docs, "benchmark_docs"),
-        ),
         "positional-interfaces": lambda root, files, config: (
             check_positional_interfaces(
                 root,
@@ -402,9 +383,6 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
             root,
             files,
             require_policy(config.checks.dynamic_markdown, "dynamic_markdown"),
-        ),
-        "document-style": lambda root, files, config: check_document_style(
-            root, files, require_policy(config.checks.document_style, "document_style")
         ),
         "suppression-reasons": lambda root, files, config: check_suppression_reasons(
             root,

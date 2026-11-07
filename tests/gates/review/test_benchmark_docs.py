@@ -455,3 +455,8 @@ def test_rule_runs_through_the_policy_and_runner_catalog(tmp_path: Path) -> None
 
     assert isinstance(findings, list)
     assert len(findings) == 1
+    assert findings[0].rule_id == (
+        "alphus/markdown/none/maintainability/brittle-benchmark-prose"
+    )
+    assert findings[0].path == "docs/quatops-style.md"
+    assert findings[0].line == 1

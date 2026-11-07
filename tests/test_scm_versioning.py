@@ -125,9 +125,21 @@ def test_tagged_and_archived_builds_keep_the_same_version(
         ".gitattributes",
         ".git_archival.txt",
         "MANIFEST.in",
+        "build_backend.py",
+        "scripts/generate_morphology_manifest.py",
+        "src/alphus/contracts/__init__.py",
+        "src/alphus/contracts/rule_tags.py",
+        "src/alphus/policy/__init__.py",
+        "src/alphus/policy/feature_definition.py",
+        "src/alphus/policy/morphology.py",
     ):
-        shutil.copy2(project / relative, repository / relative)
+        destination = repository / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(project / relative, destination)
     (source / "__init__.py").write_text('"""Version fixture."""\n', encoding="utf-8")
+    gates = source / "gates"
+    gates.mkdir()
+    (gates / "__init__.py").write_text('"""Empty gate fixture."""\n', encoding="utf-8")
 
     _successful_run(["git", "init", "--quiet"], cwd=repository, env=environment)
     _successful_run(

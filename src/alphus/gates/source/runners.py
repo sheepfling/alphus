@@ -17,33 +17,15 @@ from alphus.gates.languages.python.script_policy import (
 )
 from alphus.gates.languages.python.style import findings_for as python_style_findings
 from alphus.gates.source.cli_policy import policy_findings as cli_policy_findings
-from alphus.gates.source.cyclomatic_complexity import run_cyclomatic_complexity
-from alphus.gates.source.json_structure import check_json_structure
-from alphus.gates.source.output_escaping import check_output_escaping
-from alphus.gates.source.path_discovery import check_path_discovery
 from alphus.policy.base import require_policy
 
 SourceRunner: TypeAlias = Callable[
     [Path, Sequence[Path], QualityGateConfig], RuleOutput
 ]
 
+
 SOURCE_RULE_RUNNERS: Mapping[QualityRuleName, SourceRunner] = MappingProxyType(
     {
-        "json-structure": lambda root, files, config: check_json_structure(
-            root,
-            files,
-            require_policy(config.checks.json_structure, "json_structure"),
-        ),
-        "output-escaping": lambda root, files, config: check_output_escaping(
-            root,
-            files,
-            require_policy(config.checks.output_escaping, "output_escaping"),
-        ),
-        "path-discovery": lambda root, files, config: check_path_discovery(
-            root,
-            files,
-            require_policy(config.checks.path_discovery, "path_discovery"),
-        ),
         "python-style": lambda root, files, config: python_style_findings(
             root,
             files,
@@ -61,12 +43,6 @@ SOURCE_RULE_RUNNERS: Mapping[QualityRuleName, SourceRunner] = MappingProxyType(
             root,
             files,
             require_policy(config.checks.script_policy, "script_policy"),
-        ),
-        "cyclomatic-complexity": lambda root, files, config: run_cyclomatic_complexity(
-            root,
-            require_policy(
-                config.checks.cyclomatic_complexity, "cyclomatic_complexity"
-            ),
         ),
     }
 )

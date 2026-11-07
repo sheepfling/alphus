@@ -6,16 +6,16 @@ from typing import Annotated, Literal, Self, TypeAlias
 
 from pydantic import Field, TypeAdapter, model_validator
 
+from alphus.contracts.cyclomatic import (
+    CyclomaticBackendPlan,
+    CyclomaticBackendResult,
+    CyclomaticFunctionMetric,
+)
 from alphus.contracts.findings import (
     Diagnostic,
     Finding,
     RemediationPriority,
     Severity,
-)
-from alphus.gates.source.cyclomatic_complexity import (
-    CyclomaticBackendPlan,
-    CyclomaticBackendResult,
-    CyclomaticFunctionMetric,
 )
 from alphus.policy.base import RuleSelector, StrictModel
 

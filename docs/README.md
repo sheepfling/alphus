@@ -5,6 +5,8 @@ path that matches the repository being checked.
 
 | Need                                                      | Read                                        |
 | --------------------------------------------------------- | ------------------------------------------- |
+| Built-in check architecture | [0.0.3 migration plan](BUILTIN-CHECK-ARCHITECTURE.md) |
+| Understand rule morphology and evidence maturity      | [Rule morphology](MORPHOLOGY.md)             |
 | Choose language bundles and configure one profile         | [Consumer profiles](CONSUMER-PROFILES.md)   |
 | Understand installed native tools and their configuration | [Subtools](SUBTOOLS.md)                     |
 | Plan and apply available fixes                            | [Fixes](FIXES.md)                           |
@@ -37,9 +39,11 @@ path that matches the repository being checked.
 
 ## How the pieces fit
 
-[Architecture](ARCHITECTURE.md) defines the owning packages and the boundary
-between a portable rule and a command step. [Extensibility](EXTENSIBILITY.md)
-explains how to add a rule or language theme. [Version support](VERSION-SUPPORT.md)
+[Architecture](ARCHITECTURE.md) defines current package ownership and runtime
+boundaries. The [built-in check architecture](BUILTIN-CHECK-ARCHITECTURE.md)
+is the design entry point for the 0.0.3 registration and compatibility
+migration. [Extensibility](EXTENSIBILITY.md) explains current extension
+contracts. [Version support](VERSION-SUPPORT.md)
 lists the supported Python and dependency ranges. [Installability](INSTALLABILITY.md)
 records wheel and editable-install checks.
 

@@ -6,16 +6,78 @@ correctness. Consumer constants and factors require explicit configuration.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from pathlib import Path
+from typing import Final
 
-from alphus.config import NumericLiteralPolicy, NumericLiteralSpec
+from alphus.config import NumericLiteralSpec, QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Framework
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
 from alphus.gates.review.numeric_catalog import NumericLiteralFinding
 from alphus.gates.review.numeric_engine import scan_numeric_literals
+from alphus.plugins.builtin import BuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import NumericLiteralPolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="numeric-literals",
+    display_name="Numeric literals",
+    input_mode="configured-source-scan",
+    policy_field="numeric_literals",
+    policy_model=NumericLiteralPolicy,
+    output_shape="findings",
+    summary=(
+        "Matches configured exact numeric constants in Python arithmetic; it does "
+        "not inspect model semantics."
+    ),
+    applies_to=("python",),
+    domains=(
+        "scientific-computing",
+        "simulation",
+        "earth-science",
+        "trajectory-analysis",
+    ),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="numeric-literals",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.STYLE,
+            "inline-constant",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.STYLE,
+            "inline-conversion",
+        ),
+    ),
+    concern="scientific-constant-reuse",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "An arithmetic literal matches a configured constant or factor; source "
+        "syntax alone does not establish intent or physical meaning."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("selected-python-files", "arithmetic-expressions"),
+    languages_formats=("python",),
+    evidence_kinds=("configured-literal-match", "operation", "source-location"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+    finding_contracts=("numeric-inline",),
+)
 
 _MATH_CONSTANTS = (
     NumericLiteralSpec(
@@ -41,7 +103,13 @@ def numeric_literal_findings(
 ) -> list[NumericLiteralFinding]:
     """Review exact configured literals in arithmetic without guessing dimensions."""
     specs = (*(_MATH_CONSTANTS if policy.math_constants else ()), *policy.constants)
-    return scan_numeric_literals(source, specs, framework=Framework.NONE)
+    return scan_numeric_literals(
+        source,
+        specs,
+        complaint_contract="numeric-inline",
+        emitter="numeric-literals",
+        framework=Framework.NONE,
+    )
 
 
 def check_numeric_literals(
@@ -70,3 +138,21 @@ def check_numeric_literals(
             for finding in numeric_literal_findings(read_python_source(path), policy)
         )
     return findings
+
+
+def run_numeric_literals_rule(
+    root: Path, paths: Sequence[Path], config: QualityGateConfig
+) -> list[Finding]:
+    """Adapt the feature-owned policy to the shared typed runner interface."""
+    return check_numeric_literals(
+        root,
+        paths,
+        require_policy(config.checks.numeric_literals, "numeric_literals"),
+    )
+
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_numeric_literals_rule,
+)

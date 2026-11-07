@@ -94,6 +94,14 @@ def test_self_profile_python_style_requires_exact_result_api_scope(
     assert runner(Path(pytestconfig.rootpath), files, config) == {}
 
 
+def test_self_profile_excludes_only_the_lazy_provider_spike_file() -> None:
+    config = load_config(Path("quality-gates.toml"))
+    policy = config.checks.python_style
+    assert policy is not None
+    assert "scripts/registry_spike/provider_factory.py" in policy.exclude
+    assert "scripts/registry_spike/**" not in policy.exclude
+
+
 def test_declared_script_entry_points_resolve_to_callables() -> None:
     metadata = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
     project = metadata["project"]

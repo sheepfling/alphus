@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 from collections.abc import Callable, Sequence
+from dataclasses import replace
 from io import StringIO
 from pathlib import Path
 from typing import cast
@@ -22,14 +23,16 @@ from alphus.config import (
     load_config_stream,
 )
 from alphus.contracts.findings import Diagnostic, Finding
+from alphus.execution import dispatch
 from alphus.execution.results import (
     RuleEvaluation,
     diagnostics_from_json,
     diagnostics_from_output,
 )
-from alphus.gates.hygiene.rules import check_file_size, check_line_length
+from alphus.gates.hygiene.file_size import check_file_size
+from alphus.gates.hygiene.line_length import check_line_length
 from alphus.gates.languages.python.style import StyleFindings
-from alphus.gates.source import runners as source_runners
+from alphus.plugins.builtin import BuiltinFeature
 from alphus.support import git, inventory
 from alphus.support.inventory import candidate_files, matches_path, tracked_files
 
@@ -129,6 +132,22 @@ def test_config_rejects_unknown_policy_fields(tmp_path: Path) -> None:
     _repository(tmp_path)
     config_path = tmp_path / "quality.toml"
     config_path.write_text(POLICY + "\nunknown_setting = true\n", encoding="utf-8")
+
+    with pytest.raises(ValidationError):
+        load_config(config_path)
+
+
+def test_output_escaping_keeps_strict_generated_policy_field(tmp_path: Path) -> None:
+    _repository(tmp_path)
+    config_path = tmp_path / "quality.toml"
+    output_section = (
+        '[checks.output_escaping]\nextensions = [".py", ".js", ".mjs"]\n'
+        'exclude = ["**/vendor/**", "vendor/**"]\n'
+    )
+    invalid_section = output_section + "unknown_setting = true\n"
+    config_path.write_text(
+        POLICY.replace(output_section, invalid_section), encoding="utf-8"
+    )
 
     with pytest.raises(ValidationError):
         load_config(config_path)
@@ -791,6 +810,11 @@ def test_rule_evaluation_validates_structured_output_before_rendering() -> None:
         diagnostics_from_output("line-length", ["not a Finding"])
 
 
+def test_cyclomatic_runner_rejects_a_result_with_the_wrong_shape() -> None:
+    with pytest.raises(TypeError, match="must return CyclomaticReport"):
+        diagnostics_from_output("cyclomatic-complexity", [])
+
+
 def test_direct_rule_uses_threshold_and_report_mode_overrides_it(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -814,7 +838,9 @@ steps = ["json check"]
         encoding="utf-8",
     )
 
-    def warning_json_finding(*_args: object) -> list[Finding]:
+    def warning_json_finding(
+        _root: Path, _paths: Sequence[Path], _config: QualityGateConfig
+    ) -> list[Finding]:
         return [
             Finding(
                 "alphus/python/none/validation/unvalidated-json-decode",
@@ -825,7 +851,15 @@ steps = ["json check"]
             )
         ]
 
-    monkeypatch.setattr(source_runners, "check_json_structure", warning_json_finding)
+    original_loader = dispatch.load_builtin_feature
+
+    def load_with_warning(selector: str) -> BuiltinFeature:
+        feature = original_loader(selector)
+        if selector == "json-structure":
+            return replace(feature, runner=warning_json_finding)
+        return feature
+
+    monkeypatch.setattr(dispatch, "load_builtin_feature", load_with_warning)
     arguments = [
         "--root",
         str(tmp_path),

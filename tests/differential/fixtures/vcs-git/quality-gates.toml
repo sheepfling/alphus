@@ -1,0 +1,35 @@
+schema_version = 1
+
+[checks.git]
+attributes = [
+  { path = "javascript/example.js", attribute = "eol", value = "lf" },
+]
+generated_outputs = [
+  { pattern = "data/generated/**", generator = "tools/generate.py", classification = "API client" },
+]
+
+[orchestration]
+default_profile = "git-review"
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "git-ignore-review"
+rule = "git-ignores"
+severity = "warning"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "git-attributes-review"
+rule = "git-attributes"
+severity = "warning"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "git-history-review"
+rule = "git-history"
+severity = "warning"
+
+[[orchestration.profiles]]
+name = "git-review"
+steps = ["git-ignore-review", "git-attributes-review", "git-history-review"]

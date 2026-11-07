@@ -10,6 +10,7 @@ from typing import Self, TypeAlias, cast
 from pydantic import BaseModel, ConfigDict, TypeAdapter
 
 from alphus.contracts.cli_policy import CliPolicyReport
+from alphus.contracts.cyclomatic import CyclomaticReport
 from alphus.contracts.findings import (
     Diagnostic,
     Finding,
@@ -19,7 +20,6 @@ from alphus.contracts.findings import (
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
 from alphus.gates.languages.python.style import StyleFindings
-from alphus.gates.source.cyclomatic_complexity import CyclomaticReport
 from alphus.policy.base import QualityRuleName, RuleSelector
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
 
@@ -237,7 +237,10 @@ def diagnostics_from_output(rule: RuleSelector, output: RuleOutput) -> list[Diag
         return _DIAGNOSTICS.validate_python(output)
     shape = spec.output_shape
     if shape is RuleOutputShape.FINDINGS:
-        return [item.as_diagnostic() for item in _FINDINGS.validate_python(output)]
+        return [
+            item.as_diagnostic()
+            for item in _FINDINGS.validate_python(output, strict=True)
+        ]
     if shape is RuleOutputShape.MESSAGES:
         if rule == "cli" and isinstance(output, CliPolicyReport):
             return _cli_policy_diagnostics(output)
@@ -248,7 +251,9 @@ def diagnostics_from_output(rule: RuleSelector, output: RuleOutput) -> list[Diag
         payload = _PYTHON_STYLE.validate_python(output)
         return _style_diagnostics(payload)
     if shape is RuleOutputShape.CYCLOMATIC_REPORT:
-        return list(output.diagnostics) if isinstance(output, CyclomaticReport) else []
+        if not isinstance(output, CyclomaticReport):
+            raise TypeError("cyclomatic-complexity runner must return CyclomaticReport")
+        return list(output.diagnostics)
     if shape is not RuleOutputShape.SHARED_UTILITIES:
         raise ValueError(f"rule {rule!r} has no output normalizer")
     report = _SHARED_REPORT.validate_python(output)

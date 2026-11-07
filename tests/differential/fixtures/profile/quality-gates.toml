@@ -1,0 +1,37 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py"]
+exclude = []
+
+[checks.file_size]
+code_extensions = [".py"]
+code_limit = 3
+hard_limit = 20
+initializer_name = "__init__.py"
+initializer_limit = 5
+
+[checks.line_length]
+limits = { ".py" = 8 }
+
+[orchestration]
+default_profile = "check"
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "source-size"
+rule = "file-size"
+severity = "warning"
+priority = "high"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "source-lines"
+rule = "line-length"
+severity = "warning"
+priority = "normal"
+
+[[orchestration.profiles]]
+name = "check"
+steps = ["source-size", "source-lines"]

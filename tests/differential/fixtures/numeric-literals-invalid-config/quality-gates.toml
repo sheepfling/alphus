@@ -1,0 +1,5 @@
+schema_version = 1
+
+[checks.numeric_literals]
+extensions = [".py"]
+unknown_setting = true
