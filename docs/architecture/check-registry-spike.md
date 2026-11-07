@@ -71,8 +71,9 @@ catalog works through this registry.
 
 - **Metadata-only entry point plus typed registry:** Standard discovery; metadata
   modules load without analyzers; one registry indexes built-ins and API v1
-  plugin bindings. A per-check entry point must be packaged. Hand-maintained
-  `pyproject.toml` entries become a second authoring location unless generated.
+  plugin bindings. Each check needs both a metadata entry point and a provider
+  entry point. Hand-maintained `pyproject.toml` entries become a second
+  authoring location unless generated.
 - **Direct first-party provider entry point:** Standard and lazy when the
   selected endpoint is loaded. Its metadata supplies a name and import target,
   not strict config, morphology, effective policy inputs, or result adaptation.
