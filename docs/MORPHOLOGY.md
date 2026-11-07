@@ -61,9 +61,9 @@ by a typed `BuiltinFeature` with direct runner and specialized-operation
 references.
 
 The original six-rule pilot is not a complete built-in registration
-migration. Twenty-four selectors now use feature-owned runtime declarations,
-while 38 remain on legacy selector/config/runner paths. Generated declarations do not
-select or enable a check and do not change JSON results, finding IDs, gate IDs,
+migration. Twenty-five selectors now use feature-owned runtime
+declarations, while 37 remain on legacy selector/config/runner paths.
+Generated declarations do not select or enable a check and do not change JSON results, finding IDs, gate IDs,
 or enforcement.
 
 ## Pilot examples
@@ -139,3 +139,12 @@ zero findings only describes successfully analyzed scope.
 
 History/index migration, repository doctor/init, and optional local-model
 evaluation remain separate #87 phases.
+
+
+The FastAPI review now has a feature-owned typed registration beside its source
+checker. One configured policy drives both the bounded Python AST findings and
+the optional application/OpenAPI contract review; the optional framework is
+loaded only when the application setting is present. Its existing selector,
+strict TOML field, catalog applicability/summary, finding IDs and result shape
+remain unchanged. Its differential evidence is recorded in the [FastAPI
+registration slice](BUILTIN-CHECK-ARCHITECTURE.md#fastapi-review-registration-slice).

@@ -1316,4 +1316,44 @@ Two decisions remain for review:
 
 Until resolved, do not change digest/archive meaning or claim full #87
 acceptance. PR #100 remains a draft containing the six-check morphology pilot
-and bounded runtime registration slices for twenty-four selectors documented above.
+and bounded runtime registration slices for twenty-five selectors documented
+above.
+
+## FastAPI review registration slice
+
+`fastapi-practices` now owns `ALPHUS_CHECK`, its stable complaint contract,
+morphology and typed `BuiltinFeature` adapter in
+`gates/review/frameworks/fastapi_practices.py`. The adapter requires the existing
+strict `FastApiPracticePolicy` and returns the established `list[Finding]`
+contract. Its single policy includes the optional consumer application path;
+when unset, the source AST provider does not import FastAPI or Starlette. When
+set, the existing composite review loads the application and evaluates route
+and OpenAPI evidence. Registration adds no new detector semantics.
+
+The generated catalog preserves the original summary, applicability labels,
+TOML field, selector, finding IDs and output shape. The legacy catalog entry,
+runner entry, CLI label fallback and duplicate hand-maintained policy field were
+removed. A source-mirroring registration test exercises strict config, direct
+dispatch, the composite application path when the optional test extra is
+available, and an unselected-provider import trace. The wheel comparison adds direct JSON, serial and parallel profile JSON, and
+invalid-config scenarios. Against reference `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`, candidate
+`f53f46cdecb33edf890fd4ad49092dfe17dc0fbf` produced identical 62-selector
+catalogs and no differences across 71 scenarios. The three FastAPI scenarios
+used identical fixture SHA-256 and Git identities in both installs; direct and
+profile runs returned exit 0, strict invalid configuration returned exit 2, and
+serial/parallel profiles matched. The reference/candidate wheel SHA-256 values
+were
+`94833f60a8acaeb2630bb8a0f1adb36be75dfcb6c948781c9696aa9cd0db284e` and
+`36bce052f851bd3c9190056f93b9b5e9f215393f6154e7aff8aa208188673aa2`. The
+report is `/tmp/alphus-morphology-fastapi-f53f46c.json`. Twenty-five selectors
+have behavior-level differential evidence; 37 still lack that evidence. The
+registered optional application/OpenAPI branch is covered by unit contracts;
+the local registration test skips when the optional FastAPI test dependency is
+absent. The wheel scenarios keep dependencies matched to the existing fixture
+environment. The positive source fixture is excluded only from the self FastAPI
+detector (with a reason); its wheel scenario asserts the warning and exact
+source line, while Ruff, formatting and typing still inspect it.
+
+The full local wheel self-quality run on `f53f46c` passed: 2,508 package tests,
+27 profile checks, and the Markdown shell review; 44 tests were skipped and
+four profile checks were provisional. No profile checks failed.
