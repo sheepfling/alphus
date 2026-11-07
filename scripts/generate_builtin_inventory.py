@@ -398,11 +398,8 @@ def main() -> int:
     parser.add_argument("--output", type=Path, help="output JSON path")
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
-    target = (
-        args.output
-        if args.output is not None
-        else args.root / "docs" / "architecture" / "builtin-check-inventory.json"
-    )
+    if args.check and args.output is None:
+        parser.error("--check requires --output")
     try:
         expected = (
             json.dumps(asdict(inventory(args.root)), indent=2, sort_keys=True) + "\n"
@@ -411,10 +408,17 @@ def main() -> int:
         print(f"built-in inventory generation failed: {error}", file=sys.stderr)
         return 1
     if args.check:
+        target = args.output
+        if target is None:
+            return 2
         if not target.is_file() or target.read_text(encoding="utf-8") != expected:
             print(f"{target} is stale; regenerate it with this script", file=sys.stderr)
             return 1
         return 0
+    if args.output is None:
+        sys.stdout.write(expected)
+        return 0
+    target = args.output
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(expected, encoding="utf-8")
     return 0

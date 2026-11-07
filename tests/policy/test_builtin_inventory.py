@@ -22,7 +22,6 @@ from scripts.generate_builtin_inventory import (
     quality_rule_selectors,
 )
 
-_REFERENCE_INVENTORY = "architecture/builtin-check-baseline-c880093.json"
 _REFERENCE_REVISION = "c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e"
 _INVENTORY_ADAPTER: TypeAdapter[BuiltinInventory] = TypeAdapter(BuiltinInventory)
 _CHECK_POLICY_FIELDS: Mapping[str, FieldInfo] = cast(
@@ -34,13 +33,56 @@ def _inventory(path: Path) -> BuiltinInventory:
     return _INVENTORY_ADAPTER.validate_json(path.read_bytes())
 
 
+def _generate_inventory(
+    repository: Path, source_root: Path, output: Path
+) -> BuiltinInventory:
+    generated = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.generate_builtin_inventory",
+            "--root",
+            str(source_root),
+            "--output",
+            str(output),
+        ],
+        cwd=repository,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    assert generated.returncode == 0, generated.stderr
+    return _inventory(output)
+
+
+def _reference_source(root: Path, tmp_path: Path) -> Path:
+    archive_path = tmp_path / "reference.tar"
+    with archive_path.open("wb") as archive:
+        archived = subprocess.run(
+            ["git", "archive", "--format=tar", _REFERENCE_REVISION, "src"],
+            cwd=root,
+            stdout=archive,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+    assert archived.returncode == 0, archived.stderr.decode(errors="replace")
+    reference_root = tmp_path / "reference"
+    reference_root.mkdir()
+    unpacked = subprocess.run(
+        ["tar", "-xf", str(archive_path), "-C", str(reference_root)],
+        cwd=root,
+        capture_output=True,
+        check=False,
+    )
+    assert unpacked.returncode == 0, unpacked.stderr.decode(errors="replace")
+    return reference_root
+
+
 def test_generated_inventory_covers_runtime_builtins(
-    pytestconfig: pytest.Config,
+    pytestconfig: pytest.Config, tmp_path: Path
 ) -> None:
     root = pytestconfig.rootpath
-    inventory = _inventory(
-        root / "docs" / "architecture" / "builtin-check-inventory.json"
-    )
+    inventory = _generate_inventory(root, root, tmp_path / "current-inventory.json")
     assert inventory.selector_count == len(BUILTIN_RULES) == len(RULE_SPECS)
     assert {check.selector for check in inventory.checks} == set(BUILTIN_RULES)
     assert set(get_args(QualityRuleName)) == set(BUILTIN_RULES)
@@ -94,13 +136,14 @@ def test_generated_inventory_covers_runtime_builtins(
 
 
 def test_current_registration_contract_matches_pinned_mainline_baseline(
-    pytestconfig: pytest.Config,
+    pytestconfig: pytest.Config, tmp_path: Path
 ) -> None:
     root = pytestconfig.rootpath
-    current = _inventory(
-        root / "docs" / "architecture" / "builtin-check-inventory.json"
+    current = _generate_inventory(root, root, tmp_path / "current-inventory.json")
+    baseline_root = _reference_source(root, tmp_path)
+    baseline = _generate_inventory(
+        root, baseline_root, tmp_path / "baseline-inventory.json"
     )
-    baseline = _inventory(root / "docs" / _REFERENCE_INVENTORY)
     assert current.selector_count == baseline.selector_count
     assert current.shared_selection_surfaces == baseline.shared_selection_surfaces
     assert current.shared_reporting_surfaces == baseline.shared_reporting_surfaces
@@ -118,56 +161,13 @@ def test_current_registration_contract_matches_pinned_mainline_baseline(
         assert current_check.requires_files is baseline_check.requires_files
 
 
-def test_committed_baseline_matches_its_pinned_source(
+def test_inventory_generator_check_mode_is_current(
     pytestconfig: pytest.Config,
     tmp_path: Path,
 ) -> None:
     root = pytestconfig.rootpath
-    archive_path = tmp_path / "reference.tar"
-    with archive_path.open("wb") as archive:
-        archived = subprocess.run(
-            ["git", "archive", "--format=tar", _REFERENCE_REVISION, "src"],
-            cwd=root,
-            stdout=archive,
-            stderr=subprocess.PIPE,
-            check=False,
-        )
-    assert archived.returncode == 0, archived.stderr.decode(errors="replace")
-    reference_root = tmp_path / "reference"
-    reference_root.mkdir()
-    unpacked = subprocess.run(
-        ["tar", "-xf", str(archive_path), "-C", str(reference_root)],
-        cwd=root,
-        capture_output=True,
-        check=False,
-    )
-    assert unpacked.returncode == 0, unpacked.stderr.decode(errors="replace")
-
-    reference_inventory = tmp_path / "reference-inventory.json"
-    generated = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "scripts.generate_builtin_inventory",
-            "--root",
-            str(reference_root),
-            "--output",
-            str(reference_inventory),
-        ],
-        cwd=root,
-        capture_output=True,
-        check=False,
-        text=True,
-    )
-    assert generated.returncode == 0, generated.stderr
-    committed_baseline = root / "docs" / _REFERENCE_INVENTORY
-    assert reference_inventory.read_bytes() == committed_baseline.read_bytes()
-
-
-def test_inventory_generator_check_mode_is_current(
-    pytestconfig: pytest.Config,
-) -> None:
-    root = pytestconfig.rootpath
+    output = tmp_path / "generated-inventory.json"
+    _generate_inventory(root, root, output)
     completed = subprocess.run(
         [
             sys.executable,
@@ -175,6 +175,8 @@ def test_inventory_generator_check_mode_is_current(
             "scripts.generate_builtin_inventory",
             "--root",
             str(root),
+            "--output",
+            str(output),
             "--check",
         ],
         cwd=root,

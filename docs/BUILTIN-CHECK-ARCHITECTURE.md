@@ -6,15 +6,18 @@ flow, compatibility proof, migration slices, and deferred work. The existing
 check behavior is the compatibility baseline; this document does not itself
 change runtime behavior.
 
-The [machine-readable inventory](architecture/builtin-check-inventory.json)
-records the current built-in selector, strict policy field, directly observed
-runner policy references, runner, output shape, and shared direct/profile
-surfaces. The [pinned registry baseline](architecture/builtin-check-baseline-c880093.json)
-records these registration contracts at main commit
-`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`. These are audit views, not another
-source of truth or runtime registry. The generator checks the baseline for
-contract drift through its paired test and must be checked whenever source
-contracts change.
+Generate the current machine-readable selector and runner inventory on demand:
+
+```sh
+.venv/bin/python -m scripts.generate_builtin_inventory --root . \
+  --output /tmp/alphus-builtin-inventory.json
+```
+
+The inventory is an audit view, not another source of truth or runtime
+registry. Its test compares current source-derived contracts directly with the
+pinned `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` source archive. Generated JSON
+reports stay in the caller's temporary output path rather than being committed
+as duplicate architecture data.
 
 The current inventory's policy references are deliberately named
 `policy_inputs_observed`: it combines the primary `RuleSpec` field with direct
@@ -47,11 +50,12 @@ and local-model-assisted execution. Persistent result caching, automatic
 repository setup, and history/index migrations remain separately scoped until
 their contracts and need are established.
 
-The inventory test verifies the committed baseline by regenerating it from
-the pinned source commit, and compares the current registration fields to that
-baseline. This is an objective registration-contract check, not a wheel
-behavior differential. The full pinned-wheel equivalence protocol below is a
-prerequisite for broad migration of the remaining selectors. One isolated
+The inventory test generates both current and pinned-baseline inventories into
+temporary files directly from their source trees, then compares registration
+contracts. No generated JSON baseline is committed. This is an objective
+registration-contract check, not a wheel behavior differential. The full
+pinned-wheel equivalence protocol below is a prerequisite for broad migration
+of the remaining selectors. One isolated
 vertical slice may use its own pinned direct/profile differential cases and
 slice-specific lazy-import proof; that limited exception does not establish
 equivalence for other selectors.
@@ -66,7 +70,8 @@ This document distinguishes four kinds of statement:
   silently changing consumer behavior.
 
 PR #100 remains an open draft. It began with the six-check morphology
-metadata pilot and now has eleven feature-owned runtime selectors:
+metadata pilot and now has eleven selectors moved onto feature-owned generated
+runtime views:
 `file-size`, `line-length`, `package-boundaries`, `repository-layout`,
 `dependency-locks`, `documentation-config`, `cyclomatic-complexity`,
 `output-escaping`, `comment-markers`, `numeric-literals`, and
@@ -77,6 +82,9 @@ field, selector type, inventory entry, and lazy runner thunk. The established
 still uses the existing output contract. The other 51 baseline selectors
 remain on legacy registration paths; these slices do not complete issue #87
 or establish full selector equivalence.
+The pilot's `ALPHUS_CHECK` tuple-pair literals are migration scaffolding, not
+the accepted authoring interface; replacing them with the reviewed typed
+registry is still required.
 
 ## Current package ownership and dependency direction
 
@@ -324,14 +332,14 @@ JSON/text shapes and legacy IDs.
 
 ## Feature-owned registration and imports
 
-The intended flow is:
+The intended target flow is:
 
 ```text
-feature-owned static declaration
-       │  AST-only validation; no feature imports during discovery
+typed, feature-owned registration module
+       │  build hook scans names and writes standard entry-point metadata
        ▼
-generated typed selector, strict-config view, RuleSpec/catalog,
-lazy runner binding, result adapter, and docs index
+standard built-in entry point; typed registry validates first-party factories
+and derives selector/config/catalog/runner/docs views
        │
        ▼
 validated consumer config + explicit profile/direct selection
@@ -342,15 +350,16 @@ typed evaluation → existing render/report/history boundaries
 ```
 
 Each generated view is derived from the same declaration; none becomes an
-independent list. Generation rejects duplicate or missing selectors,
-policy/runner/result bindings, invalid output contracts, stale files, and
-unsafe source paths. Discovery must not execute feature or consumer code.
-Generated per-selector thunks use explicit static import paths so importing
-the catalog or parsing config does not initialize every checker or optional
-backend. Only an explicitly selected rule imports its implementation. A
+independent authored list. Build-time discovery scans only the first-party
+registration-module filenames and does not execute feature, consumer or plugin
+code. Runtime registry discovery loads registration factories only from the
+installed Alphus distribution and validates duplicate selector names before
+loading them. Those metadata modules cannot import optional analyzers; their
+typed provider factories import the checker only after explicit selection.
+Catalog/config inspection does not initialize checker implementations. A
 registration never selects or enables a check: consumer profile steps remain
 the selection source, and strict config continues to reject invalid or
-unknown fields.
+unknown fields. This is the design target, not yet the current production path.
 
 Preserve TOML section and field names, `QualityRuleName` selectors, existing
 `RuleTag` finding IDs, gate IDs, profile step names, output formats, ordering,
@@ -360,34 +369,41 @@ API v1.
 
 ## Developer experience: add a check once
 
-A feature declaration belongs beside its behavior and points to the
-feature's existing strict policy model without moving policy ownership into
-the checker package. `file-size` lives in
+A feature declaration should be a typed, feature-owned entry-point factory
+beside its behavior. It references the existing strict policy model without
+moving policy ownership into the checker package. `file-size` lives in
 `src/alphus/gates/hygiene/file_size.py`; `FileSizePolicy` remains in
-`src/alphus/policy/sources.py`. The second migration uses the same path for
-`line-length` and `LineLengthPolicy`:
+`src/alphus/policy/sources.py`. A target registration module for
+`line-length` would own one typed definition:
 
 ```python
-ALPHUS_CHECK = (
-    ("selector", "line-length"),
-    ("policy_field", "line_length"),
-    ("policy_model", "alphus.policy.sources.LineLengthPolicy"),
-    ("output_shape", "findings"),
-    ("runner_module", "alphus.gates.hygiene.line_length"),
-    ("runner_name", "check_line_length"),
-    # Additional literal pairs declare morphology, claim and evidence.
-)
+def register_line_length() -> BuiltinCheckDefinition[
+    LineLengthPolicy, LineLengthEvidence, tuple[Finding, ...]
+]:
+    return BuiltinCheckDefinition(
+        selector="line-length",
+        settings_model=LineLengthPolicy,
+        validate_settings=validate_line_length_settings,
+        provider_factory=load_line_length_provider,
+        adapt_result=adapt_line_length_evidence,
+        morphology=LINE_LENGTH_MORPHOLOGY,
+        complaint_contract=LINE_LENGTH_COMPLAINTS,
+    )
 ```
 
-The deterministic AST reader discovers this literal without importing feature
-or plugin code. It validates the policy class, selector, policy field, runner,
-finding tags, paths and duplicate ownership. It generates the immutable
-`FeatureDefinition` catalog, morphology view, `RuleSpec`, strict
-`GeneratedFeaturePolicies` base fields, `QualityRuleName` literal and lazy
-runner thunk. `CheckPolicies` and the public `QualityRuleName` import path stay
-unchanged. Unknown or malformed declarations fail generation with the source
-path and offending reference. Result adaptation still uses the existing
-`RuleEvaluation` and output-shape path.
+The packaging build hook discovers `*_registration.py` feature modules and
+generates standard `alphus.builtin_checks.v1` entry-point metadata in the build
+directory, not in a tracked shared file. The runtime registry loads only
+entry-points owned by the installed Alphus distribution, validates duplicate
+names before loading factories, and imports only lightweight registration
+modules. Analyzer/provider factories use statically checked callbacks and
+import their implementation only after explicit selection. Build-generated
+views supply selector, strict config, `RuleSpec`, catalog and documentation
+contracts from those typed definitions. Adding an independent check should
+require its feature registration and tests, not edits to a selector map,
+runner map, or `pyproject.toml` entry-point table. This is the reviewed target;
+the current tuple-pair generator and most generated views have not been
+replaced yet.
 
 At runtime, consumers continue to provide the same `[checks.line_length]`
 policy and select `line-length` directly or in a profile. Catalog inspection
@@ -636,22 +652,33 @@ steps, TOML names and report adaptation stay the same.
 The preceding slice moved `CyclomaticPlan`, backend plans, results, metrics
 and `CyclomaticReport` into the lightweight `contracts.cyclomatic` module; the
 engine continues to re-export those names for import compatibility. The direct
-runner, CLI, parallel profile adapter and isolated worker use bounded dynamic
-imports on the selected cyclomatic path. Subprocess coverage verifies that
-importing the CLI, dispatcher and generic worker does not import the native
-analyzer. Differential wheel scenarios and the full package suite cover
+runner and CLI keep their selected-path loading behavior. The parallel profile
+adapter now resolves its planning, backend-failure, reduction, and reporting
+operations from a typed `CyclomaticRuleOperations` contract selected by the
+registered `cyclomatic-report` result shape. This removes the parallel module's
+separate function-name/import list while keeping the native analyzer unloaded
+until that specialized result path is requested. Subprocess coverage verifies
+that importing the CLI, dispatcher and generic worker does not import the
+native analyzer. Differential wheel scenarios and the full package suite cover
 selected Python/Ruff, JavaScript/ESLint, and C++/Lizard behavior, including
 report, failure, unsupported and coverage outcomes.
 
-The [pinned cyclomatic registration report][cyclomatic-registration-differential]
-compares reference `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` with candidate
-`04b4e0378b2f24edf9f1ddacefec18c85d409c38`. All 30 manifested scenarios match;
-the 62-selector catalogs and registration contracts are equal. The matrix
-exercises Python/Ruff, JavaScript/ESLint, C++/Lizard, missing and mismatched
-backends, and partial coverage. Thirteen built-in selectors have behavior-level
+The backend's effective options are represented internally as named
+`CyclomaticOption` records. The report adapter deliberately keeps the existing
+two-item JSON arrays for wire compatibility; the tuples named in review were
+internal contract records on older revisions and no longer form the Python
+model.
+
+Pinned cyclomatic differential evidence compares reference
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` with candidate
+`04b4e0378b2f24edf9f1ddacefec18c85d409c38`. All 30 manifested scenarios matched;
+the 62-selector catalogs and registration contracts were equal. The matrix
+exercised Python/Ruff, JavaScript/ESLint, C++/Lizard, missing and mismatched
+backends, and partial coverage. Thirteen built-in selectors had behavior-level
 differential evidence, leaving 49 baseline selectors without that evidence.
 This proves the cyclomatic registration slice against manifested scenarios,
-not full 62-selector equivalence.
+not full 62-selector equivalence. Re-run the wheel harness with `--output`
+directed to a temporary file to inspect its detailed comparison record.
 
 ### Cross-language bounded heuristic: `output-escaping`
 
@@ -671,13 +698,13 @@ language providers unloaded during ordinary CLI startup.
 
 The wheel matrix exercises strict unknown-field rejection, Python and
 JavaScript findings with their original scoped IDs, and direct plus profile
-result adaptation. The [pinned output-escaping differential report][output-escaping-differential]
-compares baseline `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` with candidate
-`322f27a67f23aa9de917881590c030585a2c1cc9`. All 33 manifested scenarios match
-with zero differences; both 62-selector catalogs and their registration
-contracts are equal. The new direct and profile scenarios verify both scoped
-finding IDs, and the invalid-config scenario rejects an unknown policy field.
-Thirteen selectors have behavior-level differential evidence, leaving 49
+result adaptation. Pinned output-escaping differential evidence compares
+baseline `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` with candidate
+`322f27a67f23aa9de917881590c030585a2c1cc9`; all 33 manifested scenarios
+matched with zero differences, and both 62-selector catalogs and registration
+contracts were equal. Direct and profile scenarios verified both scoped
+finding IDs, and invalid configuration rejected an unknown policy field.
+Thirteen selectors had behavior-level differential evidence, leaving 49
 without that evidence. This does not prove full selector equivalence. The slice
 adds no languages, detection behavior or severity changes.
 
@@ -792,24 +819,22 @@ layer, so the run is matched but not hermetic. Both source-archive wheels report
 version `0.0.0`; source commits and wheel hashes identify the artifacts. That
 report alone did not justify a runtime registration migration.
 
-The latest machine-readable run is available in the
-[latest behavior and selector-matrix report][differential-report].
-It records the frozen fixture snapshot identities, manifest and harness hashes,
-plugin source/wheel hashes, per-scenario native dependencies, selected and
-analyzed file counts, and separate built-in/plugin coverage. Its generated
-matrix also invoked all 26 selectors with configured policies and verified
-strict missing-policy rejection for the other 36. These checks exercise
-selection/config contracts; they do not count as semantic behavior coverage.
-
-[differential-report]: architecture/builtin-check-wheel-differential-c880093-ad45db3-numeric-cli-metadata.json
-Reproduce it with:
+The latest differential run compared baseline
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` with candidate
+`ad45db3cdb52d4a3f9141782d3b06c057c904f23`. It recorded frozen fixture
+identities, manifest and harness hashes, plugin source and wheel hashes,
+per-scenario native dependencies, selected/analyzed file counts, and separate
+built-in/plugin coverage. Its generated matrix invoked all 26 selectors with
+configured policies and verified strict missing-policy rejection for the other
+36. These checks exercise selection/config contracts; they do not count as
+semantic behavior coverage. Reproduce the detailed record outside the repo:
 
 ```sh
 PATH="$PWD/node_modules/.bin:$PATH" .venv/bin/python scripts/differential_wheels.py \
   --root . \
   --baseline c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e \
   --candidate ad45db3cdb52d4a3f9141782d3b06c057c904f23 \
-  --output docs/architecture/builtin-check-wheel-differential-c880093-ad45db3-numeric-cli-metadata.json
+  --output /tmp/alphus-morphology-wheel-differential.json
 ```
 
 ## Runtime registration slices: `file-size` and `line-length`
@@ -838,8 +863,8 @@ file-size implementation unloaded until that selector is run.
 The first differential attempt caught a catalog-summary change for
 file-size. The declaration was corrected to preserve the exact mainline
 summary. The line-length migration also derives strict config and selector
-contracts. Its [pinned line-length differential report][line-length-differential] records
-equal catalogs and no differences across 22 scenarios, including direct
+contracts. Its pinned line-length differential run recorded equal catalogs
+and no differences across 22 scenarios, including direct
 line-length output and profile serial/parallel execution. Nine of the 62
 selectors have behavior-level evidence; the remaining 53 still lack it. The
 26 configured direct invocations and 36 strict missing-policy rejections are
@@ -875,7 +900,7 @@ selected profile step with all four policy inputs. This extends compatibility
 evidence for one difficult composite; the remaining legacy selectors and
 effectful command/build paths still require behavior-level coverage.
 
-The [pinned composite differential report][composite-differential] compares
+The pinned composite differential run compares
 reference `c880093` with candidate `87f01a0190191ed62f5657e2fd623cca21ea1fdd`.
 All 24 manifested scenarios match; both catalogs contain the same 62 selectors,
 and the composite direct and profile scenarios have identical fixture hashes,
@@ -907,26 +932,14 @@ catalog entry without changing package-boundaries' independent composite
 inputs. It provides a second repository-package migration case and does not
 imply that other repository checks share this feature shape.
 
-The [repository-layout wheel differential][repository-layout-differential]
-compares reference `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` with candidate
+The repository-layout wheel differential compares reference
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` with candidate
 `4f63bfe6d73f2e2f7cb5fc992ce272ef96f17874`. All 26 manifested scenarios
 match, both catalogs contain the same 62 selectors, and direct plus profile
 repository-layout runs preserve finding IDs, order and exit behavior. Eleven
 selectors now have behavior-level differential evidence; 51 baseline
 selectors still lack it. Selection/config rows and catalog parity do not count
 as semantic evidence for those remaining selectors.
-
-[file-size-differential]: architecture/builtin-check-wheel-differential-c880093-ab0d4ff-file-size.json
-[line-length-differential]: architecture/builtin-check-wheel-differential-c880093-0daeab6-line-length.json
-[composite-differential]: architecture/builtin-check-wheel-differential-c880093-87f01a0-package-composite.json
-[repository-layout-differential]: architecture/builtin-check-wheel-differential-c880093-4f63bfe-repository-layout.json
-[cyclomatic-registration-differential]: architecture/cyclomatic-registration-04b4e03.json
-[output-escaping-differential]: architecture/output-escaping-322f27a.json
-[comment-markers-differential]: architecture/builtin-check-wheel-differential-c880093-5d1a6f5-comment-markers.json
-[numeric-registration-differential]:
-  architecture/builtin-check-wheel-differential-c880093-409c06d-numeric-registration.json
-[numeric-cli-metadata-differential]:
-  architecture/builtin-check-wheel-differential-c880093-ad45db3-numeric-cli-metadata.json
 
 ## Dependency-lock registration slice: `dependency-locks`
 
@@ -943,15 +956,13 @@ finding, and an unselected-run subprocess proving the provider stays unloaded.
 Pinned direct and profile scenarios also exercise its existing severity and
 profile-step behavior.
 
-The [dependency-lock wheel differential][dependency-lock-differential]
-compares the baseline at `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` with
+The dependency-lock wheel differential compares the baseline at
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` with
 candidate `f6e3434ab164be102927bd537dc78c3dddb792a4`. All 28 manifested
 scenarios match and both installed-wheel catalogs contain the same 62
 selectors. Twelve selectors now have behavior-level evidence; 50 still lack
 it. Catalog and strict-config checks cover registration shape, not those
 selectors' execution semantics.
-
-[dependency-lock-differential]: architecture/builtin-check-wheel-differential-c880093-f6e3434-dependency-locks.json
 
 ## Documentation-config registration slice: `documentation-config`
 
@@ -969,15 +980,12 @@ that an unselected run does not import this checker. The pinned direct and
 profile cases exercise a source default and contradictory Markdown claim,
 including the warning-level profile result.
 
-The [documentation-config wheel differential][documentation-config-differential]
-compares main baseline `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` with source
+The documentation-config wheel differential compares main baseline
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` with source
 candidate `6b41a039c995d8cb9ff3c8f71f1bdf52dae81583`. All 30 manifested
 scenarios match, catalogs match at 62 selectors, and the registered check
 preserves the conflict ID, location, severity, message, and profile behavior.
 Thirteen selectors now have behavior-level evidence; 49 remain without it.
-
-[documentation-config-differential]:
-  architecture/builtin-check-wheel-differential-c880093-6b41a03-documentation-config.json
 
 ## Performance and cache boundary
 
