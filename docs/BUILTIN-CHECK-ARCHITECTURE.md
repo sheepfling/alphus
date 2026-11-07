@@ -94,7 +94,7 @@ morphology metadata, typed `FeatureDefinition`, `RuleSpec`, strict policy
 field, selector type, and inventory entry. Each feature module exposes one
 typed `ALPHUS_FEATURE` object with a direct callback for lazy execution. The established
 `RuleEvaluation` and CLI result adapters remain shared, so adding a feature
-still uses the existing output contract. The other 24 baseline selectors
+still uses the existing output contract. The other 22 baseline selectors
 remain on legacy registration paths; these slices do not complete issue #87
 or establish full selector equivalence. These declarations are now
 typed `FeatureDefinition(...)` calls paired with immutable
@@ -104,7 +104,7 @@ The PEP 517 backend generates installed-wheel entry-point metadata without a
 per-check `pyproject.toml` edit. Aggregate policy/config/dispatch views are
 ignored build artifacts rather than checked-in shared files, so independent
 feature branches do not edit the same generated outputs. Runtime entry points
-target the typed feature object; 24 selectors still use legacy registration
+target the typed feature object; 22 selectors still use legacy registration
 maps.
 
 The latest source-discovery slice moves `json-structure` and `path-discovery`
@@ -1454,7 +1454,7 @@ theme runner cases, and CLI source-scan selector entries were removed. The
 analyzers, policy models, finding IDs, messages, severity, selection behavior,
 and result adaptation remain unchanged.
 
-The pinned installed-wheel comparison against baseline
+At candidate `e12bf496`, the pinned installed-wheel comparison against baseline
 `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` matched all 90 manifested
 scenarios with zero differences. Both wheels expose the same 62-selector
 catalog and registration contract. Behavior scenarios exercise 38 selectors;
@@ -1477,3 +1477,36 @@ inspect it. The installed-wheel self-check passed 27 profile checks with zero
 failures and four provisional checks; its package suite passed 2,507 tests
 (44 skipped). This extends, but does not complete, the 0.0.3 migration or full
 62-selector equivalence proof.
+
+## Python text-analysis registration slice
+
+Commit `33cf71276544baa74a34770dc41ccfee0b9379ad` moves the configured
+`dynamic-markdown` and `embedded-semantic-overrides` checks from the review
+runner/catalog into typed feature declarations beside their analyzers. The
+declarations retain the existing selector strings, policy models, config
+fields, RuleTag IDs, summaries, applicability, finding results and severities.
+The AST heuristics, policy models and findings were not changed. Their
+generated strict policy fields, selector/catalog entries and lazy wheel
+entry-points now come from these feature-owned declarations; the two duplicate
+catalog and review-runner entries were removed. `ALPHUS_MORPHOLOGY` describes
+the risk claims and bounded deterministic evidence without changing
+enforcement. The existing review test paths remain adjacent to these checks.
+
+The fixture contains both source patterns. Separate direct scenarios and an
+ordered two-check profile assert the prior finding IDs and locations, while an
+unknown field proves strict config rejection. The pinned wheel comparison with
+baseline `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` matched all 94 manifested
+scenarios with zero differences. Both catalogs retain 62 selectors; behavior
+scenarios exercise 40, with 22 lacking a behavior scenario. Direct dispatch
+covers 26 selectors and strict missing-policy rejection covers 36. The
+baseline and candidate wheel SHA-256 values are
+`2a6dce3df25568d4b64f65e1b427772dc9863c593e0976efd0c52f33261bb903` and
+`e3d832ad82f36b16466767f474a98c36e373ffefebb2d76641b7f871a368660f`. The
+report is `/tmp/alphus-morphology-review-text-33cf712.json`; it is reproducible
+from the pinned commits and is not committed.
+
+The installed-wheel CI at this tree passed 2,508 tests (44 skipped); the
+self-profile passed 27 checks with no failures and four provisional passes.
+This closes the direct/profile/config evidence for this paired slice only.
+It does not establish behavior equivalence for the 22 legacy registration
+selectors or complete the 0.0.3 rearchitecture.
