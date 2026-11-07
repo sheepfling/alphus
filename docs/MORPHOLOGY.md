@@ -61,8 +61,8 @@ by a typed `BuiltinFeature` with direct runner and specialized-operation
 references.
 
 The original six-rule pilot is not a complete built-in registration
-migration. Eleven selectors now use feature-owned runtime declarations, while
-51 remain on legacy selector/config/runner paths. Generated declarations do not
+migration. Eighteen selectors now use feature-owned runtime declarations,
+while 44 remain on legacy selector/config/runner paths. Generated declarations do not
 select or enable a check and do not change JSON results, finding IDs, gate IDs,
 or enforcement.
 
@@ -89,9 +89,9 @@ readiness.
 ## Registration boundary and next tranche
 
 The six-check morphology pilot is metadata discovery. Draft PR #100 now
-has eleven feature-owned runtime selectors, including the package-boundaries
-composite, polyglot cyclomatic and comment readers, output escaping, and the
-paired shared-contract numeric checks. Each declaration generates morphology,
+has eighteen feature-owned runtime selectors, including the package-boundaries
+composite, polyglot cyclomatic and comment readers, output escaping, paired
+shared-contract numeric checks, and Python/JavaScript source checks. Each declaration generates morphology,
 `FeatureDefinition`, `RuleSpec`, strict primary `CheckPolicies` field, selector
 literal, inventory entry and lazy dispatch. Existing config names, output
 adaptation, reports, selection and exit behavior remain the compatibility
@@ -99,12 +99,12 @@ contract. Synthetic discovery proves a new selector can be found without a
 central selector list; tests cover strict fields, shared complaint ownership,
 composite dispatch and lazy unselected providers.
 
-This remains bounded: the other 51 baseline selectors use legacy registration
-paths, and the current fourteen-selector differential evidence is not full wheel
-equivalence. The latest pinned run compares 42 scenarios with no differences,
-including direct/profile numeric
-results, strict-config rejection, source selection and exact plain labels.
-Forty-eight baseline selectors still lack behavior-level differential evidence.
+This remains bounded: the other 44 baseline selectors use legacy registration
+paths, and the current evidence is not full wheel equivalence. The pinned run
+for candidate `5987a183dee35c948ae771d852c2be4a458953b9` compares 55 scenarios
+against baseline `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` with no differences;
+21 selectors have behavior-level scenarios. Forty-one baseline selectors still
+lack behavior-level differential evidence.
 Continue migration with direct/profile comparisons, lazy-provider checks, and
 explicit missing/unsupported, partial, error, plugin/native and effectful-command
 cases; this does not complete #87.
