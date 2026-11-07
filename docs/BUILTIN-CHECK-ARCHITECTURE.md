@@ -79,21 +79,22 @@ This document distinguishes four kinds of statement:
   silently changing consumer behavior.
 
 PR #100 remains an open draft. It began with the six-check morphology
-metadata pilot and now has twenty-four selectors moved onto feature-owned
+metadata pilot and now has thirty-eight selectors moved onto feature-owned
 generated runtime views:
 `file-size`, `line-length`, `package-boundaries`, `repository-layout`,
 `dependency-locks`, `documentation-config`, `cyclomatic-complexity`,
 `output-escaping`, `comment-markers`, `numeric-literals`, `scipy-constants`,
 `module-roles`, `markdown-shell-fences`, `git-ignores`, `git-attributes`,
 `git-history`, `json-structure`, `path-discovery`, `document-style`,
-`benchmark-docs`, `test-quality`, `input-contracts`, `pydantic-practices`, and
-`sqlalchemy-practices`. Each local
+`benchmark-docs`, `test-quality`, `input-contracts`, `pydantic-practices`,
+`sqlalchemy-practices`, `manual-matrix-kernels`, `manual-elimination`,
+`array-representation-churn`, and `cholesky-recurrence`. Each local
 `ALPHUS_CHECK` declaration statically generates
 morphology metadata, typed `FeatureDefinition`, `RuleSpec`, strict policy
 field, selector type, and inventory entry. Each feature module exposes one
 typed `ALPHUS_FEATURE` object with a direct callback for lazy execution. The established
 `RuleEvaluation` and CLI result adapters remain shared, so adding a feature
-still uses the existing output contract. The other 38 baseline selectors
+still uses the existing output contract. The other 24 baseline selectors
 remain on legacy registration paths; these slices do not complete issue #87
 or establish full selector equivalence. These declarations are now
 typed `FeatureDefinition(...)` calls paired with immutable
@@ -103,8 +104,8 @@ The PEP 517 backend generates installed-wheel entry-point metadata without a
 per-check `pyproject.toml` edit. Aggregate policy/config/dispatch views are
 ignored build artifacts rather than checked-in shared files, so independent
 feature branches do not edit the same generated outputs. Runtime entry points
-target the typed feature object; the remaining 40 selectors still use legacy
-registration maps.
+target the typed feature object; 24 selectors still use legacy registration
+maps.
 
 The latest source-discovery slice moves `json-structure` and `path-discovery`
 into feature-owned registration. Their typed declarations own the existing
@@ -443,7 +444,7 @@ rejects duplicate selector names before loading a selected runner. Catalog and
 config inspection do not import the migrated checker modules. A registration
 never selects or enables a check: consumer profile steps remain the selection
 source, and strict config continues to reject invalid or unknown fields. This
-production path currently covers twenty-four selectors; the other 38 still
+production path currently covers thirty-eight selectors; the other 24 still
 use legacy theme maps. The five aggregate views are no longer tracked: the
 build regenerates them as ignored source files for each worktree, and
 `MANIFEST.in` includes them in source archives. Separate feature branches
@@ -1439,3 +1440,40 @@ The auxiliary selector-dispatch matrix directly invoked 26 minimal
 configured selectors and rejected missing strict policy for 36; those counts
 are distinct from the 34 selectors with behavior scenarios. The full report
 is `/tmp/alphus-morphology-differential-69115c6.json` and is not committed.
+
+## Linear-algebra registration slice
+
+Candidate `e12bf496473bf930471e15674871c51bf46b006f` moves four configured
+Python numerical reviewers into feature-owned typed registrations:
+`manual-matrix-kernels`, `manual-elimination`, `array-representation-churn`,
+and `cholesky-recurrence`. Each checker module now owns its `FeatureDefinition`,
+`RuleMorphology`, and typed `BuiltinFeature` runner. The generated strict
+policy fields and selectors, catalog entries, and installed-wheel entry points
+derive from those declarations. The old catalog rows, `CheckPolicies` fields,
+theme runner cases, and CLI source-scan selector entries were removed. The
+analyzers, policy models, finding IDs, messages, severity, selection behavior,
+and result adaptation remain unchanged.
+
+The pinned installed-wheel comparison against baseline
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` matched all 90 manifested
+scenarios with zero differences. Both wheels expose the same 62-selector
+catalog and registration contract. Behavior scenarios exercise 38 selectors;
+24 have no behavior-level scenario yet. The separate selector-dispatch matrix
+has 62 rows, with 26 minimal direct invocations and 36 strict missing-policy
+rejections. Reference and candidate wheel SHA-256 values are
+`578a7848fa2b6d2d2f9bda95cbb137ad051df290be88e38268c8a344d3fa9ca9` and
+`c3efbff7643eb22e2115589240f15d1c52c00d117711bba49071b24519ffd555`.
+The report is `/tmp/alphus-morphology-linear-algebra-e12bf49.json`; it is
+reproducible from the pinned commits and is intentionally not committed as a
+large JSON dump.
+
+The four new direct scenarios assert existing finding IDs and source lines;
+the profile scenario asserts the existing ordered result shape, and a separate
+invalid-config fixture proves strict rejection. The manual-elimination source
+fixture intentionally exercises mutable matrix input, so the self-check policy
+excludes only that exact fixture from unrelated concrete-input and argument-
+mutation reviews. Ruff, formatting, typing, and the differential scenario still
+inspect it. The installed-wheel self-check passed 27 profile checks with zero
+failures and four provisional checks; its package suite passed 2,507 tests
+(44 skipped). This extends, but does not complete, the 0.0.3 migration or full
+62-selector equivalence proof.

@@ -61,8 +61,8 @@ by a typed `BuiltinFeature` with direct runner and specialized-operation
 references.
 
 The original six-rule pilot is not a complete built-in registration
-migration. Thirty-four selectors now use feature-owned runtime
-declarations, while 28 remain on legacy selector/config/runner paths.
+migration. Thirty-eight selectors now use feature-owned runtime
+declarations, while 24 remain on legacy selector/config/runner paths.
 Generated declarations do not select or enable a check and do not change JSON results, finding IDs, gate IDs,
 or enforcement.
 
@@ -111,8 +111,11 @@ strict policy fields, catalog summaries, lazy runner entry points and display
 labels are generated from those declarations. The pinned wheel manifest now
 includes direct, profile and unknown-policy cases for each selector.
 
-This remains bounded: the other 38 baseline selectors use legacy registration
-paths, and the current evidence is not full wheel equivalence. Candidate
+At candidate `0c31a41`, 24 selectors had been migrated; that report is a
+historical snapshot, not the current migration count. This remains bounded:
+24 baseline selectors use
+legacy registration paths, and the current evidence is not full wheel
+equivalence. Candidate
 `0c31a41b61a006ccff08d611fcec23100c403443` matched the pinned baseline
 `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` across 68 manifested scenarios
 with zero differences. Both catalogs contain the same 62 selectors; behavior
@@ -166,3 +169,9 @@ scenarios assert the stable finding IDs and source lines, a profile scenario
 asserts ordered results, and an invalid-config scenario proves strict
 validation. The [coordinate-frame registration slice](BUILTIN-CHECK-ARCHITECTURE.md#coordinate-frame-registration-slice)
 records the compatibility result.
+
+The four configured Python linear-algebra reviewers now use feature-owned
+typed registration for their separate bounded AST shapes. Their current
+selector count, pinned-wheel comparison, positive fixture treatment, and
+remaining equivalence gap are documented in the [linear-algebra registration
+slice](BUILTIN-CHECK-ARCHITECTURE.md#linear-algebra-registration-slice).
