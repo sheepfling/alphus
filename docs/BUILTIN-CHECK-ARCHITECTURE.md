@@ -1129,15 +1129,15 @@ generated history path. The wheel manifest invokes each selector directly and
 runs all three in an explicitly selected profile with serial and parallel job
 settings. Against baseline
 `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`, candidate
-`17cb1000ee06e645b128afea712f5ac2f7edaae8` retained identical 62-selector
+`15a4333b3a7cc6a3fde6e8346868f79c9b36e114` retained identical 62-selector
 catalogs and had no differences across all 51 manifested scenarios. The
 registered-check profile result order, IDs, locations, message and exit
 semantics matched. Reference and candidate wheel SHA-256 values were
-`64e1d0b402d226d09675267bd7733688cfe56a112025d5e91c7a20bc53db66a0` and
-`d9f2c96b35ed226f3e937bd3c280377be2ef058ce8df0c94e7d74158a6ba04f6`.
+`7329bced4573c9da2a5a5c683810676bc4f265fd25829399edcac147dad6d2c6` and
+`424abfaefface6b72faacef7f8fbca75e2fd66212f15495cd813669020fa6cec`.
 The harness records 19 behaviorally exercised selectors; 43 still lack
 behavior-level evidence. The exact report is
-`/tmp/alphus-morphology-git-vcs-17cb100.json`. This batch demonstrates shared
+`/tmp/alphus-morphology-git-vcs-15a4333.json`. This batch demonstrates shared
 typed policy ownership across three feature registrations, not universal
 equivalence for the remaining selector inventory.
 module; when an existing implementation is oversized, split it only as a
