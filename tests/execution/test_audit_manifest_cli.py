@@ -38,7 +38,7 @@ def _write_manifest(
 _NUMERICAL_SOURCE_RULES: tuple[QualityRuleName, ...] = tuple(
     cast(QualityRuleName, selector)
     for selector, spec in RULE_SPECS.items()
-    if "numerical" in spec.domains
+    if "numerical" in spec.applies_to
 )
 
 

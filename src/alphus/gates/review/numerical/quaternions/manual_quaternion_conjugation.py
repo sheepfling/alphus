@@ -36,8 +36,8 @@ ALPHUS_CHECK: Final = FeatureDefinition(
     policy_model=QuaternionConjugationPolicy,
     output_shape="findings",
     summary="Reviews configured hand-written quaternion conjugation patterns.",
-    applies_to=("python",),
-    domains=("numerical",),
+    applies_to=("python", "numerical"),
+    domains=(),
     requires_files=True,
 )
 

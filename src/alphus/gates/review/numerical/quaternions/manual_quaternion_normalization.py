@@ -44,8 +44,8 @@ ALPHUS_CHECK: Final = FeatureDefinition(
     policy_model=QuaternionNormalizationPolicy,
     output_shape="findings",
     summary="Reviews configured hand-written quaternion normalization patterns.",
-    applies_to=("python",),
-    domains=("numerical",),
+    applies_to=("python", "numerical"),
+    domains=(),
     requires_files=True,
 )
 

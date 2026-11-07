@@ -36,8 +36,8 @@ ALPHUS_CHECK: Final = FeatureDefinition(
     policy_model=QuaternionProductPolicy,
     output_shape="findings",
     summary="Reviews configured hand-written quaternion product patterns.",
-    applies_to=("python",),
-    domains=("numerical",),
+    applies_to=("python", "numerical"),
+    domains=(),
     requires_files=True,
 )
 
