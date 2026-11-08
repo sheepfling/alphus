@@ -61,8 +61,8 @@ by a typed `BuiltinFeature` with direct runner and specialized-operation
 references.
 
 The original six-rule pilot is not a complete built-in registration
-migration. Fifty-six selectors now use feature-owned runtime declarations,
-while six remain on legacy selector/config/runner paths.
+migration. Fifty-seven selectors now use feature-owned runtime declarations,
+while five remain on legacy selector/config/runner paths.
 Generated declarations do not select or enable a check and do not change JSON results, finding IDs, gate IDs,
 or enforcement.
 
@@ -423,3 +423,31 @@ missing-policy rejections. Reference and candidate wheel SHA-256 values are
 `83cc194d9008b9d537f8f8d9eb76d2998f7f99b9409ec800e6b97e9d9291d53d`. The
 report is `/tmp/alphus-morphology-suppression-762d06e.json`; it is not
 committed. This remains partial evidence, not completion of issue #87.
+
+## Source-test-coverage registration slice
+
+Commit `fcbb5d474e51d10896e91df7d09e4b167fdf1cb3` moves
+`source-test-coverage` to the same typed, feature-owned registration model.
+Its declaration owns the existing strict `SourceTestCoveragePolicy`,
+repository applicability, no-file-inventory requirement, finding result shape,
+morphology and lazy runner. The duplicate catalog row, policy-field override
+and hand-written review-runner binding were removed. The selector, TOML field,
+catalog summary and domains, finding ID and empty/partial/stale evidence
+behavior remain unchanged.
+
+Differential cases exercise explicit direct selection with no top-level
+`[files]` inventory, typed finding output, serial/parallel profile execution,
+and rejection of an unknown policy field. Against pinned baseline
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`, the installed-wheel comparison
+matched all 136 manifested scenarios with zero differences and confirmed
+catalog equality across all 62 selectors. Fifty-seven selectors are now both
+feature-owned and behaviorally exercised; five legacy selectors remain. The
+selector-policy matrix covers 26 configured direct invocations and 36 strict
+missing-policy rejections. Reference and candidate wheel SHA-256 values are
+`c0c6b4fa5e4ac8082aeeba1e860c3bac3364c2f54813fc509117ebee20b9e94d` and
+`068072c916986dcbefcb433e0c8735707dfa633052aef1d267c878f5a3935e3a`. The
+report is `/tmp/alphus-morphology-source-test-coverage-fcbb5d4.json`; it is not
+committed. The wheel CI passed 2,515 tests (44 skipped), with 27 self-profile
+checks passing and four provisional passes; Ruff, formatting, Pyright, import
+smoke, and Markdown-shell review also passed. This remains partial evidence,
+not completion of issue #87.
