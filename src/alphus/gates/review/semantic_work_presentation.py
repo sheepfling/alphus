@@ -12,7 +12,7 @@ from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
 from alphus.gates.review._module_bindings import module_binding_counts
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -220,19 +220,27 @@ def check_semantic_work_presentation(
     return findings
 
 
-def _run_builtin_semantic_work_presentation(
-    root: Path,
-    files: Sequence[Path],
+def resolve_semantic_work_presentation_policy(
     config: QualityGateConfig,
-) -> list[Finding]:
-    policy = require_policy(
+) -> SemanticWorkPresentationPolicy:
+    """Resolve this check's strict presentation-risk policy."""
+    return require_policy(
         config.checks.semantic_work_presentation, "semantic_work_presentation"
     )
+
+
+def run_semantic_work_presentation_feature(
+    root: Path,
+    files: Sequence[Path],
+    policy: SemanticWorkPresentationPolicy,
+) -> list[Finding]:
+    """Run the configured semantic-work review with its policy type."""
     return check_semantic_work_presentation(root, files, policy)
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=_run_builtin_semantic_work_presentation,
+    runner=run_semantic_work_presentation_feature,
+    policy_resolver=resolve_semantic_work_presentation_policy,
 )

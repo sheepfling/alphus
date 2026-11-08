@@ -3,11 +3,16 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from alphus.config import SemanticWorkPresentationPolicy
+from alphus.config import QualityGateConfig, SemanticWorkPresentationPolicy
+from alphus.execution.dispatch import run_builtin_rule
 from alphus.gates.review.semantic_work_presentation import (
+    ALPHUS_FEATURE,
     check_semantic_work_presentation,
+    resolve_semantic_work_presentation_policy,
+    run_semantic_work_presentation_feature,
     semantic_work_presentation_sites,
 )
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 _COMPOSITE = """\
 def render_document(source):
@@ -144,4 +149,32 @@ def test_check_honors_declared_module_path_and_exclusions(tmp_path: Path) -> Non
     )
     assert not check_semantic_work_presentation(
         tmp_path, (Path("src/service/render.py"),), _policy()
+    )
+
+
+def test_registration_binds_typed_presentation_policy_and_finding_runner(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "src/presentation/document.py"
+    path.parent.mkdir(parents=True)
+    path.write_text(_COMPOSITE, encoding="utf-8")
+    relative = path.relative_to(tmp_path)
+    policy = _policy()
+    config = QualityGateConfig.model_validate(
+        {"schema_version": 1, "checks": {"semantic_work_presentation": policy}},
+        strict=True,
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is SemanticWorkPresentationPolicy
+    assert type(resolve_semantic_work_presentation_policy(config)) is (
+        SemanticWorkPresentationPolicy
+    )
+    expected = run_semantic_work_presentation_feature(
+        tmp_path, [relative], resolve_semantic_work_presentation_policy(config)
+    )
+    assert check_semantic_work_presentation(tmp_path, [relative], policy) == expected
+    assert (
+        run_builtin_rule("semantic-work-in-presentation", tmp_path, [relative], config)
+        == expected
     )

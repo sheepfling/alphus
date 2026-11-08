@@ -12,7 +12,7 @@ from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
 from alphus.gates.review._module_bindings import module_binding_counts
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -244,19 +244,27 @@ def check_heuristic_total_consumption(
     return findings
 
 
-def _run_builtin_heuristic_total_consumption(
-    root: Path,
-    files: Sequence[Path],
+def resolve_heuristic_total_consumption_policy(
     config: QualityGateConfig,
-) -> list[Finding]:
-    policy = require_policy(
+) -> HeuristicTotalConsumptionPolicy:
+    """Resolve this check's strict consumer-declared heuristic policy."""
+    return require_policy(
         config.checks.heuristic_total_consumption, "heuristic_total_consumption"
     )
+
+
+def run_heuristic_total_consumption_feature(
+    root: Path,
+    files: Sequence[Path],
+    policy: HeuristicTotalConsumptionPolicy,
+) -> list[Finding]:
+    """Run the configured heuristic with its feature-owned policy type."""
     return check_heuristic_total_consumption(root, files, policy)
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=_run_builtin_heuristic_total_consumption,
+    runner=run_heuristic_total_consumption_feature,
+    policy_resolver=resolve_heuristic_total_consumption_policy,
 )
