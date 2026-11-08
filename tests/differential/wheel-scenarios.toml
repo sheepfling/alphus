@@ -2144,8 +2144,8 @@ behavior = ["feature-owned-direct-dispatch", "bounded-python-guard-heuristic", "
 expected_exit = 0
 minimum_findings = 2
 expected_findings = [
-  { rule_id = "alphus/python/none/maintainability/repeated-numeric-limit", path = "src/analysis/guards.py", line = 2 },
   { rule_id = "alphus/python/none/maintainability/repeated-numeric-limit", path = "src/analysis/guards.py", line = 4 },
+  { rule_id = "alphus/python/none/maintainability/repeated-numeric-limit", path = "src/analysis/guards.py", line = 6 },
 ]
 
 [[scenario.variant]]
@@ -2163,8 +2163,8 @@ expected_step_names = ["Repeated numeric limits"]
 expected_step_rules = ["repeated-numeric-limits"]
 require_passed_steps = true
 expected_findings = [
-  { rule_id = "alphus/python/none/maintainability/repeated-numeric-limit", path = "src/analysis/guards.py", line = 2 },
   { rule_id = "alphus/python/none/maintainability/repeated-numeric-limit", path = "src/analysis/guards.py", line = 4 },
+  { rule_id = "alphus/python/none/maintainability/repeated-numeric-limit", path = "src/analysis/guards.py", line = 6 },
 ]
 
 [[scenario.variant]]
