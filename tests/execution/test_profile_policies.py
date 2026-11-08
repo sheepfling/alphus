@@ -14,7 +14,13 @@ import pytest
 from pydantic import ValidationError
 
 from alphus.cli import main
-from alphus.config import CheckPolicies, QualityGateConfig, QualityRuleName, load_config
+from alphus.config import (
+    CheckPolicies,
+    CliPolicy,
+    QualityGateConfig,
+    QualityRuleName,
+    load_config,
+)
 from alphus.contracts.cyclomatic import CyclomaticReport
 from alphus.contracts.findings import Finding
 from alphus.execution import dispatch
@@ -34,6 +40,20 @@ from alphus.plugins.builtin_registry import (
 from alphus.policy.base import MissingPolicyError
 from alphus.policy.catalog import RULE_SPECS
 from alphus.policy.sources import FileSizePolicy
+
+
+def test_feature_policy_resolution_rejects_a_different_policy_model() -> None:
+    definition = dispatch.FEATURE_DEFINITIONS["file-size"]
+
+    def forged_resolver(_config: QualityGateConfig) -> FileSizePolicy:
+        return cast(FileSizePolicy, CliPolicy.model_construct())
+
+    with pytest.raises(TypeError, match="policy resolver returned CliPolicy"):
+        dispatch._resolve_feature_policy(
+            forged_resolver,
+            definition,
+            QualityGateConfig.model_construct(),
+        )
 
 
 def repository(tmp_path: Path, extra: str = "") -> Path:

@@ -9,6 +9,8 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Protocol, TypeVar, assert_never, cast
 
+from pydantic import ValidationError
+
 from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.contracts.cyclomatic import (
     CyclomaticRuleOperations,
@@ -84,11 +86,13 @@ def _resolve_feature_policy(
 ) -> _FeaturePolicy:
     """Resolve and verify the configured value against its declared model."""
     policy = resolver(config)
-    if type(policy) is not definition.policy_model:
+    try:
+        definition.policy_model.model_validate(policy, strict=True)
+    except ValidationError as error:
         raise TypeError(
             f"feature {definition.selector!r} policy resolver returned "
             f"{type(policy).__name__}, expected {definition.policy_model.__name__}"
-        )
+        ) from error
     return policy
 
 
