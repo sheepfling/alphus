@@ -3,10 +3,10 @@
 This document records Alphus's diagnostic-tag contract and future extension
 design. It does not add a plugin loader or change which checks run.
 
-The current built-in multi-registry and proposed 0.0.3 migration are described
-in the [built-in check architecture](BUILTIN-CHECK-ARCHITECTURE.md). Use that
-page as the single design entry point; this guide remains focused on diagnostic
-and extension contracts.
+The built-in feature-owned registry and its remaining 0.0.3 proof gaps are
+described in the [built-in check architecture](BUILTIN-CHECK-ARCHITECTURE.md).
+Use that page as the single design entry point; this guide remains focused on
+diagnostic and extension contracts.
 
 ## Current contracts
 
@@ -69,10 +69,14 @@ expose a general hook system.
 
 ## Check discovery and domain recommendations
 
-`alphus.policy.catalog.RULE_SPECS` is the current source of truth for built-in
-check discovery. Every selector records a short summary, the source or framework
-surfaces it supports, an optional set of domain tags, its policy section, and
-whether it needs a file inventory. Inspect the complete catalog with
+First-party built-ins declare `ALPHUS_CHECK`, `ALPHUS_MORPHOLOGY`, and
+`ALPHUS_FEATURE` beside their provider in `src/alphus/gates`. The build backend
+statically discovers these typed declarations and generates the installed
+entry-point metadata plus runtime `FeatureDefinition`, `RuleSpec`, strict
+policy, selector, and dispatch views. `RULE_SPECS` is a generated runtime view,
+not a second authoring registry. The catalog records a short summary, supported
+surfaces, optional domain tags, policy section, and whether a file inventory is
+required. Inspect it with
 `alphus --catalog`; use `alphus --catalog --json` for machine-readable output.
 The catalog describes all built-in rules and rules from enabled plugins.
 Installed but disabled plugin IDs appear without importing their packages or
@@ -130,10 +134,11 @@ The root `[files]` inventory still controls which files can be inspected.
 Run the proposed profile explicitly with
 `alphus --run --profile science-review` after reviewing its scope.
 
-When adding a built-in selector, add complete discovery metadata to its
-`RuleSpec`. Keep domain tags narrowly justified and open to new areas; do not
-add a tag simply to make a rule appear relevant. The existing catalog
-completeness check ensures every public selector has a spec and runner.
+Keep domain tags narrowly justified and open to new areas; do not add a tag
+simply to make a rule appear relevant. Static discovery is deterministic and
+does not import gate modules. The selected entry point is loaded only after
+explicit selection; declarations do not activate a check or select it in a
+profile.
 
 ## Third-party rule packages (API v1)
 
@@ -281,26 +286,32 @@ only with a clear resolved plan and unchanged default selection. See the
 
 ## Future extension hooks
 
-### Add a built-in theme today
+### Add a built-in check today
 
-The `alphus.gates.review`, `source`, `python`, `repository`, `vcs`, and `hygiene` packages
-are working examples. Put checker implementations under `alphus.gates.<theme>`
-and put reusable parsing or file
-access in `alphus.support` only when more than one gate needs it. A portable
-checker receives an explicit root, selected files, and its validated policy;
-it returns findings or a typed report. A workflow gate such as the stub
-verifier runs through a command step instead.
+Use a feature-local module under the owning shape or language package. Add a
+strict policy model only when the check needs one, then declare its existing
+selector and output shape in `ALPHUS_CHECK`, its claim and evidence in
+`ALPHUS_MORPHOLOGY`, and a typed synchronous runner in `ALPHUS_FEATURE`.
+The build derives catalog/config/dispatch views and the wheel entry point; do
+not edit generated views, `RULE_SPECS`, `QualityRuleName`, or `pyproject.toml`
+for an individual selector. The source declaration must use the supported
+static form: the feature object links the local declarations and a local
+runner. Use a small feature-local adapter if the implementation needs composed
+or imported setup. Do not import analyzer-only dependencies merely to inspect
+the catalog.
 
-For a new built-in selector, add its policy model under `alphus.policy`,
-add the selector to `alphus.policy.base.QualityRuleName` and its policy field
-to `alphus.policy.catalog.RULE_SPECS` with a summary, supported surfaces, and
-justified domain tags, register its runner in the theme package,
-and compose that mapping in `alphus.execution.dispatch`. Add an output adapter
-in `alphus.execution.results` only if it has a new shape. Add direct CLI and profile
-tests, then select the gate in a consumer profile. The registry completeness
-test catches missing selectors, and Alphus's `check` profile exercises the
-rule and native tooling together. Import each implementation from its owning
-theme package; removed root module forwarders are not extension points.
+The common finding adapter is appropriate for ordinary checks. Cyclomatic
+analysis retains its `CyclomaticRuleOperations` and `CyclomaticReport`; a
+consumer-owned native build remains a `CommandRunStep`. Do not coerce those
+different results into findings. Preserve existing output contracts when
+adding a feature.
+
+Put tests under the corresponding `tests/gates/...` shape/language path when
+practical, with further tests allowed for generated catalog, config, CLI,
+profile, and installed-wheel behavior. For a registration change, cover strict
+unknown-field rejection, direct and profile output, ordered reporting, and
+lazy loading of an unselected provider. Selection in a consumer profile is a
+separate explicit policy decision; registration alone never enables it.
 
 ### Package layout for additional languages
 
@@ -334,13 +345,13 @@ second rule registry.
 
 ### Rule contract
 
-The built-in `RuleSpec` catalog records policy field, output shape, discovery
-summary, supported surfaces, and advisory domain tags. The immutable
-`alphus.execution.dispatch.BUILTIN_RULES` registry joins those records with
-theme-owned checker functions and fails early if their selectors differ.
-Older built-in output shapes remain adapted through
-`alphus.execution.results` while they migrate to common diagnostics. Domain
-suggestions remain separate from diagnostic-tag categories.
+The generated built-in `RuleSpec` view records policy field, output shape,
+discovery summary, supported surfaces, and advisory domain tags. The immutable
+`alphus.execution.dispatch.BUILTIN_RULES` runtime registry joins those records
+with selected feature entry points and remaining legacy runners. Existing
+output shapes remain adapted through `alphus.execution.results`; they are not
+changed to a common wire format by registration migration. Domain suggestions
+remain separate from diagnostic-tag categories.
 
 The v1 plugin boundary is intentionally limited to rule registration and
 synchronous check callbacks. It does not add lifecycle hooks, automatic

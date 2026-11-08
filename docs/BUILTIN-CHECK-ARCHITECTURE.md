@@ -10,11 +10,10 @@ change runtime behavior.
 
 Use this section for live status. The detailed migration records below preserve
 evidence from earlier commits; their selector counts describe those historical
-heads and are not current inventory claims. At PR head
-`951cc596007a7b8853cca6ef8199de13926ffe2f`, all 62 built-in selectors have
-feature-owned `BuiltinFeature` declarations. Static discovery found 62 distinct
-registration modules and no file owns more than one selector. The build backend
-derives the installed `alphus.builtin_checks.v1` entry points and ignored
+heads and are not current inventory claims. The current PR branch has all 62
+built-in selectors on feature-owned `BuiltinFeature` registration modules, one
+per selector. The build backend derives the installed
+`alphus.builtin_checks.v1` entry points and ignored
 aggregate policy/config/dispatch views from those declarations; adding a
 feature does not require editing `pyproject.toml`, a central selector map, or
 tracked generated views.
@@ -29,6 +28,32 @@ synchronous local runner function. Computed declarations, imported runners,
 or provider factories need a small local adapter or a separate design. Pyright
 and runtime result-shape validation complement the static build check; the
 build parser itself does not prove the runner's return annotation.
+
+The execution annotation is still broader than the morphology goal: one
+`BuiltinRunner` returns the global `RuleOutput` union, while
+`FeatureDefinition.output_shape` is declared independently. The registry checks
+the selected runner's annotation and returned value at runtime, but the type
+checker does not yet prove that a feature's declared shape matches its output.
+Cyclomatic has the more specific `CyclomaticRuleOperations` contract; the
+other result adapters remain shape-dispatched.
+
+A small typed next step is to add shape-specific immutable feature forms, each
+with a literal shape and matching runner protocol, then migrate one output
+family at a time. For example, `FindingsFeature` would require
+`output_shape="findings"` and a runner returning `list[Finding]`; a messages
+form would return `list[str]`. A checked common protocol can keep selection and
+dispatch uniform, while existing runtime adapters preserve output behavior.
+This avoids pretending that one broad runner union is a static shape contract.
+The trade-off is a shared type-module change and additional class forms; doing
+this all at once would make the 62-feature migration harder to review. Start
+with one low-risk family, prove type rejection of a mismatched runner/shape,
+and expand only when that proof is useful. This is a proposed follow-on, not
+implemented behavior.
+
+The lightweight `StyleFindings` contract now lives in `alphus.contracts`, so
+CLI, registry, and result-adapter imports do not load the Python style analyzer.
+This is a lazy-import improvement within the existing result shape; it does not
+yet solve the broader runner/output-shape static typing gap above.
 
 The 0.0.3 shapes currently fit without forcing one result type:
 
@@ -78,17 +103,25 @@ npm could not resolve `registry.npmjs.org` for `eslint@10.13.0`. There is no
 self-quality checks passed locally (2,521 passed, 44 skipped) on the earlier
 `d5b5be0` code tree, and all five hosted workflows passed on implementation
 head `1fe322e` and documentation head `fe63ca8`. Those results do not
-establish checks on `951cc59` or substitute for the pinned differential. At
-the time this snapshot was updated, four workflows on `951cc59` had completed
-successfully and Alphus self quality was still in progress. Focused non-npm
-tests on `951cc59` passed 323 morphology/registry and execution tests; a second
-native, composite, and plugin test batch passed 85 tests. These are
+establish checks on later heads or substitute for the pinned differential.
+Exact-head hosted self-quality on `2c10eef` failed because the architecture
+document exceeded the line-length limit; `77fa80a` wraps those lines. Later
+local changes add regression coverage for composite policy references and
+declaration-time constant resolution, plus a lightweight `StyleFindings`
+contract so CLI/result imports do not load the Python style analyzer. The
+focused morphology, result, analyzer and documentation tests pass (126 total);
+targeted production Pyright reports no diagnostics. The full local suite has
+2,519 passes and 45 skips, with four environment-limited failures: three wheel
+or build tests cannot resolve PyPI, and one FastAPI Ruff fixture received no
+JSON output. Exact-head hosted checks for these changes remain pending.
+Earlier focused batches on `951cc59` passed 323 morphology/registry and
+execution tests, then 85 native, composite, and plugin tests. These are
 incremental evidence only.
 
-The next evidence step is to complete that differential when the pinned npm
-dependency is available, without marking the ESLint scenario as covered merely
-because it appears in the manifest. The shape-level tests that do not need npm
-remain runnable locally. New local-model execution, detector/language growth,
+The next evidence step is to complete the pinned differential when the pinned
+npm dependency is available, without marking the ESLint scenario as covered
+merely because it appears in the manifest. The shape-level tests that do not
+need npm remain runnable locally. New local-model execution, detector/language growth,
 persistent result caching, repository setup automation, history/index changes,
 round-two Bacflow, and release operations remain outside 0.0.3.
 
@@ -541,8 +574,8 @@ API v1.
 
 A migrated feature currently declares typed metadata beside its behavior. It
 references the existing strict policy model without moving policy ownership
-into the checker package. `file-size` lives in
-`src/alphus/gates/hygiene/file_size.py`; `FileSizePolicy` remains in
+into the checker package. `line-length` lives in
+`src/alphus/gates/hygiene/line_length.py`; `LineLengthPolicy` remains in
 `src/alphus/policy/sources.py`. Its declaration has this shape:
 
 ```python
@@ -573,8 +606,8 @@ The PEP 517 backend statically reads feature declarations and writes standard
 directory. The runtime registry indexes entry points from Alphus-named
 distributions whose selector set matches the generated feature catalog,
 rejects duplicate selectors, and imports a runner only after explicit
-selection. Adding one of the twenty migrated checks did not
-require editing a central runner map or the `pyproject.toml` entry-point table.
+selection. Adding a feature-owned check does not require editing a central
+runner map or the `pyproject.toml` entry-point table.
 The PEP 517 build also regenerates aggregate policy/config/dispatch views as
 ignored source files and includes them in wheels and source archives. Those
 outputs no longer appear in feature-branch diffs, so independent additions do
@@ -589,6 +622,10 @@ policy and select `line-length` directly or in a profile. Catalog inspection
 and config validation do not import the checker. Dispatch imports only the
 selected provider; registration never adds a profile step. The package-level
 `check_line_length` compatibility export resolves lazily on explicit access.
+Composite `policy_inputs` may name the owning feature's field and any other
+feature-owned or legacy `CheckPolicies` field. Static discovery validates them
+against the combined generated strict-policy view, so a composite can consume
+another feature's policy without adding that field to a central authored list.
 
 Static complaint validation supports both local literal tags and shared named
 contracts. These use immutable `ComplaintContract` and `ComplaintEntry`
