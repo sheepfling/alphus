@@ -10,9 +10,16 @@ from typing import cast
 import pytest
 from pydantic import ValidationError
 
-from alphus.config import QualityGateConfig
+from alphus.config import QualityGateConfig, RepositoryLayoutPolicy
 from alphus.contracts.findings import Finding
 from alphus.execution.dispatch import run_builtin_rule
+from alphus.gates.repository.repository_layout import (
+    ALPHUS_FEATURE,
+    check_repository_layout,
+    resolve_repository_layout_policy,
+    run_repository_layout_feature,
+)
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.plugins.builtin_registry import builtin_check_entry_points
 from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
 from alphus.policy.catalog import RULE_SPECS
@@ -84,7 +91,7 @@ def test_unselected_repository_layout_runner_remains_unimported(tmp_path: Path) 
     script = """
 import sys
 from pathlib import Path
-from alphus.config import QualityGateConfig
+from alphus.config import QualityGateConfig, RepositoryLayoutPolicy
 from alphus.execution.dispatch import run_builtin_rule
 
 module = "alphus.gates.repository.repository_layout"
@@ -111,3 +118,24 @@ print(module in sys.modules)
 
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "False"
+
+
+def test_typed_feature_runner_matches_legacy_repository_layout_result(
+    tmp_path: Path,
+) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    policy = RepositoryLayoutPolicy.model_validate(
+        {"required_paths": [{"path": "src/required.py", "message": "missing"}]}
+    )
+    config = QualityGateConfig.model_validate(
+        {"schema_version": 1, "checks": {"repository_layout": policy}}, strict=True
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is RepositoryLayoutPolicy
+    resolved = resolve_repository_layout_policy(config)
+    assert type(resolved) is RepositoryLayoutPolicy
+    expected = check_repository_layout(tmp_path, policy)
+    assert expected
+    assert run_repository_layout_feature(tmp_path, (), resolved) == expected
+    assert run_builtin_rule("repository-layout", tmp_path, (), config) == expected

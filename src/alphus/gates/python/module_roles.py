@@ -11,7 +11,7 @@ from typing import Final, NamedTuple
 from alphus.config import ModuleRoleRule, QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.architecture import ModuleRolePolicy
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
@@ -409,16 +409,21 @@ def check_module_roles(root: Path, policy: ModuleRolePolicy) -> list[Finding]:
     )
 
 
-def run_module_roles_gate(
-    root: Path, _files: Sequence[Path], config: QualityGateConfig
+def resolve_module_roles_policy(config: QualityGateConfig) -> ModuleRolePolicy:
+    """Resolve the feature's strict module roles policy."""
+    return require_policy(config.checks.module_roles, "module_roles")
+
+
+def run_module_roles_feature(
+    root: Path, _files: Sequence[Path], policy: ModuleRolePolicy
 ) -> list[Finding]:
-    """Run configured module-role boundaries through the built-in contract."""
-    policy = require_policy(config.checks.module_roles, "module_roles")
+    """Run the configured module roles check with its typed policy."""
     return check_module_roles(root, policy)
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_module_roles_gate,
+    runner=run_module_roles_feature,
+    policy_resolver=resolve_module_roles_policy,
 )
