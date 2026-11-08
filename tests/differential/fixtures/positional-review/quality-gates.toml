@@ -1,0 +1,36 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py"]
+exclude = []
+
+[checks.positional_interfaces]
+extensions = [".py"]
+exclude = []
+report_same_type_primitives = true
+
+[checks.positional_semantic_overrides]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/*.py"]
+position_variables = ["position"]
+semantic_fields = ["caption"]
+minimum_override_characters = 40
+
+[orchestration]
+default_profile = "positional-review"
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Positional interface review"
+rule = "positional-interfaces"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Positional semantic override review"
+rule = "positional-semantic-overrides"
+
+[[orchestration.profiles]]
+name = "positional-review"
+steps = ["Positional interface review", "Positional semantic override review"]

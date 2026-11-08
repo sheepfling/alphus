@@ -3,38 +3,66 @@
 from __future__ import annotations
 
 import ast
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from pathlib import Path
+from typing import Final
 
-from alphus.config import PositionalSemanticOverridePolicy
+from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
+from alphus.plugins.builtin import BuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import PositionalSemanticOverridePolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 
-ALPHUS_MORPHOLOGY = (
-    ("selector", "positional-semantic-overrides"),
-    ("concern", "semantic-field-overrides"),
-    ("claim_kind", "risk"),
-    (
-        "claim",
-        (
-            "A configured positional branch assigns hard-coded text to a semantic field; the "
-            "match is a review candidate, not proof of a defect."
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="positional-semantic-overrides",
+    policy_field="positional_semantic_overrides",
+    policy_model=PositionalSemanticOverridePolicy,
+    output_shape="findings",
+    summary="Reviews positional arguments that override semantic defaults.",
+    applies_to=("python",),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="positional-semantic-overrides",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.MAINTAINABILITY,
+            "positional-semantic-override",
         ),
     ),
-    ("mechanisms", ("bounded-heuristic",)),
-    (
-        "inspected_scope",
-        ("configured-python-paths", "if-branches", "semantic-field-assignments"),
+    concern="semantic-field-overrides",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "A configured positional branch assigns hard-coded text to a semantic field; "
+        "the match is a review candidate, not proof of a defect."
     ),
-    ("languages_formats", ("python",)),
-    (
-        "evidence_kinds",
-        ("python-ast-branch", "configured-field", "assignment-source-line"),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=(
+        "configured-python-paths",
+        "if-branches",
+        "semantic-field-assignments",
     ),
-    ("evaluation_maturity", "public-sample-reviewed"),
-    ("finding_tag_complaints", ("positional-semantic-override",)),
+    languages_formats=("python",),
+    evidence_kinds=(
+        "python-ast-branch",
+        "configured-field",
+        "assignment-source-line",
+    ),
+    evaluation_maturity=EvaluationMaturity.PUBLIC_SAMPLE_REVIEWED,
 )
 
 
@@ -167,3 +195,24 @@ def check_positional_semantic_overrides(
                 )
             )
     return findings
+
+
+def run_positional_semantic_overrides_rule(
+    root: Path, paths: Sequence[Path], config: QualityGateConfig
+) -> list[Finding]:
+    """Adapt the existing semantic-override policy to the built-in runner."""
+    return check_positional_semantic_overrides(
+        root,
+        paths,
+        require_policy(
+            config.checks.positional_semantic_overrides,
+            "positional_semantic_overrides",
+        ),
+    )
+
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_positional_semantic_overrides_rule,
+)

@@ -16,10 +16,6 @@ from alphus.execution.results import RuleOutput
 from alphus.gates.review.ci_workflows import check_ci_workflows
 from alphus.gates.review.parallel_normalization import check_parallel_normalization
 from alphus.gates.review.patch_cascade import check_patch_cascade
-from alphus.gates.review.positional_interfaces import check_positional_interfaces
-from alphus.gates.review.positional_semantic_overrides import (
-    check_positional_semantic_overrides,
-)
 from alphus.gates.review.repeated_numeric_limits import (
     check_repeated_numeric_limits,
 )
@@ -57,16 +53,6 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
                 ),
             )
         ),
-        "positional-semantic-overrides": lambda root, files, config: (
-            check_positional_semantic_overrides(
-                root,
-                files,
-                require_policy(
-                    config.checks.positional_semantic_overrides,
-                    "positional_semantic_overrides",
-                ),
-            )
-        ),
         "parallel-normalization": lambda root, files, config: (
             check_parallel_normalization(
                 root,
@@ -100,15 +86,6 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
             root,
             files,
             require_policy(config.checks.source_families, "source_families"),
-        ),
-        "positional-interfaces": lambda root, files, config: (
-            check_positional_interfaces(
-                root,
-                files,
-                require_policy(
-                    config.checks.positional_interfaces, "positional_interfaces"
-                ),
-            )
         ),
         "suppression-reasons": lambda root, files, config: check_suppression_reasons(
             root,

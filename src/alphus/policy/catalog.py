@@ -114,12 +114,6 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             "Suggests compatible typing stub packages for declared dependencies.",
             ("python", "typing"),
         ),
-        "positional-semantic-overrides": RuleSpec(
-            "positional_semantic_overrides",
-            RuleOutputShape.FINDINGS,
-            "Reviews positional arguments that override semantic defaults.",
-            ("python",),
-        ),
         "parallel-normalization": RuleSpec(
             "parallel_normalization",
             RuleOutputShape.FINDINGS,
@@ -144,12 +138,6 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             RuleOutputShape.FINDINGS,
             "Reviews selected Python artifact production and verification handoffs.",
             ("python", "ci"),
-        ),
-        "positional-interfaces": RuleSpec(
-            "positional_interfaces",
-            RuleOutputShape.FINDINGS,
-            "Reviews configured positional parameters at Python call and API boundaries.",
-            ("python",),
         ),
         "suppression-reasons": RuleSpec(
             "suppression_reasons",

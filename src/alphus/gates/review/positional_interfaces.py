@@ -3,15 +3,59 @@
 from __future__ import annotations
 
 import ast
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import NamedTuple
+from typing import Final, NamedTuple
 
-from alphus.config import PositionalInterfacePolicy
+from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
+from alphus.plugins.builtin import BuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import PositionalInterfacePolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="positional-interfaces",
+    policy_field="positional_interfaces",
+    policy_model=PositionalInterfacePolicy,
+    output_shape="findings",
+    summary="Reviews configured positional parameters at Python call and API boundaries.",
+    applies_to=("python",),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="positional-interfaces",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.CORRECTNESS,
+            "confusable-positional-parameters",
+        ),
+    ),
+    concern="ambiguous-positional-parameter-boundaries",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "Adjacent same-type primitive parameters may make call order hard to review; "
+        "no incorrect call is inferred."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("configured-python-functions", "primitive-positional-runs"),
+    languages_formats=("python",),
+    evidence_kinds=("python-ast-annotations", "parameter-source-location"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
 
 _PRIMITIVE_TYPES = frozenset({"bool", "bytes", "complex", "float", "int", "str"})
 _RULE_ID = rule_tag(
@@ -229,3 +273,21 @@ def check_positional_interfaces(
             )
         )
     return findings
+
+
+def run_positional_interfaces_rule(
+    root: Path, paths: Sequence[Path], config: QualityGateConfig
+) -> list[Finding]:
+    """Adapt the existing positional-interface policy to the built-in runner."""
+    return check_positional_interfaces(
+        root,
+        paths,
+        require_policy(config.checks.positional_interfaces, "positional_interfaces"),
+    )
+
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_positional_interfaces_rule,
+)

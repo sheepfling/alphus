@@ -34,8 +34,6 @@ from alphus.policy.review import (
     CiWorkflowPolicy,
     ParallelNormalizationPolicy,
     PatchCascadePolicy,
-    PositionalInterfacePolicy,
-    PositionalSemanticOverridePolicy,
     RepeatedNumericLimitPolicy,
     RunArtifactPolicy,
     SourceFamilyPolicy,
@@ -59,14 +57,12 @@ class CheckPolicies(GeneratedFeaturePolicies):
 
     repeated_numeric_limits: RepeatedNumericLimitPolicy | None = None
     typing_stub_suggestions: TypingStubSuggestionPolicy | None = None
-    positional_semantic_overrides: PositionalSemanticOverridePolicy | None = None
     parallel_normalization: ParallelNormalizationPolicy | None = None
     patch_cascade: PatchCascadePolicy | None = None
     run_artifacts: RunArtifactPolicy | None = None
     ci_workflows: CiWorkflowPolicy | None = None
     source_test_coverage: SourceTestCoveragePolicy | None = None
     source_families: SourceFamilyPolicy | None = None
-    positional_interfaces: PositionalInterfacePolicy | None = None
     suppression_reasons: SuppressionReasonPolicy | None = None
     shared_utilities: SharedUtilitiesPolicy | None = None
     python_style: PythonStylePolicy | None = None

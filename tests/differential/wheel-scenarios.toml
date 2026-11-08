@@ -360,6 +360,72 @@ name = "json"
 arguments = ["--config", "quality-gates.toml", "--rule", "semantic-work-in-presentation", "--json"]
 
 [[scenario]]
+name = "positional-interfaces-direct"
+fixture = "positional-review"
+selectors = ["positional-interfaces"]
+behavior = ["direct-selector", "feature-owned-policy", "finding-id", "json-result"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/python/none/correctness/confusable-positional-parameters", path = "src/example.py", line = 1 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "positional-interfaces", "--json"]
+
+[[scenario]]
+name = "positional-semantic-overrides-direct"
+fixture = "positional-review"
+selectors = ["positional-semantic-overrides"]
+behavior = ["direct-selector", "bounded-ast-review", "finding-id", "json-result"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/python/none/maintainability/positional-semantic-override", path = "src/example.py", line = 8 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "positional-semantic-overrides", "--json"]
+
+[[scenario]]
+name = "positional-review-profile"
+fixture = "positional-review"
+selectors = ["positional-interfaces", "positional-semantic-overrides"]
+behavior = ["feature-owned-profile-dispatch", "stable-step-and-finding-order"]
+expected_exit = 0
+minimum_findings = 2
+expected_step_names = ["Positional interface review", "Positional semantic override review"]
+expected_step_rules = ["positional-interfaces", "positional-semantic-overrides"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/python/none/correctness/confusable-positional-parameters", path = "src/example.py", line = 1 },
+  { rule_id = "alphus/python/none/maintainability/positional-semantic-override", path = "src/example.py", line = 8 },
+]
+
+[[scenario.variant]]
+name = "serial"
+arguments = ["--config", "quality-gates.toml", "--profile", "positional-review", "--run", "--jobs", "1", "--json"]
+
+[[scenario.variant]]
+name = "parallel"
+arguments = ["--config", "quality-gates.toml", "--profile", "positional-review", "--run", "--jobs", "2", "--json"]
+
+[[scenario]]
+name = "positional-review-invalid-config"
+fixture = "positional-review-invalid-config"
+selectors = ["positional-interfaces"]
+behavior = ["feature-owned-strict-policy", "unknown-field-rejected-before-run"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-config"
+arguments = ["--config", "quality-gates.toml", "--rule", "positional-interfaces"]
+parse_json = false
+
+[[scenario]]
 name = "review-architecture-profile"
 fixture = "review-architecture"
 selectors = ["provenance-as-ownership", "semantic-work-in-presentation"]
