@@ -10,7 +10,7 @@ from typing import Final, NamedTuple
 from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -177,19 +177,26 @@ def check_unexplained_empty_results(
     return findings
 
 
+def resolve_unexplained_empty_results_policy(
+    config: QualityGateConfig,
+) -> UnexplainedEmptyResultPolicy:
+    """Resolve the check's strict policy from validated aggregate config."""
+    return require_policy(
+        config.checks.unexplained_empty_results, "unexplained_empty_results"
+    )
+
+
 def _run_builtin_unexplained_empty_results(
     root: Path,
     files: Sequence[Path],
-    config: QualityGateConfig,
+    policy: UnexplainedEmptyResultPolicy,
 ) -> list[Finding]:
-    policy = require_policy(
-        config.checks.unexplained_empty_results, "unexplained_empty_results"
-    )
     return check_unexplained_empty_results(root, files, policy)
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
     runner=_run_builtin_unexplained_empty_results,
+    policy_resolver=resolve_unexplained_empty_results_policy,
 )

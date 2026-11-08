@@ -4,11 +4,14 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from alphus.config import ParallelNormalizationPolicy
+from alphus.config import ParallelNormalizationPolicy, QualityGateConfig
 from alphus.gates.review.parallel_normalization import (
+    ALPHUS_FEATURE,
     check_parallel_normalization,
     parallel_normalization_sites,
+    resolve_parallel_normalization_policy,
 )
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 _DRIFT = """\
 def normalize_for_display(text: str) -> str:
@@ -17,6 +20,26 @@ def normalize_for_display(text: str) -> str:
 def normalize_for_key(text: str) -> str:
     return "-".join(text.split())
 """
+
+
+def test_registration_binds_finding_runner_to_normalization_policy() -> None:
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.policy_resolver is resolve_parallel_normalization_policy
+    assert ALPHUS_FEATURE.definition.policy_model is ParallelNormalizationPolicy
+
+
+def test_resolver_returns_the_strict_declared_normalization_policy() -> None:
+    config = QualityGateConfig.model_validate(
+        {
+            "schema_version": 1,
+            "checks": {"parallel_normalization": _policy()},
+        },
+        strict=True,
+    )
+    policy = resolve_parallel_normalization_policy(config)
+
+    assert type(policy) is ParallelNormalizationPolicy
+    assert policy == _policy()
 
 
 def _policy(**updates: object) -> ParallelNormalizationPolicy:

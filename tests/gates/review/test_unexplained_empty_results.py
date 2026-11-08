@@ -3,11 +3,34 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from alphus.config import UnexplainedEmptyResultPolicy
+from alphus.config import QualityGateConfig, UnexplainedEmptyResultPolicy
 from alphus.gates.review.unexplained_empty_results import (
+    ALPHUS_FEATURE,
     check_unexplained_empty_results,
     empty_result_branches,
+    resolve_unexplained_empty_results_policy,
 )
+from alphus.plugins.builtin import FindingBuiltinFeature
+
+
+def test_registration_binds_finding_runner_to_empty_result_policy() -> None:
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.policy_resolver is resolve_unexplained_empty_results_policy
+    assert ALPHUS_FEATURE.definition.policy_model is UnexplainedEmptyResultPolicy
+
+
+def test_resolver_returns_the_strict_declared_empty_result_policy() -> None:
+    config = QualityGateConfig.model_validate(
+        {
+            "schema_version": 1,
+            "checks": {"unexplained_empty_results": _policy()},
+        },
+        strict=True,
+    )
+    policy = resolve_unexplained_empty_results_policy(config)
+
+    assert type(policy) is UnexplainedEmptyResultPolicy
+    assert policy == _policy()
 
 
 def _policy(

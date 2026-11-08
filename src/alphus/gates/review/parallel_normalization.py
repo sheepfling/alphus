@@ -12,7 +12,7 @@ from alphus.config import ParallelNormalizationPair, QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
 from alphus.gates.review._module_bindings import module_binding_counts
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -326,19 +326,25 @@ def check_parallel_normalization(
     return findings
 
 
-def run_parallel_normalization_rule(
-    root: Path, paths: Sequence[Path], config: QualityGateConfig
-) -> list[Finding]:
-    """Adapt the existing normalization policy to the typed built-in runner."""
-    return check_parallel_normalization(
-        root,
-        paths,
-        require_policy(config.checks.parallel_normalization, "parallel_normalization"),
+def resolve_parallel_normalization_policy(
+    config: QualityGateConfig,
+) -> ParallelNormalizationPolicy:
+    """Resolve the check's strict policy from validated aggregate config."""
+    return require_policy(
+        config.checks.parallel_normalization, "parallel_normalization"
     )
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+def run_parallel_normalization_rule(
+    root: Path, paths: Sequence[Path], policy: ParallelNormalizationPolicy
+) -> list[Finding]:
+    """Run the heuristic with its feature-owned policy type."""
+    return check_parallel_normalization(root, paths, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
     runner=run_parallel_normalization_rule,
+    policy_resolver=resolve_parallel_normalization_policy,
 )
