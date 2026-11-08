@@ -2429,7 +2429,7 @@ materialized_files = [
 selectors = ["shared-utilities"]
 behavior = ["feature-owned-configured-scan", "specialized-typed-report", "direct-json"]
 expected_exit = 0
-required_output = ["src/raw.py:2"]
+required_output = ["direct_git_calls"]
 
 [[scenario.variant]]
 name = "json-report"
