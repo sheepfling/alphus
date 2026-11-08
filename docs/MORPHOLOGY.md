@@ -6,21 +6,21 @@ This page remains the morphology vocabulary and pilot boundary.
 
 ## Current implementation status
 
-At draft PR #100 head `0f05c104a3c6bc478edb6497da98648b31fe94a0`, all 62
-built-in selectors have feature-owned declarations. Forty-eight use a narrow
+At draft PR #100 head `680b387a912f1a01d02004c62e4af7244fea57f2`, all 62
+built-in selectors have feature-owned declarations. Fifty-one use a narrow
 typed registration form connecting the strict policy model, resolver, runner
-signature, and `findings` output; fourteen still use the transitional broad
+signature, and `findings` output; eleven still use the transitional broad
 runner form. Recent typed slices include quaternion, coordinate-frame and
 linear-algebra checks, repository and Markdown checks, shared numeric checks,
-CI workflow review, and suppression-reason review. Their parity tests live
-alongside the corresponding source families.
+CI workflow review, suppression-reason review, and framework-practice checks.
+Their parity tests live alongside the corresponding source families.
 
 The latest fully completed exact-head hosted comparison before this commit
 matched all 149 manifested scenarios with zero differences against baseline
 `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`. Five scenarios remain explicitly
 deferred, so this is not complete equivalence over every possible selector
-input. Hosted workflows for `0f05c10` are running. Its local full self-profile
-passed 2,577 tests (44 skipped), with 27 checks passed, none failed, and four
+input. Hosted workflows for `680b387` are pending. Its local full self-profile
+passed 2,579 tests (44 skipped), with 27 checks passed, none failed, and four
 provisional passes. Ruff, formatting, source Pyright, generated-view freshness,
 and `git diff --check` passed locally.
 
