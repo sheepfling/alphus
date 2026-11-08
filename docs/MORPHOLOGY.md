@@ -532,3 +532,47 @@ all 27 self-profile checks with four provisional passes, Ruff, formatting,
 Pyright, import smoke (212 modules), compatibility imports, and Markdown-shell
 review. This remains partial compatibility evidence, not completion of issue
 #87; it leaves `python-style` and the broader remaining 0.0.3 migration work.
+
+## Python-style feature-owned registration slice
+
+The working tree now moves `python-style` to a typed feature-owned declaration
+in `alphus.gates.languages.python.style_feature`. It owns its strict
+`PythonStylePolicy`, runner, morphology, and the 25 complaint contracts emitted
+by `StyleFindings`. The `concrete-self-returns` aggregate remains a compatibility
+alias and is not declared as a separate emitted complaint. The source runner,
+catalog row, and hand-written `CheckPolicies` field are removed. Direct rendering
+and profile diagnostics resolve IDs from the feature's complaint contracts;
+the public catalog shape and legacy messages remain unchanged.
+
+The static inventory generator now reads any remaining literal legacy catalog
+rows and derives feature rows from feature declarations. It also reads the
+pinned mainline catalog's literal `RULE_SPECS` when generating the baseline
+inventory; it does not import or execute either catalog. Feature policy fields
+remain included in strict-policy inventory checks. This makes the current
+selector inventory test compare the feature-derived catalog against the pinned
+baseline without preserving a redundant empty legacy map.
+
+The scenario manifest now includes three `python-style` cases for direct JSON
+output, a finding-bearing serial/parallel profile, and unknown-field rejection.
+The suite contains 149 scenarios, with five explicitly deferred. The pinned
+installed-wheel differential was attempted against baseline
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` and candidate `d5b5be0`, but stopped
+before comparison when an npm dependency install could not resolve
+`registry.npmjs.org` (`eslint@10.13.0`, `ENOTFOUND`). No equivalence result is
+claimed for this candidate. The prior 146-scenario result applies to the CLI
+candidate only.
+
+Wheel-based self-quality on the `d5b5be0` code tree passed 2,521 tests (44
+skipped), all 27 self-profile checks with four provisional passes, Ruff,
+formatting, Pyright, import smoke (213 modules), compatibility imports, and
+Markdown-shell review. The focused registration, differential-harness,
+inventory and style-engine tests passed 101 tests after correcting the new
+fixture paths. A separate full raw pytest run had four environment-dependent
+failures: three build/install checks could not reach PyPI, and a Ruff fixture
+could not write its cache; that Ruff test passed when retried through the
+approved worktree permission path.
+
+All 62 built-ins are now feature-owned in this candidate, but the broader 0.0.3
+architecture and full equivalence acceptance remain incomplete. The new
+candidate still needs a completed pinned differential report and hosted
+exact-head CI before this slice is ready for review.
