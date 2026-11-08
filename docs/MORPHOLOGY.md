@@ -573,6 +573,8 @@ could not write its cache; that Ruff test passed when retried through the
 approved worktree permission path.
 
 All 62 built-ins are now feature-owned in this candidate, but the broader 0.0.3
-architecture and full equivalence acceptance remain incomplete. The new
-candidate still needs a completed pinned differential report and hosted
-exact-head CI before this slice is ready for review.
+architecture and full equivalence acceptance remain incomplete. Exact-head
+hosted CI for implementation commit `1fe322e2ac2f872618137be0ed544c710cc35afe`
+passed all five workflows, including the Python matrix and minimum dependencies.
+That confirms integration but does not replace the still-blocked pinned
+installed-wheel differential report.
