@@ -15,7 +15,7 @@ from markdown_it import MarkdownIt
 from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.markdown import MarkdownShellFencesPolicy
@@ -1053,18 +1053,23 @@ def check_markdown_shell_fences(
     return findings
 
 
-def run_markdown_shell_fences_gate(
-    root: Path, _files: Sequence[Path], config: QualityGateConfig
+def resolve_markdown_shell_fences_policy(
+    config: QualityGateConfig,
+) -> MarkdownShellFencesPolicy:
+    """Resolve the feature's strict Markdown shell policy."""
+    return require_policy(config.checks.markdown_shell_fences, "markdown_shell_fences")
+
+
+def run_markdown_shell_fences_feature(
+    root: Path, _files: Sequence[Path], policy: MarkdownShellFencesPolicy
 ) -> list[Finding]:
-    """Run the configured Markdown source scan through the shared dispatcher."""
-    policy = require_policy(
-        config.checks.markdown_shell_fences, "markdown_shell_fences"
-    )
+    """Run the policy-owned Git inventory scan as informational findings."""
     return check_markdown_shell_fences(root, policy)
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_markdown_shell_fences_gate,
+    runner=run_markdown_shell_fences_feature,
+    policy_resolver=resolve_markdown_shell_fences_policy,
 )
