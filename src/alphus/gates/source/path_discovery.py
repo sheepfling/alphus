@@ -20,7 +20,7 @@ from alphus.gates.languages.python.path_discovery import (
     python_inspection_findings,
     python_path_findings,
 )
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -446,12 +446,26 @@ def run_path_discovery_rule(
     root: Path, paths: Sequence[Path], config: QualityGateConfig
 ) -> list[Finding]:
     """Adapt the feature-owned strict source scope to both language checks."""
-    policy = require_policy(config.checks.path_discovery, "path_discovery")
+    return run_path_discovery_feature(
+        root, paths, resolve_path_discovery_policy(config)
+    )
+
+
+def resolve_path_discovery_policy(config: QualityGateConfig) -> PathDiscoveryPolicy:
+    """Resolve the strict cross-language path-discovery policy."""
+    return require_policy(config.checks.path_discovery, "path_discovery")
+
+
+def run_path_discovery_feature(
+    root: Path, paths: Sequence[Path], policy: PathDiscoveryPolicy
+) -> list[Finding]:
+    """Dispatch path-discovery evidence to language-specific providers."""
     return check_path_discovery(root, paths, policy)
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_path_discovery_rule,
+    runner=run_path_discovery_feature,
+    policy_resolver=resolve_path_discovery_policy,
 )

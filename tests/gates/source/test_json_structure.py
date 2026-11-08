@@ -19,6 +19,8 @@ from alphus.gates.languages.python.json_decoding import (
     json_findings as python_json_findings,
 )
 from alphus.gates.source.json_structure import check_json_structure
+from alphus.plugins.builtin import FindingBuiltinFeature
+from alphus.plugins.builtin_registry import load_builtin_feature
 
 
 def test_python_import_aliases_and_from_imports_are_reported() -> None:
@@ -160,6 +162,7 @@ def test_check_reads_utf8_bom_source(tmp_path: Path) -> None:
 def test_registered_json_structure_runner_preserves_python_and_javascript_ids(
     tmp_path: Path,
 ) -> None:
+    assert isinstance(load_builtin_feature("json-structure"), FindingBuiltinFeature)
     python_path = Path("src/example.py")
     javascript_path = Path("src/client.js")
     (tmp_path / python_path).parent.mkdir(parents=True)

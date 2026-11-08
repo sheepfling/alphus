@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Final
 
@@ -21,7 +21,7 @@ from alphus.gates.languages.javascript.output_escaping import (
 from alphus.gates.languages.python.output_escaping import (
     escape_findings as python_escape_findings,
 )
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -156,12 +156,25 @@ def run_output_escaping_rule(
     root: Path, files: Iterable[Path], config: QualityGateConfig
 ) -> list[Finding]:
     """Adapt the feature-owned strict source scope to the legacy checker."""
-    policy = require_policy(config.checks.output_escaping, "output_escaping")
+    policy = resolve_output_escaping_policy(config)
     return check_output_escaping(root, files, policy)
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+def resolve_output_escaping_policy(config: QualityGateConfig) -> SourceScanPolicy:
+    """Resolve the strict output-escaping source policy."""
+    return require_policy(config.checks.output_escaping, "output_escaping")
+
+
+def run_output_escaping_feature(
+    root: Path, files: Sequence[Path], policy: SourceScanPolicy
+) -> list[Finding]:
+    """Dispatch output-escaping checks to language-specific providers."""
+    return check_output_escaping(root, files, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_output_escaping_rule,
+    runner=run_output_escaping_feature,
+    policy_resolver=resolve_output_escaping_policy,
 )

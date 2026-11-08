@@ -16,7 +16,7 @@ from alphus.gates.languages.javascript.json_decoding import (
 from alphus.gates.languages.python.json_decoding import (
     json_findings as python_json_findings,
 )
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -145,12 +145,26 @@ def run_json_structure_rule(
     root: Path, paths: Sequence[Path], config: QualityGateConfig
 ) -> list[Finding]:
     """Adapt the feature-owned source policy to both language analyzers."""
-    policy = require_policy(config.checks.json_structure, "json_structure")
+    return run_json_structure_feature(
+        root, paths, resolve_json_structure_policy(config)
+    )
+
+
+def resolve_json_structure_policy(config: QualityGateConfig) -> SourceScanPolicy:
+    """Resolve the strict JSON-structure source policy."""
+    return require_policy(config.checks.json_structure, "json_structure")
+
+
+def run_json_structure_feature(
+    root: Path, paths: Sequence[Path], policy: SourceScanPolicy
+) -> list[Finding]:
+    """Dispatch JSON decoding to language-specific providers."""
     return check_json_structure(root, paths, policy)
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_json_structure_rule,
+    runner=run_json_structure_feature,
+    policy_resolver=resolve_json_structure_policy,
 )

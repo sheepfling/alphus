@@ -20,6 +20,8 @@ from alphus.gates.languages.python.path_discovery import (
     python_path_findings,
 )
 from alphus.gates.source.path_discovery import check_path_discovery
+from alphus.plugins.builtin import FindingBuiltinFeature
+from alphus.plugins.builtin_registry import load_builtin_feature
 
 
 def test_javascript_path_discovery_exports_are_explicit() -> None:
@@ -53,6 +55,7 @@ def test_selected_parent_walk_is_flagged(tmp_path: Path) -> None:
 def test_registered_path_discovery_runner_preserves_language_specific_results(
     tmp_path: Path,
 ) -> None:
+    assert isinstance(load_builtin_feature("path-discovery"), FindingBuiltinFeature)
     python_path = Path("src/example.py")
     javascript_path = Path("src/client.js")
     (tmp_path / python_path).parent.mkdir(parents=True)

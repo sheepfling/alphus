@@ -10,6 +10,8 @@ from alphus.gates.languages.python.output_escaping import (
     escape_findings as python_escape_findings,
 )
 from alphus.gates.source.output_escaping import check_output_escaping
+from alphus.plugins.builtin import FindingBuiltinFeature
+from alphus.plugins.builtin_registry import load_builtin_feature
 
 
 def test_python_detects_common_format_escapes() -> None:
@@ -113,3 +115,7 @@ def test_scan_uses_feature_owned_ids_for_each_language_scope(tmp_path: Path) -> 
             1,
         ),
     ]
+
+
+def test_output_escaping_uses_typed_finding_registration() -> None:
+    assert isinstance(load_builtin_feature("output-escaping"), FindingBuiltinFeature)
