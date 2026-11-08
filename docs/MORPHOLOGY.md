@@ -451,3 +451,26 @@ committed. The wheel CI passed 2,515 tests (44 skipped), with 27 self-profile
 checks passing and four provisional passes; Ruff, formatting, Pyright, import
 smoke, and Markdown-shell review also passed. This remains partial evidence,
 not completion of issue #87.
+
+## Source-family and typing-stub registration slice
+
+Commit `1d9ddc5` moves `source-families` and
+`typing-stub-suggestions` into typed feature-owned registrations beside their
+existing analyzers. This removes the last manual review-runner table. The
+source-family check keeps its cross-language filename-family heuristic and
+existing warning result; typing-stub suggestions remain an advisory
+package-metadata check with no analyzer backend. Both preserve their strict
+policy fields, selectors, finding IDs, messages, applicability and output
+adapters. Lazy-dispatch tests verify unselected providers are not imported.
+
+The pinned installed-wheel comparison against baseline
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` matched all 140 manifested
+scenarios with zero differences. Both catalogs contain the same 62 selectors;
+59 are feature-owned and behaviorally exercised, leaving three legacy
+selectors. The selector-policy matrix covers 26 direct invocations and 36
+strict missing-policy rejections. Reference and candidate wheel SHA-256 values
+are `580bc6ae6b42620b7cea5c0df769b4a2290ac8c1f84e2219e6b327ded200f9a4` and
+`0514bb5725f16d28c31337fa3431d66792e53e9e1aebfd469580f112d58dd953`. The
+report is `/tmp/alphus-morphology-review-pair-34fd501.json`; it is not
+committed. This remains partial compatibility evidence, not completion of
+issue #87.
