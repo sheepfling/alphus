@@ -13,7 +13,11 @@ from pydantic import ValidationError
 from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.execution.dispatch import run_builtin_rule
-from alphus.plugins.builtin_registry import builtin_check_entry_points
+from alphus.plugins.builtin import FindingBuiltinFeature
+from alphus.plugins.builtin_registry import (
+    builtin_check_entry_points,
+    load_builtin_feature,
+)
 from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
 from alphus.policy.catalog import RULE_SPECS
 
@@ -39,6 +43,7 @@ def _config() -> QualityGateConfig:
 
 def test_dependency_lock_definition_owns_its_policy_and_runner() -> None:
     definition = FEATURE_DEFINITIONS["dependency-locks"]
+    assert isinstance(load_builtin_feature("dependency-locks"), FindingBuiltinFeature)
     spec = RULE_SPECS["dependency-locks"]
 
     assert definition.policy_field == spec.policy_field == "dependency_locks"

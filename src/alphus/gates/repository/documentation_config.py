@@ -14,7 +14,7 @@ from typing import Final, NamedTuple, TypeAlias
 from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -855,15 +855,31 @@ def check_documentation_config(
 
 
 def run_documentation_config_gate(
-    root: Path, _files: Sequence[Path], config: QualityGateConfig
+    root: Path, files: Sequence[Path], config: QualityGateConfig
 ) -> list[Finding]:
     """Run documentation/config comparison with its validated strict policy."""
-    policy = require_policy(config.checks.documentation_config, "documentation_config")
+    return run_documentation_config_feature(
+        root, files, resolve_documentation_config_policy(config)
+    )
+
+
+def resolve_documentation_config_policy(
+    config: QualityGateConfig,
+) -> DocumentationConfigPolicy:
+    """Resolve the strict documentation/config policy for this feature."""
+    return require_policy(config.checks.documentation_config, "documentation_config")
+
+
+def run_documentation_config_feature(
+    root: Path, _files: Sequence[Path], policy: DocumentationConfigPolicy
+) -> list[Finding]:
+    """Compare bounded documentation claims using the typed policy input."""
     return check_documentation_config(root, policy)
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_documentation_config_gate,
+    runner=run_documentation_config_feature,
+    policy_resolver=resolve_documentation_config_policy,
 )

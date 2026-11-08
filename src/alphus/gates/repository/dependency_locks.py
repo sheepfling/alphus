@@ -17,7 +17,7 @@ from packaging.version import Version
 from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -464,15 +464,29 @@ def check_dependency_locks(root: Path, policy: DependencyLockPolicy) -> list[Fin
 
 
 def run_dependency_lock_gate(
-    root: Path, _files: Sequence[Path], config: QualityGateConfig
+    root: Path, files: Sequence[Path], config: QualityGateConfig
 ) -> list[Finding]:
     """Run the feature-owned dependency-lock check with its strict policy."""
-    policy = require_policy(config.checks.dependency_locks, "dependency_locks")
+    return run_dependency_lock_feature(
+        root, files, resolve_dependency_lock_policy(config)
+    )
+
+
+def resolve_dependency_lock_policy(config: QualityGateConfig) -> DependencyLockPolicy:
+    """Resolve the strict dependency-lock policy for this feature."""
+    return require_policy(config.checks.dependency_locks, "dependency_locks")
+
+
+def run_dependency_lock_feature(
+    root: Path, _files: Sequence[Path], policy: DependencyLockPolicy
+) -> list[Finding]:
+    """Run lock consistency checks from the feature's typed policy input."""
     return check_dependency_locks(root, policy)
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_dependency_lock_gate,
+    runner=run_dependency_lock_feature,
+    policy_resolver=resolve_dependency_lock_policy,
 )
