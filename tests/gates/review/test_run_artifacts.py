@@ -5,8 +5,20 @@ from pathlib import Path
 
 import pytest
 
-from alphus.config import ProvenanceCallRole, RunArtifactPolicy
-from alphus.gates.review.run_artifacts import check_run_artifacts, run_artifact_findings
+from alphus.config import (
+    ProvenanceCallRole,
+    QualityGateConfig,
+    RunArtifactPolicy,
+)
+from alphus.execution.dispatch import run_builtin_rule
+from alphus.gates.review.run_artifacts import (
+    ALPHUS_FEATURE,
+    check_run_artifacts,
+    resolve_run_artifacts_policy,
+    run_artifact_findings,
+    run_run_artifacts_feature,
+)
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 
 def policy(**updates: object) -> RunArtifactPolicy:
@@ -960,3 +972,32 @@ def test_selected_file_exclusions_are_respected(tmp_path: Path) -> None:
         exclude=("src/harness.py",),
     )
     assert check_run_artifacts(tmp_path, [source], configured) == []
+
+
+def test_typed_registration_preserves_run_artifact_findings(tmp_path: Path) -> None:
+    relative = Path("src/pipeline.py")
+    source = tmp_path / relative
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "def build(rows, output_path):\n"
+        "    if rows:\n"
+        "        write_output(output_path, rows)\n"
+        "    publish(read_output(output_path))\n",
+        encoding="utf-8",
+    )
+    configured = policy(
+        conditional_output_readback=True,
+        reused_output_path_names=("output_path",),
+        output_writers=(ProvenanceCallRole(function="write_output"),),
+        output_readers=(ProvenanceCallRole(function="read_output"),),
+    )
+    config = QualityGateConfig.model_validate(
+        {"schema_version": 1, "checks": {"run_artifacts": configured}}, strict=True
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is RunArtifactPolicy
+    resolved = resolve_run_artifacts_policy(config)
+    expected = run_run_artifacts_feature(tmp_path, (relative,), resolved)
+    assert expected == check_run_artifacts(tmp_path, (relative,), resolved)
+    assert run_builtin_rule("run-artifacts", tmp_path, (relative,), config) == expected

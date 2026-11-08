@@ -11,11 +11,20 @@ import pytest
 from pytest import MonkeyPatch
 
 from alphus.config import (
+    QualityGateConfig,
     TypingStubCandidate,
     TypingStubSuggestionPolicy,
     load_config,
 )
+from alphus.execution.dispatch import run_builtin_rule
 from alphus.gates.review import typing_stub_suggestions as gate
+from alphus.gates.review.typing_stub_suggestions import (
+    ALPHUS_FEATURE,
+    check_typing_stub_suggestions,
+    resolve_typing_stub_suggestions_policy,
+    run_typing_stub_suggestions_feature,
+)
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 
 def _policy(
@@ -1284,3 +1293,29 @@ class _ScipyDistribution:
 class _OldScipyDistribution:
     version = "1.18.0"
     files = ()
+
+
+def test_typed_registration_preserves_stub_suggestions(tmp_path: Path) -> None:
+    relative = Path("src/consumer.py")
+    source = tmp_path / relative
+    source.parent.mkdir(parents=True)
+    source.write_text('import yaml\n\nVALUE = yaml.safe_load("{}")\n', encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\ndependencies = ["PyYAML>=6,<7"]\n',
+        encoding="utf-8",
+    )
+    policy = _policy()
+    config = QualityGateConfig.model_validate(
+        {"schema_version": 1, "checks": {"typing_stub_suggestions": policy}},
+        strict=True,
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is TypingStubSuggestionPolicy
+    resolved = resolve_typing_stub_suggestions_policy(config)
+    expected = run_typing_stub_suggestions_feature(tmp_path, (relative,), resolved)
+    assert check_typing_stub_suggestions(tmp_path, (relative,), resolved) == expected
+    assert (
+        run_builtin_rule("typing-stub-suggestions", tmp_path, (relative,), config)
+        == expected
+    )

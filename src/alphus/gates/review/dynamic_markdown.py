@@ -13,7 +13,7 @@ from typing import Final, Protocol, cast
 from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding, Severity
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -797,17 +797,23 @@ def check_dynamic_markdown(
     return findings
 
 
-def _run_builtin_dynamic_markdown(
-    root: Path,
-    files: Sequence[Path],
+def resolve_dynamic_markdown_policy(
     config: QualityGateConfig,
+) -> DynamicMarkdownPolicy:
+    """Resolve the strict dynamic Markdown policy from validated config."""
+    return require_policy(config.checks.dynamic_markdown, "dynamic_markdown")
+
+
+def run_dynamic_markdown_feature(
+    root: Path, paths: Sequence[Path], policy: DynamicMarkdownPolicy
 ) -> list[Finding]:
-    policy = require_policy(config.checks.dynamic_markdown, "dynamic_markdown")
-    return check_dynamic_markdown(root, files, policy)
+    """Run this review with its feature-owned policy type."""
+    return check_dynamic_markdown(root, paths, policy)
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=_run_builtin_dynamic_markdown,
+    runner=run_dynamic_markdown_feature,
+    policy_resolver=resolve_dynamic_markdown_policy,
 )

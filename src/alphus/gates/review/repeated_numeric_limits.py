@@ -16,7 +16,7 @@ from alphus.config import (
 )
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -271,8 +271,25 @@ def run_repeated_numeric_limits_rule(
     )
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+def resolve_repeated_numeric_limits_policy(
+    config: QualityGateConfig,
+) -> RepeatedNumericLimitPolicy:
+    """Resolve the strict repeated numeric limits policy from validated config."""
+    return require_policy(
+        config.checks.repeated_numeric_limits, "repeated_numeric_limits"
+    )
+
+
+def run_repeated_numeric_limits_feature(
+    root: Path, paths: Sequence[Path], policy: RepeatedNumericLimitPolicy
+) -> list[Finding]:
+    """Run this review with its feature-owned policy type."""
+    return check_repeated_numeric_limits(root, paths, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_repeated_numeric_limits_rule,
+    runner=run_repeated_numeric_limits_feature,
+    policy_resolver=resolve_repeated_numeric_limits_policy,
 )

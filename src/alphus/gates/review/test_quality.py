@@ -15,7 +15,7 @@ from alphus.config import QualityGateConfig
 from alphus.contracts.complaints import ComplaintContract, ComplaintEntry
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -675,8 +675,21 @@ def run_test_quality_rule(
     return check_test_quality(root, files, policy)
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+def resolve_test_quality_policy(config: QualityGateConfig) -> TestQualityPolicy:
+    """Resolve the strict test quality policy from validated config."""
+    return require_policy(config.checks.test_quality, "test_quality")
+
+
+def run_test_quality_feature(
+    root: Path, paths: Sequence[Path], policy: TestQualityPolicy
+) -> list[Finding]:
+    """Run this review with its feature-owned policy type."""
+    return check_test_quality(root, paths, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_test_quality_rule,
+    runner=run_test_quality_feature,
+    policy_resolver=resolve_test_quality_policy,
 )

@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from alphus.config import QualityGateConfig
 from alphus.config import (
     TestQualityExclusion as OracleExclusion,
 )
@@ -13,7 +14,15 @@ from alphus.config import (
     TestQualityPolicy as Policy,
 )
 from alphus.contracts.findings import Finding
-from alphus.gates.review.test_quality import check_test_quality, python_findings
+from alphus.execution.dispatch import run_builtin_rule
+from alphus.gates.review.test_quality import (
+    ALPHUS_FEATURE,
+    check_test_quality,
+    python_findings,
+    resolve_test_quality_policy,
+    run_test_quality_feature,
+)
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 POLICY = Policy(
     extensions=[".py"],
@@ -535,3 +544,23 @@ def test_broken_algorithm_example_shows_why_the_shared_oracle_is_advisory() -> N
     assert broken_total(data) == broken_total(data)
     with pytest.raises(AssertionError):
         assert broken_total(data) == 3
+
+
+def test_typed_registration_preserves_test_quality_findings(tmp_path: Path) -> None:
+    relative = Path("tests/test_service.py")
+    source = tmp_path / relative
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "def test_service():\n    assert True\n",
+        encoding="utf-8",
+    )
+    config = QualityGateConfig.model_validate(
+        {"schema_version": 1, "checks": {"test_quality": POLICY}}, strict=True
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is Policy
+    policy = resolve_test_quality_policy(config)
+    expected = run_test_quality_feature(tmp_path, (relative,), policy)
+    assert check_test_quality(tmp_path, (relative,), policy) == expected
+    assert run_builtin_rule("test-quality", tmp_path, (relative,), config) == expected

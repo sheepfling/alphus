@@ -18,7 +18,7 @@ from packaging.version import Version
 from alphus.config import QualityGateConfig, TypingStubCandidate
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -644,8 +644,25 @@ def run_typing_stub_suggestions_rule(
     )
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+def resolve_typing_stub_suggestions_policy(
+    config: QualityGateConfig,
+) -> TypingStubSuggestionPolicy:
+    """Resolve the strict typing stub suggestions policy from validated config."""
+    return require_policy(
+        config.checks.typing_stub_suggestions, "typing_stub_suggestions"
+    )
+
+
+def run_typing_stub_suggestions_feature(
+    root: Path, paths: Sequence[Path], policy: TypingStubSuggestionPolicy
+) -> list[Finding]:
+    """Run this review with its feature-owned policy type."""
+    return check_typing_stub_suggestions(root, paths, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_typing_stub_suggestions_rule,
+    runner=run_typing_stub_suggestions_feature,
+    policy_resolver=resolve_typing_stub_suggestions_policy,
 )

@@ -2,8 +2,19 @@
 
 from pathlib import Path
 
-from alphus.config import NumericLimitRole, RepeatedNumericLimitPolicy
-from alphus.gates.review.repeated_numeric_limits import check_repeated_numeric_limits
+from alphus.config import (
+    NumericLimitRole,
+    QualityGateConfig,
+    RepeatedNumericLimitPolicy,
+)
+from alphus.execution.dispatch import run_builtin_rule
+from alphus.gates.review.repeated_numeric_limits import (
+    ALPHUS_FEATURE,
+    check_repeated_numeric_limits,
+    resolve_repeated_numeric_limits_policy,
+    run_repeated_numeric_limits_feature,
+)
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 
 def _policy() -> RepeatedNumericLimitPolicy:
@@ -169,3 +180,28 @@ def test_test_and_generated_paths_are_always_skipped(tmp_path: Path) -> None:
         roles=_policy().roles,
     )
     assert check_repeated_numeric_limits(tmp_path, paths, policy) == []
+
+
+def test_typed_registration_preserves_repeated_limit_findings(tmp_path: Path) -> None:
+    paths = (Path("src/analysis/walk.py"), Path("src/analysis/visit.py"))
+    (tmp_path / paths[0]).parent.mkdir(parents=True)
+    (tmp_path / paths[0]).write_text(
+        "if node_count > 512:\n    stop()\n", encoding="utf-8"
+    )
+    (tmp_path / paths[1]).write_text(
+        "if 512 < len(ast_nodes):\n    stop()\n", encoding="utf-8"
+    )
+    policy = _policy()
+    config = QualityGateConfig.model_validate(
+        {"schema_version": 1, "checks": {"repeated_numeric_limits": policy}},
+        strict=True,
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is RepeatedNumericLimitPolicy
+    resolved = resolve_repeated_numeric_limits_policy(config)
+    expected = run_repeated_numeric_limits_feature(tmp_path, paths, resolved)
+    assert check_repeated_numeric_limits(tmp_path, paths, resolved) == expected
+    assert (
+        run_builtin_rule("repeated-numeric-limits", tmp_path, paths, config) == expected
+    )

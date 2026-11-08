@@ -10,13 +10,18 @@ from pathlib import Path
 import pytest
 
 from alphus.cli import main
-from alphus.config import DynamicMarkdownPolicy, load_config_stream
+from alphus.config import DynamicMarkdownPolicy, QualityGateConfig, load_config_stream
+from alphus.execution.dispatch import run_builtin_rule
 from alphus.execution.profile_manifest import gate_manifest_entry
 from alphus.gates.review import dynamic_markdown
 from alphus.gates.review.dynamic_markdown import (
+    ALPHUS_FEATURE,
     check_dynamic_markdown,
     dynamic_markdown_findings,
+    resolve_dynamic_markdown_policy,
+    run_dynamic_markdown_feature,
 )
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.plugins.builtin_registry import load_builtin_feature
 from alphus.policy.base import MissingPolicyError, QualityRuleName
 from alphus.policy.catalog import RULE_SPECS
@@ -562,3 +567,32 @@ steps = ["Markdown source review"]
     assert findings[0]["path"] == "scripts/generate_notes.py"
     assert findings[0]["line"] == 2
     assert "table cell" in findings[0]["message"]
+
+
+def test_typed_registration_preserves_dynamic_markdown_findings(
+    tmp_path: Path,
+) -> None:
+    relative = Path("src/render/view.py")
+    source = tmp_path / relative
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "def render(label, value):\n"
+        '    row = f"| {label} | {value} |\\n"\n'
+        "    return row\n",
+        encoding="utf-8",
+    )
+    policy = DynamicMarkdownPolicy(
+        extensions=(".py",), exclude=(), producer_paths=("src/render/**",)
+    )
+    config = QualityGateConfig.model_validate(
+        {"schema_version": 1, "checks": {"dynamic_markdown": policy}}, strict=True
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is DynamicMarkdownPolicy
+    resolved = resolve_dynamic_markdown_policy(config)
+    expected = run_dynamic_markdown_feature(tmp_path, (relative,), resolved)
+    assert check_dynamic_markdown(tmp_path, (relative,), resolved) == expected
+    assert (
+        run_builtin_rule("dynamic-markdown", tmp_path, (relative,), config) == expected
+    )

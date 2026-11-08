@@ -11,7 +11,7 @@ from typing import Final
 from alphus.config import ProvenanceCallRole, QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -988,8 +988,21 @@ def run_artifacts_rule(
     )
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+def resolve_run_artifacts_policy(config: QualityGateConfig) -> RunArtifactPolicy:
+    """Resolve the strict run artifacts policy from validated config."""
+    return require_policy(config.checks.run_artifacts, "run_artifacts")
+
+
+def run_run_artifacts_feature(
+    root: Path, paths: Sequence[Path], policy: RunArtifactPolicy
+) -> list[Finding]:
+    """Run this review with its feature-owned policy type."""
+    return check_run_artifacts(root, paths, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_artifacts_rule,
+    runner=run_run_artifacts_feature,
+    policy_resolver=resolve_run_artifacts_policy,
 )
