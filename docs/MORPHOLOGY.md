@@ -61,8 +61,8 @@ by a typed `BuiltinFeature` with direct runner and specialized-operation
 references.
 
 The original six-rule pilot is not a complete built-in registration
-migration. Forty-eight selectors now use feature-owned runtime declarations,
-while 14 remain on legacy selector/config/runner paths.
+migration. Fifty selectors now use feature-owned runtime declarations,
+while 12 remain on legacy selector/config/runner paths.
 Generated declarations do not select or enable a check and do not change JSON results, finding IDs, gate IDs,
 or enforcement.
 
@@ -270,3 +270,31 @@ Installed-wheel self-quality passed: 2,510 tests, 44 skipped; its self-profile
 passed all 27 checks with zero failures and four provisional passes. This is
 incremental evidence only; 14 selectors still lack behavior-level differential
 scenarios, and issue #87 is not complete.
+
+## Paired review-pipeline registration slice
+
+Commit `3c2019ebfbd93f00dea52eaec103f665d22c6893` moves
+`parallel-normalization` and `patch-cascade` into typed feature-owned
+declarations beside their existing Python analyzers. Both remain bounded
+heuristics with separate strict policy models, RuleTag identities and claims.
+The manual catalog rows, `CheckPolicies` fields, and review-runner bindings are
+removed; configuration names, finding shapes and default selection remain
+unchanged.
+
+Installed-wheel scenarios cover each direct selector, their ordered serial and
+parallel profile, and rejection of an unknown policy field. Comparison with
+baseline `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` matched all 114 manifested
+scenarios with zero differences. Both catalogs retain the same 62 selectors;
+behavior scenarios now exercise 50, leaving 12 without behavior-level
+coverage. The separate selector-policy matrix covers 26 configured direct
+invocations and 36 strict missing-policy rejections. Reference and candidate
+wheel SHA-256 values are
+`621bbb585fe7a70ad01716fc26f07ec1ec7fdf86acd67d855877b37d03477312` and
+`b5185fb6c9f4f4128c51381a1895607af3cfe2f78119832b9bf2a9f0da8188cd`.
+The report is `/tmp/alphus-morphology-review-pipelines-3c2019e.json` and is not
+committed.
+
+Installed-wheel self-quality passed: 2,510 tests, 44 skipped; its self-profile
+passed all 27 checks with zero failures and four provisional passes. This is
+incremental evidence, not full 62-selector equivalence or completion of issue
+#87.
