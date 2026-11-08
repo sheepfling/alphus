@@ -12,6 +12,7 @@ from typing import TypeGuard, get_args, get_origin, get_type_hints
 
 from alphus.contracts.cyclomatic import CyclomaticReport
 from alphus.contracts.findings import Finding
+from alphus.contracts.shared_utilities import SharedUtilitiesReport
 from alphus.plugins.builtin import BuiltinFeature
 from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
 
@@ -56,6 +57,8 @@ def _is_builtin_feature(target: object) -> TypeGuard[BuiltinFeature]:
         return get_origin(return_annotation) is list and get_args(
             return_annotation
         ) == (str,)
+    if shape == "shared-utilities":
+        return return_annotation is SharedUtilitiesReport
     return False
 
 

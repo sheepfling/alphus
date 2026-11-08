@@ -35,14 +35,12 @@ from alphus.policy.sources import (
     FileInventoryPolicy,
     FunctionShapePolicy,
     PythonStylePolicy,
-    SharedUtilitiesPolicy,
 )
 
 
 class CheckPolicies(GeneratedFeaturePolicies):
     """Settings for the currently available source gates."""
 
-    shared_utilities: SharedUtilitiesPolicy | None = None
     python_style: PythonStylePolicy | None = None
     cli: CliPolicy | None = None
     architecture_graph: ArchitectureGraphCheckPolicy | None = None

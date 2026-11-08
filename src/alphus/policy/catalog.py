@@ -57,12 +57,6 @@ class RuleSpec:
 
 _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
     {
-        "shared-utilities": RuleSpec(
-            "shared_utilities",
-            RuleOutputShape.SHARED_UTILITIES,
-            "Finds duplicated shared-helper implementations and direct Git calls.",
-            ("python",),
-        ),
         "python-style": RuleSpec(
             "python_style",
             RuleOutputShape.PYTHON_STYLE,

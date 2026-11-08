@@ -197,7 +197,6 @@ _LEGACY_SOURCE_SCAN_RULES: tuple[QualityRuleName, ...] = (
     "json-structure",
     "output-escaping",
     "path-discovery",
-    "shared-utilities",
     "python-style",
     "runtime-types",
     "test-quality",

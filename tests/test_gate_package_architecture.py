@@ -17,7 +17,6 @@ from alphus.execution.dispatch import (
     RULE_RUNNERS,
     EntryPointBuiltinRuleBinding,
 )
-from alphus.gates.hygiene.runners import HYGIENE_RULE_RUNNERS
 from alphus.gates.markdown.runners import MARKDOWN_RULE_RUNNERS
 from alphus.gates.repository.runners import REPOSITORY_RULE_RUNNERS
 from alphus.gates.source.runners import SOURCE_RULE_RUNNERS
@@ -86,7 +85,6 @@ def test_gate_themes_own_their_runner_mappings() -> None:
         SOURCE_RULE_RUNNERS,
         REPOSITORY_RULE_RUNNERS,
         VCS_RULE_RUNNERS,
-        HYGIENE_RULE_RUNNERS,
         MARKDOWN_RULE_RUNNERS,
     )
     legacy_selectors = set().union(*(set(runners) for runners in themes))

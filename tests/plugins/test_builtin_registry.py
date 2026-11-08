@@ -14,6 +14,7 @@ import pytest
 
 from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
+from alphus.contracts.shared_utilities import SharedUtilitiesReport
 from alphus.plugins import builtin_registry
 from alphus.plugins.builtin import BuiltinFeature
 from alphus.plugins.builtin_registry import (
@@ -191,5 +192,54 @@ def test_message_feature_requires_a_list_of_strings(
     try:
         with pytest.raises(TypeError, match="typed synchronous feature"):
             load_builtin_feature("script-policy")
+    finally:
+        builtin_registry.load_builtin_feature.cache_clear()
+
+
+def test_shared_utilities_feature_requires_its_typed_report(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def report_runner(
+        _root: Path, _files: Sequence[Path], _config: QualityGateConfig
+    ) -> SharedUtilitiesReport:
+        return SharedUtilitiesReport((), (), ())
+
+    feature = BuiltinFeature(
+        definition=FEATURE_DEFINITIONS["shared-utilities"],
+        morphology=MORPHOLOGY_BY_SELECTOR["shared-utilities"],
+        runner=report_runner,
+    )
+    point = SimpleNamespace(load=lambda: feature)
+    monkeypatch.setattr(
+        builtin_registry,
+        "builtin_check_entry_points",
+        lambda: {"shared-utilities": point},
+    )
+    builtin_registry.load_builtin_feature.cache_clear()
+    try:
+        assert load_builtin_feature("shared-utilities") is feature
+    finally:
+        builtin_registry.load_builtin_feature.cache_clear()
+
+    def wrong_report_runner(
+        _root: Path, _files: Sequence[Path], _config: QualityGateConfig
+    ) -> list[str]:
+        return []
+
+    wrong_feature = BuiltinFeature(
+        definition=FEATURE_DEFINITIONS["shared-utilities"],
+        morphology=MORPHOLOGY_BY_SELECTOR["shared-utilities"],
+        runner=cast("object", wrong_report_runner),  # type: ignore[arg-type]
+    )
+    wrong_point = SimpleNamespace(load=lambda: wrong_feature)
+    monkeypatch.setattr(
+        builtin_registry,
+        "builtin_check_entry_points",
+        lambda: {"shared-utilities": wrong_point},
+    )
+    builtin_registry.load_builtin_feature.cache_clear()
+    try:
+        with pytest.raises(TypeError, match="typed synchronous feature"):
+            load_builtin_feature("shared-utilities")
     finally:
         builtin_registry.load_builtin_feature.cache_clear()

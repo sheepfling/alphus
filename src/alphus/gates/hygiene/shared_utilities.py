@@ -6,30 +6,25 @@ import ast
 import hashlib
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
-from alphus.config import SharedUtilitiesPolicy
+from alphus.config import QualityGateConfig
+from alphus.contracts.complaints import ComplaintContract, ComplaintEntry
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
+from alphus.contracts.shared_utilities import SharedUtilitiesReport
+from alphus.plugins.builtin import BuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.sources import SharedUtilitiesPolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
-
-
-@dataclass(frozen=True, slots=True)
-class SharedUtilitiesReport:
-    """Structured results from the two related shared-utility checks."""
-
-    duplicate_groups: tuple[tuple[str, ...], ...]
-    file_hash_implementations: tuple[str, ...]
-    direct_git_calls: tuple[str, ...]
-
-    @property
-    def failed(self) -> bool:
-        """Return whether duplicate helpers or multiple file hashers were found."""
-        return (
-            bool(self.duplicate_groups)
-            or len(self.file_hash_implementations) > 1
-            or bool(self.direct_git_calls)
-        )
 
 
 def _selected_python_files(
@@ -259,3 +254,128 @@ def check_shared_utilities(
         file_hash_implementations=tuple(file_hashes),
         direct_git_calls=git_calls,
     )
+
+
+ALPHUS_COMPLAINT_CONTRACTS: Final = (
+    ComplaintContract(
+        name="shared-utilities",
+        emitters=("shared-utilities",),
+        entries=(
+            ComplaintEntry(
+                emitter="shared-utilities",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.MAINTAINABILITY,
+                    "duplicate-helper",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="shared-utilities",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.MAINTAINABILITY,
+                    "duplicate-file-hash-implementation",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="shared-utilities",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.MAINTAINABILITY,
+                    "direct-git-subprocess",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="shared-utilities",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.MAINTAINABILITY,
+                    "shared-utilities-check-failed",
+                ),
+            ),
+        ),
+    ),
+)
+
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="shared-utilities",
+    policy_field="shared_utilities",
+    policy_model=SharedUtilitiesPolicy,
+    output_shape="shared-utilities",
+    summary="Finds duplicated shared-helper implementations and direct Git calls.",
+    applies_to=("python",),
+    domains=(),
+    requires_files=True,
+    input_mode="configured-source-scan",
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="shared-utilities",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.MAINTAINABILITY,
+            "duplicate-helper",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.MAINTAINABILITY,
+            "duplicate-file-hash-implementation",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.MAINTAINABILITY,
+            "direct-git-subprocess",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.MAINTAINABILITY,
+            "shared-utilities-check-failed",
+        ),
+    ),
+    finding_contracts=("shared-utilities",),
+    concern="shared-implementation-boundaries",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "Configured Python source may contain duplicate helper bodies, multiple "
+        "file-hash implementations, or direct Git subprocess calls outside the "
+        "declared shared adapters."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=(
+        "configured-python-source-files",
+        "function-and-method-bodies",
+        "file-hash-call-shapes",
+        "git-subprocess-call-shapes",
+    ),
+    languages_formats=("python",),
+    evidence_kinds=("python-ast-patterns", "normalized-function-body-hashes"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
+
+
+def run_shared_utilities_rule(
+    root: Path, paths: Sequence[Path], config: QualityGateConfig
+) -> SharedUtilitiesReport:
+    """Run the configured shared-utility checks through built-in dispatch."""
+    return check_shared_utilities(
+        root,
+        paths,
+        require_policy(config.checks.shared_utilities, "shared_utilities"),
+    )
+
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_shared_utilities_rule,
+)

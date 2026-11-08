@@ -18,7 +18,7 @@ from alphus.contracts.findings import (
     severity_meets_threshold,
 )
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
-from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
+from alphus.contracts.shared_utilities import SharedUtilitiesReport
 from alphus.gates.languages.python.style import StyleFindings
 from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
 from alphus.policy.base import QualityRuleName, RuleSelector
@@ -168,7 +168,23 @@ def _style_diagnostics(
     ]
 
 
+def _feature_complaint_id(rule: RuleSelector, complaint: str) -> str:
+    spec = RULE_SPECS.get(rule)
+    morphology = None if spec is None else spec.morphology
+    if morphology is None:
+        raise ValueError(f"rule {rule!r} has no feature-owned morphology")
+    matches = [
+        tag.rule_id for tag in morphology.finding_ids if tag.complaint == complaint
+    ]
+    if len(matches) != 1:
+        raise ValueError(
+            f"rule {rule!r} morphology must declare complaint {complaint!r} exactly once"
+        )
+    return matches[0]
+
+
 def _shared_diagnostics(
+    rule: RuleSelector,
     groups: Sequence[Sequence[str]],
     hash_implementations: Sequence[str],
     direct_git_calls: Sequence[str],
@@ -178,12 +194,7 @@ def _shared_diagnostics(
     diagnostics = [
         Diagnostic(
             source="alphus",
-            rule_id=rule_tag(
-                Scope.PYTHON,
-                Framework.NONE,
-                Category.MAINTAINABILITY,
-                "duplicate-helper",
-            ),
+            rule_id=_feature_complaint_id(rule, "duplicate-helper"),
             message=f"Duplicate Python helper: {', '.join(group)}",
         )
         for group in groups
@@ -192,11 +203,8 @@ def _shared_diagnostics(
         diagnostics.append(
             Diagnostic(
                 source="alphus",
-                rule_id=rule_tag(
-                    Scope.PYTHON,
-                    Framework.NONE,
-                    Category.MAINTAINABILITY,
-                    "duplicate-file-hash-implementation",
+                rule_id=_feature_complaint_id(
+                    rule, "duplicate-file-hash-implementation"
                 ),
                 message=(
                     "Repeated file SHA-256 implementation: "
@@ -207,12 +215,7 @@ def _shared_diagnostics(
     diagnostics.extend(
         Diagnostic(
             source="alphus",
-            rule_id=rule_tag(
-                Scope.PYTHON,
-                Framework.NONE,
-                Category.MAINTAINABILITY,
-                "direct-git-subprocess",
-            ),
+            rule_id=_feature_complaint_id(rule, "direct-git-subprocess"),
             message=f"Git subprocess bypasses shared adapter: {location}",
         )
         for location in direct_git_calls
@@ -221,12 +224,7 @@ def _shared_diagnostics(
         diagnostics.append(
             Diagnostic(
                 source="alphus",
-                rule_id=rule_tag(
-                    Scope.PYTHON,
-                    Framework.NONE,
-                    Category.MAINTAINABILITY,
-                    "shared-utilities-check-failed",
-                ),
+                rule_id=_feature_complaint_id(rule, "shared-utilities-check-failed"),
                 message="Shared utilities check reported failure without details.",
             )
         )
@@ -261,6 +259,7 @@ def diagnostics_from_output(rule: RuleSelector, output: RuleOutput) -> list[Diag
         raise ValueError(f"rule {rule!r} has no output normalizer")
     report = _SHARED_REPORT.validate_python(output)
     return _shared_diagnostics(
+        rule,
         report.duplicate_groups,
         report.file_hash_implementations,
         report.direct_git_calls,
@@ -291,6 +290,7 @@ def diagnostics_from_json(rule: RuleSelector, encoded: str) -> list[Diagnostic]:
         raise ValueError(f"rule {rule!r} has no JSON output normalizer")
     report = _SHARED_UTILITIES.validate_json(encoded)
     return _shared_diagnostics(
+        rule,
         report.duplicate_groups,
         report.file_hash_implementations,
         report.direct_git_calls,

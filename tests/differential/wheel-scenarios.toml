@@ -2418,3 +2418,59 @@ arguments = ["--config", "typing-stubs-profile.toml", "--profile", "typing-revie
 name = "parallel"
 arguments = ["--config", "typing-stubs-profile.toml", "--profile", "typing-review", "--run", "--json", "--jobs", "2"]
 compare_within_build = true
+
+[[scenario]]
+name = "shared-utilities-direct-report"
+fixture = "profile"
+materialized_files = [
+  { path = "shared-utilities.toml", contents = "schema_version = 1\n[files]\ninclude = [\"src/**/*.py\"]\nexclude = []\n[checks.shared_utilities]\nextensions = [\".py\"]\nexclude = []\ncanonical_file_hash_path = \"src/hash.py\"\ncanonical_file_hash_function = \"sha256_file\"\ncanonical_git_path = \"src/git.py\"\nminimum_body_statements = 3\nminimum_ast_nodes = 15\n" },
+  { path = "src/raw.py", contents = "import subprocess\ndef revision(root):\n    return subprocess.run([\"git\", \"status\"], cwd=root)\n" },
+]
+selectors = ["shared-utilities"]
+behavior = ["feature-owned-configured-scan", "specialized-typed-report", "direct-json"]
+expected_exit = 0
+required_output = ["src/raw.py:2"]
+
+[[scenario.variant]]
+name = "json-report"
+arguments = ["--config", "shared-utilities.toml", "--rule", "shared-utilities", "--report", "--json"]
+
+[[scenario]]
+name = "shared-utilities-profile"
+fixture = "profile"
+materialized_files = [
+  { path = "shared-utilities-profile.toml", contents = "schema_version = 1\n[files]\ninclude = [\"src/**/*.py\"]\nexclude = []\n[checks.shared_utilities]\nextensions = [\".py\"]\nexclude = []\ncanonical_file_hash_path = \"src/hash.py\"\ncanonical_file_hash_function = \"sha256_file\"\ncanonical_git_path = \"src/git.py\"\nminimum_body_statements = 3\nminimum_ast_nodes = 15\n[orchestration]\ndefault_profile = \"shared-review\"\nfailure_threshold = \"error\"\n[[orchestration.steps]]\nkind = \"rule\"\nname = \"Shared utilities review\"\nrule = \"shared-utilities\"\n[[orchestration.profiles]]\nname = \"shared-review\"\nsteps = [\"Shared utilities review\"]\n" },
+  { path = "src/raw.py", contents = "import subprocess\ndef revision(root):\n    return subprocess.run([\"git\", \"status\"], cwd=root)\n" },
+]
+selectors = ["shared-utilities"]
+behavior = ["feature-owned-profile-dispatch", "specialized-report-adapter", "serial-parallel", "finding-id"]
+expected_exit = 1
+minimum_findings = 1
+expected_step_names = ["Shared utilities review"]
+expected_step_rules = ["shared-utilities"]
+required_output = ["alphus/python/none/maintainability/direct-git-subprocess"]
+
+[[scenario.variant]]
+name = "serial"
+arguments = ["--config", "shared-utilities-profile.toml", "--profile", "shared-review", "--run", "--json", "--jobs", "1"]
+
+[[scenario.variant]]
+name = "parallel"
+arguments = ["--config", "shared-utilities-profile.toml", "--profile", "shared-review", "--run", "--json", "--jobs", "2"]
+compare_within_build = true
+
+[[scenario]]
+name = "shared-utilities-invalid-config"
+fixture = "profile"
+materialized_files = [
+  { path = "shared-utilities-invalid.toml", contents = "schema_version = 1\n[checks.shared_utilities]\nunexpected = true\n" },
+]
+selectors = ["shared-utilities"]
+behavior = ["feature-owned-strict-policy", "unknown-field-rejection"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-policy"
+arguments = ["--config", "shared-utilities-invalid.toml", "--rule", "shared-utilities"]
+parse_json = false

@@ -167,7 +167,11 @@ def test_source_test_coverage_uses_generated_registration_without_file_inventory
 
 
 def test_feature_owned_review_policies_remain_strict() -> None:
-    for field in ("source_families", "typing_stub_suggestions"):
+    for field in (
+        "source_families",
+        "typing_stub_suggestions",
+        "shared_utilities",
+    ):
         with pytest.raises(ValidationError):
             QualityGateConfig.model_validate(
                 {
@@ -191,6 +195,11 @@ def test_feature_owned_review_policies_remain_strict() -> None:
             "alphus.gates.review.typing_stub_suggestions",
             "typing_stub_suggestions",
         ),
+        (
+            "shared-utilities",
+            "alphus.gates.hygiene.shared_utilities",
+            "shared_utilities",
+        ),
     ),
 )
 def test_review_feature_providers_load_only_after_explicit_dispatch(
@@ -199,7 +208,17 @@ def test_review_feature_providers_load_only_after_explicit_dispatch(
     provider: str,
     policy_field: str,
 ) -> None:
-    policy = {"extensions": [".py"]} if selector == "typing-stub-suggestions" else {}
+    policies = {
+        "typing-stub-suggestions": {"extensions": [".py"]},
+        "shared-utilities": {
+            "extensions": [".py"],
+            "canonical_file_hash_path": "src/hash.py",
+            "canonical_file_hash_function": "sha256_file",
+            "minimum_body_statements": 3,
+            "minimum_ast_nodes": 15,
+        },
+    }
+    policy = policies.get(selector, {})
     script = f"""
 import sys
 from pathlib import Path
