@@ -41,15 +41,19 @@ def _is_builtin_feature(target: object) -> TypeGuard[BuiltinFeatureRegistration]
     match target:
         case BuiltinFeature() as feature:
             policy_resolver = None
+            runner_input_count = 3
+        case CompositeFindingBuiltinFeature() as feature:
+            policy_resolver = feature.policy_resolver
+            runner_input_count = 4
         case (
             FindingBuiltinFeature()
-            | CompositeFindingBuiltinFeature()
             | MessageBuiltinFeature()
             | PythonStyleBuiltinFeature()
             | SharedUtilitiesBuiltinFeature()
             | CyclomaticBuiltinFeature()
         ) as feature:
             policy_resolver = feature.policy_resolver
+            runner_input_count = 3
         case _:
             return False
 
@@ -64,7 +68,7 @@ def _is_builtin_feature(target: object) -> TypeGuard[BuiltinFeatureRegistration]
         if policy_resolver is None:
             runner_signature.bind(Path("."), (), object())
         else:
-            if isinstance(feature, CompositeFindingBuiltinFeature):
+            if runner_input_count == 4:
                 runner_signature.bind(Path("."), (), object(), object())
             else:
                 runner_signature.bind(Path("."), (), object())

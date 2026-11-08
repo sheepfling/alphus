@@ -84,7 +84,7 @@ def _resolve_feature_policy(
 ) -> _FeaturePolicy:
     """Resolve and verify the configured value against its declared model."""
     policy = resolver(config)
-    if not isinstance(policy, definition.policy_model):
+    if type(policy) is not definition.policy_model:
         raise TypeError(
             f"feature {definition.selector!r} policy resolver returned "
             f"{type(policy).__name__}, expected {definition.policy_model.__name__}"
