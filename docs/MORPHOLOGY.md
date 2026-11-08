@@ -474,3 +474,28 @@ are `580bc6ae6b42620b7cea5c0df769b4a2290ac8c1f84e2219e6b327ded200f9a4` and
 report is `/tmp/alphus-morphology-review-pair-34fd501.json`; it is not
 committed. This remains partial compatibility evidence, not completion of
 issue #87.
+
+## Shared-utilities specialized-report registration slice
+
+Commit `09186377482b917fb7cfaac70f5fb757b0c86186` moves
+`shared-utilities` to a typed feature-owned registration. Its declaration owns
+the configured-source scan mode, strict policy model, four stable complaint
+IDs, specialized report shape, morphology and runner. The manual hygiene runner,
+legacy catalog and policy-field registrations, and CLI source-scan selector
+entry were removed. `SharedUtilitiesReport` now lives in `alphus.contracts`;
+the original gate module re-exports it, preserving existing imports. The
+profile result adapter obtains complaint IDs from the feature's morphology,
+and the registry validates that its selected runner returns the typed report.
+
+Differential scenarios cover the direct JSON report envelope, a finding-bearing
+serial/parallel profile run, and unknown-field rejection. Against pinned
+baseline `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`, all 143 manifested
+installed-wheel scenarios matched with zero differences and the catalogs
+remained equal at 62 selectors. Sixty selectors are feature-owned and
+behaviorally exercised; `cli` and `python-style` remain on legacy registration.
+The selector-policy matrix covers 26 direct invocations and 36 strict
+missing-policy rejections. Reference and candidate wheel SHA-256 values are
+`f12710581a6bb35f628169fba66666af1ac70056b617bab617d4a323fbd1ee8b` and
+`f98299bd73e9294ce6c3362931abccef579e32b2a70a04922451a5ca1bc36944`. The
+report is `/tmp/alphus-morphology-shared-utilities-435afb8.json`; it is not
+committed. This remains partial evidence, not completion of issue #87.
