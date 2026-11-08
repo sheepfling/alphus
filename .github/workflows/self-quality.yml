@@ -94,6 +94,9 @@ jobs:
             2>"$RUNNER_TEMP/$ALPHUS_REPORT_DIR/stderr.log"
           result=$?
           echo "exit_code=$result" >> "$GITHUB_OUTPUT"
+          if [ "$result" -ne 0 ]; then
+            cat "$RUNNER_TEMP/$ALPHUS_REPORT_DIR/stderr.log" >&2
+          fi
           exit "$result"
       - name: Retain comparison outcome and report provenance
         if: always()
@@ -111,6 +114,7 @@ jobs:
 
           report_dir = Path(os.environ["RUNNER_TEMP"]) / os.environ["ALPHUS_REPORT_DIR"]
           harness_report = report_dir / "harness-report.json"
+          stderr_log = report_dir / "stderr.log"
           manifest = Path("tests/differential/wheel-scenarios.toml")
           manifest_bytes = manifest.read_bytes()
           report: dict[str, object] | None = None
@@ -224,6 +228,11 @@ jobs:
               "difference_count": len(differences) if differences is not None else None,
               "harness_exit_code": os.environ["DIFFERENTIAL_EXIT_CODE"] or None,
               "harness_step_outcome": os.environ["DIFFERENTIAL_OUTCOME"],
+              "failure_stderr_tail": (
+                  stderr_log.read_text(encoding="utf-8").splitlines()[-40:]
+                  if stderr_log.is_file()
+                  else []
+              ),
           }
           if coverage is not None:
               selector_coverage_status = (
