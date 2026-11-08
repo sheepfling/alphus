@@ -9,8 +9,9 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from alphus import check_file_size, check_line_length
+from alphus import check_line_length
 from alphus.config import QualityGateConfig
+from alphus.gates.hygiene.file_size import run_file_size_feature
 from alphus.plugins.builtin_registry import load_builtin_feature
 from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
 from alphus.policy.catalog import RULE_SPECS
@@ -23,7 +24,7 @@ def test_feature_definition_generates_the_existing_catalog_contract() -> None:
     assert definition.policy_field == spec.policy_field == "file_size"
     assert definition.output_shape == spec.output_shape.value == "findings"
     assert definition.summary == spec.summary
-    assert load_builtin_feature("file-size").runner is check_file_size
+    assert load_builtin_feature("file-size").runner is run_file_size_feature
     line_definition = FEATURE_DEFINITIONS["line-length"]
     line_spec = RULE_SPECS["line-length"]
     assert line_definition.policy_field == line_spec.policy_field == "line_length"

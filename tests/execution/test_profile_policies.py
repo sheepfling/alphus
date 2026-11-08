@@ -33,6 +33,7 @@ from alphus.plugins.builtin_registry import (
 )
 from alphus.policy.base import MissingPolicyError
 from alphus.policy.catalog import RULE_SPECS
+from alphus.policy.sources import FileSizePolicy
 
 
 def repository(tmp_path: Path, extra: str = "") -> Path:
@@ -318,7 +319,9 @@ def test_entrypoint_dispatch_rejects_coercible_finding_mappings(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def malformed_runner(
-        _root: Path, _files: Sequence[Path], _config: QualityGateConfig
+        _root: Path,
+        _files: Sequence[Path],
+        _policy: FileSizePolicy,
     ) -> list[Finding]:
         return cast(
             list[Finding],

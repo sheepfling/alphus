@@ -51,6 +51,8 @@ def typed_feature_output_shape(constructor_name: str) -> str | None:
             return "cyclomatic-report"
         case "FindingBuiltinFeature":
             return "findings"
+        case "CompositeFindingBuiltinFeature":
+            return "findings"
         case "MessageBuiltinFeature":
             return "messages"
         case "PythonStyleBuiltinFeature":
@@ -1466,7 +1468,13 @@ def _validate_builtin_feature_export(
                 f"{output_shape!r}"
             )
     fields: dict[str, ast.expr] = {}
-    positional_names = ("definition", "morphology", "runner", "cyclomatic_operations")
+    positional_names = (
+        "definition",
+        "morphology",
+        "runner",
+        "policy_resolver",
+        "cyclomatic_operations",
+    )
     if len(args) > len(positional_names):
         raise ValueError(f"{path}: ALPHUS_FEATURE has too many positional arguments")
     fields.update(zip(positional_names, args, strict=False))
@@ -1474,11 +1482,10 @@ def _validate_builtin_feature_export(
         if keyword.arg is None or keyword.arg in fields:
             raise ValueError(f"{path}: ALPHUS_FEATURE has duplicate or expanded fields")
         fields[keyword.arg] = keyword.value
-    if set(fields) - set(positional_names) or not {
-        "definition",
-        "morphology",
-        "runner",
-    } <= set(fields):
+    required_fields = {"definition", "morphology", "runner"}
+    if constructor_name != "BuiltinFeature":
+        required_fields.add("policy_resolver")
+    if set(fields) - set(positional_names) or not required_fields <= set(fields):
         raise ValueError(f"{path}: ALPHUS_FEATURE fields are incomplete or unsupported")
     match (fields["definition"], fields["morphology"]):
         case (
@@ -1516,16 +1523,54 @@ def _validate_builtin_feature_export(
             raise ValueError(
                 f"{path}: ALPHUS_FEATURE runner {runner_name!r} must be synchronous"
             )
+    expected_runner_inputs = (
+        4 if constructor_name == "CompositeFindingBuiltinFeature" else 3
+    )
     parameters = (*provider.args.posonlyargs, *provider.args.args)
     if (
-        len(parameters) != 3
+        len(parameters) != expected_runner_inputs
         or args.vararg is not None
         or args.kwarg is not None
         or args.kwonlyargs
     ):
         raise ValueError(
-            f"{path}: ALPHUS_FEATURE runner {runner_name!r} must accept three positional inputs"
+            f"{path}: ALPHUS_FEATURE runner {runner_name!r} must accept "
+            f"{expected_runner_inputs} positional inputs"
         )
+
+    if constructor_name != "BuiltinFeature":
+        match fields["policy_resolver"]:
+            case ast.Name(id=resolver_name):
+                pass
+            case _:
+                raise ValueError(
+                    f"{path}: typed feature policy resolver must be a local function"
+                )
+        resolvers: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
+        for statement in tree.body:
+            match statement:
+                case ast.FunctionDef(name=name) | ast.AsyncFunctionDef(name=name) if (
+                    name == resolver_name
+                ):
+                    resolvers.append(statement)
+                case _:
+                    continue
+        if len(resolvers) != 1 or not isinstance(resolvers[0], ast.FunctionDef):
+            raise ValueError(
+                f"{path}: typed feature policy resolver must be one local sync function"
+            )
+        resolver_args = resolvers[0].args
+        resolver_parameters = (*resolver_args.posonlyargs, *resolver_args.args)
+        if (
+            len(resolver_parameters) != 1
+            or resolver_args.vararg is not None
+            or resolver_args.kwarg is not None
+            or resolver_args.kwonlyargs
+        ):
+            raise ValueError(
+                f"{path}: typed feature policy resolver must accept "
+                "one positional input"
+            )
 
 
 def _quoted(value: str) -> str:
@@ -1732,9 +1777,9 @@ def render_feature_manifest(root: Path) -> str:
 
 def _registered_feature_form(root: Path, feature: _FeatureRegistration) -> str:
     """Read a validated registration's constructor name without importing it."""
-    path = root.joinpath(
-        "src", *feature.registration_module.split(".")
-    ).with_suffix(".py")
+    path = root.joinpath("src", *feature.registration_module.split(".")).with_suffix(
+        ".py"
+    )
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     exports = [
         _assignment_value(statement)
@@ -1747,8 +1792,7 @@ def _registered_feature_form(root: Path, feature: _FeatureRegistration) -> str:
         )
     match exports[0]:
         case ast.Call(
-            func=ast.Name(id=constructor_name)
-            | ast.Attribute(attr=constructor_name),
+            func=ast.Name(id=constructor_name) | ast.Attribute(attr=constructor_name),
         ):
             return constructor_name
         case _:
@@ -1756,20 +1800,37 @@ def _registered_feature_form(root: Path, feature: _FeatureRegistration) -> str:
 
 
 def render_builtin_registry_stub(root: Path) -> str:
-    """Render literal-selector overloads from feature-owned registrations."""
+    """Render selector- and primary-policy-specific lazy-loader overloads."""
     registrations = feature_registrations(root)
     overloads: list[tuple[str, str]] = []
+    feature_models: dict[str, set[str]] = {}
     for feature in registrations:
         form = _registered_feature_form(root, feature)
         if form != "BuiltinFeature" and typed_feature_output_shape(form) is None:
             raise ValueError(
-                f"{feature.registration_module}: unsupported feature form "
-                f"{form!r}"
+                f"{feature.registration_module}: unsupported feature form {form!r}"
             )
-        overloads.append((feature.selector, form))
+        if form == "BuiltinFeature":
+            overloads.append((feature.selector, form))
+            continue
+        model_module, model_name = feature.policy_model.rsplit(".", 1)
+        feature_models.setdefault(model_module, set()).add(model_name)
+        overloads.append((feature.selector, f"{form}[{model_name}]"))
+
+    model_owners: dict[str, str] = {}
+    for module, names in feature_models.items():
+        for name in names:
+            previous = model_owners.get(name)
+            if previous is not None and previous != module:
+                raise ValueError(
+                    f"policy model name {name!r} is ambiguous in generated stub"
+                )
+            model_owners[name] = module
 
     imported_types = {"BuiltinFeatureRegistration"}
-    imported_types.update(form for _selector, form in overloads)
+    imported_types.update(
+        form for _selector, form in overloads for form in (form.split("[", 1)[0],)
+    )
     lines = [
         '"""Generated selector-specific types for the lazy built-in registry."""',
         "",
@@ -1780,13 +1841,21 @@ def render_builtin_registry_stub(root: Path) -> str:
         "from alphus.plugins.builtin import (",
         *(f"    {name}," for name in sorted(imported_types)),
         ")",
-        "",
-        "BUILTIN_CHECK_ENTRY_POINT_GROUP: str",
-        "",
-        "def builtin_check_entry_points() -> Mapping[str, EntryPoint]: ...",
-        "",
-        "class _BuiltinFeatureLoader(Protocol):",
     ]
+    for module, names in sorted(feature_models.items()):
+        lines.extend(["", f"from {module} import ("])
+        lines.extend(f"    {name}," for name in sorted(names))
+        lines.append(")")
+    lines.extend(
+        [
+            "",
+            "BUILTIN_CHECK_ENTRY_POINT_GROUP: str",
+            "",
+            "def builtin_check_entry_points() -> Mapping[str, EntryPoint]: ...",
+            "",
+            "class _BuiltinFeatureLoader(Protocol):",
+        ]
+    )
     for selector, form in overloads:
         signature = (
             f"    def __call__(self, selector: Literal[{_quoted(selector)}], /) "

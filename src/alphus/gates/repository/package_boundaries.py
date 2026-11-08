@@ -22,7 +22,7 @@ from alphus.config import (
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
 from alphus.gates.repository.composite_contracts import package_boundary_rule_tag
-from alphus.plugins.builtin import FindingBuiltinFeature
+from alphus.plugins.builtin import CompositeFindingBuiltinFeature
 from alphus.policy.architecture import ArchitectureGraphPolicy, PackageBoundaryPolicy
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
@@ -274,11 +274,20 @@ ALPHUS_MORPHOLOGY: Final = RuleMorphology(
 )
 
 
+def resolve_package_boundary_policy(
+    config: QualityGateConfig,
+) -> PackageBoundaryPolicy:
+    """Resolve the primary composite policy with established strict behavior."""
+    return require_policy(config.checks.package_boundaries, "package_boundaries")
+
+
 def run_package_boundary_gate(
-    root: Path, _files: Sequence[Path], config: QualityGateConfig
+    root: Path,
+    _files: Sequence[Path],
+    config: QualityGateConfig,
+    policy: PackageBoundaryPolicy,
 ) -> list[Finding]:
-    """Run the package-owned composite with the configured optional providers."""
-    policy = require_policy(config.checks.package_boundaries, "package_boundaries")
+    """Run the composite with a typed primary and configured secondary inputs."""
     findings = check_package_boundaries(root, policy)
     graph_policy = config.checks.architecture_graph
     if graph_policy is not None and graph_policy.graph is not None:
@@ -965,8 +974,9 @@ def check_package_boundaries(
     return findings
 
 
-ALPHUS_FEATURE: Final = FindingBuiltinFeature(
+ALPHUS_FEATURE: Final = CompositeFindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
     runner=run_package_boundary_gate,
+    policy_resolver=resolve_package_boundary_policy,
 )

@@ -182,10 +182,25 @@ def _initializer_findings(
 
 
 def check_file_size(
-    root: Path, files: Sequence[Path], config: QualityGateConfig
+    root: Path,
+    files: Sequence[Path],
+    config: QualityGateConfig,
 ) -> list[Finding]:
     """Report source, Markdown, and package initializer size violations."""
-    policy = require_policy(config.checks.file_size, "file_size")
+    return _check_file_size_with_policy(
+        root, files, require_policy(config.checks.file_size, "file_size")
+    )
+
+
+def resolve_file_size_policy(config: QualityGateConfig) -> FileSizePolicy:
+    """Resolve file-size policy with the existing missing-policy behavior."""
+    return require_policy(config.checks.file_size, "file_size")
+
+
+def _check_file_size_with_policy(
+    root: Path, files: Sequence[Path], policy: FileSizePolicy
+) -> list[Finding]:
+    """Share size analysis between the typed registry and legacy adapter."""
     findings: list[Finding] = []
     checkout = root.resolve(strict=True)
     for relative in files:
@@ -268,6 +283,16 @@ def check_file_size(
     return findings
 
 
+def run_file_size_feature(
+    root: Path, files: Sequence[Path], policy: FileSizePolicy
+) -> list[Finding]:
+    """Run the registered typed provider without exposing aggregate config."""
+    return _check_file_size_with_policy(root, files, policy)
+
+
 ALPHUS_FEATURE: Final = FindingBuiltinFeature(
-    definition=ALPHUS_CHECK, morphology=ALPHUS_MORPHOLOGY, runner=check_file_size
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_file_size_feature,
+    policy_resolver=resolve_file_size_policy,
 )

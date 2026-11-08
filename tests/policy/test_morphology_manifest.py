@@ -92,17 +92,35 @@ def _feature_source(
         ]
     )
     lines.extend(morphology)
+    if feature_class == "BuiltinFeature":
+        runner_parameters = "root, files, config"
+        resolver_lines: list[str] = []
+    elif feature_class == "CompositeFindingBuiltinFeature":
+        runner_parameters = "root, files, config, policy"
+        resolver_lines = [
+            "def _resolve_demo_policy(config):\n",
+            "    return None\n",
+        ]
+    else:
+        runner_parameters = "root, files, policy"
+        resolver_lines = [
+            "def _resolve_demo_policy(config):\n",
+            "    return None\n",
+        ]
     lines.extend(
         [
-            "def _registered_demo_runner(root, files, config):\n",
+            f"def _registered_demo_runner({runner_parameters}):\n",
             "    return []\n",
+            *resolver_lines,
             f"ALPHUS_FEATURE = {feature_class}(\n",
             "    definition=ALPHUS_CHECK,\n",
             "    morphology=ALPHUS_MORPHOLOGY,\n",
             "    runner=_registered_demo_runner,\n",
-            ")\n",
         ]
     )
+    if feature_class != "BuiltinFeature":
+        lines.append("    policy_resolver=_resolve_demo_policy,\n")
+    lines.append(")\n")
     return f"from {policy_module} import {policy_class}\n" + "".join(lines)
 
 
@@ -990,13 +1008,13 @@ def test_registry_stub_narrows_literals_from_feature_owned_forms(
     stub = render_builtin_registry_stub(Path(pytestconfig.rootpath))
 
     assert 'selector: Literal["file-size"]' in stub
-    assert ') -> FindingBuiltinFeature: ...' in stub
+    assert ") -> FindingBuiltinFeature[FileSizePolicy]: ..." in stub
     assert 'selector: Literal["cli"]' in stub
-    assert ') -> MessageBuiltinFeature: ...' in stub
+    assert ") -> MessageBuiltinFeature[CliPolicy]: ..." in stub
     assert 'selector: Literal["cyclomatic-complexity"]' in stub
-    assert ') -> CyclomaticBuiltinFeature: ...' in stub
-    assert 'selector: str, /' in stub
-    assert ') -> BuiltinFeatureRegistration: ...' in stub
+    assert ") -> CyclomaticBuiltinFeature[CyclomaticComplexityPolicy]: ..." in stub
+    assert "selector: str, /" in stub
+    assert ") -> BuiltinFeatureRegistration: ..." in stub
 
 
 def test_check_detects_stale_generated_manifest(

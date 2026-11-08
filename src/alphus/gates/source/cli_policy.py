@@ -173,15 +173,23 @@ ALPHUS_MORPHOLOGY: Final = RuleMorphology(
 )
 
 
+def resolve_cli_policy(config: QualityGateConfig) -> CliPolicy:
+    """Resolve CLI policy with the established missing-policy behavior."""
+    return require_policy(config.checks.cli, "cli")
+
+
 def run_cli_policy_rule(
-    root: Path, paths: Sequence[Path], config: QualityGateConfig
+    root: Path,
+    paths: Sequence[Path],
+    policy: CliPolicy,
 ) -> list[str]:
-    """Preserve the existing message-list output for configured CLI policy."""
-    return policy_issues(root, paths, require_policy(config.checks.cli, "cli"))
+    """Preserve legacy messages using the registry-resolved CLI policy."""
+    return policy_issues(root, paths, policy)
 
 
 ALPHUS_FEATURE: Final = MessageBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
     runner=run_cli_policy_rule,
+    policy_resolver=resolve_cli_policy,
 )

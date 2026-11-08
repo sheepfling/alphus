@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from types import MappingProxyType
-from typing import Protocol, assert_never, cast
+from typing import Protocol, TypeVar, assert_never, cast
 
 from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.contracts.cyclomatic import (
@@ -20,9 +20,11 @@ from alphus.plugins.api import PluginFinding
 from alphus.plugins.builtin import (
     BuiltinFeature,
     BuiltinFeatureRegistration,
+    CompositeFindingBuiltinFeature,
     CyclomaticBuiltinFeature,
     FindingBuiltinFeature,
     MessageBuiltinFeature,
+    PolicyResolver,
     PythonStyleBuiltinFeature,
     SharedUtilitiesBuiltinFeature,
 )
@@ -32,8 +34,9 @@ from alphus.plugins.builtin_registry import (
 )
 from alphus.plugins.registry import PluginRuleBinding, enabled_plugin_registry
 from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
-from alphus.policy.base import RuleSelector
+from alphus.policy.base import RuleSelector, StrictModel
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape, RuleSpec
+from alphus.policy.feature_definition import FeatureDefinition
 
 RuleRunner = Callable[[Path, Sequence[Path], QualityGateConfig], RuleOutput]
 
@@ -71,6 +74,24 @@ class BuiltinRuleBinding:
         return self.runner(root, files, config)
 
 
+_FeaturePolicy = TypeVar("_FeaturePolicy", bound=StrictModel)
+
+
+def _resolve_feature_policy(
+    resolver: PolicyResolver[_FeaturePolicy],
+    definition: FeatureDefinition,
+    config: QualityGateConfig,
+) -> _FeaturePolicy:
+    """Resolve and verify the configured value against its declared model."""
+    policy = resolver(config)
+    if not isinstance(policy, definition.policy_model):
+        raise TypeError(
+            f"feature {definition.selector!r} policy resolver returned "
+            f"{type(policy).__name__}, expected {definition.policy_model.__name__}"
+        )
+    return policy
+
+
 def _run_registered_feature(
     feature: BuiltinFeatureRegistration,
     root: Path,
@@ -79,16 +100,40 @@ def _run_registered_feature(
 ) -> RuleOutput:
     """Run a selected provider while retaining its output type until adaptation."""
     match feature:
+        case CompositeFindingBuiltinFeature() as composite_feature:
+            policy = _resolve_feature_policy(
+                composite_feature.policy_resolver,
+                composite_feature.definition,
+                config,
+            )
+            return composite_feature.runner(root, files, config, policy)
         case FindingBuiltinFeature() as findings_feature:
-            return findings_feature.runner(root, files, config)
+            policy = _resolve_feature_policy(
+                findings_feature.policy_resolver, findings_feature.definition, config
+            )
+            return findings_feature.runner(root, files, policy)
         case MessageBuiltinFeature() as message_feature:
-            return message_feature.runner(root, files, config)
+            policy = _resolve_feature_policy(
+                message_feature.policy_resolver, message_feature.definition, config
+            )
+            return message_feature.runner(root, files, policy)
         case PythonStyleBuiltinFeature() as style_feature:
-            return style_feature.runner(root, files, config)
+            policy = _resolve_feature_policy(
+                style_feature.policy_resolver, style_feature.definition, config
+            )
+            return style_feature.runner(root, files, policy)
         case SharedUtilitiesBuiltinFeature() as utilities_feature:
-            return utilities_feature.runner(root, files, config)
+            policy = _resolve_feature_policy(
+                utilities_feature.policy_resolver, utilities_feature.definition, config
+            )
+            return utilities_feature.runner(root, files, policy)
         case CyclomaticBuiltinFeature() as cyclomatic_feature:
-            return cyclomatic_feature.runner(root, files, config)
+            policy = _resolve_feature_policy(
+                cyclomatic_feature.policy_resolver,
+                cyclomatic_feature.definition,
+                config,
+            )
+            return cyclomatic_feature.runner(root, files, policy)
         case BuiltinFeature() as legacy_feature:
             return legacy_feature.runner(root, files, config)
     return assert_never(feature)

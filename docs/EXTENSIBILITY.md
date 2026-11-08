@@ -292,10 +292,13 @@ Use a feature-local module under the owning shape or language package. Add a
 strict policy model only when the check needs one, then declare its existing
 selector and output shape in `ALPHUS_CHECK`, its claim and evidence in
 `ALPHUS_MORPHOLOGY`, and a typed synchronous runner in `ALPHUS_FEATURE`.
-Choose `FindingBuiltinFeature`, `MessageBuiltinFeature`,
+Choose `FindingBuiltinFeature`, `CompositeFindingBuiltinFeature`,
+`MessageBuiltinFeature`,
 `PythonStyleBuiltinFeature`, `SharedUtilitiesBuiltinFeature`, or
 `CyclomaticBuiltinFeature` to match the output shape. Each form narrows the
-runner result type; the lazy loader returns a disjoint union, and dispatch
+runner result type and primary policy type; the lazy loader returns a disjoint
+union. A typed form also declares a policy resolver; its return type must
+match the runner policy parameter and declared policy model. Dispatch
 narrows the selected form before adapting to the existing output contract.
 Static discovery checks the form/output-shape pairing. The build derives
 catalog/config/dispatch views and the wheel entry point; do not edit generated
@@ -305,12 +308,14 @@ feature object links the local declarations and a local runner. Use a small
 feature-local adapter if the implementation needs composed or imported setup.
 Do not import analyzer-only dependencies merely to inspect the catalog.
 
-The declared policy model is a concrete strict-model class and generates the
-matching typed config field. Runner functions still receive the aggregate
-`QualityGateConfig`; their config-field accesses are type-checked, but Python's
-type system does not yet prove that the field accessed by the runner matches
-the model in its feature declaration. See the architecture plan for this
-remaining policy-binding gap.
+For a typed form, pair a policy resolver that returns the declared strict
+model with a runner that accepts that same policy type. Pyright checks the
+resolver/runner pair; runtime registration checks both annotations against the
+`FeatureDefinition.policy_model`, and dispatch checks the resolved value before
+calling the runner. The model generates the matching strict config field.
+Ordinary typed runners cannot read unrelated config fields; a composite opts
+into aggregate config through `CompositeFindingBuiltinFeature`, with its primary
+policy still typed explicitly.
 
 The common finding adapter is appropriate for ordinary checks. Cyclomatic
 analysis retains its `CyclomaticRuleOperations` and `CyclomaticReport`; a

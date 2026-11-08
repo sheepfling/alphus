@@ -30,7 +30,8 @@ and runtime result-shape validation complement the static build check; the
 build parser itself does not prove the runner's return annotation.
 
 The registration package now provides immutable shape-specific forms with
-narrow runner protocols: `FindingBuiltinFeature`, `MessageBuiltinFeature`,
+narrow runner protocols: `FindingBuiltinFeature`,
+`CompositeFindingBuiltinFeature`, `MessageBuiltinFeature`,
 `PythonStyleBuiltinFeature`, `SharedUtilitiesBuiltinFeature`, and
 `CyclomaticBuiltinFeature`. Their constructors require the corresponding return
 type; each form also checks its declared shape. Static build discovery rejects
@@ -41,22 +42,23 @@ without changing the shared dispatch boundary.
 The loader now returns a disjoint union of the typed forms and the broad
 legacy form, so execution narrows by registered form before widening to the
 existing `RuleOutput` adapter. This avoids casts and keeps the result type
-attached to the actual runner call. The forms retain the common input signature
-`(root, selected files, validated QualityGateConfig)` to preserve 0.0.3 runner
-behavior. Pyright checks each concrete runner signature and result type; static
+attached to the actual runner call. Ordinary typed runners take the stable root,
+selected files, and resolved primary policy. Legacy
+three-argument runners keep their original signature. Pyright checks each
+concrete runner signature and result type; static
 build discovery checks its result form against `FeatureDefinition.output_shape`,
 and runtime loading checks the return annotation and value.
 
-Policy typing is less tightly connected. `FeatureDefinition.policy_model` is
-an actual `type[StrictModel]`, not a string label, and its policy field derives
-the generated strict `CheckPolicies` field. Runner callbacks still receive the
-whole typed `QualityGateConfig` and resolve that field themselves, so Pyright
-checks the accessed policy and its members but does not prove that a feature's
-declared model is exactly the model the callback reads. This remains a known
-contract gap; closing it needs a typed policy resolver or a runner input that
-carries the primary policy type, with explicit handling for composite secondary
-policies. The current slice does not change runner inputs or configuration
-semantics.
+Primary policy binding is explicit for typed forms. Their generic resolver
+returns a concrete policy type and ordinary typed runners receive only that
+policy, not aggregate config. Pyright checks the runner/resolver pair; runtime
+registration checks both annotations against `FeatureDefinition.policy_model`,
+and dispatch verifies the resolved value before invocation. The concrete
+policy class still derives the generated strict `CheckPolicies` field.
+`CompositeFindingBuiltinFeature` is the explicit exception: it receives the
+aggregate config for named secondary policies as well as the typed primary
+policy. Its runner result stays typed as findings. Legacy three-argument
+runners are unchanged.
 
 The forms distinguish result and required operations, not analyzer claim
 strength or backend. A future genuinely different input contract should add a
@@ -69,7 +71,8 @@ required by its form. Other feature declarations can still use the broad
 `BuiltinFeature` during migration, and the runtime loader validates their
 annotations and results. Dynamic entry-point lookup returns a disjoint union.
 A generated, ignored `builtin_registry.pyi` overload view maps each literal
-selector to its declared feature form; dynamic strings retain the full union.
+selector to its feature form and primary policy type; dynamic strings retain
+the full registration union.
 The view is derived from the same feature-owned declarations during the
 build, so it adds neither a second selector list nor a tracked merge-conflict
 file.
@@ -607,39 +610,32 @@ API v1.
 
 ## Developer experience: add a check once
 
-A migrated feature currently declares typed metadata beside its behavior. It
-references the existing strict policy model without moving policy ownership
-into the checker package. `line-length` lives in
-`src/alphus/gates/hygiene/line_length.py`; `LineLengthPolicy` remains in
-`src/alphus/policy/sources.py`. Its declaration has this shape:
+A typed feature declaration pairs its existing strict policy model with a
+feature-local resolver and a runner that accepts the same policy type. The
+build statically verifies the resolver is local and synchronous; Pyright checks
+the resolver/runner type pair. The runtime loader verifies both annotations
+against the declaration's policy model, and dispatch verifies the resolved
+object before calling the runner. For example, the `file-size` feature owns
+these references:
 
 ```python
-from alphus.plugins.builtin import FindingBuiltinFeature
-from alphus.policy.feature_definition import FeatureDefinition
-from alphus.policy.sources import LineLengthPolicy
-
-ALPHUS_CHECK: Final = FeatureDefinition(
-    selector="line-length",
-    policy_field="line_length",
-    policy_model=LineLengthPolicy,
-    output_shape="findings",
-    summary="Checks configured source lines against a maximum length.",
-    applies_to=("python",),
-    domains=(),
-    requires_files=True,
-)
-
 ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=check_line_length,
+    runner=run_file_size_feature,
+    policy_resolver=resolve_file_size_policy,
 )
 ```
 
-Choose the feature form that matches `ALPHUS_CHECK.output_shape`. Its runner
-protocol narrows the expected return type, and static build discovery rejects
-a typed form paired with a different shape. The broad `BuiltinFeature` remains
-available while older registrations migrate.
+`resolve_file_size_policy` returns `FileSizePolicy`; `run_file_size_feature`
+accepts that same type and returns `list[Finding]`. The existing
+`check_file_size(root, files, config)` adapter remains unchanged for direct
+callers.
+Typed selector overloads derive both form and primary policy type from this same
+declaration. Ordinary typed runners receive only the resolved primary policy.
+For `package-boundaries`, `CompositeFindingBuiltinFeature` additionally exposes
+`QualityGateConfig` for secondary policy inputs; its primary policy remains
+explicitly typed.
 
 The PEP 517 backend statically reads feature declarations and writes standard
 `alphus.builtin_checks.v1` metadata under the ignored `.registry-build/`
@@ -648,6 +644,7 @@ distributions whose selector set matches the generated feature catalog,
 rejects duplicate selectors, and imports a runner only after explicit
 selection. Adding a feature-owned check does not require editing a central
 runner map or the `pyproject.toml` entry-point table.
+
 The PEP 517 build also regenerates aggregate policy/config/dispatch views as
 ignored source files and includes them in wheels and source archives. Those
 outputs no longer appear in feature-branch diffs, so independent additions do

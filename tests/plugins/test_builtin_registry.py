@@ -12,19 +12,24 @@ from typing import cast
 
 import pytest
 
-from alphus.config import QualityGateConfig
+from alphus.config import CliPolicy, QualityGateConfig
 from alphus.contracts.cli_policy import CliPolicyReport
 from alphus.contracts.findings import Finding
 from alphus.contracts.shared_utilities import SharedUtilitiesReport
 from alphus.gates.languages.python.style import StyleFindings
 from alphus.plugins import builtin_registry
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import (
+    BuiltinFeature,
+    FindingBuiltinFeature,
+    PolicyResolver,
+)
 from alphus.plugins.builtin_registry import (
     builtin_check_entry_points,
     load_builtin_feature,
 )
 from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
 from alphus.policy._generated_morphology import MORPHOLOGY_BY_SELECTOR
+from alphus.policy.sources import FileSizePolicy
 
 
 def test_installed_entry_points_match_feature_selectors_and_load_lazily() -> None:
@@ -147,6 +152,44 @@ def test_loaded_feature_rejects_invalid_runner_signatures(
                 load_builtin_feature(selector)
         finally:
             builtin_registry.load_builtin_feature.cache_clear()
+
+
+def test_typed_feature_rejects_policy_resolver_mismatched_with_definition(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def cli_policy_resolver(config: QualityGateConfig) -> CliPolicy:
+        policy = config.checks.cli
+        if policy is None:
+            raise ValueError("test resolver requires the CLI policy")
+        return policy
+
+    def cli_policy_runner(
+        _root: Path,
+        _files: Sequence[Path],
+        _policy: CliPolicy,
+    ) -> list[Finding]:
+        return []
+
+    feature = FindingBuiltinFeature(
+        definition=FEATURE_DEFINITIONS["file-size"],
+        morphology=MORPHOLOGY_BY_SELECTOR["file-size"],
+        runner=cli_policy_runner,
+        policy_resolver=cast(
+            "PolicyResolver[FileSizePolicy]", cli_policy_resolver
+        ),  # simulate a forged feature contract at the runtime boundary
+    )
+    point = SimpleNamespace(load=lambda: feature)
+    monkeypatch.setattr(
+        builtin_registry,
+        "builtin_check_entry_points",
+        lambda: {"file-size": point},
+    )
+    builtin_registry.load_builtin_feature.cache_clear()
+    try:
+        with pytest.raises(TypeError, match="typed synchronous feature"):
+            load_builtin_feature("file-size")
+    finally:
+        builtin_registry.load_builtin_feature.cache_clear()
 
 
 def test_message_feature_requires_a_list_of_strings(

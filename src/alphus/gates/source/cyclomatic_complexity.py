@@ -911,13 +911,19 @@ def run_cyclomatic_complexity(
     return combine_cyclomatic_backends(policy, runs)
 
 
+def resolve_cyclomatic_policy(
+    config: QualityGateConfig,
+) -> CyclomaticComplexityPolicy:
+    """Resolve native cyclomatic policy using the strict config contract."""
+    return require_policy(config.checks.cyclomatic_complexity, "cyclomatic_complexity")
+
+
 def run_cyclomatic_rule(
-    root: Path, _files: Sequence[Path], config: QualityGateConfig
+    root: Path,
+    _files: Sequence[Path],
+    policy: CyclomaticComplexityPolicy,
 ) -> CyclomaticReport:
-    """Adapt the selected strict policy to the existing native report runner."""
-    policy = require_policy(
-        config.checks.cyclomatic_complexity, "cyclomatic_complexity"
-    )
+    """Adapt the typed selected policy to the existing native report runner."""
     return run_cyclomatic_complexity(root, policy)
 
 
@@ -986,6 +992,7 @@ ALPHUS_FEATURE: Final = CyclomaticBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
     runner=run_cyclomatic_rule,
+    policy_resolver=resolve_cyclomatic_policy,
     cyclomatic_operations=CyclomaticRuleOperations(
         build_plan=build_cyclomatic_plan,
         backend_failure=backend_failure,

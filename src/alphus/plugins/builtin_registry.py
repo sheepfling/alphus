@@ -16,6 +16,7 @@ from alphus.contracts.shared_utilities import SharedUtilitiesReport
 from alphus.plugins.builtin import (
     BuiltinFeature,
     BuiltinFeatureRegistration,
+    CompositeFindingBuiltinFeature,
     CyclomaticBuiltinFeature,
     FindingBuiltinFeature,
     MessageBuiltinFeature,
@@ -36,28 +37,57 @@ def _distribution_name(owner: Distribution) -> str:
 
 
 def _is_builtin_feature(target: object) -> TypeGuard[BuiltinFeatureRegistration]:
-    """Validate a first-party feature object and its synchronous result contract."""
+    """Validate runner input, policy binding, and synchronous output contracts."""
     match target:
+        case BuiltinFeature() as feature:
+            policy_resolver = None
         case (
-            BuiltinFeature()
-            | FindingBuiltinFeature()
+            FindingBuiltinFeature()
+            | CompositeFindingBuiltinFeature()
             | MessageBuiltinFeature()
             | PythonStyleBuiltinFeature()
             | SharedUtilitiesBuiltinFeature()
             | CyclomaticBuiltinFeature()
         ) as feature:
-            pass
+            policy_resolver = feature.policy_resolver
         case _:
             return False
+
     runner = feature.runner
     if iscoroutinefunction(runner) or isasyncgenfunction(runner):
         return False
     if not callable(runner):
         return False
     try:
-        signature(runner).bind(Path("."), (), object())
-        return_annotation = get_type_hints(runner).get("return")
-    except (TypeError, ValueError):
+        runner_signature = signature(runner)
+        runner_annotations = get_type_hints(runner)
+        if policy_resolver is None:
+            runner_signature.bind(Path("."), (), object())
+        else:
+            if isinstance(feature, CompositeFindingBuiltinFeature):
+                runner_signature.bind(Path("."), (), object(), object())
+            else:
+                runner_signature.bind(Path("."), (), object())
+            if iscoroutinefunction(policy_resolver) or isasyncgenfunction(
+                policy_resolver
+            ):
+                return False
+            signature(policy_resolver).bind(object())
+            resolver_return = get_type_hints(policy_resolver).get("return")
+            runner_policy = runner_annotations.get("policy")
+            policy_types = get_args(runner_policy)
+            valid_runner_policy = runner_policy is feature.definition.policy_model or (
+                len(policy_types) == 2
+                and feature.definition.policy_model in policy_types
+                and type(None) in policy_types
+            )
+            if (
+                resolver_return is not feature.definition.policy_model
+                or not valid_runner_policy
+            ):
+                return False
+        return_annotation = runner_annotations.get("return")
+    except (NameError, TypeError, ValueError):
         return False
     if return_annotation is None:
         return False
