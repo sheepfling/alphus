@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+import tomllib
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -183,6 +184,41 @@ def test_report_manifest_derives_selector_coverage_without_a_total_list(
         "package-boundaries",
     }
     assert any(item.capability.startswith("plugin-api-v1") for item in deferred)
+
+
+def test_partial_cyclomatic_scenario_pins_its_isolated_python_backend(
+    pytestconfig: pytest.Config,
+) -> None:
+    root = pytestconfig.rootpath
+    scenarios, _ = load_manifest(
+        root / "tests" / "differential" / "wheel-scenarios.toml"
+    )
+    scenario = next(
+        scenario
+        for scenario in scenarios
+        if scenario.name == "cyclomatic-partial-coverage"
+    )
+    fixture_config = tomllib.loads(
+        (
+            root
+            / "tests"
+            / "differential"
+            / "fixtures"
+            / "cyclomatic-partial"
+            / "quality-gates.toml"
+        ).read_text(encoding="utf-8")
+    )
+    python_backend = fixture_config["checks"]["cyclomatic_complexity"]["backends"][0]
+
+    assert scenario.isolate_native_tools
+    assert scenario.python_distributions == (f"ruff=={python_backend['version']}",)
+    assert scenario.expected_cyclomatic_backends[1] == (
+        "python",
+        "ruff",
+        "clean",
+        1,
+        1,
+    )
 
 
 def test_immutable_scenario_report_keeps_json_array_wire_shape() -> None:

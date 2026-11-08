@@ -1205,6 +1205,7 @@ arguments = ["--config", "quality-gates.toml", "--rule", "cyclomatic-complexity"
 [[scenario]]
 name = "cyclomatic-partial-coverage"
 fixture = "cyclomatic-partial"
+python_distributions = ["ruff==0.16.1"]
 isolate_native_tools = true
 selectors = ["cyclomatic-complexity"]
 behavior = ["polyglot-selection", "no-matching-provider", "incomplete-coverage-exit"]
