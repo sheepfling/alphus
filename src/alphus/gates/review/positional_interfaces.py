@@ -10,7 +10,7 @@ from typing import Final, NamedTuple
 from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -279,15 +279,28 @@ def run_positional_interfaces_rule(
     root: Path, paths: Sequence[Path], config: QualityGateConfig
 ) -> list[Finding]:
     """Adapt the existing positional-interface policy to the built-in runner."""
-    return check_positional_interfaces(
-        root,
-        paths,
-        require_policy(config.checks.positional_interfaces, "positional_interfaces"),
+    return run_positional_interfaces_feature(
+        root, paths, resolve_positional_interfaces_policy(config)
     )
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+def resolve_positional_interfaces_policy(
+    config: QualityGateConfig,
+) -> PositionalInterfacePolicy:
+    """Resolve the strict positional-interface policy from validated config."""
+    return require_policy(config.checks.positional_interfaces, "positional_interfaces")
+
+
+def run_positional_interfaces_feature(
+    root: Path, paths: Sequence[Path], policy: PositionalInterfacePolicy
+) -> list[Finding]:
+    """Run parameter-boundary analysis with its feature-owned policy type."""
+    return check_positional_interfaces(root, paths, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_positional_interfaces_rule,
+    runner=run_positional_interfaces_feature,
+    policy_resolver=resolve_positional_interfaces_policy,
 )

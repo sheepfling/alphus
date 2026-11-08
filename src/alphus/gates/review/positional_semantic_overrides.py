@@ -10,7 +10,7 @@ from typing import Final
 from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -201,18 +201,33 @@ def run_positional_semantic_overrides_rule(
     root: Path, paths: Sequence[Path], config: QualityGateConfig
 ) -> list[Finding]:
     """Adapt the existing semantic-override policy to the built-in runner."""
-    return check_positional_semantic_overrides(
-        root,
-        paths,
-        require_policy(
-            config.checks.positional_semantic_overrides,
-            "positional_semantic_overrides",
-        ),
+    return run_positional_semantic_overrides_feature(
+        root, paths, resolve_positional_semantic_overrides_policy(config)
     )
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+def resolve_positional_semantic_overrides_policy(
+    config: QualityGateConfig,
+) -> PositionalSemanticOverridePolicy:
+    """Resolve the strict positional-override policy from validated config."""
+    return require_policy(
+        config.checks.positional_semantic_overrides,
+        "positional_semantic_overrides",
+    )
+
+
+def run_positional_semantic_overrides_feature(
+    root: Path,
+    paths: Sequence[Path],
+    policy: PositionalSemanticOverridePolicy,
+) -> list[Finding]:
+    """Run semantic-field analysis with its feature-owned policy type."""
+    return check_positional_semantic_overrides(root, paths, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_positional_semantic_overrides_rule,
+    runner=run_positional_semantic_overrides_feature,
+    policy_resolver=resolve_positional_semantic_overrides_policy,
 )

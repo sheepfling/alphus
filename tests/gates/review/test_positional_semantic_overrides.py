@@ -4,11 +4,16 @@ from pathlib import Path
 
 import pytest
 
-from alphus.config import PositionalSemanticOverridePolicy
+from alphus.config import PositionalSemanticOverridePolicy, QualityGateConfig
 from alphus.gates.review.positional_semantic_overrides import (
+    ALPHUS_FEATURE,
     check_positional_semantic_overrides,
     positional_override_sites,
+    resolve_positional_semantic_overrides_policy,
+    run_positional_semantic_overrides_feature,
+    run_positional_semantic_overrides_rule,
 )
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 _EXPLANATION = (
     "A long source-derived interpretation is selected by a table row number "
@@ -27,6 +32,27 @@ def _policy(**updates: object) -> PositionalSemanticOverridePolicy:
             **updates,
         }
     )
+
+
+def test_registration_uses_typed_policy_and_keeps_direct_adapter(
+    tmp_path: Path,
+) -> None:
+    policy = _policy()
+    config = QualityGateConfig.model_validate(
+        {
+            "schema_version": 1,
+            "checks": {"positional_semantic_overrides": policy},
+        },
+        strict=True,
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.runner is run_positional_semantic_overrides_feature
+    assert (
+        type(resolve_positional_semantic_overrides_policy(config))
+        is PositionalSemanticOverridePolicy
+    )
+    assert run_positional_semantic_overrides_rule(tmp_path, (), config) == []
 
 
 def test_flags_configured_row_number_replacing_semantic_prose() -> None:
