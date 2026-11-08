@@ -6,6 +6,79 @@ flow, compatibility proof, migration slices, and deferred work. The existing
 check behavior is the compatibility baseline; this document does not itself
 change runtime behavior.
 
+## Current implementation snapshot
+
+Use this section for live status. The detailed migration records below preserve
+evidence from earlier commits; their selector counts describe those historical
+heads and are not current inventory claims. At PR head
+`fe63ca82cee9bc9af103e7be09c5b56714ca71df`, all 62 built-in selectors have
+feature-owned `BuiltinFeature` declarations. Static discovery found 62 distinct
+registration modules and no file owns more than one selector. The build backend
+derives the installed `alphus.builtin_checks.v1` entry points and ignored
+aggregate policy/config/dispatch views from those declarations; adding a
+feature does not require editing `pyproject.toml`, a central selector map, or
+tracked generated views.
+
+The declaration path is typed Python, not tuple metadata: `ALPHUS_CHECK` is a
+`FeatureDefinition`, `ALPHUS_MORPHOLOGY` is a `RuleMorphology`, and
+`ALPHUS_FEATURE` is a `BuiltinFeature` with a direct runner reference. Build
+discovery parses a deliberately bounded subset of those actual Python
+constructors without importing or executing gate modules. The constraint is
+real: the feature object must directly link its local check, morphology and
+synchronous local runner function. Computed declarations, imported runners,
+or provider factories need a small local adapter or a separate design. Pyright
+and runtime result-shape validation complement the static build check; the
+build parser itself does not prove the runner's return annotation.
+
+The 0.0.3 shapes currently fit without forcing one result type:
+
+| Existing shape | Representative owner | Shared boundary and preserved result |
+| --- | --- | --- |
+| File-local findings | `file-size`, `line-length` | Explicit feature runner and existing `Finding` output |
+| Deterministic heuristic or prose risk | `python-style`, `benchmark-docs`, `positional-semantic-overrides` | Concern, claim and morphology stay distinct; existing findings or the typed Python-style category mapping |
+| Cross-file composite | `package-boundaries` | One selected selector consumes declared secondary policy fields and preserves the existing ordered findings |
+| Native polyglot analysis | `cyclomatic-complexity` | `CyclomaticRuleOperations` retains backend plans, provenance and `CyclomaticReport` |
+| Effectful command/build | configured `CommandRunStep`, including the PDF consumer profile | Existing scheduler returns process/step results and artifacts; it is not auto-registered as a finding check |
+
+So “everything fits a shape” is true at the orchestration boundary, where
+selected work can be planned and scheduled, while role-specific outputs remain
+typed. Commands are explicit consumer configuration; feature registration
+does not discover or enable them. Plugin API v1 also remains a separate,
+explicit trust boundary. No universal result payload or selector identity is
+needed for those roles.
+
+The 62 distinct registration modules and ignored generated aggregates remove
+the old shared-file edit for a built-in registration. They do not prove every
+kind of parallel feature work is conflict-free: edits to a shared policy model,
+shared analyzer, public CLI, or common output adapter can still overlap. The
+two-branch installed-wheel merge test is an architecture fixture, not a test of
+two production features added to this repository. Treat low registration
+friction as a supported structural property, not as a measured reduction in
+human review time. This selector migration commit changed 12 files because it
+also removed legacy paths, adapted the specialized Python-style result, and
+added regression scenarios; that is migration cost, not the cost of adding a
+simple new finding check.
+
+The scenario manifest contains 149 entries: 144 behavior-labeled, four
+controls and one planned-only entry, with five additional capabilities
+explicitly deferred. Its behavior labels currently name all 62 selectors, but
+labels alone are not execution proof. The previous complete pinned comparison
+was for the earlier CLI candidate `3c4db3b` (146 scenarios, zero differences,
+61 behaviorally exercised selectors). The attempted comparison for
+`d5b5be0`, which adds `python-style`, stopped before running comparisons when
+npm could not resolve `registry.npmjs.org` for `eslint@10.13.0`. There is no
+149-scenario equivalence result for that candidate. The installed-wheel
+self-quality checks passed locally (2,521 passed, 44 skipped), and all five
+hosted workflows passed on both implementation head `1fe322e` and documentation
+head `fe63ca8`. Neither result substitutes for the pinned differential.
+
+The next evidence step is to complete that differential when the pinned npm
+dependency is available, without marking the ESLint scenario as covered merely
+because it appears in the manifest. The shape-level tests that do not need npm
+remain runnable locally. New local-model execution, detector/language growth,
+persistent result caching, repository setup automation, history/index changes,
+round-two Bacflow, and release operations remain outside 0.0.3.
+
 Generate the current machine-readable selector and runner inventory on demand:
 
 ```sh
@@ -32,10 +105,10 @@ belong in the future feature definition and need dedicated validation.
 
 Rick identified tuple-pair `ALPHUS_CHECK` declarations as opaque and the
 built-in path as parallel to the existing plugin registry. The current
-candidate replaces that tuple format for twenty feature-owned checks with
+implementation replaces that tuple format for all 62 built-in selectors with
 immutable `FeatureDefinition` and `RuleMorphology` values plus a typed
-`BuiltinFeature` execution object. A PEP 517 build
-backend statically reads those declarations and writes standard
+`BuiltinFeature` execution object. A PEP 517 build backend statically reads
+those declarations and writes standard
 `alphus.builtin_checks.v1` metadata into ignored build output. Runtime lookup
 uses `importlib.metadata` against Alphus-named distributions and selects the
 entry-point catalog matching generated feature definitions. It imports only the
@@ -45,9 +118,10 @@ metadata targets `ALPHUS_FEATURE`; selector and policy metadata no longer store
 runner module/function strings, and policy models are class objects derived
 from `StrictModel`. The loader rejects asynchronous providers and checks the
 result annotation against the declared output shape before dispatch. The
-third-party `alphus.rules.v1` contract remains separate and allowlisted. This is
-still a partial migration: the remaining selectors use legacy maps. The history and
-trade-offs are recorded in the [check registry spike](architecture/check-registry-spike.md).
+third-party `alphus.rules.v1` contract remains separate and allowlisted. The
+current registration state and outstanding behavior-equivalence proof are
+summarized above. The prototype history and trade-offs are recorded in the
+[check registry spike](architecture/check-registry-spike.md).
 
 ## Release boundary and status vocabulary
 
@@ -63,11 +137,11 @@ The inventory test generates both current and pinned-baseline inventories into
 temporary files directly from their source trees, then compares registration
 contracts. No generated JSON baseline is committed. This is an objective
 registration-contract check, not a wheel behavior differential. The full
-pinned-wheel equivalence protocol below is a prerequisite for broad migration
-of the remaining selectors. One isolated
-vertical slice may use its own pinned direct/profile differential cases and
-slice-specific lazy-import proof; that limited exception does not establish
-equivalence for other selectors.
+pinned-wheel equivalence protocol below remains the acceptance boundary for
+calling the migration behavior-complete. Registration migration has completed
+without completing that full comparison; the boundary is still outstanding.
+Slice-specific direct/profile cases and lazy-import proofs are useful but do
+not establish equivalence for the other selectors.
 
 This document distinguishes four kinds of statement:
 
@@ -78,19 +152,18 @@ This document distinguishes four kinds of statement:
 - **Open decision** is called out explicitly below and must not be resolved by
   silently changing consumer behavior.
 
-PR #100 remains an open draft. It began with the six-check morphology
-metadata pilot and now has 52 of the 62 built-in selectors on feature-owned
-generated runtime views. The statically discovered selector inventory is the
-source of truth; it is deliberately not duplicated here as another selector
-list. Each local
+PR #100 remains an open draft. It began with the six-check morphology metadata
+pilot and now has all 62 built-in selectors on feature-owned generated runtime
+views. The statically discovered selector inventory is the source of truth; it
+is deliberately not duplicated here as another selector list. Each local
 `ALPHUS_CHECK` declaration statically generates
 morphology metadata, typed `FeatureDefinition`, `RuleSpec`, strict policy
 field, selector type, and inventory entry. Each feature module exposes one
 typed `ALPHUS_FEATURE` object with a direct callback for lazy execution. The established
 `RuleEvaluation` and CLI result adapters remain shared, so adding a feature
-still uses the existing output contract. The other 10 baseline selectors
-remain on legacy registration paths; these slices do not complete issue #87
-or establish full selector equivalence. These declarations are now
+still uses the existing output contract. Registration migration is complete
+for the existing selector set; full candidate behavior equivalence remains
+unproven. These declarations are now
 typed `FeatureDefinition(...)` calls paired with immutable
 `RuleMorphology(...)` values rather than the former tuple-pair `ALPHUS_CHECK`
 format. Static discovery validates them without importing gate implementations.
@@ -98,8 +171,7 @@ The PEP 517 backend generates installed-wheel entry-point metadata without a
 per-check `pyproject.toml` edit. Aggregate policy/config/dispatch views are
 ignored build artifacts rather than checked-in shared files, so independent
 feature branches do not edit the same generated outputs. Runtime entry points
-target the typed feature object; 10 selectors still use legacy registration
-maps.
+target the typed feature object.
 
 The latest source-discovery slice moves `json-structure` and `path-discovery`
 into feature-owned registration. Their typed declarations own the existing
@@ -412,7 +484,7 @@ JSON/text shapes and legacy IDs.
 
 ## Feature-owned registration and imports
 
-The current twenty-four-selector flow is:
+The feature-owned registration flow is:
 
 ```text
 typed, feature-owned FeatureDefinition and RuleMorphology
@@ -438,9 +510,9 @@ rejects duplicate selector names before loading a selected runner. Catalog and
 config inspection do not import the migrated checker modules. A registration
 never selects or enables a check: consumer profile steps remain the selection
 source, and strict config continues to reject invalid or unknown fields. This
-production path currently covers thirty-eight selectors; the other 24 still
-use legacy theme maps. The five aggregate views are no longer tracked: the
-build regenerates them as ignored source files for each worktree, and
+production path covers all 62 selectors. The five aggregate views are no
+longer tracked: the build regenerates them as ignored source files for each
+worktree, and
 `MANIFEST.in` includes them in source archives. Separate feature branches
 therefore do not commit or merge the same generated output. A checkout must run
 the editable-install/build bootstrap before importing runtime modules or
@@ -1263,6 +1335,12 @@ digest. Feature declarations may record effective-input dependencies for
 future caches without changing the legacy history digest.
 
 ## Ordered migration slices
+
+This sequence records the original execution plan, not remaining registration
+work. Inventory, typed registration and migration of the existing selectors
+have been carried out. The final compatibility closeout is not complete:
+the latest full wheel comparison stopped during npm dependency setup, so the
+full 62-selector behavior-equivalence acceptance has not been met.
 
 1. **Inventory and reference baseline.** Generate the source-derived
    selector/config/runner/output inventory; pin reference wheel and fixtures;
