@@ -6,16 +6,29 @@ This page remains the morphology vocabulary and pilot boundary.
 
 ## Current implementation status
 
-At draft PR #100 head `951cc596007a7b8853cca6ef8199de13926ffe2f`, all 62
-built-in selectors have feature-owned `BuiltinFeature` registrations; static
-discovery found one registration module per selector. Generated installed
-entry points and ignored policy/config/dispatch views derive from these
-declarations. Registration migration is complete for the existing selector
-inventory, but the pinned baseline wheel differential is not: its latest
-149-scenario attempt stopped before comparison when npm could not resolve the
-pinned ESLint package. Do not read the historical selector counts or scenario
-reports below as the current completion state.
+At draft PR #100 head `04234beaa5fd539b38a8cdc4ffe06d640f26f69d`, all 62
+built-in selectors have feature-owned declarations, and 44 use a narrow typed
+registration form that connects the declared strict policy model, resolver,
+runner signature, and `findings` output. Eighteen still use the transitional
+broad runner form. The current slice adds typed registrations for the six
+manual quaternion reviews, three coordinate-frame reviews, four linear-algebra
+reviews, module roles, repository layout, and Markdown shell fences. Their
+tests live alongside the corresponding source families.
 
+The latest completed exact-head hosted run is commit
+`22083a5d8be8fcfd9225abea32e31e955a13b14b`: all five workflows passed,
+including the pinned installed-wheel comparison. That comparison matched all
+149 manifested scenarios with zero differences against baseline
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`; five scenarios remain explicitly
+deferred, so this is not complete equivalence over every possible selector
+input. The current `04234be` tree passes its local full self-profile
+(2,573 passed, 44 skipped; 27 passed, zero failed, four provisional). Its
+exact-head hosted workflows are still running.
+
+Registration migration and the 149-scenario differential remain evidence, not
+completion of issue #87. Persistent caching, local-model execution, new
+detectors/languages, setup automation, history/index changes, and round-two
+Bacflow remain outside 0.0.3.
 The runtime morphology model remains transitional. `RuleMorphology` currently
 has `ClaimKind` and `DetectionMechanism`, but the latter still combines claim
 or evidence strength (`EXACT_RULE`) with analyzer/backend properties
