@@ -26,7 +26,7 @@ from alphus.gates.languages.python.runtime_type_facts import (
     element,
     named,
 )
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import MessageBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -831,15 +831,24 @@ def run_runtime_types_rule(
     root: Path, paths: Sequence[Path], config: QualityGateConfig
 ) -> list[str]:
     """Adapt the configured runtime-type scan to the typed built-in runner."""
-    return policy_issues(
-        root,
-        paths,
-        require_policy(config.checks.runtime_types, "runtime_types"),
-    )
+    return run_runtime_types_feature(root, paths, resolve_runtime_types_policy(config))
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+def resolve_runtime_types_policy(config: QualityGateConfig) -> RuntimeTypePolicy:
+    """Resolve the strict runtime-type policy from validated aggregate config."""
+    return require_policy(config.checks.runtime_types, "runtime_types")
+
+
+def run_runtime_types_feature(
+    root: Path, paths: Sequence[Path], policy: RuntimeTypePolicy
+) -> list[str]:
+    """Run type-shape checks with their feature-owned policy type."""
+    return policy_issues(root, paths, policy)
+
+
+ALPHUS_FEATURE: Final = MessageBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_runtime_types_rule,
+    runner=run_runtime_types_feature,
+    policy_resolver=resolve_runtime_types_policy,
 )

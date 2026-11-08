@@ -9,7 +9,7 @@ from typing import Final
 
 from alphus.config import QualityGateConfig
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import MessageBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -143,15 +143,24 @@ def run_script_policy_rule(
     root: Path, paths: Sequence[Path], config: QualityGateConfig
 ) -> list[str]:
     """Adapt launcher-policy checks to the typed built-in runner."""
-    return policy_issues(
-        root,
-        paths,
-        require_policy(config.checks.script_policy, "script_policy"),
-    )
+    return run_script_policy_feature(root, paths, resolve_script_policy(config))
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+def resolve_script_policy(config: QualityGateConfig) -> ScriptPolicy:
+    """Resolve the strict launcher policy from validated aggregate config."""
+    return require_policy(config.checks.script_policy, "script_policy")
+
+
+def run_script_policy_feature(
+    root: Path, paths: Sequence[Path], policy: ScriptPolicy
+) -> list[str]:
+    """Run launcher checks with their feature-owned policy type."""
+    return policy_issues(root, paths, policy)
+
+
+ALPHUS_FEATURE: Final = MessageBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_script_policy_rule,
+    runner=run_script_policy_feature,
+    policy_resolver=resolve_script_policy,
 )
