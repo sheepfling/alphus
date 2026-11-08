@@ -80,6 +80,7 @@ _TARGET = Path("src/alphus/policy/_generated_morphology.py")
 _FEATURE_TARGET = Path("src/alphus/policy/_generated_feature_definitions.py")
 _FEATURE_POLICIES_TARGET = Path("src/alphus/policy/_generated_feature_policies.py")
 _QUALITY_RULES_TARGET = Path("src/alphus/policy/_generated_quality_rule_names.py")
+_BUILTIN_REGISTRY_STUB_TARGET = Path("src/alphus/plugins/builtin_registry.pyi")
 _MAX_FEATURE_MODULES = 2048
 _MAX_SOURCE_MODULE_BYTES = 1_048_576
 _MAX_SCANNED_SOURCE_BYTES = 16_777_216
@@ -1729,6 +1730,95 @@ def render_feature_manifest(root: Path) -> str:
     return "\n".join(lines)
 
 
+def _registered_feature_form(root: Path, feature: _FeatureRegistration) -> str:
+    """Read a validated registration's constructor name without importing it."""
+    path = root.joinpath(
+        "src", *feature.registration_module.split(".")
+    ).with_suffix(".py")
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    exports = [
+        _assignment_value(statement)
+        for statement in tree.body
+        if _assignment_name(statement) == "ALPHUS_FEATURE"
+    ]
+    if len(exports) != 1 or exports[0] is None:
+        raise ValueError(
+            f"{path}: feature {feature.selector!r} must define one ALPHUS_FEATURE"
+        )
+    match exports[0]:
+        case ast.Call(
+            func=ast.Name(id=constructor_name)
+            | ast.Attribute(attr=constructor_name),
+        ):
+            return constructor_name
+        case _:
+            raise ValueError(f"{path}: ALPHUS_FEATURE must construct a feature form")
+
+
+def render_builtin_registry_stub(root: Path) -> str:
+    """Render literal-selector overloads from feature-owned registrations."""
+    registrations = feature_registrations(root)
+    overloads: list[tuple[str, str]] = []
+    for feature in registrations:
+        form = _registered_feature_form(root, feature)
+        if form != "BuiltinFeature" and typed_feature_output_shape(form) is None:
+            raise ValueError(
+                f"{feature.registration_module}: unsupported feature form "
+                f"{form!r}"
+            )
+        overloads.append((feature.selector, form))
+
+    imported_types = {"BuiltinFeatureRegistration"}
+    imported_types.update(form for _selector, form in overloads)
+    lines = [
+        '"""Generated selector-specific types for the lazy built-in registry."""',
+        "",
+        "from collections.abc import Callable, Mapping",
+        "from importlib.metadata import EntryPoint",
+        "from typing import Literal, Protocol, overload",
+        "",
+        "from alphus.plugins.builtin import (",
+        *(f"    {name}," for name in sorted(imported_types)),
+        ")",
+        "",
+        "BUILTIN_CHECK_ENTRY_POINT_GROUP: str",
+        "",
+        "def builtin_check_entry_points() -> Mapping[str, EntryPoint]: ...",
+        "",
+        "class _BuiltinFeatureLoader(Protocol):",
+    ]
+    for selector, form in overloads:
+        signature = (
+            f"    def __call__(self, selector: Literal[{_quoted(selector)}], /) "
+            f"-> {form}: ..."
+        )
+        lines.append("    @overload")
+        if len(signature) <= 88:
+            lines.append(signature)
+        else:
+            lines.extend(
+                [
+                    "    def __call__(",
+                    f"        self, selector: Literal[{_quoted(selector)}], /",
+                    f"    ) -> {form}: ...",
+                ]
+            )
+    lines.extend(
+        [
+            "    @overload",
+            "    def __call__(",
+            "        self, selector: str, /",
+            "    ) -> BuiltinFeatureRegistration: ...",
+            "",
+            "    cache_clear: Callable[[], None]",
+            "",
+            "load_builtin_feature: _BuiltinFeatureLoader",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def _policy_class(feature: _FeatureRegistration) -> tuple[str, str]:
     module, class_name = feature.policy_model.rsplit(".", 1)
     return module, class_name
@@ -1858,11 +1948,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     feature_target = root / _FEATURE_TARGET
     feature_policies_target = root / _FEATURE_POLICIES_TARGET
     quality_rules_target = root / _QUALITY_RULES_TARGET
+    builtin_registry_stub_target = root / _BUILTIN_REGISTRY_STUB_TARGET
     try:
         expected = render_manifest(root)
         expected_features = render_feature_manifest(root)
         expected_policies = render_feature_policies(root)
         expected_quality_rules = render_quality_rule_names(root)
+        expected_builtin_registry_stub = render_builtin_registry_stub(root)
     except (OSError, SyntaxError, TypeError, ValueError) as error:
         print(f"morphology manifest generation failed: {error}", file=sys.stderr)
         return 1
@@ -1903,12 +1995,25 @@ def main(argv: Sequence[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 1
+        if (
+            not builtin_registry_stub_target.is_file()
+            or builtin_registry_stub_target.read_text(encoding="utf-8")
+            != expected_builtin_registry_stub
+        ):
+            print(
+                f"{builtin_registry_stub_target} is stale; regenerate morphology views",
+                file=sys.stderr,
+            )
+            return 1
         return 0
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(expected, encoding="utf-8")
     feature_target.write_text(expected_features, encoding="utf-8")
     feature_policies_target.write_text(expected_policies, encoding="utf-8")
     quality_rules_target.write_text(expected_quality_rules, encoding="utf-8")
+    builtin_registry_stub_target.write_text(
+        expected_builtin_registry_stub, encoding="utf-8"
+    )
     return 0
 
 

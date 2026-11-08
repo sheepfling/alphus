@@ -18,12 +18,15 @@ from alphus.gates.source.cyclomatic_complexity import (
     ALPHUS_FEATURE as CYCLOMATIC_FEATURE,
 )
 from alphus.plugins.builtin import (
+    BuiltinFeature,
     CyclomaticBuiltinFeature,
     FindingBuiltinFeature,
     MessageBuiltinFeature,
 )
+from alphus.plugins.builtin_registry import load_builtin_feature
 from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
 from alphus.policy._generated_morphology import MORPHOLOGY_BY_SELECTOR
+from alphus.policy.sources import FileSizePolicy
 
 
 def test_real_file_local_composite_message_and_native_shapes_are_typed() -> None:
@@ -32,6 +35,53 @@ def test_real_file_local_composite_message_and_native_shapes_are_typed() -> None
     assert isinstance(CLI_FEATURE, MessageBuiltinFeature)
     assert isinstance(CYCLOMATIC_FEATURE, CyclomaticBuiltinFeature)
     assert CYCLOMATIC_FEATURE.cyclomatic_operations is not None
+    assert not isinstance(FILE_SIZE_FEATURE, BuiltinFeature)
+    assert not isinstance(CLI_FEATURE, BuiltinFeature)
+    assert not isinstance(CYCLOMATIC_FEATURE, BuiltinFeature)
+
+
+def test_file_size_declaration_matches_its_generated_strict_policy() -> None:
+    assert FILE_SIZE_FEATURE.definition.policy_field == "file_size"
+    assert FILE_SIZE_FEATURE.definition.policy_model is FileSizePolicy
+    config = QualityGateConfig.model_validate(
+        {
+            "schema_version": 1,
+            "checks": {
+                "file_size": {
+                    "code_extensions": [".py"],
+                    "code_limit": 100,
+                    "hard_limit": 200,
+                    "initializer_name": "__init__.py",
+                    "initializer_limit": 200,
+                }
+            },
+        },
+        strict=True,
+    )
+    assert type(config.checks.file_size) is FILE_SIZE_FEATURE.definition.policy_model
+
+
+def test_lazy_loader_preserves_each_migrated_feature_form() -> None:
+    assert isinstance(load_builtin_feature("file-size"), FindingBuiltinFeature)
+    assert isinstance(
+        load_builtin_feature("package-boundaries"), FindingBuiltinFeature
+    )
+    assert isinstance(load_builtin_feature("cli"), MessageBuiltinFeature)
+    assert isinstance(
+        load_builtin_feature("cyclomatic-complexity"), CyclomaticBuiltinFeature
+    )
+
+
+def test_literal_selector_loader_narrows_feature_form() -> None:
+    finding_feature: FindingBuiltinFeature = load_builtin_feature("file-size")
+    message_feature: MessageBuiltinFeature = load_builtin_feature("cli")
+    cyclomatic_feature: CyclomaticBuiltinFeature = load_builtin_feature(
+        "cyclomatic-complexity"
+    )
+
+    assert finding_feature.definition.output_shape == "findings"
+    assert message_feature.definition.output_shape == "messages"
+    assert cyclomatic_feature.definition.output_shape == "cyclomatic-report"
 
 
 def test_typed_finding_form_rejects_message_definition() -> None:

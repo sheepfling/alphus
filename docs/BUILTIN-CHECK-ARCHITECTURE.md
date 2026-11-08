@@ -20,7 +20,7 @@ tracked generated views.
 
 The declaration path is typed Python, not tuple metadata: `ALPHUS_CHECK` is a
 `FeatureDefinition`, `ALPHUS_MORPHOLOGY` is a `RuleMorphology`, and
-`ALPHUS_FEATURE` is a `BuiltinFeature` with a direct runner reference. Build
+`ALPHUS_FEATURE` is a typed feature form with a direct runner reference. Build
 discovery parses a deliberately bounded subset of those actual Python
 constructors without importing or executing gate modules. The constraint is
 real: the feature object must directly link its local check, morphology and
@@ -38,23 +38,43 @@ a typed constructor paired with a different `FeatureDefinition.output_shape`.
 This binds the authoring declaration's output protocol to its output shape
 without changing the shared dispatch boundary.
 
-The forms retain the existing common input signature `(root, selected files,
-validated QualityGateConfig)` to preserve 0.0.3 runner behavior. The feature's
-`input_mode` and declared policy fields describe which files and configuration
-are relevant; the check-owned runner still resolves its typed policy. The
-forms distinguish result and required operations, not analyzer claim strength
-or backend. A future genuinely different input contract should add a named
-shape only when an existing check needs it.
+The loader now returns a disjoint union of the typed forms and the broad
+legacy form, so execution narrows by registered form before widening to the
+existing `RuleOutput` adapter. This avoids casts and keeps the result type
+attached to the actual runner call. The forms retain the common input signature
+`(root, selected files, validated QualityGateConfig)` to preserve 0.0.3 runner
+behavior. Pyright checks each concrete runner signature and result type; static
+build discovery checks its result form against `FeatureDefinition.output_shape`,
+and runtime loading checks the return annotation and value.
+
+Policy typing is less tightly connected. `FeatureDefinition.policy_model` is
+an actual `type[StrictModel]`, not a string label, and its policy field derives
+the generated strict `CheckPolicies` field. Runner callbacks still receive the
+whole typed `QualityGateConfig` and resolve that field themselves, so Pyright
+checks the accessed policy and its members but does not prove that a feature's
+declared model is exactly the model the callback reads. This remains a known
+contract gap; closing it needs a typed policy resolver or a runner input that
+carries the primary policy type, with explicit handling for composite secondary
+policies. The current slice does not change runner inputs or configuration
+semantics.
+
+The forms distinguish result and required operations, not analyzer claim
+strength or backend. A future genuinely different input contract should add a
+named shape only when an existing check needs it.
 
 The production slice exercises file-local findings (`file-size`), a composite
 finding check (`package-boundaries`), legacy messages (`cli`), and the native
 polyglot report (`cyclomatic-complexity`). Cyclomatic's operations object is
 required by its form. Other feature declarations can still use the broad
 `BuiltinFeature` during migration, and the runtime loader validates their
-annotations and results. Dynamic entry-point lookup exposes the common base to
-dispatch, so the downstream adapter still sees `RuleOutput`; selector-specific
-static narrowing after lookup remains open. This is a deliberate bounded
-increment: existing result adapters and wire behavior remain unchanged.
+annotations and results. Dynamic entry-point lookup returns a disjoint union.
+A generated, ignored `builtin_registry.pyi` overload view maps each literal
+selector to its declared feature form; dynamic strings retain the full union.
+The view is derived from the same feature-owned declarations during the
+build, so it adds neither a second selector list nor a tracked merge-conflict
+file.
+Dispatch narrows the loaded form, then adapts its typed result to the existing
+`RuleOutput`; public result adapters and wire behavior remain unchanged.
 
 The lightweight `StyleFindings` contract now lives in `alphus.contracts`, so
 CLI, registry, and result-adapter imports do not load the Python style analyzer.

@@ -26,7 +26,7 @@ from alphus.execution.dispatch import (
 )
 from alphus.gates.hygiene.file_size import check_file_size
 from alphus.gates.hygiene.line_length import check_line_length
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import BuiltinFeatureRegistration
 from alphus.plugins.builtin_registry import (
     builtin_check_entry_points,
     load_builtin_feature,
@@ -333,7 +333,7 @@ def test_entrypoint_dispatch_rejects_coercible_finding_mappings(
 
     feature = replace(load_builtin_feature("file-size"), runner=malformed_runner)
 
-    def load_malformed_feature(_selector: str) -> BuiltinFeature:
+    def load_malformed_feature(_selector: str) -> BuiltinFeatureRegistration:
         return feature
 
     monkeypatch.setattr(dispatch, "load_builtin_feature", load_malformed_feature)

@@ -13,6 +13,7 @@ from scripts.generate_morphology_manifest import (
     _tuple_lines,
     feature_registrations,
     main,
+    render_builtin_registry_stub,
     render_feature_manifest,
     render_feature_policies,
     render_manifest,
@@ -983,6 +984,21 @@ def test_checked_in_manifest_matches_feature_declarations(
     assert main(["--root", str(pytestconfig.rootpath), "--check"]) == 0
 
 
+def test_registry_stub_narrows_literals_from_feature_owned_forms(
+    pytestconfig: pytest.Config,
+) -> None:
+    stub = render_builtin_registry_stub(Path(pytestconfig.rootpath))
+
+    assert 'selector: Literal["file-size"]' in stub
+    assert ') -> FindingBuiltinFeature: ...' in stub
+    assert 'selector: Literal["cli"]' in stub
+    assert ') -> MessageBuiltinFeature: ...' in stub
+    assert 'selector: Literal["cyclomatic-complexity"]' in stub
+    assert ') -> CyclomaticBuiltinFeature: ...' in stub
+    assert 'selector: str, /' in stub
+    assert ') -> BuiltinFeatureRegistration: ...' in stub
+
+
 def test_check_detects_stale_generated_manifest(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -1010,6 +1026,11 @@ def test_check_detects_stale_generated_manifest(
     )
     quality_rules_target.write_text(
         render_quality_rule_names(tmp_path), encoding="utf-8"
+    )
+    registry_stub_target = tmp_path / "src/alphus/plugins/builtin_registry.pyi"
+    registry_stub_target.parent.mkdir(parents=True, exist_ok=True)
+    registry_stub_target.write_text(
+        render_builtin_registry_stub(tmp_path), encoding="utf-8"
     )
 
     assert main(["--root", str(tmp_path), "--check"]) == 0

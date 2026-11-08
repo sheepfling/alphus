@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol, TypeVar
+from typing import Protocol, TypeAlias, TypeVar
 
 from alphus.config import QualityGateConfig
 from alphus.contracts.cyclomatic import CyclomaticReport, CyclomaticRuleOperations
@@ -27,9 +27,30 @@ class BuiltinRunner(Protocol[_RunnerOutput_co]):
     ) -> _RunnerOutput_co: ...
 
 
+def _validate_registration(
+    definition: FeatureDefinition,
+    morphology: RuleMorphology,
+    runner: object,
+    cyclomatic_operations: CyclomaticRuleOperations | None,
+    expected_shape: str | None,
+    form_name: str,
+) -> None:
+    if definition.selector != morphology.selector:
+        raise ValueError("built-in feature metadata and morphology selectors differ")
+    if not callable(runner):
+        raise TypeError("built-in feature runner must be callable")
+    is_cyclomatic = definition.output_shape == "cyclomatic-report"
+    if is_cyclomatic != (cyclomatic_operations is not None):
+        raise ValueError(
+            "cyclomatic features require exactly one typed operations contract"
+        )
+    if expected_shape is not None and definition.output_shape != expected_shape:
+        raise ValueError(f"{form_name} requires output shape {expected_shape!r}")
+
+
 @dataclass(frozen=True, slots=True)
 class BuiltinFeature:
-    """One feature's metadata, morphology, and typed execution provider."""
+    """Legacy broad-result registration retained during shape migration."""
 
     definition: FeatureDefinition
     morphology: RuleMorphology
@@ -37,82 +58,129 @@ class BuiltinFeature:
     cyclomatic_operations: CyclomaticRuleOperations | None = None
 
     def __post_init__(self) -> None:
-        if self.definition.selector != self.morphology.selector:
-            raise ValueError(
-                "built-in feature metadata and morphology selectors differ"
-            )
-        if not callable(self.runner):
-            raise TypeError("built-in feature runner must be callable")
-        is_cyclomatic = self.definition.output_shape == "cyclomatic-report"
-        if is_cyclomatic != (self.cyclomatic_operations is not None):
-            raise ValueError(
-                "cyclomatic features require exactly one typed operations contract"
-            )
-
-
-def _require_output_shape(feature: BuiltinFeature, expected: str) -> None:
-    if feature.definition.output_shape != expected:
-        raise ValueError(f"{type(feature).__name__} requires output shape {expected!r}")
+        _validate_registration(
+            self.definition,
+            self.morphology,
+            self.runner,
+            self.cyclomatic_operations,
+            None,
+            type(self).__name__,
+        )
 
 
 @dataclass(frozen=True, slots=True)
-class FindingBuiltinFeature(BuiltinFeature):
+class FindingBuiltinFeature:
     """Feature whose typed runner returns the standard finding list."""
 
+    definition: FeatureDefinition
+    morphology: RuleMorphology
     runner: BuiltinRunner[list[Finding]]
+    cyclomatic_operations: CyclomaticRuleOperations | None = None
 
     def __post_init__(self) -> None:
-        BuiltinFeature.__post_init__(self)
-        _require_output_shape(self, "findings")
+        _validate_registration(
+            self.definition,
+            self.morphology,
+            self.runner,
+            self.cyclomatic_operations,
+            "findings",
+            type(self).__name__,
+        )
 
 
 @dataclass(frozen=True, slots=True)
-class MessageBuiltinFeature(BuiltinFeature):
+class MessageBuiltinFeature:
     """Feature whose typed runner preserves the legacy message-list output."""
 
+    definition: FeatureDefinition
+    morphology: RuleMorphology
     runner: BuiltinRunner[list[str]]
+    cyclomatic_operations: CyclomaticRuleOperations | None = None
 
     def __post_init__(self) -> None:
-        BuiltinFeature.__post_init__(self)
-        _require_output_shape(self, "messages")
+        _validate_registration(
+            self.definition,
+            self.morphology,
+            self.runner,
+            self.cyclomatic_operations,
+            "messages",
+            type(self).__name__,
+        )
 
 
 @dataclass(frozen=True, slots=True)
-class PythonStyleBuiltinFeature(BuiltinFeature):
+class PythonStyleBuiltinFeature:
     """Feature whose typed runner returns named Python-style categories."""
 
+    definition: FeatureDefinition
+    morphology: RuleMorphology
     runner: BuiltinRunner[dict[str, StyleFindings]]
+    cyclomatic_operations: CyclomaticRuleOperations | None = None
 
     def __post_init__(self) -> None:
-        BuiltinFeature.__post_init__(self)
-        _require_output_shape(self, "python-style")
+        _validate_registration(
+            self.definition,
+            self.morphology,
+            self.runner,
+            self.cyclomatic_operations,
+            "python-style",
+            type(self).__name__,
+        )
 
 
 @dataclass(frozen=True, slots=True)
-class SharedUtilitiesBuiltinFeature(BuiltinFeature):
+class SharedUtilitiesBuiltinFeature:
     """Feature whose typed runner returns the shared-utilities report."""
 
+    definition: FeatureDefinition
+    morphology: RuleMorphology
     runner: BuiltinRunner[SharedUtilitiesReport]
+    cyclomatic_operations: CyclomaticRuleOperations | None = None
 
     def __post_init__(self) -> None:
-        BuiltinFeature.__post_init__(self)
-        _require_output_shape(self, "shared-utilities")
+        _validate_registration(
+            self.definition,
+            self.morphology,
+            self.runner,
+            self.cyclomatic_operations,
+            "shared-utilities",
+            type(self).__name__,
+        )
 
 
 @dataclass(frozen=True, slots=True)
-class CyclomaticBuiltinFeature(BuiltinFeature):
+class CyclomaticBuiltinFeature:
     """Native cyclomatic provider and report with its required operations."""
 
+    definition: FeatureDefinition
+    morphology: RuleMorphology
     runner: BuiltinRunner[CyclomaticReport]
     cyclomatic_operations: CyclomaticRuleOperations = field()
 
     def __post_init__(self) -> None:
-        BuiltinFeature.__post_init__(self)
-        _require_output_shape(self, "cyclomatic-report")
+        _validate_registration(
+            self.definition,
+            self.morphology,
+            self.runner,
+            self.cyclomatic_operations,
+            "cyclomatic-report",
+            type(self).__name__,
+        )
+
+
+BuiltinFeatureRegistration: TypeAlias = (
+    BuiltinFeature
+    | FindingBuiltinFeature
+    | MessageBuiltinFeature
+    | PythonStyleBuiltinFeature
+    | SharedUtilitiesBuiltinFeature
+    | CyclomaticBuiltinFeature
+)
 
 
 __all__ = [
     "BuiltinFeature",
+    "BuiltinFeatureRegistration",
     "CyclomaticBuiltinFeature",
     "FindingBuiltinFeature",
     "MessageBuiltinFeature",

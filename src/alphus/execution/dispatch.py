@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from types import MappingProxyType
-from typing import Protocol, cast
+from typing import Protocol, assert_never, cast
 
 from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.contracts.cyclomatic import (
@@ -17,6 +17,15 @@ from alphus.contracts.findings import Diagnostic
 from alphus.execution._generated_dispatch import RULE_RUNNERS
 from alphus.execution.results import RuleOutput, diagnostics_from_output
 from alphus.plugins.api import PluginFinding
+from alphus.plugins.builtin import (
+    BuiltinFeature,
+    BuiltinFeatureRegistration,
+    CyclomaticBuiltinFeature,
+    FindingBuiltinFeature,
+    MessageBuiltinFeature,
+    PythonStyleBuiltinFeature,
+    SharedUtilitiesBuiltinFeature,
+)
 from alphus.plugins.builtin_registry import (
     builtin_check_entry_points,
     load_builtin_feature,
@@ -62,6 +71,29 @@ class BuiltinRuleBinding:
         return self.runner(root, files, config)
 
 
+def _run_registered_feature(
+    feature: BuiltinFeatureRegistration,
+    root: Path,
+    files: Sequence[Path],
+    config: QualityGateConfig,
+) -> RuleOutput:
+    """Run a selected provider while retaining its output type until adaptation."""
+    match feature:
+        case FindingBuiltinFeature() as findings_feature:
+            return findings_feature.runner(root, files, config)
+        case MessageBuiltinFeature() as message_feature:
+            return message_feature.runner(root, files, config)
+        case PythonStyleBuiltinFeature() as style_feature:
+            return style_feature.runner(root, files, config)
+        case SharedUtilitiesBuiltinFeature() as utilities_feature:
+            return utilities_feature.runner(root, files, config)
+        case CyclomaticBuiltinFeature() as cyclomatic_feature:
+            return cyclomatic_feature.runner(root, files, config)
+        case BuiltinFeature() as legacy_feature:
+            return legacy_feature.runner(root, files, config)
+    return assert_never(feature)
+
+
 @dataclass(frozen=True, slots=True)
 class EntryPointBuiltinRuleBinding:
     """One selected feature rule resolved through standard package metadata."""
@@ -78,7 +110,7 @@ class EntryPointBuiltinRuleBinding:
     ) -> RuleOutput:
         config.checks.require_rule(self.selector)
         feature = load_builtin_feature(self.selector)
-        output: RuleOutput = feature.runner(root, files, config)
+        output = _run_registered_feature(feature, root, files, config)
         diagnostics_from_output(self.selector, output)
         return output
 
@@ -180,12 +212,7 @@ def cyclomatic_rule_operations() -> CyclomaticRuleOperations:
             "the built-in registry must provide exactly one cyclomatic-report binding"
         )
     feature = load_builtin_feature("cyclomatic-complexity")
-    operations = feature.cyclomatic_operations
-    if operations is None:
-        raise RuntimeError(
-            "the cyclomatic-complexity feature is missing its typed operations"
-        )
-    return operations
+    return feature.cyclomatic_operations
 
 
 def run_rule(

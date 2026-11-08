@@ -13,7 +13,15 @@ from typing import TypeGuard, get_args, get_origin, get_type_hints, is_typeddict
 from alphus.contracts.cyclomatic import CyclomaticReport
 from alphus.contracts.findings import Finding
 from alphus.contracts.shared_utilities import SharedUtilitiesReport
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import (
+    BuiltinFeature,
+    BuiltinFeatureRegistration,
+    CyclomaticBuiltinFeature,
+    FindingBuiltinFeature,
+    MessageBuiltinFeature,
+    PythonStyleBuiltinFeature,
+    SharedUtilitiesBuiltinFeature,
+)
 from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
 
 BUILTIN_CHECK_ENTRY_POINT_GROUP = "alphus.builtin_checks.v1"
@@ -27,10 +35,17 @@ def _distribution_name(owner: Distribution) -> str:
         return ""
 
 
-def _is_builtin_feature(target: object) -> TypeGuard[BuiltinFeature]:
+def _is_builtin_feature(target: object) -> TypeGuard[BuiltinFeatureRegistration]:
     """Validate a first-party feature object and its synchronous result contract."""
     match target:
-        case BuiltinFeature() as feature:
+        case (
+            BuiltinFeature()
+            | FindingBuiltinFeature()
+            | MessageBuiltinFeature()
+            | PythonStyleBuiltinFeature()
+            | SharedUtilitiesBuiltinFeature()
+            | CyclomaticBuiltinFeature()
+        ) as feature:
             pass
         case _:
             return False
@@ -134,7 +149,7 @@ def builtin_check_entry_points() -> Mapping[str, EntryPoint]:
 
 
 @lru_cache(maxsize=64)
-def load_builtin_feature(selector: str) -> BuiltinFeature:
+def load_builtin_feature(selector: str) -> BuiltinFeatureRegistration:
     """Load one typed feature provider only after explicit selection."""
     point = builtin_check_entry_points().get(selector)
     if point is None:
@@ -144,16 +159,13 @@ def load_builtin_feature(selector: str) -> BuiltinFeature:
         raise TypeError(
             f"built-in entry point {selector!r} must be a typed synchronous feature"
         )
-    match target:
-        case BuiltinFeature() as feature:
-            if feature.definition.selector != selector:
-                raise ValueError(
-                    f"built-in feature {feature.definition.selector!r} does not "
-                    f"match entry point {selector!r}"
-                )
-            return feature
-        case _:
-            raise TypeError("validated built-in feature lost its runtime type")
+    feature = target
+    if feature.definition.selector != selector:
+        raise ValueError(
+            f"built-in feature {feature.definition.selector!r} does not "
+            f"match entry point {selector!r}"
+        )
+    return feature
 
 
 __all__ = [

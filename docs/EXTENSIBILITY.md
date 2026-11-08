@@ -294,15 +294,23 @@ selector and output shape in `ALPHUS_CHECK`, its claim and evidence in
 `ALPHUS_MORPHOLOGY`, and a typed synchronous runner in `ALPHUS_FEATURE`.
 Choose `FindingBuiltinFeature`, `MessageBuiltinFeature`,
 `PythonStyleBuiltinFeature`, `SharedUtilitiesBuiltinFeature`, or
-`CyclomaticBuiltinFeature` to match the output shape. Each runner protocol
-narrowly types its result, and static discovery checks the shape pairing.
-The build derives catalog/config/dispatch views and the wheel entry point; do
-not edit generated views, `RULE_SPECS`, `QualityRuleName`, or `pyproject.toml`
-for an individual selector. The source declaration must use the supported
-static form: the feature object links the local declarations and a local
-runner. Use a small feature-local adapter if the implementation needs composed
-or imported setup. Do not import analyzer-only dependencies merely to inspect
-the catalog.
+`CyclomaticBuiltinFeature` to match the output shape. Each form narrows the
+runner result type; the lazy loader returns a disjoint union, and dispatch
+narrows the selected form before adapting to the existing output contract.
+Static discovery checks the form/output-shape pairing. The build derives
+catalog/config/dispatch views and the wheel entry point; do not edit generated
+views, `RULE_SPECS`, `QualityRuleName`, or `pyproject.toml` for an individual
+selector. The source declaration must use the supported static form: the
+feature object links the local declarations and a local runner. Use a small
+feature-local adapter if the implementation needs composed or imported setup.
+Do not import analyzer-only dependencies merely to inspect the catalog.
+
+The declared policy model is a concrete strict-model class and generates the
+matching typed config field. Runner functions still receive the aggregate
+`QualityGateConfig`; their config-field accesses are type-checked, but Python's
+type system does not yet prove that the field accessed by the runner matches
+the model in its feature declaration. See the architecture plan for this
+remaining policy-binding gap.
 
 The common finding adapter is appropriate for ordinary checks. Cyclomatic
 analysis retains its `CyclomaticRuleOperations` and `CyclomaticReport`; a
