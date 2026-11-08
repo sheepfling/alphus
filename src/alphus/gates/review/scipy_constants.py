@@ -15,7 +15,7 @@ from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
 from alphus.gates.review.numeric_catalog import NumericLiteralFinding
 from alphus.gates.review.numeric_engine import scan_numeric_literals
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -207,19 +207,21 @@ def check_scipy_constants(
     return findings
 
 
-def run_scipy_constants_rule(
-    root: Path, paths: Sequence[Path], config: QualityGateConfig
+def resolve_scipy_constants_policy(config: QualityGateConfig) -> ScipyConstantsPolicy:
+    """Resolve this numeric review's strict feature policy."""
+    return require_policy(config.checks.scipy_constants, "scipy_constants")
+
+
+def run_scipy_constants_feature(
+    root: Path, paths: Sequence[Path], policy: ScipyConstantsPolicy
 ) -> list[Finding]:
-    """Adapt the feature-owned policy to the shared typed runner interface."""
-    return check_scipy_constants(
-        root,
-        paths,
-        require_policy(config.checks.scipy_constants, "scipy_constants"),
-    )
+    """Run this numeric feature through its shared evidence engine."""
+    return check_scipy_constants(root, paths, policy)
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_scipy_constants_rule,
+    runner=run_scipy_constants_feature,
+    policy_resolver=resolve_scipy_constants_policy,
 )

@@ -15,7 +15,7 @@ from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
 from alphus.gates.review.numeric_catalog import NumericLiteralFinding
 from alphus.gates.review.numeric_engine import scan_numeric_literals
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -140,19 +140,21 @@ def check_numeric_literals(
     return findings
 
 
-def run_numeric_literals_rule(
-    root: Path, paths: Sequence[Path], config: QualityGateConfig
+def resolve_numeric_literals_policy(config: QualityGateConfig) -> NumericLiteralPolicy:
+    """Resolve this numeric review's strict feature policy."""
+    return require_policy(config.checks.numeric_literals, "numeric_literals")
+
+
+def run_numeric_literals_feature(
+    root: Path, paths: Sequence[Path], policy: NumericLiteralPolicy
 ) -> list[Finding]:
-    """Adapt the feature-owned policy to the shared typed runner interface."""
-    return check_numeric_literals(
-        root,
-        paths,
-        require_policy(config.checks.numeric_literals, "numeric_literals"),
-    )
+    """Run this numeric feature through its shared evidence engine."""
+    return check_numeric_literals(root, paths, policy)
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_numeric_literals_rule,
+    runner=run_numeric_literals_feature,
+    policy_resolver=resolve_numeric_literals_policy,
 )
