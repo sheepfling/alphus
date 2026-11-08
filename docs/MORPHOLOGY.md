@@ -61,8 +61,8 @@ by a typed `BuiltinFeature` with direct runner and specialized-operation
 references.
 
 The original six-rule pilot is not a complete built-in registration
-migration. Fifty-two selectors now use feature-owned runtime declarations,
-while 10 remain on legacy selector/config/runner paths.
+migration. Fifty-four selectors now use feature-owned runtime declarations,
+while eight remain on legacy selector/config/runner paths.
 Generated declarations do not select or enable a check and do not change JSON results, finding IDs, gate IDs,
 or enforcement.
 
@@ -89,7 +89,7 @@ readiness.
 ## Registration boundary and remaining work
 
 The six-check morphology pilot was metadata discovery. Draft PR #100 now
-has forty-two feature-owned runtime selectors, including the package-boundaries
+has fifty-four feature-owned runtime selectors, including the package-boundaries
 composite, polyglot cyclomatic and comment readers, paired shared-contract
 numeric checks, document reviewers, and Python test-quality and input-contract
 review. The Pydantic and SQLAlchemy Python framework reviewers now use the same
@@ -324,3 +324,37 @@ committed.
 Installed-wheel self-quality passed 2,510 tests (44 skipped); all 27 self-
 profile checks passed, with four provisional passes. This is incremental
 evidence, not full selector equivalence or completion of issue #87.
+
+## Paired message-result registration slice
+
+Commits `e2d640e` and `ba13b18` migrate `runtime-types` and `script-policy`
+into typed feature-owned registrations beside their existing analyzers. Both
+use the existing `messages` runner/result shape. Their declared complaint IDs
+drive the profile result adapter; direct invocation retains the legacy message
+array and exit behavior. The generated strict policy fields and selector
+contracts remain unchanged, and the manual catalog rows, `CheckPolicies`
+fields, and source-runner bindings were removed. A lazy-load regression proves
+that selecting `file-size` does not import either Python message provider.
+
+Differential scenarios exercise direct JSON and plain output, serial/parallel
+profile selection for both checks, unknown-field rejection for both policy
+sections, and profile finding IDs.
+The pinned installed-wheel comparison against baseline
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` matched all 125 scenarios with zero
+differences. Both catalogs retain the same 62 selectors; behavior scenarios
+cover 54, leaving eight without behavior-level cases. The separate
+selector-policy matrix covers 26 direct invocations and 36 strict
+missing-policy rejections. Reference and candidate wheel SHA-256 values are
+`45243dfdd61854bcbc59dfecb2e304f9aaf289beecc294ebd5b3c334031a4a62` and
+`09a31509a125872d54e79ba78cc06171a0c8eff933a00c7e4a866c2590f2d639`. The
+report is `/tmp/alphus-morphology-message-rules-7b2f045.json`; it is not
+committed.
+
+This comparison also caught and prevented a new `typing` domain tag from
+changing the public catalog: the runtime-types declaration keeps the existing
+empty catalog domain list. This slice preserves the 0.0.3 output and selection
+contracts; it does not complete issue #87 or cover all remaining selectors.
+Installed-wheel self-quality at implementation commit `b3c2967` passed 2,514
+tests (44 skipped), with all 27 self-profile checks passing and four provisional
+passes. Ruff, formatting, Pyright, package import checks, and the Markdown-shell
+review passed as part of that run.
