@@ -440,6 +440,31 @@ def test_declared_exact_findings_are_not_skipped_for_zero_minimum() -> None:
         _assert_scenario_output(exact_expectation, "json", ProcessResult(0, "[]", ""))
 
 
+def test_python_style_profile_contract_covers_all_bare_dict_categories() -> None:
+    scenarios, _ = load_manifest(Path("tests/differential/wheel-scenarios.toml"))
+    scenario = next(
+        item for item in scenarios if item.name == "python-style-feature-owned-profile"
+    )
+
+    assert scenario.expected_findings == (
+        (
+            "alphus/python/none/style/bare-containers",
+            "src/morphology_style_profile.py",
+            1,
+        ),
+        (
+            "alphus/python/none/style/concrete-inputs",
+            "src/morphology_style_profile.py",
+            1,
+        ),
+        (
+            "alphus/python/none/style/opaque-mappings",
+            "src/morphology_style_profile.py",
+            1,
+        ),
+    )
+
+
 def test_cyclomatic_backend_mismatch_is_reported_as_contract_failure() -> None:
     scenario = Scenario(
         name="cyclomatic-backend-status",

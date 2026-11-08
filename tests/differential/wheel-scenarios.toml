@@ -2565,6 +2565,8 @@ expected_step_names = ["Python style review"]
 expected_step_rules = ["python-style"]
 expected_findings = [
   { rule_id = "alphus/python/none/style/bare-containers", path = "src/morphology_style_profile.py", line = 1 },
+  { rule_id = "alphus/python/none/style/concrete-inputs", path = "src/morphology_style_profile.py", line = 1 },
+  { rule_id = "alphus/python/none/style/opaque-mappings", path = "src/morphology_style_profile.py", line = 1 },
 ]
 
 [[scenario.variant]]
