@@ -138,7 +138,7 @@ class _InstallationProbe(_StrictDocument):
 class _ProfileFinding(_StrictDocument):
     model_config = ConfigDict(extra="allow", strict=True)
     rule_id: Annotated[str, Field(min_length=1)]
-    path: Annotated[str, Field(min_length=1)]
+    path: Annotated[str, Field(min_length=1)] | None
     message: str
     line: int | None = None
 
@@ -1492,7 +1492,7 @@ def _assert_scenario_output(
             f"{scenario.name}/{variant_name} returned {len(findings)} findings; "
             f"expected at least {scenario.minimum_findings}"
         )
-    actual_findings: list[tuple[str, str, int | None]] = []
+    actual_findings: list[tuple[str, str | None, int | None]] = []
     for finding in findings:
         actual_findings.append((finding.rule_id, finding.path, finding.line))
     if (

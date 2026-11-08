@@ -18,6 +18,7 @@ from scripts.differential_wheels import (
     _assert_scenario_output,
     _catalog_contract_differences,
     _CatalogRule,
+    _ProfileFinding,
     _compare_reports,
     _configured_policy_sections,
     _dispatch_case,
@@ -205,6 +206,20 @@ def test_immutable_scenario_report_keeps_json_array_wire_shape() -> None:
     assert decoded["python_distributions"] == ["lizard==1.24.2"]
     assert decoded["selectors"] == ["cyclomatic-complexity"]
     assert decoded["behavior"] == ["native-backend-report"]
+
+
+def test_profile_finding_preserves_legacy_message_without_location() -> None:
+    finding = _ProfileFinding.model_validate(
+        {
+            "rule_id": "alphus/python/none/security/script-policy-violation",
+            "path": None,
+            "line": None,
+            "message": "scripts/legacy.sh: use a Python module",
+        }
+    )
+
+    assert finding.path is None
+    assert finding.line is None
 
 
 @pytest.mark.parametrize(
