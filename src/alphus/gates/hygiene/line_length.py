@@ -10,7 +10,7 @@ from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding, LineLengthMeasurement
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
 from alphus.gates.hygiene.rules import path_override
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -64,7 +64,18 @@ def check_line_length(
     root: Path, files: Sequence[Path], config: QualityGateConfig
 ) -> list[Finding]:
     """Report each physical source line beyond its configured extension limit."""
-    policy = require_policy(config.checks.line_length, "line_length")
+    return run_line_length_feature(root, files, resolve_line_length_policy(config))
+
+
+def resolve_line_length_policy(config: QualityGateConfig) -> LineLengthPolicy:
+    """Resolve the strict line-length policy for this feature."""
+    return require_policy(config.checks.line_length, "line_length")
+
+
+def run_line_length_feature(
+    root: Path, files: Sequence[Path], policy: LineLengthPolicy
+) -> list[Finding]:
+    """Report bounded line measurements from the feature's typed policy input."""
     findings: list[Finding] = []
     checkout = root.resolve(strict=True)
     for relative in files:
@@ -123,6 +134,9 @@ def check_line_length(
     return findings
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
-    definition=ALPHUS_CHECK, morphology=ALPHUS_MORPHOLOGY, runner=check_line_length
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_line_length_feature,
+    policy_resolver=resolve_line_length_policy,
 )

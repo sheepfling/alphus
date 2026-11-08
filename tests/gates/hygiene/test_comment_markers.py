@@ -13,6 +13,8 @@ from pydantic import ValidationError
 
 from alphus.cli import main
 from alphus.gates.hygiene.comment_markers import check_comment_markers
+from alphus.plugins.builtin import FindingBuiltinFeature
+from alphus.plugins.builtin_registry import load_builtin_feature
 from alphus.policy.sources import CommentMarkerPolicy
 
 
@@ -110,6 +112,7 @@ def test_file_exclusions_and_invalid_policy(tmp_path: Path) -> None:
 def test_direct_cli_reports_file_and_line(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    assert isinstance(load_builtin_feature("comment-markers"), FindingBuiltinFeature)
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     (tmp_path / "sample.py").write_text("# HACK: temporary\n", encoding="utf-8")
     (tmp_path / "quality.toml").write_text(

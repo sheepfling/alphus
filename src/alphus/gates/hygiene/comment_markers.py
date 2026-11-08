@@ -5,14 +5,14 @@ from __future__ import annotations
 import io
 import re
 import tokenize
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Final, NamedTuple
 
 from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -245,12 +245,25 @@ def run_comment_markers_rule(
     root: Path, paths: Iterable[Path], config: QualityGateConfig
 ) -> list[Finding]:
     """Adapt the feature-owned policy to the existing comment scanners."""
-    policy = require_policy(config.checks.comment_markers, "comment_markers")
+    policy = resolve_comment_markers_policy(config)
     return check_comment_markers(root, paths, policy)
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+def resolve_comment_markers_policy(config: QualityGateConfig) -> CommentMarkerPolicy:
+    """Resolve the strict comment-marker policy for this feature."""
+    return require_policy(config.checks.comment_markers, "comment_markers")
+
+
+def run_comment_markers_feature(
+    root: Path, paths: Sequence[Path], policy: CommentMarkerPolicy
+) -> list[Finding]:
+    """Scan selected files using the feature's typed policy input."""
+    return check_comment_markers(root, paths, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_comment_markers_rule,
+    runner=run_comment_markers_feature,
+    policy_resolver=resolve_comment_markers_policy,
 )
