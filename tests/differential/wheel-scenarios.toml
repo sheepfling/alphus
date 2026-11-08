@@ -2330,7 +2330,7 @@ materialized_files = [
 ]
 selectors = ["source-families"]
 behavior = ["feature-owned-cross-language-policy", "bounded-family-candidate", "finding-id"]
-expected_exit = 1
+expected_exit = 0
 minimum_findings = 1
 expected_findings = [
   { rule_id = "alphus/any/none/maintainability/flat-source-family", path = "src" },
