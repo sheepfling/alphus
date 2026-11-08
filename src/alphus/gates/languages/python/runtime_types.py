@@ -51,7 +51,7 @@ ALPHUS_CHECK: Final = FeatureDefinition(
     output_shape="messages",
     summary="Reviews configured Python runtime type-checking conventions.",
     applies_to=("python",),
-    domains=("typing",),
+    domains=(),
     requires_files=True,
 )
 
