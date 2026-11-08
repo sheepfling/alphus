@@ -79,7 +79,7 @@ This document distinguishes four kinds of statement:
   silently changing consumer behavior.
 
 PR #100 remains an open draft. It began with the six-check morphology
-metadata pilot and now has 44 of the 62 built-in selectors on feature-owned
+metadata pilot and now has 46 of the 62 built-in selectors on feature-owned
 generated runtime views. The statically discovered selector inventory is the
 source of truth; it is deliberately not duplicated here as another selector
 list. Each local
@@ -88,7 +88,7 @@ morphology metadata, typed `FeatureDefinition`, `RuleSpec`, strict policy
 field, selector type, and inventory entry. Each feature module exposes one
 typed `ALPHUS_FEATURE` object with a direct callback for lazy execution. The established
 `RuleEvaluation` and CLI result adapters remain shared, so adding a feature
-still uses the existing output contract. The other 18 baseline selectors
+still uses the existing output contract. The other 16 baseline selectors
 remain on legacy registration paths; these slices do not complete issue #87
 or establish full selector equivalence. These declarations are now
 typed `FeatureDefinition(...)` calls paired with immutable
@@ -98,7 +98,7 @@ The PEP 517 backend generates installed-wheel entry-point metadata without a
 per-check `pyproject.toml` edit. Aggregate policy/config/dispatch views are
 ignored build artifacts rather than checked-in shared files, so independent
 feature branches do not edit the same generated outputs. Runtime entry points
-target the typed feature object; 18 selectors still use legacy registration
+target the typed feature object; 16 selectors still use legacy registration
 maps.
 
 The latest source-discovery slice moves `json-structure` and `path-discovery`

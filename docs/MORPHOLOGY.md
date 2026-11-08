@@ -61,8 +61,8 @@ by a typed `BuiltinFeature` with direct runner and specialized-operation
 references.
 
 The original six-rule pilot is not a complete built-in registration
-migration. Forty-four selectors now use feature-owned runtime declarations,
-while 18 remain on legacy selector/config/runner paths.
+migration. Forty-six selectors now use feature-owned runtime declarations,
+while 16 remain on legacy selector/config/runner paths.
 Generated declarations do not select or enable a check and do not change JSON results, finding IDs, gate IDs,
 or enforcement.
 
@@ -160,6 +160,36 @@ Installed-wheel self-quality passed: 2,510 tests passed, 44 skipped; the
 self-profile passed all 27 checks with no failures and four provisional
 passes. This is incremental evidence, not full 62-selector equivalence or
 completion of issue #87.
+
+## Paired architecture-review registration slice
+
+Commit `a161464f8e06a02a95c768f41dd01f3cf86f9f02` moves
+`provenance-as-ownership` and `semantic-work-in-presentation` into typed
+feature-owned registrations. They share the existing finding/result shape and
+architecture category, while retaining distinct concerns, strict policy
+models, configurations, RuleTag IDs, and claims. The first is a configured
+path-ownership heuristic; the second checks co-location of four
+consumer-declared operation roles. The former review runner entries, catalog
+rows and handwritten `CheckPolicies` fields were removed. The detectors and
+their findings were not changed.
+
+The installed-wheel scenarios invoke each selector directly, run both in an
+ordered profile, and reject an unknown field before dispatch. Against baseline
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`, all 106 manifested scenarios
+matched with zero differences and the 62-selector catalogs were equal.
+Behavior scenarios cover 46 selectors, leaving 16 without behavior-level
+scenarios. The separate selector-policy matrix has 26 configured direct
+invocations and 36 strict missing-policy rejections. Reference and candidate
+wheel SHA-256 values are
+`2f983f1b760e56f7ddfe5e6677daf9da7b36693ff84003ce8cc08720bb3ed043` and
+`3f5d48dd4b025422048c50d9a0b78fe09b43decc0042ed7d24802347e70e0367`. The
+report is `/tmp/alphus-morphology-architecture-reviews-a161464.json` and is
+not committed.
+
+Installed-wheel self-quality passed: 2,510 tests passed, 44 skipped; the
+self-profile passed 27 checks with no failures and four provisional passes.
+This is incremental evidence, not full selector equivalence or completion of
+issue #87.
 
 ## Orthogonal policy and run evidence
 
