@@ -8,8 +8,9 @@ from typing import Final
 
 from alphus.config import QualityGateConfig
 from alphus.contracts.complaints import ComplaintContract, ComplaintEntry
+from alphus.contracts.python_style import StyleFindings
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
-from alphus.gates.languages.python.style import StyleFindings, findings_for
+from alphus.gates.languages.python.style import findings_for
 from alphus.plugins.builtin import BuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition

@@ -16,8 +16,8 @@ from alphus.contracts.findings import (
     Severity,
     severity_meets_threshold,
 )
+from alphus.contracts.python_style import StyleFindings
 from alphus.contracts.shared_utilities import SharedUtilitiesReport
-from alphus.gates.languages.python.style import StyleFindings
 from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
 from alphus.policy.base import QualityRuleName, RuleSelector
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape

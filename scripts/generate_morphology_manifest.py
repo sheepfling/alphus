@@ -630,9 +630,14 @@ def _is_feature_definition_call(node: ast.expr) -> bool:
             return False
 
 
-def _static_source_constants(tree: ast.Module, path: Path) -> Mapping[str, ast.expr]:
+def _static_source_constants(
+    tree: ast.Module, path: Path, *, before_line: int
+) -> Mapping[str, ast.expr]:
+    """Read literal bindings visible where the feature declaration is evaluated."""
     values: dict[str, ast.expr] = {}
     for statement in tree.body:
+        if statement.lineno >= before_line:
+            continue
         name = _assignment_name(statement)
         expression = _assignment_value(statement)
         if name is None or expression is None:
@@ -1083,12 +1088,14 @@ def _declarations(
                     raise ValueError(f"{path} must assign {assignment_name}")
                 values_by_name[assignment_name].append(value)
         local_ids = _static_rule_ids(tree)
-        source_constants = _static_source_constants(tree, path)
         feature_values = values_by_name[_CHECK_DECLARATION_NAME]
         typed_feature: _FeatureRegistration | None = None
         if len(feature_values) == 1 and isinstance(feature_values[0], ast.Call):
             call = feature_values[0]
             if _is_feature_definition_call(call):
+                source_constants = _static_source_constants(
+                    tree, path, before_line=call.lineno
+                )
                 typed_feature = _parse_feature_definition(
                     call, path, constants=source_constants
                 )
@@ -1267,6 +1274,11 @@ def _declarations(
                 )
             )
 
+    feature_policy_fields = {
+        declaration.feature.policy_field
+        for declaration in declarations
+        if declaration.feature is not None
+    }
     owners: dict[str, str] = {}
     finding_owners: dict[str, str] = {}
     for declaration in declarations:
@@ -1290,7 +1302,9 @@ def _declarations(
                 )
             finding_owners[finding_id] = finding_owner
         if declaration.feature is not None:
-            _validate_feature_registration(root, declaration)
+            _validate_feature_registration(
+                root, declaration, feature_policy_fields=feature_policy_fields
+            )
     if require_declarations and not declarations:
         raise ValueError(f"no {_DECLARATION_NAME} declarations found under {gates}")
     return tuple(sorted(declarations, key=lambda item: item.selector))
@@ -1305,7 +1319,12 @@ def feature_registrations(root: Path) -> tuple[_FeatureRegistration, ...]:
     )
 
 
-def _validate_feature_registration(root: Path, declaration: _Declaration) -> None:
+def _validate_feature_registration(
+    root: Path,
+    declaration: _Declaration,
+    *,
+    feature_policy_fields: set[str],
+) -> None:
     feature = declaration.feature
     if feature is None:
         return
@@ -1354,12 +1373,15 @@ def _validate_feature_registration(root: Path, declaration: _Declaration) -> Non
     undeclared_policy_inputs = tuple(
         policy_input
         for policy_input in feature.policy_inputs
-        if policy_input != feature.policy_field and policy_input not in legacy_fields
+        if policy_input != feature.policy_field
+        and policy_input not in legacy_fields
+        and policy_input not in feature_policy_fields
     )
     if undeclared_policy_inputs:
         raise ValueError(
             f"{declaration.source}: secondary policy inputs must name existing "
-            f"CheckPolicies fields: {undeclared_policy_inputs!r}"
+            "CheckPolicies or feature-owned fields: "
+            f"{undeclared_policy_inputs!r}"
         )
 
     policy_module, policy_class = feature.policy_model.rsplit(".", 1)

@@ -45,6 +45,7 @@ from alphus.contracts.findings import (
     SeverityCounts,
 )
 from alphus.contracts.process import ExitCode
+from alphus.contracts.python_style import StyleFindings
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.execution.audit_manifest import (
     AuditCheckStatus,
@@ -85,7 +86,6 @@ from alphus.execution.results import RuleEvaluation, RuleOutput
 from alphus.execution.scheduler import WorkUnit, run_work_units
 from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
 from alphus.gates.languages.python.script_policy import launcher_files
-from alphus.gates.languages.python.style import StyleFindings
 from alphus.gates.review.source_families import bounded_source_family_inventory
 from alphus.gates.source.cli_policy import CliPolicyReport, selected_policy_sources
 from alphus.plugins.registry import (

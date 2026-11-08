@@ -375,6 +375,60 @@ def test_feature_definition_generates_catalog_and_lazy_runner_views(
     assert "**DEMO_GROUP_RULE_RUNNERS," in runner_manifest
 
 
+def test_composite_feature_can_reference_another_feature_policy_field(
+    tmp_path: Path,
+) -> None:
+    gates = tmp_path / "src/alphus/gates"
+    gates.mkdir(parents=True)
+    for selector, policy_field, policy_inputs in (
+        ("base-check", "base_policy", ("base_policy",)),
+        (
+            "composite-check",
+            "composite_policy",
+            ("composite_policy", "base_policy"),
+        ),
+    ):
+        declaration = tuple(
+            (key, selector if key == "selector" else value)
+            for key, value in _DECLARATION
+        ) + (
+            ("finding_tag_complaints", (selector,)),
+            ("policy_field", policy_field),
+            ("policy_model", "alphus.policy.sources.DemoPolicy"),
+            ("output_shape", "findings"),
+            ("summary", f"Reports {selector} findings."),
+            ("applies_to", ("python",)),
+            ("domains", ()),
+            ("requires_files", True),
+            ("policy_inputs", policy_inputs),
+        )
+        (gates / f"{selector.replace('-', '_')}.py").write_text(
+            _feature_source(declaration)
+            + "rule_tag(Scope.REPOSITORY, Framework.NONE, Category.TESTING, "
+            + f"{selector!r})\n",
+            encoding="utf-8",
+        )
+
+    policy = tmp_path / "src/alphus/policy"
+    policy.mkdir(parents=True)
+    (policy / "orchestration.py").write_text(
+        "class CheckPolicies:\n    pass\n", encoding="utf-8"
+    )
+    (policy / "sources.py").write_text(
+        "class DemoPolicy:\n    pass\n", encoding="utf-8"
+    )
+
+    features = {item.selector: item for item in feature_registrations(tmp_path)}
+    generated_policies = render_feature_policies(tmp_path)
+
+    assert features["composite-check"].policy_inputs == (
+        "composite_policy",
+        "base_policy",
+    )
+    assert "base_policy: DemoPolicy | None = None" in generated_policies
+    assert "composite_policy: DemoPolicy | None = None" in generated_policies
+
+
 def test_message_feature_uses_one_typed_morphology_id_for_result_adaptation(
     tmp_path: Path,
 ) -> None:
@@ -462,6 +516,12 @@ def test_feature_definition_supports_qualified_constructor_and_selector_constant
         1,
     ).replace("selector='demo-check',", "selector=SELECTOR,", 1)
     source = source.replace(
+        ")\nALPHUS_MORPHOLOGY = RuleMorphology(",
+        ")\nSELECTOR = 'reassigned-after-check'\n"
+        "ALPHUS_MORPHOLOGY = RuleMorphology(",
+        1,
+    )
+    source = source.replace(
         "from alphus.policy.sources import DemoPolicy\n",
         "import alphus.policy.sources\n",
     ).replace(
@@ -492,6 +552,7 @@ def test_feature_definition_supports_qualified_constructor_and_selector_constant
     registration = feature_registrations(tmp_path)
 
     assert [item.selector for item in registration] == ["demo-check"]
+    assert registration[0].selector == "demo-check"
 
 
 def test_feature_registration_without_export_fails_during_static_discovery(

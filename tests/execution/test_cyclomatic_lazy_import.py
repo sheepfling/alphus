@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
+from pathlib import Path
+
+import pytest
 
 
-def test_cli_and_dispatch_import_without_loading_cyclomatic_engine() -> None:
+def test_cli_and_dispatch_import_without_loading_cyclomatic_engine(
+    pytestconfig: pytest.Config,
+) -> None:
+    root = Path(pytestconfig.rootpath)
     completed = subprocess.run(
         [
             sys.executable,
@@ -20,12 +27,41 @@ def test_cli_and_dispatch_import_without_loading_cyclomatic_engine() -> None:
         check=False,
         capture_output=True,
         text=True,
+        cwd=root,
+        env={**os.environ, "PYTHONPATH": str(root / "src")},
     )
 
     assert completed.returncode == 0, completed.stderr
 
 
-def test_registered_cyclomatic_operations_load_only_when_requested() -> None:
+def test_cli_dispatch_and_registry_do_not_import_unselected_python_style_engine(
+    pytestconfig: pytest.Config,
+) -> None:
+    root = Path(pytestconfig.rootpath)
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; import alphus.cli; import alphus.execution.dispatch; "
+                "import alphus.plugins.builtin_registry; "
+                "assert 'alphus.gates.languages.python.style' not in sys.modules"
+            ),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        cwd=root,
+        env={**os.environ, "PYTHONPATH": str(root / "src")},
+    )
+
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_registered_cyclomatic_operations_load_only_when_requested(
+    pytestconfig: pytest.Config,
+) -> None:
+    root = Path(pytestconfig.rootpath)
     completed = subprocess.run(
         [
             sys.executable,
@@ -43,6 +79,8 @@ def test_registered_cyclomatic_operations_load_only_when_requested() -> None:
         check=False,
         capture_output=True,
         text=True,
+        cwd=root,
+        env={**os.environ, "PYTHONPATH": str(root / "src")},
     )
 
     assert completed.returncode == 0, completed.stderr

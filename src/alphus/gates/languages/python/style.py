@@ -8,9 +8,9 @@ from collections import Counter
 from collections.abc import Sequence
 from collections.abc import Set as AbstractSet
 from pathlib import Path
-from typing import TypedDict
 
 from alphus.config import PythonStylePolicy
+from alphus.contracts.python_style import StyleFindings
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 
@@ -308,37 +308,6 @@ def _dotted_name(node: ast.expr) -> str | None:
         parent = _dotted_name(node.value)
         return f"{parent}.{node.attr}" if parent else None
     return None
-
-
-class StyleFindings(TypedDict):
-    """Named Python-style finding categories with their source line numbers."""
-
-    bare_containers: list[int]
-    bare_tuples: list[int]
-    concrete_inputs: list[int]
-    local_imports: list[int]
-    opaque_mappings: list[int]
-    unslotted_dataclasses: list[int]
-    quoted_types: list[int]
-    type_checking_imports: list[int]
-    os_path: list[int]
-    main_module_imports: list[int]
-    legacy_pydantic_fields: list[int]
-    pydantic_collection_contracts: list[int]
-    mutable_module_constants: list[int]
-    literal_rule_ids: list[int]
-    literal_rule_dimensions: list[int]
-    raw_reporting_prints: list[int]
-    magic_exit_codes: list[int]
-    repeated_literals: list[int]
-    unnamed_tuple_returns: list[int]
-    undifferentiated_patterns: list[int]
-    concrete_classmethod_returns: list[int]
-    concrete_model_validator_returns: list[int]
-    concrete_self_returns: list[int]
-    direct_text_reads: list[int]
-    duplicate_literal_catalogs: list[int]
-    unused_public_constants: list[int]
 
 
 def is_mutable_literal(node: ast.expr) -> bool:
