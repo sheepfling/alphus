@@ -14,7 +14,7 @@ from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule
 from alphus.gates.review.numerical.common.ast_helpers import (
     configured_function_observations,
 )
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -398,17 +398,23 @@ def check_manual_elimination(
     return findings
 
 
-def _run_builtin_manual_elimination(
-    root: Path,
-    files: Sequence[Path],
+def resolve_manual_elimination_policy(
     config: QualityGateConfig,
+) -> ManualEliminationPolicy:
+    """Resolve this linear-algebra review's strict feature policy."""
+    return require_policy(config.checks.manual_elimination, "manual_elimination")
+
+
+def run_manual_elimination_feature(
+    root: Path, files: Sequence[Path], policy: ManualEliminationPolicy
 ) -> list[Finding]:
-    policy = require_policy(config.checks.manual_elimination, "manual_elimination")
+    """Run this configured linear-algebra review with its typed policy."""
     return check_manual_elimination(root, files, policy)
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=_run_builtin_manual_elimination,
+    runner=run_manual_elimination_feature,
+    policy_resolver=resolve_manual_elimination_policy,
 )

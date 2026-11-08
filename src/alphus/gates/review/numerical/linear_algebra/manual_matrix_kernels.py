@@ -10,7 +10,7 @@ from typing import Final
 from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -255,19 +255,23 @@ def check_manual_matrix_kernels(
     return findings
 
 
-def _run_builtin_manual_matrix_kernels(
-    root: Path,
-    files: Sequence[Path],
+def resolve_manual_matrix_kernels_policy(
     config: QualityGateConfig,
+) -> ManualMatrixKernelPolicy:
+    """Resolve this linear-algebra review's strict feature policy."""
+    return require_policy(config.checks.manual_matrix_kernels, "manual_matrix_kernels")
+
+
+def run_manual_matrix_kernels_feature(
+    root: Path, files: Sequence[Path], policy: ManualMatrixKernelPolicy
 ) -> list[Finding]:
-    policy = require_policy(
-        config.checks.manual_matrix_kernels, "manual_matrix_kernels"
-    )
+    """Run this configured linear-algebra review with its typed policy."""
     return check_manual_matrix_kernels(root, files, policy)
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=_run_builtin_manual_matrix_kernels,
+    runner=run_manual_matrix_kernels_feature,
+    policy_resolver=resolve_manual_matrix_kernels_policy,
 )

@@ -1,10 +1,15 @@
 from pathlib import Path
 
-from alphus.config import ManualEliminationPolicy
+from alphus.config import ManualEliminationPolicy, QualityGateConfig
+from alphus.execution.dispatch import run_builtin_rule
 from alphus.gates.review.numerical.linear_algebra.manual_elimination import (
+    ALPHUS_FEATURE,
     check_manual_elimination,
     manual_elimination_sites,
+    resolve_manual_elimination_policy,
+    run_manual_elimination_feature,
 )
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 _SOURCE = """\
 def invert_matrix(matrix, size):
@@ -105,3 +110,30 @@ def test_module_level_range_shadowing_makes_loop_semantics_unknown() -> None:
     shadowed = "range = lambda count: ()\n\n" + _SOURCE
 
     assert manual_elimination_sites(shadowed, _policy()) == []
+
+
+def test_feature_registration_preserves_configured_finding_behavior(
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "src/numerics/solver.py"
+    source_path.parent.mkdir(parents=True)
+    source_path.write_text(_SOURCE, encoding="utf-8")
+    relative_path = Path("src/numerics/solver.py")
+    policy = _policy()
+    config = QualityGateConfig.model_validate(
+        {"schema_version": 1, "checks": {"manual_elimination": policy}}, strict=True
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is ManualEliminationPolicy
+    resolved = resolve_manual_elimination_policy(config)
+    assert type(resolved) is ManualEliminationPolicy
+    expected = check_manual_elimination(tmp_path, [relative_path], policy)
+    assert expected
+    assert (
+        run_manual_elimination_feature(tmp_path, [relative_path], resolved) == expected
+    )
+    assert (
+        run_builtin_rule("manual-elimination", tmp_path, [relative_path], config)
+        == expected
+    )

@@ -13,7 +13,7 @@ from alphus.config import (
 )
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -506,19 +506,25 @@ def check_array_representation(
     return findings
 
 
-def _run_builtin_array_representation(
-    root: Path,
-    files: Sequence[Path],
+def resolve_array_representation_policy(
     config: QualityGateConfig,
-) -> list[Finding]:
-    policy = require_policy(
+) -> ArrayRepresentationPolicy:
+    """Resolve this linear-algebra review's strict feature policy."""
+    return require_policy(
         config.checks.array_representation_churn, "array_representation_churn"
     )
+
+
+def run_array_representation_feature(
+    root: Path, files: Sequence[Path], policy: ArrayRepresentationPolicy
+) -> list[Finding]:
+    """Run this configured linear-algebra review with its typed policy."""
     return check_array_representation(root, files, policy)
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=_run_builtin_array_representation,
+    runner=run_array_representation_feature,
+    policy_resolver=resolve_array_representation_policy,
 )

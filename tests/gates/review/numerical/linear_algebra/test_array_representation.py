@@ -4,12 +4,17 @@ from pathlib import Path
 
 import pytest
 
-from alphus.config import ArrayRepresentationPolicy
+from alphus.config import ArrayRepresentationPolicy, QualityGateConfig
+from alphus.execution.dispatch import run_builtin_rule
 from alphus.gates.review.numerical.linear_algebra.array_representation import (
+    ALPHUS_FEATURE,
     check_array_representation,
     loop_representation_churn_lines,
     representation_churn_lines,
+    resolve_array_representation_policy,
+    run_array_representation_feature,
 )
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 
 def _policy(**updates: object) -> ArrayRepresentationPolicy:
@@ -280,3 +285,34 @@ def test_loop_contract_validates_exact_selectors() -> None:
 def test_invalid_helper_configuration_is_rejected() -> None:
     with pytest.raises(ValueError, match="dotted identifiers"):
         _policy(array_constructors=("np.asarray; malicious()",))
+
+
+def test_feature_registration_preserves_configured_finding_behavior(
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "src/numerics/operations.py"
+    source_path.parent.mkdir(parents=True)
+    source_path.write_text("result = np.asarray(values.tolist())\n", encoding="utf-8")
+    relative_path = Path("src/numerics/operations.py")
+    policy = _policy(source_paths=("src/numerics/*.py",))
+    config = QualityGateConfig.model_validate(
+        {"schema_version": 1, "checks": {"array_representation_churn": policy}},
+        strict=True,
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is ArrayRepresentationPolicy
+    resolved = resolve_array_representation_policy(config)
+    assert type(resolved) is ArrayRepresentationPolicy
+    expected = check_array_representation(tmp_path, [relative_path], policy)
+    assert expected
+    assert (
+        run_array_representation_feature(tmp_path, [relative_path], resolved)
+        == expected
+    )
+    assert (
+        run_builtin_rule(
+            "array-representation-churn", tmp_path, [relative_path], config
+        )
+        == expected
+    )

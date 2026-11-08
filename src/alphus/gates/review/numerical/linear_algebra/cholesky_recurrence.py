@@ -10,7 +10,7 @@ from typing import Final
 from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -443,17 +443,23 @@ def check_cholesky_recurrence(
     return findings
 
 
-def _run_builtin_cholesky_recurrence(
-    root: Path,
-    files: Sequence[Path],
+def resolve_cholesky_recurrence_policy(
     config: QualityGateConfig,
+) -> CholeskyRecurrencePolicy:
+    """Resolve this linear-algebra review's strict feature policy."""
+    return require_policy(config.checks.cholesky_recurrence, "cholesky_recurrence")
+
+
+def run_cholesky_recurrence_feature(
+    root: Path, files: Sequence[Path], policy: CholeskyRecurrencePolicy
 ) -> list[Finding]:
-    policy = require_policy(config.checks.cholesky_recurrence, "cholesky_recurrence")
+    """Run this configured linear-algebra review with its typed policy."""
     return check_cholesky_recurrence(root, files, policy)
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=_run_builtin_cholesky_recurrence,
+    runner=run_cholesky_recurrence_feature,
+    policy_resolver=resolve_cholesky_recurrence_policy,
 )
