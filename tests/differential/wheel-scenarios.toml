@@ -2375,7 +2375,7 @@ compare_within_build = true
 name = "typing-stub-suggestions-direct"
 fixture = "profile"
 materialized_files = [
-  { path = "typing-stubs.toml", contents = "schema_version = 1\n[files]\ninclude = [\"src/**/*.py\"]\nexclude = []\n[checks.typing_stub_suggestions]\ntyping_groups = [\"dev\"]\ncheckers = [\"pyright\"]\n" },
+  { path = "typing-stubs.toml", contents = "schema_version = 1\n[files]\ninclude = [\"src/**/*.py\"]\nexclude = []\n[checks.typing_stub_suggestions]\nextensions = [\".py\"]\ntyping_groups = [\"dev\"]\ncheckers = [\"pyright\"]\n" },
   { path = "pyproject.toml", contents = "[project]\nname = \"differential-fixture\"\nversion = \"0.1.0\"\ndependencies = [\"PyYAML==6.0.0\"]\n[project.optional-dependencies]\ndev = []\n" },
   { path = "src/typing_example.py", contents = "import yaml\n" },
 ]
@@ -2395,7 +2395,7 @@ arguments = ["--config", "typing-stubs.toml", "--rule", "typing-stub-suggestions
 name = "typing-stub-suggestions-profile"
 fixture = "profile"
 materialized_files = [
-  { path = "typing-stubs-profile.toml", contents = "schema_version = 1\n[files]\ninclude = [\"src/**/*.py\"]\nexclude = []\n[checks.typing_stub_suggestions]\ntyping_groups = [\"dev\"]\ncheckers = [\"pyright\"]\n[orchestration]\ndefault_profile = \"typing-review\"\nfailure_threshold = \"error\"\n[[orchestration.steps]]\nkind = \"rule\"\nname = \"Typing stub suggestions\"\nrule = \"typing-stub-suggestions\"\n[[orchestration.profiles]]\nname = \"typing-review\"\nsteps = [\"Typing stub suggestions\"]\n" },
+  { path = "typing-stubs-profile.toml", contents = "schema_version = 1\n[files]\ninclude = [\"src/**/*.py\"]\nexclude = []\n[checks.typing_stub_suggestions]\nextensions = [\".py\"]\ntyping_groups = [\"dev\"]\ncheckers = [\"pyright\"]\n[orchestration]\ndefault_profile = \"typing-review\"\nfailure_threshold = \"error\"\n[[orchestration.steps]]\nkind = \"rule\"\nname = \"Typing stub suggestions\"\nrule = \"typing-stub-suggestions\"\n[[orchestration.profiles]]\nname = \"typing-review\"\nsteps = [\"Typing stub suggestions\"]\n" },
   { path = "pyproject.toml", contents = "[project]\nname = \"differential-fixture\"\nversion = \"0.1.0\"\ndependencies = [\"PyYAML==6.0.0\"]\n[project.optional-dependencies]\ndev = []\n" },
   { path = "src/typing_example.py", contents = "import yaml\n" },
 ]
