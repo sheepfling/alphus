@@ -335,16 +335,25 @@ def resolve_parallel_normalization_policy(
     )
 
 
-def run_parallel_normalization_rule(
+def run_parallel_normalization_feature(
     root: Path, paths: Sequence[Path], policy: ParallelNormalizationPolicy
 ) -> list[Finding]:
     """Run the heuristic with its feature-owned policy type."""
     return check_parallel_normalization(root, paths, policy)
 
 
+def run_parallel_normalization_rule(
+    root: Path, paths: Sequence[Path], config: QualityGateConfig
+) -> list[Finding]:
+    """Keep the original aggregate-config adapter for direct callers."""
+    return run_parallel_normalization_feature(
+        root, paths, resolve_parallel_normalization_policy(config)
+    )
+
+
 ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_parallel_normalization_rule,
+    runner=run_parallel_normalization_feature,
     policy_resolver=resolve_parallel_normalization_policy,
 )

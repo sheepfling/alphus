@@ -16,7 +16,7 @@ from markdown_it import MarkdownIt
 from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -857,12 +857,26 @@ def run_document_style_rule(
     root: Path, paths: Sequence[Path], config: QualityGateConfig
 ) -> list[Finding]:
     """Resolve strict feature policy before extracting selected documents."""
-    policy = require_policy(config.checks.document_style, "document_style")
+    return run_document_style_feature(
+        root, paths, resolve_document_style_policy(config)
+    )
+
+
+def resolve_document_style_policy(config: QualityGateConfig) -> DocumentStylePolicy:
+    """Resolve the strict document-style policy from validated config."""
+    return require_policy(config.checks.document_style, "document_style")
+
+
+def run_document_style_feature(
+    root: Path, paths: Sequence[Path], policy: DocumentStylePolicy
+) -> list[Finding]:
+    """Run document heading review with its feature-owned policy type."""
     return check_document_style(root, paths, policy)
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_document_style_rule,
+    runner=run_document_style_feature,
+    policy_resolver=resolve_document_style_policy,
 )

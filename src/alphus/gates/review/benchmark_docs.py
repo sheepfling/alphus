@@ -11,7 +11,7 @@ from typing import Final
 from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -496,12 +496,26 @@ def run_benchmark_docs_rule(
     root: Path, paths: Sequence[Path], config: QualityGateConfig
 ) -> list[Finding]:
     """Resolve strict feature policy before invoking the prose analyzer."""
-    policy = require_policy(config.checks.benchmark_docs, "benchmark_docs")
+    return run_benchmark_docs_feature(
+        root, paths, resolve_benchmark_docs_policy(config)
+    )
+
+
+def resolve_benchmark_docs_policy(config: QualityGateConfig) -> BenchmarkDocPolicy:
+    """Resolve the strict benchmark-prose policy from validated config."""
+    return require_policy(config.checks.benchmark_docs, "benchmark_docs")
+
+
+def run_benchmark_docs_feature(
+    root: Path, paths: Sequence[Path], policy: BenchmarkDocPolicy
+) -> list[Finding]:
+    """Run bounded benchmark prose review with its feature-owned policy type."""
     return check_benchmark_docs(root, paths, policy)
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_benchmark_docs_rule,
+    runner=run_benchmark_docs_feature,
+    policy_resolver=resolve_benchmark_docs_policy,
 )

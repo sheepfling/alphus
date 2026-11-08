@@ -10,6 +10,8 @@ from alphus.gates.review.parallel_normalization import (
     check_parallel_normalization,
     parallel_normalization_sites,
     resolve_parallel_normalization_policy,
+    run_parallel_normalization_feature,
+    run_parallel_normalization_rule,
 )
 from alphus.plugins.builtin import FindingBuiltinFeature
 
@@ -26,6 +28,7 @@ def test_registration_binds_finding_runner_to_normalization_policy() -> None:
     assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
     assert ALPHUS_FEATURE.policy_resolver is resolve_parallel_normalization_policy
     assert ALPHUS_FEATURE.definition.policy_model is ParallelNormalizationPolicy
+    assert ALPHUS_FEATURE.runner is run_parallel_normalization_feature
 
 
 def test_resolver_returns_the_strict_declared_normalization_policy() -> None:
@@ -40,6 +43,20 @@ def test_resolver_returns_the_strict_declared_normalization_policy() -> None:
 
     assert type(policy) is ParallelNormalizationPolicy
     assert policy == _policy()
+
+
+def test_aggregate_config_runner_adapter_remains_compatible(tmp_path: Path) -> None:
+    config = QualityGateConfig.model_validate(
+        {
+            "schema_version": 1,
+            "checks": {"parallel_normalization": _policy()},
+        },
+        strict=True,
+    )
+
+    assert run_parallel_normalization_rule(
+        tmp_path, (), config
+    ) == run_parallel_normalization_feature(tmp_path, (), _policy())
 
 
 def _policy(**updates: object) -> ParallelNormalizationPolicy:
