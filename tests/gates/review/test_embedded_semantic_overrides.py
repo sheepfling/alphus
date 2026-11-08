@@ -2,11 +2,16 @@ from pathlib import Path
 
 import pytest
 
-from alphus.config import EmbeddedSemanticOverridePolicy
+from alphus.config import EmbeddedSemanticOverridePolicy, QualityGateConfig
+from alphus.execution.dispatch import run_builtin_rule
 from alphus.gates.review.embedded_semantic_overrides import (
+    ALPHUS_FEATURE,
     check_embedded_semantic_overrides,
     embedded_override_sites,
+    resolve_embedded_semantic_overrides_policy,
+    run_embedded_semantic_overrides_feature,
 )
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.plugins.builtin_registry import load_builtin_feature
 from alphus.policy.base import QualityRuleName
 from alphus.policy.catalog import RULE_SPECS
@@ -242,4 +247,36 @@ def test_reports_only_configured_scope_and_honors_exclusions(tmp_path: Path) -> 
         tmp_path,
         (Path("src/render/replacements.py"),),
         _policy(exclude=("src/render/**",)),
+    )
+
+
+def test_typed_registration_preserves_embedded_override_findings(
+    tmp_path: Path,
+) -> None:
+    relative = Path("src/render/view.py")
+    source = tmp_path / relative
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "def render(cell):\n"
+        "    replacement = fixed_paragraphs.get(cell.attribute)\n"
+        "    if replacement is not None:\n"
+        "        return source_anchor(cell.id) + replacement\n",
+        encoding="utf-8",
+    )
+    config = QualityGateConfig.model_validate(
+        {
+            "schema_version": 1,
+            "checks": {"embedded_semantic_overrides": _policy()},
+        },
+        strict=True,
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is EmbeddedSemanticOverridePolicy
+    policy = resolve_embedded_semantic_overrides_policy(config)
+    expected = run_embedded_semantic_overrides_feature(tmp_path, (relative,), policy)
+    assert check_embedded_semantic_overrides(tmp_path, (relative,), policy) == expected
+    assert (
+        run_builtin_rule("embedded-semantic-overrides", tmp_path, (relative,), config)
+        == expected
     )

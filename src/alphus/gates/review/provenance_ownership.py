@@ -12,7 +12,7 @@ from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
 from alphus.gates.review._module_bindings import module_binding_counts
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -482,17 +482,23 @@ def check_provenance_ownership(
     return findings
 
 
-def _run_builtin_provenance_ownership(
-    root: Path,
-    files: Sequence[Path],
+def resolve_provenance_ownership_policy(
     config: QualityGateConfig,
+) -> ProvenanceOwnershipPolicy:
+    """Resolve the strict provenance ownership policy from validated config."""
+    return require_policy(config.checks.provenance_ownership, "provenance_ownership")
+
+
+def run_provenance_ownership_feature(
+    root: Path, paths: Sequence[Path], policy: ProvenanceOwnershipPolicy
 ) -> list[Finding]:
-    policy = require_policy(config.checks.provenance_ownership, "provenance_ownership")
-    return check_provenance_ownership(root, files, policy)
+    """Run this source review with its feature-owned policy type."""
+    return check_provenance_ownership(root, paths, policy)
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=_run_builtin_provenance_ownership,
+    runner=run_provenance_ownership_feature,
+    policy_resolver=resolve_provenance_ownership_policy,
 )

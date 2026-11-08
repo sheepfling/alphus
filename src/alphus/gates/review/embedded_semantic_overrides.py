@@ -10,7 +10,7 @@ from typing import Final
 from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -356,19 +356,25 @@ def check_embedded_semantic_overrides(
     return findings
 
 
-def _run_builtin_embedded_semantic_overrides(
-    root: Path,
-    files: Sequence[Path],
+def resolve_embedded_semantic_overrides_policy(
     config: QualityGateConfig,
-) -> list[Finding]:
-    policy = require_policy(
+) -> EmbeddedSemanticOverridePolicy:
+    """Resolve the strict embedded semantic overrides policy from validated config."""
+    return require_policy(
         config.checks.embedded_semantic_overrides, "embedded_semantic_overrides"
     )
-    return check_embedded_semantic_overrides(root, files, policy)
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+def run_embedded_semantic_overrides_feature(
+    root: Path, paths: Sequence[Path], policy: EmbeddedSemanticOverridePolicy
+) -> list[Finding]:
+    """Run this source review with its feature-owned policy type."""
+    return check_embedded_semantic_overrides(root, paths, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=_run_builtin_embedded_semantic_overrides,
+    runner=run_embedded_semantic_overrides_feature,
+    policy_resolver=resolve_embedded_semantic_overrides_policy,
 )

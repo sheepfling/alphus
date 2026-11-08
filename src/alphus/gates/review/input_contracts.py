@@ -15,7 +15,7 @@ from alphus.config import ManualSchemaBoundary, QualityGateConfig
 from alphus.contracts.complaints import ComplaintContract, ComplaintEntry
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -2381,8 +2381,21 @@ def run_input_contracts_rule(
     return check_input_contracts(root, files, policy)
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+def resolve_input_contracts_policy(config: QualityGateConfig) -> InputContractPolicy:
+    """Resolve the strict input contracts policy from validated config."""
+    return require_policy(config.checks.input_contracts, "input_contracts")
+
+
+def run_input_contracts_feature(
+    root: Path, paths: Sequence[Path], policy: InputContractPolicy
+) -> list[Finding]:
+    """Run this source review with its feature-owned policy type."""
+    return check_input_contracts(root, paths, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_input_contracts_rule,
+    runner=run_input_contracts_feature,
+    policy_resolver=resolve_input_contracts_policy,
 )

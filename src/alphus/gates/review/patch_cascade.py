@@ -12,7 +12,7 @@ from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
 from alphus.gates.review._module_bindings import module_binding_counts
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -436,8 +436,21 @@ def run_patch_cascade_rule(
     )
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+def resolve_patch_cascade_policy(config: QualityGateConfig) -> PatchCascadePolicy:
+    """Resolve the strict patch cascade policy from validated config."""
+    return require_policy(config.checks.patch_cascade, "patch_cascade")
+
+
+def run_patch_cascade_feature(
+    root: Path, paths: Sequence[Path], policy: PatchCascadePolicy
+) -> list[Finding]:
+    """Run this source review with its feature-owned policy type."""
+    return check_patch_cascade(root, paths, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_patch_cascade_rule,
+    runner=run_patch_cascade_feature,
+    policy_resolver=resolve_patch_cascade_policy,
 )
