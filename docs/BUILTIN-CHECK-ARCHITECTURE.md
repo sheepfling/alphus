@@ -32,13 +32,20 @@ build parser itself does not prove the runner's return annotation.
 
 The 0.0.3 shapes currently fit without forcing one result type:
 
-| Existing shape | Representative owner | Shared boundary and preserved result |
-| --- | --- | --- |
-| File-local findings | `file-size`, `line-length` | Explicit feature runner and existing `Finding` output |
-| Deterministic heuristic or prose risk | `python-style`, `benchmark-docs`, `positional-semantic-overrides` | Concern, claim and morphology stay distinct; existing findings or the typed Python-style category mapping |
-| Cross-file composite | `package-boundaries` | One selected selector consumes declared secondary policy fields and preserves the existing ordered findings |
-| Native polyglot analysis | `cyclomatic-complexity` | `CyclomaticRuleOperations` retains backend plans, provenance and `CyclomaticReport` |
-| Effectful command/build | configured `CommandRunStep`, including the PDF consumer profile | Existing scheduler returns process/step results and artifacts; it is not auto-registered as a finding check |
+The current inventory exercises these distinct shapes:
+
+- **File-local findings:** `file-size` and `line-length` use explicit feature
+  runners and return the existing `Finding` output.
+- **Heuristic or prose risk:** `python-style`, `benchmark-docs`, and
+  `positional-semantic-overrides` keep concern and claim separate from their
+  existing finding or typed category-mapping outputs.
+- **Cross-file composite:** `package-boundaries` consumes secondary policy
+  fields and preserves the existing ordered findings.
+- **Native polyglot analysis:** `cyclomatic-complexity` keeps its backend
+  plans, provenance, and `CyclomaticReport` in `CyclomaticRuleOperations`.
+- **Effectful command/build:** configured `CommandRunStep`, including the PDF
+  consumer profile, returns process/step results and artifacts. It is not
+  auto-registered as a finding check.
 
 So “everything fits a shape” is true at the orchestration boundary, where
 selected work can be planned and scheduled, while role-specific outputs remain
