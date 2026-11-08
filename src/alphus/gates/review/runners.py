@@ -20,14 +20,10 @@ from alphus.gates.review.positional_interfaces import check_positional_interface
 from alphus.gates.review.positional_semantic_overrides import (
     check_positional_semantic_overrides,
 )
-from alphus.gates.review.provenance_ownership import check_provenance_ownership
 from alphus.gates.review.repeated_numeric_limits import (
     check_repeated_numeric_limits,
 )
 from alphus.gates.review.run_artifacts import check_run_artifacts
-from alphus.gates.review.semantic_work_presentation import (
-    check_semantic_work_presentation,
-)
 from alphus.gates.review.source_families import check_source_families
 from alphus.gates.review.source_test_coverage import check_source_test_coverage
 from alphus.gates.review.suppression_reasons import check_suppression_reasons
@@ -68,25 +64,6 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
                 require_policy(
                     config.checks.positional_semantic_overrides,
                     "positional_semantic_overrides",
-                ),
-            )
-        ),
-        "provenance-as-ownership": lambda root, files, config: (
-            check_provenance_ownership(
-                root,
-                files,
-                require_policy(
-                    config.checks.provenance_ownership, "provenance_ownership"
-                ),
-            )
-        ),
-        "semantic-work-in-presentation": lambda root, files, config: (
-            check_semantic_work_presentation(
-                root,
-                files,
-                require_policy(
-                    config.checks.semantic_work_presentation,
-                    "semantic_work_presentation",
                 ),
             )
         ),

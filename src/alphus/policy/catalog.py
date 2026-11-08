@@ -120,18 +120,6 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             "Reviews positional arguments that override semantic defaults.",
             ("python",),
         ),
-        "provenance-as-ownership": RuleSpec(
-            "provenance_ownership",
-            RuleOutputShape.FINDINGS,
-            "Reviews provenance metadata used as an ownership guarantee.",
-            ("python",),
-        ),
-        "semantic-work-in-presentation": RuleSpec(
-            "semantic_work_presentation",
-            RuleOutputShape.FINDINGS,
-            "Reviews semantic work placed in presentation code.",
-            ("python",),
-        ),
         "parallel-normalization": RuleSpec(
             "parallel_normalization",
             RuleOutputShape.FINDINGS,

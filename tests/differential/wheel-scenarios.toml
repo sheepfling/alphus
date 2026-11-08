@@ -330,6 +330,68 @@ arguments = ["--config", "quality-gates.toml", "--rule", "prose-as-control"]
 parse_json = false
 
 [[scenario]]
+name = "provenance-as-ownership-direct"
+fixture = "review-architecture"
+selectors = ["provenance-as-ownership"]
+behavior = ["feature-owned-direct-dispatch", "configured-path-ownership-heuristic"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/python/none/architecture/provenance-as-ownership", path = "src/example.py", line = 21 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "provenance-as-ownership", "--json"]
+
+[[scenario]]
+name = "semantic-work-in-presentation-direct"
+fixture = "review-architecture"
+selectors = ["semantic-work-in-presentation"]
+behavior = ["feature-owned-direct-dispatch", "configured-helper-role-heuristic"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/python/none/architecture/semantic-work-in-presentation", path = "src/example.py", line = 24 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "semantic-work-in-presentation", "--json"]
+
+[[scenario]]
+name = "review-architecture-profile"
+fixture = "review-architecture"
+selectors = ["provenance-as-ownership", "semantic-work-in-presentation"]
+behavior = ["typed-profile-dispatch", "distinct-architecture-claims", "stable-step-order"]
+expected_exit = 0
+minimum_findings = 2
+expected_step_names = ["Review provenance ownership", "Review semantic work in presentation"]
+expected_step_rules = ["provenance-as-ownership", "semantic-work-in-presentation"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/python/none/architecture/provenance-as-ownership", path = "src/example.py", line = 21 },
+  { rule_id = "alphus/python/none/architecture/semantic-work-in-presentation", path = "src/example.py", line = 24 },
+]
+
+[[scenario.variant]]
+name = "profile-json"
+arguments = ["--config", "quality-gates.toml", "--profile", "review-architecture", "--run", "--json"]
+
+[[scenario]]
+name = "provenance-as-ownership-invalid-config"
+fixture = "review-architecture-invalid-config"
+selectors = ["provenance-as-ownership"]
+behavior = ["feature-owned-strict-policy", "unknown-field-rejected-before-run"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-config"
+arguments = ["--config", "quality-gates.toml", "--rule", "provenance-as-ownership"]
+parse_json = false
+
+[[scenario]]
 name = "heuristic-total-consumption-direct"
 fixture = "review-advisories"
 selectors = ["heuristic-total-consumption"]

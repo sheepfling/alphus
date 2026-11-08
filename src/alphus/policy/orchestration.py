@@ -36,10 +36,8 @@ from alphus.policy.review import (
     PatchCascadePolicy,
     PositionalInterfacePolicy,
     PositionalSemanticOverridePolicy,
-    ProvenanceOwnershipPolicy,
     RepeatedNumericLimitPolicy,
     RunArtifactPolicy,
-    SemanticWorkPresentationPolicy,
     SourceFamilyPolicy,
     SuppressionReasonPolicy,
     TypingStubSuggestionPolicy,
@@ -62,8 +60,6 @@ class CheckPolicies(GeneratedFeaturePolicies):
     repeated_numeric_limits: RepeatedNumericLimitPolicy | None = None
     typing_stub_suggestions: TypingStubSuggestionPolicy | None = None
     positional_semantic_overrides: PositionalSemanticOverridePolicy | None = None
-    provenance_ownership: ProvenanceOwnershipPolicy | None = None
-    semantic_work_presentation: SemanticWorkPresentationPolicy | None = None
     parallel_normalization: ParallelNormalizationPolicy | None = None
     patch_cascade: PatchCascadePolicy | None = None
     run_artifacts: RunArtifactPolicy | None = None

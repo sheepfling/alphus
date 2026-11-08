@@ -3,17 +3,65 @@
 from __future__ import annotations
 
 import ast
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import NamedTuple
+from typing import Final, NamedTuple
 
-from alphus.config import ProvenanceOwnershipPolicy
+from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
 from alphus.gates.review._module_bindings import module_binding_counts
+from alphus.plugins.builtin import BuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import ProvenanceOwnershipPolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="provenance-as-ownership",
+    policy_field="provenance_ownership",
+    policy_model=ProvenanceOwnershipPolicy,
+    output_shape="findings",
+    summary="Reviews provenance metadata used as an ownership guarantee.",
+    applies_to=("python",),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="provenance-as-ownership",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.ARCHITECTURE,
+            "provenance-as-ownership",
+        ),
+    ),
+    concern="provenance-metadata-used-as-ownership-proof",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "Configured path-only filtering may omit distinct same-file spans; the "
+        "candidate does not establish record ownership or a defect."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("configured-python-functions", "path-based-collection-filters"),
+    languages_formats=("python",),
+    evidence_kinds=(
+        "configured-ownership-contract",
+        "ast-filter-analysis",
+        "source-location",
+    ),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
 
 _RULE_ID = rule_tag(
     Scope.PYTHON,
@@ -432,3 +480,19 @@ def check_provenance_ownership(
                 )
             )
     return findings
+
+
+def _run_builtin_provenance_ownership(
+    root: Path,
+    files: Sequence[Path],
+    config: QualityGateConfig,
+) -> list[Finding]:
+    policy = require_policy(config.checks.provenance_ownership, "provenance_ownership")
+    return check_provenance_ownership(root, files, policy)
+
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=_run_builtin_provenance_ownership,
+)

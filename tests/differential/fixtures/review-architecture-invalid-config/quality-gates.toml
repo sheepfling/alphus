@@ -1,0 +1,24 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py"]
+exclude = []
+
+[checks.provenance_ownership]
+extensions = [".py"]
+source_paths = ["src/*.py"]
+function_names = ["remaining_paragraphs"]
+owner_collection_names = ["tables"]
+candidate_collection_names = ["paragraphs"]
+ownership_basis = "exact-source-span"
+unexpected_option = true
+
+[checks.semantic_work_presentation]
+extensions = [".py"]
+source_paths = ["src/*.py"]
+function_names = ["render_document"]
+source_layout_helpers = ["reconstruct_layout"]
+content_correction_helpers = ["apply_content_correction"]
+semantic_ownership_helpers = ["decide_semantic_ownership"]
+serialization_helpers = ["serialize_output"]
+module_role = "presentation"
