@@ -503,3 +503,32 @@ committed. Installed-wheel self-quality at documentation head
 all 27 self-profile checks with four provisional passes, Ruff, formatting,
 Pyright, import smoke (212 modules), compatibility imports, and Markdown-shell
 review. This remains partial evidence, not completion of issue #87.
+
+## CLI policy feature-owned registration slice
+
+Commit `3c4db3b` moves `cli` from the central source-runner, selector catalog,
+and policy-model lists into its feature-owned declaration. The feature provides
+its strict `CliPolicy` model, complaint contracts, morphology, and typed runner.
+The runner adapts the existing structured `CliPolicyReport` to its established
+message-list result at the process boundary, so direct JSON output and the
+catalog's `messages` shape remain unchanged. Profile diagnostics still use the
+two stable contract and presentation complaint IDs, including the nonfatal
+unresolved-presentation case. Existing configuration field names, selector,
+selection behavior, severities, and findings remain unchanged.
+
+The differential scenarios exercise direct JSON output, a finding-bearing
+serial/parallel profile, and unknown-field rejection. The pinned wheel run
+against baseline `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` matched all 146
+manifested scenarios with zero differences. Both catalogs contain 62 selectors;
+61 are feature-owned and behaviorally exercised, with only `python-style` still
+on the legacy registration path. The selector-policy matrix covers 26 direct
+invocations and 36 strict missing-policy rejections. Reference and candidate
+wheel SHA-256 values are `b2427c348df55333bbc8acd23d90187b21a8722d20b3f55e1fe09c93beee6f64`
+and `6ae43b84268a767d142839eb2d0549df635f6a7231c97bef4101f1c52d3347d9`. The
+report is `/tmp/alphus-morphology-cli-3c4db3b.json`; it is not committed.
+
+Wheel-based self-quality on the same source passed 2,520 tests (44 skipped),
+all 27 self-profile checks with four provisional passes, Ruff, formatting,
+Pyright, import smoke (212 modules), compatibility imports, and Markdown-shell
+review. This remains partial compatibility evidence, not completion of issue
+#87; it leaves `python-style` and the broader remaining 0.0.3 migration work.
