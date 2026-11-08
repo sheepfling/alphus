@@ -8,7 +8,7 @@ from importlib.metadata import Distribution, EntryPoint, distributions
 from inspect import isasyncgenfunction, iscoroutinefunction, signature
 from pathlib import Path
 from types import MappingProxyType
-from typing import TypeGuard, get_args, get_origin, get_type_hints
+from typing import TypeGuard, get_args, get_origin, get_type_hints, is_typeddict
 
 from alphus.contracts.cyclomatic import CyclomaticReport
 from alphus.contracts.findings import Finding
@@ -57,6 +57,14 @@ def _is_builtin_feature(target: object) -> TypeGuard[BuiltinFeature]:
         return get_origin(return_annotation) is list and get_args(
             return_annotation
         ) == (str,)
+    if shape == "python-style":
+        result_types = get_args(return_annotation)
+        return (
+            get_origin(return_annotation) is dict
+            and len(result_types) == 2
+            and result_types[0] is str
+            and is_typeddict(result_types[1])
+        )
     if shape == "shared-utilities":
         return return_annotation is SharedUtilitiesReport
     return False

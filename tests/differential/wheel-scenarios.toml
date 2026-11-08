@@ -2532,3 +2532,61 @@ required_output = ["Invalid quality policy"]
 name = "invalid-policy"
 arguments = ["--config", "cli-invalid.toml", "--rule", "cli"]
 parse_json = false
+
+[[scenario]]
+name = "python-style-feature-owned-direct"
+fixture = "profile"
+materialized_files = [
+  { path = "python-style.toml", contents = "schema_version = 1\n[files]\ninclude = [\"src/**/*.py\"]\nexclude = []\n[checks.python_style]\nextensions = [\".py\"]\nexclude = []\nopaque_boundary_paths = []\nopaque_boundary_marker_prefix = \"# opaque-boundary: \"\nopaque_boundary_min_reason_chars = 12\n" },
+  { path = "src/morphology_style_direct.py", contents = "def check(value: dict):\n    return value\n" },
+]
+selectors = ["python-style"]
+behavior = ["feature-owned-configured-policy", "typed-style-category-mapping", "legacy-json-shape"]
+expected_exit = 1
+required_output = ["bare_containers"]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "python-style.toml", "--rule", "python-style", "--json"]
+
+[[scenario]]
+name = "python-style-feature-owned-profile"
+fixture = "profile"
+materialized_files = [
+  { path = "python-style-profile.toml", contents = "schema_version = 1\n[files]\ninclude = [\"src/**/*.py\"]\nexclude = []\n[checks.python_style]\nextensions = [\".py\"]\nexclude = []\nopaque_boundary_paths = []\nopaque_boundary_marker_prefix = \"# opaque-boundary: \"\nopaque_boundary_min_reason_chars = 12\n[orchestration]\ndefault_profile = \"style-review\"\nfailure_threshold = \"error\"\n[[orchestration.steps]]\nkind = \"rule\"\nname = \"Python style review\"\nrule = \"python-style\"\n[[orchestration.profiles]]\nname = \"style-review\"\nsteps = [\"Python style review\"]\n" },
+  { path = "src/morphology_style_profile.py", contents = "def check(value: dict):\n    return value\n" },
+]
+selectors = ["python-style"]
+behavior = ["feature-owned-profile-dispatch", "typed-style-adapter", "serial-parallel", "stable-style-ID"]
+expected_exit = 1
+minimum_findings = 1
+expected_step_names = ["Python style review"]
+expected_step_rules = ["python-style"]
+expected_findings = [
+  { rule_id = "alphus/python/none/style/bare-containers", path = "src/morphology_style_profile.py", line = 1 },
+]
+
+[[scenario.variant]]
+name = "serial"
+arguments = ["--config", "python-style-profile.toml", "--profile", "style-review", "--run", "--json", "--jobs", "1"]
+
+[[scenario.variant]]
+name = "parallel"
+arguments = ["--config", "python-style-profile.toml", "--profile", "style-review", "--run", "--json", "--jobs", "2"]
+compare_within_build = true
+
+[[scenario]]
+name = "python-style-feature-owned-invalid-config"
+fixture = "profile"
+materialized_files = [
+  { path = "python-style-invalid.toml", contents = "schema_version = 1\n[checks.python_style]\nunexpected = true\n" },
+]
+selectors = ["python-style"]
+behavior = ["feature-owned-strict-policy", "unknown-policy-field-rejected-before-run"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-policy"
+arguments = ["--config", "python-style-invalid.toml", "--rule", "python-style"]
+parse_json = false

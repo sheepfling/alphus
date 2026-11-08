@@ -9,7 +9,7 @@ import pytest
 from alphus.contracts.rule_tags import RuleTag
 from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
 from alphus.policy._generated_morphology import MORPHOLOGY_BY_SELECTOR
-from alphus.policy.catalog import _LEGACY_RULE_SPECS, RULE_SPECS
+from alphus.policy.catalog import RULE_SPECS
 from alphus.policy.morphology import (
     ClaimKind,
     DetectionMechanism,
@@ -23,16 +23,16 @@ def test_feature_morphology_is_attached_without_changing_rule_contracts() -> Non
         name for name, spec in RULE_SPECS.items() if spec.morphology is not None
     }
     assert attached_selectors == set(MORPHOLOGY_BY_SELECTOR)
-    assert set(RULE_SPECS) == set(_LEGACY_RULE_SPECS) | set(FEATURE_DEFINITIONS)
-    for selector, old_spec in _LEGACY_RULE_SPECS.items():
+    assert set(RULE_SPECS) == set(FEATURE_DEFINITIONS)
+    for selector, definition in FEATURE_DEFINITIONS.items():
         current = RULE_SPECS[selector]
-        assert current.policy_field == old_spec.policy_field
-        assert current.output_shape is old_spec.output_shape
-        assert current.summary == old_spec.summary
-        assert current.applies_to == old_spec.applies_to
-        assert current.domains == old_spec.domains
-        assert current.requires_files == old_spec.requires_files
-        assert current.morphology is MORPHOLOGY_BY_SELECTOR.get(selector)
+        assert current.policy_field == definition.policy_field
+        assert current.output_shape.value == definition.output_shape
+        assert current.summary == definition.summary
+        assert current.applies_to == definition.applies_to
+        assert current.domains == definition.domains
+        assert current.requires_files == definition.requires_files
+        assert current.morphology is MORPHOLOGY_BY_SELECTOR[selector]
 
 
 def test_pilot_covers_exact_heuristic_prose_style_and_native_tool_mechanisms() -> None:

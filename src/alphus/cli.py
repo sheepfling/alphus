@@ -576,12 +576,7 @@ def _render_python_style(findings: Mapping[str, StyleFindings]) -> int:
         for kind, lines in _python_style_categories(issues):
             if lines:
                 total += len(lines)
-                tag = rule_tag(
-                    Scope.PYTHON,
-                    Framework.NONE,
-                    Category.STYLE,
-                    kind.replace("_", "-"),
-                )
+                tag = _feature_rule_tag("python-style", kind.replace("_", "-"))
                 _human_print(
                     f"{tag} {name}: {kind} at lines {lines[:8]} ({len(lines)} total)"
                 )

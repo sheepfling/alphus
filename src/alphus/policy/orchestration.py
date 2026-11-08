@@ -33,14 +33,12 @@ from alphus.policy.repository import VersionSyncPolicy
 from alphus.policy.sources import (
     FileInventoryPolicy,
     FunctionShapePolicy,
-    PythonStylePolicy,
 )
 
 
 class CheckPolicies(GeneratedFeaturePolicies):
     """Settings for the currently available source gates."""
 
-    python_style: PythonStylePolicy | None = None
     architecture_graph: ArchitectureGraphCheckPolicy | None = None
     version_sync: VersionSyncPolicy | None = None
     callable_registry: CallableRegistryPolicy | None = None

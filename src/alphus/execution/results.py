@@ -16,7 +16,6 @@ from alphus.contracts.findings import (
     Severity,
     severity_meets_threshold,
 )
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.contracts.shared_utilities import SharedUtilitiesReport
 from alphus.gates.languages.python.style import StyleFindings
 from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
@@ -138,9 +137,7 @@ def _style_diagnostics(
     return [
         Diagnostic(
             source="alphus",
-            rule_id=rule_tag(
-                Scope.PYTHON, Framework.NONE, Category.STYLE, category.replace("_", "-")
-            ),
+            rule_id=_feature_complaint_id("python-style", category.replace("_", "-")),
             path=path,
             line=line,
             message=category.replace("_", " "),

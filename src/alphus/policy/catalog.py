@@ -55,18 +55,6 @@ class RuleSpec:
                 )
 
 
-_LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
-    {
-        "python-style": RuleSpec(
-            "python_style",
-            RuleOutputShape.PYTHON_STYLE,
-            "Runs configured Python source-style checks.",
-            ("python",),
-        ),
-    }
-)
-
-
 _FEATURE_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
     {
         selector: RuleSpec(
@@ -81,19 +69,12 @@ _FEATURE_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
     }
 )
 
-if set(_LEGACY_RULE_SPECS) & set(_FEATURE_RULE_SPECS):
-    raise RuntimeError("built-in rule has both legacy and feature-owned metadata")
-
-_ALL_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
-    {**_LEGACY_RULE_SPECS, **_FEATURE_RULE_SPECS}
-)
-
 RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
     {
         selector: replace(
             spec,
             morphology=MORPHOLOGY_BY_SELECTOR.get(selector),
         )
-        for selector, spec in _ALL_RULE_SPECS.items()
+        for selector, spec in _FEATURE_RULE_SPECS.items()
     }
 )

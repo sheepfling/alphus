@@ -125,9 +125,10 @@ def quality_rule_selectors(root: Path) -> tuple[str, ...]:
 
 
 def _catalog_rules(root: Path) -> tuple[_CatalogRule, ...]:
-    """Read `RuleSpec` literals without evaluating the catalog module."""
+    """Read legacy literals and feature-owned catalog declarations statically."""
     path = root / "src" / "alphus" / "policy" / "catalog.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    rules: list[_CatalogRule] = []
     for statement in tree.body:
         if (
             not isinstance(statement, ast.AnnAssign)
@@ -137,11 +138,14 @@ def _catalog_rules(root: Path) -> tuple[_CatalogRule, ...]:
             continue
         value: ast.expr | None = statement.value
         if not isinstance(value, ast.Call) or len(value.args) != 1:
-            raise ValueError(f"{path}: built-in RuleSpecs must wrap a literal map")
+            if statement.target.id == "RULE_SPECS":
+                continue
+            raise ValueError(f"{path}: legacy RuleSpecs must wrap a literal map")
         mapping: ast.expr = value.args[0]
         if not isinstance(mapping, ast.Dict):
-            raise TypeError(f"{path}: built-in RuleSpecs must use a literal dict")
-        rules: list[_CatalogRule] = []
+            if statement.target.id == "RULE_SPECS":
+                continue
+            raise TypeError(f"{path}: legacy RuleSpecs must use a literal dict")
         for key, raw_spec in zip(mapping.keys, mapping.values, strict=True):
             selector = _literal_string(key, f"{path}: selector")
             match raw_spec:
@@ -178,17 +182,20 @@ def _catalog_rules(root: Path) -> tuple[_CatalogRule, ...]:
                     requires_files=requires_files,
                 )
             )
-        feature_rules = tuple(
-            _CatalogRule(
-                selector=feature.selector,
-                policy_field=feature.policy_field,
-                output_shape=feature.output_shape,
-                requires_files=feature.requires_files,
-            )
-            for feature in feature_registrations(root)
+        if statement.target.id == "_LEGACY_RULE_SPECS":
+            break
+    rules.extend(
+        _CatalogRule(
+            selector=feature.selector,
+            policy_field=feature.policy_field,
+            output_shape=feature.output_shape,
+            requires_files=feature.requires_files,
         )
-        return (*rules, *feature_rules)
-    raise ValueError(f"{path} does not define a literal RuleSpec mapping")
+        for feature in feature_registrations(root)
+    )
+    if not rules:
+        raise ValueError(f"{path} has no legacy or feature-owned RuleSpecs")
+    return tuple(rules)
 
 
 def _check_policy_fields(root: Path) -> tuple[PolicyField, ...]:

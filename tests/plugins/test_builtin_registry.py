@@ -16,6 +16,7 @@ from alphus.config import QualityGateConfig
 from alphus.contracts.cli_policy import CliPolicyReport
 from alphus.contracts.findings import Finding
 from alphus.contracts.shared_utilities import SharedUtilitiesReport
+from alphus.gates.languages.python.style import StyleFindings
 from alphus.plugins import builtin_registry
 from alphus.plugins.builtin import BuiltinFeature
 from alphus.plugins.builtin_registry import (
@@ -291,5 +292,54 @@ def test_cli_feature_preserves_its_registered_message_shape(
     try:
         with pytest.raises(TypeError, match="typed synchronous feature"):
             load_builtin_feature("cli")
+    finally:
+        builtin_registry.load_builtin_feature.cache_clear()
+
+
+def test_python_style_feature_requires_a_typed_category_mapping(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def style_runner(
+        _root: Path, _files: Sequence[Path], _config: QualityGateConfig
+    ) -> dict[str, StyleFindings]:
+        return {}
+
+    feature = BuiltinFeature(
+        definition=FEATURE_DEFINITIONS["python-style"],
+        morphology=MORPHOLOGY_BY_SELECTOR["python-style"],
+        runner=style_runner,
+    )
+    point = SimpleNamespace(load=lambda: feature)
+    monkeypatch.setattr(
+        builtin_registry,
+        "builtin_check_entry_points",
+        lambda: {"python-style": point},
+    )
+    builtin_registry.load_builtin_feature.cache_clear()
+    try:
+        assert load_builtin_feature("python-style") is feature
+    finally:
+        builtin_registry.load_builtin_feature.cache_clear()
+
+    def wrong_style_runner(
+        _root: Path, _files: Sequence[Path], _config: QualityGateConfig
+    ) -> dict[str, list[str]]:
+        return {}
+
+    wrong_feature = BuiltinFeature(
+        definition=FEATURE_DEFINITIONS["python-style"],
+        morphology=MORPHOLOGY_BY_SELECTOR["python-style"],
+        runner=wrong_style_runner,
+    )
+    wrong_point = SimpleNamespace(load=lambda: wrong_feature)
+    monkeypatch.setattr(
+        builtin_registry,
+        "builtin_check_entry_points",
+        lambda: {"python-style": wrong_point},
+    )
+    builtin_registry.load_builtin_feature.cache_clear()
+    try:
+        with pytest.raises(TypeError, match="typed synchronous feature"):
+            load_builtin_feature("python-style")
     finally:
         builtin_registry.load_builtin_feature.cache_clear()

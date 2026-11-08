@@ -15,7 +15,7 @@ from packaging.version import Version
 
 from alphus.config import load_config
 from alphus.gates.review.test_quality import python_findings
-from alphus.gates.source.runners import SOURCE_RULE_RUNNERS
+from alphus.plugins.builtin_registry import load_builtin_feature
 
 
 def test_self_check_enforces_review_and_repository_toml() -> None:
@@ -89,7 +89,7 @@ def test_self_profile_python_style_requires_exact_result_api_scope(
     policy = config.checks.python_style
     assert policy is not None
     assert not policy.semantic_result_apis
-    runner = SOURCE_RULE_RUNNERS["python-style"]
+    runner = load_builtin_feature("python-style").runner
     assert runner(tmp_path, files, config) == {}
     assert runner(Path(pytestconfig.rootpath), files, config) == {}
 
