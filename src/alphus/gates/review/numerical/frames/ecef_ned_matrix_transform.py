@@ -16,7 +16,7 @@ from alphus.gates.review.numerical.common.ast_helpers import (
     configured_function_observations,
     redefined_function_names,
 )
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -326,19 +326,25 @@ def check_ecef_ned_matrix_transform(
     return findings
 
 
-def _run_builtin_ecef_ned_matrix_transform(
-    root: Path,
-    files: Sequence[Path],
+def resolve_ecef_ned_matrix_transform_policy(
     config: QualityGateConfig,
-) -> list[Finding]:
-    policy = require_policy(
+) -> EcefNedMatrixTransformPolicy:
+    """Resolve this frame review's strict feature policy."""
+    return require_policy(
         config.checks.ecef_ned_matrix_transform, "ecef_ned_matrix_transform"
     )
+
+
+def run_ecef_ned_matrix_transform_feature(
+    root: Path, files: Sequence[Path], policy: EcefNedMatrixTransformPolicy
+) -> list[Finding]:
+    """Run this configured frame review with its typed policy."""
     return check_ecef_ned_matrix_transform(root, files, policy)
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=_run_builtin_ecef_ned_matrix_transform,
+    runner=run_ecef_ned_matrix_transform_feature,
+    policy_resolver=resolve_ecef_ned_matrix_transform_policy,
 )

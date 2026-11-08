@@ -3,11 +3,16 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from alphus.config import EcefNedMatrixTransformPolicy
+from alphus.config import EcefNedMatrixTransformPolicy, QualityGateConfig
+from alphus.execution.dispatch import run_builtin_rule
 from alphus.gates.review.numerical.frames.ecef_ned_matrix_transform import (
+    ALPHUS_FEATURE,
     check_ecef_ned_matrix_transform,
     ecef_ned_matrix_transform_sites,
+    resolve_ecef_ned_matrix_transform_policy,
+    run_ecef_ned_matrix_transform_feature,
 )
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 _TITAN_SHAPE = """\
 import math
@@ -184,4 +189,33 @@ def test_finding_is_scoped_and_names_configured_contract(tmp_path: Path) -> None
     assert "no speedup is inferred" in findings[0].message
     assert not check_ecef_ned_matrix_transform(
         tmp_path, paths, _policy(exclude=("src/geometry/coordinates.py",))
+    )
+
+
+def test_feature_registration_preserves_configured_finding_behavior(
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "src/geometry/operations.py"
+    source_path.parent.mkdir(parents=True)
+    source_path.write_text(_TITAN_SHAPE, encoding="utf-8")
+    relative = Path("src/geometry/operations.py")
+    policy = _policy()
+    config = QualityGateConfig.model_validate(
+        {"schema_version": 1, "checks": {"ecef_ned_matrix_transform": policy}},
+        strict=True,
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is EcefNedMatrixTransformPolicy
+    resolved = resolve_ecef_ned_matrix_transform_policy(config)
+    assert type(resolved) is EcefNedMatrixTransformPolicy
+    expected = check_ecef_ned_matrix_transform(tmp_path, [relative], policy)
+    assert expected
+    assert (
+        run_ecef_ned_matrix_transform_feature(tmp_path, [relative], resolved)
+        == expected
+    )
+    assert (
+        run_builtin_rule("ecef-ned-matrix-transform", tmp_path, [relative], config)
+        == expected
     )

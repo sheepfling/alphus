@@ -3,11 +3,16 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from alphus.config import EcefEnuTransformPolicy
+from alphus.config import EcefEnuTransformPolicy, QualityGateConfig
+from alphus.execution.dispatch import run_builtin_rule
 from alphus.gates.review.numerical.frames.ecef_enu_transform import (
+    ALPHUS_FEATURE,
     check_ecef_enu_transform,
     ecef_enu_transform_sites,
+    resolve_ecef_enu_transform_policy,
+    run_ecef_enu_transform_feature,
 )
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 _SOURCE = """\
 import math
@@ -139,3 +144,27 @@ def test_contract_does_not_accept_unimplemented_conventions(
 ) -> None:
     with pytest.raises(ValidationError):
         _policy(**{field: value})
+
+
+def test_feature_registration_preserves_configured_finding_behavior(
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "src/geometry/operations.py"
+    source_path.parent.mkdir(parents=True)
+    source_path.write_text(_SOURCE, encoding="utf-8")
+    relative = Path("src/geometry/operations.py")
+    policy = _policy()
+    config = QualityGateConfig.model_validate(
+        {"schema_version": 1, "checks": {"ecef_enu_transform": policy}}, strict=True
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is EcefEnuTransformPolicy
+    resolved = resolve_ecef_enu_transform_policy(config)
+    assert type(resolved) is EcefEnuTransformPolicy
+    expected = check_ecef_enu_transform(tmp_path, [relative], policy)
+    assert expected
+    assert run_ecef_enu_transform_feature(tmp_path, [relative], resolved) == expected
+    assert (
+        run_builtin_rule("ecef-enu-transform", tmp_path, [relative], config) == expected
+    )

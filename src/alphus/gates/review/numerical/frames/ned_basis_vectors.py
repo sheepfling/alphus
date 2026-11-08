@@ -16,7 +16,7 @@ from alphus.gates.review.numerical.common.ast_helpers import (
     configured_function_observations,
     redefined_function_names,
 )
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -343,17 +343,23 @@ def check_ned_basis_vectors(
     return findings
 
 
-def _run_builtin_ned_basis_vectors(
-    root: Path,
-    files: Sequence[Path],
+def resolve_ned_basis_vectors_policy(
     config: QualityGateConfig,
+) -> NedBasisVectorsPolicy:
+    """Resolve this frame review's strict feature policy."""
+    return require_policy(config.checks.ned_basis_vectors, "ned_basis_vectors")
+
+
+def run_ned_basis_vectors_feature(
+    root: Path, files: Sequence[Path], policy: NedBasisVectorsPolicy
 ) -> list[Finding]:
-    policy = require_policy(config.checks.ned_basis_vectors, "ned_basis_vectors")
+    """Run this configured frame review with its typed policy."""
     return check_ned_basis_vectors(root, files, policy)
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=_run_builtin_ned_basis_vectors,
+    runner=run_ned_basis_vectors_feature,
+    policy_resolver=resolve_ned_basis_vectors_policy,
 )
