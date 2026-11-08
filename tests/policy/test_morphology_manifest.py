@@ -612,6 +612,35 @@ def test_feature_definition_supports_qualified_constructor_and_selector_constant
     assert registration[0].selector == "demo-check"
 
 
+def test_feature_definition_rejects_reassigned_transitive_alias(
+    tmp_path: Path,
+) -> None:
+    gates = tmp_path / "src/alphus/gates"
+    gates.mkdir(parents=True)
+    source = _feature_source(
+        _DECLARATION
+        + (
+            ("policy_field", "demo_policy"),
+            ("policy_model", "alphus.policy.sources.DemoPolicy"),
+            ("output_shape", "findings"),
+            ("summary", "Original summary."),
+            ("applies_to", ("python",)),
+            ("domains", ()),
+            ("requires_files", True),
+        )
+    ).replace("summary='Original summary.'", "summary=SUMMARY_ALIAS", 1)
+    source = source.replace(
+        "ALPHUS_CHECK = FeatureDefinition(",
+        "A = 'original'\nB = A\nA = 'later'\nSUMMARY_ALIAS = B\n"
+        "ALPHUS_CHECK = FeatureDefinition(",
+        1,
+    )
+    (gates / "demo_check.py").write_text(source, encoding="utf-8")
+
+    with pytest.raises(ValueError, match="depends on reassigned constant 'A'"):
+        feature_registrations(tmp_path)
+
+
 def test_feature_registration_without_export_fails_during_static_discovery(
     tmp_path: Path,
 ) -> None:

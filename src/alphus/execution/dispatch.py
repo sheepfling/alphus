@@ -87,13 +87,13 @@ def _resolve_feature_policy(
     """Resolve and verify the configured value against its declared model."""
     policy = resolver(config)
     try:
-        definition.policy_model.model_validate(policy, strict=True)
+        validated_policy = definition.policy_model.model_validate(policy, strict=True)
     except ValidationError as error:
         raise TypeError(
             f"feature {definition.selector!r} policy resolver returned "
             f"{type(policy).__name__}, expected {definition.policy_model.__name__}"
         ) from error
-    return policy
+    return cast(_FeaturePolicy, validated_policy)
 
 
 def _run_registered_feature(

@@ -655,9 +655,9 @@ def _is_feature_definition_call(node: ast.expr) -> bool:
 
 def _static_source_constants(
     tree: ast.Module, path: Path, *, before_line: int
-) -> Mapping[str, ast.expr]:
-    """Read literal bindings visible where the feature declaration is evaluated."""
-    values: dict[str, ast.expr] = {}
+) -> Mapping[str, tuple[ast.expr, ...]]:
+    """Read unambiguous literal bindings before the feature declaration."""
+    values: dict[str, list[ast.expr]] = {}
     for statement in tree.body:
         if statement.lineno >= before_line:
             continue
@@ -665,14 +665,14 @@ def _static_source_constants(
         expression = _assignment_value(statement)
         if name is None or expression is None:
             continue
-        values[name] = expression
-    return values
+        values.setdefault(name, []).append(expression)
+    return {name: tuple(expressions) for name, expressions in values.items()}
 
 
 def _literal_expression(
     node: ast.expr,
     *,
-    constants: Mapping[str, ast.expr],
+    constants: Mapping[str, tuple[ast.expr, ...]],
     path: Path,
     field_name: str,
 ) -> _FeatureLiteral:
@@ -682,8 +682,14 @@ def _literal_expression(
             raise ValueError(
                 f"{path}: FeatureDefinition {field_name} must resolve to a literal"
             )
+        bindings = constants[node.id]
+        if len(bindings) != 1:
+            raise ValueError(
+                f"{path}: FeatureDefinition {field_name} depends on reassigned "
+                f"constant {node.id!r}"
+            )
         visited.add(node.id)
-        node = constants[node.id]
+        node = bindings[0]
     try:
         value: object = ast.literal_eval(node)
     except (ValueError, TypeError, SyntaxError) as error:
@@ -697,7 +703,7 @@ def _parse_feature_definition(
     node: ast.expr,
     path: Path,
     *,
-    constants: Mapping[str, ast.expr],
+    constants: Mapping[str, tuple[ast.expr, ...]],
 ) -> _FeatureRegistration:
     """Read one typed FeatureDefinition call without importing gate modules."""
     match node:

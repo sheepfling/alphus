@@ -56,6 +56,60 @@ def test_feature_policy_resolution_rejects_a_different_policy_model() -> None:
         )
 
 
+def test_feature_policy_resolution_returns_validated_mapping_as_model() -> None:
+    definition = dispatch.FEATURE_DEFINITIONS["file-size"]
+    raw_policy = {
+        "code_extensions": (".py",),
+        "code_limit": 120,
+        "hard_limit": 240,
+        "initializer_name": "__init__.py",
+        "initializer_limit": 100,
+        "raw_byte_limits": (),
+        "path_raw_byte_limits": (),
+        "exclude": (),
+    }
+
+    def mapping_resolver(_config: QualityGateConfig) -> FileSizePolicy:
+        return cast(FileSizePolicy, raw_policy)
+
+    resolved = dispatch._resolve_feature_policy(
+        mapping_resolver,
+        definition,
+        QualityGateConfig.model_construct(),
+    )
+
+    assert isinstance(resolved, FileSizePolicy)
+    assert resolved.code_extensions == (".py",)
+    assert resolved.code_limit == 120
+    assert resolved.hard_limit == 240
+    assert resolved.initializer_limit == 100
+
+
+def test_feature_policy_resolution_preserves_valid_typed_policy() -> None:
+    definition = dispatch.FEATURE_DEFINITIONS["file-size"]
+    expected = FileSizePolicy(
+        code_extensions=(".py",),
+        code_limit=120,
+        hard_limit=240,
+        initializer_name="__init__.py",
+        initializer_limit=100,
+        raw_byte_limits=(),
+        path_raw_byte_limits=(),
+        exclude=(),
+    )
+
+    def typed_resolver(_config: QualityGateConfig) -> FileSizePolicy:
+        return expected
+
+    resolved = dispatch._resolve_feature_policy(
+        typed_resolver,
+        definition,
+        QualityGateConfig.model_construct(),
+    )
+
+    assert resolved is expected
+
+
 def repository(tmp_path: Path, extra: str = "") -> Path:
     subprocess.run(
         ["git", "init", "--quiet", str(tmp_path)], check=True, capture_output=True

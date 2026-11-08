@@ -192,6 +192,48 @@ def test_typed_feature_rejects_policy_resolver_mismatched_with_definition(
         builtin_registry.load_builtin_feature.cache_clear()
 
 
+def test_typed_feature_accepts_a_renamed_positional_policy_parameter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    policy = FileSizePolicy(
+        code_extensions=(".py",),
+        code_limit=120,
+        hard_limit=240,
+        initializer_name="__init__.py",
+        initializer_limit=100,
+        raw_byte_limits=(),
+        path_raw_byte_limits=(),
+        exclude=(),
+    )
+
+    def policy_resolver(_config: QualityGateConfig) -> FileSizePolicy:
+        return policy
+
+    def runner(
+        _root: Path, _files: Sequence[Path], settings: FileSizePolicy
+    ) -> list[Finding]:
+        assert settings is policy
+        return []
+
+    feature = FindingBuiltinFeature(
+        definition=FEATURE_DEFINITIONS["file-size"],
+        morphology=MORPHOLOGY_BY_SELECTOR["file-size"],
+        runner=runner,
+        policy_resolver=policy_resolver,
+    )
+    point = SimpleNamespace(load=lambda: feature)
+    monkeypatch.setattr(
+        builtin_registry,
+        "builtin_check_entry_points",
+        lambda: {"file-size": point},
+    )
+    builtin_registry.load_builtin_feature.cache_clear()
+    try:
+        assert load_builtin_feature("file-size") is feature
+    finally:
+        builtin_registry.load_builtin_feature.cache_clear()
+
+
 def test_message_feature_requires_a_list_of_strings(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

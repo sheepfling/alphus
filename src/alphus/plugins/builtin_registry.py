@@ -5,7 +5,12 @@ from __future__ import annotations
 from collections.abc import Mapping
 from functools import lru_cache
 from importlib.metadata import Distribution, EntryPoint, distributions
-from inspect import isasyncgenfunction, iscoroutinefunction, signature
+from inspect import (
+    Parameter,
+    isasyncgenfunction,
+    iscoroutinefunction,
+    signature,
+)
 from pathlib import Path
 from types import MappingProxyType
 from typing import TypeGuard, get_args, get_origin, get_type_hints, is_typeddict
@@ -78,7 +83,17 @@ def _is_builtin_feature(target: object) -> TypeGuard[BuiltinFeatureRegistration]
                 return False
             signature(policy_resolver).bind(object())
             resolver_return = get_type_hints(policy_resolver).get("return")
-            runner_policy = runner_annotations.get("policy")
+            runner_parameters = tuple(runner_signature.parameters.values())
+            policy_index = runner_input_count - 1
+            if policy_index >= len(runner_parameters):
+                return False
+            policy_parameter = runner_parameters[policy_index]
+            if policy_parameter.kind not in (
+                Parameter.POSITIONAL_ONLY,
+                Parameter.POSITIONAL_OR_KEYWORD,
+            ):
+                return False
+            runner_policy = runner_annotations.get(policy_parameter.name)
             policy_types = get_args(runner_policy)
             valid_runner_policy = runner_policy is feature.definition.policy_model or (
                 len(policy_types) == 2
