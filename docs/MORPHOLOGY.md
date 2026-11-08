@@ -373,7 +373,8 @@ review passed as part of that run.
 ## Repeated numeric-limit registration slice
 
 Commits `3c23a1624ea2588ceee01551216339ddf3ac8939` and
-`83aa9cf93ab0340d1b61e4fca0018c5a74705473` move
+`83aa9cf93ab0340d1b61e4fca0018c5a74705473` and
+`79a425377b3e1d2f6a49a2256299450a076f448a` move
 `repeated-numeric-limits` into a typed feature-owned registration beside its
 existing analyzer. Its declaration owns the existing strict
 `RepeatedNumericLimitPolicy`, configured-source-scan mode, findings result
@@ -391,9 +392,9 @@ runtime declarations, and behavior scenarios exercise 55, leaving seven
 without behavior-level evidence. The separate selector-policy matrix covers
 26 configured direct invocations and 36 strict missing-policy rejections.
 Reference and candidate wheel SHA-256 values are
-`3c97ea756617e554db70b2845eea207ef1ffd39712fc0a28c58b365174993fe3` and
-`66bb8adb2eff5c200cc09effaa1a02d0de68ee9b7852f0076b860ee3c368d0a9`. The
-report is `/tmp/alphus-morphology-repeated-numeric-83aa9cf.json` and is not
+`7e85428e80e2623617cb0fc37a29547f02213522da91a56f94974b4e96bf7472` and
+`0bb1ab4c1487b9a619ad853e1ffcab298c5fc755529c1a6a8084e085aa14fd2f`. The
+report is `/tmp/alphus-morphology-repeated-numeric-79a4253.json` and is not
 committed. The corrected fixture also passes the repository self-profile's
 Python lint step. This remains partial compatibility evidence, not completion
 of issue #87.
