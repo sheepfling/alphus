@@ -61,8 +61,8 @@ by a typed `BuiltinFeature` with direct runner and specialized-operation
 references.
 
 The original six-rule pilot is not a complete built-in registration
-migration. Forty-six selectors now use feature-owned runtime declarations,
-while 16 remain on legacy selector/config/runner paths.
+migration. Forty-eight selectors now use feature-owned runtime declarations,
+while 14 remain on legacy selector/config/runner paths.
 Generated declarations do not select or enable a check and do not change JSON results, finding IDs, gate IDs,
 or enforcement.
 
@@ -240,3 +240,33 @@ typed registration for their separate bounded AST shapes. Their current
 selector count, pinned-wheel comparison, positive fixture treatment, and
 remaining equivalence gap are documented in the [linear-algebra registration
 slice](BUILTIN-CHECK-ARCHITECTURE.md#linear-algebra-registration-slice).
+
+## Paired positional-review registration slice
+
+Commit `c7023fa14a12d71784a7fcb2c0d666334fcfcf0d` moves
+`positional-interfaces` and `positional-semantic-overrides` to typed
+feature-owned registrations beside their Python AST analyzers. The checks keep
+separate concerns, policies, and RuleTag identities: one flags adjacent
+same-type primitive parameters; the other reviews configured position-based
+assignments to semantic fields. Their messages, severity, scope, selector
+names, config fields, and analyzer behavior remain unchanged. The legacy
+catalog rows, manual policy fields, and review-runner bindings were removed.
+
+The installed-wheel fixtures exercise direct selection for both checks, the
+ordered profile in serial and parallel execution, existing finding IDs and
+locations, and strict rejection of an unknown policy field. The pinned wheel
+comparison against baseline
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` matched all 110 manifested
+scenarios with zero differences. Both catalogs retain the same 62 selectors;
+behavior scenarios cover 48, leaving 14 without behavior-level coverage. The
+separate selector-policy matrix covers 26 minimal direct invocations and 36
+strict missing-policy rejections. Reference and candidate wheel SHA-256 values
+are `d2878e2781296fd9539374b3121470060536682d9840b28f92ebce4b75397108` and
+`c44cf1cb6ccfbd548e7c9ef70e0ec68a348cde42e6d432dc8472742b6b9eb198`. The
+report is `/tmp/alphus-morphology-positional-c7023fa.json`; it is not
+committed.
+
+Installed-wheel self-quality passed: 2,510 tests, 44 skipped; its self-profile
+passed all 27 checks with zero failures and four provisional passes. This is
+incremental evidence only; 14 selectors still lack behavior-level differential
+scenarios, and issue #87 is not complete.

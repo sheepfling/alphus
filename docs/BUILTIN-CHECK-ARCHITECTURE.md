@@ -79,7 +79,7 @@ This document distinguishes four kinds of statement:
   silently changing consumer behavior.
 
 PR #100 remains an open draft. It began with the six-check morphology
-metadata pilot and now has 46 of the 62 built-in selectors on feature-owned
+metadata pilot and now has 48 of the 62 built-in selectors on feature-owned
 generated runtime views. The statically discovered selector inventory is the
 source of truth; it is deliberately not duplicated here as another selector
 list. Each local
@@ -88,7 +88,7 @@ morphology metadata, typed `FeatureDefinition`, `RuleSpec`, strict policy
 field, selector type, and inventory entry. Each feature module exposes one
 typed `ALPHUS_FEATURE` object with a direct callback for lazy execution. The established
 `RuleEvaluation` and CLI result adapters remain shared, so adding a feature
-still uses the existing output contract. The other 16 baseline selectors
+still uses the existing output contract. The other 14 baseline selectors
 remain on legacy registration paths; these slices do not complete issue #87
 or establish full selector equivalence. These declarations are now
 typed `FeatureDefinition(...)` calls paired with immutable
@@ -98,7 +98,7 @@ The PEP 517 backend generates installed-wheel entry-point metadata without a
 per-check `pyproject.toml` edit. Aggregate policy/config/dispatch views are
 ignored build artifacts rather than checked-in shared files, so independent
 feature branches do not edit the same generated outputs. Runtime entry points
-target the typed feature object; 16 selectors still use legacy registration
+target the typed feature object; 14 selectors still use legacy registration
 maps.
 
 The latest source-discovery slice moves `json-structure` and `path-discovery`
@@ -1536,3 +1536,33 @@ The installed-wheel CI passed 2,510 package tests (44 skipped); its self-profile
 passed 27 checks with zero failures and four provisional passes. This is
 evidence for the paired shared-policy migration, not complete selector or
 issue #87 equivalence.
+
+## Positional-review registration slice
+
+Commit `c7023fa14a12d71784a7fcb2c0d666334fcfcf0d` moves
+`positional-interfaces` and `positional-semantic-overrides` from the manual
+catalog, `CheckPolicies`, and review-runner maps into typed feature-owned
+declarations beside the analyzers. Both are configured Python AST checks with
+the existing findings output shape, but their concerns, strict policies and
+stable RuleTag IDs remain distinct. Generated policy fields and lazy wheel
+entry points derive from those declarations. The checkers, messages, severity,
+selection and enforcement behavior remain unchanged.
+
+The installed-wheel scenarios cover both direct selectors, an ordered
+serial/parallel profile and strict unknown-field rejection. The pinned
+comparison against baseline `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`
+matched all 110 manifested scenarios with zero differences. Both catalogs
+have 62 selectors; behavior scenarios exercise 48, leaving 14 selectors
+without behavior-level coverage. The separate selector-policy matrix has 26
+configured direct invocations and 36 strict missing-policy rejections.
+Reference and candidate wheel SHA-256 values are
+`d2878e2781296fd9539374b3121470060536682d9840b28f92ebce4b75397108` and
+`c44cf1cb6ccfbd548e7c9ef70e0ec68a348cde42e6d432dc8472742b6b9eb198`.
+The report is `/tmp/alphus-morphology-positional-c7023fa.json` and is not
+committed.
+
+Installed-wheel self-quality passed 2,510 tests with 44 skipped; the
+self-profile passed 27 checks with zero failures and four provisional passes.
+This slice adds no detector behavior. The remaining 14 selectors without
+behavior-level scenarios and the broader compatibility requirements mean this
+does not complete issue #87.
