@@ -135,6 +135,30 @@ def test_hosted_dependency_floor_uses_package_metadata() -> None:
     assert "python scripts/ci.py --root . --minimum" in floor_job
 
 
+def test_wheel_differential_keeps_optional_native_tools_scenario_scoped() -> None:
+    workflow = yaml.safe_load(
+        Path(".github/workflows/self-quality.yml").read_text(encoding="utf-8")
+    )
+    job = workflow["jobs"]["morphology-wheel-differential"]
+    dependency_step = next(
+        step
+        for step in job["steps"]
+        if step.get("name")
+        == "Install wheel build, test, Ruff, and JavaScript parser dependencies"
+    )
+    assert "cyclomatic-lizard" not in dependency_step["run"]
+
+    scenarios = tomllib.loads(
+        Path("tests/differential/wheel-scenarios.toml").read_text(encoding="utf-8")
+    )["scenario"]
+    lizard_scenario = next(
+        scenario
+        for scenario in scenarios
+        if scenario["name"] == "cyclomatic-cpp-lizard"
+    )
+    assert lizard_scenario["python_distributions"] == ["lizard==1.24.2"]
+
+
 def test_source_family_self_review_propagates_pipeline_errors_without_blocking_advisories(
     tmp_path: Path,
 ) -> None:

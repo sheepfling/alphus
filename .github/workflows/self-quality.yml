@@ -68,10 +68,10 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: pyproject.toml
-      - name: Install wheel build, test, Ruff, and Lizard dependencies
+      - name: Install wheel build, test, Ruff, and JavaScript parser dependencies
         run: >-
           python -m pip install --disable-pip-version-check -e
-          '.[python,javascript,cyclomatic-lizard]'
+          '.[python,javascript]'
           'setuptools>=80' 'setuptools-scm>=10.3.4,<11'
       - name: Verify exact comparison revisions
         id: verify-revisions

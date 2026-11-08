@@ -1450,6 +1450,7 @@ def _assert_scenario_output(
     ):
         return
     profile_steps: tuple[_ProfileStep, ...] = ()
+    cyclomatic: _CyclomaticEnvelopeDocument | None = None
     try:
         if scenario.expected_step_names:
             profile = _ProfileDocument.model_validate_json(result.stdout)
@@ -1457,15 +1458,16 @@ def _assert_scenario_output(
             findings = [finding for step in profile.steps for finding in step.findings]
         elif scenario.expected_cyclomatic_outcome is not None:
             cyclomatic = _CyclomaticEnvelopeDocument.model_validate_json(result.stdout)
-            _assert_cyclomatic_contract(scenario, variant_name, cyclomatic)
             findings = cyclomatic.diagnostics
         else:
             findings = _DIRECT_FINDINGS.validate_json(result.stdout)
-    except ValueError as error:
+    except ValidationError as error:
         raise ValueError(
             f"{scenario.name}/{variant_name} expected JSON; exit={result.exit_code}, "
             f"stdout={result.stdout[:240]!r}, stderr={result.stderr[:240]!r}"
         ) from error
+    if cyclomatic is not None:
+        _assert_cyclomatic_contract(scenario, variant_name, cyclomatic)
     if scenario.expected_step_names:
         steps = profile_steps
         names = tuple(step.name for step in steps)

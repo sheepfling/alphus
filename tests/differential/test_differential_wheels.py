@@ -440,6 +440,54 @@ def test_declared_exact_findings_are_not_skipped_for_zero_minimum() -> None:
         _assert_scenario_output(exact_expectation, "json", ProcessResult(0, "[]", ""))
 
 
+def test_cyclomatic_backend_mismatch_is_reported_as_contract_failure() -> None:
+    scenario = Scenario(
+        name="cyclomatic-backend-status",
+        fixture=None,
+        selectors=("cyclomatic-complexity",),
+        behavior=(),
+        expected_exit=2,
+        minimum_findings=0,
+        expected_step_names=(),
+        expected_step_rules=(),
+        expected_reported_step_rules=(),
+        require_passed_steps=False,
+        required_output=(),
+        expected_findings=(),
+        variants=(
+            differential_wheels.RunVariant(
+                name="json",
+                arguments=("--json",),
+                compare_within_build=False,
+                parse_json=True,
+            ),
+        ),
+        expected_cyclomatic_outcome="operational_failure",
+        expected_cyclomatic_backends=(("cpp", "lizard", "operational_failure", 1, 0),),
+    )
+    stdout = json.dumps(
+        {
+            "diagnostics": [],
+            "report": {
+                "outcome": "operational_failure",
+                "backends": [
+                    {
+                        "language": "cpp",
+                        "backend": "lizard",
+                        "status": "violations",
+                        "selected_file_count": 1,
+                        "analyzed_file_count": 1,
+                    }
+                ],
+            },
+            "summary": "Cyclomatic complexity: operational_failure",
+        }
+    )
+
+    with pytest.raises(ValueError, match="cyclomatic backend coverage"):
+        _assert_scenario_output(scenario, "json", ProcessResult(2, stdout, ""))
+
+
 def test_volatile_paths_do_not_clear_unrelated_object_fields() -> None:
     payload = {"steps": [{"duration_seconds": 1.2, "status": "failed"}]}
 
