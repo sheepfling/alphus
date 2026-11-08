@@ -143,6 +143,28 @@ def test_typing_stub_rule_requires_source_inventory(
     assert "top-level [files]" in capsys.readouterr().err
 
 
+def test_source_test_coverage_uses_generated_registration_without_file_inventory(
+    tmp_path: Path,
+) -> None:
+    config = QualityGateConfig.model_validate(
+        {
+            "schema_version": 1,
+            "checks": {"source_test_coverage": {}},
+        },
+        strict=True,
+    )
+
+    binding = BUILTIN_RULES["source-test-coverage"]
+    assert not binding.requires_files
+    output = run_builtin_rule("source-test-coverage", tmp_path, (), config)
+
+    assert len(output) == 1
+    assert isinstance(output[0], Finding)
+    assert output[0].rule_id == "alphus/repository/none/testing/source-test-coverage"
+    assert output[0].path == "."
+    assert "no source-to-test relationships are declared" in output[0].message
+
+
 @pytest.mark.parametrize("rule", get_args(QualityRuleName))
 def test_each_selected_portable_rule_requires_its_policy(rule: QualityRuleName) -> None:
     with pytest.raises(MissingPolicyError, match=RULE_SPECS[rule].policy_field):

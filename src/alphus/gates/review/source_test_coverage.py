@@ -5,16 +5,30 @@ from __future__ import annotations
 import json
 import re
 from collections import Counter
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Final, Literal
 
 from pydantic import Field, field_validator
 
+from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
-from alphus.policy.base import StrictModel, require_unique, validate_single_path
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
+from alphus.plugins.builtin import BuiltinFeature
+from alphus.policy.base import (
+    StrictModel,
+    require_policy,
+    require_unique,
+    validate_single_path,
+)
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
 from alphus.policy.source_test_coverage import (
     SourceTestCoveragePolicy as _SourceTestCoveragePolicy,
 )
@@ -22,29 +36,49 @@ from alphus.support.data_access import JsonValue, contained_file
 from alphus.support.git import git_value, run_git
 from alphus.support.source_text import read_utf8_text
 
-ALPHUS_MORPHOLOGY = (
-    ("selector", "source-test-coverage"),
-    ("concern", "declared-source-test-evidence"),
-    ("claim_kind", "condition"),
-    (
-        "claim",
-        (
-            "Declared source-to-test relationships agree with revision-matched test-execution "
-            "evidence."
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="source-test-coverage",
+    policy_field="source_test_coverage",
+    policy_model=_SourceTestCoveragePolicy,
+    output_shape="findings",
+    summary=(
+        "Audits caller-declared source-to-test relationships against "
+        "revision-matched execution evidence; it does not infer relationships "
+        "from filenames or assess test correctness."
+    ),
+    applies_to=("repository",),
+    domains=(),
+    requires_files=False,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="source-test-coverage",
+    finding_ids=(
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.TESTING,
+            "source-test-coverage",
         ),
     ),
-    ("mechanisms", ("exact-rule",)),
-    (
-        "inspected_scope",
-        ("declared-source-test-relationships", "revision-matched-test-evidence"),
+    concern="declared-source-test-evidence",
+    claim_kind=ClaimKind.CONDITION,
+    claim=(
+        "Declared source-to-test relationships agree with revision-matched "
+        "test-execution evidence."
     ),
-    ("languages_formats", ("repository", "json", "toml")),
-    (
-        "evidence_kinds",
-        ("declared-relationship", "revision-matched-execution-status", "tracked-paths"),
+    mechanisms=(DetectionMechanism.EXACT_RULE,),
+    inspected_scope=(
+        "declared-source-test-relationships",
+        "revision-matched-test-evidence",
     ),
-    ("evaluation_maturity", "synthetic-only"),
-    ("finding_tag_complaints", ("source-test-coverage",)),
+    languages_formats=("repository", "json", "toml"),
+    evidence_kinds=(
+        "declared-relationship",
+        "revision-matched-execution-status",
+        "tracked-paths",
+    ),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
 )
 
 
@@ -236,7 +270,7 @@ def _finding(path: str, status: str, detail: str) -> Finding:
 
 def check_source_test_coverage(
     root: Path,
-    _paths: object,
+    _paths: Sequence[Path],
     policy: _SourceTestCoveragePolicy,
 ) -> list[Finding]:
     """Check only declared relationships; never guess from file names."""
@@ -389,3 +423,21 @@ def check_source_test_coverage(
         f"{evidence.status}. Test correctness and quality were not assessed",
     )
     return findings
+
+
+def run_source_test_coverage_rule(
+    root: Path, files: Sequence[Path], config: QualityGateConfig
+) -> list[Finding]:
+    """Adapt declared source-to-test evidence to built-in feature dispatch."""
+    return check_source_test_coverage(
+        root,
+        files,
+        require_policy(config.checks.source_test_coverage, "source_test_coverage"),
+    )
+
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_source_test_coverage_rule,
+)

@@ -34,7 +34,6 @@ from alphus.policy.review import (
     SourceFamilyPolicy,
     TypingStubSuggestionPolicy,
 )
-from alphus.policy.source_test_coverage import SourceTestCoveragePolicy
 from alphus.policy.sources import (
     CliPolicy,
     FileInventoryPolicy,
@@ -48,7 +47,6 @@ class CheckPolicies(GeneratedFeaturePolicies):
     """Settings for the currently available source gates."""
 
     typing_stub_suggestions: TypingStubSuggestionPolicy | None = None
-    source_test_coverage: SourceTestCoveragePolicy | None = None
     source_families: SourceFamilyPolicy | None = None
     shared_utilities: SharedUtilitiesPolicy | None = None
     python_style: PythonStylePolicy | None = None

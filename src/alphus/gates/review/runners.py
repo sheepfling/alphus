@@ -14,7 +14,6 @@ from typing import TypeAlias
 from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.execution.results import RuleOutput
 from alphus.gates.review.source_families import check_source_families
-from alphus.gates.review.source_test_coverage import check_source_test_coverage
 from alphus.gates.review.typing_stub_suggestions import check_typing_stub_suggestions
 from alphus.policy.base import require_policy
 
@@ -34,11 +33,6 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
                     config.checks.typing_stub_suggestions, "typing_stub_suggestions"
                 ),
             )
-        ),
-        "source-test-coverage": lambda root, files, config: check_source_test_coverage(
-            root,
-            files,
-            require_policy(config.checks.source_test_coverage, "source_test_coverage"),
         ),
         "source-families": lambda root, files, config: check_source_families(
             root,

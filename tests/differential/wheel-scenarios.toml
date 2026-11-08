@@ -2265,3 +2265,54 @@ required_output = ["Invalid quality policy"]
 name = "invalid-config"
 arguments = ["--config", "quality-gates.toml", "--rule", "suppression-reasons"]
 parse_json = false
+
+[[scenario]]
+name = "source-test-coverage-direct-without-file-inventory"
+fixture = "source-test-coverage"
+selectors = ["source-test-coverage"]
+behavior = ["feature-owned-direct-dispatch", "repository-scope", "empty-declaration-result"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/repository/none/testing/source-test-coverage", path = "." },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "source-test-coverage", "--json"]
+
+[[scenario]]
+name = "source-test-coverage-profile-without-file-inventory"
+fixture = "source-test-coverage"
+selectors = ["source-test-coverage"]
+behavior = ["feature-owned-profile-dispatch", "no-file-inventory", "typed-finding-report", "serial-parallel"]
+expected_exit = 0
+minimum_findings = 1
+expected_step_names = ["Declared source coverage"]
+expected_step_rules = ["source-test-coverage"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/repository/none/testing/source-test-coverage", path = "." },
+]
+
+[[scenario.variant]]
+name = "serial"
+arguments = ["--config", "quality-gates.toml", "--profile", "coverage-review", "--run", "--json", "--jobs", "1"]
+
+[[scenario.variant]]
+name = "parallel"
+arguments = ["--config", "quality-gates.toml", "--profile", "coverage-review", "--run", "--json", "--jobs", "2"]
+compare_within_build = true
+
+[[scenario]]
+name = "source-test-coverage-invalid-config"
+fixture = "source-test-coverage-invalid-config"
+selectors = ["source-test-coverage"]
+behavior = ["feature-owned-strict-policy", "unknown-field-rejected-before-run"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-config"
+arguments = ["--config", "quality-gates.toml", "--rule", "source-test-coverage"]
+parse_json = false

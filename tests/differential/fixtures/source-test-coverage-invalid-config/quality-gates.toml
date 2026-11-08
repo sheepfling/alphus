@@ -1,0 +1,4 @@
+schema_version = 1
+
+[checks.source_test_coverage]
+unexpected = true
