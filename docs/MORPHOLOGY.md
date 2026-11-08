@@ -61,8 +61,8 @@ by a typed `BuiltinFeature` with direct runner and specialized-operation
 references.
 
 The original six-rule pilot is not a complete built-in registration
-migration. Fifty-four selectors now use feature-owned runtime declarations,
-while eight remain on legacy selector/config/runner paths.
+migration. Fifty-five selectors now use feature-owned runtime declarations,
+while seven remain on legacy selector/config/runner paths.
 Generated declarations do not select or enable a check and do not change JSON results, finding IDs, gate IDs,
 or enforcement.
 
@@ -89,7 +89,7 @@ readiness.
 ## Registration boundary and remaining work
 
 The six-check morphology pilot was metadata discovery. Draft PR #100 now
-has fifty-four feature-owned runtime selectors, including the package-boundaries
+has fifty-five feature-owned runtime selectors, including the package-boundaries
 composite, polyglot cyclomatic and comment readers, paired shared-contract
 numeric checks, document reviewers, and Python test-quality and input-contract
 review. The Pydantic and SQLAlchemy Python framework reviewers now use the same
@@ -101,6 +101,17 @@ and exit behavior remain the compatibility contract. Synthetic discovery
 proves a new selector can be found without a central selector list; tests
 cover strict fields, shared complaint ownership, composite dispatch and lazy
 unselected providers.
+
+The repeated numeric-limit advisory is feature-owned as well. Its source
+module declares the strict `RepeatedNumericLimitPolicy`, Python source-scan
+input mode, finding result shape, bounded-heuristic morphology and lazy runner.
+The old catalog row, hand-written review-runner entry, legacy policy override,
+and CLI source-scan selector entry were removed. The policy schema, selector,
+RuleTag, locations, messages, severity and plain/profile output remain
+unchanged. Installed-wheel differential scenarios cover direct JSON and plain
+output, strict unknown-field rejection, and serial/parallel profile results.
+This is a representative deterministic advisory shape; it adds no detector and
+does not complete the remaining legacy migration.
 
 This paired source-review slice moved `pydantic-practices` and
 `sqlalchemy-practices` from the theme runner/catalog into declarations beside
@@ -358,3 +369,29 @@ Installed-wheel self-quality at implementation commit `b3c2967` passed 2,514
 tests (44 skipped), with all 27 self-profile checks passing and four provisional
 passes. Ruff, formatting, Pyright, package import checks, and the Markdown-shell
 review passed as part of that run.
+
+## Repeated numeric-limit registration slice
+
+Commit `3c23a1624ea2588ceee01551216339ddf3ac8939` moves
+`repeated-numeric-limits` into a typed feature-owned registration beside its
+existing analyzer. Its declaration owns the existing strict
+`RepeatedNumericLimitPolicy`, configured-source-scan mode, findings result
+shape, morphology and lazy runner. The old catalog row, hand-written review
+runner, legacy policy override and CLI source-scan selector entry were removed.
+The selector, TOML field, finding ID, locations, messages, severity, plain
+output and profile behavior remain unchanged.
+
+Differential cases cover direct JSON and plain output, strict rejection of an
+unknown policy field, and serial/parallel profile results. The pinned
+installed-wheel comparison against baseline
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` matched all 129 manifested scenarios
+with zero differences. The catalog remains 62 selectors; 55 have feature-owned
+runtime declarations, and behavior scenarios exercise 55, leaving seven
+without behavior-level evidence. The separate selector-policy matrix covers
+26 configured direct invocations and 36 strict missing-policy rejections.
+Reference and candidate wheel SHA-256 values are
+`ecee13fb104973f7a73addafd0f46c8f154b0f4a7c00adc61e5165dcd7065c5b` and
+`b8a910eb3db26c4963967b98c21e95a8c515487c4bb4c544a1040ea10f16cf46`. The
+report is `/tmp/alphus-morphology-repeated-numeric-3c23a16.json` and is not
+committed. This is partial compatibility evidence, not completion of issue
+#87.
