@@ -20,8 +20,6 @@ from alphus.execution.dispatch import (
 from alphus.gates.hygiene.runners import HYGIENE_RULE_RUNNERS
 from alphus.gates.markdown.runners import MARKDOWN_RULE_RUNNERS
 from alphus.gates.repository.runners import REPOSITORY_RULE_RUNNERS
-from alphus.gates.review import runners as review_runners
-from alphus.gates.review.runners import REVIEW_RULE_RUNNERS
 from alphus.gates.source.runners import SOURCE_RULE_RUNNERS
 from alphus.gates.vcs.runners import VCS_RULE_RUNNERS
 from alphus.plugins.builtin_registry import builtin_check_entry_points
@@ -85,7 +83,6 @@ def test_policy_models_do_not_import_execution_or_gate_packages() -> None:
 
 def test_gate_themes_own_their_runner_mappings() -> None:
     themes = (
-        REVIEW_RULE_RUNNERS,
         SOURCE_RULE_RUNNERS,
         REPOSITORY_RULE_RUNNERS,
         VCS_RULE_RUNNERS,
@@ -108,10 +105,6 @@ def test_gate_themes_own_their_runner_mappings() -> None:
         for name in feature_selectors
     )
     assert all(name in BUILTIN_RULES for name in RULE_SPECS)
-
-
-def test_review_runner_registry_is_an_explicit_module_export() -> None:
-    assert review_runners.__all__ == ["REVIEW_RULE_RUNNERS"]
 
 
 def test_explicit_runner_adapters_cover_the_public_rule_catalog() -> None:

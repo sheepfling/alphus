@@ -30,10 +30,6 @@ from alphus.policy.intents import (
     resolve_intent_bindings,
 )
 from alphus.policy.repository import VersionSyncPolicy
-from alphus.policy.review import (
-    SourceFamilyPolicy,
-    TypingStubSuggestionPolicy,
-)
 from alphus.policy.sources import (
     CliPolicy,
     FileInventoryPolicy,
@@ -46,8 +42,6 @@ from alphus.policy.sources import (
 class CheckPolicies(GeneratedFeaturePolicies):
     """Settings for the currently available source gates."""
 
-    typing_stub_suggestions: TypingStubSuggestionPolicy | None = None
-    source_families: SourceFamilyPolicy | None = None
     shared_utilities: SharedUtilitiesPolicy | None = None
     python_style: PythonStylePolicy | None = None
     cli: CliPolicy | None = None

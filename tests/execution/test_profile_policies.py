@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
@@ -163,6 +164,65 @@ def test_source_test_coverage_uses_generated_registration_without_file_inventory
     assert output[0].rule_id == "alphus/repository/none/testing/source-test-coverage"
     assert output[0].path == "."
     assert "no source-to-test relationships are declared" in output[0].message
+
+
+def test_feature_owned_review_policies_remain_strict() -> None:
+    for field in ("source_families", "typing_stub_suggestions"):
+        with pytest.raises(ValidationError):
+            QualityGateConfig.model_validate(
+                {
+                    "schema_version": 1,
+                    "checks": {field: {"unexpected": True}},
+                },
+                strict=True,
+            )
+
+
+@pytest.mark.parametrize(
+    ("selector", "provider", "policy_field"),
+    (
+        (
+            "source-families",
+            "alphus.gates.review.source_families",
+            "source_families",
+        ),
+        (
+            "typing-stub-suggestions",
+            "alphus.gates.review.typing_stub_suggestions",
+            "typing_stub_suggestions",
+        ),
+    ),
+)
+def test_review_feature_providers_load_only_after_explicit_dispatch(
+    pytestconfig: pytest.Config,
+    selector: str,
+    provider: str,
+    policy_field: str,
+) -> None:
+    policy = {"extensions": [".py"]} if selector == "typing-stub-suggestions" else {}
+    script = f"""
+import sys
+from pathlib import Path
+from alphus.config import QualityGateConfig
+from alphus.execution.dispatch import run_builtin_rule
+provider = {provider!r}
+assert provider not in sys.modules
+config = QualityGateConfig.model_validate({{
+    "schema_version": 1,
+    "checks": {{{policy_field!r}: {policy!r}}},
+}}, strict=True)
+run_builtin_rule({selector!r}, Path.cwd(), (), config)
+assert provider in sys.modules
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=pytestconfig.rootpath,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 @pytest.mark.parametrize("rule", get_args(QualityRuleName))

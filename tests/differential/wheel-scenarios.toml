@@ -2316,3 +2316,105 @@ required_output = ["Invalid quality policy"]
 name = "invalid-config"
 arguments = ["--config", "quality-gates.toml", "--rule", "source-test-coverage"]
 parse_json = false
+
+[[scenario]]
+name = "source-families-direct"
+fixture = "profile"
+materialized_files = [
+  { path = "source-families.toml", contents = "schema_version = 1\n[files]\ninclude = [\"src/**/*.py\"]\nexclude = []\n[checks.source_families]\nmin_family_files = 5\n" },
+  { path = "src/gateway_client.py", contents = "value = 1\n" },
+  { path = "src/gateway_server.py", contents = "value = 1\n" },
+  { path = "src/gateway_routes.py", contents = "value = 1\n" },
+  { path = "src/gateway_auth.py", contents = "value = 1\n" },
+  { path = "src/gateway_cache.py", contents = "value = 1\n" },
+]
+selectors = ["source-families"]
+behavior = ["feature-owned-cross-language-policy", "bounded-family-candidate", "finding-id"]
+expected_exit = 1
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/any/none/maintainability/flat-source-family", path = "src" },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "source-families.toml", "--rule", "source-families", "--json"]
+
+[[scenario]]
+name = "source-families-profile"
+fixture = "profile"
+materialized_files = [
+  { path = "source-families-profile.toml", contents = "schema_version = 1\n[files]\ninclude = [\"src/**/*.py\"]\nexclude = []\n[checks.source_families]\nmin_family_files = 5\n[orchestration]\nfailure_threshold = \"error\"\n[[orchestration.steps]]\nkind = \"rule\"\nname = \"Source family review\"\nrule = \"source-families\"\n[[orchestration.profiles]]\nname = \"source-review\"\nsteps = [\"Source family review\"]\n" },
+  { path = "src/gateway_client.py", contents = "value = 1\n" },
+  { path = "src/gateway_server.py", contents = "value = 1\n" },
+  { path = "src/gateway_routes.py", contents = "value = 1\n" },
+  { path = "src/gateway_auth.py", contents = "value = 1\n" },
+  { path = "src/gateway_cache.py", contents = "value = 1\n" },
+]
+selectors = ["source-families"]
+behavior = ["feature-owned-profile-dispatch", "typed-findings", "ordered-serial-parallel"]
+expected_exit = 0
+minimum_findings = 1
+expected_step_names = ["Source family review"]
+expected_step_rules = ["source-families"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/any/none/maintainability/flat-source-family", path = "src" },
+]
+
+[[scenario.variant]]
+name = "serial"
+arguments = ["--config", "source-families-profile.toml", "--profile", "source-review", "--run", "--json", "--jobs", "1"]
+
+[[scenario.variant]]
+name = "parallel"
+arguments = ["--config", "source-families-profile.toml", "--profile", "source-review", "--run", "--json", "--jobs", "2"]
+compare_within_build = true
+
+[[scenario]]
+name = "typing-stub-suggestions-direct"
+fixture = "profile"
+materialized_files = [
+  { path = "typing-stubs.toml", contents = "schema_version = 1\n[files]\ninclude = [\"src/**/*.py\"]\nexclude = []\n[checks.typing_stub_suggestions]\ntyping_groups = [\"dev\"]\ncheckers = [\"pyright\"]\n" },
+  { path = "pyproject.toml", contents = "[project]\nname = \"differential-fixture\"\nversion = \"0.1.0\"\ndependencies = [\"PyYAML==6.0.0\"]\n[project.optional-dependencies]\ndev = []\n" },
+  { path = "src/typing_example.py", contents = "import yaml\n" },
+]
+selectors = ["typing-stub-suggestions"]
+behavior = ["feature-owned-dependency-policy", "declared-import-evidence", "typed-finding"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/python/none/dependencies/typing-stub-suggestion", path = "src/typing_example.py", line = 1 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "typing-stubs.toml", "--rule", "typing-stub-suggestions", "--json"]
+
+[[scenario]]
+name = "typing-stub-suggestions-profile"
+fixture = "profile"
+materialized_files = [
+  { path = "typing-stubs-profile.toml", contents = "schema_version = 1\n[files]\ninclude = [\"src/**/*.py\"]\nexclude = []\n[checks.typing_stub_suggestions]\ntyping_groups = [\"dev\"]\ncheckers = [\"pyright\"]\n[orchestration]\nfailure_threshold = \"error\"\n[[orchestration.steps]]\nkind = \"rule\"\nname = \"Typing stub suggestions\"\nrule = \"typing-stub-suggestions\"\n[[orchestration.profiles]]\nname = \"typing-review\"\nsteps = [\"Typing stub suggestions\"]\n" },
+  { path = "pyproject.toml", contents = "[project]\nname = \"differential-fixture\"\nversion = \"0.1.0\"\ndependencies = [\"PyYAML==6.0.0\"]\n[project.optional-dependencies]\ndev = []\n" },
+  { path = "src/typing_example.py", contents = "import yaml\n" },
+]
+selectors = ["typing-stub-suggestions"]
+behavior = ["feature-owned-profile-dispatch", "typed-findings", "ordered-serial-parallel"]
+expected_exit = 0
+minimum_findings = 1
+expected_step_names = ["Typing stub suggestions"]
+expected_step_rules = ["typing-stub-suggestions"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/python/none/dependencies/typing-stub-suggestion", path = "src/typing_example.py", line = 1 },
+]
+
+[[scenario.variant]]
+name = "serial"
+arguments = ["--config", "typing-stubs-profile.toml", "--profile", "typing-review", "--run", "--json", "--jobs", "1"]
+
+[[scenario.variant]]
+name = "parallel"
+arguments = ["--config", "typing-stubs-profile.toml", "--profile", "typing-review", "--run", "--json", "--jobs", "2"]
+compare_within_build = true

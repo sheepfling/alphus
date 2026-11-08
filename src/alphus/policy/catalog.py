@@ -75,18 +75,6 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             "Reviews configured Python command-line interface contracts.",
             ("python",),
         ),
-        "source-families": RuleSpec(
-            "source_families",
-            RuleOutputShape.FINDINGS,
-            "Flags flat similarly named source families for human architectural review.",
-            ("configurable-source",),
-        ),
-        "typing-stub-suggestions": RuleSpec(
-            "typing_stub_suggestions",
-            RuleOutputShape.FINDINGS,
-            "Suggests compatible typing stub packages for declared dependencies.",
-            ("python", "typing"),
-        ),
     }
 )
 

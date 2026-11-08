@@ -14,11 +14,21 @@ from heapq import nsmallest
 from importlib import import_module
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
-from typing import Protocol, TypeAlias, cast
+from typing import Final, Protocol, TypeAlias, cast
 
-from alphus.config import SourceFamilyPolicy as _SourceFamilyPolicy
+from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
+from alphus.plugins.builtin import BuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import SourceFamilyPolicy as _SourceFamilyPolicy
 from alphus.support.git import git_output
 from alphus.support.inventory import matches_path
 
@@ -1917,3 +1927,72 @@ def check_source_families(
 ) -> list[Finding]:
     """Checker entry point for the optional source-family review rule."""
     return source_family_findings(root, paths, policy)
+
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="source-families",
+    policy_field="source_families",
+    policy_model=_SourceFamilyPolicy,
+    output_shape="findings",
+    summary="Flags flat similarly named source families for human architectural review.",
+    applies_to=("configurable-source",),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="source-families",
+    finding_ids=(
+        RuleTag(
+            Scope.ANY,
+            Framework.NONE,
+            Category.MAINTAINABILITY,
+            "flat-source-family",
+        ),
+    ),
+    concern="source-family-boundaries",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "Repeated source naming patterns identify candidates for architectural "
+        "review; names and optional correlations do not establish shared behavior, "
+        "ownership, or causation."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=(
+        "selected-source-inventory",
+        "source-filenames-and-lengths",
+        "optional-language-and-history-evidence",
+    ),
+    languages_formats=(
+        "python",
+        "c",
+        "c-plus-plus",
+        "javascript",
+        "typescript",
+    ),
+    evidence_kinds=(
+        "tokenized-filenames",
+        "bounded-source-line-counts",
+        "optional-syntax-import-evidence",
+        "optional-git-cochange-correlation",
+    ),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
+
+
+def run_source_families_rule(
+    root: Path, files: Sequence[Path], config: QualityGateConfig
+) -> list[Finding]:
+    """Adapt the selected cross-language source-family audit to dispatch."""
+    return check_source_families(
+        root,
+        files,
+        require_policy(config.checks.source_families, "source_families"),
+    )
+
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_source_families_rule,
+)
