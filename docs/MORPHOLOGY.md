@@ -61,8 +61,8 @@ by a typed `BuiltinFeature` with direct runner and specialized-operation
 references.
 
 The original six-rule pilot is not a complete built-in registration
-migration. Fifty-five selectors now use feature-owned runtime declarations,
-while seven remain on legacy selector/config/runner paths.
+migration. Fifty-six selectors now use feature-owned runtime declarations,
+while six remain on legacy selector/config/runner paths.
 Generated declarations do not select or enable a check and do not change JSON results, finding IDs, gate IDs,
 or enforcement.
 
@@ -89,7 +89,7 @@ readiness.
 ## Registration boundary and remaining work
 
 The six-check morphology pilot was metadata discovery. Draft PR #100 now
-has fifty-five feature-owned runtime selectors, including the package-boundaries
+has fifty-six feature-owned runtime selectors, including the package-boundaries
 composite, polyglot cyclomatic and comment readers, paired shared-contract
 numeric checks, document reviewers, and Python test-quality and input-contract
 review. The Pydantic and SQLAlchemy Python framework reviewers now use the same
@@ -372,8 +372,8 @@ review passed as part of that run.
 
 ## Repeated numeric-limit registration slice
 
-Commits `3c23a1624ea2588ceee01551216339ddf3ac8939` and
-`83aa9cf93ab0340d1b61e4fca0018c5a74705473` and
+Commits `3c23a1624ea2588ceee01551216339ddf3ac8939`,
+`83aa9cf93ab0340d1b61e4fca0018c5a74705473`, and
 `79a425377b3e1d2f6a49a2256299450a076f448a` move
 `repeated-numeric-limits` into a typed feature-owned registration beside its
 existing analyzer. Its declaration owns the existing strict
@@ -398,3 +398,28 @@ report is `/tmp/alphus-morphology-repeated-numeric-79a4253.json` and is not
 committed. The corrected fixture also passes the repository self-profile's
 Python lint step. This remains partial compatibility evidence, not completion
 of issue #87.
+
+## Suppression-reason registration slice
+
+Commit `762d06eef3dcc4b665a17babf9b6531a93fb4dd6` moves
+`suppression-reasons` into a feature-owned typed declaration beside its
+existing analyzer. The declaration owns the strict policy model, finding
+result shape, applicability, exact-rule morphology and lazy runner. The
+duplicate catalog row, `CheckPolicies` field and review-runner binding were
+removed. The TOML policy, selector, finding ID, paths, messages, direct result,
+profile status and exit behavior remain unchanged. A registration probe
+confirms catalog discovery does not import this analyzer until selected.
+
+Differential cases cover direct JSON/plain output, strict unknown-field
+rejection and serial/parallel profile results. The pinned installed-wheel
+comparison against baseline
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` matched all 133 manifested scenarios
+with zero differences. The catalog remains 62 selectors; 56 have
+feature-owned runtime declarations and behavior scenarios exercise 56, leaving
+six legacy selectors without behavior-level coverage. The selector-policy
+matrix still covers 26 configured direct invocations and 36 strict
+missing-policy rejections. Reference and candidate wheel SHA-256 values are
+`f5d5b611a8e9217220ce3e9dbdeaaba0c8cf62740a54b123a666454769fe27e3` and
+`83cc194d9008b9d537f8f8d9eb76d2998f7f99b9409ec800e6b97e9d9291d53d`. The
+report is `/tmp/alphus-morphology-suppression-762d06e.json`; it is not
+committed. This remains partial evidence, not completion of issue #87.
