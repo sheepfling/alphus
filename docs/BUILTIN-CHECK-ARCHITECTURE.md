@@ -11,7 +11,7 @@ change runtime behavior.
 Use this section for live status. The detailed migration records below preserve
 evidence from earlier commits; their selector counts describe those historical
 heads and are not current inventory claims. At PR head
-`fe63ca82cee9bc9af103e7be09c5b56714ca71df`, all 62 built-in selectors have
+`951cc596007a7b8853cca6ef8199de13926ffe2f`, all 62 built-in selectors have
 feature-owned `BuiltinFeature` declarations. Static discovery found 62 distinct
 registration modules and no file owns more than one selector. The build backend
 derives the installed `alphus.builtin_checks.v1` entry points and ignored
@@ -68,9 +68,15 @@ was for the earlier CLI candidate `3c4db3b` (146 scenarios, zero differences,
 `d5b5be0`, which adds `python-style`, stopped before running comparisons when
 npm could not resolve `registry.npmjs.org` for `eslint@10.13.0`. There is no
 149-scenario equivalence result for that candidate. The installed-wheel
-self-quality checks passed locally (2,521 passed, 44 skipped), and all five
-hosted workflows passed on both implementation head `1fe322e` and documentation
-head `fe63ca8`. Neither result substitutes for the pinned differential.
+self-quality checks passed locally (2,521 passed, 44 skipped) on the earlier
+`d5b5be0` code tree, and all five hosted workflows passed on implementation
+head `1fe322e` and documentation head `fe63ca8`. Those results do not
+establish checks on `951cc59` or substitute for the pinned differential. At
+the time this snapshot was updated, four workflows on `951cc59` had completed
+successfully and Alphus self quality was still in progress. Focused non-npm
+tests on `951cc59` passed 323 morphology/registry and execution tests; a second
+native, composite, and plugin test batch passed 85 tests. These are
+incremental evidence only.
 
 The next evidence step is to complete that differential when the pinned npm
 dependency is available, without marking the ESLint scenario as covered merely

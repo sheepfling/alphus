@@ -4,6 +4,27 @@ The broader built-in ownership and registration design is documented in the
 [built-in check architecture and migration plan](BUILTIN-CHECK-ARCHITECTURE.md).
 This page remains the morphology vocabulary and pilot boundary.
 
+## Current implementation status
+
+At draft PR #100 head `951cc596007a7b8853cca6ef8199de13926ffe2f`, all 62
+built-in selectors have feature-owned `BuiltinFeature` registrations; static
+discovery found one registration module per selector. Generated installed
+entry points and ignored policy/config/dispatch views derive from these
+declarations. Registration migration is complete for the existing selector
+inventory, but the pinned baseline wheel differential is not: its latest
+149-scenario attempt stopped before comparison when npm could not resolve the
+pinned ESLint package. Do not read the historical selector counts or scenario
+reports below as the current completion state.
+
+The runtime morphology model remains transitional. `RuleMorphology` currently
+has `ClaimKind` and `DetectionMechanism`, but the latter still combines claim
+or evidence strength (`EXACT_RULE`) with analyzer/backend properties
+(`NATIVE_TOOL`, `LOCAL_MODEL_ASSISTED`). It does not yet encode provider
+capabilities, repeatability, cacheability, or effects as independent typed
+fields. The architecture page describes those as target dimensions, not
+implemented runtime contracts. This metadata limitation does not change
+detector output or enforcement behavior.
+
 Morphology describes a built-in rule's claim, detection mechanism, inspected
 scope, evidence, and rule-level evaluation maturity. Claim kind (condition,
 risk, or style preference) is independent of detection mechanism. Morphology
@@ -60,9 +81,10 @@ policy's `StrictModel` subclass directly, and each selected provider is owned
 by a typed `BuiltinFeature` with direct runner and specialized-operation
 references.
 
-The original six-rule pilot is not a complete built-in registration
-migration. Fifty-seven selectors now use feature-owned runtime declarations,
-while five remain on legacy selector/config/runner paths.
+The original six-rule pilot did not complete the built-in registration
+migration. The counts in the historical slice records below refer to their
+specific candidate commits; at the current head, all 62 selectors use
+feature-owned runtime declarations.
 Generated declarations do not select or enable a check and do not change JSON results, finding IDs, gate IDs,
 or enforcement.
 
@@ -86,10 +108,11 @@ establish a production positive for semantic corruption, so
 `public-sample-reviewed` does not mean measured precision or enforcement
 readiness.
 
-## Registration boundary and remaining work
+## Historical registration and migration evidence
 
-The six-check morphology pilot was metadata discovery. Draft PR #100 now
-has fifty-six feature-owned runtime selectors, including the package-boundaries
+The six-check morphology pilot was metadata discovery. Historical slice
+records below describe incremental candidates. The current draft PR #100 has
+all 62 feature-owned runtime selectors, including the package-boundaries
 composite, polyglot cyclomatic and comment readers, paired shared-contract
 numeric checks, document reviewers, and Python test-quality and input-contract
 review. The Pydantic and SQLAlchemy Python framework reviewers now use the same
