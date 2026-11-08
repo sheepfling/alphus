@@ -1142,17 +1142,24 @@ def _declarations(
                             f"{path}: typed finding IDs do not match their complaint contract"
                         )
                 else:
-                    for tag in morphology.finding_ids:
-                        matches = local_ids.get(tag.complaint, ())
-                        if (
-                            not matches
-                            or len(matches) != 1
-                            or matches[0] != tag.rule_id
-                        ):
+                    if typed_feature.output_shape == "messages":
+                        if len(morphology.finding_ids) != 1:
                             raise ValueError(
-                                f"{path}: typed finding ID {tag.rule_id!r} is not "
-                                "unambiguously emitted by this feature"
+                                f"{path}: message features need exactly one typed "
+                                "finding ID for the existing message adapter"
                             )
+                    else:
+                        for tag in morphology.finding_ids:
+                            matches = local_ids.get(tag.complaint, ())
+                            if (
+                                not matches
+                                or len(matches) != 1
+                                or matches[0] != tag.rule_id
+                            ):
+                                raise ValueError(
+                                    f"{path}: typed finding ID {tag.rule_id!r} is not "
+                                    "unambiguously emitted by this feature"
+                                )
                 declarations.append(
                     _Declaration(
                         selector=morphology.selector,

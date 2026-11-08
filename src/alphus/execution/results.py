@@ -20,6 +20,7 @@ from alphus.contracts.findings import (
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
 from alphus.gates.languages.python.style import StyleFindings
+from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
 from alphus.policy.base import QualityRuleName, RuleSelector
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
 
@@ -69,31 +70,33 @@ _CLI_PRESENTATION_RULE_ID = rule_tag(
 
 _MESSAGE_RULE_IDS: Mapping[QualityRuleName, str] = MappingProxyType(
     {
-        "runtime-types": rule_tag(
-            Scope.PYTHON,
-            Framework.NONE,
-            Category.TYPING,
-            "runtime-type-contract-violation",
-        ),
         "cli": rule_tag(
             Scope.PYTHON, Framework.NONE, Category.CORRECTNESS, "cli-contract-violation"
-        ),
-        "script-policy": rule_tag(
-            Scope.PYTHON, Framework.NONE, Category.SECURITY, "script-policy-violation"
         ),
     }
 )
 
 
-def _message_diagnostics(
-    rule: QualityRuleName, messages: Sequence[str]
-) -> list[Diagnostic]:
+def _message_rule_id(rule: QualityRuleName) -> str:
+    if rule in FEATURE_DEFINITIONS:
+        morphology = RULE_SPECS[rule].morphology
+        if morphology is None or len(morphology.finding_ids) != 1:
+            raise ValueError(
+                f"feature message rule {rule!r} needs exactly one morphology finding ID"
+            )
+        return morphology.finding_ids[0].rule_id
     try:
-        rule_id = _MESSAGE_RULE_IDS[rule]
+        return _MESSAGE_RULE_IDS[rule]
     except KeyError as error:
         raise ValueError(
             f"no diagnostic tag registered for message rule {rule!r}"
         ) from error
+
+
+def _message_diagnostics(
+    rule: QualityRuleName, messages: Sequence[str]
+) -> list[Diagnostic]:
+    rule_id = _message_rule_id(rule)
     output: list[Diagnostic] = []
     for message in messages:
         inconclusive = "[presentation:inconclusive] "

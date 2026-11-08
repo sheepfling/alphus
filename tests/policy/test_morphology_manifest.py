@@ -375,6 +375,70 @@ def test_feature_definition_generates_catalog_and_lazy_runner_views(
     assert "**DEMO_GROUP_RULE_RUNNERS," in runner_manifest
 
 
+def test_message_feature_uses_one_typed_morphology_id_for_result_adaptation(
+    tmp_path: Path,
+) -> None:
+    gates = tmp_path / "src/alphus/gates"
+    gates.mkdir(parents=True)
+    declaration = _DECLARATION + (
+        ("policy_field", "demo_policy"),
+        ("policy_model", "alphus.policy.sources.DemoPolicy"),
+        ("output_shape", "messages"),
+        ("summary", "Reports a demo message."),
+        ("applies_to", ("python",)),
+        ("domains", ()),
+        ("requires_files", True),
+    )
+    (gates / "demo_messages.py").write_text(
+        _feature_source(declaration), encoding="utf-8"
+    )
+    policy = tmp_path / "src/alphus/policy"
+    policy.mkdir(parents=True)
+    (policy / "orchestration.py").write_text(
+        "class CheckPolicies:\n    pass\n", encoding="utf-8"
+    )
+    (policy / "sources.py").write_text(
+        "class DemoPolicy:\n    pass\n", encoding="utf-8"
+    )
+    group = gates / "demo_group"
+    group.mkdir()
+    (group / "runners.py").write_text(
+        "from types import MappingProxyType\n"
+        "DEMO_GROUP_RULE_RUNNERS: object = MappingProxyType({})\n",
+        encoding="utf-8",
+    )
+
+    registration = feature_registrations(tmp_path)
+    manifest = render_manifest(tmp_path)
+
+    assert [item.selector for item in registration] == ["demo-check"]
+    assert '"demo-check": RuleMorphology(' in manifest
+    assert "RuleTag(" in manifest
+    assert '"demo-check"' in manifest
+
+
+def test_message_feature_rejects_ambiguous_morphology_ids(tmp_path: Path) -> None:
+    gates = tmp_path / "src/alphus/gates"
+    gates.mkdir(parents=True)
+    declaration = _DECLARATION + (
+        ("finding_tag_complaints", ("demo-check", "second-message")),
+        ("policy_field", "demo_policy"),
+        ("policy_model", "alphus.policy.sources.DemoPolicy"),
+        ("output_shape", "messages"),
+        ("summary", "Reports demo messages."),
+        ("applies_to", ("python",)),
+        ("domains", ()),
+        ("requires_files", True),
+    )
+    source = _feature_source(declaration)
+    (gates / "demo_messages.py").write_text(source, encoding="utf-8")
+
+    with pytest.raises(
+        ValueError, match="message features need exactly one typed finding ID"
+    ):
+        render_manifest(tmp_path)
+
+
 def test_feature_definition_supports_qualified_constructor_and_selector_constant(
     tmp_path: Path,
 ) -> None:

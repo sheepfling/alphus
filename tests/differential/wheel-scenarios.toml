@@ -2017,3 +2017,81 @@ required_output = ["Invalid quality policy"]
 name = "invalid-config"
 arguments = ["--config", "quality-gates.toml", "--rule", "manual-matrix-kernels"]
 parse_json = false
+
+[[scenario]]
+name = "runtime-types-direct"
+fixture = "message-rules"
+selectors = ["runtime-types"]
+behavior = ["direct-selector", "legacy-message-output"]
+expected_exit = 1
+required_output = [
+  "src/example.py:3: runtime type check requires an explicit union annotation",
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "runtime-types", "--json"]
+
+[[scenario]]
+name = "runtime-types-profile"
+fixture = "message-rules"
+selectors = ["runtime-types"]
+behavior = ["profile-selection", "message-result-adapter", "serial-parallel-reporting"]
+expected_exit = 0
+minimum_findings = 1
+expected_step_names = ["runtime-types"]
+expected_step_rules = ["runtime-types"]
+require_passed_steps = true
+required_output = ["alphus/python/none/typing/runtime-type-contract-violation"]
+
+[[scenario.variant]]
+name = "profile-json"
+arguments = ["--config", "quality-gates.toml", "--profile", "runtime-review", "--run", "--json"]
+
+[[scenario]]
+name = "script-policy-direct"
+fixture = "message-rules"
+selectors = ["script-policy"]
+behavior = ["direct-selector", "configured-launcher-policy", "legacy-message-output"]
+expected_exit = 1
+required_output = [
+  "scripts/legacy.sh: use a Python module for operational scripts",
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "script-policy", "--json"]
+
+[[scenario]]
+name = "script-policy-profile"
+fixture = "message-rules"
+selectors = ["script-policy"]
+behavior = ["profile-selection", "configured-launcher-policy", "typed-result-reporting"]
+expected_exit = 0
+minimum_findings = 1
+expected_step_names = ["script-policy"]
+expected_step_rules = ["script-policy"]
+require_passed_steps = true
+required_output = ["alphus/python/none/security/script-policy-violation"]
+
+[[scenario.variant]]
+name = "profile-json"
+arguments = ["--config", "quality-gates.toml", "--profile", "script-review", "--run", "--json"]
+
+[[scenario]]
+name = "message-rules-strict-config"
+fixture = "message-rules-invalid-config"
+selectors = ["runtime-types", "script-policy"]
+behavior = ["feature-owned-strict-config", "unknown-fields-rejected-before-run"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-runtime"
+arguments = ["--config", "quality-gates.toml", "--rule", "runtime-types"]
+parse_json = false
+
+[[scenario.variant]]
+name = "invalid-script"
+arguments = ["--config", "quality-gates.toml", "--rule", "script-policy"]
+parse_json = false

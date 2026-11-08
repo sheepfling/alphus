@@ -69,23 +69,11 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             "Runs configured Python source-style checks.",
             ("python",),
         ),
-        "runtime-types": RuleSpec(
-            "runtime_types",
-            RuleOutputShape.MESSAGES,
-            "Reviews configured Python runtime type-checking conventions.",
-            ("python",),
-        ),
         "cli": RuleSpec(
             "cli",
             RuleOutputShape.MESSAGES,
             "Reviews configured Python command-line interface contracts.",
             ("python",),
-        ),
-        "script-policy": RuleSpec(
-            "script_policy",
-            RuleOutputShape.MESSAGES,
-            "Checks configured Python and Node launcher/script conventions.",
-            ("python", "javascript"),
         ),
         "repeated-numeric-limits": RuleSpec(
             "repeated_numeric_limits",

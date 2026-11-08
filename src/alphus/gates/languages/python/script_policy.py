@@ -3,12 +3,58 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from pathlib import Path
+from typing import Final
 
-from alphus.config import ScriptPolicy
+from alphus.config import QualityGateConfig
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
+from alphus.plugins.builtin import BuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.sources import ScriptPolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_utf8_sig_text
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="script-policy",
+    policy_field="script_policy",
+    policy_model=ScriptPolicy,
+    output_shape="messages",
+    summary="Checks configured Python and Node launcher/script conventions.",
+    applies_to=("python", "javascript"),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="script-policy",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.SECURITY,
+            "script-policy-violation",
+        ),
+    ),
+    concern="configured-launcher-policy",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "Selected launcher suffixes are checked against a configured Python-module "
+        "boundary; a matching wrapper does not establish broader script safety."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("configured-launcher-files", "python-module-router-pattern"),
+    languages_formats=("cmd", "batch", "python"),
+    evidence_kinds=("script-policy", "launcher-text", "contained-module-path"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
 
 _CMD_DIRECTORY = re.compile(r'(?i)^cd /d "%~dp0(?:\.\.(?:[\\/]\.\.)*)?"$')
 _PYTHON_EXECUTABLE = (
@@ -91,3 +137,21 @@ def policy_issues(root: Path, paths: Iterable[Path], policy: ScriptPolicy) -> li
         message = policy.cmd_message if suffix == ".cmd" else policy.launcher_message
         issues.append(f"{relative}: {message}")
     return issues
+
+
+def run_script_policy_rule(
+    root: Path, paths: Sequence[Path], config: QualityGateConfig
+) -> list[str]:
+    """Adapt launcher-policy checks to the typed built-in runner."""
+    return policy_issues(
+        root,
+        paths,
+        require_policy(config.checks.script_policy, "script_policy"),
+    )
+
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_script_policy_rule,
+)

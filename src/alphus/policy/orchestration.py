@@ -42,8 +42,6 @@ from alphus.policy.sources import (
     FileInventoryPolicy,
     FunctionShapePolicy,
     PythonStylePolicy,
-    RuntimeTypePolicy,
-    ScriptPolicy,
     SharedUtilitiesPolicy,
 )
 
@@ -58,9 +56,7 @@ class CheckPolicies(GeneratedFeaturePolicies):
     suppression_reasons: SuppressionReasonPolicy | None = None
     shared_utilities: SharedUtilitiesPolicy | None = None
     python_style: PythonStylePolicy | None = None
-    runtime_types: RuntimeTypePolicy | None = None
     cli: CliPolicy | None = None
-    script_policy: ScriptPolicy | None = None
     architecture_graph: ArchitectureGraphCheckPolicy | None = None
     version_sync: VersionSyncPolicy | None = None
     callable_registry: CallableRegistryPolicy | None = None

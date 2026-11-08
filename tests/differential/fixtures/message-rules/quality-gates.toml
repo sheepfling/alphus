@@ -1,0 +1,41 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py", "scripts/**/*"]
+exclude = []
+
+[checks.runtime_types]
+extensions = [".py"]
+exclude = []
+
+[checks.script_policy]
+extensions = [".sh"]
+exclude = []
+cmd_router_line_limit = 12
+python_module_prefix = "scripts"
+launcher_message = "use a Python module for operational scripts"
+cmd_message = "CMD must route to a Python module"
+
+[orchestration]
+default_profile = "runtime-review"
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "runtime-types"
+rule = "runtime-types"
+severity = "warning"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "script-policy"
+rule = "script-policy"
+severity = "warning"
+
+[[orchestration.profiles]]
+name = "runtime-review"
+steps = ["runtime-types"]
+
+[[orchestration.profiles]]
+name = "script-review"
+steps = ["script-policy"]

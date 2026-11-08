@@ -37,6 +37,8 @@ def test_installed_entry_points_match_feature_selectors_and_load_lazily() -> Non
                 "builtin_check_entry_points, load_builtin_feature; "
                 "points = builtin_check_entry_points(); "
                 "assert 'alphus.gates.hygiene.file_size' not in sys.modules; "
+                "assert 'alphus.gates.languages.python.runtime_types' not in sys.modules; "
+                "assert 'alphus.gates.languages.python.script_policy' not in sys.modules; "
                 "assert points['file-size'].group == 'alphus.builtin_checks.v1'; "
                 "feature = load_builtin_feature('file-size'); "
                 "assert feature.runner.__module__ == 'alphus.gates.hygiene.file_size'; "
@@ -134,3 +136,52 @@ def test_loaded_feature_rejects_invalid_runner_signatures(
                 load_builtin_feature(selector)
         finally:
             builtin_registry.load_builtin_feature.cache_clear()
+
+
+def test_message_feature_requires_a_list_of_strings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def message_runner(
+        _root: Path, _files: Sequence[Path], _config: QualityGateConfig
+    ) -> list[str]:
+        return []
+
+    feature = BuiltinFeature(
+        definition=FEATURE_DEFINITIONS["script-policy"],
+        morphology=MORPHOLOGY_BY_SELECTOR["script-policy"],
+        runner=message_runner,
+    )
+    point = SimpleNamespace(load=lambda: feature)
+    monkeypatch.setattr(
+        builtin_registry,
+        "builtin_check_entry_points",
+        lambda: {"script-policy": point},
+    )
+    builtin_registry.load_builtin_feature.cache_clear()
+    try:
+        assert load_builtin_feature("script-policy") is feature
+    finally:
+        builtin_registry.load_builtin_feature.cache_clear()
+
+    def wrong_message_runner(
+        _root: Path, _files: Sequence[Path], _config: QualityGateConfig
+    ) -> list[Finding]:
+        return []
+
+    wrong_feature = BuiltinFeature(
+        definition=FEATURE_DEFINITIONS["script-policy"],
+        morphology=MORPHOLOGY_BY_SELECTOR["script-policy"],
+        runner=cast("object", wrong_message_runner),  # type: ignore[arg-type]
+    )
+    wrong_point = SimpleNamespace(load=lambda: wrong_feature)
+    monkeypatch.setattr(
+        builtin_registry,
+        "builtin_check_entry_points",
+        lambda: {"script-policy": wrong_point},
+    )
+    builtin_registry.load_builtin_feature.cache_clear()
+    try:
+        with pytest.raises(TypeError, match="typed synchronous feature"):
+            load_builtin_feature("script-policy")
+    finally:
+        builtin_registry.load_builtin_feature.cache_clear()

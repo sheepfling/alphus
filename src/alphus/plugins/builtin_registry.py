@@ -52,6 +52,10 @@ def _is_builtin_feature(target: object) -> TypeGuard[BuiltinFeature]:
         return get_origin(return_annotation) is list and get_args(
             return_annotation
         ) == (Finding,)
+    if shape == "messages":
+        return get_origin(return_annotation) is list and get_args(
+            return_annotation
+        ) == (str,)
     return False
 
 

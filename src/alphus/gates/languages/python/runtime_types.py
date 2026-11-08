@@ -7,8 +7,10 @@ from collections import Counter
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Final
 
-from alphus.config import RuntimeTypePolicy
+from alphus.config import QualityGateConfig
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
 from alphus.gates.languages.python.runtime_type_facts import (
     BUILTINS,
     INSPECTION_CLASSES,
@@ -24,6 +26,16 @@ from alphus.gates.languages.python.runtime_type_facts import (
     element,
     named,
 )
+from alphus.plugins.builtin import BuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.sources import RuntimeTypePolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_scanning import (
     ImportAliases,
@@ -31,6 +43,40 @@ from alphus.support.source_scanning import (
     import_aliases,
 )
 from alphus.support.source_text import read_python_source
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="runtime-types",
+    policy_field="runtime_types",
+    policy_model=RuntimeTypePolicy,
+    output_shape="messages",
+    summary="Reviews configured Python runtime type-checking conventions.",
+    applies_to=("python",),
+    domains=("typing",),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="runtime-types",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.TYPING,
+            "runtime-type-contract-violation",
+        ),
+    ),
+    concern="runtime-type-check-contract",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "Configured runtime type inspections may not narrow or support the values "
+        "they inspect; bounded AST facts do not prove runtime behavior."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("configured-python-runtime-type-checks", "local-ast-bindings"),
+    languages_formats=("python",),
+    evidence_kinds=("runtime-type-policy", "python-ast", "source-location"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
 
 
 class _LocalNames(ast.NodeVisitor):
@@ -779,3 +825,21 @@ def policy_issues(
                 for line, reason in type_check_findings(read_python_source(path))
             )
     return issues
+
+
+def run_runtime_types_rule(
+    root: Path, paths: Sequence[Path], config: QualityGateConfig
+) -> list[str]:
+    """Adapt the configured runtime-type scan to the typed built-in runner."""
+    return policy_issues(
+        root,
+        paths,
+        require_policy(config.checks.runtime_types, "runtime_types"),
+    )
+
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_runtime_types_rule,
+)
