@@ -2033,6 +2033,21 @@ name = "json"
 arguments = ["--config", "quality-gates.toml", "--rule", "runtime-types", "--json"]
 
 [[scenario]]
+name = "runtime-types-plain"
+fixture = "message-rules"
+selectors = ["runtime-types"]
+behavior = ["direct-selector", "legacy-plain-rule-id", "legacy-summary"]
+expected_exit = 1
+required_output = [
+  "alphus/python/none/typing/runtime-type-contract-violation: src/example.py:3: runtime type check requires an explicit union annotation",
+  "Runtime type checks: 1 violation(s)",
+]
+
+[[scenario.variant]]
+name = "plain"
+arguments = ["--config", "quality-gates.toml", "--rule", "runtime-types", "--output", "plain"]
+
+[[scenario]]
 name = "runtime-types-profile"
 fixture = "message-rules"
 selectors = ["runtime-types"]
@@ -2066,6 +2081,21 @@ required_output = [
 [[scenario.variant]]
 name = "json"
 arguments = ["--config", "quality-gates.toml", "--rule", "script-policy", "--json"]
+
+[[scenario]]
+name = "script-policy-plain"
+fixture = "message-rules"
+selectors = ["script-policy"]
+behavior = ["direct-selector", "legacy-plain-rule-id", "legacy-summary"]
+expected_exit = 1
+required_output = [
+  "alphus/python/none/security/script-policy-violation: scripts/legacy.sh: use a Python module for operational scripts",
+  "Script policy: 1 violation(s)",
+]
+
+[[scenario.variant]]
+name = "plain"
+arguments = ["--config", "quality-gates.toml", "--rule", "script-policy", "--output", "plain"]
 
 [[scenario]]
 name = "script-policy-profile"
