@@ -61,8 +61,8 @@ by a typed `BuiltinFeature` with direct runner and specialized-operation
 references.
 
 The original six-rule pilot is not a complete built-in registration
-migration. Thirty-eight selectors now use feature-owned runtime
-declarations, while 24 remain on legacy selector/config/runner paths.
+migration. Forty-four selectors now use feature-owned runtime declarations,
+while 18 remain on legacy selector/config/runner paths.
 Generated declarations do not select or enable a check and do not change JSON results, finding IDs, gate IDs,
 or enforcement.
 
@@ -130,6 +130,36 @@ explicit missing/unsupported, partial, error, plugin/native and effectful-comman
 cases; this does not complete #87. The latest shared-policy prose slice and its
 98-scenario installed-wheel result are recorded in the [architecture document's
 shared-policy section](BUILTIN-CHECK-ARCHITECTURE.md#shared-policy-prose-registration-slice).
+
+## Paired semantic-review registration slice
+
+Commit `7388a58bef5bd522c9d94c5d142528ff0ce874c6` moves
+`heuristic-total-consumption` and `unexplained-empty-results` to declarations
+beside their existing Python analyzers. They remain separate bounded
+heuristics with distinct policy models, selectors, RuleTag IDs, messages, and
+findings. The feature-owned declarations provide typed registration and
+morphology; the old review runner entries, catalog rows, and handwritten
+`CheckPolicies` fields are removed. No detector semantics or default selection
+changed.
+
+The installed-wheel scenarios invoke each selector directly, exercise both in
+profile order, and reject an unknown policy field before dispatch. The wheel
+differential against baseline
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` matched all 102 manifested
+scenarios with zero differences. Both catalogs contain the same 62 selectors;
+behavior scenarios cover 44, leaving 18 without behavior-level cases. The
+separate selector policy matrix has 26 configured direct invocations and 36
+strict missing-policy rejections; those counts describe that matrix rather
+than the direct CLI scenarios. Reference and candidate wheel SHA-256 values
+are `156bea18e6d12647c9d765d60fd4938e6e8ea6bf86ab46e9ed0032dd8886afb5` and
+`e610e62003bbefda5c172b512a522a1021c91096052ba5cca394649eb730a64e`. The
+report is `/tmp/alphus-morphology-semantic-reviews-7388a58.json` and is not
+committed.
+
+Installed-wheel self-quality passed: 2,510 tests passed, 44 skipped; the
+self-profile passed all 27 checks with no failures and four provisional
+passes. This is incremental evidence, not full 62-selector equivalence or
+completion of issue #87.
 
 ## Orthogonal policy and run evidence
 
