@@ -1,0 +1,46 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py"]
+exclude = []
+
+[checks.parallel_normalization]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/*.py"]
+
+[[checks.parallel_normalization.pairs]]
+concept = "canonical display text"
+first_function = "normalize_for_display"
+second_function = "normalize_for_key"
+output_contract = "same-output-for-same-input"
+
+[checks.patch_cascade]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/*.py"]
+
+[[checks.patch_cascade.functions]]
+function_name = "parse_document"
+selector_names = ["repair_id"]
+repair_ids = ["vendor-a", "vendor-b"]
+normalization_helpers = ["normalize_text"]
+function_contract = "general-parser"
+
+[orchestration]
+default_profile = "review-pipelines"
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Parallel normalization"
+rule = "parallel-normalization"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Patch cascade"
+rule = "patch-cascade"
+
+[[orchestration.profiles]]
+name = "review-pipelines"
+steps = ["Parallel normalization", "Patch cascade"]

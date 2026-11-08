@@ -32,8 +32,6 @@ from alphus.policy.intents import (
 from alphus.policy.repository import VersionSyncPolicy
 from alphus.policy.review import (
     CiWorkflowPolicy,
-    ParallelNormalizationPolicy,
-    PatchCascadePolicy,
     RepeatedNumericLimitPolicy,
     RunArtifactPolicy,
     SourceFamilyPolicy,
@@ -57,8 +55,6 @@ class CheckPolicies(GeneratedFeaturePolicies):
 
     repeated_numeric_limits: RepeatedNumericLimitPolicy | None = None
     typing_stub_suggestions: TypingStubSuggestionPolicy | None = None
-    parallel_normalization: ParallelNormalizationPolicy | None = None
-    patch_cascade: PatchCascadePolicy | None = None
     run_artifacts: RunArtifactPolicy | None = None
     ci_workflows: CiWorkflowPolicy | None = None
     source_test_coverage: SourceTestCoveragePolicy | None = None

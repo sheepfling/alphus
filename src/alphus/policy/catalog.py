@@ -114,18 +114,6 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             "Suggests compatible typing stub packages for declared dependencies.",
             ("python", "typing"),
         ),
-        "parallel-normalization": RuleSpec(
-            "parallel_normalization",
-            RuleOutputShape.FINDINGS,
-            "Reviews parallel normalization implementations.",
-            ("python",),
-        ),
-        "patch-cascade": RuleSpec(
-            "patch_cascade",
-            RuleOutputShape.FINDINGS,
-            "Reviews ordered patch operations that can cascade across edits.",
-            ("python",),
-        ),
         "ci-workflows": RuleSpec(
             "ci_workflows",
             RuleOutputShape.FINDINGS,

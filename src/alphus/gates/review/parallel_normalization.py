@@ -3,16 +3,61 @@
 from __future__ import annotations
 
 import ast
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
-from alphus.config import ParallelNormalizationPair, ParallelNormalizationPolicy
+from alphus.config import ParallelNormalizationPair, QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
 from alphus.gates.review._module_bindings import module_binding_counts
+from alphus.plugins.builtin import BuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import ParallelNormalizationPolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="parallel-normalization",
+    policy_field="parallel_normalization",
+    policy_model=ParallelNormalizationPolicy,
+    output_shape="findings",
+    summary="Reviews parallel normalization implementations.",
+    applies_to=("python",),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="parallel-normalization",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.MAINTAINABILITY,
+            "parallel-normalization",
+        ),
+    ),
+    concern="inconsistent-parallel-normalization",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "Configured same-output normalizers may use different separator rules; "
+        "a match does not establish a defect or equivalence outside the contract."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("configured-python-paths", "direct-split-join-normalizers"),
+    languages_formats=("python",),
+    evidence_kinds=("declared-same-output-contract", "python-ast", "source-location"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
 
 _RULE_ID = rule_tag(
     Scope.PYTHON,
@@ -279,3 +324,21 @@ def check_parallel_normalization(
             )
         )
     return findings
+
+
+def run_parallel_normalization_rule(
+    root: Path, paths: Sequence[Path], config: QualityGateConfig
+) -> list[Finding]:
+    """Adapt the existing normalization policy to the typed built-in runner."""
+    return check_parallel_normalization(
+        root,
+        paths,
+        require_policy(config.checks.parallel_normalization, "parallel_normalization"),
+    )
+
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_parallel_normalization_rule,
+)

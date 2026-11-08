@@ -14,8 +14,6 @@ from typing import TypeAlias
 from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.execution.results import RuleOutput
 from alphus.gates.review.ci_workflows import check_ci_workflows
-from alphus.gates.review.parallel_normalization import check_parallel_normalization
-from alphus.gates.review.patch_cascade import check_patch_cascade
 from alphus.gates.review.repeated_numeric_limits import (
     check_repeated_numeric_limits,
 )
@@ -52,20 +50,6 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
                     config.checks.typing_stub_suggestions, "typing_stub_suggestions"
                 ),
             )
-        ),
-        "parallel-normalization": lambda root, files, config: (
-            check_parallel_normalization(
-                root,
-                files,
-                require_policy(
-                    config.checks.parallel_normalization, "parallel_normalization"
-                ),
-            )
-        ),
-        "patch-cascade": lambda root, files, config: check_patch_cascade(
-            root,
-            files,
-            require_policy(config.checks.patch_cascade, "patch_cascade"),
         ),
         "run-artifacts": lambda root, files, config: check_run_artifacts(
             root,

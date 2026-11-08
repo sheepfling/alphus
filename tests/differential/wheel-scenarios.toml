@@ -426,6 +426,72 @@ arguments = ["--config", "quality-gates.toml", "--rule", "positional-interfaces"
 parse_json = false
 
 [[scenario]]
+name = "parallel-normalization-direct"
+fixture = "review-pipelines"
+selectors = ["parallel-normalization"]
+behavior = ["direct-selector", "declared-same-output-contract", "finding-id"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/python/none/maintainability/parallel-normalization", path = "src/example.py", line = 6 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "parallel-normalization", "--json"]
+
+[[scenario]]
+name = "patch-cascade-direct"
+fixture = "review-pipelines"
+selectors = ["patch-cascade"]
+behavior = ["direct-selector", "configured-repair-contract", "finding-id"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/python/none/maintainability/patch-cascade", path = "src/example.py", line = 18 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "patch-cascade", "--json"]
+
+[[scenario]]
+name = "review-pipelines-profile"
+fixture = "review-pipelines"
+selectors = ["parallel-normalization", "patch-cascade"]
+behavior = ["feature-owned-profile-dispatch", "stable-step-and-finding-order"]
+expected_exit = 0
+minimum_findings = 2
+expected_step_names = ["Parallel normalization", "Patch cascade"]
+expected_step_rules = ["parallel-normalization", "patch-cascade"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/python/none/maintainability/parallel-normalization", path = "src/example.py", line = 6 },
+  { rule_id = "alphus/python/none/maintainability/patch-cascade", path = "src/example.py", line = 18 },
+]
+
+[[scenario.variant]]
+name = "serial"
+arguments = ["--config", "quality-gates.toml", "--profile", "review-pipelines", "--run", "--jobs", "1", "--json"]
+
+[[scenario.variant]]
+name = "parallel"
+arguments = ["--config", "quality-gates.toml", "--profile", "review-pipelines", "--run", "--jobs", "2", "--json"]
+
+[[scenario]]
+name = "review-pipelines-invalid-config"
+fixture = "review-pipelines-invalid-config"
+selectors = ["parallel-normalization"]
+behavior = ["feature-owned-strict-policy", "unknown-field-rejected-before-run"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-config"
+arguments = ["--config", "quality-gates.toml", "--rule", "parallel-normalization"]
+parse_json = false
+
+[[scenario]]
 name = "review-architecture-profile"
 fixture = "review-architecture"
 selectors = ["provenance-as-ownership", "semantic-work-in-presentation"]
