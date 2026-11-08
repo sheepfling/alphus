@@ -14,7 +14,7 @@ from alphus.config import QualityGateConfig
 from alphus.contracts.complaints import ComplaintContract, ComplaintEntry
 from alphus.contracts.findings import Finding, Severity
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -1127,8 +1127,23 @@ def run_sqlalchemy_practices_rule(
     )
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+def resolve_sqlalchemy_practices_policy(
+    config: QualityGateConfig,
+) -> SqlAlchemyPracticePolicy:
+    """Resolve the strict sqlalchemy practices policy from validated config."""
+    return require_policy(config.checks.sqlalchemy_practices, "sqlalchemy_practices")
+
+
+def run_sqlalchemy_practices_feature(
+    root: Path, paths: Sequence[Path], policy: SqlAlchemyPracticePolicy
+) -> list[Finding]:
+    """Run this framework review with its feature-owned policy type."""
+    return check_sqlalchemy_practices(root, paths, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_sqlalchemy_practices_rule,
+    runner=run_sqlalchemy_practices_feature,
+    policy_resolver=resolve_sqlalchemy_practices_policy,
 )

@@ -1,10 +1,20 @@
 """Synthetic Pydantic source contracts for optional review findings."""
 
+from pathlib import Path
+
 import pytest
 from pydantic import BaseModel, ValidationError
 
-from alphus.config import PydanticPracticePolicy
-from alphus.gates.review.frameworks.pydantic.practices import pydantic_practice_findings
+from alphus.config import PydanticPracticePolicy, QualityGateConfig
+from alphus.execution.dispatch import run_builtin_rule
+from alphus.gates.review.frameworks.pydantic.practices import (
+    ALPHUS_FEATURE,
+    check_pydantic_practices,
+    pydantic_practice_findings,
+    resolve_pydantic_practices_policy,
+    run_pydantic_practices_feature,
+)
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 
 def _policy(**options: bool | tuple[str, ...]) -> PydanticPracticePolicy:
@@ -1061,3 +1071,35 @@ def test_pydantic_policy_rejects_malformed_or_unknown_options(
         PydanticPracticePolicy.model_validate(
             dict((("extensions", (".py",)), *options))
         )
+
+
+def test_typed_registration_preserves_pydantic_practice_findings(
+    tmp_path: Path,
+) -> None:
+    relative = Path("src/models.py")
+    source = tmp_path / relative
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "def output(model):\n"
+        "    data = model.model_dump(mode='json')\n"
+        "    return Adapter.model_validate(data)\n",
+        encoding="utf-8",
+    )
+    config = QualityGateConfig.model_validate(
+        {
+            "schema_version": 1,
+            "checks": {"pydantic_practices": {"extensions": [".py"]}},
+        },
+        strict=True,
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is PydanticPracticePolicy
+    policy = resolve_pydantic_practices_policy(config)
+    assert type(policy) is PydanticPracticePolicy
+    expected = run_pydantic_practices_feature(tmp_path, (relative,), policy)
+    assert check_pydantic_practices(tmp_path, (relative,), policy) == expected
+    assert (
+        run_builtin_rule("pydantic-practices", tmp_path, (relative,), config)
+        == expected
+    )

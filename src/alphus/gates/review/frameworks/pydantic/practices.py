@@ -21,7 +21,7 @@ from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
 from alphus.gates.review.frameworks.pydantic.manual_validation import (
     manual_model_validation_lines,
 )
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -2035,8 +2035,23 @@ def run_pydantic_practices_rule(
     )
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+def resolve_pydantic_practices_policy(
+    config: QualityGateConfig,
+) -> PydanticPracticePolicy:
+    """Resolve the strict pydantic practices policy from validated config."""
+    return require_policy(config.checks.pydantic_practices, "pydantic_practices")
+
+
+def run_pydantic_practices_feature(
+    root: Path, paths: Sequence[Path], policy: PydanticPracticePolicy
+) -> list[Finding]:
+    """Run this framework review with its feature-owned policy type."""
+    return check_pydantic_practices(root, paths, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_pydantic_practices_rule,
+    runner=run_pydantic_practices_feature,
+    policy_resolver=resolve_pydantic_practices_policy,
 )

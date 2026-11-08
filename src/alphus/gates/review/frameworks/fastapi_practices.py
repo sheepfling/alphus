@@ -14,7 +14,7 @@ from alphus.contracts.complaints import ComplaintContract, ComplaintEntry
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
 from alphus.gates.review.frameworks.fastapi_contracts import fastapi_contract_findings
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -423,8 +423,24 @@ ALPHUS_MORPHOLOGY: Final = RuleMorphology(
     evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
 )
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+
+def resolve_fastapi_practices_policy(
+    config: QualityGateConfig,
+) -> FastApiPracticePolicy:
+    """Resolve the strict fastapi practices policy from validated config."""
+    return require_policy(config.checks.fastapi_practices, "fastapi_practices")
+
+
+def run_fastapi_practices_feature(
+    root: Path, paths: Sequence[Path], policy: FastApiPracticePolicy
+) -> list[Finding]:
+    """Run this framework review with its feature-owned policy type."""
+    return check_fastapi_practices(root, paths, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_fastapi_practices_rule,
+    runner=run_fastapi_practices_feature,
+    policy_resolver=resolve_fastapi_practices_policy,
 )

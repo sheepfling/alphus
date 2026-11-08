@@ -9,10 +9,16 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from alphus.config import QualityGateConfig
+from alphus.config import FastApiPracticePolicy, QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.execution.dispatch import run_builtin_rule
 from alphus.execution.results import RuleOutput
+from alphus.gates.review.frameworks.fastapi_practices import (
+    ALPHUS_FEATURE,
+    resolve_fastapi_practices_policy,
+    run_fastapi_practices_feature,
+)
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.plugins.builtin_registry import builtin_check_entry_points
 from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
 from alphus.policy.catalog import RULE_SPECS
@@ -65,11 +71,17 @@ def test_registered_runner_preserves_source_finding_identity(tmp_path: Path) -> 
         encoding="utf-8",
     )
 
-    findings = _as_findings(
-        run_builtin_rule(
-            "fastapi-practices", tmp_path, (Path("src/api.py"),), _config()
-        )
+    config = _config()
+    selected = (Path("src/api.py"),)
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is FastApiPracticePolicy
+    policy = resolve_fastapi_practices_policy(config)
+    direct = run_fastapi_practices_feature(tmp_path, selected, policy)
+    dispatched = _as_findings(
+        run_builtin_rule("fastapi-practices", tmp_path, selected, config)
     )
+    assert dispatched == direct
+    findings = dispatched
 
     assert [
         (item.rule_id, item.path, item.line, item.severity) for item in findings
@@ -136,7 +148,7 @@ def test_unselected_fastapi_provider_does_not_import(tmp_path: Path) -> None:
     script = """
 import sys
 from pathlib import Path
-from alphus.config import QualityGateConfig
+from alphus.config import FastApiPracticePolicy, QualityGateConfig
 from alphus.execution.dispatch import run_builtin_rule
 provider = "alphus.gates.review.frameworks.fastapi_practices"
 assert provider not in sys.modules
