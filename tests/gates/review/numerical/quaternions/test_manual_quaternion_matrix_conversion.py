@@ -3,11 +3,16 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from alphus.config import QuaternionMatrixConversionPolicy
+from alphus.config import QualityGateConfig, QuaternionMatrixConversionPolicy
+from alphus.execution.dispatch import run_builtin_rule
 from alphus.gates.review.numerical.quaternions.manual_quaternion_matrix_conversion import (
+    ALPHUS_FEATURE,
     check_manual_quaternion_matrix_conversion,
     quaternion_matrix_conversion_sites,
+    resolve_manual_quaternion_matrix_conversion_policy,
+    run_manual_quaternion_matrix_conversion_feature,
 )
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 _SOURCE = """\
 def quaternion_to_matrix(w, x, y, z):
@@ -95,3 +100,50 @@ def test_configuration_and_scope_bound_the_finding(tmp_path: Path) -> None:
     )
     with pytest.raises(ValidationError, match="active-column-scalar-first"):
         _policy(convention="active-row-scalar-first")
+
+
+def test_feature_registration_preserves_configured_finding_behavior(
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "src/geometry/operations.py"
+    source_path.parent.mkdir(parents=True)
+    source = chr(10).join(
+        (
+            "def quaternion_to_matrix(w, x, y, z):",
+            "    return [",
+            "        [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), "
+            + "2 * (x * z + y * w)],",
+            "        [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), "
+            + "2 * (y * z - x * w)],",
+            "        [2 * (x * z - y * w), 2 * (y * z + x * w), "
+            + "1 - 2 * (x * x + y * y)],",
+            "    ]",
+        )
+    ) + chr(10)
+    source_path.write_text(source, encoding="utf-8")
+    relative = Path("src/geometry/operations.py")
+    policy = _policy()
+    config = QualityGateConfig.model_validate(
+        {
+            "schema_version": 1,
+            "checks": {"manual_quaternion_matrix_conversion": policy},
+        },
+        strict=True,
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is QuaternionMatrixConversionPolicy
+    resolved = resolve_manual_quaternion_matrix_conversion_policy(config)
+    assert type(resolved) is QuaternionMatrixConversionPolicy
+    expected = check_manual_quaternion_matrix_conversion(tmp_path, [relative], policy)
+    assert expected
+    assert (
+        run_manual_quaternion_matrix_conversion_feature(tmp_path, [relative], resolved)
+        == expected
+    )
+    assert (
+        run_builtin_rule(
+            "manual-quaternion-matrix-conversion", tmp_path, [relative], config
+        )
+        == expected
+    )

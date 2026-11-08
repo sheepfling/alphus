@@ -21,7 +21,7 @@ from alphus.gates.review.numerical.common.ast_helpers import (
     configured_function_observations,
     redefined_function_names,
 )
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -218,20 +218,26 @@ def check_manual_quaternion_matrix_conversion(
     return findings
 
 
-def _run_builtin_manual_quaternion_matrix_conversion(
-    root: Path,
-    files: Sequence[Path],
+def resolve_manual_quaternion_matrix_conversion_policy(
     config: QualityGateConfig,
-) -> list[Finding]:
-    policy = require_policy(
+) -> QuaternionMatrixConversionPolicy:
+    """Resolve this quaternion check's strict feature policy."""
+    return require_policy(
         config.checks.manual_quaternion_matrix_conversion,
         "manual_quaternion_matrix_conversion",
     )
+
+
+def run_manual_quaternion_matrix_conversion_feature(
+    root: Path, files: Sequence[Path], policy: QuaternionMatrixConversionPolicy
+) -> list[Finding]:
+    """Run this configured quaternion review with its typed policy."""
     return check_manual_quaternion_matrix_conversion(root, files, policy)
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=_run_builtin_manual_quaternion_matrix_conversion,
+    runner=run_manual_quaternion_matrix_conversion_feature,
+    policy_resolver=resolve_manual_quaternion_matrix_conversion_policy,
 )

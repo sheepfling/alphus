@@ -24,7 +24,7 @@ from alphus.gates.review.numerical.common.ast_helpers import (
 from alphus.gates.review.numerical.quaternions.ast_patterns import (
     is_sum_of_four_squares,
 )
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -236,19 +236,25 @@ def check_manual_quaternion_normalization(
     return findings
 
 
-def _run_builtin_manual_quaternion_normalization(
-    root: Path,
-    files: Sequence[Path],
+def resolve_manual_quaternion_normalization_policy(
     config: QualityGateConfig,
-) -> list[Finding]:
-    policy = require_policy(
+) -> QuaternionNormalizationPolicy:
+    """Resolve this quaternion check's strict feature policy."""
+    return require_policy(
         config.checks.manual_quaternion_normalization, "manual_quaternion_normalization"
     )
+
+
+def run_manual_quaternion_normalization_feature(
+    root: Path, files: Sequence[Path], policy: QuaternionNormalizationPolicy
+) -> list[Finding]:
+    """Run this configured quaternion review with its typed policy."""
     return check_manual_quaternion_normalization(root, files, policy)
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=_run_builtin_manual_quaternion_normalization,
+    runner=run_manual_quaternion_normalization_feature,
+    policy_resolver=resolve_manual_quaternion_normalization_policy,
 )

@@ -3,11 +3,16 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from alphus.config import QuaternionConjugationPolicy
+from alphus.config import QualityGateConfig, QuaternionConjugationPolicy
+from alphus.execution.dispatch import run_builtin_rule
 from alphus.gates.review.numerical.quaternions.manual_quaternion_conjugation import (
+    ALPHUS_FEATURE,
     check_manual_quaternion_conjugation,
     quaternion_conjugation_lines,
+    resolve_manual_quaternion_conjugation_policy,
+    run_manual_quaternion_conjugation_feature,
 )
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 _COMPONENTS = ("w", "x", "y", "z")
 
@@ -90,3 +95,34 @@ def test_reports_only_configured_paths_and_honors_exclusions(tmp_path: Path) -> 
         exclude=("src/geometry/**",),
     )
     assert not check_manual_quaternion_conjugation(tmp_path, paths, excluded)
+
+
+def test_feature_registration_preserves_configured_finding_behavior(
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "src/geometry/operations.py"
+    source_path.parent.mkdir(parents=True)
+    source_path.write_text(
+        "def conjugate(w, x, y, z):\n    return w, -x, -y, -z\n", encoding="utf-8"
+    )
+    relative = Path("src/geometry/operations.py")
+    policy = _policy()
+    config = QualityGateConfig.model_validate(
+        {"schema_version": 1, "checks": {"manual_quaternion_conjugation": policy}},
+        strict=True,
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is QuaternionConjugationPolicy
+    resolved = resolve_manual_quaternion_conjugation_policy(config)
+    assert type(resolved) is QuaternionConjugationPolicy
+    expected = check_manual_quaternion_conjugation(tmp_path, [relative], policy)
+    assert expected
+    assert (
+        run_manual_quaternion_conjugation_feature(tmp_path, [relative], resolved)
+        == expected
+    )
+    assert (
+        run_builtin_rule("manual-quaternion-conjugation", tmp_path, [relative], config)
+        == expected
+    )

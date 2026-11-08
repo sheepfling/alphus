@@ -3,11 +3,16 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from alphus.config import QuaternionProductPolicy
+from alphus.config import QualityGateConfig, QuaternionProductPolicy
+from alphus.execution.dispatch import run_builtin_rule
 from alphus.gates.review.numerical.quaternions.manual_quaternion_product import (
+    ALPHUS_FEATURE,
     check_manual_quaternion_products,
     quaternion_product_lines,
+    resolve_manual_quaternion_products_policy,
+    run_manual_quaternion_products_feature,
 )
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 _LEFT = ("lw", "lx", "ly", "lz")
 _RIGHT = ("rw", "rx", "ry", "rz")
@@ -80,4 +85,45 @@ def test_reports_only_configured_source_and_respects_exclusions(tmp_path: Path) 
     excluded = _policy(exclude=("src/geometry/**",))
     assert not check_manual_quaternion_products(
         tmp_path, (Path("src/geometry/rotation.py"),), excluded
+    )
+
+
+def test_feature_registration_preserves_configured_finding_behavior(
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "src/geometry/operations.py"
+    source_path.parent.mkdir(parents=True)
+    source = chr(10).join(
+        (
+            "def multiply_quaternions(lw, lx, ly, lz, rw, rx, ry, rz):",
+            "    ow, ox, oy, oz = (",
+            "        lw * rw - lx * rx - ly * ry - lz * rz,",
+            "        lw * rx + lx * rw + ly * rz - lz * ry,",
+            "        lw * ry - lx * rz + ly * rw + lz * rx,",
+            "        lw * rz + lx * ry - ly * rx + lz * rw,",
+            "    )",
+            "    return ow, ox, oy, oz",
+        )
+    ) + chr(10)
+    source_path.write_text(source, encoding="utf-8")
+    relative = Path("src/geometry/operations.py")
+    policy = _policy()
+    config = QualityGateConfig.model_validate(
+        {"schema_version": 1, "checks": {"manual_quaternion_products": policy}},
+        strict=True,
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is QuaternionProductPolicy
+    resolved = resolve_manual_quaternion_products_policy(config)
+    assert type(resolved) is QuaternionProductPolicy
+    expected = check_manual_quaternion_products(tmp_path, [relative], policy)
+    assert expected
+    assert (
+        run_manual_quaternion_products_feature(tmp_path, [relative], resolved)
+        == expected
+    )
+    assert (
+        run_builtin_rule("manual-quaternion-products", tmp_path, [relative], config)
+        == expected
     )

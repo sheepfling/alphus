@@ -1,10 +1,15 @@
 from pathlib import Path
 
-from alphus.config import QuaternionVectorRotationPolicy
+from alphus.config import QualityGateConfig, QuaternionVectorRotationPolicy
+from alphus.execution.dispatch import run_builtin_rule
 from alphus.gates.review.numerical.quaternions.manual_quaternion_vector_rotation import (
+    ALPHUS_FEATURE,
     check_manual_quaternion_vector_rotation,
     quaternion_vector_rotation_sites,
+    resolve_manual_quaternion_vector_rotation_policy,
+    run_manual_quaternion_vector_rotation_feature,
 )
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 _SOURCE = """\
 def rotate_vector(w, x, y, z, vx, vy, vz):
@@ -79,4 +84,42 @@ def test_configured_path_exclusion_and_message_are_respected(tmp_path: Path) -> 
     )
     assert not check_manual_quaternion_vector_rotation(
         tmp_path, paths, _policy(exclude=("src/geometry/rotation.py",))
+    )
+
+
+def test_feature_registration_preserves_configured_finding_behavior(
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "src/geometry/operations.py"
+    source_path.parent.mkdir(parents=True)
+    source = chr(10).join(
+        (
+            "def rotate_vector(w, x, y, z, vx, vy, vz):",
+            "    return multiply(multiply((w, x, y, z), (0, vx, vy, vz)), "
+            + "conjugate((w, x, y, z)))",
+        )
+    ) + chr(10)
+    source_path.write_text(source, encoding="utf-8")
+    relative = Path("src/geometry/operations.py")
+    policy = _policy()
+    config = QualityGateConfig.model_validate(
+        {"schema_version": 1, "checks": {"manual_quaternion_vector_rotation": policy}},
+        strict=True,
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is QuaternionVectorRotationPolicy
+    resolved = resolve_manual_quaternion_vector_rotation_policy(config)
+    assert type(resolved) is QuaternionVectorRotationPolicy
+    expected = check_manual_quaternion_vector_rotation(tmp_path, [relative], policy)
+    assert expected
+    assert (
+        run_manual_quaternion_vector_rotation_feature(tmp_path, [relative], resolved)
+        == expected
+    )
+    assert (
+        run_builtin_rule(
+            "manual-quaternion-vector-rotation", tmp_path, [relative], config
+        )
+        == expected
     )

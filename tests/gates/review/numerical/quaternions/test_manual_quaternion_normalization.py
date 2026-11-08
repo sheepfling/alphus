@@ -2,11 +2,16 @@ from pathlib import Path
 
 import pytest
 
-from alphus.config import QuaternionNormalizationPolicy
+from alphus.config import QualityGateConfig, QuaternionNormalizationPolicy
+from alphus.execution.dispatch import run_builtin_rule
 from alphus.gates.review.numerical.quaternions.manual_quaternion_normalization import (
+    ALPHUS_FEATURE,
     check_manual_quaternion_normalization,
     quaternion_normalization_sites,
+    resolve_manual_quaternion_normalization_policy,
+    run_manual_quaternion_normalization_feature,
 )
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 _SOURCE = """\
 import math
@@ -115,4 +120,45 @@ def test_scope_exclusions_and_finding_evidence(tmp_path: Path) -> None:
         tmp_path,
         paths,
         _policy(source_paths=("src/other/*.py",)),
+    )
+
+
+def test_feature_registration_preserves_configured_finding_behavior(
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "src/geometry/operations.py"
+    source_path.parent.mkdir(parents=True)
+    source = chr(10).join(
+        (
+            "import math",
+            "",
+            "def normalize_attitude(w, x, y, z):",
+            "    norm = math.sqrt(w * w + x * x + y * y + z * z)",
+            "    unit = (w / norm, x / norm, y / norm, z / norm)",
+            "    return Rotation.from_quat(unit)",
+        )
+    ) + chr(10)
+    source_path.write_text(source, encoding="utf-8")
+    relative = Path("src/geometry/operations.py")
+    policy = _policy()
+    config = QualityGateConfig.model_validate(
+        {"schema_version": 1, "checks": {"manual_quaternion_normalization": policy}},
+        strict=True,
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is QuaternionNormalizationPolicy
+    resolved = resolve_manual_quaternion_normalization_policy(config)
+    assert type(resolved) is QuaternionNormalizationPolicy
+    expected = check_manual_quaternion_normalization(tmp_path, [relative], policy)
+    assert expected
+    assert (
+        run_manual_quaternion_normalization_feature(tmp_path, [relative], resolved)
+        == expected
+    )
+    assert (
+        run_builtin_rule(
+            "manual-quaternion-normalization", tmp_path, [relative], config
+        )
+        == expected
     )

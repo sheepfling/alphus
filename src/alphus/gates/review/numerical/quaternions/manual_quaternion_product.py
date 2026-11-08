@@ -16,7 +16,7 @@ from alphus.contracts.rule_tags import (
     Scope,
     rule_tag,
 )
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -231,19 +231,25 @@ def check_manual_quaternion_products(
     return findings
 
 
-def _run_builtin_manual_quaternion_products(
-    root: Path,
-    files: Sequence[Path],
+def resolve_manual_quaternion_products_policy(
     config: QualityGateConfig,
-) -> list[Finding]:
-    policy = require_policy(
+) -> QuaternionProductPolicy:
+    """Resolve this quaternion check's strict feature policy."""
+    return require_policy(
         config.checks.manual_quaternion_products, "manual_quaternion_products"
     )
+
+
+def run_manual_quaternion_products_feature(
+    root: Path, files: Sequence[Path], policy: QuaternionProductPolicy
+) -> list[Finding]:
+    """Run this configured quaternion review with its typed policy."""
     return check_manual_quaternion_products(root, files, policy)
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=_run_builtin_manual_quaternion_products,
+    runner=run_manual_quaternion_products_feature,
+    policy_resolver=resolve_manual_quaternion_products_policy,
 )
