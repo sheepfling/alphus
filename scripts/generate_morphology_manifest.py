@@ -12,7 +12,7 @@ import json
 import re
 import sys
 import textwrap
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping, Sequence, Set as AbstractSet
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TypeAlias, cast
@@ -1323,7 +1323,7 @@ def _validate_feature_registration(
     root: Path,
     declaration: _Declaration,
     *,
-    feature_policy_fields: set[str],
+    feature_policy_fields: AbstractSet[str],
 ) -> None:
     feature = declaration.feature
     if feature is None:

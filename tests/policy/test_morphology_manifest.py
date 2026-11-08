@@ -517,8 +517,7 @@ def test_feature_definition_supports_qualified_constructor_and_selector_constant
     ).replace("selector='demo-check',", "selector=SELECTOR,", 1)
     source = source.replace(
         ")\nALPHUS_MORPHOLOGY = RuleMorphology(",
-        ")\nSELECTOR = 'reassigned-after-check'\n"
-        "ALPHUS_MORPHOLOGY = RuleMorphology(",
+        ")\nSELECTOR = 'reassigned-after-check'\nALPHUS_MORPHOLOGY = RuleMorphology(",
         1,
     )
     source = source.replace(
