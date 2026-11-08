@@ -13,7 +13,7 @@ from alphus.config import QualityGateConfig
 from alphus.contracts.complaints import ComplaintContract, ComplaintEntry
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
 from alphus.contracts.shared_utilities import SharedUtilitiesReport
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import SharedUtilitiesBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -374,8 +374,21 @@ def run_shared_utilities_rule(
     )
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+def resolve_shared_utilities_policy(config: QualityGateConfig) -> SharedUtilitiesPolicy:
+    """Resolve the strict shared-utilities policy from validated config."""
+    return require_policy(config.checks.shared_utilities, "shared_utilities")
+
+
+def run_shared_utilities_feature(
+    root: Path, paths: Sequence[Path], policy: SharedUtilitiesPolicy
+) -> SharedUtilitiesReport:
+    """Run the related utility checks with their typed report contract."""
+    return check_shared_utilities(root, paths, policy)
+
+
+ALPHUS_FEATURE: Final = SharedUtilitiesBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_shared_utilities_rule,
+    runner=run_shared_utilities_feature,
+    policy_resolver=resolve_shared_utilities_policy,
 )

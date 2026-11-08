@@ -8,12 +8,19 @@ from pathlib import Path
 
 import pytest
 
-from alphus.config import PythonStylePolicy
+from alphus.config import PythonStylePolicy, QualityGateConfig
+from alphus.execution.dispatch import run_builtin_rule
 from alphus.gates.languages.python.style import (
     StyleVisitor,
     findings_for,
     is_boundary_file,
 )
+from alphus.gates.languages.python.style_feature import (
+    ALPHUS_FEATURE,
+    resolve_python_style_policy,
+    run_python_style_feature,
+)
+from alphus.plugins.builtin import PythonStyleBuiltinFeature
 
 POLICY = PythonStylePolicy(
     extensions=[".py"],
@@ -798,3 +805,23 @@ def test_public_constant_index_treats_external_star_imports_as_unknown(
         update={"public_constant_paths": ("src/alphus/gates/cpp/**",)}
     )
     assert findings_for(tmp_path, [source, consumer], policy) == {}
+
+
+def test_typed_registration_preserves_python_style_categories(tmp_path: Path) -> None:
+    relative = Path("src/module.py")
+    source = tmp_path / relative
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "def render(items: list) -> None:\n    return None\n",
+        encoding="utf-8",
+    )
+    config = QualityGateConfig.model_validate(
+        {"schema_version": 1, "checks": {"python_style": POLICY}}, strict=True
+    )
+
+    assert isinstance(ALPHUS_FEATURE, PythonStyleBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is PythonStylePolicy
+    policy = resolve_python_style_policy(config)
+    expected = run_python_style_feature(tmp_path, (relative,), policy)
+    assert expected == findings_for(tmp_path, (relative,), policy)
+    assert run_builtin_rule("python-style", tmp_path, (relative,), config) == expected

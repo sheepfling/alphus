@@ -8,13 +8,19 @@ from pathlib import Path
 import pytest
 
 from alphus.cli import main
-from alphus.config import SharedUtilitiesPolicy
+from alphus.config import QualityGateConfig, SharedUtilitiesPolicy
+from alphus.contracts.shared_utilities import SharedUtilitiesReport
+from alphus.execution.dispatch import run_builtin_rule
 from alphus.gates.hygiene.shared_utilities import (
+    ALPHUS_FEATURE,
     check_shared_utilities,
     duplicate_helpers,
     file_sha256_helpers,
+    resolve_shared_utilities_policy,
+    run_shared_utilities_feature,
 )
 from alphus.gates.languages.python.runtime_types import type_check_findings
+from alphus.plugins.builtin import SharedUtilitiesBuiltinFeature
 
 POLICY = SharedUtilitiesPolicy(
     extensions=[".py"],
@@ -337,3 +343,29 @@ def test_shared_utilities_reports_direct_git_launches(tmp_path: Path) -> None:
     report = check_shared_utilities(tmp_path, [Path("src/raw.py")], POLICY)
     assert report.direct_git_calls == ("src/raw.py:3",)
     assert report.failed
+
+
+def test_typed_registration_preserves_shared_utilities_report(tmp_path: Path) -> None:
+    relative = Path("src/one.py")
+    source = tmp_path / relative
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "def repeated(value):\n"
+        "    first = value\n"
+        "    second = value\n"
+        "    return first + second\n",
+        encoding="utf-8",
+    )
+    config = QualityGateConfig.model_validate(
+        {"schema_version": 1, "checks": {"shared_utilities": POLICY}}, strict=True
+    )
+
+    assert isinstance(ALPHUS_FEATURE, SharedUtilitiesBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is SharedUtilitiesPolicy
+    policy = resolve_shared_utilities_policy(config)
+    expected = run_shared_utilities_feature(tmp_path, (relative,), policy)
+    assert isinstance(expected, SharedUtilitiesReport)
+    assert check_shared_utilities(tmp_path, (relative,), policy) == expected
+    assert (
+        run_builtin_rule("shared-utilities", tmp_path, (relative,), config) == expected
+    )

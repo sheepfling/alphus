@@ -14,7 +14,12 @@ from packaging.specifiers import SpecifierSet
 from packaging.version import Version
 
 from alphus.config import load_config
+from alphus.gates.languages.python.style_feature import (
+    resolve_python_style_policy,
+    run_python_style_feature,
+)
 from alphus.gates.review.test_quality import python_findings
+from alphus.plugins.builtin import PythonStyleBuiltinFeature
 from alphus.plugins.builtin_registry import load_builtin_feature
 
 
@@ -89,9 +94,13 @@ def test_self_profile_python_style_requires_exact_result_api_scope(
     policy = config.checks.python_style
     assert policy is not None
     assert not policy.semantic_result_apis
-    runner = load_builtin_feature("python-style").runner
-    assert runner(tmp_path, files, config) == {}
-    assert runner(Path(pytestconfig.rootpath), files, config) == {}
+    feature = load_builtin_feature("python-style")
+    assert isinstance(feature, PythonStyleBuiltinFeature)
+    resolved = resolve_python_style_policy(config)
+    assert resolved is policy
+    assert feature.runner is run_python_style_feature
+    assert run_python_style_feature(tmp_path, files, resolved) == {}
+    assert run_python_style_feature(Path(pytestconfig.rootpath), files, resolved) == {}
 
 
 def test_self_profile_excludes_only_the_lazy_provider_spike_file() -> None:

@@ -11,7 +11,7 @@ from alphus.contracts.complaints import ComplaintContract, ComplaintEntry
 from alphus.contracts.python_style import StyleFindings
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
 from alphus.gates.languages.python.style import findings_for
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import PythonStyleBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -454,8 +454,21 @@ def run_python_style_rule(
     )
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+def resolve_python_style_policy(config: QualityGateConfig) -> PythonStylePolicy:
+    """Resolve the strict Python-style policy from validated config."""
+    return require_policy(config.checks.python_style, "python_style")
+
+
+def run_python_style_feature(
+    root: Path, paths: Sequence[Path], policy: PythonStylePolicy
+) -> dict[str, StyleFindings]:
+    """Return the existing named style categories from the typed provider."""
+    return findings_for(root, paths, policy)
+
+
+ALPHUS_FEATURE: Final = PythonStyleBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_python_style_rule,
+    runner=run_python_style_feature,
+    policy_resolver=resolve_python_style_policy,
 )
