@@ -1,0 +1,38 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py", ".github/workflows/*.yml"]
+exclude = []
+
+[checks.ci_workflows]
+extensions = [".yml", ".yaml"]
+exclude = []
+workflow_paths = [".github/workflows/**"]
+minimum_run_lines = 2
+maximum_inline_run_lines = 20
+
+[checks.run_artifacts]
+extensions = [".py"]
+exclude = []
+conditional_output_readback = true
+reused_output_path_names = ["output_path"]
+output_writers = [{ function = "write_output" }]
+output_readers = [{ function = "read_output" }]
+
+[orchestration]
+default_profile = "ci-artifact-review"
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Review repeated workflow commands"
+rule = "ci-workflows"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Review artifact readback"
+rule = "run-artifacts"
+
+[[orchestration.profiles]]
+name = "ci-artifact-review"
+steps = ["Review repeated workflow commands", "Review artifact readback"]

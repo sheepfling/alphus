@@ -492,6 +492,72 @@ arguments = ["--config", "quality-gates.toml", "--rule", "parallel-normalization
 parse_json = false
 
 [[scenario]]
+name = "ci-workflows-direct"
+fixture = "ci-artifact-review"
+selectors = ["ci-workflows"]
+behavior = ["static-yaml-command-review", "finding-id-and-location"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/any/none/orchestration/duplicate-workflow-run", path = ".github/workflows/ci.yml", line = 7 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "ci-workflows", "--json"]
+
+[[scenario]]
+name = "run-artifacts-direct"
+fixture = "ci-artifact-review"
+selectors = ["run-artifacts"]
+behavior = ["configured-python-artifact-flow", "finding-id-and-location"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/python/none/orchestration/conditional-output-readback", path = "src/pipeline.py", line = 19 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "run-artifacts", "--json"]
+
+[[scenario]]
+name = "ci-artifact-review-profile"
+fixture = "ci-artifact-review"
+selectors = ["ci-workflows", "run-artifacts"]
+behavior = ["yaml-and-python-providers", "typed-results-and-order"]
+expected_exit = 0
+minimum_findings = 2
+expected_step_names = ["Review repeated workflow commands", "Review artifact readback"]
+expected_step_rules = ["ci-workflows", "run-artifacts"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/any/none/orchestration/duplicate-workflow-run", path = ".github/workflows/ci.yml", line = 7 },
+  { rule_id = "alphus/python/none/orchestration/conditional-output-readback", path = "src/pipeline.py", line = 19 },
+]
+
+[[scenario.variant]]
+name = "serial"
+arguments = ["--config", "quality-gates.toml", "--profile", "ci-artifact-review", "--run", "--jobs", "1", "--json"]
+
+[[scenario.variant]]
+name = "parallel"
+arguments = ["--config", "quality-gates.toml", "--profile", "ci-artifact-review", "--run", "--jobs", "2", "--json"]
+
+[[scenario]]
+name = "ci-artifact-review-invalid-config"
+fixture = "ci-artifact-review-invalid-config"
+selectors = ["ci-workflows"]
+behavior = ["unknown-policy-field-rejected-before-dispatch"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-config"
+arguments = ["--config", "quality-gates.toml", "--rule", "ci-workflows"]
+parse_json = false
+
+[[scenario]]
 name = "review-architecture-profile"
 fixture = "review-architecture"
 selectors = ["provenance-as-ownership", "semantic-work-in-presentation"]

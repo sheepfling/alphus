@@ -6,12 +6,78 @@ import ast
 from collections.abc import Iterable, Iterator, Sequence
 from collections.abc import Set as AbstractSet
 from pathlib import Path
+from typing import Final
 
-from alphus.config import ProvenanceCallRole, RunArtifactPolicy
+from alphus.config import ProvenanceCallRole, QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
+from alphus.plugins.builtin import BuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import RunArtifactPolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="run-artifacts",
+    policy_field="run_artifacts",
+    policy_model=RunArtifactPolicy,
+    output_shape="findings",
+    summary="Reviews selected Python artifact production and verification handoffs.",
+    applies_to=("python", "ci"),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="run-artifacts",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.ORCHESTRATION,
+            "failure-evidence-before-persistence",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.ORCHESTRATION,
+            "runtime-origin-not-bound-to-metadata",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.ORCHESTRATION,
+            "conditional-output-readback",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.ORCHESTRATION,
+            "parse-hash-reread",
+        ),
+    ),
+    concern="run-artifact-provenance-and-freshness",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "Configured local-flow relationships identify possible stale reuse or "
+        "provenance gaps; they do not establish runtime artifact identity."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=(
+        "configured-python-functions",
+        "artifact-path-and-provenance-flows",
+    ),
+    languages_formats=("python",),
+    evidence_kinds=("configured-call-roles", "python-ast", "source-location"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
 
 
 def _call_name(node: ast.expr) -> str | None:
@@ -909,3 +975,21 @@ def check_run_artifacts(
                 run_artifact_findings(read_python_source(path), name, policy)
             )
     return findings
+
+
+def run_artifacts_rule(
+    root: Path, paths: Sequence[Path], config: QualityGateConfig
+) -> list[Finding]:
+    """Adapt the opt-in artifact-flow analyzer to the typed built-in runner."""
+    return check_run_artifacts(
+        root,
+        paths,
+        require_policy(config.checks.run_artifacts, "run_artifacts"),
+    )
+
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_artifacts_rule,
+)

@@ -114,19 +114,6 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             "Suggests compatible typing stub packages for declared dependencies.",
             ("python", "typing"),
         ),
-        "ci-workflows": RuleSpec(
-            "ci_workflows",
-            RuleOutputShape.FINDINGS,
-            "Reviews selected CI workflow commands for repeated job work.",
-            ("yaml", "ci"),
-            requires_files=False,
-        ),
-        "run-artifacts": RuleSpec(
-            "run_artifacts",
-            RuleOutputShape.FINDINGS,
-            "Reviews selected Python artifact production and verification handoffs.",
-            ("python", "ci"),
-        ),
         "suppression-reasons": RuleSpec(
             "suppression_reasons",
             RuleOutputShape.FINDINGS,

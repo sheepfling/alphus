@@ -13,11 +13,9 @@ from typing import TypeAlias
 
 from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.execution.results import RuleOutput
-from alphus.gates.review.ci_workflows import check_ci_workflows
 from alphus.gates.review.repeated_numeric_limits import (
     check_repeated_numeric_limits,
 )
-from alphus.gates.review.run_artifacts import check_run_artifacts
 from alphus.gates.review.source_families import check_source_families
 from alphus.gates.review.source_test_coverage import check_source_test_coverage
 from alphus.gates.review.suppression_reasons import check_suppression_reasons
@@ -50,16 +48,6 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
                     config.checks.typing_stub_suggestions, "typing_stub_suggestions"
                 ),
             )
-        ),
-        "run-artifacts": lambda root, files, config: check_run_artifacts(
-            root,
-            files,
-            require_policy(config.checks.run_artifacts, "run_artifacts"),
-        ),
-        "ci-workflows": lambda root, files, config: check_ci_workflows(
-            root,
-            files,
-            require_policy(config.checks.ci_workflows, "ci_workflows"),
         ),
         "source-test-coverage": lambda root, files, config: check_source_test_coverage(
             root,
