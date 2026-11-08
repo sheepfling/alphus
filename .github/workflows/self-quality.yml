@@ -49,14 +49,14 @@ jobs:
     env:
       ALPHUS_BASELINE: c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e
       ALPHUS_CANDIDATE: ${{ github.event.pull_request.head.sha }}
-      ALPHUS_REPORT_DIR: ${{ runner.temp }}/alphus-wheel-differential
+      ALPHUS_REPORT_DIR: alphus-wheel-differential
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
       - name: Prepare differential evidence directory
-        run: mkdir -p "$ALPHUS_REPORT_DIR"
+        run: mkdir -p "$RUNNER_TEMP/$ALPHUS_REPORT_DIR"
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -89,9 +89,9 @@ jobs:
             --root . \
             --baseline "$ALPHUS_BASELINE" \
             --candidate "$ALPHUS_CANDIDATE" \
-            --output "$ALPHUS_REPORT_DIR/harness-report.json" \
-            >"$ALPHUS_REPORT_DIR/stdout.log" \
-            2>"$ALPHUS_REPORT_DIR/stderr.log"
+            --output "$RUNNER_TEMP/$ALPHUS_REPORT_DIR/harness-report.json" \
+            >"$RUNNER_TEMP/$ALPHUS_REPORT_DIR/stdout.log" \
+            2>"$RUNNER_TEMP/$ALPHUS_REPORT_DIR/stderr.log"
           result=$?
           echo "exit_code=$result" >> "$GITHUB_OUTPUT"
           exit "$result"
@@ -109,7 +109,7 @@ jobs:
           import tomllib
           from pathlib import Path
 
-          report_dir = Path(os.environ["ALPHUS_REPORT_DIR"])
+          report_dir = Path(os.environ["RUNNER_TEMP"]) / os.environ["ALPHUS_REPORT_DIR"]
           harness_report = report_dir / "harness-report.json"
           manifest = Path("tests/differential/wheel-scenarios.toml")
           manifest_bytes = manifest.read_bytes()
@@ -249,7 +249,7 @@ jobs:
       - name: Require a successful manifested-scenario comparison
         if: always()
         run: |
-          python - "$ALPHUS_REPORT_DIR/job-status.json" <<'PY'
+          python - "$RUNNER_TEMP/$ALPHUS_REPORT_DIR/job-status.json" <<'PY'
           import json
           import sys
           from pathlib import Path
