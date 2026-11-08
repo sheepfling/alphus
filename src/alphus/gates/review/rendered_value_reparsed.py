@@ -10,7 +10,7 @@ from typing import Final, NamedTuple
 from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -924,17 +924,23 @@ def check_rendered_value_reparsed(
     return findings
 
 
-def _run_builtin_rendered_value_reparsed(
-    root: Path,
-    files: Sequence[Path],
+def resolve_rendered_value_reparsed_policy(
     config: QualityGateConfig,
+) -> ProseAsControlPolicy:
+    """Resolve the existing prose policy shared with related checks."""
+    return require_policy(config.checks.prose_as_control, "prose_as_control")
+
+
+def run_rendered_value_reparsed_feature(
+    root: Path, files: Sequence[Path], policy: ProseAsControlPolicy
 ) -> list[Finding]:
-    policy = require_policy(config.checks.prose_as_control, "prose_as_control")
+    """Run rendered-value flow analysis with the shared typed policy."""
     return check_rendered_value_reparsed(root, files, policy)
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=_run_builtin_rendered_value_reparsed,
+    runner=run_rendered_value_reparsed_feature,
+    policy_resolver=resolve_rendered_value_reparsed_policy,
 )

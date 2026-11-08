@@ -16,8 +16,8 @@ from alphus.config import (
     load_config,
 )
 from alphus.contracts.findings import Finding
+from alphus.execution.dispatch import run_builtin_rule
 from alphus.gates.review import rendered_value_reparsed
-from alphus.plugins.builtin_registry import load_builtin_feature
 
 
 @pytest.fixture
@@ -77,14 +77,12 @@ def test_rendered_feedback_is_dispatched_only_by_its_dedicated_rule(
         rendered_result,
     )
 
-    prose_findings = load_builtin_feature("prose-as-control").runner(
-        Path("."), (), config
-    )
+    prose_findings = run_builtin_rule("prose-as-control", Path("."), (), config)
     assert prose_findings == []
     assert calls == []
 
-    rendered_findings = load_builtin_feature("rendered-value-reparsed").runner(
-        Path("."), (), config
+    rendered_findings = run_builtin_rule(
+        "rendered-value-reparsed", Path("."), (), config
     )
     assert rendered_findings == []
     assert calls == ["rendered"]

@@ -11,7 +11,7 @@ from typing import Final
 from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -890,19 +890,25 @@ def check_lossy_text_rewrite(
     return findings
 
 
-def _run_builtin_prose_as_control(
-    root: Path,
-    files: Sequence[Path],
+def resolve_prose_as_control_policy(
     config: QualityGateConfig,
+) -> ProseAsControlPolicy:
+    """Resolve the strict shared prose-analysis policy from validated config."""
+    return require_policy(config.checks.prose_as_control, "prose_as_control")
+
+
+def run_prose_as_control_feature(
+    root: Path, files: Sequence[Path], policy: ProseAsControlPolicy
 ) -> list[Finding]:
-    policy = require_policy(config.checks.prose_as_control, "prose_as_control")
+    """Run configured prose and rewrite checks with their typed shared policy."""
     return check_prose_as_control(root, files, policy) + check_lossy_text_rewrite(
         root, files, policy
     )
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=_run_builtin_prose_as_control,
+    runner=run_prose_as_control_feature,
+    policy_resolver=resolve_prose_as_control_policy,
 )
