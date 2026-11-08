@@ -1444,8 +1444,7 @@ def _validate_builtin_feature_export(
         )
     match exports[0]:
         case ast.Call(
-            func=ast.Name(id=constructor_name)
-            | ast.Attribute(attr=constructor_name),
+            func=ast.Name(id=constructor_name) | ast.Attribute(attr=constructor_name),
             args=args,
             keywords=keywords,
         ):

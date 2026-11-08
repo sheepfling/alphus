@@ -52,9 +52,7 @@ class BuiltinFeature:
 
 def _require_output_shape(feature: BuiltinFeature, expected: str) -> None:
     if feature.definition.output_shape != expected:
-        raise ValueError(
-            f"{type(feature).__name__} requires output shape {expected!r}"
-        )
+        raise ValueError(f"{type(feature).__name__} requires output shape {expected!r}")
 
 
 @dataclass(frozen=True, slots=True)
