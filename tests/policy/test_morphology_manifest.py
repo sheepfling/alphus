@@ -34,7 +34,11 @@ _DECLARATION: tuple[tuple[str, object], ...] = (
 )
 
 
-def _feature_source(declaration: tuple[tuple[str, object], ...]) -> str:
+def _feature_source(
+    declaration: tuple[tuple[str, object], ...],
+    *,
+    feature_class: str = "BuiltinFeature",
+) -> str:
     """Render synthetic feature input using typed semantic contracts."""
     feature_fields = {
         "policy_field",
@@ -91,7 +95,7 @@ def _feature_source(declaration: tuple[tuple[str, object], ...]) -> str:
         [
             "def _registered_demo_runner(root, files, config):\n",
             "    return []\n",
-            "ALPHUS_FEATURE = BuiltinFeature(\n",
+            f"ALPHUS_FEATURE = {feature_class}(\n",
             "    definition=ALPHUS_CHECK,\n",
             "    morphology=ALPHUS_MORPHOLOGY,\n",
             "    runner=_registered_demo_runner,\n",
@@ -99,6 +103,41 @@ def _feature_source(declaration: tuple[tuple[str, object], ...]) -> str:
         ]
     )
     return f"from {policy_module} import {policy_class}\n" + "".join(lines)
+
+
+def test_static_discovery_rejects_typed_feature_output_mismatch(
+    tmp_path: Path,
+) -> None:
+    gates = tmp_path / "src/alphus/gates"
+    gates.mkdir(parents=True)
+    declaration = tuple(
+        (key, "demo-check" if key == "selector" else value)
+        for key, value in _DECLARATION
+    ) + (
+        ("finding_tag_complaints", ("demo-check",)),
+        ("policy_field", "demo_policy"),
+        ("policy_model", "alphus.policy.sources.DemoPolicy"),
+        ("output_shape", "messages"),
+        ("summary", "Reports demo findings."),
+        ("applies_to", ("python",)),
+        ("domains", ()),
+        ("requires_files", True),
+    )
+    (gates / "demo_check.py").write_text(
+        _feature_source(declaration, feature_class="FindingBuiltinFeature"),
+        encoding="utf-8",
+    )
+    policy = tmp_path / "src/alphus/policy"
+    policy.mkdir(parents=True)
+    (policy / "orchestration.py").write_text(
+        "class CheckPolicies:\n    pass\n", encoding="utf-8"
+    )
+    (policy / "sources.py").write_text(
+        "class DemoPolicy:\n    pass\n", encoding="utf-8"
+    )
+
+    with pytest.raises(ValueError, match="does not match output shape 'messages'"):
+        feature_registrations(tmp_path)
 
 
 def test_generated_text_arguments_wrap_without_changing_their_value() -> None:

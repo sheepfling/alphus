@@ -292,6 +292,10 @@ Use a feature-local module under the owning shape or language package. Add a
 strict policy model only when the check needs one, then declare its existing
 selector and output shape in `ALPHUS_CHECK`, its claim and evidence in
 `ALPHUS_MORPHOLOGY`, and a typed synchronous runner in `ALPHUS_FEATURE`.
+Choose `FindingBuiltinFeature`, `MessageBuiltinFeature`,
+`PythonStyleBuiltinFeature`, `SharedUtilitiesBuiltinFeature`, or
+`CyclomaticBuiltinFeature` to match the output shape. Each runner protocol
+narrowly types its result, and static discovery checks the shape pairing.
 The build derives catalog/config/dispatch views and the wheel entry point; do
 not edit generated views, `RULE_SPECS`, `QualityRuleName`, or `pyproject.toml`
 for an individual selector. The source declaration must use the supported

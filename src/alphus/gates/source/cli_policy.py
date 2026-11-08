@@ -16,7 +16,7 @@ from alphus.gates.languages.python.cli_policy import (
     python_cli_findings_for_sources,
     python_cli_issues,
 )
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import MessageBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -180,7 +180,7 @@ def run_cli_policy_rule(
     return policy_issues(root, paths, require_policy(config.checks.cli, "cli"))
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = MessageBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
     runner=run_cli_policy_rule,

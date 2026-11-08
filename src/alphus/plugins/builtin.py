@@ -3,23 +3,28 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, TypeVar
 
 from alphus.config import QualityGateConfig
-from alphus.contracts.cyclomatic import CyclomaticRuleOperations
+from alphus.contracts.cyclomatic import CyclomaticReport, CyclomaticRuleOperations
+from alphus.contracts.findings import Finding
+from alphus.contracts.python_style import StyleFindings
+from alphus.contracts.shared_utilities import SharedUtilitiesReport
 from alphus.execution.results import RuleOutput
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import RuleMorphology
 
+_RunnerOutput_co = TypeVar("_RunnerOutput_co", covariant=True)
 
-class BuiltinRunner(Protocol):
+
+class BuiltinRunner(Protocol[_RunnerOutput_co]):
     """Synchronous provider contract shared by registered built-ins."""
 
     def __call__(
         self, root: Path, files: Sequence[Path], config: QualityGateConfig, /
-    ) -> RuleOutput: ...
+    ) -> _RunnerOutput_co: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,7 +33,7 @@ class BuiltinFeature:
 
     definition: FeatureDefinition
     morphology: RuleMorphology
-    runner: BuiltinRunner
+    runner: BuiltinRunner[RuleOutput]
     cyclomatic_operations: CyclomaticRuleOperations | None = None
 
     def __post_init__(self) -> None:
@@ -45,4 +50,74 @@ class BuiltinFeature:
             )
 
 
-__all__ = ["BuiltinFeature"]
+def _require_output_shape(feature: BuiltinFeature, expected: str) -> None:
+    if feature.definition.output_shape != expected:
+        raise ValueError(
+            f"{type(feature).__name__} requires output shape {expected!r}"
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class FindingBuiltinFeature(BuiltinFeature):
+    """Feature whose typed runner returns the standard finding list."""
+
+    runner: BuiltinRunner[list[Finding]]
+
+    def __post_init__(self) -> None:
+        BuiltinFeature.__post_init__(self)
+        _require_output_shape(self, "findings")
+
+
+@dataclass(frozen=True, slots=True)
+class MessageBuiltinFeature(BuiltinFeature):
+    """Feature whose typed runner preserves the legacy message-list output."""
+
+    runner: BuiltinRunner[list[str]]
+
+    def __post_init__(self) -> None:
+        BuiltinFeature.__post_init__(self)
+        _require_output_shape(self, "messages")
+
+
+@dataclass(frozen=True, slots=True)
+class PythonStyleBuiltinFeature(BuiltinFeature):
+    """Feature whose typed runner returns named Python-style categories."""
+
+    runner: BuiltinRunner[dict[str, StyleFindings]]
+
+    def __post_init__(self) -> None:
+        BuiltinFeature.__post_init__(self)
+        _require_output_shape(self, "python-style")
+
+
+@dataclass(frozen=True, slots=True)
+class SharedUtilitiesBuiltinFeature(BuiltinFeature):
+    """Feature whose typed runner returns the shared-utilities report."""
+
+    runner: BuiltinRunner[SharedUtilitiesReport]
+
+    def __post_init__(self) -> None:
+        BuiltinFeature.__post_init__(self)
+        _require_output_shape(self, "shared-utilities")
+
+
+@dataclass(frozen=True, slots=True)
+class CyclomaticBuiltinFeature(BuiltinFeature):
+    """Native cyclomatic provider and report with its required operations."""
+
+    runner: BuiltinRunner[CyclomaticReport]
+    cyclomatic_operations: CyclomaticRuleOperations = field()
+
+    def __post_init__(self) -> None:
+        BuiltinFeature.__post_init__(self)
+        _require_output_shape(self, "cyclomatic-report")
+
+
+__all__ = [
+    "BuiltinFeature",
+    "CyclomaticBuiltinFeature",
+    "FindingBuiltinFeature",
+    "MessageBuiltinFeature",
+    "PythonStyleBuiltinFeature",
+    "SharedUtilitiesBuiltinFeature",
+]

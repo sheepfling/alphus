@@ -9,7 +9,10 @@ import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from scripts.generate_morphology_manifest import feature_registrations
+from scripts.generate_morphology_manifest import (
+    feature_registrations,
+    typed_feature_output_shape,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -307,13 +310,21 @@ def _runner_policy_inputs(
                     pass
         match registration:
             case ast.Call(
-                func=ast.Name(id="BuiltinFeature"), args=args, keywords=keywords
+                func=ast.Name(id=constructor_name)
+                | ast.Attribute(attr=constructor_name),
+                args=args,
+                keywords=keywords,
             ):
                 pass
             case _:
                 raise ValueError(
                     f"{path}: ALPHUS_FEATURE must construct BuiltinFeature"
                 )
+        typed_shape = typed_feature_output_shape(constructor_name)
+        if constructor_name != "BuiltinFeature" and typed_shape != feature.output_shape:
+            raise ValueError(
+                f"{path}: typed feature output shape does not match its declaration"
+            )
         runner = (
             args[2]
             if len(args) > 2

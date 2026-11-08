@@ -33,7 +33,7 @@ from alphus.contracts.findings import (
 from alphus.contracts.process import ExitCode
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
 from alphus.gates.source._lizard_contracts import LizardWorkerResponse as _LizardPayload
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import CyclomaticBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.metrics import (
@@ -982,7 +982,7 @@ def report_summary(report: CyclomaticReport) -> str:
     )
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = CyclomaticBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
     runner=run_cyclomatic_rule,

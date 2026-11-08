@@ -29,31 +29,37 @@ or provider factories need a small local adapter or a separate design. Pyright
 and runtime result-shape validation complement the static build check; the
 build parser itself does not prove the runner's return annotation.
 
-The execution annotation is still broader than the morphology goal: one
-`BuiltinRunner` returns the global `RuleOutput` union, while
-`FeatureDefinition.output_shape` is declared independently. The registry checks
-the selected runner's annotation and returned value at runtime, but the type
-checker does not yet prove that a feature's declared shape matches its output.
-Cyclomatic has the more specific `CyclomaticRuleOperations` contract; the
-other result adapters remain shape-dispatched.
+The registration package now provides immutable shape-specific forms with
+narrow runner protocols: `FindingBuiltinFeature`, `MessageBuiltinFeature`,
+`PythonStyleBuiltinFeature`, `SharedUtilitiesBuiltinFeature`, and
+`CyclomaticBuiltinFeature`. Their constructors require the corresponding return
+type; each form also checks its declared shape. Static build discovery rejects
+a typed constructor paired with a different `FeatureDefinition.output_shape`.
+This binds the authoring declaration's output protocol to its output shape
+without changing the shared dispatch boundary.
 
-A small typed next step is to add shape-specific immutable feature forms, each
-with a literal shape and matching runner protocol, then migrate one output
-family at a time. For example, `FindingsFeature` would require
-`output_shape="findings"` and a runner returning `list[Finding]`; a messages
-form would return `list[str]`. A checked common protocol can keep selection and
-dispatch uniform, while existing runtime adapters preserve output behavior.
-This avoids pretending that one broad runner union is a static shape contract.
-The trade-off is a shared type-module change and additional class forms; doing
-this all at once would make the 62-feature migration harder to review. Start
-with one low-risk family, prove type rejection of a mismatched runner/shape,
-and expand only when that proof is useful. This is a proposed follow-on, not
-implemented behavior.
+The forms retain the existing common input signature `(root, selected files,
+validated QualityGateConfig)` to preserve 0.0.3 runner behavior. The feature's
+`input_mode` and declared policy fields describe which files and configuration
+are relevant; the check-owned runner still resolves its typed policy. The
+forms distinguish result and required operations, not analyzer claim strength
+or backend. A future genuinely different input contract should add a named
+shape only when an existing check needs it.
+
+The production slice exercises file-local findings (`file-size`), a composite
+finding check (`package-boundaries`), legacy messages (`cli`), and the native
+polyglot report (`cyclomatic-complexity`). Cyclomatic's operations object is
+required by its form. Other feature declarations can still use the broad
+`BuiltinFeature` during migration, and the runtime loader validates their
+annotations and results. Dynamic entry-point lookup exposes the common base to
+dispatch, so the downstream adapter still sees `RuleOutput`; selector-specific
+static narrowing after lookup remains open. This is a deliberate bounded
+increment: existing result adapters and wire behavior remain unchanged.
 
 The lightweight `StyleFindings` contract now lives in `alphus.contracts`, so
 CLI, registry, and result-adapter imports do not load the Python style analyzer.
-This is a lazy-import improvement within the existing result shape; it does not
-yet solve the broader runner/output-shape static typing gap above.
+`PythonStyleBuiltinFeature` can use that contract without importing the
+analyzer for catalog or config inspection.
 
 The 0.0.3 shapes currently fit without forcing one result type:
 
@@ -106,14 +112,23 @@ head `1fe322e` and documentation head `fe63ca8`. Those results do not
 establish checks on later heads or substitute for the pinned differential.
 Exact-head hosted self-quality on `2c10eef` failed because the architecture
 document exceeded the line-length limit; `77fa80a` wraps those lines. Later
-local changes add regression coverage for composite policy references and
+commits add regression coverage for composite policy references and
 declaration-time constant resolution, plus a lightweight `StyleFindings`
 contract so CLI/result imports do not load the Python style analyzer. The
-focused morphology, result, analyzer and documentation tests pass (126 total);
-targeted production Pyright reports no diagnostics. The full local suite has
-2,519 passes and 45 skips, with four environment-limited failures: three wheel
-or build tests cannot resolve PyPI, and one FastAPI Ruff fixture received no
-JSON output. Exact-head hosted checks for these changes remain pending.
+latest runtime slice binds shape-specific runner protocols to `findings`,
+`messages`, and `cyclomatic-report` feature declarations; all five current
+result forms now have a matching type. It exercises file-local, composite,
+message, and native report paths while preserving the common runtime adapter.
+The focused shape, registry, generator, inventory, and lazy-import tests pass
+(61 total); targeted production Pyright reports no diagnostics. The full local
+suite has 2,522 passes and 45 skips, with four environment-limited failures:
+three wheel/build tests cannot resolve PyPI, and one FastAPI Ruff fixture
+received no JSON output. On exact head `f810a91`, hosted self-quality exposed
+one import-order lint error in the generator; the local import order now matches
+the check's suggested organization. Exact-head hosted checks for this slice
+remain pending. The Python 3.10 installed-consumer job retried after an HTTP 504
+but failed again with the same 504 response; other installed-consumer matrix
+variants passed.
 Earlier focused batches on `951cc59` passed 323 morphology/registry and
 execution tests, then 85 native, composite, and plugin tests. These are
 incremental evidence only.
@@ -579,7 +594,7 @@ into the checker package. `line-length` lives in
 `src/alphus/policy/sources.py`. Its declaration has this shape:
 
 ```python
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.sources import LineLengthPolicy
 
@@ -594,12 +609,17 @@ ALPHUS_CHECK: Final = FeatureDefinition(
     requires_files=True,
 )
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
     runner=check_line_length,
 )
 ```
+
+Choose the feature form that matches `ALPHUS_CHECK.output_shape`. Its runner
+protocol narrows the expected return type, and static build discovery rejects
+a typed form paired with a different shape. The broad `BuiltinFeature` remains
+available while older registrations migrate.
 
 The PEP 517 backend statically reads feature declarations and writes standard
 `alphus.builtin_checks.v1` metadata under the ignored `.registry-build/`

@@ -22,7 +22,7 @@ from alphus.config import (
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
 from alphus.gates.repository.composite_contracts import package_boundary_rule_tag
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.architecture import ArchitectureGraphPolicy, PackageBoundaryPolicy
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
@@ -965,7 +965,7 @@ def check_package_boundaries(
     return findings
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
     runner=run_package_boundary_gate,

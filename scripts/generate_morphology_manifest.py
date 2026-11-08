@@ -12,7 +12,8 @@ import json
 import re
 import sys
 import textwrap
-from collections.abc import Mapping, Sequence, Set as AbstractSet
+from collections.abc import Mapping, Sequence
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TypeAlias, cast
@@ -41,6 +42,25 @@ _DECLARATION_COMMON_FIELDS: frozenset[str] = frozenset(
         "evaluation_maturity",
     }
 )
+
+
+def typed_feature_output_shape(constructor_name: str) -> str | None:
+    """Return the output shape named by a typed feature-form constructor."""
+    match constructor_name:
+        case "CyclomaticBuiltinFeature":
+            return "cyclomatic-report"
+        case "FindingBuiltinFeature":
+            return "findings"
+        case "MessageBuiltinFeature":
+            return "messages"
+        case "PythonStyleBuiltinFeature":
+            return "python-style"
+        case "SharedUtilitiesBuiltinFeature":
+            return "shared-utilities"
+        case _:
+            return None
+
+
 _DIRECT_FINDING_FIELD = "finding_tag_complaints"
 _CONTRACT_FINDING_FIELD = "finding_contracts"
 _MECHANISMS = frozenset(
@@ -1336,7 +1356,9 @@ def _validate_feature_registration(
         raise ValueError(
             f"{declaration.source}: feature registration escapes built-in gates"
         )
-    _validate_builtin_feature_export(registration_path, feature.selector)
+    _validate_builtin_feature_export(
+        registration_path, feature.selector, feature.output_shape
+    )
 
     policy_directory = root / "src" / "alphus" / "policy"
     repository_root = root.resolve(strict=True)
@@ -1406,7 +1428,9 @@ def _validate_feature_registration(
         )
 
 
-def _validate_builtin_feature_export(path: Path, selector: str) -> None:
+def _validate_builtin_feature_export(
+    path: Path, selector: str, output_shape: str
+) -> None:
     """Require a statically linked, local provider for each package entry point."""
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     exports = [
@@ -1420,7 +1444,8 @@ def _validate_builtin_feature_export(path: Path, selector: str) -> None:
         )
     match exports[0]:
         case ast.Call(
-            func=ast.Name(id="BuiltinFeature") | ast.Attribute(attr="BuiltinFeature"),
+            func=ast.Name(id=constructor_name)
+            | ast.Attribute(attr=constructor_name),
             args=args,
             keywords=keywords,
         ):
@@ -1428,6 +1453,17 @@ def _validate_builtin_feature_export(path: Path, selector: str) -> None:
         case _:
             raise ValueError(
                 f"{path}: ALPHUS_FEATURE must construct a typed BuiltinFeature"
+            )
+    if constructor_name != "BuiltinFeature":
+        typed_shape = typed_feature_output_shape(constructor_name)
+        if typed_shape is None:
+            raise ValueError(
+                f"{path}: unsupported typed feature form {constructor_name!r}"
+            )
+        if typed_shape != output_shape:
+            raise ValueError(
+                f"{path}: {constructor_name} does not match output shape "
+                f"{output_shape!r}"
             )
     fields: dict[str, ast.expr] = {}
     positional_names = ("definition", "morphology", "runner", "cyclomatic_operations")
