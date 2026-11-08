@@ -556,6 +556,17 @@ def test_missing_policy_error_matches_only_the_named_neighbor() -> None:
     assert not _missing_policy_error(stderr, "checks.line_length")
 
 
+def test_missing_policy_error_ignores_terminal_color_codes() -> None:
+    stderr = (
+        "\x1b[1;33mUsage:\x1b[0m alphus [OPTIONS] COMMAND [ARGS]...\n"
+        "\x1b[31m│ Invalid value: selected configuration has no\x1b[0m\n"
+        "\x1b[31m│ [checks.array_representation_churn] policy\x1b[0m\n"
+    )
+
+    assert _missing_policy_error(stderr, "checks.array_representation_churn")
+    assert not _missing_policy_error(stderr, "checks.line_length")
+
+
 def test_catalog_contract_differences_name_only_changed_selectors() -> None:
     reference = [
         _CatalogRule(

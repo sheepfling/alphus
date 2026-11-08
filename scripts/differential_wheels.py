@@ -1111,7 +1111,8 @@ def _dispatch_variant(rule: _CatalogRule, case: str) -> RunVariant:
 
 
 def _missing_policy_error(stderr: str, policy_section: str) -> bool:
-    plain_text = " ".join(stderr.replace("│", " ").split())
+    without_ansi = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", stderr)
+    plain_text = " ".join(without_ansi.replace("│", " ").split())
     return f"no [{policy_section}] policy" in plain_text
 
 
