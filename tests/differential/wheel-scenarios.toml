@@ -2045,8 +2045,13 @@ require_passed_steps = true
 required_output = ["alphus/python/none/typing/runtime-type-contract-violation"]
 
 [[scenario.variant]]
-name = "profile-json"
-arguments = ["--config", "quality-gates.toml", "--profile", "runtime-review", "--run", "--json"]
+name = "serial"
+arguments = ["--config", "quality-gates.toml", "--profile", "runtime-review", "--run", "--json", "--jobs", "1"]
+
+[[scenario.variant]]
+name = "parallel"
+arguments = ["--config", "quality-gates.toml", "--profile", "runtime-review", "--run", "--json", "--jobs", "2"]
+compare_within_build = true
 
 [[scenario]]
 name = "script-policy-direct"
@@ -2075,8 +2080,13 @@ require_passed_steps = true
 required_output = ["alphus/python/none/security/script-policy-violation"]
 
 [[scenario.variant]]
-name = "profile-json"
-arguments = ["--config", "quality-gates.toml", "--profile", "script-review", "--run", "--json"]
+name = "serial"
+arguments = ["--config", "quality-gates.toml", "--profile", "script-review", "--run", "--json", "--jobs", "1"]
+
+[[scenario.variant]]
+name = "parallel"
+arguments = ["--config", "quality-gates.toml", "--profile", "script-review", "--run", "--json", "--jobs", "2"]
+compare_within_build = true
 
 [[scenario]]
 name = "message-rules-strict-config"
