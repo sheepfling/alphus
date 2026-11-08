@@ -31,7 +31,6 @@ from alphus.policy.intents import (
 )
 from alphus.policy.repository import VersionSyncPolicy
 from alphus.policy.review import (
-    RepeatedNumericLimitPolicy,
     SourceFamilyPolicy,
     SuppressionReasonPolicy,
     TypingStubSuggestionPolicy,
@@ -49,7 +48,6 @@ from alphus.policy.sources import (
 class CheckPolicies(GeneratedFeaturePolicies):
     """Settings for the currently available source gates."""
 
-    repeated_numeric_limits: RepeatedNumericLimitPolicy | None = None
     typing_stub_suggestions: TypingStubSuggestionPolicy | None = None
     source_test_coverage: SourceTestCoveragePolicy | None = None
     source_families: SourceFamilyPolicy | None = None

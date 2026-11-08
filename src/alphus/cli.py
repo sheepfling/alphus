@@ -200,7 +200,6 @@ _LEGACY_SOURCE_SCAN_RULES: tuple[QualityRuleName, ...] = (
     "shared-utilities",
     "python-style",
     "runtime-types",
-    "repeated-numeric-limits",
     "test-quality",
     "input-contracts",
     "positional-interfaces",

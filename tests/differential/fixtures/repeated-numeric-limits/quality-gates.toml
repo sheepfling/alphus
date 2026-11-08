@@ -1,0 +1,27 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py"]
+exclude = []
+
+[checks.repeated_numeric_limits]
+extensions = [".py"]
+source_paths = ["src/analysis/**"]
+exclude = []
+
+[[checks.repeated_numeric_limits.roles]]
+name = "AST traversal ceiling"
+identifiers = ["node_count", "ast_nodes"]
+
+[orchestration]
+default_profile = "numeric-review"
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Repeated numeric limits"
+rule = "repeated-numeric-limits"
+
+[[orchestration.profiles]]
+name = "numeric-review"
+steps = ["Repeated numeric limits"]

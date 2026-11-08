@@ -13,9 +13,6 @@ from typing import TypeAlias
 
 from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.execution.results import RuleOutput
-from alphus.gates.review.repeated_numeric_limits import (
-    check_repeated_numeric_limits,
-)
 from alphus.gates.review.source_families import check_source_families
 from alphus.gates.review.source_test_coverage import check_source_test_coverage
 from alphus.gates.review.suppression_reasons import check_suppression_reasons
@@ -30,16 +27,6 @@ __all__ = ["REVIEW_RULE_RUNNERS"]
 
 REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
     {
-        "repeated-numeric-limits": lambda root, files, config: (
-            check_repeated_numeric_limits(
-                root,
-                files,
-                require_policy(
-                    config.checks.repeated_numeric_limits,
-                    "repeated_numeric_limits",
-                ),
-            )
-        ),
         "typing-stub-suggestions": lambda root, files, config: (
             check_typing_stub_suggestions(
                 root,

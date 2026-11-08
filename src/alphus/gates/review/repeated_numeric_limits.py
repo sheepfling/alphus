@@ -5,16 +5,67 @@ from __future__ import annotations
 import ast
 import math
 from collections import defaultdict
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TypeAlias
+from typing import Final, TypeAlias
 
-from alphus.config import NumericLimitRole, RepeatedNumericLimitPolicy
+from alphus.config import (
+    NumericLimitRole,
+    QualityGateConfig,
+)
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
+from alphus.plugins.builtin import BuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import RepeatedNumericLimitPolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="repeated-numeric-limits",
+    input_mode="configured-source-scan",
+    policy_field="repeated_numeric_limits",
+    policy_model=RepeatedNumericLimitPolicy,
+    output_shape="findings",
+    summary=(
+        "Reviews repeated numeric thresholds in explicitly selected Python "
+        "analysis paths."
+    ),
+    applies_to=("python",),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="repeated-numeric-limits",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.MAINTAINABILITY,
+            "repeated-numeric-limit",
+        ),
+    ),
+    concern="repeated-boundary-policy",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "Repeated literal guards for a consumer-declared role may drift; matching "
+        "names and values do not establish equivalent behavior."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("configured-python-source-paths", "if-guard-comparisons"),
+    languages_formats=("python",),
+    evidence_kinds=("declared-role", "numeric-literal", "source-location"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
 
 _RULE_ID = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.MAINTAINABILITY, "repeated-numeric-limit"
@@ -204,3 +255,24 @@ def check_repeated_numeric_limits(
             for span in spans
         )
     return findings
+
+
+def run_repeated_numeric_limits_rule(
+    root: Path, paths: Sequence[Path], config: QualityGateConfig
+) -> list[Finding]:
+    """Adapt the declared numeric-boundary review to built-in rule dispatch."""
+    return check_repeated_numeric_limits(
+        root,
+        paths,
+        require_policy(
+            config.checks.repeated_numeric_limits,
+            "repeated_numeric_limits",
+        ),
+    )
+
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_repeated_numeric_limits_rule,
+)

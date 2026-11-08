@@ -2135,3 +2135,69 @@ parse_json = false
 name = "invalid-script"
 arguments = ["--config", "quality-gates.toml", "--rule", "script-policy"]
 parse_json = false
+
+[[scenario]]
+name = "repeated-numeric-limits-direct"
+fixture = "repeated-numeric-limits"
+selectors = ["repeated-numeric-limits"]
+behavior = ["feature-owned-direct-dispatch", "bounded-python-guard-heuristic", "stable-finding-id"]
+expected_exit = 0
+minimum_findings = 2
+expected_findings = [
+  { rule_id = "alphus/python/none/maintainability/repeated-numeric-limit", path = "src/analysis/guards.py", line = 1 },
+  { rule_id = "alphus/python/none/maintainability/repeated-numeric-limit", path = "src/analysis/guards.py", line = 4 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "repeated-numeric-limits", "--json"]
+
+[[scenario]]
+name = "repeated-numeric-limits-profile"
+fixture = "repeated-numeric-limits"
+selectors = ["repeated-numeric-limits"]
+behavior = ["feature-owned-profile-dispatch", "declared-source-scope", "serial-parallel-reporting"]
+expected_exit = 0
+minimum_findings = 2
+expected_step_names = ["Repeated numeric limits"]
+expected_step_rules = ["repeated-numeric-limits"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/python/none/maintainability/repeated-numeric-limit", path = "src/analysis/guards.py", line = 1 },
+  { rule_id = "alphus/python/none/maintainability/repeated-numeric-limit", path = "src/analysis/guards.py", line = 4 },
+]
+
+[[scenario.variant]]
+name = "profile-serial"
+arguments = ["--config", "quality-gates.toml", "--profile", "numeric-review", "--run", "--json", "--jobs", "1"]
+
+[[scenario.variant]]
+name = "profile-parallel"
+arguments = ["--config", "quality-gates.toml", "--profile", "numeric-review", "--run", "--json", "--jobs", "2"]
+compare_within_build = true
+
+[[scenario]]
+name = "repeated-numeric-limits-plain"
+fixture = "repeated-numeric-limits"
+selectors = ["repeated-numeric-limits"]
+behavior = ["legacy-plain-output", "finding-identity-and-summary"]
+expected_exit = 0
+required_output = ["repeated-numeric-limit", "Repeated numeric limits: 2 finding(s)"]
+
+[[scenario.variant]]
+name = "plain"
+arguments = ["--config", "quality-gates.toml", "--rule", "repeated-numeric-limits", "--output", "plain"]
+parse_json = false
+
+[[scenario]]
+name = "repeated-numeric-limits-invalid-config"
+fixture = "repeated-numeric-limits-invalid-config"
+selectors = ["repeated-numeric-limits"]
+behavior = ["feature-owned-strict-policy", "unknown-field-rejected-before-run"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-config"
+arguments = ["--config", "quality-gates.toml", "--rule", "repeated-numeric-limits"]
+parse_json = false

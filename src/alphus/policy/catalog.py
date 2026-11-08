@@ -75,12 +75,6 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             "Reviews configured Python command-line interface contracts.",
             ("python",),
         ),
-        "repeated-numeric-limits": RuleSpec(
-            "repeated_numeric_limits",
-            RuleOutputShape.FINDINGS,
-            "Reviews repeated numeric thresholds in explicitly selected Python analysis paths.",
-            ("python",),
-        ),
         "source-test-coverage": RuleSpec(
             "source_test_coverage",
             RuleOutputShape.FINDINGS,
