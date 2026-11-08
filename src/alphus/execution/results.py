@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from types import MappingProxyType
 from typing import Self, TypeAlias, cast
 
 from pydantic import BaseModel, ConfigDict, TypeAdapter
@@ -64,20 +63,11 @@ _SHARED_REPORT: TypeAdapter[SharedUtilitiesReport] = TypeAdapter(SharedUtilities
 _CYCLOMATIC_WIRE: TypeAdapter[_CyclomaticWire] = TypeAdapter(_CyclomaticWire)
 _ADVISORY_STYLE_CATEGORIES = frozenset({"opaque_mappings", "unnamed_tuple_returns"})
 _STYLE_COMPATIBILITY_ONLY_CATEGORIES = frozenset({"concrete_self_returns"})
-_CLI_PRESENTATION_RULE_ID = rule_tag(
-    Scope.PYTHON, Framework.NONE, Category.STYLE, "cli-presentation-policy"
-)
-
-_MESSAGE_RULE_IDS: Mapping[QualityRuleName, str] = MappingProxyType(
-    {
-        "cli": rule_tag(
-            Scope.PYTHON, Framework.NONE, Category.CORRECTNESS, "cli-contract-violation"
-        ),
-    }
-)
 
 
 def _message_rule_id(rule: QualityRuleName) -> str:
+    if rule == "cli":
+        return _feature_complaint_id(rule, "cli-contract-violation")
     if rule in FEATURE_DEFINITIONS:
         morphology = RULE_SPECS[rule].morphology
         if morphology is None or len(morphology.finding_ids) != 1:
@@ -85,12 +75,7 @@ def _message_rule_id(rule: QualityRuleName) -> str:
                 f"feature message rule {rule!r} needs exactly one morphology finding ID"
             )
         return morphology.finding_ids[0].rule_id
-    try:
-        return _MESSAGE_RULE_IDS[rule]
-    except KeyError as error:
-        raise ValueError(
-            f"no diagnostic tag registered for message rule {rule!r}"
-        ) from error
+    raise ValueError(f"no diagnostic tag registered for message rule {rule!r}")
 
 
 def _message_diagnostics(
@@ -104,7 +89,7 @@ def _message_diagnostics(
             output.append(
                 Diagnostic(
                     source="alphus",
-                    rule_id=_CLI_PRESENTATION_RULE_ID,
+                    rule_id=_feature_complaint_id(rule, "cli-presentation-policy"),
                     message=message,
                     severity="info",
                 )
@@ -121,7 +106,7 @@ def _message_diagnostics(
                 output.append(
                     Diagnostic(
                         source="alphus",
-                        rule_id=_CLI_PRESENTATION_RULE_ID,
+                        rule_id=_feature_complaint_id(rule, "cli-presentation-policy"),
                         message=message,
                         severity=severity,
                     )
@@ -136,9 +121,9 @@ def _cli_policy_diagnostics(report: CliPolicyReport) -> list[Diagnostic]:
         Diagnostic(
             source="alphus",
             rule_id=(
-                _CLI_PRESENTATION_RULE_ID
+                _feature_complaint_id("cli", "cli-presentation-policy")
                 if finding.classification == "presentation"
-                else _MESSAGE_RULE_IDS["cli"]
+                else _feature_complaint_id("cli", "cli-contract-violation")
             ),
             message=finding.to_legacy_message(),
             severity=finding.severity,
@@ -301,7 +286,7 @@ def diagnostics_from_json(rule: RuleSelector, encoded: str) -> list[Diagnostic]:
 def is_nonfatal_cli_presentation_diagnostic(diagnostic: Diagnostic) -> bool:
     """Keep inconclusive renderer evidence nonfatal across profile adapters."""
     return (
-        diagnostic.rule_id == _CLI_PRESENTATION_RULE_ID
+        diagnostic.rule_id == _feature_complaint_id("cli", "cli-presentation-policy")
         and diagnostic.severity == "info"
     )
 

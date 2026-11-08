@@ -222,12 +222,6 @@ _DIRECT_GIT_SUBPROCESS_TAG = rule_tag(
 _RUNTIME_TYPE_TAG = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.TYPING, "runtime-type-contract-violation"
 )
-_CLI_CONTRACT_TAG = rule_tag(
-    Scope.PYTHON, Framework.NONE, Category.CORRECTNESS, "cli-contract-violation"
-)
-_CLI_PRESENTATION_TAG = rule_tag(
-    Scope.PYTHON, Framework.NONE, Category.STYLE, "cli-presentation-policy"
-)
 _SCRIPT_POLICY_TAG = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.SECURITY, "script-policy-violation"
 )
@@ -602,21 +596,36 @@ def _render_runtime_types(issues: Sequence[str]) -> None:
     _human_print(f"Runtime type checks: {len(issues)} violation(s)")
 
 
+def _feature_rule_tag(selector: QualityRuleName, complaint: str) -> str:
+    morphology = RULE_SPECS[selector].morphology
+    if morphology is None:
+        raise ValueError(f"feature {selector!r} has no morphology")
+    matches = [
+        tag.rule_id for tag in morphology.finding_ids if tag.complaint == complaint
+    ]
+    if len(matches) != 1:
+        raise ValueError(
+            f"feature {selector!r} must declare complaint {complaint!r} exactly once"
+        )
+    return matches[0]
+
+
 def _render_cli_policy(report: CliPolicyReport | Sequence[str]) -> None:
     """Render classified findings or a legacy list of CLI messages."""
     if isinstance(report, CliPolicyReport):
         for finding in report.findings:
             tag = (
-                _CLI_PRESENTATION_TAG
+                _feature_rule_tag("cli", "cli-presentation-policy")
                 if finding.classification == "presentation"
-                else _CLI_CONTRACT_TAG
+                else _feature_rule_tag("cli", "cli-contract-violation")
             )
             _human_print(f"{tag}: {finding.to_legacy_message()}")
         finding_count = len(report.findings)
         endpoint_count = len(report.endpoints)
     else:
         for issue in report:
-            _human_print(f"{_CLI_CONTRACT_TAG}: {issue}")
+            tag = _feature_rule_tag("cli", "cli-contract-violation")
+            _human_print(f"{tag}: {issue}")
         finding_count = len(report)
         endpoint_count = 0
     _human_print(
@@ -908,18 +917,22 @@ def _execute(
 
     if shape is RuleOutputShape.MESSAGES:
         if rule == "cli":
-            cli_output = cast(CliPolicyReport | list[str], output)
-            if hasattr(cli_output, "legacy_messages"):
-                cli_report = cast(CliPolicyReport, cli_output)
+            cli_output: CliPolicyReport | list[str] = cast(
+                CliPolicyReport | list[str], output
+            )
+            if isinstance(cli_output, CliPolicyReport):
+                messages = cli_output.legacy_messages()
                 if json_output:
-                    typer.echo(json.dumps(cli_report.legacy_messages()))
+                    typer.echo(json.dumps(messages))
                 else:
-                    _render_cli_policy(cli_report)
-            elif json_output:
-                typer.echo(json.dumps(cli_output))
+                    _render_cli_policy(cli_output)
             else:
-                _render_cli_policy(cli_output)
+                if json_output:
+                    typer.echo(json.dumps(cli_output))
+                else:
+                    _render_cli_policy(cli_output)
             return exit_code
+
         issues = cast(list[str], output)
         if json_output:
             typer.echo(json.dumps(issues))

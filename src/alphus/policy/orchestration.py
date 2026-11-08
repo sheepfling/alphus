@@ -31,7 +31,6 @@ from alphus.policy.intents import (
 )
 from alphus.policy.repository import VersionSyncPolicy
 from alphus.policy.sources import (
-    CliPolicy,
     FileInventoryPolicy,
     FunctionShapePolicy,
     PythonStylePolicy,
@@ -42,7 +41,6 @@ class CheckPolicies(GeneratedFeaturePolicies):
     """Settings for the currently available source gates."""
 
     python_style: PythonStylePolicy | None = None
-    cli: CliPolicy | None = None
     architecture_graph: ArchitectureGraphCheckPolicy | None = None
     version_sync: VersionSyncPolicy | None = None
     callable_registry: CallableRegistryPolicy | None = None

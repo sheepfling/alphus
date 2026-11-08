@@ -63,12 +63,6 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             "Runs configured Python source-style checks.",
             ("python",),
         ),
-        "cli": RuleSpec(
-            "cli",
-            RuleOutputShape.MESSAGES,
-            "Reviews configured Python command-line interface contracts.",
-            ("python",),
-        ),
     }
 )
 

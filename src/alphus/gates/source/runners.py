@@ -10,7 +10,6 @@ from typing import TypeAlias
 from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.execution.results import RuleOutput
 from alphus.gates.languages.python.style import findings_for as python_style_findings
-from alphus.gates.source.cli_policy import policy_findings as cli_policy_findings
 from alphus.policy.base import require_policy
 
 SourceRunner: TypeAlias = Callable[
@@ -24,9 +23,6 @@ SOURCE_RULE_RUNNERS: Mapping[QualityRuleName, SourceRunner] = MappingProxyType(
             root,
             files,
             require_policy(config.checks.python_style, "python_style"),
-        ),
-        "cli": lambda root, files, config: cli_policy_findings(
-            root, files, require_policy(config.checks.cli, "cli")
         ),
     }
 )

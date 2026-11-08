@@ -2474,3 +2474,61 @@ required_output = ["Invalid quality policy"]
 name = "invalid-policy"
 arguments = ["--config", "shared-utilities-invalid.toml", "--rule", "shared-utilities"]
 parse_json = false
+
+[[scenario]]
+name = "cli-feature-owned-direct"
+fixture = "profile"
+materialized_files = [
+  { path = "cli-policy.toml", contents = "schema_version = 1\n[files]\ninclude = [\"src/**/*.py\"]\nexclude = []\n[checks.cli]\nnode_endpoint_message = \"move Node commands to Python\"\n[checks.cli.python]\nextensions = [\".py\"]\nexclude = []\ntyper_package = \"typer\"\ntyper_calls = [\"Typer\", \"run\"]\nrich_package = \"rich\"\nrich_calls = [\"Console\", \"print\"]\njson_option = \"--json\"\njson_serializers = [\"dumps\", \"model_dump_json\"]\nverbose_option = \"--verbose\"\n[checks.cli.node]\nextensions = [\".mjs\", \".js\"]\nexclude = []\npackage_manifest = \"package.json\"\nexecutable = \"node\"\ncommand_path_prefixes = [\"scripts/\"]\nargument_access_marker = \"process.argv\"\n" },
+  { path = "src/cli.py", contents = "import argparse\nif __name__ == '__main__':\n    argparse.ArgumentParser().parse_args()\n" },
+  { path = "package.json", contents = "{\"scripts\":{}}\n" },
+]
+selectors = ["cli"]
+behavior = ["feature-owned-configured-policy", "typed-cli-policy-report", "legacy-json-message-list"]
+expected_exit = 1
+required_output = ["serialize machine output as JSON"]
+
+[[scenario.variant]]
+name = "json-messages"
+arguments = ["--config", "cli-policy.toml", "--rule", "cli", "--json"]
+
+[[scenario]]
+name = "cli-feature-owned-profile"
+fixture = "profile"
+materialized_files = [
+  { path = "cli-profile.toml", contents = "schema_version = 1\n[files]\ninclude = [\"src/**/*.py\"]\nexclude = []\n[checks.cli]\nnode_endpoint_message = \"move Node commands to Python\"\n[checks.cli.python]\nextensions = [\".py\"]\nexclude = []\ntyper_package = \"typer\"\ntyper_calls = [\"Typer\", \"run\"]\nrich_package = \"rich\"\nrich_calls = [\"Console\", \"print\"]\njson_option = \"--json\"\njson_serializers = [\"dumps\", \"model_dump_json\"]\nverbose_option = \"--verbose\"\n[checks.cli.node]\nextensions = [\".mjs\", \".js\"]\nexclude = []\npackage_manifest = \"package.json\"\nexecutable = \"node\"\ncommand_path_prefixes = [\"scripts/\"]\nargument_access_marker = \"process.argv\"\n[orchestration]\ndefault_profile = \"cli-review\"\nfailure_threshold = \"error\"\n[[orchestration.steps]]\nkind = \"rule\"\nname = \"CLI contract review\"\nrule = \"cli\"\n[[orchestration.profiles]]\nname = \"cli-review\"\nsteps = [\"CLI contract review\"]\n" },
+  { path = "src/cli.py", contents = "import argparse\nif __name__ == '__main__':\n    argparse.ArgumentParser().parse_args()\n" },
+  { path = "package.json", contents = "{\"scripts\":{}}\n" },
+]
+selectors = ["cli"]
+behavior = ["feature-owned-profile-dispatch", "specialized-report-adapter", "serial-parallel", "stable-contract-id"]
+expected_exit = 1
+minimum_findings = 1
+expected_step_names = ["CLI contract review"]
+expected_step_rules = ["cli"]
+required_output = ["alphus/python/none/correctness/cli-contract-violation"]
+
+[[scenario.variant]]
+name = "serial"
+arguments = ["--config", "cli-profile.toml", "--profile", "cli-review", "--run", "--json", "--jobs", "1"]
+
+[[scenario.variant]]
+name = "parallel"
+arguments = ["--config", "cli-profile.toml", "--profile", "cli-review", "--run", "--json", "--jobs", "2"]
+compare_within_build = true
+
+[[scenario]]
+name = "cli-feature-owned-invalid-config"
+fixture = "profile"
+materialized_files = [
+  { path = "cli-invalid.toml", contents = "schema_version = 1\n[checks.cli]\nunexpected = true\n" },
+]
+selectors = ["cli"]
+behavior = ["feature-owned-strict-policy", "unknown-policy-field-rejected-before-run"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-policy"
+arguments = ["--config", "cli-invalid.toml", "--rule", "cli"]
+parse_json = false
