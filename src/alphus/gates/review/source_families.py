@@ -19,7 +19,7 @@ from typing import Final, Protocol, TypeAlias, cast
 from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -1984,15 +1984,28 @@ def run_source_families_rule(
     root: Path, files: Sequence[Path], config: QualityGateConfig
 ) -> list[Finding]:
     """Adapt the selected cross-language source-family audit to dispatch."""
-    return check_source_families(
-        root,
-        files,
-        require_policy(config.checks.source_families, "source_families"),
+    return run_source_families_feature(
+        root, files, resolve_source_families_policy(config)
     )
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+def resolve_source_families_policy(
+    config: QualityGateConfig,
+) -> _SourceFamilyPolicy:
+    """Resolve strict cross-language family settings from validated config."""
+    return require_policy(config.checks.source_families, "source_families")
+
+
+def run_source_families_feature(
+    root: Path, files: Sequence[Path], policy: _SourceFamilyPolicy
+) -> list[Finding]:
+    """Run the family audit with its feature-owned policy type."""
+    return check_source_families(root, files, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_source_families_rule,
+    runner=run_source_families_feature,
+    policy_resolver=resolve_source_families_policy,
 )

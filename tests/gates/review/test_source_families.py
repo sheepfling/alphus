@@ -7,9 +7,16 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from alphus.config import SourceFamilyPolicy
+from alphus.config import QualityGateConfig, SourceFamilyPolicy
+from alphus.execution.dispatch import run_builtin_rule
 from alphus.gates.review import source_families
-from alphus.gates.review.source_families import source_family_findings
+from alphus.gates.review.source_families import (
+    ALPHUS_FEATURE,
+    resolve_source_families_policy,
+    run_source_families_feature,
+    source_family_findings,
+)
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 
 def _write(root: Path, name: str, lines: int = 2) -> Path:
@@ -1818,3 +1825,26 @@ def test_rejects_invalid_source_family_policy(
 ) -> None:
     with pytest.raises(ValidationError):
         invalid_policy()
+
+
+def test_feature_registration_binds_source_family_policy_and_finding_output(
+    tmp_path: Path,
+) -> None:
+    policy = SourceFamilyPolicy(min_family_files=5)
+    config = QualityGateConfig.model_validate(
+        {"schema_version": 1, "checks": {"source_families": policy}},
+        strict=True,
+    )
+    paths = [
+        _write(tmp_path, f"src/gateway_{name}.py")
+        for name in ("client", "server", "routes", "auth", "cache")
+    ]
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is SourceFamilyPolicy
+    assert type(resolve_source_families_policy(config)) is SourceFamilyPolicy
+    expected = run_source_families_feature(
+        tmp_path, paths, resolve_source_families_policy(config)
+    )
+    assert source_family_findings(tmp_path, paths, policy) == expected
+    assert run_builtin_rule("source-families", tmp_path, paths, config) == expected

@@ -15,7 +15,7 @@ from pydantic import Field, field_validator
 from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import (
     StrictModel,
     require_policy,
@@ -429,15 +429,28 @@ def run_source_test_coverage_rule(
     root: Path, files: Sequence[Path], config: QualityGateConfig
 ) -> list[Finding]:
     """Adapt declared source-to-test evidence to built-in feature dispatch."""
-    return check_source_test_coverage(
-        root,
-        files,
-        require_policy(config.checks.source_test_coverage, "source_test_coverage"),
+    return run_source_test_coverage_feature(
+        root, files, resolve_source_test_coverage_policy(config)
     )
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+def resolve_source_test_coverage_policy(
+    config: QualityGateConfig,
+) -> _SourceTestCoveragePolicy:
+    """Resolve declared source/test evidence settings from validated config."""
+    return require_policy(config.checks.source_test_coverage, "source_test_coverage")
+
+
+def run_source_test_coverage_feature(
+    root: Path, files: Sequence[Path], policy: _SourceTestCoveragePolicy
+) -> list[Finding]:
+    """Run the coverage evidence audit with its feature-owned policy type."""
+    return check_source_test_coverage(root, files, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_source_test_coverage_rule,
+    runner=run_source_test_coverage_feature,
+    policy_resolver=resolve_source_test_coverage_policy,
 )
