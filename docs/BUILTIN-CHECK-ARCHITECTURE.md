@@ -79,7 +79,7 @@ This document distinguishes four kinds of statement:
   silently changing consumer behavior.
 
 PR #100 remains an open draft. It began with the six-check morphology
-metadata pilot and now has 50 of the 62 built-in selectors on feature-owned
+metadata pilot and now has 52 of the 62 built-in selectors on feature-owned
 generated runtime views. The statically discovered selector inventory is the
 source of truth; it is deliberately not duplicated here as another selector
 list. Each local
@@ -88,7 +88,7 @@ morphology metadata, typed `FeatureDefinition`, `RuleSpec`, strict policy
 field, selector type, and inventory entry. Each feature module exposes one
 typed `ALPHUS_FEATURE` object with a direct callback for lazy execution. The established
 `RuleEvaluation` and CLI result adapters remain shared, so adding a feature
-still uses the existing output contract. The other 12 baseline selectors
+still uses the existing output contract. The other 10 baseline selectors
 remain on legacy registration paths; these slices do not complete issue #87
 or establish full selector equivalence. These declarations are now
 typed `FeatureDefinition(...)` calls paired with immutable
@@ -98,7 +98,7 @@ The PEP 517 backend generates installed-wheel entry-point metadata without a
 per-check `pyproject.toml` edit. Aggregate policy/config/dispatch views are
 ignored build artifacts rather than checked-in shared files, so independent
 feature branches do not edit the same generated outputs. Runtime entry points
-target the typed feature object; 12 selectors still use legacy registration
+target the typed feature object; 10 selectors still use legacy registration
 maps.
 
 The latest source-discovery slice moves `json-structure` and `path-discovery`
@@ -1595,3 +1595,33 @@ passed all 27 checks with zero failures and four provisional passes. This is
 incremental evidence, not full 62-selector equivalence or completion of issue
 #87. The remaining 12 selectors without behavior-level cases include command,
 native/backend and composite paths that still need dedicated evidence.
+
+## Paired CI and artifact-flow registration slice
+
+Commit `32595473db4f65c59d769442b340c8f138acbdfd` moves `ci-workflows` and
+`run-artifacts` into feature-owned typed declarations. The first remains a
+read-only analyzer of configured GitHub Actions/Azure workflow YAML and static
+commands; the second remains an opt-in Python AST analyzer of configured
+artifact and provenance paths. Each owns its morphology, strict policy model,
+summary and typed runner beside the implementation. Manual catalog rows,
+`CheckPolicies` fields and review-runner bindings were removed. YAML is analyzed
+as static input; no workflow command is executed by these checks.
+
+Installed-wheel scenarios assert both direct selectors, existing findings and
+locations, ordered serial/parallel profile reporting, and strict unknown-field
+rejection. The pinned comparison against baseline
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` matched all 118 manifested scenarios
+with zero differences. Both catalogs retain 62 selectors; behavior scenarios
+exercise 52, leaving 10 without behavior-level evidence. Direct dispatch covers
+26 selectors and strict missing-policy rejection covers 36. Reference and
+candidate wheel SHA-256 values are
+`1ce2335cae5754b12de38e1fb84524bafa90953b73225c782481068dc3d36515` and
+`1ddfa386327938c577a10fa2c5216b5a6314afc56b4aa42f0be755e84dfe7d53`. The
+report is `/tmp/alphus-morphology-ci-artifacts-3259547.json`, not committed.
+
+Installed-wheel self-quality passed 2,510 tests (44 skipped); its self-profile
+passed all 27 checks with zero failures and four provisional passes. Ten
+selectors still use legacy registration. Ten selectors lack behavior-level
+cases, including message-result, shared-utility and source-test shapes. The
+harness also lacks a dedicated effectful command-step scenario. This is
+incremental evidence, not full #87 equivalence.

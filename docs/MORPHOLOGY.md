@@ -61,8 +61,8 @@ by a typed `BuiltinFeature` with direct runner and specialized-operation
 references.
 
 The original six-rule pilot is not a complete built-in registration
-migration. Fifty selectors now use feature-owned runtime declarations,
-while 12 remain on legacy selector/config/runner paths.
+migration. Fifty-two selectors now use feature-owned runtime declarations,
+while 10 remain on legacy selector/config/runner paths.
 Generated declarations do not select or enable a check and do not change JSON results, finding IDs, gate IDs,
 or enforcement.
 
@@ -298,3 +298,29 @@ Installed-wheel self-quality passed: 2,510 tests, 44 skipped; its self-profile
 passed all 27 checks with zero failures and four provisional passes. This is
 incremental evidence, not full 62-selector equivalence or completion of issue
 #87.
+
+## Paired CI and artifact-flow registration slice
+
+Commit `32595473db4f65c59d769442b340c8f138acbdfd` moves `ci-workflows` and
+`run-artifacts` into typed feature-owned registrations beside their existing
+analyzers. The former reviews configured GitHub Actions/Azure YAML without
+executing it; the latter checks caller-configured Python artifact/provenance
+flows. They retain separate policies and finding IDs. Their central catalog,
+policy-field and review-runner entries were removed without changing config,
+selection or reporting contracts.
+
+The installed-wheel scenarios cover each direct check, an ordered serial and
+parallel profile, and unknown-field rejection. The pinned comparison against
+baseline `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` matched all 118 manifested
+scenarios with zero differences. Both catalogs retain 62 selectors; behavior
+scenarios cover 52, leaving 10 without behavior-level cases. The separate
+selector-policy matrix covers 26 configured direct invocations and 36 strict
+missing-policy rejections. Reference and candidate wheel SHA-256 values are
+`1ce2335cae5754b12de38e1fb84524bafa90953b73225c782481068dc3d36515` and
+`1ddfa386327938c577a10fa2c5216b5a6314afc56b4aa42f0be755e84dfe7d53`.
+The report is `/tmp/alphus-morphology-ci-artifacts-3259547.json` and is not
+committed.
+
+Installed-wheel self-quality passed 2,510 tests (44 skipped); all 27 self-
+profile checks passed, with four provisional passes. This is incremental
+evidence, not full selector equivalence or completion of issue #87.
