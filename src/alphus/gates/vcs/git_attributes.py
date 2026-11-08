@@ -10,7 +10,7 @@ from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
 from alphus.gates.vcs.git_quality import check_attributes
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -62,11 +62,24 @@ def run_git_attributes_gate(
 ) -> list[Finding]:
     """Run configured Git attribute assertions."""
     policy = require_policy(config.checks.git, "git")
+    return run_git_attributes_feature(root, _files, policy)
+
+
+def resolve_git_attributes_policy(config: QualityGateConfig) -> GitRepositoryPolicy:
+    """Resolve the shared strict Git policy for the attributes provider."""
+    return require_policy(config.checks.git, "git")
+
+
+def run_git_attributes_feature(
+    root: Path, _files: Sequence[Path], policy: GitRepositoryPolicy
+) -> list[Finding]:
+    """Run Git attribute checks from the feature's typed policy input."""
     return check_attributes(root, policy.attributes)
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_git_attributes_gate,
+    runner=run_git_attributes_feature,
+    policy_resolver=resolve_git_attributes_policy,
 )

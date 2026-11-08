@@ -10,7 +10,7 @@ from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
 from alphus.gates.vcs.git_quality import check_ignores
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -77,6 +77,18 @@ def run_git_ignores_gate(
 ) -> list[Finding]:
     """Run the configured repository ignore check."""
     policy = require_policy(config.checks.git, "git")
+    return run_git_ignores_feature(root, _files, policy)
+
+
+def resolve_git_ignores_policy(config: QualityGateConfig) -> GitRepositoryPolicy:
+    """Resolve the shared strict Git policy for the ignores provider."""
+    return require_policy(config.checks.git, "git")
+
+
+def run_git_ignores_feature(
+    root: Path, _files: Sequence[Path], policy: GitRepositoryPolicy
+) -> list[Finding]:
+    """Run Git ignore checks from the feature's typed policy input."""
     return check_ignores(
         root,
         policy.languages,
@@ -85,8 +97,9 @@ def run_git_ignores_gate(
     )
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_git_ignores_gate,
+    runner=run_git_ignores_feature,
+    policy_resolver=resolve_git_ignores_policy,
 )
