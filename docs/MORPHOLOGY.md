@@ -6,24 +6,23 @@ This page remains the morphology vocabulary and pilot boundary.
 
 ## Current implementation status
 
-At draft PR #100 head `04234beaa5fd539b38a8cdc4ffe06d640f26f69d`, all 62
-built-in selectors have feature-owned declarations, and 44 use a narrow typed
-registration form that connects the declared strict policy model, resolver,
-runner signature, and `findings` output. Eighteen still use the transitional
-broad runner form. The current slice adds typed registrations for the six
-manual quaternion reviews, three coordinate-frame reviews, four linear-algebra
-reviews, module roles, repository layout, and Markdown shell fences. Their
-tests live alongside the corresponding source families.
+At draft PR #100 head `0f05c104a3c6bc478edb6497da98648b31fe94a0`, all 62
+built-in selectors have feature-owned declarations. Forty-eight use a narrow
+typed registration form connecting the strict policy model, resolver, runner
+signature, and `findings` output; fourteen still use the transitional broad
+runner form. Recent typed slices include quaternion, coordinate-frame and
+linear-algebra checks, repository and Markdown checks, shared numeric checks,
+CI workflow review, and suppression-reason review. Their parity tests live
+alongside the corresponding source families.
 
-The latest completed exact-head hosted run is commit
-`22083a5d8be8fcfd9225abea32e31e955a13b14b`: all five workflows passed,
-including the pinned installed-wheel comparison. That comparison matched all
-149 manifested scenarios with zero differences against baseline
-`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`; five scenarios remain explicitly
+The latest fully completed exact-head hosted comparison before this commit
+matched all 149 manifested scenarios with zero differences against baseline
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`. Five scenarios remain explicitly
 deferred, so this is not complete equivalence over every possible selector
-input. The current `04234be` tree passes its local full self-profile
-(2,573 passed, 44 skipped; 27 passed, zero failed, four provisional). Its
-exact-head hosted workflows are still running.
+input. Hosted workflows for `0f05c10` are running. Its local full self-profile
+passed 2,577 tests (44 skipped), with 27 checks passed, none failed, and four
+provisional passes. Ruff, formatting, source Pyright, generated-view freshness,
+and `git diff --check` passed locally.
 
 Registration migration and the 149-scenario differential remain evidence, not
 completion of issue #87. Persistent caching, local-model execution, new
