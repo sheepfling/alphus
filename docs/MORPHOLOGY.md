@@ -498,4 +498,8 @@ missing-policy rejections. Reference and candidate wheel SHA-256 values are
 `f12710581a6bb35f628169fba66666af1ac70056b617bab617d4a323fbd1ee8b` and
 `f98299bd73e9294ce6c3362931abccef579e32b2a70a04922451a5ca1bc36944`. The
 report is `/tmp/alphus-morphology-shared-utilities-435afb8.json`; it is not
-committed. This remains partial evidence, not completion of issue #87.
+committed. Installed-wheel self-quality at documentation head
+`122f92b0b833df39201f12440eef7593a96daea2` passed 2,519 tests (44 skipped),
+all 27 self-profile checks with four provisional passes, Ruff, formatting,
+Pyright, import smoke (212 modules), compatibility imports, and Markdown-shell
+review. This remains partial evidence, not completion of issue #87.
