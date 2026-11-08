@@ -32,7 +32,6 @@ from alphus.policy.intents import (
 from alphus.policy.repository import VersionSyncPolicy
 from alphus.policy.review import (
     SourceFamilyPolicy,
-    SuppressionReasonPolicy,
     TypingStubSuggestionPolicy,
 )
 from alphus.policy.source_test_coverage import SourceTestCoveragePolicy
@@ -51,7 +50,6 @@ class CheckPolicies(GeneratedFeaturePolicies):
     typing_stub_suggestions: TypingStubSuggestionPolicy | None = None
     source_test_coverage: SourceTestCoveragePolicy | None = None
     source_families: SourceFamilyPolicy | None = None
-    suppression_reasons: SuppressionReasonPolicy | None = None
     shared_utilities: SharedUtilitiesPolicy | None = None
     python_style: PythonStylePolicy | None = None
     cli: CliPolicy | None = None

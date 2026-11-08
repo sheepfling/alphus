@@ -7,18 +7,69 @@ import json
 import re
 import tokenize
 import tomllib
-from collections.abc import Collection, Iterable, Mapping, MutableSequence, MutableSet
+from collections.abc import (
+    Collection,
+    Iterable,
+    Mapping,
+    MutableSequence,
+    MutableSet,
+    Sequence,
+)
 from collections.abc import Set as AbstractSet
 from fnmatch import fnmatchcase
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
-from typing import cast
+from typing import Final, cast
 
-from alphus.config import SuppressionReasonPolicy
+from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding, Severity
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
+from alphus.plugins.builtin import BuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import SuppressionReasonPolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source, read_utf8_text
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="suppression-reasons",
+    policy_field="suppression_reasons",
+    policy_model=SuppressionReasonPolicy,
+    output_shape="findings",
+    summary="Reviews selected Ruff suppressions for documented reasons.",
+    applies_to=("python", "ruff"),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="suppression-reasons",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.STYLE,
+            "missing-suppression-reason",
+        ),
+    ),
+    concern="documented-suppression-rationale",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "Selected Ruff suppressions without the configured rationale are reported; "
+        "a reason does not establish that a suppression is correct."
+    ),
+    mechanisms=(DetectionMechanism.EXACT_RULE,),
+    inspected_scope=("selected-python-suppressions", "active-ruff-configuration"),
+    languages_formats=("python", "toml"),
+    evidence_kinds=("selected-ruff-code", "reason-delimiter", "exception-config"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
 
 _RULE_ID = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.STYLE, "missing-suppression-reason"
@@ -347,6 +398,24 @@ def check_suppression_reasons(
     return sorted(
         findings, key=lambda item: (item.path or "", item.line or 0, item.message)
     )
+
+
+def run_suppression_reasons_rule(
+    root: Path, paths: Sequence[Path], config: QualityGateConfig
+) -> list[Finding]:
+    """Adapt configured Ruff suppression review to built-in dispatch."""
+    return check_suppression_reasons(
+        root,
+        paths,
+        require_policy(config.checks.suppression_reasons, "suppression_reasons"),
+    )
+
+
+ALPHUS_FEATURE: Final = BuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_suppression_reasons_rule,
+)
 
 
 def _missing_exception_file_findings(

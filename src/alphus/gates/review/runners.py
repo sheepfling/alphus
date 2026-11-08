@@ -15,7 +15,6 @@ from alphus.config import QualityGateConfig, QualityRuleName
 from alphus.execution.results import RuleOutput
 from alphus.gates.review.source_families import check_source_families
 from alphus.gates.review.source_test_coverage import check_source_test_coverage
-from alphus.gates.review.suppression_reasons import check_suppression_reasons
 from alphus.gates.review.typing_stub_suggestions import check_typing_stub_suggestions
 from alphus.policy.base import require_policy
 
@@ -45,11 +44,6 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
             root,
             files,
             require_policy(config.checks.source_families, "source_families"),
-        ),
-        "suppression-reasons": lambda root, files, config: check_suppression_reasons(
-            root,
-            files,
-            require_policy(config.checks.suppression_reasons, "suppression_reasons"),
         ),
     }
 )

@@ -40,12 +40,16 @@ def test_installed_entry_points_match_feature_selectors_and_load_lazily() -> Non
                 "assert 'alphus.gates.languages.python.runtime_types' not in sys.modules; "
                 "assert 'alphus.gates.languages.python.script_policy' not in sys.modules; "
                 "assert 'alphus.gates.review.repeated_numeric_limits' not in sys.modules; "
+                "assert 'alphus.gates.review.suppression_reasons' not in sys.modules; "
                 "assert points['file-size'].group == 'alphus.builtin_checks.v1'; "
                 "feature = load_builtin_feature('file-size'); "
                 "assert feature.runner.__module__ == 'alphus.gates.hygiene.file_size'; "
                 "numeric = load_builtin_feature('repeated-numeric-limits'); "
                 "assert numeric.runner.__module__ == "
                 "'alphus.gates.review.repeated_numeric_limits'; "
+                "suppression = load_builtin_feature('suppression-reasons'); "
+                "assert suppression.runner.__module__ == "
+                "'alphus.gates.review.suppression_reasons'; "
                 "assert 'alphus.gates.hygiene.line_length' not in sys.modules"
             ),
         ],

@@ -96,12 +96,6 @@ _LEGACY_RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             "Suggests compatible typing stub packages for declared dependencies.",
             ("python", "typing"),
         ),
-        "suppression-reasons": RuleSpec(
-            "suppression_reasons",
-            RuleOutputShape.FINDINGS,
-            "Reviews selected Ruff suppressions for documented reasons.",
-            ("python", "ruff"),
-        ),
     }
 )
 

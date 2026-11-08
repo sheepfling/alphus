@@ -2201,3 +2201,67 @@ required_output = ["Invalid quality policy"]
 name = "invalid-config"
 arguments = ["--config", "quality-gates.toml", "--rule", "repeated-numeric-limits"]
 parse_json = false
+
+[[scenario]]
+name = "suppression-reasons-direct"
+fixture = "suppression-reasons"
+selectors = ["suppression-reasons"]
+behavior = ["feature-owned-direct-dispatch", "configured-ruff-rationale", "stable-finding-id"]
+expected_exit = 0
+minimum_findings = 1
+expected_findings = [
+  { rule_id = "alphus/python/none/style/missing-suppression-reason", path = "src/example.py", line = 2 },
+]
+
+[[scenario.variant]]
+name = "json"
+arguments = ["--config", "quality-gates.toml", "--rule", "suppression-reasons", "--json"]
+
+[[scenario]]
+name = "suppression-reasons-profile"
+fixture = "suppression-reasons"
+selectors = ["suppression-reasons"]
+behavior = ["feature-owned-profile-dispatch", "typed-finding-report", "serial-parallel"]
+expected_exit = 0
+minimum_findings = 1
+expected_step_names = ["Suppression reasons"]
+expected_step_rules = ["suppression-reasons"]
+require_passed_steps = true
+expected_findings = [
+  { rule_id = "alphus/python/none/style/missing-suppression-reason", path = "src/example.py", line = 2 },
+]
+
+[[scenario.variant]]
+name = "profile-serial"
+arguments = ["--config", "quality-gates.toml", "--profile", "suppression-review", "--run", "--json", "--jobs", "1"]
+
+[[scenario.variant]]
+name = "profile-parallel"
+arguments = ["--config", "quality-gates.toml", "--profile", "suppression-review", "--run", "--json", "--jobs", "2"]
+compare_within_build = true
+
+[[scenario]]
+name = "suppression-reasons-plain"
+fixture = "suppression-reasons"
+selectors = ["suppression-reasons"]
+behavior = ["legacy-plain-output", "finding-identity-and-summary"]
+expected_exit = 0
+required_output = ["missing-suppression-reason", "Suppression reasons: 1 finding(s)"]
+
+[[scenario.variant]]
+name = "plain"
+arguments = ["--config", "quality-gates.toml", "--rule", "suppression-reasons", "--output", "plain"]
+parse_json = false
+
+[[scenario]]
+name = "suppression-reasons-invalid-config"
+fixture = "suppression-reasons-invalid-config"
+selectors = ["suppression-reasons"]
+behavior = ["feature-owned-strict-policy", "unknown-field-rejected-before-run"]
+expected_exit = 2
+required_output = ["Invalid quality policy"]
+
+[[scenario.variant]]
+name = "invalid-config"
+arguments = ["--config", "quality-gates.toml", "--rule", "suppression-reasons"]
+parse_json = false
