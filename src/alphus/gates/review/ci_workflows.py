@@ -15,7 +15,7 @@ from yaml.nodes import MappingNode, Node, ScalarNode, SequenceNode
 from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -721,8 +721,21 @@ def run_ci_workflows_rule(
     )
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+def resolve_ci_workflows_policy(config: QualityGateConfig) -> CiWorkflowPolicy:
+    """Resolve the strict workflow review policy from validated config."""
+    return require_policy(config.checks.ci_workflows, "ci_workflows")
+
+
+def run_ci_workflows_feature(
+    root: Path, paths: Sequence[Path], policy: CiWorkflowPolicy
+) -> list[Finding]:
+    """Run static CI workflow review with its feature-owned policy type."""
+    return check_ci_workflows(root, paths, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_ci_workflows_rule,
+    runner=run_ci_workflows_feature,
+    policy_resolver=resolve_ci_workflows_policy,
 )

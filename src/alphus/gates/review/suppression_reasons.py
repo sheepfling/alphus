@@ -24,7 +24,7 @@ from typing import Final, cast
 from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding, Severity
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
-from alphus.plugins.builtin import BuiltinFeature
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.base import require_policy
 from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.morphology import (
@@ -411,10 +411,25 @@ def run_suppression_reasons_rule(
     )
 
 
-ALPHUS_FEATURE: Final = BuiltinFeature(
+def resolve_suppression_reasons_policy(
+    config: QualityGateConfig,
+) -> SuppressionReasonPolicy:
+    """Resolve the strict Ruff suppression review policy."""
+    return require_policy(config.checks.suppression_reasons, "suppression_reasons")
+
+
+def run_suppression_reasons_feature(
+    root: Path, paths: Sequence[Path], policy: SuppressionReasonPolicy
+) -> list[Finding]:
+    """Run the selected suppression review with its feature-owned policy."""
+    return check_suppression_reasons(root, paths, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
     definition=ALPHUS_CHECK,
     morphology=ALPHUS_MORPHOLOGY,
-    runner=run_suppression_reasons_rule,
+    runner=run_suppression_reasons_feature,
+    policy_resolver=resolve_suppression_reasons_policy,
 )
 
 
