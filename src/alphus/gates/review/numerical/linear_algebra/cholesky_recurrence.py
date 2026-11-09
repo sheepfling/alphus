@@ -427,4 +427,3 @@ def check_cholesky_recurrence(
                 )
             )
     return findings
-
