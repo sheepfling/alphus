@@ -425,4 +425,3 @@ def test_pdf_example_checks_one_explicit_artifact_provisionally() -> None:
         "examples/documents/pdf-navigation-contract.json",
     )
     assert navigation.rollout == "provisional"
-
