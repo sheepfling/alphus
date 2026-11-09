@@ -69,4 +69,3 @@ def test_configured_function_and_trigonometric_bindings_are_required() -> None:
         == []
     )
     assert euler_rotation_matrix_sites(wrong_angle, _policy()) == []
-
