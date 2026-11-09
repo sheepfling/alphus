@@ -22,3 +22,8 @@ description; `Field(description=...)` supplies a field description. The
 uses `Any`, in this demonstration.
 Remove the example violations or disable individual rule flags when adapting
 the configuration to a real consumer.
+
+The selected `build_summary` API also demonstrates `erased-domain-output`: its
+consumer-declared contract names `Summary`, but its `dict[str, object]` return
+annotation hides that validated record. `write_summary` is deliberately not
+selected because its JSON mapping is the intended file boundary.
