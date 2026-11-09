@@ -1235,6 +1235,114 @@ def _declared_domain_return_dump_lines(
     return sorted(evidence)
 
 
+_OPAQUE_OUTPUT_NAMES = frozenset(
+    {
+        "Any",
+        "BaseModel",
+        "dict",
+        "JsonObject",
+        "JsonSerializable",
+        "JsonValue",
+        "Mapping",
+        "object",
+        "typing.Dict",
+        "typing.Any",
+        "typing.Mapping",
+        "typing_extensions.Any",
+        "builtins.object",
+        "collections.abc.Mapping",
+        "pydantic.BaseModel",
+    }
+)
+_MAPPING_OUTPUT_NAMES = frozenset(
+    {
+        "dict",
+        "typing.Dict",
+        "Mapping",
+        "typing.Mapping",
+        "collections.abc.Mapping",
+    }
+)
+_CONTAINER_OUTPUT_NAMES = frozenset(
+    {
+        "list",
+        "typing.List",
+        "Sequence",
+        "typing.Sequence",
+        "collections.abc.Sequence",
+        "tuple",
+        "typing.Tuple",
+    }
+)
+
+
+def _is_erased_output_annotation(annotation: ast.expr, aliases: ImportAliases) -> bool:
+    """Recognize only generic or JSON types that erase a declared output model."""
+    match annotation:
+        case ast.Name() | ast.Attribute():
+            name = _annotation_name(annotation, aliases)
+            return name in _OPAQUE_OUTPUT_NAMES or (
+                name is not None
+                and name.rsplit(".", maxsplit=1)[-1]
+                in {"JsonObject", "JsonSerializable", "JsonValue"}
+            )
+        case ast.Subscript(value=container, slice=arguments):
+            name = _annotation_name(container, aliases)
+            match arguments:
+                case ast.Tuple(elts=elements):
+                    items = elements
+                case _:
+                    items = [arguments]
+            if name in _MAPPING_OUTPUT_NAMES:
+                return any(
+                    _is_erased_output_annotation(item, aliases) for item in items
+                )
+            if name in _CONTAINER_OUTPUT_NAMES:
+                return any(
+                    _is_erased_output_annotation(item, aliases) for item in items
+                )
+            return False
+        case _:
+            return False
+
+
+def _annotation_name(annotation: ast.expr, aliases: ImportAliases) -> str | None:
+    """Resolve imported names, retaining unqualified builtin/type names."""
+    name = canonical_expression_name(annotation, aliases)
+    if name is not None:
+        return name
+    if isinstance(annotation, ast.Name):
+        return annotation.id
+    return None
+
+
+def _declared_erased_domain_return_lines(
+    module: ast.Module,
+    contract: PydanticDomainReturnContract,
+    aliases: ImportAliases,
+) -> list[tuple[int, str]]:
+    """Find exact selected APIs whose annotations erase a promised domain result."""
+    selected: dict[str, list[ast.FunctionDef | ast.AsyncFunctionDef]] = {}
+
+    def visit(statements: Sequence[ast.stmt], scope: tuple[str, ...]) -> None:
+        for statement in statements:
+            match statement:
+                case ast.ClassDef(name=name, body=body):
+                    visit(body, (*scope, name))
+                case ast.FunctionDef(name=name) | ast.AsyncFunctionDef(name=name):
+                    selected.setdefault(".".join((*scope, name)), []).append(statement)
+                case _:
+                    pass
+
+    visit(module.body, ())
+    evidence: set[tuple[int, str]] = set()
+    for function in selected.get(contract.function, []):
+        annotation = function.returns
+        if annotation is not None and _is_erased_output_annotation(annotation, aliases):
+            evidence.add((function.lineno, ast.unparse(annotation)))
+    return sorted(evidence)
+
+
 def _binds_name(node: ast.AST, name: str) -> bool:
     match node:
         case ast.Name(id=bound, ctx=ast.Store() | ast.Del()):
@@ -1565,6 +1673,31 @@ def pydantic_practice_findings(
                         f"declared model parameter {parameter}. Review whether "
                         "serialization belongs at an I/O boundary; this advisory "
                         "does not prove the conversion is unsafe."
+                    ),
+                )
+            )
+        for line, annotation in _declared_erased_domain_return_lines(
+            module, contract, aliases
+        ):
+            findings.append(
+                Finding(
+                    rule_id=rule_tag(
+                        Scope.PYTHON,
+                        Framework.PYDANTIC,
+                        Category.CORRECTNESS,
+                        "erased-domain-output",
+                    ),
+                    path=path,
+                    line=line,
+                    severity=policy.domain_return_severity,
+                    message=(
+                        f"Selected domain-output contract {contract.function} "
+                        f"names {contract.model}, but its return annotation "
+                        f"{annotation} erases that result schema. Return the "
+                        "validated domain record through its consumers and "
+                        "serialize only at an I/O boundary; this advisory "
+                        "depends on the declared contract and does not infer "
+                        "external API compatibility."
                     ),
                 )
             )
