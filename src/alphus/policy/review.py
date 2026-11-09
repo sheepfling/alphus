@@ -2576,4 +2576,3 @@ class SqlAlchemyPracticePolicy(PythonSourceScanPolicy):
                 "repository_paths must be configured when repository commit review is enabled"
             )
         return self
-
