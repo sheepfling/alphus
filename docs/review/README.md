@@ -554,7 +554,8 @@ Selector: `pydantic-practices`. IDs: `alphus/python/pydantic/validation/dump-rev
 `alphus/python/pydantic/metadata/external-schema-documentation`,
 `alphus/python/pydantic/validation/custom-init`, and
 `alphus/python/pydantic/validation/public-unconstrained-any`, and
-`alphus/python/pydantic/style/static-mutable-default-factory`.
+`alphus/python/pydantic/style/static-mutable-default-factory`, and
+`alphus/python/pydantic/correctness/erased-domain-output`.
 
 ```toml
 [checks.pydantic_practices]
@@ -728,6 +729,29 @@ external adapters, unresolved aliases, copied dumps, and cross-function flow
 are not inferred. Review whether serialization belongs at an I/O boundary; the
 finding does not establish that a conversion is unsafe and never recommends
 deleting validation or changing wire behavior automatically.
+
+The same exact selector also reports `erased-domain-output` when the selected
+function's return annotation replaces its declared domain result with `Any`,
+`object`, `BaseModel`, a recursive `JsonObject`/`JsonValue`/
+`JsonSerializable` alias, or a generic mapping/sequence containing one of those
+opaque types. This is a configured contract check: the consumer names the
+expected model, so an unselected `to_json` method or final JSON writer is not
+reported. Typed dynamic mappings such as `dict[str, int]` are not classified as
+erased outputs. The check reads annotations only; it does not trace arbitrary
+calls, validate that runtime values match the contract, or determine external
+compatibility. Findings are informational by default and require human review.
+
+For example, if `build_summary` should return `Summary`, this is an erased
+contract:
+
+```python
+def build_summary(summary: BaseModel) -> dict[str, object]:
+    return summary.model_dump()
+```
+
+Keep `domain_return_contracts` scoped to functions whose consumers need the
+validated model. A JSON conversion belongs in a separately named and unselected
+writer.
 
 For an explicitly closed action domain, a consumer can opt in to a bounded
 review of a selected string parameter:

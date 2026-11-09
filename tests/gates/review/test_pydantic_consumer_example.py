@@ -31,6 +31,7 @@ def test_pydantic_consumer_example_runs_plan_and_json_profile(
     findings = report["steps"][0]["findings"]
     expected_rule_ids = {
         "alphus/python/pydantic/correctness/deprecated-v1-api",
+        "alphus/python/pydantic/correctness/erased-domain-output",
         "alphus/python/pydantic/validation/unvalidated-construct",
         "alphus/python/pydantic/validation/unvalidated-copy-update",
         "alphus/python/pydantic/correctness/validator-fallthrough",
