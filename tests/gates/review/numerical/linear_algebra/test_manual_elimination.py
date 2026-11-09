@@ -22,6 +22,29 @@ def invert_matrix(matrix, size):
                 ]
 """
 
+_AUGMENTED = """\
+def _inverse(matrix):
+    size = len(matrix)
+    rows = [
+        list(row) + [float(i == j) for j in range(size)] for i, row in enumerate(matrix)
+    ]
+    for column in range(size):
+        pivot = max(range(column, size), key=lambda row: abs(rows[row][column]))
+        rows[column], rows[pivot] = rows[pivot], rows[column]
+        divisor = rows[column][column]
+        if divisor == 0:
+            raise ValueError("singular")
+        rows[column] = [value / divisor for value in rows[column]]
+        for i in range(size):
+            if i != column:
+                factor = rows[i][column]
+                rows[i] = [
+                    value - factor * other
+                    for value, other in zip(rows[i], rows[column], strict=True)
+                ]
+    return [row[size:] for row in rows]
+"""
+
 
 def _policy(**updates: object) -> ManualEliminationPolicy:
     return ManualEliminationPolicy.model_validate(
@@ -42,6 +65,40 @@ def test_matches_complete_pivot_swap_normalize_and_eliminate_kernel() -> None:
         (site.pivot_line, site.swap_line, site.normalize_line, site.update_line)
         for site in sites
     ] == [(3, 4, 6, 10)]
+
+
+def test_matches_augmented_inverse_with_zero_guard_and_right_half_return() -> None:
+    sites = manual_elimination_sites(_AUGMENTED, _policy(function_names=("_inverse",)))
+
+    assert len(sites) == 1
+    assert (sites[0].pivot_line, sites[0].swap_line, sites[0].normalize_line) == (
+        7,
+        8,
+        12,
+    )
+
+
+def test_augmented_inverse_requires_identity_initialization_and_right_half() -> None:
+    wrong_identity = _AUGMENTED.replace("float(i == j)", "float(i != j)")
+    wrong_result = _AUGMENTED.replace("row[size:]", "row[:size]")
+    no_singularity_guard = _AUGMENTED.replace(
+        '        if divisor == 0:\n            raise ValueError("singular")\n', ""
+    )
+
+    assert (
+        manual_elimination_sites(wrong_identity, _policy(function_names=("_inverse",)))
+        == []
+    )
+    assert (
+        manual_elimination_sites(wrong_result, _policy(function_names=("_inverse",)))
+        == []
+    )
+    assert (
+        manual_elimination_sites(
+            no_singularity_guard, _policy(function_names=("_inverse",))
+        )
+        == []
+    )
 
 
 def test_requires_each_coordinated_operation_and_same_pivot() -> None:
@@ -105,3 +162,4 @@ def test_module_level_range_shadowing_makes_loop_semantics_unknown() -> None:
     shadowed = "range = lambda count: ()\n\n" + _SOURCE
 
     assert manual_elimination_sites(shadowed, _policy()) == []
+
