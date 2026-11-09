@@ -116,16 +116,19 @@ does not establish that a dependency is suitable or that the kernel is wrong or
 slow. Preserve zero and non-finite behavior, component convention, dtype,
 returned representation, and non-unit semantics.
 
-`manual-elimination` recognizes one configured direct-list Gauss-Jordan shape:
+`manual-elimination` recognizes one configured Gauss-Jordan shape in either a
+direct-list matrix or an augmented-list inverse:
 maximum-absolute pivot selection over the current column, an in-place row swap,
 pivot-row normalization by its diagonal, then elimination of every other row
 using the same pivot column. It requires those operations in one top-level or
-class method with direct matrix indexing and no intervening statements. Aliases,
-other matrix representations, separate RHS vectors, alternate pivot APIs,
-branches and factorization variants are out of scope. The finding identifies a
-handwritten elimination candidate; it does not imply that a matrix inverse is
-needed or that a library routine preserves representation, pivoting, stability,
-dtype or failure behavior.
+class method with direct matrix indexing and no intervening statements. The
+augmented-list form additionally requires `list(row) + [float(i == j) ...]`
+initialization from `enumerate(matrix)`, a zero-pivot guard, and returning only
+the right half. Aliases, other matrix representations, separate RHS vectors,
+alternate pivot APIs, branches and factorization variants are out of scope. The
+finding identifies a handwritten elimination candidate; it does not imply that
+a matrix inverse is needed or that a library routine preserves representation,
+pivoting, stability, dtype or failure behavior.
 
 `manual-quaternion-vector-rotation` recognizes a configured direct expression
 `multiply(multiply((w, x, y, z), (0, vx, vy, vz)), conjugate((w, x, y, z)))`.
@@ -326,3 +329,4 @@ ECEF-to-NED, and NED-basis fingerprints bind their supported declarations and
 exact syntax, but cannot prove that the declarations describe runtime behavior.
 Trigonometric calls or a 3x3-looking assignment do not establish equivalence;
 unsupported forms remain unknown.
+
