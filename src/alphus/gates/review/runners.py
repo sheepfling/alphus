@@ -45,6 +45,9 @@ from alphus.gates.review.numerical.linear_algebra.array_representation import (
 from alphus.gates.review.numerical.linear_algebra.cholesky_recurrence import (
     check_cholesky_recurrence,
 )
+from alphus.gates.review.numerical.linear_algebra.euler_rotation_matrix import (
+    check_euler_rotation_matrix,
+)
 from alphus.gates.review.numerical.linear_algebra.manual_elimination import (
     check_manual_elimination,
 )
@@ -314,6 +317,16 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
                 ),
             )
         ),
+        "euler-rotation-matrix": lambda root, files, config: (
+            check_euler_rotation_matrix(
+                root,
+                files,
+                require_policy(
+                    config.checks.euler_rotation_matrix,
+                    "euler_rotation_matrix",
+                ),
+            )
+        ),
         "ecef-enu-transform": lambda root, files, config: check_ecef_enu_transform(
             root,
             files,
@@ -413,3 +426,4 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
         ),
     }
 )
+
