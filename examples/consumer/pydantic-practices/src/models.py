@@ -33,3 +33,17 @@ def normalize_request(
     constructed = PublicRequest.model_construct(name=payload, quantity=-1)
     copied = request.model_copy(update={"quantity": payload})
     return constructed, copied
+
+
+class Summary(BaseModel):
+    run_id: str
+
+
+def build_summary(summary: BaseModel) -> dict[str, object]:
+    """Intentional smell: this selected domain API erases its result model."""
+    return summary.model_dump()
+
+
+def write_summary(summary: Summary) -> dict[str, object]:
+    """A JSON writer is an output boundary and is not selected as a domain API."""
+    return summary.model_dump(mode="json")
