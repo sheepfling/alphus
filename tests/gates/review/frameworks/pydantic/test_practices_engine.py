@@ -177,11 +177,11 @@ def test_domain_output_contract_flags_erased_results_and_keeps_boundaries_clean(
 
 def test_domain_output_contract_parses_quoted_and_nested_forward_references() -> None:
     source = (
-        "from pydantic import BaseModel\\n"
-        "def quoted_mapping() -> \"dict[str, object]\": return {}\\n"
-        "def quoted_any() -> \"Any\": return None\\n"
-        "def nested_model() -> list[\"BaseModel\"]: return []\\n"
-        "def typed_mapping() -> \"dict[str, int]\": return {}\\n"
+        "from pydantic import BaseModel\n"
+        "def quoted_mapping() -> \"dict[str, object]\": return {}\n"
+        "def quoted_any() -> \"Any\": return None\n"
+        "def nested_model() -> list[\"BaseModel\"]: return []\n"
+        "def typed_mapping() -> \"dict[str, int]\": return {}\n"
     )
     policy = PydanticPracticePolicy.model_validate(
         {
