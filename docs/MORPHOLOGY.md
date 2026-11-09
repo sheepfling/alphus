@@ -6,21 +6,21 @@ This page records morphology vocabulary and the current 0.0.3 status.
 
 ## Current implementation status
 
-At draft PR #100 head
-`ec71e810e45dc9def3733264330761de30c5d647`, all 62 built-in selectors use
+At the latest fully verified PR #100 head
+`9e39702df2ebf9fe807ee0ff722ef51f50238ffc`, all 62 built-in selectors use
 feature-owned declarations and narrow typed registrations. Their declared
 policy models and resolvers connect to typed runner/result shapes for findings,
 composites, messages, Python-style category maps, shared-utilities reports, and
 cyclomatic reports. The existing selectors, strict config fields, output
 adapters, findings, and enforcement remain the compatibility contract.
 
-All five exact-head hosted workflows passed. The pinned wheel comparison passed
-with zero differences across the 149 manifested scenarios against baseline
+All five exact-head hosted workflows passed on that head. The pinned wheel
+comparison passed with zero differences across the 149 manifested scenarios against baseline
 `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`. The manifest contains 144
 behavior-labeled entries, four controls and one planned-only entry; five
 capabilities remain deferred. This is bounded scenario evidence, not
 exhaustive equivalence for every possible input. The local full self-profile
-passed 2,597 tests (44 skipped); 27 checks passed, none failed, and four were
+passed 2,598 tests (44 skipped); 27 checks passed, none failed, and four were
 provisional. Ruff, formatting, strict Pyright, generated-view checks, and
 `git diff --check` passed.
 

@@ -120,18 +120,18 @@ parallel contributions instead of inferring productivity from this migration.
 The current scenario manifest has 149 entries: 144 behavior-labeled, four
 controls and one planned-only entry; five additional capabilities are
 deferred.
-The exact-head comparison at `ec71e810e45dc9def3733264330761de30c5d647`
+The exact-head comparison at `9e39702df2ebf9fe807ee0ff722ef51f50238ffc`
 passed its required
 `equivalent-for-manifested-scenarios` check against baseline
 `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`. All five hosted workflows
 passed, including the pinned differential, installed consumers, Python
 self-check matrix, minimum dependencies, optional gates, source archive, and
 native PDF smoke. The report is retained with the
-[exact-head workflow](https://github.com/sheepfling/alphus/actions/runs/42546743557/artifacts/13644350406).
+[exact-head workflow](https://github.com/sheepfling/alphus/actions/runs/42592006136/artifacts/13662606084).
 This proves parity for the finite manifested cases, not every possible input;
 a planned-only entry or deferred capability is not a successful behavior run.
 
-The local full self-profile on `ec71e81` passed 2,597 tests (44 skipped), with
+The local full self-profile on `9e39702` passed 2,598 tests (44 skipped), with
 27 profile checks passed, zero failed, and four provisional passes. Ruff,
 formatting, strict Pyright, generated-view checks, and `git diff --check` passed.
 Older candidate failures and partial comparisons are historical migration
