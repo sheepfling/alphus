@@ -1217,4 +1217,3 @@ def test_audit_manifest_rejects_duplicate_top_level_and_nested_keys(
 
     assert exit_code == 2
     assert "audit manifest is invalid" in capsys.readouterr().err
-
