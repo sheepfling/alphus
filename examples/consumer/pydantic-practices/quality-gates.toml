@@ -20,6 +20,11 @@ report_custom_init = true
 report_unconstrained_any = true
 public_model_paths = ["src/**"]
 
+[[checks.pydantic_practices.domain_return_contracts]]
+path = "src/models.py"
+function = "build_summary"
+model = "Summary"
+
 [orchestration]
 default_profile = "pydantic"
 failure_threshold = "error"
