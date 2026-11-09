@@ -131,4 +131,3 @@ def test_scope_and_configured_sqrt_helper_are_respected(tmp_path: Path) -> None:
         )
         == []
     )
-
