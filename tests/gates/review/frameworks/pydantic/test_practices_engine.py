@@ -179,10 +179,10 @@ def test_domain_output_contract_parses_quoted_and_nested_forward_references() ->
     source = (
         "from pydantic import BaseModel\n"
         "class Manifest(BaseModel): pass\n"
-        "def quoted_mapping() -> \"dict[str, object]\": return {}\n"
-        "def quoted_any() -> \"Any\": return None\n"
-        "def nested_model() -> list[\"BaseModel\"]: return []\n"
-        "def typed_mapping() -> \"dict[str, int]\": return {}\n"
+        'def quoted_mapping() -> "dict[str, object]": return {}\n'
+        'def quoted_any() -> "Any": return None\n'
+        'def nested_model() -> list["BaseModel"]: return []\n'
+        'def typed_mapping() -> "dict[str, int]": return {}\n'
     )
     policy = PydanticPracticePolicy.model_validate(
         {
