@@ -12,6 +12,7 @@ from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
 from alphus.gates.review.numerical.common.ast_helpers import (
     configured_function_observations,
+    qualified_call_name,
     redefined_function_names,
 )
 from alphus.support.inventory import matches_path
@@ -29,17 +30,6 @@ _RULE_ID = rule_tag(
 class _Site:
     function: str
     line: int
-
-
-def _qualified_name(node: ast.expr) -> str | None:
-    match node:
-        case ast.Name(id=name):
-            return name
-        case ast.Attribute(value=value, attr=attr):
-            parent = _qualified_name(value)
-            return f"{parent}.{attr}" if parent else None
-        case _:
-            return None
 
 
 def _expected_matrix(symbols: tuple[str, str, str, str, str, str]) -> ast.expr:
@@ -79,7 +69,7 @@ def _helpers_match(assignment: ast.Assign, policy: EulerRotationMatrixPolicy) ->
     for node, (helpers, angle) in zip(value.elts, expected, strict=True):
         if not isinstance(node, ast.Call) or node.keywords or len(node.args) != 1:
             return False
-        if _qualified_name(node.func) not in helpers:
+        if qualified_call_name(node.func) not in helpers:
             return False
         if not isinstance(node.args[0], ast.Name) or node.args[0].id != angle:
             return False
