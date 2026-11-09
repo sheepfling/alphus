@@ -162,4 +162,3 @@ def test_module_level_range_shadowing_makes_loop_semantics_unknown() -> None:
     shadowed = "range = lambda count: ()\n\n" + _SOURCE
 
     assert manual_elimination_sites(shadowed, _policy()) == []
-
