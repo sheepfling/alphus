@@ -175,6 +175,42 @@ def test_domain_output_contract_flags_erased_results_and_keeps_boundaries_clean(
     ]
 
 
+def test_domain_output_contract_parses_quoted_and_nested_forward_references() -> None:
+    source = (
+        "from pydantic import BaseModel\\n"
+        "def quoted_mapping() -> \"dict[str, object]\": return {}\\n"
+        "def quoted_any() -> \"Any\": return None\\n"
+        "def nested_model() -> list[\"BaseModel\"]: return []\\n"
+        "def typed_mapping() -> \"dict[str, int]\": return {}\\n"
+    )
+    policy = PydanticPracticePolicy.model_validate(
+        {
+            "extensions": [".py"],
+            "domain_return_contracts": [
+                {
+                    "path": "src/domain.py",
+                    "function": function,
+                    "model": "Manifest",
+                }
+                for function in (
+                    "quoted_mapping",
+                    "quoted_any",
+                    "nested_model",
+                    "typed_mapping",
+                )
+            ],
+        }
+    )
+
+    findings = pydantic_practice_findings(source, policy, path="src/domain.py")
+
+    assert [(item.rule_id, item.line) for item in findings] == [
+        ("alphus/python/pydantic/correctness/erased-domain-output", 2),
+        ("alphus/python/pydantic/correctness/erased-domain-output", 3),
+        ("alphus/python/pydantic/correctness/erased-domain-output", 4),
+    ]
+
+
 def test_domain_return_contracts_reject_duplicate_selectors() -> None:
     contract = {
         "path": "src/domain.py",
