@@ -23,6 +23,26 @@ def factorize(matrix, n):
     return lower
 """
 
+_WOLF_COVARIANCE = """\
+import math
+
+def _covariance(matrix, label):
+    matrix_values = [_vector(row, 6, label) for row in matrix]
+    lower = [[0.0] * 6 for _ in range(6)]
+    for i in range(6):
+        for j in range(i + 1):
+            value = matrix_values[i][j] - sum(
+                lower[i][k] * lower[j][k] for k in range(j)
+            )
+            if i == j:
+                if value <= 0:
+                    raise ValueError(f"{label} must be positive definite")
+                lower[i][j] = math.sqrt(value)
+            else:
+                lower[i][j] = value / lower[j][j]
+    return matrix_values
+"""
+
 
 def _policy(**updates: object) -> CholeskyRecurrencePolicy:
     return CholeskyRecurrencePolicy.model_validate(
@@ -40,6 +60,12 @@ def test_recognizes_coordinated_lower_factorization_recurrence() -> None:
     lines = cholesky_recurrence_lines(_RECURRENCE, _policy())
     assert len(lines) == 1
     assert lines[0] == (5, 6, 7, 11)
+
+
+def test_recognizes_wolf_covariance_recurrence_with_shared_intermediate() -> None:
+    lines = cholesky_recurrence_lines(_WOLF_COVARIANCE, _policy())
+
+    assert len(lines) == 1
 
 
 def test_requires_product_sum_sqrt_and_previous_diagonal_divisor() -> None:
@@ -105,3 +131,4 @@ def test_scope_and_configured_sqrt_helper_are_respected(tmp_path: Path) -> None:
         )
         == []
     )
+
