@@ -46,6 +46,7 @@ _NUMERICAL_SOURCE_RULES: tuple[QualityRuleName, ...] = (
     "manual-quaternion-inversion",
     "manual-quaternion-vector-rotation",
     "manual-quaternion-matrix-conversion",
+    "euler-rotation-matrix",
     "ecef-enu-transform",
     "ecef-ned-matrix-transform",
     "ned-basis-vectors",
@@ -1216,3 +1217,4 @@ def test_audit_manifest_rejects_duplicate_top_level_and_nested_keys(
 
     assert exit_code == 2
     assert "audit manifest is invalid" in capsys.readouterr().err
+
