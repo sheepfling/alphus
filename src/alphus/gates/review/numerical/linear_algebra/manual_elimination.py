@@ -526,4 +526,3 @@ def check_manual_elimination(
                 )
             )
     return findings
-
