@@ -404,7 +404,8 @@ RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
         "pydantic-practices": RuleSpec(
             "pydantic_practices",
             RuleOutputShape.FINDINGS,
-            "Reviews configured Pydantic model declarations and validation practices.",
+            "Reviews configured Pydantic declarations, validation, and "
+            "domain-return contracts.",
             ("python", "pydantic"),
         ),
         "fastapi-practices": RuleSpec(
