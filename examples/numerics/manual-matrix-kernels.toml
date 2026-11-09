@@ -1,7 +1,11 @@
 schema_version = 1
 
 [files]
-include = ["src/numerics/*.py", "src/geometry/*.py"]
+include = [
+  "src/numerics/*.py",
+  "src/geometry/*.py",
+  "tests/fixtures/numerics/manual_euler_matrix.py",
+]
 exclude = []
 
 [checks.manual_matrix_kernels]
@@ -83,6 +87,17 @@ source_paths = ["src/geometry/*.py"]
 function_names = ["quaternion_to_matrix"]
 components = ["w", "x", "y", "z"]
 convention = "active-column-scalar-first"
+
+[checks.euler_rotation_matrix]
+extensions = [".py"]
+exclude = []
+source_paths = ["tests/fixtures/numerics/manual_euler_matrix.py"]
+function_names = ["_source_covariance"]
+angles = ["yaw", "pitch", "roll"]
+trig_symbols = ["cy", "sy", "cp", "sp", "cr", "sr"]
+sine_helpers = ["math.sin"]
+cosine_helpers = ["math.cos"]
+convention = "zyx"
 
 [checks.ecef_enu_transform]
 extensions = [".py"]
@@ -227,6 +242,12 @@ rollout = "provisional"
 
 [[orchestration.steps]]
 kind = "rule"
+name = "Euler rotation matrix review"
+rule = "euler-rotation-matrix"
+rollout = "provisional"
+
+[[orchestration.steps]]
+kind = "rule"
 name = "ECEF to ENU transform review"
 rule = "ecef-enu-transform"
 rollout = "provisional"
@@ -245,4 +266,5 @@ rollout = "provisional"
 
 [[orchestration.profiles]]
 name = "numerical-review"
-steps = ["Manual matrix kernels", "Manual elimination review", "Array representation churn", "Cholesky recurrence review", "Quaternion product review", "Quaternion conjugation review", "Quaternion normalization review", "Quaternion inversion review", "Quaternion vector rotation review", "Quaternion matrix conversion review", "ECEF to ENU transform review", "ECEF to NED matrix review", "NED basis vector review"]
+steps = ["Manual matrix kernels", "Manual elimination review", "Array representation churn", "Cholesky recurrence review", "Quaternion product review", "Quaternion conjugation review", "Quaternion normalization review", "Quaternion inversion review", "Quaternion vector rotation review", "Quaternion matrix conversion review", "Euler rotation matrix review", "ECEF to ENU transform review", "ECEF to NED matrix review", "NED basis vector review"]
+
