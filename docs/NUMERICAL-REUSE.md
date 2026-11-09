@@ -149,6 +149,15 @@ that convention. Review handedness, active/passive semantics, vector orientation
 normalization, dtype, failures, and output shape before considering reuse. The
 finding does not establish a defect or performance gain.
 
+`euler-rotation-matrix` recognizes one configured ZYX Euler matrix assigned as
+a direct 3×3 nested list or tuple, paired with one tuple assignment of the six
+configured sine/cosine helper calls for the three configured angle names. It
+requires the exact configured alias order and matrix signs; it does not follow
+aliases for the matrix, accept altered signs or infer angle units. A finding is
+an advisory review lead. Compare with the runtime's `Rotation.from_euler` or
+other existing rotation API only after checking angle units, frame, composition
+order, handedness, dtype, and downstream matrix semantics.
+
 `ecef-enu-transform` is an opt-in exact fingerprint for one direct tuple return
 that rotates an ECEF **displacement vector** into right-handed ENU at an anchor
 point. Its policy must declare geodetic latitude, radians, meters, the
