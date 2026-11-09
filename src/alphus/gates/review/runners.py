@@ -426,4 +426,3 @@ REVIEW_RULE_RUNNERS: Mapping[QualityRuleName, ReviewRunner] = MappingProxyType(
         ),
     }
 )
-
