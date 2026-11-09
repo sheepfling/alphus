@@ -107,6 +107,74 @@ def test_domain_return_contract_requires_declared_identity_and_exact_scope() -> 
     assert pydantic_practice_findings(source, policy, path="src/io.py") == []
 
 
+def test_domain_output_contract_flags_erased_results_and_keeps_boundaries_clean() -> (
+    None
+):
+    source = (
+        "from collections.abc import Mapping\n"
+        "from typing import Any\n"
+        "from pydantic import BaseModel\n"
+        "from app.json_types import JsonObject, JsonValue\n"
+        "class RunManifest(BaseModel):\n"
+        "    run_id: str\n"
+        "def manifest(self, context: object, verification: BaseModel) -> dict[str, object]:\n"
+        "    return {'run_id': verification.model_dump()['run_id']}\n"
+        "def manifest_map(verification: BaseModel) -> Mapping[str, JsonValue]:\n"
+        "    return {}\n"
+        "def manifest_object(verification: BaseModel) -> JsonObject:\n"
+        "    return {}\n"
+        "def manifest_any(verification: BaseModel) -> Any:\n"
+        "    return verification\n"
+        "def manifest_base(verification: BaseModel) -> BaseModel:\n"
+        "    return verification\n"
+        "def write_json(verification: RunManifest) -> dict[str, object]:\n"
+        "    return verification.model_dump(mode='json')\n"
+        "def dynamic_counts(verification: RunManifest) -> dict[str, int]:\n"
+        "    return {'items': 1}\n"
+        "def typed_manifest(verification: RunManifest) -> RunManifest:\n"
+        "    return verification\n"
+        "def source_hashes(verification: RunManifest) -> dict[str, str]:\n"
+        "    return {'source': 'abc'}\n"
+        "def bare_mapping(verification: BaseModel) -> Mapping:\n"
+        "    return {}\n"
+    )
+    functions = (
+        "manifest",
+        "manifest_map",
+        "manifest_object",
+        "manifest_any",
+        "manifest_base",
+        "dynamic_counts",
+        "typed_manifest",
+        "source_hashes",
+        "bare_mapping",
+    )
+    policy = PydanticPracticePolicy.model_validate(
+        {
+            "extensions": [".py"],
+            "domain_return_contracts": [
+                {
+                    "path": "src/domain.py",
+                    "function": function,
+                    "model": "RunManifest",
+                }
+                for function in functions
+            ],
+        }
+    )
+
+    findings = pydantic_practice_findings(source, policy, path="src/domain.py")
+
+    assert [(item.rule_id, item.line) for item in findings] == [
+        ("alphus/python/pydantic/correctness/erased-domain-output", 7),
+        ("alphus/python/pydantic/correctness/erased-domain-output", 9),
+        ("alphus/python/pydantic/correctness/erased-domain-output", 11),
+        ("alphus/python/pydantic/correctness/erased-domain-output", 13),
+        ("alphus/python/pydantic/correctness/erased-domain-output", 15),
+        ("alphus/python/pydantic/correctness/erased-domain-output", 25),
+    ]
+
+
 def test_domain_return_contracts_reject_duplicate_selectors() -> None:
     contract = {
         "path": "src/domain.py",
