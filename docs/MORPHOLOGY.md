@@ -6,8 +6,8 @@ This page records morphology vocabulary and the current 0.0.3 status.
 
 ## Current implementation status
 
-At the latest fully verified PR #100 head
-`9e39702df2ebf9fe807ee0ff722ef51f50238ffc`, all 62 built-in selectors use
+At the last fully verified PR #100 head before the digest correction,
+`862e8bb797c23ee3fc251f5499c7aff6e1cc7d65`, all 62 built-in selectors use
 feature-owned declarations and narrow typed registrations. Their declared
 policy models and resolvers connect to typed runner/result shapes for findings,
 composites, messages, Python-style category maps, shared-utilities reports, and
@@ -15,19 +15,22 @@ cyclomatic reports. The existing selectors, strict config fields, output
 adapters, findings, and enforcement remain the compatibility contract.
 
 All five exact-head hosted workflows passed on that head. The pinned wheel
-comparison passed with zero differences across the 149 manifested scenarios against baseline
-`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`. The manifest contains 144
-behavior-labeled entries, four controls and one planned-only entry; five
-capabilities remain deferred. This is bounded scenario evidence, not
-exhaustive equivalence for every possible input. The local full self-profile
-passed 2,598 tests (44 skipped); 27 checks passed, none failed, and four were
-provisional. Ruff, formatting, strict Pyright, generated-view checks, and
-`git diff --check` passed.
+comparison passed with zero differences across the 149 manifested scenarios
+against baseline `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`. The manifest contains 144
+behavior-labeled entries, four controls, and one planned-only entry. The
+package-boundaries history digest now has focused tests but is intentionally
+outside baseline equality; four other capabilities remain deferred. This is
+bounded scenario evidence, not exhaustive equivalence for every possible
+input. On prior code head `9e39702`, the local full self-profile passed 2,598 tests
+(44 skipped); 27 checks passed, none failed, and four were provisional. Ruff,
+formatting, strict Pyright, generated-view checks, and `git diff --check` passed.
 
 Registration migration and the manifested comparison are substantial evidence,
 not completion of issue #87. Persistent caching, local-model execution, new
-detectors/languages, setup automation, history/index changes, and round-two
-Bacflow remain outside 0.0.3.
+detectors/languages, setup automation, history archive/index schema
+migrations, and round-two Bacflow remain outside 0.0.3. The separately
+versioned package-boundaries policy-identity correction is documented in the
+architecture plan.
 The runtime morphology model remains transitional. `RuleMorphology` currently
 has `ClaimKind` and `DetectionMechanism`, but the latter still combines claim
 or evidence strength (`EXACT_RULE`) with analyzer/backend properties
@@ -90,15 +93,16 @@ names and configured source-scan mode, removing two selector lists from the
 CLI while preserving legacy fallbacks for unmigrated checks. Their existing
 checkers and public behavior are unchanged. `FeatureDefinition` stores each
 policy's `StrictModel` subclass directly, and each selected provider is owned
-by a typed `BuiltinFeature` with direct runner and specialized-operation
-references.
+by a narrow typed feature form with direct runner and specialized-operation
+references. The concrete `BuiltinFeature` compatibility form is unused by
+current registrations.
 
 The original six-rule pilot did not complete the built-in registration
 migration. The counts in the historical slice records below refer to their
 specific candidate commits; at the current head, all 62 selectors use
 feature-owned runtime declarations.
-Generated declarations do not select or enable a check and do not change JSON results, finding IDs, gate IDs,
-or enforcement.
+Generated declarations do not select or enable a check or change JSON
+results, finding IDs, gate IDs, or enforcement.
 
 ## Pilot examples
 
@@ -134,7 +138,9 @@ review. The Pydantic and SQLAlchemy Python framework reviewers now use the same
 feature-owned registration/result shape while retaining separate policies and
 analyzers. Each declaration generates morphology, `FeatureDefinition`, `RuleSpec`,
 strict primary `CheckPolicies` field, selector literal, inventory entry and
-lazy dispatch. Existing config names, output adaptation, reports, selection
+lazy dispatch. Narrow forms are independent registration records. The concrete
+`BuiltinFeature` broad-result fallback is not their base type and has no current
+selector registrations. Existing config names, output adaptation, reports, selection
 and exit behavior remain the compatibility contract. Synthetic discovery
 proves a new selector can be found without a central selector list; tests
 cover strict fields, shared complaint ownership, composite dispatch and lazy
@@ -166,7 +172,8 @@ migrated 40 of 62 baseline selectors. Candidate `6bc8a0c` migrates 42; 20
 still use legacy registration paths, and the evidence is not full wheel
 equivalence. The latest shared-policy prose slice matched 98 installed-wheel
 scenarios with zero differences; it is described in the [architecture
-document's shared-policy section](BUILTIN-CHECK-ARCHITECTURE.md#shared-policy-prose-registration-slice).
+document's shared-policy section](
+BUILTIN-CHECK-ARCHITECTURE.md#shared-policy-prose-registration-slice).
 Candidate
 `0c31a41b61a006ccff08d611fcec23100c403443` matched the pinned baseline
 `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` across 68 manifested scenarios
@@ -281,7 +288,8 @@ vectors each own their policy model, morphology and typed runner beside the
 checker. Their concerns and policy contracts remain distinct. Direct JSON
 scenarios assert the stable finding IDs and source lines, a profile scenario
 asserts ordered results, and an invalid-config scenario proves strict
-validation. The [coordinate-frame registration slice](BUILTIN-CHECK-ARCHITECTURE.md#coordinate-frame-registration-slice)
+validation. The [coordinate-frame registration
+slice](BUILTIN-CHECK-ARCHITECTURE.md#coordinate-frame-registration-slice)
 records the compatibility result.
 
 The four configured Python linear-algebra reviewers now use feature-owned

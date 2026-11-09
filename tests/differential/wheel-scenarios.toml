@@ -1422,8 +1422,8 @@ compare_within_build = true
 
 [[deferred]]
 capability = "package-boundaries-history-digest-identity"
-status = "not-exercised"
-reason = "The composite runtime scenario exercises package, graph, version-sync, and callable-registry policies; changing legacy history cohort identity remains separately scoped."
+status = "partial"
+reason = "Focused tests now verify all declared secondary policies, the explicit digest version, unchanged single-policy digests, and separation from the legacy composite cohort. This intentional history-identity correction is not compared as behavior-equivalent to the baseline wheel; archived records and index schema remain unchanged."
 selector = "package-boundaries"
 
 [[deferred]]

@@ -9,6 +9,7 @@ import pytest
 
 from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
+from alphus.execution.dispatch import BUILTIN_RULES, EntryPointBuiltinRuleBinding
 from alphus.gates.hygiene.file_size import (
     ALPHUS_FEATURE as FILE_SIZE_FEATURE,
 )
@@ -40,6 +41,14 @@ from alphus.policy._generated_morphology import MORPHOLOGY_BY_SELECTOR
 from alphus.policy.architecture import PackageBoundaryPolicy
 from alphus.policy.metrics import CyclomaticComplexityPolicy
 from alphus.policy.sources import CliPolicy, FileSizePolicy
+
+
+def test_every_current_builtin_uses_a_narrow_typed_registration() -> None:
+    assert set(BUILTIN_RULES) == set(FEATURE_DEFINITIONS)
+    assert all(
+        isinstance(binding, EntryPointBuiltinRuleBinding)
+        for binding in BUILTIN_RULES.values()
+    )
 
 
 def test_real_file_local_composite_message_and_native_shapes_are_typed() -> None:

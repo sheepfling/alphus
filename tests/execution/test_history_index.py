@@ -19,6 +19,8 @@ from alphus.config import (
     OrchestrationProfile,
     QualityGateConfig,
     RuleRunStep,
+    VersionSource,
+    VersionSyncPolicy,
 )
 from alphus.execution.history_cli import main
 from alphus.execution.history_index import (
@@ -39,6 +41,12 @@ from alphus.execution.profile_history import (
     write_profile_record,
 )
 from alphus.execution.profile_manifest import gate_manifest_entry
+from alphus.policy.architecture import (
+    ArchitectureGraphCheckPolicy,
+    ArchitectureGraphPolicy,
+    CallableRegistryPolicy,
+    PackageBoundaryPolicy,
+)
 
 
 @pytest.mark.parametrize("table", [_runs, _gates, _units])
@@ -332,6 +340,123 @@ def test_gate_identity_is_stable_across_names_but_policy_sensitive() -> None:
     assert gate_manifest_entry(command, config).gate_id is None
     with pytest.raises(ValueError, match="gate_id"):
         CommandRunStep(kind="command", name="tool", argv=("true",), gate_id="Bad ID")
+
+
+def _composite_history_config() -> QualityGateConfig:
+    primary = PackageBoundaryPolicy(
+        metadata_patterns=("pyproject.toml",),
+        source_directory="src",
+        allowed_dependencies=(("alphus", ()),),
+    )
+    return QualityGateConfig(
+        schema_version=1,
+        checks=CheckPolicies(package_boundaries=primary),
+    )
+
+
+def test_composite_policy_digest_tracks_all_declared_secondary_inputs() -> None:
+    step = RuleRunStep(kind="rule", name="boundaries", rule="package-boundaries")
+    config = _composite_history_config()
+    baseline = gate_manifest_entry(step, config)
+    assert baseline.gate_id == "alphus/rule/package-boundaries"
+
+    changed_inputs = (
+        (
+            "architecture_graph",
+            ArchitectureGraphCheckPolicy(
+                graph=ArchitectureGraphPolicy(
+                    path="docs/architecture.mmd",
+                    node_names=(("alphus", "Alphus"),),
+                )
+            ),
+        ),
+        (
+            "version_sync",
+            VersionSyncPolicy(
+                sources=(
+                    VersionSource(
+                        path="pyproject.toml", format="toml", key="project.version"
+                    ),
+                    VersionSource(
+                        path="src/alphus/VERSION.toml",
+                        format="toml",
+                        key="version",
+                    ),
+                )
+            ),
+        ),
+        (
+            "callable_registry",
+            CallableRegistryPolicy(
+                source_path="src/alphus/api.py",
+                registry_path="src/alphus/registry.py",
+                protocol_name="Operation",
+                registry_name="OPERATIONS",
+            ),
+        ),
+    )
+    for field, value in changed_inputs:
+        checks = config.checks.model_copy(update={field: value})
+        changed = config.model_copy(update={"checks": checks})
+        assert gate_manifest_entry(step, changed).gate_policy_sha256 != (
+            baseline.gate_policy_sha256
+        ), field
+
+    changed_primary = config.model_copy(
+        update={
+            "checks": config.checks.model_copy(
+                update={
+                    "package_boundaries": config.checks.package_boundaries.model_copy(
+                        update={"source_directory": "packages"}
+                    )
+                }
+            )
+        }
+    )
+    assert gate_manifest_entry(step, changed_primary).gate_policy_sha256 != (
+        baseline.gate_policy_sha256
+    )
+
+    legacy_payload = {
+        "rule": step.rule,
+        "policy": config.checks.package_boundaries.model_dump(mode="json"),
+        "files": None,
+        "severity": step.severity,
+        "priority": step.priority,
+        "rollout": step.rollout,
+        "failure_threshold": None,
+    }
+    legacy_digest = hashlib.sha256(
+        json.dumps(legacy_payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    assert baseline.gate_policy_sha256 != legacy_digest
+
+    unrelated = RuleRunStep(kind="rule", name="lines", rule="line-length")
+    before = gate_manifest_entry(unrelated, config).gate_policy_sha256
+    legacy_single_payload = {
+        "rule": unrelated.rule,
+        "policy": None,
+        "files": None,
+        "severity": unrelated.severity,
+        "priority": unrelated.priority,
+        "rollout": unrelated.rollout,
+        "failure_threshold": None,
+    }
+    legacy_single_digest = hashlib.sha256(
+        json.dumps(
+            legacy_single_payload, sort_keys=True, separators=(",", ":")
+        ).encode()
+    ).hexdigest()
+    assert before == legacy_single_digest
+
+    with_secondary = config.model_copy(
+        update={
+            "checks": config.checks.model_copy(
+                update={"version_sync": changed_inputs[1][1]}
+            )
+        }
+    )
+    assert gate_manifest_entry(unrelated, with_secondary).gate_policy_sha256 == before
 
 
 def test_unknown_index_version_requires_rebuild(tmp_path: Path) -> None:

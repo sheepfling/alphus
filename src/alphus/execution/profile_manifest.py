@@ -9,8 +9,11 @@ from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Severity
 from alphus.execution.profile_history import GateManifestEntry
 from alphus.plugins.registry import enabled_plugin_registry
+from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
 from alphus.policy.catalog import RULE_SPECS
 from alphus.policy.orchestration import CommandRunStep, RuleRunStep
+
+_POLICY_IDENTITY_VERSION = 2
 
 
 def gate_manifest_entry(
@@ -45,6 +48,17 @@ def gate_manifest_entry(
                 "rollout": step.rollout,
                 "failure_threshold": threshold,
             }
+            feature = FEATURE_DEFINITIONS[step.rule]
+            if len(feature.policy_inputs) > 1:
+                identity["policy_identity_version"] = _POLICY_IDENTITY_VERSION
+                identity["secondary_policies"] = {
+                    field: (
+                        value.model_dump(mode="json") if value is not None else None
+                    )
+                    for field in feature.policy_inputs
+                    if field != feature.policy_field
+                    for value in (getattr(config.checks, field),)
+                }
         else:
             binding = enabled_plugin_registry(config.plugins).get(step.rule)
             if binding is None:

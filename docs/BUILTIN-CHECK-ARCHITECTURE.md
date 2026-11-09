@@ -11,8 +11,8 @@ change runtime behavior.
 Use this section for live status. The detailed migration records below preserve
 evidence from earlier commits; their selector counts describe those historical
 heads and are not current inventory claims. The current PR branch has all 62
-built-in selectors on feature-owned `BuiltinFeature` registration modules, one
-per selector. The build backend derives the installed
+built-in selectors on feature-owned typed registration modules, one per
+selector. The build backend derives the installed
 `alphus.builtin_checks.v1` entry points and ignored
 aggregate policy/config/dispatch views from those declarations; adding a
 feature does not require editing `pyproject.toml`, a central selector map, or
@@ -68,8 +68,9 @@ The representative shapes include file-local findings (`file-size`), a
 composite finding check (`package-boundaries`), messages (`cli`), and the
 native polyglot report (`cyclomatic-complexity`). Cyclomatic's operations
 object is required by its form. All 62 built-ins use narrow typed feature
-forms; `BuiltinFeature` is their shared abstract runtime type, not a remaining
-broad built-in registration path. Dynamic entry-point lookup returns a disjoint union.
+forms. `BuiltinFeature` remains a concrete broad-result compatibility form in
+the registration union, but no current selector uses it. The narrow forms do
+not inherit from it. Dynamic entry-point lookup returns a disjoint union.
 A generated, ignored `builtin_registry.pyi` overload view maps each literal
 selector to its feature form and primary policy type; dynamic strings retain
 the full registration union.
@@ -118,16 +119,18 @@ in review time. Measure correction categories and registration edits in future
 parallel contributions instead of inferring productivity from this migration.
 
 The current scenario manifest has 149 entries: 144 behavior-labeled, four
-controls and one planned-only entry; five additional capabilities are
-deferred.
-The exact-head comparison at `9e39702df2ebf9fe807ee0ff722ef51f50238ffc`
-passed its required
+controls, and one planned-only entry. Five capabilities need separate
+treatment: the package-boundaries history identity has focused tests but is
+intentionally outside baseline parity because its corrected digest starts a
+new cohort; four other capabilities remain deferred.
+The last completed exact-head comparison before the digest correction, at
+`862e8bb797c23ee3fc251f5499c7aff6e1cc7d65`, passed its required
 `equivalent-for-manifested-scenarios` check against baseline
 `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`. All five hosted workflows
 passed, including the pinned differential, installed consumers, Python
 self-check matrix, minimum dependencies, optional gates, source archive, and
-native PDF smoke. The report is retained with the
-[exact-head workflow](https://github.com/sheepfling/alphus/actions/runs/42592006136/artifacts/13662606084).
+native PDF smoke. The report is retained with this [exact-head workflow
+artifact](https://github.com/sheepfling/alphus/actions/runs/42593541909/artifacts/13662892735).
 This proves parity for the finite manifested cases, not every possible input;
 a planned-only entry or deferred capability is not a successful behavior run.
 
@@ -164,9 +167,10 @@ belong in the future feature definition and need dedicated validation.
 Rick identified tuple-pair `ALPHUS_CHECK` declarations as opaque and the
 built-in path as parallel to the existing plugin registry. The current
 implementation replaces that tuple format for all 62 built-in selectors with
-immutable `FeatureDefinition` and `RuleMorphology` values plus a typed
-`BuiltinFeature` execution object. A PEP 517 build backend statically reads
-those declarations and writes standard
+immutable `FeatureDefinition` and `RuleMorphology` values plus a narrow,
+shape-specific typed execution object. The concrete `BuiltinFeature` class is
+retained only as a broad-result compatibility fallback; it is not a base class.
+A PEP 517 build backend statically reads those declarations and writes standard
 `alphus.builtin_checks.v1` metadata into ignored build output. Runtime lookup
 uses `importlib.metadata` against Alphus-named distributions and selects the
 entry-point catalog matching generated feature definitions. It imports only the
@@ -1376,19 +1380,27 @@ identity is separate from legacy history cohort identity and archive schema.
 
 ## Package-boundaries history identity: separate disposition
 
-There is a source-backed gap in the current legacy profile digest. The
-package-boundaries runner reads package-boundaries policy and can additionally
-run architecture-graph, version-sync, and callable-registry checks. The
-current `gate_manifest_entry` hashes only the primary `RuleSpec.policy_field`,
-common file policy, and gate settings. Changes to those additional effective
-policies can therefore leave the recorded gate digest unchanged.
+The legacy profile digest had a source-backed gap. The package-boundaries
+runner reads its primary policy and can additionally run architecture-graph,
+version-sync, and callable-registry checks. The former `gate_manifest_entry`
+hashed only the primary `RuleSpec.policy_field`, common file policy, and gate
+settings, so changes to those secondary effective policies could leave the
+recorded digest unchanged.
 
-Track this as a separately reviewed history-identity correctness fix. Do not
-silently fold it into the structural migration, rewrite existing cohorts, or
-change archive semantics as part of 0.0.3. Add explicit tests for each
-effective input and decide version/compatibility behavior before changing the
-digest. Feature declarations may record effective-input dependencies for
-future caches without changing the legacy history digest.
+The source-backed gap was resolved in a dedicated, versioned identity change.
+For any built-in declaration with secondary `policy_inputs`, the digest payload
+now carries an explicit policy-identity version and hashes every declared
+secondary field by name, including an unset (`null`) value. The ordinary
+single-policy digest payload is unchanged. Tests prove that each of the three
+package-boundaries secondary policies changes its gate digest, while those
+settings do not change an unrelated single-policy gate digest.
+
+Existing v1-v4 JSON archives are not rewritten, and the history archive schema
+and rebuildable SQLite index schema are unchanged. New package-boundaries runs
+form a distinct policy cohort from historical runs because their digest now
+represents the effective composite policy. This deliberate cohort boundary
+prevents new runs from being pooled with legacy runs whose digest omitted those
+inputs. No historical policy is inferred or backfilled.
 
 ## Ordered migration slices
 
@@ -1412,13 +1424,13 @@ remains open; do not describe the finite result as exhaustive.
 5. **Differential validation — passed for 149 manifested scenarios.** This does
    not imply arbitrary-input equivalence; add cases when review identifies
    meaningful uncovered contracts.
-6. **Remaining 0.0.3 review — open.** Reconcile accepted feedback, keep
-   contributor guidance current, and preserve the separate history-digest
-   disposition below.
+6. **Remaining 0.0.3 review — in progress.** Reconcile accepted feedback, keep
+   contributor guidance current, and retain finite compatibility evidence.
 
-History identity correction, persistent cache, automatic setup, history/index
-migrations, new detector behavior, new language providers, local model
-execution, and round-two Bacflow are not hidden substeps of this sequence.
+Persistent cache, automatic setup, history/index schema migrations, new
+detector behavior, new language providers, local-model execution, and
+round-two Bacflow are not hidden substeps of this sequence. The separately
+versioned composite history identity is documented above.
 
 ## 0.0.4 backlog and unresolved decisions
 
@@ -1428,21 +1440,14 @@ evidence, repeatability, provenance, lazy binding, and dependency declarations
 from 0.0.3 are extension seams only; 0.0.3 should not ship dormant AI or cache
 frameworks.
 
-Two decisions remain for review:
+One release-readiness question remains: whether the planned-only scenario and
+four deferred capabilities block #87's exit. Keep this finite evidence distinct
+from exhaustive equivalence. The history-digest correction has focused unit
+coverage and is intentionally excluded from baseline equality because the new
+versioned cohort cannot equal the legacy digest.
 
-1. **History digest correction timing:** decide whether the separately scoped
-   package-boundaries digest fix must ship before 0.0.3 or can follow. In
-   either case, preserve legacy archive interpretation and make any digest
-   transition explicit.
-2. **Further behavior evidence:** all 62 built-ins now use generated
-   registration and the 149 manifested comparisons passed. One scenario is
-   planned-only and five capabilities are deferred. Decide whether these gaps
-   block #87's exit; do not claim exhaustive equivalence or change legacy
-   digest/archive meaning inside this structural tranche.
-
-Do not change history digest/archive meaning without a separate decision. PR
-#100 remains draft. Registration is complete for the current 62 built-ins; the
-issue's broader exit status remains subject to review of deferred compatibility
+PR #100 remains draft. Registration is complete for the current 62 built-ins;
+the issue's broader exit status remains subject to review of deferred compatibility
 cases.
 
 ## Historical selector migration reports
