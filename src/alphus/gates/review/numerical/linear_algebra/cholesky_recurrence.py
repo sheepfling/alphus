@@ -9,6 +9,7 @@ from pathlib import Path
 from alphus.config import CholeskyRecurrencePolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.gates.review.numerical.common.ast_helpers import qualified_call_name
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 
@@ -18,17 +19,6 @@ _RULE_ID = rule_tag(
     Category.MAINTAINABILITY,
     "manual-cholesky-recurrence",
 )
-
-
-def _qualified_name(node: ast.expr) -> str | None:
-    match node:
-        case ast.Name(id=name):
-            return name
-        case ast.Attribute(value=value, attr=attr):
-            parent = _qualified_name(value)
-            return f"{parent}.{attr}" if parent else None
-        case _:
-            return None
 
 
 def _index(node: ast.expr, base: str, first: str, second: str) -> bool:
@@ -268,7 +258,7 @@ def _match_function(
                             ast.Assign(
                                 value=ast.Call(func=func, args=[_], keywords=[])
                             ) as assignment
-                        ) if _qualified_name(func) in sqrt_helpers:
+                        ) if qualified_call_name(func) in sqrt_helpers:
                             sqrt_line = assignment.lineno
                             factor = target_factor
                             diagonal_assignment = assignment
