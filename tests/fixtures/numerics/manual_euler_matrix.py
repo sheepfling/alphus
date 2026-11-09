@@ -16,4 +16,3 @@ def _source_covariance(yaw: float, pitch: float, roll: float) -> list[list[float
         [-sp, cp * sr, cp * cr],
     ]
     return rotation
-
