@@ -1276,9 +1276,19 @@ _CONTAINER_OUTPUT_NAMES = frozenset(
 )
 
 
-def _is_erased_output_annotation(annotation: ast.expr, aliases: ImportAliases) -> bool:
-    """Recognize only generic or JSON types that erase a declared output model."""
+def _is_erased_output_annotation(
+    annotation: ast.expr, aliases: ImportAliases, *, depth: int = 0
+) -> bool:
+    """Recognize generic or JSON types that erase a declared output model."""
+    if depth >= 8:
+        return False
     match annotation:
+        case ast.Constant(value=str() as source) if len(source) <= 4096:
+            try:
+                parsed = ast.parse(source, mode="eval").body
+            except (SyntaxError, ValueError, RecursionError):
+                return False
+            return _is_erased_output_annotation(parsed, aliases, depth=depth + 1)
         case ast.Name() | ast.Attribute():
             name = _annotation_name(annotation, aliases)
             return name in _OPAQUE_OUTPUT_NAMES or (
@@ -1293,13 +1303,10 @@ def _is_erased_output_annotation(annotation: ast.expr, aliases: ImportAliases) -
                     items = elements
                 case _:
                     items = [arguments]
-            if name in _MAPPING_OUTPUT_NAMES:
+            if name in _MAPPING_OUTPUT_NAMES or name in _CONTAINER_OUTPUT_NAMES:
                 return any(
-                    _is_erased_output_annotation(item, aliases) for item in items
-                )
-            if name in _CONTAINER_OUTPUT_NAMES:
-                return any(
-                    _is_erased_output_annotation(item, aliases) for item in items
+                    _is_erased_output_annotation(item, aliases, depth=depth + 1)
+                    for item in items
                 )
             return False
         case _:
