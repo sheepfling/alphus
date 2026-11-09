@@ -104,6 +104,7 @@ def test_gate_themes_own_their_runner_mappings() -> None:
                 "manual-quaternion-inversion",
                 "manual-quaternion-vector-rotation",
                 "manual-quaternion-matrix-conversion",
+                "euler-rotation-matrix",
                 "ecef-enu-transform",
                 "ecef-ned-matrix-transform",
                 "ned-basis-vectors",
@@ -278,3 +279,4 @@ def test_target_audit_package_contains_only_python_310_helpers() -> None:
         "runtime_audit.py",
         "py.typed",
     }
+
