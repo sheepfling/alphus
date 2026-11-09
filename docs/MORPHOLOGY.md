@@ -2,29 +2,30 @@
 
 The broader built-in ownership and registration design is documented in the
 [built-in check architecture and migration plan](BUILTIN-CHECK-ARCHITECTURE.md).
-This page remains the morphology vocabulary and pilot boundary.
+This page records morphology vocabulary and the current 0.0.3 status.
 
 ## Current implementation status
 
-At draft PR #100 head `51375f5`, all 62 built-in selectors have feature-owned
-declarations and narrow typed registrations. The forms connect each declared
-policy model and resolver to a statically typed runner/result shape, including
-ordinary findings, composites, messages, Python-style category maps, shared
-utilities reports, and cyclomatic reports. Focused parity tests live alongside
-the corresponding source families. The implementation retains existing
-selectors, strict config fields, output adapters, findings and enforcement.
+At draft PR #100 head
+`ec71e810e45dc9def3733264330761de30c5d647`, all 62 built-in selectors use
+feature-owned declarations and narrow typed registrations. Their declared
+policy models and resolvers connect to typed runner/result shapes for findings,
+composites, messages, Python-style category maps, shared-utilities reports, and
+cyclomatic reports. The existing selectors, strict config fields, output
+adapters, findings, and enforcement remain the compatibility contract.
 
-The latest fully completed exact-head hosted comparison before this commit
-matched all 149 manifested scenarios with zero differences against baseline
-`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`. Five scenarios remain explicitly
-deferred, so this is not complete equivalence over every possible selector
-input. Hosted workflows for `51375f5` are pending. Its local full self-profile
-passed 2,590 tests (44 skipped), with 27 checks passed, none failed, and four
-provisional passes. Ruff, formatting, source Pyright, generated-view freshness,
-and `git diff --check` passed locally.
+All five exact-head hosted workflows passed. The pinned wheel comparison passed
+with zero differences across the 149 manifested scenarios against baseline
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`. The manifest contains 144
+behavior-labeled entries, four controls and one planned-only entry; five
+capabilities remain deferred. This is bounded scenario evidence, not
+exhaustive equivalence for every possible input. The local full self-profile
+passed 2,597 tests (44 skipped); 27 checks passed, none failed, and four were
+provisional. Ruff, formatting, strict Pyright, generated-view checks, and
+`git diff --check` passed.
 
-Registration migration and the 149-scenario differential remain evidence, not
-completion of issue #87. Persistent caching, local-model execution, new
+Registration migration and the manifested comparison are substantial evidence,
+not completion of issue #87. Persistent caching, local-model execution, new
 detectors/languages, setup automation, history/index changes, and round-two
 Bacflow remain outside 0.0.3.
 The runtime morphology model remains transitional. `RuleMorphology` currently
@@ -44,10 +45,10 @@ describes the rule itself; it does not describe a particular finding or run.
 The six-check pilot's `mechanisms` vocabulary is transitional. `exact-rule`
 describes claim/evidence strength, while `bounded-heuristic`, `native-tool`,
 and `local-model-assisted` describe different detection or backend properties.
-The [built-in check architecture](BUILTIN-CHECK-ARCHITECTURE.md) separates
-claim strength, analyzer method, backend, repeatability, and advisory or
-enforcement disposition before broad registration migration. Do not infer
-repeatability from a pilot mechanism label.
+The [built-in check architecture](BUILTIN-CHECK-ARCHITECTURE.md) defines
+those as independent target dimensions. The current `RuleMorphology` mechanism
+vocabulary remains transitional and does not encode all of them as separate
+runtime fields. Do not infer repeatability from a pilot mechanism label.
 
 Keep these fields separate from severity, remediation priority, provisional or
 mainline rollout, per-finding confidence, applicability, selection, and actual
@@ -121,6 +122,9 @@ readiness.
 
 ## Historical registration and migration evidence
 
+Candidate-specific records below describe earlier migration stages. They are
+historical evidence; the current status is at the top of this page.
+
 The six-check morphology pilot was metadata discovery. Historical slice
 records below describe incremental candidates. The current draft PR #100 has
 all 62 feature-owned runtime selectors, including the package-boundaries
@@ -176,7 +180,7 @@ cases; this does not complete #87. The latest shared-policy prose slice and its
 98-scenario installed-wheel result are recorded in the [architecture document's
 shared-policy section](BUILTIN-CHECK-ARCHITECTURE.md#shared-policy-prose-registration-slice).
 
-## Paired semantic-review registration slice
+### Paired semantic-review registration slice
 
 Commit `7388a58bef5bd522c9d94c5d142528ff0ce874c6` moves
 `heuristic-total-consumption` and `unexplained-empty-results` to declarations
@@ -206,7 +210,7 @@ self-profile passed all 27 checks with no failures and four provisional
 passes. This is incremental evidence, not full 62-selector equivalence or
 completion of issue #87.
 
-## Paired architecture-review registration slice
+### Paired architecture-review registration slice
 
 Commit `a161464f8e06a02a95c768f41dd01f3cf86f9f02` moves
 `provenance-as-ownership` and `semantic-work-in-presentation` into typed
@@ -236,7 +240,7 @@ self-profile passed 27 checks with no failures and four provisional passes.
 This is incremental evidence, not full selector equivalence or completion of
 issue #87.
 
-## Orthogonal policy and run evidence
+### Orthogonal policy and run evidence
 
 Claim kind, concern, mechanism, inspected scope, evidence kind, and rule-level
 evaluation maturity describe the rule. They do not describe severity,
@@ -286,7 +290,7 @@ selector count, pinned-wheel comparison, positive fixture treatment, and
 remaining equivalence gap are documented in the [linear-algebra registration
 slice](BUILTIN-CHECK-ARCHITECTURE.md#linear-algebra-registration-slice).
 
-## Paired positional-review registration slice
+### Paired positional-review registration slice
 
 Commit `c7023fa14a12d71784a7fcb2c0d666334fcfcf0d` moves
 `positional-interfaces` and `positional-semantic-overrides` to typed
@@ -316,7 +320,7 @@ passed all 27 checks with zero failures and four provisional passes. This is
 incremental evidence only; 14 selectors still lack behavior-level differential
 scenarios, and issue #87 is not complete.
 
-## Paired review-pipeline registration slice
+### Paired review-pipeline registration slice
 
 Commit `3c2019ebfbd93f00dea52eaec103f665d22c6893` moves
 `parallel-normalization` and `patch-cascade` into typed feature-owned
@@ -344,7 +348,7 @@ passed all 27 checks with zero failures and four provisional passes. This is
 incremental evidence, not full 62-selector equivalence or completion of issue
 #87.
 
-## Paired CI and artifact-flow registration slice
+### Paired CI and artifact-flow registration slice
 
 Commit `32595473db4f65c59d769442b340c8f138acbdfd` moves `ci-workflows` and
 `run-artifacts` into typed feature-owned registrations beside their existing
@@ -370,7 +374,7 @@ Installed-wheel self-quality passed 2,510 tests (44 skipped); all 27 self-
 profile checks passed, with four provisional passes. This is incremental
 evidence, not full selector equivalence or completion of issue #87.
 
-## Paired message-result registration slice
+### Paired message-result registration slice
 
 Commits `e2d640e` and `ba13b18` migrate `runtime-types` and `script-policy`
 into typed feature-owned registrations beside their existing analyzers. Both
@@ -404,7 +408,7 @@ tests (44 skipped), with all 27 self-profile checks passing and four provisional
 passes. Ruff, formatting, Pyright, package import checks, and the Markdown-shell
 review passed as part of that run.
 
-## Repeated numeric-limit registration slice
+### Repeated numeric-limit registration slice
 
 Commits `3c23a1624ea2588ceee01551216339ddf3ac8939`,
 `83aa9cf93ab0340d1b61e4fca0018c5a74705473`, and
@@ -433,7 +437,7 @@ committed. The corrected fixture also passes the repository self-profile's
 Python lint step. This remains partial compatibility evidence, not completion
 of issue #87.
 
-## Suppression-reason registration slice
+### Suppression-reason registration slice
 
 Commit `762d06eef3dcc4b665a17babf9b6531a93fb4dd6` moves
 `suppression-reasons` into a feature-owned typed declaration beside its
@@ -458,7 +462,7 @@ missing-policy rejections. Reference and candidate wheel SHA-256 values are
 report is `/tmp/alphus-morphology-suppression-762d06e.json`; it is not
 committed. This remains partial evidence, not completion of issue #87.
 
-## Source-test-coverage registration slice
+### Source-test-coverage registration slice
 
 Commit `fcbb5d474e51d10896e91df7d09e4b167fdf1cb3` moves
 `source-test-coverage` to the same typed, feature-owned registration model.
@@ -486,7 +490,7 @@ checks passing and four provisional passes; Ruff, formatting, Pyright, import
 smoke, and Markdown-shell review also passed. This remains partial evidence,
 not completion of issue #87.
 
-## Source-family and typing-stub registration slice
+### Source-family and typing-stub registration slice
 
 Commit `1d9ddc5` moves `source-families` and
 `typing-stub-suggestions` into typed feature-owned registrations beside their
@@ -509,7 +513,7 @@ report is `/tmp/alphus-morphology-review-pair-34fd501.json`; it is not
 committed. This remains partial compatibility evidence, not completion of
 issue #87.
 
-## Shared-utilities specialized-report registration slice
+### Shared-utilities specialized-report registration slice
 
 Commit `09186377482b917fb7cfaac70f5fb757b0c86186` moves
 `shared-utilities` to a typed feature-owned registration. Its declaration owns
@@ -538,7 +542,7 @@ all 27 self-profile checks with four provisional passes, Ruff, formatting,
 Pyright, import smoke (212 modules), compatibility imports, and Markdown-shell
 review. This remains partial evidence, not completion of issue #87.
 
-## CLI policy feature-owned registration slice
+### CLI policy feature-owned registration slice
 
 Commit `3c4db3b` moves `cli` from the central source-runner, selector catalog,
 and policy-model lists into its feature-owned declaration. The feature provides
@@ -567,7 +571,7 @@ Pyright, import smoke (212 modules), compatibility imports, and Markdown-shell
 review. This remains partial compatibility evidence, not completion of issue
 #87; it leaves `python-style` and the broader remaining 0.0.3 migration work.
 
-## Python-style feature-owned registration slice
+### Python-style feature-owned registration slice
 
 The working tree now moves `python-style` to a typed feature-owned declaration
 in `alphus.gates.languages.python.style_feature`. It owns its strict

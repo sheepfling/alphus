@@ -32,6 +32,7 @@ from scripts.differential_wheels import (
     _scenario_executes,
     _ScenarioRunReport,
     _validate_materialized_files,
+    _VariantDocument,
     load_manifest,
     normalize_json,
     remove_path,
@@ -242,6 +243,27 @@ def test_immutable_scenario_report_keeps_json_array_wire_shape() -> None:
     assert decoded["python_distributions"] == ["lizard==1.24.2"]
     assert decoded["selectors"] == ["cyclomatic-complexity"]
     assert decoded["behavior"] == ["native-backend-report"]
+
+
+def _variant_from_json(encoded: str) -> _VariantDocument:
+    return _VariantDocument.model_validate_json(encoded)
+
+
+def test_static_empty_tuple_defaults_preserve_strict_json_array_contract() -> None:
+    variant = _VariantDocument.model_validate({"name": "help"})
+    field = _VariantDocument.model_fields["arguments"]
+
+    assert variant.arguments == ()
+    assert field.default == ()
+    assert field.default_factory is None
+    encoded = variant.model_dump_json()
+    assert json.loads(encoded)["arguments"] == []
+    assert _variant_from_json(encoded) == variant
+
+    with pytest.raises(ValueError):
+        _VariantDocument.model_validate({"name": "help", "arguments": None})
+    with pytest.raises(ValueError):
+        _variant_from_json('{"name":"help","arguments":null}')
 
 
 def test_profile_finding_preserves_legacy_message_without_location() -> None:

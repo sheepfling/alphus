@@ -64,12 +64,12 @@ The forms distinguish result and required operations, not analyzer claim
 strength or backend. A future genuinely different input contract should add a
 named shape only when an existing check needs it.
 
-The production slice exercises file-local findings (`file-size`), a composite
-finding check (`package-boundaries`), legacy messages (`cli`), and the native
-polyglot report (`cyclomatic-complexity`). Cyclomatic's operations object is
-required by its form. Other feature declarations can still use the broad
-`BuiltinFeature` during migration, and the runtime loader validates their
-annotations and results. Dynamic entry-point lookup returns a disjoint union.
+The representative shapes include file-local findings (`file-size`), a
+composite finding check (`package-boundaries`), messages (`cli`), and the
+native polyglot report (`cyclomatic-complexity`). Cyclomatic's operations
+object is required by its form. All 62 built-ins use narrow typed feature
+forms; `BuiltinFeature` is their shared abstract runtime type, not a remaining
+broad built-in registration path. Dynamic entry-point lookup returns a disjoint union.
 A generated, ignored `builtin_registry.pyi` overload view maps each literal
 selector to its feature form and primary policy type; dynamic strings retain
 the full registration union.
@@ -109,59 +109,33 @@ explicit trust boundary. No universal result payload or selector identity is
 needed for those roles.
 
 The 62 distinct registration modules and ignored generated aggregates remove
-the old shared-file edit for a built-in registration. They do not prove every
-kind of parallel feature work is conflict-free: edits to a shared policy model,
-shared analyzer, public CLI, or common output adapter can still overlap. The
-two-branch installed-wheel merge test is an architecture fixture, not a test of
-two production features added to this repository. Treat low registration
-friction as a supported structural property, not as a measured reduction in
-human review time. This selector migration commit changed 12 files because it
-also removed legacy paths, adapted the specialized Python-style result, and
-added regression scenarios; that is migration cost, not the cost of adding a
-simple new finding check.
+the shared registry/config/catalog/runner edit for a built-in registration.
+They do not eliminate conflicts in genuinely shared policy models, analyzers,
+CLI code, or common result adapters. The two-branch installed-wheel merge test
+is an architecture fixture, not a production-contribution trial. Treat reduced
+registration friction as a structural property, not as a measured reduction
+in review time. Measure correction categories and registration edits in future
+parallel contributions instead of inferring productivity from this migration.
 
-The scenario manifest contains 149 entries: 144 behavior-labeled, four
-controls and one planned-only entry, with five additional capabilities
-explicitly deferred. Its behavior labels currently name all 62 selectors, but
-labels alone are not execution proof. The previous complete pinned comparison
-was for the earlier CLI candidate `3c4db3b` (146 scenarios, zero differences,
-61 behaviorally exercised selectors). The attempted comparison for
-`d5b5be0`, which adds `python-style`, stopped before running comparisons when
-npm could not resolve `registry.npmjs.org` for `eslint@10.13.0`. There is no
-149-scenario equivalence result for that candidate. The installed-wheel
-self-quality checks passed locally (2,521 passed, 44 skipped) on the earlier
-`d5b5be0` code tree, and all five hosted workflows passed on implementation
-head `1fe322e` and documentation head `fe63ca8`. Those results do not
-establish checks on later heads or substitute for the pinned differential.
-Exact-head hosted self-quality on `2c10eef` failed because the architecture
-document exceeded the line-length limit; `77fa80a` wraps those lines. Later
-commits add regression coverage for composite policy references and
-declaration-time constant resolution, plus a lightweight `StyleFindings`
-contract so CLI/result imports do not load the Python style analyzer. The
-latest runtime slice binds shape-specific runner protocols to `findings`,
-`messages`, and `cyclomatic-report` feature declarations; all five current
-result forms now have a matching type. It exercises file-local, composite,
-message, and native report paths while preserving the common runtime adapter.
-The focused shape, registry, generator, inventory, and lazy-import tests pass
-(61 total); targeted production Pyright reports no diagnostics. The full local
-suite has 2,522 passes and 45 skips, with four environment-limited failures:
-three wheel/build tests cannot resolve PyPI, and one FastAPI Ruff fixture
-received no JSON output. On exact head `f810a91`, hosted self-quality exposed
-one import-order lint error in the generator; the local import order now matches
-the check's suggested organization. Exact-head hosted checks for this slice
-remain pending. The Python 3.10 installed-consumer job retried after an HTTP 504
-but failed again with the same 504 response; other installed-consumer matrix
-variants passed.
-Earlier focused batches on `951cc59` passed 323 morphology/registry and
-execution tests, then 85 native, composite, and plugin tests. These are
-incremental evidence only.
+The current scenario manifest has 149 entries: 144 behavior-labeled, four
+controls and one planned-only entry; five additional capabilities are
+deferred.
+The exact-head comparison at `ec71e810e45dc9def3733264330761de30c5d647`
+passed its required
+`equivalent-for-manifested-scenarios` check against baseline
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`. All five hosted workflows
+passed, including the pinned differential, installed consumers, Python
+self-check matrix, minimum dependencies, optional gates, source archive, and
+native PDF smoke. The report is retained with the
+[exact-head workflow](https://github.com/sheepfling/alphus/actions/runs/42546743557/artifacts/13644350406).
+This proves parity for the finite manifested cases, not every possible input;
+a planned-only entry or deferred capability is not a successful behavior run.
 
-The next evidence step is to complete the pinned differential when the pinned
-npm dependency is available, without marking the ESLint scenario as covered
-merely because it appears in the manifest. The shape-level tests that do not
-need npm remain runnable locally. New local-model execution, detector/language growth,
-persistent result caching, repository setup automation, history/index changes,
-round-two Bacflow, and release operations remain outside 0.0.3.
+The local full self-profile on `ec71e81` passed 2,597 tests (44 skipped), with
+27 profile checks passed, zero failed, and four provisional passes. Ruff,
+formatting, strict Pyright, generated-view checks, and `git diff --check` passed.
+Older candidate failures and partial comparisons are historical migration
+evidence, not current blockers.
 
 Generate the current machine-readable selector and runner inventory on demand:
 
@@ -203,7 +177,7 @@ runner module/function strings, and policy models are class objects derived
 from `StrictModel`. The loader rejects asynchronous providers and checks the
 result annotation against the declared output shape before dispatch. The
 third-party `alphus.rules.v1` contract remains separate and allowlisted. The
-current registration state and outstanding behavior-equivalence proof are
+current registration state and bounded behavior-equivalence evidence are
 summarized above. The prototype history and trade-offs are recorded in the
 [check registry spike](architecture/check-registry-spike.md).
 
@@ -217,15 +191,12 @@ and local-model-assisted execution. Persistent result caching, automatic
 repository setup, and history/index migrations remain separately scoped until
 their contracts and need are established.
 
-The inventory test generates both current and pinned-baseline inventories into
-temporary files directly from their source trees, then compares registration
-contracts. No generated JSON baseline is committed. This is an objective
-registration-contract check, not a wheel behavior differential. The full
-pinned-wheel equivalence protocol below remains the acceptance boundary for
-calling the migration behavior-complete. Registration migration has completed
-without completing that full comparison; the boundary is still outstanding.
-Slice-specific direct/profile cases and lazy-import proofs are useful but do
-not establish equivalence for the other selectors.
+The inventory test generates current and pinned-baseline inventories into
+temporary files from their source trees, then compares registration contracts.
+No generated JSON baseline is committed. This is an objective registration
+check, not a wheel behavior comparison. The pinned wheel comparison passed for
+the 149 manifested scenarios; that result remains finite and does not prove all
+possible inputs.
 
 This document distinguishes four kinds of statement:
 
@@ -240,15 +211,15 @@ PR #100 remains an open draft. It began with the six-check morphology metadata
 pilot and now has all 62 built-in selectors on feature-owned generated runtime
 views. The statically discovered selector inventory is the source of truth; it
 is deliberately not duplicated here as another selector list. Each local
-`ALPHUS_CHECK` declaration statically generates
-morphology metadata, typed `FeatureDefinition`, `RuleSpec`, strict policy
-field, selector type, and inventory entry. Each feature module exposes one
-typed `ALPHUS_FEATURE` object with a direct callback for lazy execution. The established
-`RuleEvaluation` and CLI result adapters remain shared, so adding a feature
-still uses the existing output contract. Registration migration is complete
-for the existing selector set; full candidate behavior equivalence remains
-unproven. These declarations are now
-typed `FeatureDefinition(...)` calls paired with immutable
+`ALPHUS_CHECK` declaration statically generates morphology metadata, typed
+`FeatureDefinition`, `RuleSpec`, strict policy field, selector type, and
+inventory entry. Each feature module exposes one typed `ALPHUS_FEATURE` object
+with a direct callback for lazy execution. The established `RuleEvaluation`
+and CLI result adapters remain shared, so adding a feature still uses the
+existing output contract. Registration migration is complete for the existing
+selector set; the finite 149-scenario candidate comparison passed but is not
+exhaustive. These declarations are now typed `FeatureDefinition(...)` calls
+paired with immutable
 `RuleMorphology(...)` values rather than the former tuple-pair `ALPHUS_CHECK`
 format. Static discovery validates them without importing gate implementations.
 The PEP 517 backend generates installed-wheel entry-point metadata without a
@@ -257,7 +228,9 @@ ignored build artifacts rather than checked-in shared files, so independent
 feature branches do not edit the same generated outputs. Runtime entry points
 target the typed feature object.
 
-The latest source-discovery slice moves `json-structure` and `path-discovery`
+### Earlier candidate snapshots (historical; current status is above)
+
+The source-discovery slice moved `json-structure` and `path-discovery`
 into feature-owned registration. Their typed declarations own the existing
 strict policy model, metadata, complaint contracts and callbacks; language
 analyzers remain separate Python and JavaScript providers. The legacy
@@ -331,17 +304,18 @@ The current public and internal responsibilities are:
   exit status.
 - **Built-in selector and policy validation** — `alphus.policy.base` and
   `alphus.policy.orchestration` expose `QualityRuleName`, `CheckPolicies`, and
-  `require_rule`. For migrated features, selector and strict policy contracts
-  derive from generated views; legacy selectors and policy fields remain
-  explicitly declared in their current source modules.
+  `require_rule`. All 62 built-in selector and strict policy contracts derive
+  from feature-owned declarations into ignored generated views.
 - **Rule metadata and catalog** — `alphus.policy.catalog` owns `RuleSpec`,
   `RULE_SPECS`, and `RuleOutputShape`.
 - **Feature implementations** — `alphus.gates.<theme>` and
-  `alphus.gates.languages.<language>` own checker functions and theme runner
-  maps.
+  `alphus.gates.languages.<language>` own checker functions and language
+  adapters. Each built-in selector's typed registration sits beside its owner;
+  shared analyzers remain language- or concern-specific.
 - **Runtime dispatch and third-party boundary** —
-  `alphus.execution.dispatch` and `alphus.plugins` own `BuiltinRuleBinding`,
-  generated runner dispatch, and plugin API v1.
+  `alphus.execution.dispatch` and `alphus.plugins` own selected built-in
+  dispatch and plugin API v1. The built-in entry-point catalog and third-party
+  plugin registry remain distinct trust boundaries.
 - **Output normalization and evaluation** — `alphus.execution.results` owns
   `RuleOutput`, `diagnostics_from_output`, and `RuleEvaluation`.
 - **Profile planning, commands, and work scheduling** —
@@ -703,25 +677,16 @@ semantics are preserved.
 
 The declaration also owns each check's stable CLI display name and its
 configured source-scan inventory mode. Generated metadata feeds the existing
-file-selection and plain-rendering paths, removing these selectors from the
-CLI's legacy source-scan and review-label lists. Legacy selectors still use
-those fallbacks until their own migration.
+file-selection and plain-rendering paths. All built-ins now use generated,
+feature-owned registration views; established labels and inventory behavior
+remain compatibility contracts.
 
 Tests cover generated strict fields, unknown-field rejection, shared complaint
 IDs, direct and profile reporting, configured source selection, stable plain
-labels, and that selecting one provider leaves the other unloaded. The
-[paired numeric wheel differential]
-[numeric-registration-differential] compares the pinned mainline wheel with
-candidate `409c06d` across 40 manifested scenarios. The 62-selector catalog
-and registration contract match, direct/profile outputs and invalid-config
-behavior match, and no differences were reported. Numeric selectors already
-had direct behavior evidence before this slice, so this adds profile and strict
-config evidence but does not increase the behaviorally exercised count. The
-follow-up [numeric CLI metadata differential]
-[numeric-cli-metadata-differential] records the declaration-owned source-scan
-mode and plain labels across 42 scenarios with no differences, while retaining
-the same 62-selector catalog. The new cases assert both legacy numeric labels
-verbatim; the remaining 48 selectors still lack behavior-level evidence.
+labels, and that selecting one provider leaves the other unloaded. The earlier
+40- and 42-scenario candidate reports are historical. The current 149-scenario
+pinned-wheel comparison and its exact-head evidence are summarized at the start
+of this document; that finite manifest is not exhaustive.
 
 `FeatureDefinition.policy_field` remains the primary compatibility binding.
 Feature declarations can also name validated `policy_inputs`; the
@@ -795,10 +760,11 @@ selector, config, catalog or runner list edit for these generated surfaces.
 Measure registration edits and review effort from the next migrations rather
 than claiming a time reduction from the design alone.
 
-Do not claim a time reduction from the design alone. For the first three
-migrated checks, record the commit diff, the count of manually edited
-registration locations, generator output, and elapsed implementation/review
-time. Also count human corrections: accepted review comments that require a
+Do not claim a time reduction from the design alone. The original pilot and
+backflow correction baseline has not yet been reconstructed. Future slices
+should record the commit diff, manually edited registration locations,
+generator output, and elapsed implementation/review time. Also count human
+corrections: accepted review comments that require a
 code, documentation, or test change, with categories for ownership/duplicate
 registration, config/selection/dispatch compatibility, static discovery and
 lazy imports, independent taxonomy axes, evidence and coverage, effective
@@ -820,18 +786,16 @@ meaningful boundary. Keep the checklist and category definitions stable across
 the first three migrations, then compare repeated-category corrections and
 registration locations against the baseline. The objective is zero
 hand-maintained central selector, config, catalog, or runner enumerations for a
-new check; the migration itself remains a bounded, reviewed change. The full
-exit criterion still requires all current selectors to derive from the same
-declarations and the pinned-wheel proof to pass.
+new check; the migration itself remains a bounded, reviewed change. The
+registration criterion is met for the current 62 selectors, and the manifested
+pinned-wheel comparison passed. Human correction effort and behavior outside
+the manifested scenarios have not been measured or proven equivalent.
 
-The six-check morphology pilot proves metadata discovery. Eighteen selectors
-now use feature-owned runtime registration: generated views derive strict policy
-fields, selector typing, `RuleSpec`, inventory and lazy dispatch while sharing
-the existing result adaptation and reporting. The slices cover file-local
-checks, a composite, bounded heuristics, native polyglot analysis, distinct
-language-specific readers for a shared concern, and two selectors sharing one
-complaint contract. Pinned wheel reports remain the evidence boundary; these
-slices do not prove all 62 selectors or complete issue #87.
+The six-check morphology pilot proved metadata discovery but did not complete
+runtime registration. At the current head, all 62 built-ins use feature-owned
+typed forms and generated runtime views. The pinned 149-scenario comparison
+passed, but its coverage remains bounded; it does not prove every possible
+input or complete issue #87.
 
 ## Existing-check mappings
 
@@ -1022,7 +986,12 @@ absolute paths. Do not refresh snapshots, suppress self-review findings, or
 weaken thresholds to conceal a difference. An unexplained behavior difference
 blocks the refactor slice.
 
-## First pinned-wheel differential result
+## Historical migration and differential records
+
+Candidate-by-candidate evidence below records its named commit and is not live
+status; use the snapshot at the start of this document for current results.
+
+### First pinned-wheel differential result
 
 The runnable harness is [scripts/differential_wheels.py](../scripts/differential_wheels.py)
 with its scenario manifest and fixtures under
@@ -1086,7 +1055,7 @@ PATH="$PWD/node_modules/.bin:$PATH" .venv/bin/python scripts/differential_wheels
   --output /tmp/alphus-morphology-wheel-differential.json
 ```
 
-## Runtime registration slices: `file-size` and `line-length`
+### Runtime registration slices: `file-size` and `line-length`
 
 Commit `22698843ad2ceca12f4b65567cd3cf5cf1340bf2` moves file-size behavior to
 `src/alphus/gates/hygiene/file_size.py` and removes its duplicate entries from
@@ -1121,7 +1090,7 @@ selection/config evidence, not semantic coverage. Installed-wheel validation
 on the line-length candidate passed 27 self-profile checks and 2,432 tests
 (43 skipped). Neither slice proves full equivalence or completes #87.
 
-## Composite registration slice: `package-boundaries`
+### Composite registration slice: `package-boundaries`
 
 `package-boundaries` now owns one static `ALPHUS_CHECK` declaration beside its
 runner. The declaration supplies the selector, primary policy, four effective
@@ -1159,7 +1128,7 @@ The provider import trace is also exercised by the installed-wheel self-profile
 test, while remaining a separate non-serialized capability in the comparison
 report.
 
-## Repository layout registration slice: `repository-layout`
+### Repository layout registration slice: `repository-layout`
 
 `repository-layout` now declares its feature metadata beside
 `check_repository_layout` in `gates/repository/repository_layout.py`. That
@@ -1190,7 +1159,7 @@ selectors now have behavior-level differential evidence; 51 baseline
 selectors still lack it. Selection/config rows and catalog parity do not count
 as semantic evidence for those remaining selectors.
 
-## Dependency-lock registration slice: `dependency-locks`
+### Dependency-lock registration slice: `dependency-locks`
 
 `dependency-locks` now owns its `ALPHUS_CHECK` declaration and typed runner in
 `gates/repository/dependency_locks.py`. Static generation provides its
@@ -1213,7 +1182,7 @@ selectors. Twelve selectors now have behavior-level evidence; 50 still lack
 it. Catalog and strict-config checks cover registration shape, not those
 selectors' execution semantics.
 
-## Documentation-config registration slice: `documentation-config`
+### Documentation-config registration slice: `documentation-config`
 
 `documentation-config` now owns its declaration and strict policy binding in
 `gates/repository/documentation_config.py`. The static generator derives its
@@ -1236,7 +1205,7 @@ scenarios match, catalogs match at 62 selectors, and the registered check
 preserves the conflict ID, location, severity, message, and profile behavior.
 Thirteen selectors now have behavior-level evidence; 49 remain without it.
 
-## Module-role registration slice: `module-roles`
+### Module-role registration slice: `module-roles`
 
 `module-roles` now owns its `FeatureDefinition`, morphology, and typed runner
 beside the existing analyzer in `src/alphus/gates/python/module_roles.py`. The
@@ -1299,7 +1268,7 @@ metadata copy cannot shadow the current editable install; absence of a matching
 catalog or conflicting matching distributions fails closed. This metadata
 check imports no gate modules, and a selected feature remains lazy until run.
 
-## Markdown shell-fence registration slice: `markdown-shell-fences`
+### Markdown shell-fence registration slice: `markdown-shell-fences`
 
 `markdown-shell-fences` now owns its typed feature declaration and dispatcher
 adapter beside the existing CommonMark-backed analyzer in
@@ -1332,7 +1301,7 @@ The static reader requires the declaration and synchronous adapter in the
 same module as the implementation. For new features, prefer a small
 feature-owned implementation module with its mirrored `tests/gates/...`
 
-## Shared Git policy registration slice
+### Shared Git policy registration slice
 
 The three repository Git selectors now each own a typed declaration and
 runner adapter beside the checker in `src/alphus/gates/vcs/`. They share the
@@ -1425,31 +1394,27 @@ future caches without changing the legacy history digest.
 
 This sequence records the original execution plan, not remaining registration
 work. Inventory, typed registration and migration of the existing selectors
-have been carried out. The final compatibility closeout is not complete:
-the latest full wheel comparison stopped during npm dependency setup, so the
-full 62-selector behavior-equivalence acceptance has not been met.
+have been carried out. The manifested wheel comparison passed at the current exact head. Additional
+coverage for deferred capabilities and inputs not represented in the manifest
+remains open; do not describe the finite result as exhaustive.
 
-1. **Inventory and reference baseline.** Generate the source-derived
-   selector/config/runner/output inventory; pin reference wheel and fixtures;
-   check generated inventory freshness and completeness. No runtime behavior
-   changes.
-2. **Typed registration contract.** Define the constrained declaration
-   fields, AST-only validation, generator diagnostics, and generated artifact
-   boundaries. Preserve the morphology pilot as one consumer of the model.
-3. **Bounded feature-owned vertical slices (`file-size`, `line-length`).**
-   These derive strict policy fields, selector typing, `RuleSpec`, inventory
-   and lazy dispatch while keeping existing config names, result adaptation,
-   and reporting behavior. Their direct/profile differential and unselected
-   provider tests establish only these slices.
-4. **Migrate remaining built-ins by owner package.** Move registration data,
-   not semantics. Generate selector typing, strict check fields, `RuleSpec`,
-   runner/result bindings, catalog and docs views. Retain per-feature
-   implementations and tests near `src/` ownership.
-5. **Lazy execution and measured in-run reuse.** Make only behavior-preserving
-   import and reuse changes; publish phase timings and differential evidence.
-6. **Close compatibility and documentation.** Require all current selectors
-   in generated inventory, no stale generated views, exact behavior diffs,
-   self-profile and wheel validations before the refactor release.
+1. **Inventory and reference baseline — complete.** Source-derived inventories
+   compare current declarations with the pinned baseline without committed JSON.
+2. **Typed registration contract — complete for current built-ins.** The build
+   statically validates feature-owned declarations and generates ignored package
+   views and entry-point metadata.
+3. **Representative typed slices — complete.** File-local, composite, message,
+   heuristic, native polyglot, and specialized result forms have compatibility
+   tests.
+4. **Built-in registration migration — complete for all 62 selectors.**
+   Existing checker bodies, strict config names, selection and result behavior
+   remain the compatibility target.
+5. **Differential validation — passed for 149 manifested scenarios.** This does
+   not imply arbitrary-input equivalence; add cases when review identifies
+   meaningful uncovered contracts.
+6. **Remaining 0.0.3 review — open.** Reconcile accepted feedback, keep
+   contributor guidance current, and preserve the separate history-digest
+   disposition below.
 
 History identity correction, persistent cache, automatic setup, history/index
 migrations, new detector behavior, new language providers, local model
@@ -1469,17 +1434,23 @@ Two decisions remain for review:
    package-boundaries digest fix must ship before 0.0.3 or can follow. In
    either case, preserve legacy archive interpretation and make any digest
    transition explicit.
-2. **Migration completeness:** the recommended 0.0.3 exit is generated
-   registration for every existing built-in selector, delivered in small
-   reviewed slices. A partial generated catalog would leave the multi-registry
-   addition problem unsolved and should not be called complete.
+2. **Further behavior evidence:** all 62 built-ins now use generated
+   registration and the 149 manifested comparisons passed. One scenario is
+   planned-only and five capabilities are deferred. Decide whether these gaps
+   block #87's exit; do not claim exhaustive equivalence or change legacy
+   digest/archive meaning inside this structural tranche.
 
-Until resolved, do not change digest/archive meaning or claim full #87
-acceptance. PR #100 remains a draft containing the six-check morphology pilot
-and bounded runtime registration slices for thirty-one selectors documented
-below.
+Do not change history digest/archive meaning without a separate decision. PR
+#100 remains draft. Registration is complete for the current 62 built-ins; the
+issue's broader exit status remains subject to review of deferred compatibility
+cases.
 
-## FastAPI review registration slice
+## Historical selector migration reports
+
+The sections below retain candidate-specific details. Treat them as historical
+records, not current registration status; the current snapshot is above.
+
+### FastAPI review registration slice
 
 `fastapi-practices` now owns `ALPHUS_CHECK`, its stable complaint contract,
 morphology and typed `BuiltinFeature` adapter in
@@ -1521,7 +1492,7 @@ The full local wheel self-quality run on `f53f46c` passed: 2,508 package tests,
 27 profile checks, and the Markdown shell review; 44 tests were skipped and
 four profile checks were provisional. No profile checks failed.
 
-## Quaternion registration slice
+### Quaternion registration slice
 
 The six configured Python quaternion checks now own their typed
 `FeatureDefinition`, `RuleMorphology`, and `BuiltinFeature` in the checker
@@ -1568,7 +1539,7 @@ ESLint was unavailable. The reports record the npm tool-tree digest and each
 scenario's native isolation inputs. Existing selectors and native result
 contracts remain unchanged.
 
-## Coordinate-frame registration slice
+### Coordinate-frame registration slice
 
 The three configured coordinate-frame checks now declare their typed policy,
 existing selector and result shape, morphology, and direct runner in their
@@ -1600,7 +1571,7 @@ configured selectors and rejected missing strict policy for 36; those counts
 are distinct from the 34 selectors with behavior scenarios. The full report
 is `/tmp/alphus-morphology-differential-69115c6.json` and is not committed.
 
-## Linear-algebra registration slice
+### Linear-algebra registration slice
 
 Candidate `e12bf496473bf930471e15674871c51bf46b006f` moves four configured
 Python numerical reviewers into feature-owned typed registrations:
@@ -1637,7 +1608,7 @@ failures and four provisional checks; its package suite passed 2,507 tests
 (44 skipped). This extends, but does not complete, the 0.0.3 migration or full
 62-selector equivalence proof.
 
-## Python text-analysis registration slice
+### Python text-analysis registration slice
 
 Commit `33cf71276544baa74a34770dc41ccfee0b9379ad` moves the configured
 `dynamic-markdown` and `embedded-semantic-overrides` checks from the review
@@ -1670,7 +1641,7 @@ This closes the direct/profile/config evidence for this paired slice only.
 It does not establish behavior equivalence for the 22 legacy registration
 selectors or complete the 0.0.3 rearchitecture.
 
-## Shared-policy prose registration slice
+### Shared-policy prose registration slice
 
 Commit `6bc8a0cda4a82286e893f96f42b13a66337c481a` moves
 `prose-as-control` and `rendered-value-reparsed` into typed feature-owned
@@ -1702,7 +1673,7 @@ passed 27 checks with zero failures and four provisional passes. This is
 evidence for the paired shared-policy migration, not complete selector or
 issue #87 equivalence.
 
-## Positional-review registration slice
+### Positional-review registration slice
 
 Commit `c7023fa14a12d71784a7fcb2c0d666334fcfcf0d` moves
 `positional-interfaces` and `positional-semantic-overrides` from the manual
@@ -1732,7 +1703,7 @@ This slice adds no detector behavior. The remaining 14 selectors without
 behavior-level scenarios and the broader compatibility requirements mean this
 does not complete issue #87.
 
-## Paired review-pipeline registration slice
+### Paired review-pipeline registration slice
 
 Commit `3c2019ebfbd93f00dea52eaec103f665d22c6893` moves the existing
 `parallel-normalization` and `patch-cascade` Python AST checks into typed
@@ -1761,7 +1732,7 @@ incremental evidence, not full 62-selector equivalence or completion of issue
 #87. The remaining 12 selectors without behavior-level cases include command,
 native/backend and composite paths that still need dedicated evidence.
 
-## Paired CI and artifact-flow registration slice
+### Paired CI and artifact-flow registration slice
 
 Commit `32595473db4f65c59d769442b340c8f138acbdfd` moves `ci-workflows` and
 `run-artifacts` into feature-owned typed declarations. The first remains a

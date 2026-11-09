@@ -3,8 +3,9 @@
 This document records Alphus's diagnostic-tag contract and future extension
 design. It does not add a plugin loader or change which checks run.
 
-The built-in feature-owned registry and its remaining 0.0.3 proof gaps are
-described in the [built-in check architecture](BUILTIN-CHECK-ARCHITECTURE.md).
+Current built-in feature-owned registration and its bounded 0.0.3 compatibility
+evidence are described in the
+[built-in check architecture](BUILTIN-CHECK-ARCHITECTURE.md).
 Use that page as the single design entry point; this guide remains focused on
 diagnostic and extension contracts.
 
@@ -365,7 +366,8 @@ second rule registry.
 The generated built-in `RuleSpec` view records policy field, output shape,
 discovery summary, supported surfaces, and advisory domain tags. The immutable
 `alphus.execution.dispatch.BUILTIN_RULES` runtime registry joins those records
-with selected feature entry points and remaining legacy runners. Existing
+with selected feature entry points. No built-in selector remains on a legacy
+registration path. Existing
 output shapes remain adapted through `alphus.execution.results`; they are not
 changed to a common wire format by registration migration. Domain suggestions
 remain separate from diagnostic-tag categories.

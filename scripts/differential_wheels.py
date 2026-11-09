@@ -55,7 +55,7 @@ class _MaterializedFileDocument(_StrictDocument):
 
 class _VariantDocument(_StrictDocument):
     name: str
-    arguments: Annotated[tuple[str, ...], Field(default_factory=tuple)]
+    arguments: tuple[str, ...] = ()
     compare_within_build: bool = False
     parse_json: bool | None = None
     plugin_import_expected: bool | None = None
@@ -73,30 +73,22 @@ class _ScenarioDocument(_StrictDocument):
     name: str
     fixture: str | None = None
     plugin_package: str | None = None
-    python_distributions: Annotated[tuple[str, ...], Field(default_factory=tuple)]
-    npm_packages: Annotated[tuple[str, ...], Field(default_factory=tuple)]
+    python_distributions: tuple[str, ...] = ()
+    npm_packages: tuple[str, ...] = ()
     isolate_native_tools: bool = False
-    selectors: Annotated[tuple[str, ...], Field(default_factory=tuple)]
+    selectors: tuple[str, ...] = ()
     behavior: tuple[str, ...]
     expected_exit: int
     minimum_findings: int = 0
-    expected_step_names: Annotated[tuple[str, ...], Field(default_factory=tuple)]
-    expected_step_rules: Annotated[tuple[str, ...], Field(default_factory=tuple)]
-    expected_reported_step_rules: Annotated[
-        tuple[str, ...], Field(default_factory=tuple)
-    ]
+    expected_step_names: tuple[str, ...] = ()
+    expected_step_rules: tuple[str, ...] = ()
+    expected_reported_step_rules: tuple[str, ...] = ()
     require_passed_steps: bool = False
-    required_output: Annotated[tuple[str, ...], Field(default_factory=tuple)]
-    expected_findings: Annotated[
-        tuple[_ExpectedFindingDocument, ...], Field(default_factory=tuple)
-    ]
-    materialized_files: Annotated[
-        tuple[_MaterializedFileDocument, ...], Field(default_factory=tuple)
-    ]
+    required_output: tuple[str, ...] = ()
+    expected_findings: tuple[_ExpectedFindingDocument, ...] = ()
+    materialized_files: tuple[_MaterializedFileDocument, ...] = ()
     expected_cyclomatic_outcome: str | None = None
-    expected_cyclomatic_backends: Annotated[
-        tuple[_ExpectedCyclomaticBackendDocument, ...], Field(default_factory=tuple)
-    ]
+    expected_cyclomatic_backends: tuple[_ExpectedCyclomaticBackendDocument, ...] = ()
     variant: tuple[_VariantDocument, ...]
 
 
@@ -109,8 +101,8 @@ class _DeferredDocument(_StrictDocument):
 
 class _ManifestDocument(_StrictDocument):
     schema_version: int
-    scenario: Annotated[tuple[_ScenarioDocument, ...], Field(default_factory=tuple)]
-    deferred: Annotated[tuple[_DeferredDocument, ...], Field(default_factory=tuple)]
+    scenario: tuple[_ScenarioDocument, ...] = ()
+    deferred: tuple[_DeferredDocument, ...] = ()
 
 
 class _CatalogRule(_StrictDocument):
@@ -148,7 +140,7 @@ class _ProfileStep(_StrictDocument):
     name: str
     rule: str | None = None
     status: str | None = None
-    findings: Annotated[tuple[_ProfileFinding, ...], Field(default_factory=tuple)]
+    findings: tuple[_ProfileFinding, ...] = ()
 
 
 class _ProfileDocument(_StrictDocument):
@@ -188,9 +180,7 @@ class _ProfileOrchestrationStep(_StrictDocument):
 
 class _ProfileOrchestration(_StrictDocument):
     model_config = ConfigDict(extra="ignore", strict=True)
-    steps: Annotated[
-        tuple[_ProfileOrchestrationStep, ...], Field(default_factory=tuple)
-    ]
+    steps: tuple[_ProfileOrchestrationStep, ...] = ()
 
 
 class _ProfileFixtureConfig(_StrictDocument):
@@ -225,8 +215,8 @@ class _ScenarioRunReport(_StrictDocument):
     fixture_sha256: str
     fixture_git_commit: str
     plugin_package: str | None = None
-    python_distributions: Annotated[tuple[str, ...], Field(default_factory=tuple)]
-    npm_packages: Annotated[tuple[str, ...], Field(default_factory=tuple)]
+    python_distributions: tuple[str, ...] = ()
+    npm_packages: tuple[str, ...] = ()
     isolate_native_tools: bool = False
     npm_tool_tree_sha256: str | None = None
     selectors: tuple[str, ...]

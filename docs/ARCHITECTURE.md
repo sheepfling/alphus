@@ -3,10 +3,10 @@
 See the [documentation map](README.md) for consumer setup, rule ownership,
 C++ examples, and self-check verification.
 
-For the proposed behavior-preserving built-in registration migration, see the
-[built-in check architecture and migration plan](BUILTIN-CHECK-ARCHITECTURE.md).
-This page describes current ownership and runtime boundaries; the linked plan
-records the target architecture and migration proof separately.
+For current feature-owned built-in registration and its bounded compatibility
+evidence, see the [built-in check architecture](BUILTIN-CHECK-ARCHITECTURE.md).
+That page records the current ownership model, migration evidence, and the
+remaining limits of the 0.0.3 proof.
 
 Alphus is a Python package for running policy-driven quality checks
 against Git repositories. Each consumer owns its TOML policy. The package
