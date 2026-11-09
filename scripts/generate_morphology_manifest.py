@@ -488,10 +488,11 @@ def _validate_declaration(
         finding_contracts = _string_tuple(
             field(_CONTRACT_FINDING_FIELD), _CONTRACT_FINDING_FIELD
         )
-        if len(finding_contracts) != 1:
+        if not finding_contracts or len(finding_contracts) != len(
+            set(finding_contracts)
+        ):
             raise ValueError(
-                f"{path}: a morphology declaration must reference exactly one "
-                "finding contract to keep complaint ownership unambiguous"
+                f"{path}: finding contracts must be a non-empty tuple of unique names"
             )
         for contract_name in finding_contracts:
             if contract_name not in complaint_contracts:
@@ -1259,18 +1260,19 @@ def _declarations(
                 declaration = replace(declaration, feature=typed_feature)
             resolved_ids: list[str] = []
             if declaration.finding_contracts:
-                contract_name = declaration.finding_contracts[0]
-                contract = complaint_contracts[contract_name]
-                resolved_ids.extend(
-                    rule_id
-                    for emitter, rule_id in contract.rule_ids_by_emitter
-                    if emitter == declaration.selector
-                )
-                if not resolved_ids:
-                    raise ValueError(
-                        f"{path}: finding contract {contract_name!r} declares no "
-                        f"rule IDs for {declaration.selector!r}"
-                    )
+                for contract_name in declaration.finding_contracts:
+                    contract = complaint_contracts[contract_name]
+                    contract_ids = [
+                        rule_id
+                        for emitter, rule_id in contract.rule_ids_by_emitter
+                        if emitter == declaration.selector
+                    ]
+                    if not contract_ids:
+                        raise ValueError(
+                            f"{path}: finding contract {contract_name!r} declares no "
+                            f"rule IDs for {declaration.selector!r}"
+                        )
+                    resolved_ids.extend(contract_ids)
             else:
                 for complaint in declaration.finding_ids:
                     matches = local_ids.get(complaint, ())
@@ -1317,12 +1319,21 @@ def _declarations(
                 f"{owners[declaration.selector]} and {declaration.source}"
             )
         owners[declaration.selector] = declaration.source
-        finding_owner = (
-            f"contract:{declaration.finding_contracts[0]}"
-            if declaration.finding_contracts
-            else f"selector:{declaration.selector}"
-        )
+        finding_contract_by_id = {
+            rule_id: contract_name
+            for contract_name in declaration.finding_contracts
+            for emitter, rule_id in complaint_contracts[
+                contract_name
+            ].rule_ids_by_emitter
+            if emitter == declaration.selector
+        }
         for finding_id in declaration.finding_ids:
+            contract_name = finding_contract_by_id.get(finding_id)
+            finding_owner = (
+                f"contract:{contract_name}"
+                if contract_name is not None
+                else f"selector:{declaration.selector}"
+            )
             owner = finding_owners.get(finding_id)
             if owner is not None and owner != finding_owner:
                 raise ValueError(
@@ -1607,7 +1618,12 @@ def _text_argument_lines(name: str, value: str) -> list[str]:
             "            ),",
         ]
     parts = textwrap.wrap(
-        value, width=68, break_long_words=True, break_on_hyphens=False
+        value,
+        width=68,
+        break_long_words=True,
+        break_on_hyphens=False,
+        drop_whitespace=False,
+        replace_whitespace=False,
     )
     if len(parts) == 1:
         return [
@@ -1615,10 +1631,7 @@ def _text_argument_lines(name: str, value: str) -> list[str]:
             f"                {_quoted(parts[0])}",
             "            ),",
         ]
-    quoted = [
-        _quoted(part + (" " if index < len(parts) - 1 else ""))
-        for index, part in enumerate(parts)
-    ]
+    quoted = [_quoted(part) for part in parts]
     return [
         f"            {name}=(",
         *(f"                {part}" for part in quoted),

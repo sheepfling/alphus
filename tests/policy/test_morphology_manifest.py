@@ -174,6 +174,18 @@ def test_generated_text_arguments_wrap_without_changing_their_value() -> None:
     assert ast.literal_eval(call.keywords[0].value) == value
 
 
+def test_generated_text_arguments_split_long_tokens_without_inserting_spaces() -> None:
+    value = "x" * 90
+    lines = _text_argument_lines("summary", value)
+
+    assert len(lines) > 1
+    assert all(len(line) <= 88 for line in lines)
+    module = ast.parse("FeatureDefinition(\n" + "\n".join(lines) + "\n)")
+    call = module.body[0].value
+    assert isinstance(call, ast.Call)
+    assert ast.literal_eval(call.keywords[0].value) == value
+
+
 def test_generated_feature_definition_imports_are_sorted(
     pytestconfig: pytest.Config,
 ) -> None:
@@ -222,6 +234,64 @@ def _with_contract(
         else:
             result.append((name, item))
     return tuple(result)
+
+
+def _with_contracts(
+    declaration: tuple[tuple[str, object], ...],
+    selector: str,
+    contracts: tuple[str, ...],
+) -> tuple[tuple[str, object], ...]:
+    result: list[tuple[str, object]] = []
+    for name, item in declaration:
+        if name == "selector":
+            result.append((name, selector))
+        elif name == "finding_tag_complaints":
+            result.append(("finding_contracts", contracts))
+        else:
+            result.append((name, item))
+    return tuple(result)
+
+
+def _write_overlapping_contract_fixture(root: Path) -> None:
+    gates = root / "src/alphus/gates"
+    gates.mkdir(parents=True, exist_ok=True)
+    (gates / "shared_catalog.py").write_text(
+        "ALPHUS_COMPLAINT_CONTRACTS: Final = (\n"
+        "    ComplaintContract(\n"
+        "        name='first-only',\n"
+        "        emitters=('demo-one',),\n"
+        "        entries=(\n"
+        "            ComplaintEntry(emitter='demo-one', tag=rule_tag("
+        "Scope.REPOSITORY, Framework.NONE, Category.TESTING, 'first-only')),\n"
+        "        ),\n"
+        "    ),\n"
+        "    ComplaintContract(\n"
+        "        name='shared-demo',\n"
+        "        emitters=('demo-one', 'demo-two'),\n"
+        "        entries=(\n"
+        "            ComplaintEntry(emitter='demo-one', tag=rule_tag("
+        "Scope.REPOSITORY, Framework.NONE, Category.TESTING, 'shared-demo')),\n"
+        "            ComplaintEntry(emitter='demo-two', tag=rule_tag("
+        "Scope.REPOSITORY, Framework.NONE, Category.TESTING, 'shared-demo')),\n"
+        "        ),\n"
+        "    ),\n"
+        ")\n",
+        encoding="utf-8",
+    )
+    contracts = root / "src/alphus/contracts"
+    contracts.mkdir(parents=True, exist_ok=True)
+    (contracts / "rule_tags.py").write_text(
+        "class Scope:\n    REPOSITORY = 'repository'\n"
+        "class Framework:\n    NONE = 'none'\n"
+        "class Category:\n    TESTING = 'testing'\n",
+        encoding="utf-8",
+    )
+    first = _with_contracts(_DECLARATION, "demo-one", ("first-only", "shared-demo"))
+    second = _with_contracts(_DECLARATION, "demo-two", ("shared-demo",))
+    for filename, declaration in (("first", first), ("second", second)):
+        (gates / f"{filename}.py").write_text(
+            f"ALPHUS_MORPHOLOGY = {declaration!r}\n", encoding="utf-8"
+        )
 
 
 def _write_contract_fixture(root: Path, *, shared_rule_id: str) -> None:
@@ -303,6 +373,36 @@ def test_explicit_complaint_contract_shares_one_tag_across_emitters(
     assert '"demo-two": RuleMorphology(' in manifest
     assert manifest.count('"shared-demo"') == 4
     assert manifest.count('finding_contracts=("shared-demo",)') == 2
+
+
+def test_feature_can_compose_contracts_with_shared_secondary_owner(
+    tmp_path: Path,
+) -> None:
+    _write_overlapping_contract_fixture(tmp_path)
+
+    manifest = render_manifest(tmp_path)
+
+    assert manifest.count('"first-only"') >= 2
+    assert manifest.count('"shared-demo"') >= 4
+    assert 'finding_contracts=("first-only", "shared-demo")' in manifest
+    assert 'finding_contracts=("shared-demo",)' in manifest
+
+
+def test_feature_rejects_duplicate_contract_references(tmp_path: Path) -> None:
+    _write_contract_fixture(
+        tmp_path, shared_rule_id="alphus/repository/none/testing/shared-demo"
+    )
+    declaration = _with_contracts(
+        _DECLARATION, "demo-one", ("shared-demo", "shared-demo")
+    )
+    (tmp_path / "src/alphus/gates/first.py").write_text(
+        f"ALPHUS_MORPHOLOGY = {declaration!r}\n", encoding="utf-8"
+    )
+
+    with pytest.raises(
+        ValueError, match="finding_contracts must not contain duplicates"
+    ):
+        render_manifest(tmp_path)
 
 
 def test_complaint_contract_rejects_undeclared_emitter(tmp_path: Path) -> None:

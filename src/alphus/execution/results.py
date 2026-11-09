@@ -20,7 +20,7 @@ from alphus.contracts.python_style import StyleFindings
 from alphus.contracts.shared_utilities import SharedUtilitiesReport
 from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
 from alphus.policy.base import QualityRuleName, RuleSelector
-from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
+from alphus.policy.catalog import RULE_SPECS, RuleOutputShape, RuleSpec
 
 RuleOutput: TypeAlias = (
     list[Finding]
@@ -213,6 +213,20 @@ def _shared_diagnostics(
     return diagnostics
 
 
+def _validate_declared_finding_ids(
+    rule: RuleSelector, spec: RuleSpec, findings: Sequence[Finding]
+) -> None:
+    morphology = spec.morphology
+    if morphology is None:
+        return
+    declared_ids = {tag.rule_id for tag in morphology.finding_ids}
+    for finding in findings:
+        if finding.tag.rule_id not in declared_ids:
+            raise ValueError(
+                f"rule {rule!r} emitted undeclared finding ID {finding.tag.rule_id!r}"
+            )
+
+
 def diagnostics_from_output(rule: RuleSelector, output: RuleOutput) -> list[Diagnostic]:
     """Normalize a checker result without serializing it through the CLI."""
     spec = RULE_SPECS.get(rule)  # plugin diagnostics already use the shared contract
@@ -220,10 +234,9 @@ def diagnostics_from_output(rule: RuleSelector, output: RuleOutput) -> list[Diag
         return _DIAGNOSTICS.validate_python(output)
     shape = spec.output_shape
     if shape is RuleOutputShape.FINDINGS:
-        return [
-            item.as_diagnostic()
-            for item in _FINDINGS.validate_python(output, strict=True)
-        ]
+        findings = _FINDINGS.validate_python(output, strict=True)
+        _validate_declared_finding_ids(rule, spec, findings)
+        return [item.as_diagnostic() for item in findings]
     if shape is RuleOutputShape.MESSAGES:
         if rule == "cli" and isinstance(output, CliPolicyReport):
             return _cli_policy_diagnostics(output)
@@ -256,7 +269,9 @@ def diagnostics_from_json(rule: RuleSelector, encoded: str) -> list[Diagnostic]:
         return _DIAGNOSTICS.validate_json(encoded)
     shape = spec.output_shape
     if shape is RuleOutputShape.FINDINGS:
-        return [item.as_diagnostic() for item in _FINDINGS.validate_json(encoded)]
+        findings = _FINDINGS.validate_json(encoded)
+        _validate_declared_finding_ids(rule, spec, findings)
+        return [item.as_diagnostic() for item in findings]
     if shape is RuleOutputShape.MESSAGES:
         return _message_diagnostics(
             cast(QualityRuleName, rule), _MESSAGES.validate_json(encoded)
