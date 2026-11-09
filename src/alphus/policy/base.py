@@ -61,6 +61,7 @@ QualityRuleName: TypeAlias = Literal[
     "manual-quaternion-inversion",
     "manual-quaternion-vector-rotation",
     "manual-quaternion-matrix-conversion",
+    "euler-rotation-matrix",
     "ecef-enu-transform",
     "ecef-ned-matrix-transform",
     "ned-basis-vectors",
@@ -183,3 +184,4 @@ def validate_template(message: str, allowed_fields: AbstractSet[str]) -> str:
     if fields - allowed_fields:
         raise ValueError("policy message uses an unsupported placeholder")
     return message
+
