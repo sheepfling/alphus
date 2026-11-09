@@ -167,4 +167,3 @@ def check_euler_rotation_matrix(
                 )
             )
     return findings
-
