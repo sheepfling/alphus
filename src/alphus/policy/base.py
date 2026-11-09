@@ -184,4 +184,3 @@ def validate_template(message: str, allowed_fields: AbstractSet[str]) -> str:
     if fields - allowed_fields:
         raise ValueError("policy message uses an unsupported placeholder")
     return message
-
