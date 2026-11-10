@@ -241,9 +241,7 @@ def byte_sha256_helpers(
             for child in ast.walk(node):
                 match child:
                     case ast.Call(
-                        func=ast.Attribute(
-                            attr="sha256", value=ast.Name(id="hashlib")
-                        ),
+                        func=ast.Attribute(attr="sha256", value=ast.Name(id="hashlib")),
                         args=[ast.Name(), *_],
                     ):
                         locations.append(
