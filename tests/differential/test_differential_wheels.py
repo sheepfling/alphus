@@ -17,15 +17,18 @@ from scripts.differential_wheels import (
     Scenario,
     _assert_file_identity,
     _assert_scenario_output,
+    _builtin_import_mismatch,
     _catalog_contract_differences,
     _CatalogRule,
     _compare_reports,
     _configured_policy_sections,
+    _consumer_result_projection,
     _dispatch_case,
     _install_npm_packages,
     _install_python_distributions,
     _materialize_scenario_files,
     _missing_policy_error,
+    _plugin_environment,
     _prepare_isolated_native_path,
     _ProfileFinding,
     _scenario_classification,
@@ -691,6 +694,84 @@ def test_plugin_import_observation_is_part_of_differential_result() -> None:
     assert _compare_reports((scenario,), reference, candidate) == [
         "plugin-unselected-lazy/catalog differs"
     ]
+
+
+def test_plugin_environment_installs_only_the_scenario_packages(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    python = tmp_path / "bin" / "python"
+    alphus_wheel = tmp_path / "alphus.whl"
+    wheels = {
+        "example": tmp_path / "example.whl",
+        "duplicate": tmp_path / "duplicate.whl",
+        "unrelated": tmp_path / "unrelated.whl",
+    }
+    installed: list[tuple[Path, Path]] = []
+    monkeypatch.setattr(
+        differential_wheels,
+        "_python_environment",
+        lambda wheel, _destination: (
+            python
+            if wheel == alphus_wheel
+            else pytest.fail("plugin wheel used as the Alphus environment wheel")
+        ),
+    )
+    monkeypatch.setattr(
+        differential_wheels,
+        "_install_wheel",
+        lambda environment, wheel: installed.append((environment, wheel)),
+    )
+
+    result = _plugin_environment(
+        alphus_wheel,
+        ("example", "duplicate"),
+        wheels,
+        tmp_path / "scenario-venv",
+    )
+
+    assert result == python
+    assert installed == [(python, wheels["duplicate"]), (python, wheels["example"])]
+
+
+def test_builtin_import_trace_is_evidence_not_consumer_output() -> None:
+    reference = ProcessResult(
+        0,
+        "{}",
+        "",
+        imported_builtin_modules=("alphus.gates.hygiene.file_size",),
+    ).to_wire()
+    candidate = ProcessResult(0, "{}", "").to_wire()
+
+    assert (
+        reference["imported_builtin_modules"] != candidate["imported_builtin_modules"]
+    )
+    assert _consumer_result_projection(reference) == _consumer_result_projection(
+        candidate
+    )
+    changed_output = ProcessResult(0, "[]", "").to_wire()
+    assert _consumer_result_projection(candidate) != _consumer_result_projection(
+        changed_output
+    )
+
+
+def test_builtin_import_expectation_identifies_candidate_contract_misses() -> None:
+    variant = differential_wheels.RunVariant(
+        name="selected-file-size",
+        arguments=("--rule", "file-size"),
+        compare_within_build=False,
+        parse_json=True,
+        expected_imported_modules=("alphus.gates.hygiene.file_size",),
+        expected_unimported_modules=("alphus.gates.hygiene.line_length",),
+    )
+
+    assert _builtin_import_mismatch(variant, ("alphus.gates.hygiene.line_length",)) == (
+        "selected-file-size built-in import trace mismatch; "
+        "missing=['alphus.gates.hygiene.file_size'], "
+        "unexpected=['alphus.gates.hygiene.line_length']"
+    )
+    assert (
+        _builtin_import_mismatch(variant, ("alphus.gates.hygiene.file_size",)) is None
+    )
 
 
 def test_dispatch_matrix_classifies_from_reference_policy_sections(

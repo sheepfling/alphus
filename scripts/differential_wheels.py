@@ -18,7 +18,7 @@ import tempfile
 import tomllib
 import venv
 import zipfile
-from collections.abc import Generator, Mapping, Sequence
+from collections.abc import Collection, Generator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -842,6 +842,22 @@ def _python_environment(wheel: Path, destination: Path) -> Path:
     return python
 
 
+def _plugin_environment(
+    alphus_wheel: Path,
+    plugin_names: Sequence[str],
+    plugin_wheels: Mapping[str, Path],
+    destination: Path,
+) -> Path:
+    """Install only one scenario's API-v1 plugins beside its Alphus wheel."""
+    python = _python_environment(alphus_wheel, destination)
+    for name in sorted(plugin_names):
+        wheel = plugin_wheels.get(name)
+        if wheel is None:
+            raise ValueError(f"plugin wheel is unavailable for package {name!r}")
+        _install_wheel(python, wheel)
+    return python
+
+
 def _process_environment(
     python: Path, *, path_override: str | None = None
 ) -> dict[str, str]:
@@ -1402,6 +1418,21 @@ def _assert_file_identity(path: Path, expected_sha256: str, label: str) -> None:
         )
 
 
+def _builtin_import_mismatch(
+    variant: RunVariant, imported_modules: Collection[str]
+) -> str | None:
+    """Return a candidate-only built-in import contract violation, if any."""
+    imported = set(imported_modules)
+    missing = set(variant.expected_imported_modules) - imported
+    unexpected = set(variant.expected_unimported_modules) & imported
+    if not missing and not unexpected:
+        return None
+    return (
+        f"{variant.name} built-in import trace mismatch; "
+        f"missing={sorted(missing)!r}, unexpected={sorted(unexpected)!r}"
+    )
+
+
 def _run_variant(
     python: Path,
     root: Path,
@@ -1412,6 +1443,7 @@ def _run_variant(
     isolate_native_tools: bool = False,
     plugin_marker: Path | None = None,
     import_trace_file: Path | None = None,
+    validate_builtin_import_expectations: bool = True,
 ) -> ProcessResult:
     arguments = [
         str(python.parent / "alphus"),
@@ -1468,14 +1500,10 @@ def _run_variant(
             _BUILTIN_MODULES.validate_json(import_trace_file.read_bytes())
         )
         imported_set = set(imported_modules)
-        missing_imports = set(variant.expected_imported_modules) - imported_set
-        unexpected_imports = set(variant.expected_unimported_modules) & imported_set
-        if missing_imports or unexpected_imports:
-            raise ValueError(
-                f"{variant.name} built-in import trace mismatch; "
-                f"missing={sorted(missing_imports)!r}, "
-                f"unexpected={sorted(unexpected_imports)!r}"
-            )
+        if validate_builtin_import_expectations:
+            mismatch = _builtin_import_mismatch(variant, imported_set)
+            if mismatch is not None:
+                raise ValueError(mismatch)
     if variant.plugin_import_expected is None:
         return ProcessResult(
             normalized.exit_code,
@@ -1691,11 +1719,13 @@ def _run_scenarios(
     temporary_root: Path,
     label: str,
     npm_tool_paths: Mapping[str, Path],
+    plugin_environments: Mapping[tuple[str, ...], Path],
 ) -> dict[str, _ScenarioRunReport]:
     report: dict[str, _ScenarioRunReport] = {}
     empty_path = temporary_root / "no-native-tools"
     _prepare_isolated_native_path(empty_path)
     for scenario in scenarios:
+        scenario_python = plugin_environments.get(scenario.plugin_packages, python)
         snapshot = fixture_snapshots[scenario.name]
         fixture = _fixture_root(snapshot, temporary_root / "fixtures" / scenario.name)
         fixture_commit = _git_head(fixture)
@@ -1706,7 +1736,9 @@ def _run_scenarios(
                 f"scenario fixture differs from frozen snapshot: {scenario.name}"
             )
         if scenario.python_distributions:
-            _install_python_distributions(python, scenario.python_distributions)
+            _install_python_distributions(
+                scenario_python, scenario.python_distributions
+            )
         npm_tool_path = npm_tool_paths.get(scenario.name)
         npm_tool_digest = (
             _tree_digest(npm_tool_path.parent.parent)
@@ -1748,7 +1780,7 @@ def _run_scenarios(
                     encoding="utf-8",
                 )
             results[variant.name] = _run_variant(
-                python,
+                scenario_python,
                 fixture,
                 variant,
                 empty_path=empty_path,
@@ -1756,6 +1788,7 @@ def _run_scenarios(
                 isolate_native_tools=scenario.isolate_native_tools,
                 plugin_marker=plugin_marker,
                 import_trace_file=import_trace_file,
+                validate_builtin_import_expectations=label == "candidate",
             )
         if (
             npm_tool_path is not None
@@ -1832,7 +1865,9 @@ def _compare_reports(
         for variant in scenario.variants:
             ref_result = ref_variants[variant.name]
             cand_result = cand_variants[variant.name]
-            if ref_result != cand_result:
+            if _consumer_result_projection(ref_result) != _consumer_result_projection(
+                cand_result
+            ):
                 differences.append(f"{scenario.name}/{variant.name} differs")
             if ref_result["exit_code"] != scenario.expected_exit:
                 differences.append(
@@ -1845,6 +1880,16 @@ def _compare_reports(
                     f"{cand_result['exit_code']}, expected {scenario.expected_exit}"
                 )
     return differences
+
+
+def _consumer_result_projection(result: ProcessResultWire) -> tuple[object, ...]:
+    """Compare public output while retaining private import traces as evidence."""
+    return (
+        result["exit_code"],
+        result["stdout"],
+        result["stderr"],
+        result["plugin_module_imported"],
+    )
 
 
 def run(
@@ -1891,6 +1936,7 @@ def run(
             candidate_wheel, temporary_root / "venv-candidate"
         )
         plugin_wheels: list[_PluginWheelReport] = []
+        plugin_wheel_paths: dict[str, Path] = {}
         for name, snapshot in plugin_snapshots.items():
             source_sha256 = snapshot.tree_sha256
             if _tree_digest(snapshot.path) != source_sha256:
@@ -1900,8 +1946,7 @@ def run(
             wheel = _build_plugin_wheel(
                 snapshot.path, temporary_root / "plugin-build" / name
             )
-            _install_wheel(baseline_python, wheel)
-            _install_wheel(candidate_python, wheel)
+            plugin_wheel_paths[name] = wheel
             plugin_wheels.append(
                 _PluginWheelReport(
                     name=name,
@@ -1909,6 +1954,33 @@ def run(
                     wheel_sha256=_sha256(wheel),
                 )
             )
+        plugin_package_sets = tuple(
+            sorted(
+                {
+                    scenario.plugin_packages
+                    for scenario in scenarios
+                    if scenario.plugin_packages
+                }
+            )
+        )
+        baseline_plugin_environments = {
+            names: _plugin_environment(
+                baseline_wheel,
+                names,
+                plugin_wheel_paths,
+                temporary_root / "plugin-venvs-baseline" / f"set-{index}",
+            )
+            for index, names in enumerate(plugin_package_sets)
+        }
+        candidate_plugin_environments = {
+            names: _plugin_environment(
+                candidate_wheel,
+                names,
+                plugin_wheel_paths,
+                temporary_root / "plugin-venvs-candidate" / f"set-{index}",
+            )
+            for index, names in enumerate(plugin_package_sets)
+        }
         probe_root = temporary_root / "probe"
         probe_root.mkdir()
         _initialize_fixture_git(probe_root)
@@ -1963,6 +2035,7 @@ def run(
             temporary_root / "runs-baseline",
             "reference",
             npm_tool_paths,
+            baseline_plugin_environments,
         )
         candidate_runs = _run_scenarios(
             candidate_python,
@@ -1971,6 +2044,7 @@ def run(
             temporary_root / "runs-candidate",
             "candidate",
             npm_tool_paths,
+            candidate_plugin_environments,
         )
         baseline_install = _probe_installation(baseline_python, probe_root)
         candidate_install = _probe_installation(candidate_python, probe_root)
