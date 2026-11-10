@@ -80,10 +80,16 @@ file.
 Dispatch narrows the loaded form, then adapts its typed result to the existing
 `RuleOutput`; public result adapters and wire behavior remain unchanged.
 
-The lightweight `StyleFindings` contract now lives in `alphus.contracts`, so
-CLI, registry, and result-adapter imports do not load the Python style analyzer.
-`PythonStyleBuiltinFeature` can use that contract without importing the
-analyzer for catalog or config inspection.
+`StyleFindings` in `alphus.contracts` is the fixed legacy result contract for
+the existing `python-style` selector: path to named Python categories to line
+numbers. The CLI and result adapter preserve that wire shape without importing
+the analyzer during catalog or config inspection. It is not a registry for
+future style checks. A new `*-style` selector should normally be a separate
+feature with its own concern and policy, `FindingBuiltinFeature`, and
+`list[Finding]` output; it should not add a category to this Python-only
+`TypedDict` or use `PythonStyleBuiltinFeature`. The suffix in a selector does
+not choose a result shape. The installed-wheel extension acceptance test
+exercises that ordinary finding path with a new style-named selector.
 
 The 0.0.3 shapes currently fit without forcing one result type:
 
@@ -253,8 +259,10 @@ existing selector set; behavior equivalence remains in progress and finite.
 
 ### Review-comment dispositions
 
-The six inline comments on the original pilot diff are still open GitHub
-threads; the code and contributor documentation now have these dispositions:
+The six inline comments on the original pilot diff remain open and outdated
+GitHub threads. A later open thread asks whether `StyleFindings` is the model
+for future `*-style` checks; its disposition is included below. These are
+implementation dispositions, not replies or resolutions of any thread.
 
 - No generated JSON inventory is checked in. The inventory is produced on
   demand from current source and the pinned reference; comparison reports live
@@ -276,6 +284,11 @@ threads; the code and contributor documentation now have these dispositions:
 - Built-ins use feature-owned named declarations and typed execution forms;
   build-derived entry-point metadata and ignored aggregate views prevent
   per-feature edits to central authored registries or packaging tables.
+- The current `python-style` category map is a legacy compatibility contract,
+  not the registry for future style checks. The installed-wheel extension test
+  registers a new style-named selector as an ordinary findings feature. New
+  language/style concerns therefore do not need edits to `StyleFindings` or
+  Python-style result handling.
 
 These are implementation dispositions, not replies or resolutions of the
 owner's GitHub threads. The Pydantic default-convention preference and broader
@@ -423,6 +436,27 @@ whether a result is advisory or enforcement-relevant belong on separate axes.
 Do not encode unsupported numeric confidence. Rule-level evaluation maturity
 is separate from a particular finding's confidence (if any), and both are
 separate from consumer severity and blocking policy.
+
+There is no single “top dog” among language, framework, category, and detection
+method. The stable selector is the execution and configuration identity;
+concern/category describes what is reviewed; language and framework describe
+where a provider applies; provider/backend names how it is implemented; and
+heuristic or fuzzy describes the evidence method and limits. Package ownership
+follows code dependencies and import boundaries, not a universal taxonomy
+ordering. A universal concern can have separate Python, JavaScript, and C++
+providers, and each must state unsupported or unknown cases. A framework-specific
+provider can emit its existing framework-scoped rule ID without making the
+framework the parent of every related concern.
+
+Three existing checks illustrate the boundary without adding 0.0.3 behavior:
+`line-length` is a cross-language text concern (`Scope.ANY`) and counts physical
+UTF-8 lines without pretending to parse each language; `numeric-literals` is a
+Python AST provider for a concern that could have other-language providers,
+but it makes no claim about C++ or JavaScript; and `test-quality` currently
+recognizes Python test syntax, so another language or framework needs its own
+provider and discovery rules. A shared concern name does not imply a shared
+parser, test discovery mechanism, or supported-language claim. New detector
+providers remain outside the 0.0.3 behavior-preserving scope.
 
 The target vocabulary has three small independent metadata contracts, separate
 from `FeatureDefinition` registration:

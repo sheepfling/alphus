@@ -1,4 +1,9 @@
-"""Typed result shape for the built-in Python style analyzer."""
+"""Legacy wire result shape for the existing ``python-style`` selector.
+
+This fixed category mapping is a compatibility contract, not a registry or
+base type for future language-specific style checks. New checks should return
+ordinary ``Finding`` values through their own feature registration.
+"""
 
 from typing import TypedDict
 

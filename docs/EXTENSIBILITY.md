@@ -36,6 +36,15 @@ tools are producers, not frameworks. Add languages to `Scope` and complaint
 categories to `Category` in the same module. The final segment names the
 specific complaint and stays independent of message wording.
 
+No one of language, framework, or category is the universal parent of every
+rule. A selector is the stable execution/configuration handle; concern and
+category describe the reviewed problem; language/framework describe provider
+applicability; detector method and fuzziness describe how evidence is produced.
+Keep implementation packages with their actual language, framework, or shared
+runtime dependencies. A shared concern may have several language-specific
+providers, each with explicit limits; a matching concern name does not imply
+that every provider supports every language.
+
 Examples:
 
 - alphus/python/none/style/line-too-long
@@ -294,9 +303,13 @@ strict policy model only when the check needs one, then declare its existing
 selector and output shape in `ALPHUS_CHECK`, its claim and evidence in
 `ALPHUS_MORPHOLOGY`, and a typed synchronous runner in `ALPHUS_FEATURE`.
 Choose `FindingBuiltinFeature`, `CompositeFindingBuiltinFeature`,
-`MessageBuiltinFeature`,
-`PythonStyleBuiltinFeature`, `SharedUtilitiesBuiltinFeature`, or
-`CyclomaticBuiltinFeature` to match the output shape. Each form narrows the
+`MessageBuiltinFeature`, `SharedUtilitiesBuiltinFeature`, or
+`CyclomaticBuiltinFeature` to match the output shape.
+`PythonStyleBuiltinFeature` is reserved for the existing `python-style`
+selector's legacy category-map wire format; it is not a template or registry
+for new `*-style` checks. A new style check should have a feature-owned
+declaration and ordinarily return `list[Finding]` through
+`FindingBuiltinFeature`. Each form narrows the
 runner result type and primary policy type; the lazy loader returns a disjoint
 union. A typed form also declares a policy resolver; its return type must
 match the runner policy parameter and declared policy model. Dispatch

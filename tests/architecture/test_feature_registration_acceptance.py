@@ -12,8 +12,8 @@ import pytest
 from alphus.execution.processes import run_captured_process
 from alphus.support.git import run_git
 
-_SELECTOR = "morphology-extension-probe"
-_RULE_ID = "alphus/python/none/testing/morphology-extension-probe"
+_SELECTOR = "future-extension-style"
+_RULE_ID = "alphus/python/none/testing/future-extension-style"
 _REGISTRATION = '''"""Feature-local registration added by the acceptance fixture."""
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ from alphus.policy.morphology import (
 from alphus.policy.review import TestQualityPolicy
 
 ALPHUS_CHECK: Final = FeatureDefinition(
-    selector="morphology-extension-probe",
+    selector="future-extension-style",
     policy_field="test_quality",
     policy_model=TestQualityPolicy,
     output_shape="findings",
@@ -54,13 +54,13 @@ ALPHUS_CHECK: Final = FeatureDefinition(
 
 
 ALPHUS_MORPHOLOGY: Final = RuleMorphology(
-    selector="morphology-extension-probe",
+    selector="future-extension-style",
     finding_ids=(
         RuleTag(
             Scope.PYTHON,
             Framework.NONE,
             Category.TESTING,
-            "morphology-extension-probe",
+            "future-extension-style",
         ),
     ),
     concern="extension-registration",
@@ -93,7 +93,7 @@ def _run(
                 Scope.PYTHON,
                 Framework.NONE,
                 Category.TESTING,
-                "morphology-extension-probe",
+                "future-extension-style",
             ),
             path=files[0].relative_to(root).as_posix(),
             line=1,
@@ -248,7 +248,7 @@ from alphus.execution.dispatch import run_rule
 from alphus.execution.results import diagnostics_from_output
 from alphus.plugins.builtin_registry import builtin_check_entry_points
 
-selector = "morphology-extension-probe"
+selector = "future-extension-style"
 module = "alphus.gates.review.morphology_extension_probe"
 assert Path(alphus.__file__).resolve().is_relative_to(installed)
 entry_points = builtin_check_entry_points()
@@ -285,7 +285,7 @@ diagnostics = diagnostics_from_output(selector, output)
 assert module in sys.modules
 assert len(diagnostics) == 1
 assert diagnostics[0].rule_id == (
-    "alphus/python/none/testing/morphology-extension-probe"
+    "alphus/python/none/testing/future-extension-style"
 )
 print(
     json.dumps(
@@ -316,7 +316,7 @@ print(
         encoding="utf-8"
     )
     assert (
-        "morphology-extension-probe = "
+        "future-extension-style = "
         "alphus.gates.review.morphology_extension_probe:ALPHUS_FEATURE"
     ) in entry_points
     assert all(
