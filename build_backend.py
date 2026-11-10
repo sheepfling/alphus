@@ -20,6 +20,7 @@ def _write_builtin_entry_points() -> None:
         sys.path.insert(0, path)
 
     from scripts.generate_morphology_manifest import (
+        complaint_contributions,
         feature_registrations,
     )
     from scripts.generate_morphology_manifest import (
@@ -45,6 +46,15 @@ def _write_builtin_entry_points() -> None:
         f"{feature.selector} = {feature.registration_module}:ALPHUS_FEATURE"
         for feature in features
     )
+    contributions = complaint_contributions(root)
+    groups = sorted({item.selector for item in contributions})
+    for selector in groups:
+        lines.extend(["", f"[alphus.complaints.v1.{selector}]"])
+        lines.extend(
+            f"{item.policy_field} = {item.registration_module}:ALPHUS_CONTRIBUTION"
+            for item in contributions
+            if item.selector == selector
+        )
     (metadata / "entry_points.txt").write_text(
         "\n".join(lines) + "\n", encoding="utf-8"
     )

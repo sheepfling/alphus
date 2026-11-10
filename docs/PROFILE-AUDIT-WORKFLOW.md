@@ -87,6 +87,27 @@ scripts, and relevant subfeatures. Do not describe a successful profile or
 aggregate exit code as comprehensive coverage when the manifest itself is
 incomplete.
 
+## Assess findings against the project
+
+Coverage and findings answer different questions. For every emitted finding,
+read the diagnostic's concise message and any rule guidance linked by the
+catalog. If no link is available, inspect the owning check's documentation and
+the relevant project context, such as its `AGENTS.md`, design decisions,
+supported-runtime policy, or build constraints. Do not treat the finding as an
+instruction to change code without that review.
+
+Recommend a correction when the check's evidence and project constraints
+support it. When the current code is intentional, record the concrete reason
+and the evidence for an exception. When the rule misreads the project or its
+limits, capture that as a rule gap with a reproduction and the missing context.
+Do not chase a zero-finding report as a goal, and do not write or inject a
+project `AGENTS.md`; project instructions remain user-owned.
+
+The 0.0.3 registry does not yet expose a rule-guidance link for every finding.
+Until that field is implemented, reviewers can use the selector inventory to
+locate its owning feature documentation. The workflow above is review guidance;
+it does not automatically edit project instructions or alter check selection.
+
 When blocked by missing policy, unavailable tools, or unresolved scope, name
 the exact requirement and work completed. Do not silently add tools, persist
 the temporary policy, change consumer CI, or invent severity thresholds.

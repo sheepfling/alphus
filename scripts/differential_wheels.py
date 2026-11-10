@@ -194,10 +194,7 @@ class _ProfileOrchestration(_StrictDocument):
 
 class _ProfileFixtureConfig(_StrictDocument):
     model_config = ConfigDict(extra="ignore", strict=True)
-    orchestration: Annotated[
-        _ProfileOrchestration,
-        Field(default_factory=lambda: _ProfileOrchestration(steps=())),
-    ]
+    orchestration: _ProfileOrchestration = _ProfileOrchestration(steps=())
 
 
 _DIRECT_FINDINGS: TypeAdapter[list[_ProfileFinding]] = TypeAdapter(

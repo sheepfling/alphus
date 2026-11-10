@@ -193,17 +193,22 @@ read guidance for emitted rule IDs, assess findings against project purpose
 and constraints, then recommend a sound correction or record an evidence-based
 exception. It should surface unknown applicability and rule gaps for review,
 not mechanically remove findings or broaden selection. No such agent
-workflow or guidance-link field is implemented in this 0.0.3 slice.
+workflow or runtime guidance-link field is implemented in this 0.0.3 slice.
+The manual review procedure is now part of
+[`PROFILE-AUDIT-WORKFLOW.md`](PROFILE-AUDIT-WORKFLOW.md); it asks reviewers to
+consult project context and owning feature docs when no rule link exists, and
+never to write or inject project `AGENTS.md` files.
 
 The 62 distinct registration modules and ignored generated aggregates remove
 the shared registry/config/catalog/runner edit for a built-in registration.
 They do not eliminate conflicts in genuinely shared policy models, analyzers,
-CLI code, or common result adapters. Two disposable production-repository
-branch experiments now demonstrate clean selector-level contribution merges
-and installed-wheel dispatch, but they do not measure actual review-time
-savings. Treat reduced registration friction as a structural property and
-measure correction categories and registration edits in future parallel
-contributions instead of inferring productivity from this migration.
+CLI code, or common result adapters. Disposable production-repository tests
+now demonstrate both independent selector additions and two contributions to
+the same aggregate merging cleanly in both orders, with generated-view parity
+and installed-wheel dispatch. They do not measure actual review-time savings.
+Treat reduced registration friction as a structural property and measure
+correction categories and registration edits in future parallel contributions
+instead of inferring productivity from this migration.
 
 The current scenario manifest has 154 entries: 147 behavioral scenarios, five
 controls, and two planned-only entries. The package-boundaries history
@@ -214,24 +219,23 @@ unsupported native capabilities; the other checks profile planning. Neither
 claims analyzer execution. The effectful command and plugin-failure cases
 execute.
 
-The pinned installed-wheel comparison on code head
-`1d37ce4d320fc0349243a980abb68479e3402709` passed all 154 manifested scenarios
-against baseline `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`, with all five
-hosted workflows green. The manifest contains 147 behavioral scenarios, five
-controls, and two planned-only entries. It exercises unsupported cyclomatic
-planning without claiming analyzer execution, duplicate plugin entry-point
-rejection before provider import, invalid plugin return reporting, serialized
-lazy built-in import traces, and serial/parallel equality for a side-effecting
-three-command profile. This is finite evidence, not exhaustive equivalence for
-every input. The versioned history identity and planned-only entries are
-outside baseline-equality claims.
+The latest published PR head before the complaint-contribution extension was
+`0966f4d6e01188754ed4ee508efaf70ca0d83dda`; its pinned wheel comparison passed
+all 154 scenarios against baseline
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`, and all five hosted workflows
+passed ([run 42761791173](https://github.com/sheepfling/alphus/actions/runs/42761791173)).
+The manifest exercises unsupported cyclomatic planning without claiming
+analyzer execution, duplicate plugin entry-point rejection before provider
+import, invalid plugin return reporting, serialized lazy built-in import
+traces, and serial/parallel equality for a side-effecting three-command
+profile. This is finite evidence, not exhaustive equivalence. The versioned
+history identity and two planned-only entries remain outside baseline-equality
+claims.
 
-Local documentation-link, style, and shell-fence validation passed 105 tests.
-The preceding exact code head also passed the full local `check` profile (27
-passed, zero failed, four provisional), 2,608 package tests (44 skipped),
-Ruff, formatting, Pyright (zero errors), import smoke, and compatibility
-imports. The exact-head hosted run for later documentation-only commits is
-tracked by PR #100; no code or detector changes are in those commits.
+The current unpublished candidate adds the same-aggregate complaint
+contribution path and generated policy-class aliases described below. Those
+changes do not add a detector or change the 154-scenario manifest; they still
+need exact-head hosted validation before their status can be called green.
 
 Generate the current machine-readable selector and runner inventory on demand:
 
@@ -291,9 +295,10 @@ their contracts and need are established.
 The inventory test generates current and pinned-baseline inventories into
 temporary files from their source trees, then compares registration contracts.
 No generated JSON baseline is committed. This is an objective registration
-check, not a wheel behavior comparison. The latest pinned wheel comparison did
-not pass for the current 154-scenario manifest; see the current status above.
-Prior comparisons apply only to their recorded earlier manifests and commits.
+check, not a wheel behavior comparison. The latest published candidate's
+finite wheel comparison passed as described above; each new candidate must
+rerun the comparison against the same pinned baseline. Earlier candidate
+results apply only to their recorded manifests and commits.
 
 This document distinguishes four kinds of statement:
 
@@ -314,8 +319,9 @@ inventory entry. Each feature module exposes one typed `ALPHUS_FEATURE` object
 with a direct callback for lazy execution. The established `RuleEvaluation`
 and CLI result adapters remain shared, so adding a feature still uses the
 existing output contract. Registration migration is complete for the existing
-selector set; behavior equivalence for the current manifest remains in
-progress and is not exhaustive. These declarations are now typed
+selector set; the last published candidate passed the current finite manifest,
+but the unpublished complaint-contribution change still needs exact-head
+validation. Equivalence is finite, not exhaustive. These declarations are now typed
 `FeatureDefinition(...)` calls
 paired with immutable
 `RuleMorphology(...)` values rather than the former tuple-pair `ALPHUS_CHECK`
@@ -325,7 +331,8 @@ per-check `pyproject.toml` edit. Aggregate policy/config/dispatch views are
 ignored build artifacts rather than checked-in shared files, so independent
 feature branches do not edit the same generated outputs. Runtime entry points
 target the typed feature object. Registration migration is complete for the
-existing selector set; behavior equivalence remains in progress and finite.
+existing selector set. The same-aggregate contribution change is a separate
+bounded extension of that registration path and is not a new detector.
 
 ### Review-comment dispositions
 
@@ -361,10 +368,9 @@ implementation dispositions, not replies or resolutions of any thread.
   Python-style result handling.
 
 These are implementation dispositions, not replies or resolutions of the
-owner's GitHub threads. The Pydantic default-convention preference and broader
-semantic guidance work remain tracked by
-[issue #51](https://github.com/sheepfling/alphus/issues/51); they are distinct
-from this compatibility-preserving manifest cleanup.
+owner's GitHub threads. Direct immutable defaults address the observed
+static-default convention; future detector and semantic-guidance work remains
+tracked by [issue #51](https://github.com/sheepfling/alphus/issues/51).
 
 ### Parallel contribution experiment
 
@@ -389,18 +395,10 @@ and dispatched both selectors to the declared finding IDs. The wheel files
 are not claimed byte-identical because their version metadata reflects their
 different merge commits.
 
-The second complaint-only branch (`c0c4bef`) tested the limit: two independent
-complaints added to the same `test-quality` aggregate conflicted in
-`src/alphus/gates/review/test_quality.py` and its mirrored engine test in both
-merge orders. Each synthetic complaint reused `TestQualityPolicy`; it did not
-exercise an independently owned policy fragment because the current feature
-model has one policy model/resolver and one runner per selector. A complaint
-with a separate policy fragment would also need a composition point in the
-shared feature declaration. Therefore, selector-level parallel registration
-is demonstrated, but the stronger requirement for conflict-free parallel
-complaint additions inside one existing aggregate is not met. The existing
-duplicate-selector, duplicate-finding-ID, and conflicting-policy-model guards
-reject those collisions deterministically.
+The complaint-only branch experiment (`6a69c1c` with `c0c4bef`) exposed the
+former limitation: both additions edited the aggregate analyzer and mirrored
+engine test, and reused one policy model. That was the state before the typed
+contribution seam below; it is historical evidence, not the current result.
 
 For 0.0.3, the compatible rule is to give an independently authored check its
 own selector, feature module, policy, mirrored tests, and standalone docs; a
@@ -415,10 +413,56 @@ finding IDs; the two mirrored tests passed in both trees. The wheel files
 themselves are not claimed byte-identical because their version metadata
 includes the different merge commits.
 
-Keep legacy aggregate selectors stable. If multiple independently authored
-contributions must share one selector and one combined policy/output contract,
-that requires a separate contribution-composition design and compatibility
-review; this PR does not claim to provide it.
+### Feature-owned complaint contributions
+
+A complaint can now extend an existing finding-producing selector without
+editing its analyzer, primary policy, morphology declaration, or central
+registry. Place a provider under
+`src/alphus/gates/<owner>/contributions/<name>.py`. It owns a
+`ComplaintContributionDefinition` with the parent selector, a unique strict
+policy field and model, its own `RuleMorphology`, and a summary; it exports a
+typed `ALPHUS_CONTRIBUTION` runner. The policy model, mirrored tests, and
+guidance page are separate feature-owned files. A provider's finding IDs are
+declared statically by its morphology and checked against its local
+`rule_tag()` calls. Duplicate policy fields and duplicate finding IDs within
+the aggregate fail generation with an actionable error.
+
+The build backend scans only the fixed first-party gates tree without importing
+providers. It generates strict `[checks.<policy-field>]` fields and one
+`alphus.complaints.v1.<selector>` entry point per contribution. At runtime, the
+existing aggregate runner reads that selector's first-party entry points in
+policy-field order, skips fields that are absent, and imports only configured
+providers. The generated aggregate morphology includes their declared finding
+IDs; `COMPLAINT_MORPHOLOGY_BY_POLICY_FIELD` retains each contribution's own
+claim, scope, evidence, and maturity metadata. The existing result adapter
+still validates and reports the stable public `Finding` shape. Registering a
+contribution does not select the parent selector or activate a policy. With no
+contribution policy configured,
+`test-quality` continues to run its pre-existing analyzer and returns its
+existing output.
+
+`tests/architecture/test_complaint_contribution_acceptance.py` creates two
+independent production-shaped contributions to `test-quality`. Each branch
+owns a different policy model, contribution module, mirrored test, and guide.
+The branches merge without path conflicts in both orders; each generated
+policy and morphology view is byte-identical across the two merge results.
+The test then regenerates and builds an installed wheel, verifies strict
+unknown-field rejection, confirms an unconfigured provider is not imported,
+and dispatches both configured contributions to their separately declared
+finding IDs. A second regression requires duplicate finding identities to
+fail generation. It asserts the generated config binds each policy field to
+its own imported policy class even when both feature modules use the local
+class name `ContributionPolicy`. Strict result validation rejects malformed
+provider outputs. The acceptance fixture adds no detector behavior to the
+shipped 0.0.3 package.
+
+The clean selector-level merges (`fa8b5d3` and `2f87c61`) remain complementary
+evidence: they show independent new selectors own their policy, registration,
+mirrored tests, and docs without touching shared generated views. The complaint
+fixture demonstrates the corresponding same-selector contribution shape.
+Edits to an existing aggregate's shared semantic contract or collisions in
+policy/finding identity remain deliberate errors to resolve, not silently
+merged metadata.
 
 ### Earlier candidate snapshots (historical; current status is above)
 
@@ -1002,16 +1046,18 @@ the first three migrations, then compare repeated-category corrections and
 registration locations against the baseline. The objective is zero
 hand-maintained central selector, config, catalog, or runner enumerations for a
 new check; the migration itself remains a bounded, reviewed change. The
-registration criterion is met for the current 62 selectors. The current
-manifested wheel comparison is in progress after correcting a strict-config
-fixture failure. Human correction effort and behavior outside manifested
-scenarios have not been measured or proven equivalent.
+registration criterion is met for the current 62 selectors. The latest
+published manifested comparison passed; the current unpublished contribution
+candidate still requires exact-head validation. Human correction effort and
+behavior outside manifested scenarios have not been measured or proven
+equivalent.
 
-The six-check morphology pilot proved metadata discovery but did not complete
-runtime registration. At the current head, all 62 built-ins use feature-owned
-typed forms and generated runtime views. Previous 149-scenario comparison
-results apply only to their earlier manifest and candidate. Current coverage
-remains bounded and does not prove every possible input or complete issue #87.
+The six-check morphology pilot was an early metadata-discovery stage; it did
+not complete runtime registration. All 62 built-ins now use feature-owned typed
+forms and generated runtime views. The latest published 154-scenario result is
+bounded evidence, not proof for every input or completion of issue #87. The
+same-aggregate complaint extension is implemented in the unpublished candidate
+and must pass exact-head validation before it is included in the current status.
 
 ## Existing-check mappings
 
@@ -1616,14 +1662,14 @@ inputs. No historical policy is inferred or backfilled.
 
 ## Ordered migration slices
 
-This sequence records the original execution plan, not remaining registration
-work. Inventory, typed registration and migration of the existing selectors
-have been carried out. The last exact-head manifested comparison failed before
-producing a report because the duplicate-entry-point scenario expected JSON
-from a strict-config failure. The local harness now validates duplicate
-metadata before checking the public CLI error. Additional
-coverage for deferred capabilities and inputs not represented in the manifest
-remains open; do not describe the finite result as exhaustive.
+This sequence began as the migration plan. Inventory and registration for all
+current selectors are implemented. The latest published head is
+`0966f4d6e01188754ed4ee508efaf70ca0d83dda`; its pinned wheel comparison passed
+the 154 manifested scenarios and all five hosted workflows. The current
+unpublished candidate adds feature-owned complaint contributions and a
+production-path two-branch acceptance test. It requires its own exact-head
+validation before it can be described as passing. Finite manifested coverage
+is not exhaustive equivalence.
 
 1. **Inventory and reference baseline — complete.** Source-derived inventories
    compare current declarations with the pinned baseline without committed JSON.
@@ -1636,14 +1682,24 @@ remains open; do not describe the finite result as exhaustive.
 4. **Built-in registration migration — complete for all 62 selectors.**
    Existing checker bodies, strict config names, selection and result behavior
    remain the compatibility target.
-5. **Differential validation — in progress for 154 manifested scenarios.** The
-   unsupported native plan and duplicate-entry metadata checks are corrected.
-   The tuple-preserving import trace fix passes local checks. Exact-head hosted
-   comparison now completes but reports output differences; the run retained
-   the report, and its concise diagnostics will be emitted on the next run.
-   The finite comparison will not imply arbitrary-input equivalence.
-6. **Remaining 0.0.3 review — in progress.** Reconcile accepted feedback, keep
-   contributor guidance current, and retain finite compatibility evidence.
+5. **Pinned differential evidence — passed on the latest published head.** All
+   154 manifested scenarios match baseline on `0966f4d`; all five hosted
+   workflows passed. Two planned-only cases check planning semantics and do not
+   claim analyzer execution. Unsupported native planning, duplicate plugin
+   metadata, invalid plugin returns, serialized lazy-import traces, and an
+   effectful command profile have executed evidence. The comparison remains
+   bounded to its declared manifest.
+6. **Same-aggregate contribution path — implemented in the current candidate;
+   validation pending.** Two independent complaint additions to `test-quality`
+   merge in either order without authored-path conflicts. The test regenerates
+   the production views, builds a wheel, and exercises strict config, lazy
+   imports, dispatch, policy types, and reported finding IDs. Duplicate policy
+   fields and finding identities fail deterministically. These synthetic
+   additions are test fixtures; no new shipped detector is activated.
+7. **Remaining 0.0.3 review — in progress.** Review the candidate's contribution
+   contract, verify exact-head local and hosted checks, and reconcile accepted
+   feedback. Do not claim issue #87 completion from selector registration or
+   the finite comparison alone.
 
 Persistent cache, automatic setup, history/index schema migrations, new
 detector behavior, new language providers, local-model execution, and
@@ -1667,11 +1723,13 @@ and `Field` forms, so this is not a deprecation claim. The cyclomatic
 `CyclomaticOption(name, value)` record gives the internal slots meaning while
 its adapter preserves the existing two-element JSON arrays.
 
-One release-readiness question remains: whether the planned-only scenario and
-four deferred capabilities block #87's exit. Keep this finite evidence distinct
-from exhaustive equivalence. The corrected history digest has focused unit
-coverage and is intentionally excluded from baseline equality because the new
-versioned cohort cannot equal the legacy digest.
+The two planned-only entries are intentional checks of planning output, not
+missing execution coverage. The four previously identified capability gaps
+now have executable scenarios as described above. The corrected history digest
+has focused unit coverage and is intentionally excluded from baseline equality
+because its versioned cohort cannot equal the legacy digest. Issue #87 still
+needs independent review and exact-head validation of the current candidate;
+the 154 scenarios are not exhaustive equivalence.
 
 PR #100 remains draft. Registration is complete for the current 62 built-ins;
 the issue's broader exit status remains subject to review of deferred compatibility

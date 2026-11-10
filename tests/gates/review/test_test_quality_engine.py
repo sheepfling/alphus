@@ -22,7 +22,7 @@ from alphus.gates.review.test_quality import (
     resolve_test_quality_policy,
     run_test_quality_feature,
 )
-from alphus.plugins.builtin import FindingBuiltinFeature
+from alphus.plugins.builtin import CompositeFindingBuiltinFeature
 
 POLICY = Policy(
     extensions=[".py"],
@@ -558,9 +558,9 @@ def test_typed_registration_preserves_test_quality_findings(tmp_path: Path) -> N
         {"schema_version": 1, "checks": {"test_quality": POLICY}}, strict=True
     )
 
-    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert isinstance(ALPHUS_FEATURE, CompositeFindingBuiltinFeature)
     assert ALPHUS_FEATURE.definition.policy_model is Policy
     policy = resolve_test_quality_policy(config)
-    expected = run_test_quality_feature(tmp_path, (relative,), policy)
+    expected = run_test_quality_feature(tmp_path, (relative,), config, policy)
     assert check_test_quality(tmp_path, (relative,), policy) == expected
     assert run_builtin_rule("test-quality", tmp_path, (relative,), config) == expected

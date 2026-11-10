@@ -9,6 +9,15 @@ evidence are described in the
 Use that page as the single design entry point; this guide remains focused on
 diagnostic and extension contracts.
 
+For a new complaint on an existing finding-producing selector, add one typed
+provider under `src/alphus/gates/<owner>/contributions/`. Give it its own
+strict policy model, morphology, runner, mirrored test, and guide page. The
+build derives the selector's entry point, strict policy field, and allowed
+finding identity from the provider; do not edit a shared catalog or aggregate
+analyzer. The architecture page documents the exact contract and acceptance
+test. Keep new complaint policies opt-in so registration alone changes no
+selection or default behavior.
+
 ## Current contracts
 
 Each portable checker receives an explicit repository root, validated policy,

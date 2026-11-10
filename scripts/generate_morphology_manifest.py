@@ -16,6 +16,7 @@ from collections.abc import Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, replace
 from pathlib import Path
+from types import EllipsisType
 from typing import TypeAlias, cast
 
 from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
@@ -123,6 +124,262 @@ class _FeatureRegistration:
     policy_inputs: tuple[str, ...]
     display_name: str | None = None
     input_mode: str = "caller-scope"
+
+
+@dataclass(frozen=True, slots=True)
+class _ComplaintContribution:
+    selector: str
+    policy_field: str
+    policy_model: str
+    summary: str
+    morphology: RuleMorphology
+    registration_module: str
+
+
+def complaint_contributions(root: Path) -> tuple[_ComplaintContribution, ...]:
+    """Discover typed complaint providers from a bounded first-party source root."""
+    gates = root / "src" / "alphus" / "gates"
+    repository_root = root.resolve(strict=True)
+    gates_root = gates.resolve(strict=True)
+    if gates.is_symlink() or not gates_root.is_relative_to(repository_root):
+        raise ValueError(f"built-in gates root escapes the repository: {gates}")
+
+    contributions: list[_ComplaintContribution] = []
+    total_bytes = 0
+    paths = sorted(
+        path
+        for path in gates.rglob("*.py")
+        if "contributions" in path.relative_to(gates).parts
+    )
+    if len(paths) > _MAX_FEATURE_MODULES:
+        raise ValueError(
+            f"complaint discovery exceeds {_MAX_FEATURE_MODULES} Python modules"
+        )
+    for path in paths:
+        if path.is_symlink() or not path.resolve(strict=True).is_relative_to(
+            gates_root
+        ):
+            raise ValueError(f"complaint contribution escapes built-in gates: {path}")
+        size = path.stat().st_size
+        total_bytes += size
+        if size > _MAX_SOURCE_MODULE_BYTES or total_bytes > _MAX_SCANNED_SOURCE_BYTES:
+            raise ValueError("complaint contribution discovery exceeds scan limits")
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        values = [
+            _assignment_value(statement)
+            for statement in tree.body
+            if _assignment_name(statement) == "ALPHUS_COMPLAINT_DEFINITION"
+        ]
+        if not values:
+            continue
+        if len(values) != 1:
+            raise ValueError(f"{path}: define one ALPHUS_COMPLAINT_DEFINITION call")
+        definition_value: ast.expr | None = values[0]
+        if not isinstance(definition_value, ast.Call):
+            raise TypeError(f"{path}: complaint definition must be a call")
+        fields = _call_fields(definition_value, "ComplaintContributionDefinition", path)
+        required = {"selector", "policy_field", "policy_model", "morphology", "summary"}
+        if set(fields) != required:
+            raise ValueError(f"{path}: complaint definition fields are incomplete")
+
+        selector = _complaint_literal_text(fields, path, "selector")
+        policy_field = _complaint_literal_text(fields, path, "policy_field")
+        summary = _complaint_literal_text(fields, path, "summary")
+        if (
+            _SLUG.fullmatch(selector) is None
+            or re.fullmatch(r"[a-z][a-z0-9_]*", policy_field) is None
+        ):
+            raise ValueError(f"{path}: invalid complaint selector or policy field")
+        policy_model = _resolve_policy_model(fields["policy_model"], path)
+        morphology_node: ast.expr | None = fields.get("morphology")
+        if not isinstance(morphology_node, ast.Call):
+            raise TypeError(f"{path}: complaint morphology must use RuleMorphology")
+        morphology = _parse_rule_morphology(morphology_node, path)
+        if morphology.selector != selector:
+            raise ValueError(f"{path}: complaint selector and morphology differ")
+        policy_module, policy_class = policy_model.rsplit(".", 1)
+        policy_path = root.joinpath("src", *policy_module.split(".")).with_suffix(".py")
+        policy_root = root / "src" / "alphus" / "policy"
+        repository_root = root.resolve(strict=True)
+        if policy_root.is_symlink() or not policy_root.resolve(
+            strict=True
+        ).is_relative_to(repository_root):
+            raise ValueError(f"{path}: built-in policy root escapes the repository")
+        if (
+            not policy_path.is_file()
+            or policy_path.is_symlink()
+            or not policy_path.resolve(strict=True).is_relative_to(
+                policy_root.resolve(strict=True)
+            )
+        ):
+            raise ValueError(f"{path}: complaint policy model must be first-party")
+        policy_tree = ast.parse(
+            policy_path.read_text(encoding="utf-8"), filename=str(policy_path)
+        )
+        if not any(
+            isinstance(statement, ast.ClassDef) and statement.name == policy_class
+            for statement in policy_tree.body
+        ):
+            raise ValueError(
+                f"{path}: complaint policy model must name a top-level class"
+            )
+        static_ids = _static_rule_ids(tree)
+        for tag in morphology.finding_ids:
+            matches = static_ids.get(tag.complaint, ())
+            if len(matches) != 1 or matches[0] != tag.rule_id:
+                raise ValueError(
+                    f"{path}: complaint finding {tag.rule_id!r} must be emitted "
+                    "by exactly one local rule_tag call"
+                )
+        contribution_exports = [
+            _assignment_value(statement)
+            for statement in tree.body
+            if _assignment_name(statement) == "ALPHUS_CONTRIBUTION"
+        ]
+        if len(contribution_exports) != 1:
+            raise ValueError(f"{path}: export exactly one ALPHUS_CONTRIBUTION")
+        contribution_export: ast.expr | None = contribution_exports[0]
+        if not isinstance(contribution_export, ast.Call):
+            raise TypeError(f"{path}: ALPHUS_CONTRIBUTION must be a call")
+        export_fields = _call_fields(contribution_export, "ComplaintContribution", path)
+        definition_export: ast.expr | None = export_fields.get("definition")
+        runner_export: ast.expr | None = export_fields.get("runner")
+        if set(export_fields) != {"definition", "runner"} or not (
+            isinstance(definition_export, ast.Name)
+            and definition_export.id == "ALPHUS_COMPLAINT_DEFINITION"
+            and isinstance(runner_export, ast.Name)
+        ):
+            raise ValueError(
+                f"{path}: ALPHUS_CONTRIBUTION must link its local definition and runner"
+            )
+        runner_name = runner_export.id
+        runners = [
+            statement
+            for statement in tree.body
+            if isinstance(statement, ast.FunctionDef) and statement.name == runner_name
+        ]
+        if len(runners) != 1:
+            raise ValueError(
+                f"{path}: complaint runner {runner_name!r} must be one local sync function"
+            )
+        runner_args = runners[0].args
+        runner_parameters = (*runner_args.posonlyargs, *runner_args.args)
+        if (
+            len(runner_parameters) != 3
+            or runner_args.vararg is not None
+            or runner_args.kwarg is not None
+            or runner_args.kwonlyargs
+        ):
+            raise ValueError(
+                f"{path}: complaint runner {runner_name!r} must accept root, files, policy"
+            )
+        module_path = ".".join(path.relative_to(root / "src").with_suffix("").parts)
+        contributions.append(
+            _ComplaintContribution(
+                selector,
+                policy_field,
+                policy_model,
+                summary,
+                morphology,
+                module_path,
+            )
+        )
+
+    if not contributions:
+        return ()
+
+    seen_fields: dict[str, str] = {}
+    seen_ids: dict[str, str] = {}
+    builtins = {feature.selector: feature for feature in feature_registrations(root)}
+    orchestration = root / "src" / "alphus" / "policy" / "orchestration.py"
+    policy_tree = ast.parse(
+        orchestration.read_text(encoding="utf-8"), filename=str(orchestration)
+    )
+    legacy_fields = {
+        member.target.id
+        for statement in policy_tree.body
+        if isinstance(statement, ast.ClassDef) and statement.name == "CheckPolicies"
+        for member in statement.body
+        if isinstance(member, ast.AnnAssign) and isinstance(member.target, ast.Name)
+    }
+    existing_ids = {
+        finding_id
+        for declaration in _declarations(root)
+        for finding_id in declaration.finding_ids
+    }
+    for contribution in contributions:
+        feature = builtins.get(contribution.selector)
+        if feature is None or feature.output_shape != "findings":
+            raise ValueError(
+                f"{contribution.registration_module}: contributions require an "
+                "existing finding-producing selector"
+            )
+        previous_field = seen_fields.get(contribution.policy_field)
+        if previous_field is not None:
+            raise ValueError(
+                f"duplicate complaint policy field {contribution.policy_field!r}: "
+                f"{previous_field} and {contribution.registration_module}"
+            )
+        seen_fields[contribution.policy_field] = contribution.registration_module
+        if contribution.policy_field in legacy_fields:
+            raise ValueError(
+                f"complaint policy field {contribution.policy_field!r} duplicates "
+                "a legacy CheckPolicies field"
+            )
+        if contribution.policy_field == feature.policy_field:
+            raise ValueError(
+                f"complaint policy field {contribution.policy_field!r} duplicates "
+                "its aggregate feature policy"
+            )
+        for tag in contribution.morphology.finding_ids:
+            if tag.rule_id in existing_ids:
+                raise ValueError(
+                    f"complaint finding ID {tag.rule_id!r} is already declared by "
+                    "an existing built-in selector"
+                )
+            previous = seen_ids.get(tag.rule_id)
+            if previous is not None:
+                raise ValueError(
+                    f"duplicate complaint finding ID {tag.rule_id!r}: "
+                    f"{previous} and {contribution.registration_module}"
+                )
+            seen_ids[tag.rule_id] = contribution.registration_module
+    return tuple(
+        sorted(contributions, key=lambda item: (item.selector, item.policy_field))
+    )
+
+
+def _complaint_literal_text(
+    fields: Mapping[str, ast.expr], path: Path, field_name: str
+) -> str:
+    expression: ast.expr | None = fields.get(field_name)
+    if not isinstance(expression, ast.Constant):
+        raise TypeError(f"{path}: complaint {field_name} must be a literal constant")
+    value: str | int | float | complex | bool | bytes | EllipsisType | None = (
+        expression.value
+    )
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{path}: complaint {field_name} must be text")
+    return value
+
+
+def _call_fields(node: ast.Call, name: str, path: Path) -> dict[str, ast.expr]:
+    constructor = node.func
+    constructor_name = (
+        constructor.id
+        if isinstance(constructor, ast.Name)
+        else constructor.attr
+        if isinstance(constructor, ast.Attribute)
+        else ""
+    )
+    if constructor_name != name or node.args:
+        raise ValueError(f"{path}: expected a keyword-only {name} call")
+    fields: dict[str, ast.expr] = {}
+    for keyword in node.keywords:
+        if keyword.arg is None or keyword.arg in fields:
+            raise ValueError(f"{path}: invalid {name} keyword")
+        fields[keyword.arg] = keyword.value
+    return fields
 
 
 @dataclass(frozen=True, slots=True)
@@ -1594,28 +1851,32 @@ def _quoted(value: str) -> str:
     return json.dumps(value, ensure_ascii=True)
 
 
-def _tuple_lines(name: str, values: tuple[str, ...]) -> list[str]:
+def _tuple_lines(
+    name: str, values: tuple[str, ...], *, indent: str = "            "
+) -> list[str]:
     rendered = ", ".join(_quoted(value) for value in values)
-    inline = f"            {name}=({rendered}{',' if len(values) == 1 else ''}),"
+    inline = f"{indent}{name}=({rendered}{',' if len(values) == 1 else ''}),"
     if len(inline) <= 88:
         return [inline]
     return [
-        f"            {name}=(",
-        *(f"                {_quoted(value)}," for value in values),
-        "            ),",
+        f"{indent}{name}=(",
+        *(f"{indent}    {_quoted(value)}," for value in values),
+        f"{indent}),",
     ]
 
 
-def _text_argument_lines(name: str, value: str) -> list[str]:
-    inline = f"            {name}={_quoted(value)},"
+def _text_argument_lines(
+    name: str, value: str, *, indent: str = "            "
+) -> list[str]:
+    inline = f"{indent}{name}={_quoted(value)},"
     if len(inline) <= 88:
         return [inline]
     quoted_value = _quoted(value)
     if len(quoted_value) + 16 <= 88:
         return [
-            f"            {name}=(",
-            f"                {quoted_value}",
-            "            ),",
+            f"{indent}{name}=(",
+            f"{indent}    {quoted_value}",
+            f"{indent}),",
         ]
     parts = textwrap.wrap(
         value,
@@ -1627,35 +1888,35 @@ def _text_argument_lines(name: str, value: str) -> list[str]:
     )
     if len(parts) == 1:
         return [
-            f"            {name}=(",
-            f"                {_quoted(parts[0])}",
-            "            ),",
+            f"{indent}{name}=(",
+            f"{indent}    {_quoted(parts[0])}",
+            f"{indent}),",
         ]
     quoted = [_quoted(part) for part in parts]
     return [
-        f"            {name}=(",
-        *(f"                {part}" for part in quoted),
-        "            ),",
+        f"{indent}{name}=(",
+        *(f"{indent}    {part}" for part in quoted),
+        f"{indent}),",
     ]
 
 
-def _claim_lines(claim: str) -> list[str]:
-    return _text_argument_lines("claim", claim)
+def _claim_lines(claim: str, *, indent: str = "            ") -> list[str]:
+    return _text_argument_lines("claim", claim, indent=indent)
 
 
-def _mechanism_lines(values: tuple[str, ...]) -> list[str]:
+def _mechanism_lines(
+    values: tuple[str, ...], *, indent: str = "            "
+) -> list[str]:
     names = [
         f"DetectionMechanism.{value.upper().replace('-', '_')}" for value in values
     ]
-    inline = (
-        f"            mechanisms=({', '.join(names)}{',' if len(names) == 1 else ''}),"
-    )
+    inline = f"{indent}mechanisms=({', '.join(names)}{',' if len(names) == 1 else ''}),"
     if len(inline) <= 88:
         return [inline]
     return [
-        "            mechanisms=(",
-        *(f"                {name}," for name in names),
-        "            ),",
+        f"{indent}mechanisms=(",
+        *(f"{indent}    {name}," for name in names),
+        f"{indent}),",
     ]
 
 
@@ -1673,7 +1934,28 @@ def _render_rule_tag(rule_id: str) -> tuple[str, ...]:
 
 def render_manifest(root: Path) -> str:
     """Render the deterministic typed catalog from literal declarations."""
-    declarations = _declarations(root)
+    declarations = list(_declarations(root))
+    contributions_by_selector: dict[str, list[_ComplaintContribution]] = {}
+    for contribution in complaint_contributions(root):
+        contributions_by_selector.setdefault(contribution.selector, []).append(
+            contribution
+        )
+    declarations = [
+        replace(
+            declaration,
+            finding_ids=(
+                *declaration.finding_ids,
+                *(
+                    tag.rule_id
+                    for contribution in contributions_by_selector.get(
+                        declaration.selector, []
+                    )
+                    for tag in contribution.morphology.finding_ids
+                ),
+            ),
+        )
+        for declaration in declarations
+    ]
     lines = [
         '"""Generated by scripts/generate_morphology_manifest.py; do not edit."""',
         "",
@@ -1723,6 +2005,68 @@ def render_manifest(root: Path) -> str:
             ]
         )
     lines.extend(["    }", ")", ""])
+    lines.extend(
+        [
+            "COMPLAINT_MORPHOLOGY_BY_POLICY_FIELD: Mapping[str, RuleMorphology] = (",
+            "    MappingProxyType(",
+            "        {",
+        ]
+    )
+    for contribution in complaint_contributions(root):
+        morphology = contribution.morphology
+        lines.extend(
+            [
+                f"            {_quoted(contribution.policy_field)}: RuleMorphology(",
+                f"                selector={_quoted(morphology.selector)},",
+                "                finding_ids=(",
+                *(
+                    line.replace("                ", "                    ", 1)
+                    for tag in morphology.finding_ids
+                    for line in _render_rule_tag(tag.rule_id)
+                ),
+                "                ),",
+                f"                concern={_quoted(morphology.concern)},",
+                (
+                    "                claim_kind=ClaimKind."
+                    f"{morphology.claim_kind.value.upper().replace('-', '_')},"
+                ),
+                *_claim_lines(morphology.claim, indent="                "),
+                *_mechanism_lines(
+                    tuple(item.value for item in morphology.mechanisms),
+                    indent="                ",
+                ),
+                *_tuple_lines(
+                    "inspected_scope",
+                    morphology.inspected_scope,
+                    indent="                ",
+                ),
+                *_tuple_lines(
+                    "languages_formats",
+                    morphology.languages_formats,
+                    indent="                ",
+                ),
+                *_tuple_lines(
+                    "evidence_kinds",
+                    morphology.evidence_kinds,
+                    indent="                ",
+                ),
+                (
+                    "                evaluation_maturity=EvaluationMaturity."
+                    f"{morphology.evaluation_maturity.value.upper().replace('-', '_')},"
+                ),
+                *(
+                    _tuple_lines(
+                        "finding_contracts",
+                        morphology.finding_contracts,
+                        indent="                ",
+                    )
+                    if morphology.finding_contracts
+                    else []
+                ),
+                "            ),",
+            ]
+        )
+    lines.extend(["        }", "    )", ")", ""])
     return "\n".join(lines)
 
 
@@ -1925,30 +2269,57 @@ def render_feature_policies(root: Path) -> str:
                 f"feature policy field {feature.policy_field!r} has conflicting "
                 "policy models"
             )
-    imports: dict[str, set[str]] = {"alphus.policy.base": {"StrictModel"}}
-    for feature in fields.values():
-        module, class_name = _policy_class(feature)
-        imports.setdefault(module, set()).add(class_name)
+    for contribution in complaint_contributions(root):
+        previous = fields.get(contribution.policy_field)
+        if previous is not None:
+            raise ValueError(
+                f"complaint policy field {contribution.policy_field!r} conflicts "
+                "with an existing feature policy field"
+            )
+        fields[contribution.policy_field] = _FeatureRegistration(
+            selector=contribution.selector,
+            policy_field=contribution.policy_field,
+            policy_model=contribution.policy_model,
+            output_shape="findings",
+            summary=contribution.summary,
+            applies_to=("python",),
+            domains=(),
+            requires_files=True,
+            registration_module=contribution.registration_module,
+            policy_inputs=(contribution.policy_field,),
+        )
     lines = [
         '"""Generated by scripts/generate_morphology_manifest.py; do not edit."""',
         "",
         "from __future__ import annotations",
         "",
+        "from alphus.policy.base import StrictModel",
     ]
-    for module, names in sorted(imports.items()):
-        import_line = f"from {module} import {', '.join(sorted(names))}"
+    policy_aliases = {
+        policy_field: f"_{policy_field}_policy" for policy_field in sorted(fields)
+    }
+    for policy_field, feature in sorted(fields.items()):
+        module, class_name = _policy_class(feature)
+        import_line = (
+            f"from {module} import {class_name} as {policy_aliases[policy_field]}"
+        )
         if len(import_line) <= 88:
             lines.append(import_line)
-            continue
-        lines.append(f"from {module} import (")
-        lines.extend(f"    {name}," for name in sorted(names))
-        lines.append(")")
+        else:
+            lines.extend(
+                (
+                    f"from {module} import (",
+                    f"    {class_name} as {policy_aliases[policy_field]},",
+                    ")",
+                )
+            )
     lines.extend(["", "", "class GeneratedFeaturePolicies(StrictModel):"])
     if not fields:
         lines.append("    pass")
     for policy_field, feature in sorted(fields.items()):
-        _, class_name = _policy_class(feature)
-        lines.append(f"    {policy_field}: {class_name} | None = None")
+        lines.append(
+            f"    {policy_field}: {policy_aliases[policy_field]} | None = None"
+        )
     lines.append("")
     return "\n".join(lines)
 

@@ -32,6 +32,7 @@ from scripts.differential_wheels import (
     _plugin_environment,
     _prepare_isolated_native_path,
     _ProfileFinding,
+    _ProfileFixtureConfig,
     _scenario_classification,
     _scenario_executes,
     _ScenarioDocument,
@@ -112,6 +113,18 @@ def test_pinned_npm_tools_install_into_a_scenario_local_bin_directory(
             "eslint@10.13.0",
         )
     ]
+
+
+def test_profile_fixture_uses_immutable_static_orchestration_default() -> None:
+    fixture = _ProfileFixtureConfig.model_validate({}, strict=True)
+    field = _ProfileFixtureConfig.model_fields["orchestration"]
+
+    assert fixture.orchestration.steps == ()
+    assert field.default_factory is None
+    assert field.default.steps == ()
+    assert json.loads(fixture.model_dump_json()) == {"orchestration": {"steps": []}}
+    with pytest.raises(ValueError):
+        _ProfileFixtureConfig.model_validate({"orchestration": None}, strict=True)
 
 
 def test_manifest_rejects_unpinned_npm_dependencies(tmp_path: Path) -> None:

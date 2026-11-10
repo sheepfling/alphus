@@ -525,7 +525,7 @@ def test_feature_definition_generates_catalog_and_lazy_runner_views(
     assert 'display_name="Demo check"' in definitions
     assert 'input_mode="configured-source-scan"' in definitions
     assert "class GeneratedFeaturePolicies(StrictModel):" in policies
-    assert "demo_policy: DemoPolicy | None = None" in policies
+    assert "demo_policy: _demo_policy_policy | None = None" in policies
     assert '"demo-check",' in quality_rules
     assert "def _run_feature_demo_check(" not in runner_manifest
     assert 'import_module("alphus.gates.demo_check")' not in runner_manifest
@@ -583,8 +583,10 @@ def test_composite_feature_can_reference_another_feature_policy_field(
         "composite_policy",
         "base_policy",
     )
-    assert "base_policy: DemoPolicy | None = None" in generated_policies
-    assert "composite_policy: DemoPolicy | None = None" in generated_policies
+    assert "base_policy: _base_policy_policy | None = None" in generated_policies
+    assert (
+        "composite_policy: _composite_policy_policy | None = None" in generated_policies
+    )
 
 
 def test_message_feature_uses_one_typed_morphology_id_for_result_adaptation(
@@ -813,7 +815,11 @@ def test_feature_policy_imports_wrap_deterministically(tmp_path: Path) -> None:
     generated = render_feature_policies(tmp_path)
 
     assert "from alphus.policy.sources import (" in generated
-    assert generated.index(f"    {names[0]},") < generated.index(f"    {names[1]},")
+    assert f"    {names[0]} as _demo_policy_1_policy," in generated
+    assert f"    {names[1]} as _demo_policy_2_policy," in generated
+    assert generated.index("_demo_policy_1_policy") < generated.index(
+        "_demo_policy_2_policy"
+    )
 
 
 def test_feature_policy_generation_shares_identical_policy_models(
@@ -848,7 +854,7 @@ def test_feature_policy_generation_shares_identical_policy_models(
 
     generated = render_feature_policies(tmp_path)
 
-    assert generated.count("shared_policy: DemoPolicy | None = None") == 1
+    assert generated.count("shared_policy: _shared_policy_policy | None = None") == 1
 
 
 def test_feature_policy_generation_rejects_conflicting_shared_models(
