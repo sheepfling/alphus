@@ -44,6 +44,17 @@ def test_recognizes_removed_wolf_zyx_euler_matrix() -> None:
     assert [(site.function, site.line) for site in sites] == [("_source_covariance", 9)]
 
 
+def test_recognizes_nested_tuple_matrix_containers() -> None:
+    tuple_matrix = (
+        _WOLF_SOURCE.replace("rotation = [\\n", "rotation = (\\n")
+        .replace("    ]\\n", "    )\\n")
+        .replace("        [", "        (")
+        .replace("],\\n", "),\\n")
+    )
+
+    assert len(euler_rotation_matrix_sites(tuple_matrix, _policy())) == 1
+
+
 def test_rejects_altered_signs_and_library_rotation_calls() -> None:
     changed_sign = _WOLF_SOURCE.replace(
         "cy * sp * sr - sy * cr", "cy * sp * sr + sy * cr"
