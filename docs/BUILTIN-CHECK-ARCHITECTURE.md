@@ -214,13 +214,12 @@ three-command profile. This is finite evidence, not exhaustive equivalence for
 every input. The versioned history identity and planned-only entries are
 outside baseline-equality claims.
 
-On current docs-only head `be27539c1baa763a6d3b07f374f9fccecd04496e`, four
-of five hosted workflows have passed and self-quality (including the pinned
-differential) is still running. Local documentation-link, style, and shell
-fence validation passed 105 tests. The preceding exact code head also passed
-the full local `check` profile (27 passed, zero failed, four provisional),
-2,608 package tests (44 skipped), Ruff, formatting, Pyright (zero errors),
-import smoke, and compatibility imports.
+Local documentation-link, style, and shell-fence validation passed 105 tests.
+The preceding exact code head also passed the full local `check` profile (27
+passed, zero failed, four provisional), 2,608 package tests (44 skipped),
+Ruff, formatting, Pyright (zero errors), import smoke, and compatibility
+imports. The exact-head hosted run for later documentation-only commits is
+tracked by PR #100; no code or detector changes are in those commits.
 
 Generate the current machine-readable selector and runner inventory on demand:
 
@@ -367,6 +366,16 @@ views after each merge produced identical hashes. Installed wheels built
 from each order executed both contributions, and focused tests passed 47/47
 in each order. The temporary probe additions were not copied into this PR and
 did not change 0.0.3 detection behavior.
+
+A separate pair of branches added two different selectors from the same base:
+`fa8b5d3` and `2f87c61`. Each owned distinct policy, feature-registration,
+mirrored-test, and check-documentation paths, with no authored-path overlap.
+Merging in either order (`ca49d31` and `228ae4e`) was clean. After generation,
+each of the seven installed views had the same SHA-256 in both merge trees.
+The two mirrored tests passed in each tree, and each installed wheel selected
+and dispatched both selectors to the declared finding IDs. The wheel files
+are not claimed byte-identical because their version metadata reflects their
+different merge commits.
 
 The second complaint-only branch (`c0c4bef`) tested the limit: two independent
 complaints added to the same `test-quality` aggregate conflicted in

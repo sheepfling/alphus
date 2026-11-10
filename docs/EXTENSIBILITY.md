@@ -101,6 +101,13 @@ policy, explain the match, and identify domain requirements that no available
 check covers. It must not enable a rule or change a default profile merely
 because a tag matched.
 
+When a check emits a finding, use its concise message and any available
+rule-specific guidance to assess the observation against repository purpose
+and constraints. Recommend a sound correction when one fits; otherwise record
+an evidence-based exception and call out a rule or guidance gap. A clean scan
+is not the goal by itself. The current catalog does not link longer per-rule
+guides, so that discoverability remains follow-on work.
+
 For example, a Python simulation, earth-science, or trajectory-analysis
 project may find `numeric-literals` and `scipy-constants` relevant. They can
 flag configured exact constants in arithmetic, but they do not validate
@@ -321,6 +328,15 @@ selector. The source declaration must use the supported static form: the
 feature object links the local declarations and a local runner. Use a small
 feature-local adapter if the implementation needs composed or imported setup.
 Do not import analyzer-only dependencies merely to inspect the catalog.
+
+Keep `Finding.message` concise: describe what was observed and include an
+immediate correction only when it is safe and clear. Longer rationale,
+examples, and exceptions belong in discoverable documentation, not every
+finding. A future guidance link should be derived from the full stable rule ID
+so rule owners can add pages without editing a central index. The path
+convention and catalog link are not implemented yet. Alphus can recommend a
+project instruction change for a person to review; it must not write or inject
+project `AGENTS.md` content automatically.
 
 For a typed form, pair a policy resolver that returns the declared strict
 model with a runner that accepts that same policy type. Pyright checks the
