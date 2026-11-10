@@ -83,9 +83,7 @@ def test_augmented_inverse_respects_configured_function_scope() -> None:
         "    " + line for line in _AUGMENTED.splitlines()
     )
 
-    assert manual_elimination_sites(
-        nested, _policy(function_names=("_inverse",))
-    ) == []
+    assert manual_elimination_sites(nested, _policy(function_names=("_inverse",))) == []
 
 
 def test_augmented_inverse_requires_identity_initialization_and_right_half() -> None:
