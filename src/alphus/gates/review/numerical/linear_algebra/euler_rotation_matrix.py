@@ -76,10 +76,23 @@ def _helpers_match(assignment: ast.Assign, policy: EulerRotationMatrixPolicy) ->
     return True
 
 
+def _normalize_matrix_containers(node: ast.expr) -> ast.List | None:
+    """Normalize only the supported direct 3-by-3 list/tuple matrix containers."""
+    if not isinstance(node, ast.List | ast.Tuple) or len(node.elts) != 3:
+        return None
+    rows: list[ast.List] = []
+    for row in node.elts:
+        if not isinstance(row, ast.List | ast.Tuple) or len(row.elts) != 3:
+            return None
+        rows.append(ast.List(elts=row.elts, ctx=ast.Load()))
+    return ast.List(elts=rows, ctx=ast.Load())
+
+
 def _matches_matrix(actual: ast.expr, expected: ast.expr) -> bool:
-    return ast.dump(actual, include_attributes=False) == ast.dump(
-        expected, include_attributes=False
-    )
+    normalized = _normalize_matrix_containers(actual)
+    return normalized is not None and ast.dump(
+        normalized, include_attributes=False
+    ) == ast.dump(expected, include_attributes=False)
 
 
 def _match(
