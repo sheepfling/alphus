@@ -118,29 +118,34 @@ registration friction as a structural property, not as a measured reduction
 in review time. Measure correction categories and registration edits in future
 parallel contributions instead of inferring productivity from this migration.
 
-The current scenario manifest has 149 entries: 144 behavior-labeled, four
-controls, and one planned-only entry. The package-boundaries history identity
-now includes all declared secondary policy inputs under identity version 2.
-That deliberate change starts a distinct cohort, so the history-digest case
-is not asserted equal to the baseline wheel. Four other capabilities remain
-deferred.
-All five exact-head hosted workflows passed on code commit
-`21219e646f9aef3d4a1df01d695fb0e70f3fb447`, including the required
-`equivalent-for-manifested-scenarios` check against baseline
-`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`. The report is retained with this
-[exact-head workflow and differential
-artifact](https://github.com/sheepfling/alphus/actions/runs/42724928340/artifacts/13722980964).
-This proves parity only for the finite scenarios designated for comparison,
-not every possible input; the versioned history identity, planned-only entry,
-and deferred capabilities are not baseline-equivalence claims.
+The current scenario manifest has 154 entries: 147 behavioral scenarios, five
+controls, and two planned-only entries. The package-boundaries history
+identity includes all declared secondary policy inputs under identity version
+2. That deliberate change starts a distinct cohort, so its history case is not
+asserted equal to the baseline wheel. One planned-only case describes
+unsupported native capabilities; the other checks profile planning. Neither
+claims analyzer execution. The effectful command and plugin-failure cases
+execute.
 
-Local focused morphology/history tests passed (15 tests), with Ruff,
-formatting, strict Pyright (0 errors), generated-view checks, and
-`git diff --check` passing. The local full suite encountered four wheel/build
-tests blocked by PyPI DNS and one FastAPI test blocked by a Ruff cache write;
-that FastAPI test passed on the authorized retry. Exact-head hosted self-quality
-passed all jobs. Older candidate failures and partial comparisons are
-historical migration evidence, not current blockers.
+On exact head `3983626b69db4d3b521efe7929c825492ed1166b`, four hosted workflows
+passed and Alphus self-quality failed in its differential step. The new
+unsupported-native-plan fixture did not satisfy strict config validation; it
+has been corrected locally, and a new exact-head comparison is pending. On
+the current working diff, the full self-profile passes (27 passed, zero
+failed, four provisional), with 2,605 package tests passed and 44 skipped.
+Ruff, formatting, strict Pyright (0 errors), imports, documentation line
+length, focused manifest tests, and `git diff --check` also pass. An
+unfiltered local pytest run separately had five environment failures: four
+wheel/version tests could not fetch PyPI build dependencies, and one Ruff
+fixture could not write its cache. Any future differential result proves
+parity only for finite scenarios
+designated for comparison, not every possible input. The versioned history
+identity and planned-only entries are not baseline-equivalence claims. Older
+candidate failures and partial comparisons remain historical evidence.
+
+Older candidate failures and partial comparisons remain historical migration
+evidence. The current local checks are listed above; hosted exact-head checks
+for the corrected fixture remain pending.
 
 Generate the current machine-readable selector and runner inventory on demand:
 
@@ -200,9 +205,9 @@ their contracts and need are established.
 The inventory test generates current and pinned-baseline inventories into
 temporary files from their source trees, then compares registration contracts.
 No generated JSON baseline is committed. This is an objective registration
-check, not a wheel behavior comparison. The pinned wheel comparison passed for
-the 149 manifested scenarios; that result remains finite and does not prove all
-possible inputs.
+check, not a wheel behavior comparison. The latest pinned wheel comparison did
+not pass for the current 154-scenario manifest; see the current status above.
+Prior comparisons apply only to their recorded earlier manifests and commits.
 
 This document distinguishes four kinds of statement:
 
@@ -223,8 +228,9 @@ inventory entry. Each feature module exposes one typed `ALPHUS_FEATURE` object
 with a direct callback for lazy execution. The established `RuleEvaluation`
 and CLI result adapters remain shared, so adding a feature still uses the
 existing output contract. Registration migration is complete for the existing
-selector set; the finite 149-scenario candidate comparison passed but is not
-exhaustive. These declarations are now typed `FeatureDefinition(...)` calls
+selector set; behavior equivalence for the current manifest remains in
+progress and is not exhaustive. These declarations are now typed
+`FeatureDefinition(...)` calls
 paired with immutable
 `RuleMorphology(...)` values rather than the former tuple-pair `ALPHUS_CHECK`
 format. Static discovery validates them without importing gate implementations.
@@ -232,7 +238,40 @@ The PEP 517 backend generates installed-wheel entry-point metadata without a
 per-check `pyproject.toml` edit. Aggregate policy/config/dispatch views are
 ignored build artifacts rather than checked-in shared files, so independent
 feature branches do not edit the same generated outputs. Runtime entry points
-target the typed feature object.
+target the typed feature object. Registration migration is complete for the
+existing selector set; behavior equivalence remains in progress and finite.
+
+### Review-comment dispositions
+
+The six inline comments on the original pilot diff are still open GitHub
+threads; the code and contributor documentation now have these dispositions:
+
+- No generated JSON inventory is checked in. The inventory is produced on
+  demand from current source and the pinned reference; comparison reports live
+  in the caller's temporary directory or a workflow artifact.
+- The wheel manifest models its immutable rows with the shared `StrictModel`,
+  `Annotated` constraints, tuple fields, and direct `= ()` defaults for static
+  empty values. Tests cover omitted defaults, JSON-array serialization, and
+  rejection of explicit null. This does not claim Pydantic v2 assignment-form
+  `Field` is deprecated.
+- `scripts/__init__.py` makes `python -m scripts.generate_builtin_inventory`
+  the supported invocation; there is no package-dependent import branch.
+- Cyclomatic option pairs have the semantic `CyclomaticOption(name, value)`
+  type internally. The existing public report serializer deliberately retains
+  the two-element JSON arrays. Additional nested tuple-field coverage is
+  tracked under [issue #48's review note](https://github.com/sheepfling/alphus/issues/48#issuecomment-6676590600).
+- Parallel scheduling delegates cyclomatic-specific report operations through
+  `cyclomatic_rule_operations()`, whose typed operations object is owned by
+  the feature. The scheduler has no separate cyclomatic operation registry.
+- Built-ins use feature-owned named declarations and typed execution forms;
+  build-derived entry-point metadata and ignored aggregate views prevent
+  per-feature edits to central authored registries or packaging tables.
+
+These are implementation dispositions, not replies or resolutions of the
+owner's GitHub threads. The Pydantic default-convention preference and broader
+semantic guidance work remain tracked by
+[issue #51](https://github.com/sheepfling/alphus/issues/51); they are distinct
+from this compatibility-preserving manifest cleanup.
 
 ### Earlier candidate snapshots (historical; current status is above)
 
@@ -690,9 +729,9 @@ remain compatibility contracts.
 Tests cover generated strict fields, unknown-field rejection, shared complaint
 IDs, direct and profile reporting, configured source selection, stable plain
 labels, and that selecting one provider leaves the other unloaded. The earlier
-40- and 42-scenario candidate reports are historical. The current 149-scenario
-pinned-wheel comparison and its exact-head evidence are summarized at the start
-of this document; that finite manifest is not exhaustive.
+40-, 42-, and 149-scenario candidate reports are historical. Current exact-head
+status is summarized at the start of this document; the 154-entry manifest is
+finite and not exhaustive.
 
 `FeatureDefinition.policy_field` remains the primary compatibility binding.
 Feature declarations can also name validated `policy_inputs`; the
@@ -795,15 +834,16 @@ the first three migrations, then compare repeated-category corrections and
 registration locations against the baseline. The objective is zero
 hand-maintained central selector, config, catalog, or runner enumerations for a
 new check; the migration itself remains a bounded, reviewed change. The
-registration criterion is met for the current 62 selectors, and the manifested
-pinned-wheel comparison passed. Human correction effort and behavior outside
-the manifested scenarios have not been measured or proven equivalent.
+registration criterion is met for the current 62 selectors. The current
+manifested wheel comparison is in progress after correcting a strict-config
+fixture failure. Human correction effort and behavior outside manifested
+scenarios have not been measured or proven equivalent.
 
 The six-check morphology pilot proved metadata discovery but did not complete
 runtime registration. At the current head, all 62 built-ins use feature-owned
-typed forms and generated runtime views. The pinned 149-scenario comparison
-passed, but its coverage remains bounded; it does not prove every possible
-input or complete issue #87.
+typed forms and generated runtime views. Previous 149-scenario comparison
+results apply only to their earlier manifest and candidate. Current coverage
+remains bounded and does not prove every possible input or complete issue #87.
 
 ## Existing-check mappings
 
@@ -1425,9 +1465,10 @@ remains open; do not describe the finite result as exhaustive.
 4. **Built-in registration migration — complete for all 62 selectors.**
    Existing checker bodies, strict config names, selection and result behavior
    remain the compatibility target.
-5. **Differential validation — passed for 149 manifested scenarios.** This does
-   not imply arbitrary-input equivalence; add cases when review identifies
-   meaningful uncovered contracts.
+5. **Differential validation — in progress for 154 manifested scenarios.** The
+   exact-head run exposed a strict-config error in the unsupported-native-plan
+   fixture; the corrected fixture is local and awaits a new wheel comparison.
+   The finite comparison will not imply arbitrary-input equivalence.
 6. **Remaining 0.0.3 review — in progress.** Reconcile accepted feedback, keep
    contributor guidance current, and retain finite compatibility evidence.
 

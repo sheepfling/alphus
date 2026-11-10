@@ -7,30 +7,32 @@ This page records morphology vocabulary and the current 0.0.3 status.
 ## Current implementation status
 
 At code commit
-`21219e646f9aef3d4a1df01d695fb0e70f3fb447`, all 62 built-in selectors use
+`3983626b69db4d3b521efe7929c825492ed1166b`, all 62 built-in selectors use
 feature-owned declarations and narrow typed registrations. Their declared
 policy models and resolvers connect to typed runner/result shapes for findings,
 composites, messages, Python-style category maps, shared-utilities reports, and
 cyclomatic reports. The existing selectors, strict config fields, output
 adapters, findings, and enforcement remain the compatibility contract.
 
-All five exact-head hosted workflows passed on this code commit. The pinned
-wheel comparison passed its required checks for the manifest-designated
-baseline-parity scenarios against `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`.
-The report is retained with this [exact-head workflow and differential
-artifact](https://github.com/sheepfling/alphus/actions/runs/42724928340/artifacts/13722980964).
-The manifest contains 149 entries: 144 behavior-labeled, four controls, and one
-planned-only entry. The package-boundaries history digest is versioned to
+The latest exact-head run for this code commit has four workflows passing and
+the self-quality workflow failing in its differential step. The new unsupported
+native-plan scenario was rejected by strict config validation because its
+fixture omitted required fields. That fixture has been corrected locally; the
+corrected wheel comparison and exact-head hosted checks are pending. The
+manifest contains 154 entries: 147 behavioral scenarios, five controls, and
+two planned-only scenarios. The package-boundaries history digest is versioned to
 include all declared effective policy inputs; this intentionally starts a
-distinct history cohort and is not asserted equal to the baseline digest. Four
-other capabilities remain deferred. This is
-bounded scenario evidence, not exhaustive equivalence for every possible
-input. Local focused morphology/history tests passed (15 tests), with Ruff,
-formatting, strict Pyright (0 errors), generated-view checks, and
-`git diff --check` passing. The local full suite encountered four wheel/build
-tests blocked by PyPI DNS and one FastAPI test blocked by a Ruff cache write;
-that FastAPI test passed on the authorized retry. Exact-head hosted self-quality
-passed all jobs.
+distinct history cohort and is not asserted equal to the baseline digest. The
+history-identity scenario remains deliberately outside baseline equality; the
+unsupported native-plan scenario is plan-only and does not claim analyzer
+execution. This is bounded scenario evidence, not exhaustive equivalence for
+every possible input. On `3983626`, the local full profile passed (27 passed,
+zero failed, four provisional), and the package suite passed (2,605 passed, 44
+skipped). The current working diff has the same clean self-profile; focused
+manifest tests, Ruff, formatting, Pyright (0 errors), imports, line length and
+diff checks pass. An unfiltered local pytest run had five environment failures:
+four wheel/version cases could not fetch PyPI dependencies and one Ruff fixture
+could not write its cache. Hosted checks for the corrected fixture are pending.
 
 Registration migration and the manifested comparison are substantial evidence,
 not completion of issue #87. Persistent caching, local-model execution, new

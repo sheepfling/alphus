@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from alphus.config import QualityGateConfig
 from scripts import differential_wheels
 from scripts.differential_wheels import (
     ProcessResult,
@@ -386,9 +387,19 @@ def test_remaining_wheel_evidence_cases_have_executable_contracts() -> None:
     native_plan = by_name["cyclomatic-plan-unsupported-capabilities"]
     assert native_plan.selectors == ("cyclomatic-complexity",)
     assert _scenario_classification(native_plan) == "planned-only"
-    assert "full repository ESLint configuration and plugin rules" in (
-        native_plan.required_output
+    assert native_plan.required_output == (
+        "full repository ESLint configuration and plugin rules",
+        "preprocessor expansion and compiler-assisted C/C++ semantics",
+        "reliable counts for unsupported or malformed syntax",
     )
+    native_plan_config = tomllib.loads(
+        dict(native_plan.materialized_files)["quality-gates.toml"]
+    )
+    native_policy = QualityGateConfig.model_validate(native_plan_config).checks
+    assert native_policy.cyclomatic_complexity is not None
+    assert tuple(
+        backend.language for backend in native_policy.cyclomatic_complexity.backends
+    ) == ("python", "javascript", "cpp")
 
     invalid_plugin = by_name["plugin-invalid-result"]
     assert invalid_plugin.fixture is None

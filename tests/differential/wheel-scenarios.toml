@@ -1436,6 +1436,10 @@ materialized_files = [
   { path = "src/example.cpp", contents = "int calculate(int value) { return value; }\n" },
   { path = "quality-gates.toml", contents = """schema_version = 1
 
+[files]
+include = ["src/**/*"]
+exclude = []
+
 [checks.cyclomatic_complexity]
 metric = "cyclomatic"
 maximum = 10
@@ -1448,12 +1452,14 @@ exclude = []
 language = "python"
 backend = "ruff"
 version = "0.16.1"
+executable = "ruff"
 
 [[checks.cyclomatic_complexity.backends]]
 language = "javascript"
 backend = "eslint"
 variant = "classic"
 version = "10.13.0"
+executable = "eslint"
 
 [[checks.cyclomatic_complexity.backends]]
 language = "cpp"
