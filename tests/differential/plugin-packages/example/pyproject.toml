@@ -10,6 +10,7 @@ dependencies = ["alphus>=0.0.1,<1"]
 
 [project.entry-points."alphus.rules.v1"]
 diff = "differential_plugin:register"
+invalid-result = "differential_plugin.invalid_result:register"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

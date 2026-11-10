@@ -182,10 +182,16 @@ def test_report_manifest_derives_selector_coverage_without_a_total_list(
 
     assert {"file-size", "line-length", "benchmark-docs"} <= exercised
     assert {item.selector for item in deferred if item.selector is not None} == {
-        "cyclomatic-complexity",
         "package-boundaries",
     }
-    assert any(item.capability.startswith("plugin-api-v1") for item in deferred)
+    assert {item.name for item in scenarios} >= {
+        "cyclomatic-plan-unsupported-capabilities",
+        "plugin-invalid-result",
+        "plugin-duplicate-entry-point-rejected",
+        "builtin-module-import-laziness",
+        "effectful-command-profile",
+    }
+    assert not any(item.capability.startswith("plugin-api-v1") for item in deferred)
 
 
 def test_partial_cyclomatic_scenario_pins_its_isolated_python_backend(
@@ -368,6 +374,58 @@ def test_profile_plan_requires_reported_selector_rules() -> None:
 
     with pytest.raises(ValueError, match="expected reported rules"):
         _assert_scenario_output(scenario, variant.name, result)
+
+
+def test_remaining_wheel_evidence_cases_have_executable_contracts() -> None:
+    scenarios, deferred = load_manifest(Path("tests/differential/wheel-scenarios.toml"))
+    by_name = {scenario.name: scenario for scenario in scenarios}
+
+    native_plan = by_name["cyclomatic-plan-unsupported-capabilities"]
+    assert native_plan.selectors == ("cyclomatic-complexity",)
+    assert _scenario_classification(native_plan) == "planned-only"
+    assert "full repository ESLint configuration and plugin rules" in (
+        native_plan.required_output
+    )
+
+    invalid_plugin = by_name["plugin-invalid-result"]
+    assert invalid_plugin.plugin_packages == ("example",)
+    assert invalid_plugin.expected_step_statuses == ("failed",)
+    duplicate_plugin = by_name["plugin-duplicate-entry-point-rejected"]
+    assert duplicate_plugin.plugin_packages == ("duplicate", "example")
+    assert all(
+        variant.plugin_import_expected is False for variant in duplicate_plugin.variants
+    )
+
+    lazy_imports = by_name["builtin-module-import-laziness"].variants
+    assert any(variant.expected_imported_modules for variant in lazy_imports)
+    assert any(variant.expected_unimported_modules for variant in lazy_imports)
+
+    command = by_name["effectful-command-profile"]
+    assert command.expected_step_kinds == ("command", "command", "command")
+    assert any(variant.compare_within_build for variant in command.variants)
+    assert {item.capability for item in deferred} == {
+        "package-boundaries-history-digest-identity"
+    }
+
+
+def test_step_status_contract_rejects_unexpected_plugin_result_success() -> None:
+    scenarios, _ = load_manifest(Path("tests/differential/wheel-scenarios.toml"))
+    scenario = next(item for item in scenarios if item.name == "plugin-invalid-result")
+    result = ProcessResult(
+        2,
+        json.dumps(
+            {
+                "error": "plugin checkers must return PluginFinding records",
+                "steps": [
+                    {"name": "malformed-result", "kind": "rule", "status": "passed"}
+                ],
+            }
+        ),
+        "",
+    )
+
+    with pytest.raises(ValueError, match="selected step statuses"):
+        _assert_scenario_output(scenario, "profile-json", result)
 
 
 def test_plan_only_scenarios_are_not_behavioral_coverage() -> None:

@@ -1420,33 +1420,191 @@ name = "parallel"
 arguments = ["--config", "quality-gates.toml", "--profile", "git-review", "--run", "--json", "--jobs", "2"]
 compare_within_build = true
 
+[[scenario]]
+name = "cyclomatic-plan-unsupported-capabilities"
+behavior = ["native-plan-output", "per-backend-capability-limits", "no-native-execution"]
+selectors = ["cyclomatic-complexity"]
+expected_exit = 0
+required_output = [
+  "full repository ESLint configuration and plugin rules",
+  "preprocessor expansion and compiler-assisted C/C++ semantics",
+  "reliable counts for unsupported or malformed syntax",
+]
+materialized_files = [
+  { path = "src/example.py", contents = "def calculate(value): return value\n" },
+  { path = "src/example.js", contents = "function calculate(value) { return value; }\n" },
+  { path = "src/example.cpp", contents = "int calculate(int value) { return value; }\n" },
+  { path = "quality-gates.toml", contents = """schema_version = 1
+
+[checks.cyclomatic_complexity]
+metric = "cyclomatic"
+maximum = 10
+
+[checks.cyclomatic_complexity.files]
+include = ["src/**/*"]
+exclude = []
+
+[[checks.cyclomatic_complexity.backends]]
+language = "python"
+backend = "ruff"
+version = "0.16.1"
+
+[[checks.cyclomatic_complexity.backends]]
+language = "javascript"
+backend = "eslint"
+variant = "classic"
+version = "10.13.0"
+
+[[checks.cyclomatic_complexity.backends]]
+language = "cpp"
+backend = "lizard"
+variant = "standard"
+version = "1.24.2"
+""" },
+]
+
+[[scenario.variant]]
+name = "plan-json"
+arguments = ["--config", "quality-gates.toml", "--rule", "cyclomatic-complexity", "--plan", "--json"]
+
+[[scenario]]
+name = "plugin-invalid-result"
+fixture = "plugin-enabled"
+plugin_package = "example"
+selectors = ["invalid-result:malformed"]
+behavior = ["installed-api-v1-plugin", "invalid-callback-result", "operational-failure-report"]
+expected_exit = 2
+expected_step_names = ["malformed-result"]
+expected_step_kinds = ["rule"]
+expected_step_statuses = ["failed"]
+expected_step_rules = ["invalid-result:malformed"]
+required_output = ["plugin checkers must return PluginFinding records"]
+materialized_files = [
+  { path = "quality-gates.toml", contents = """schema_version = 1
+
+[files]
+include = ["*.md"]
+exclude = []
+
+[plugins]
+enabled = ["invalid-result"]
+
+[orchestration]
+default_profile = "invalid-result"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "malformed-result"
+rule = "invalid-result:malformed"
+
+[[orchestration.profiles]]
+name = "invalid-result"
+steps = ["malformed-result"]
+""" },
+]
+
+[[scenario.variant]]
+name = "profile-json"
+arguments = ["--config", "quality-gates.toml", "--profile", "invalid-result", "--run", "--json"]
+plugin_import_expected = true
+
+[[scenario]]
+name = "plugin-duplicate-entry-point-rejected"
+fixture = "plugin-unselected"
+plugin_packages = ["duplicate", "example"]
+behavior = ["duplicate-api-v1-entry-point", "reject-before-plugin-import"]
+expected_exit = 2
+required_output = ["multiple Alphus rule plugins use entry point name"]
+materialized_files = [
+  { path = "quality-gates.toml", contents = """schema_version = 1
+
+[plugins]
+enabled = ["diff"]
+""" },
+]
+
+[[scenario.variant]]
+name = "catalog"
+arguments = ["--config", "quality-gates.toml", "--catalog", "--json"]
+plugin_import_expected = false
+
+[[scenario]]
+name = "builtin-module-import-laziness"
+fixture = "file-size"
+selectors = ["file-size"]
+behavior = ["installed-builtin-entry-point", "selected-provider-import", "unselected-provider-laziness"]
+expected_exit = 0
+
+[[scenario.variant]]
+name = "catalog"
+arguments = ["--config", "quality-gates.toml", "--catalog", "--json"]
+expected_unimported_modules = [
+  "alphus.gates.hygiene.file_size",
+  "alphus.gates.repository.package_boundaries",
+  "alphus.gates.source.cyclomatic_complexity",
+]
+
+[[scenario.variant]]
+name = "selected-file-size"
+arguments = ["--config", "quality-gates.toml", "--rule", "file-size", "--json"]
+expected_imported_modules = ["alphus.gates.hygiene.file_size"]
+expected_unimported_modules = [
+  "alphus.gates.hygiene.line_length",
+  "alphus.gates.repository.package_boundaries",
+  "alphus.gates.source.cyclomatic_complexity",
+]
+
+[[scenario]]
+name = "effectful-command-profile"
+behavior = ["configured-command-step", "command-output-report", "serial-parallel-equality"]
+expected_exit = 0
+expected_step_names = ["write-command-marker-a", "write-command-marker-b", "report-command-markers"]
+expected_step_kinds = ["command", "command", "command"]
+expected_step_statuses = ["passed", "passed", "passed"]
+require_passed_steps = true
+required_output = ["command marker A written", "command marker B written", "both command markers observed"]
+materialized_files = [
+  { path = "quality-gates.toml", contents = """schema_version = 1
+
+[orchestration]
+default_profile = "command-smoke"
+
+[[orchestration.steps]]
+kind = "command"
+name = "write-command-marker-a"
+argv = ["{python}", "-c", "from pathlib import Path; Path('../command-marker-a.txt').write_text('created-a', encoding='utf-8'); print('command marker A written')"]
+
+[[orchestration.steps]]
+kind = "command"
+name = "write-command-marker-b"
+argv = ["{python}", "-c", "from pathlib import Path; Path('../command-marker-b.txt').write_text('created-b', encoding='utf-8'); print('command marker B written')"]
+
+[[orchestration.steps]]
+kind = "command"
+name = "report-command-markers"
+after = ["write-command-marker-a", "write-command-marker-b"]
+argv = ["{python}", "-c", "from pathlib import Path; ok = Path('../command-marker-a.txt').read_text(encoding='utf-8') == 'created-a' and Path('../command-marker-b.txt').read_text(encoding='utf-8') == 'created-b'; print('both command markers observed' if ok else 'missing command marker'); raise SystemExit(0 if ok else 1)"]
+
+[[orchestration.profiles]]
+name = "command-smoke"
+steps = ["write-command-marker-a", "write-command-marker-b", "report-command-markers"]
+""" },
+]
+
+[[scenario.variant]]
+name = "serial-json"
+arguments = ["--config", "quality-gates.toml", "--profile", "command-smoke", "--run", "--json", "--jobs", "1"]
+
+[[scenario.variant]]
+name = "parallel-json"
+arguments = ["--config", "quality-gates.toml", "--profile", "command-smoke", "--run", "--json", "--jobs", "2"]
+compare_within_build = true
+
 [[deferred]]
 capability = "package-boundaries-history-digest-identity"
 status = "partial"
-reason = "Focused tests now verify all declared secondary policies, the explicit digest version, unchanged single-policy digests, and separation from the legacy composite cohort. This intentional history-identity correction is not compared as behavior-equivalent to the baseline wheel; archived records and index schema remain unchanged."
+reason = "Focused tests verify all declared secondary policies, the explicit digest version, unchanged single-policy digests, and separation from the legacy composite cohort. This intentional history-identity correction is excluded from baseline equality because the versioned cohort is deliberately different; archived records and index schema remain unchanged."
 selector = "package-boundaries"
-
-[[deferred]]
-capability = "native-tool-unsupported-capability-plan"
-status = "not-exercised"
-reason = "Successful Python, JavaScript, and C++ providers plus missing, version-mismatch, and no-matching partial outcomes are exercised; plan-level unsupported-capability detail remains unasserted."
-selector = "cyclomatic-complexity"
-
-[[deferred]]
-capability = "plugin-api-v1-conformance-edge-cases"
-status = "partial"
-reason = "The installed API-v1 plugin is discovered without import, rejected when unenabled settings are supplied, and explicitly selected in a profile; invalid plugin return values and duplicate entry points remain covered only by unit tests."
-
-[[deferred]]
-capability = "unselected-builtin-backend-laziness"
-status = "partial"
-reason = "The installed-wheel self-profile runs a subprocess regression proving the unselected composite stays unloaded and that selected package-boundaries does not load absent graph, version-sync, or callable-registry providers; this import trace is not serialized in the wheel differential report."
-
-[[deferred]]
-capability = "effectful-command-step-compatibility"
-status = "not-exercised"
-reason = "The architecture plan names the LaTeX build-and-validation step, but the current wheel harness has no command/build scenario; scheduler and command behavior are unchanged by this numeric-contract slice."
-
 
 [[scenario]]
 name = "comment-markers-polyglot-direct"

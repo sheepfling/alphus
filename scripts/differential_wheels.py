@@ -22,7 +22,7 @@ from collections.abc import Generator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Annotated, TypeAlias, cast
+from typing import Annotated, Literal, TypeAlias, cast
 
 from pydantic import ConfigDict, Field, TypeAdapter, ValidationError
 from typing_extensions import TypedDict
@@ -59,6 +59,8 @@ class _VariantDocument(_StrictDocument):
     compare_within_build: bool = False
     parse_json: bool | None = None
     plugin_import_expected: bool | None = None
+    expected_imported_modules: tuple[str, ...] = ()
+    expected_unimported_modules: tuple[str, ...] = ()
 
 
 class _ExpectedCyclomaticBackendDocument(_StrictDocument):
@@ -73,6 +75,7 @@ class _ScenarioDocument(_StrictDocument):
     name: str
     fixture: str | None = None
     plugin_package: str | None = None
+    plugin_packages: tuple[str, ...] = ()
     python_distributions: tuple[str, ...] = ()
     npm_packages: tuple[str, ...] = ()
     isolate_native_tools: bool = False
@@ -81,6 +84,8 @@ class _ScenarioDocument(_StrictDocument):
     expected_exit: int
     minimum_findings: int = 0
     expected_step_names: tuple[str, ...] = ()
+    expected_step_kinds: tuple[Literal["rule", "command"], ...] = ()
+    expected_step_statuses: tuple[Literal["passed", "failed", "skipped"], ...] = ()
     expected_step_rules: tuple[str, ...] = ()
     expected_reported_step_rules: tuple[str, ...] = ()
     require_passed_steps: bool = False
@@ -138,6 +143,7 @@ class _ProfileFinding(_StrictDocument):
 class _ProfileStep(_StrictDocument):
     model_config = ConfigDict(extra="allow", strict=True)
     name: str
+    kind: Literal["rule", "command"] | None = None
     rule: str | None = None
     status: str | None = None
     findings: tuple[_ProfileFinding, ...] = ()
@@ -194,6 +200,7 @@ class _ProfileFixtureConfig(_StrictDocument):
 _DIRECT_FINDINGS: TypeAdapter[list[_ProfileFinding]] = TypeAdapter(
     list[_ProfileFinding]
 )
+_BUILTIN_MODULES: TypeAdapter[list[str]] = TypeAdapter(list[str])
 
 
 class ProcessResultWire(TypedDict):
@@ -201,6 +208,7 @@ class ProcessResultWire(TypedDict):
     stdout: str
     stderr: str
     plugin_module_imported: bool | None
+    imported_builtin_modules: list[str] | None
 
 
 class WheelModuleRecord(TypedDict):
@@ -215,6 +223,7 @@ class _ScenarioRunReport(_StrictDocument):
     fixture_sha256: str
     fixture_git_commit: str
     plugin_package: str | None = None
+    plugin_packages: tuple[str, ...] = ()
     python_distributions: tuple[str, ...] = ()
     npm_packages: tuple[str, ...] = ()
     isolate_native_tools: bool = False
@@ -312,6 +321,8 @@ class RunVariant:
     compare_within_build: bool
     parse_json: bool | None
     plugin_import_expected: bool | None = None
+    expected_imported_modules: tuple[str, ...] = ()
+    expected_unimported_modules: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -332,9 +343,12 @@ class Scenario:
     expected_findings: tuple[tuple[str, str, int | None], ...]
     variants: tuple[RunVariant, ...]
     materialized_files: tuple[tuple[str, str], ...] = ()
+    expected_step_kinds: tuple[Literal["rule", "command"], ...] = ()
+    expected_step_statuses: tuple[Literal["passed", "failed", "skipped"], ...] = ()
     expected_cyclomatic_outcome: str | None = None
     expected_cyclomatic_backends: tuple[tuple[str, str, str, int, int], ...] = ()
     plugin_package: str | None = None
+    plugin_packages: tuple[str, ...] = ()
     python_distributions: tuple[str, ...] = ()
     npm_packages: tuple[str, ...] = ()
     isolate_native_tools: bool = False
@@ -374,6 +388,7 @@ class ProcessResult:
     stdout: str
     stderr: str
     plugin_module_imported: bool | None = None
+    imported_builtin_modules: tuple[str, ...] | None = None
 
     def to_wire(self) -> ProcessResultWire:
         return {
@@ -381,6 +396,11 @@ class ProcessResult:
             "stdout": self.stdout,
             "stderr": self.stderr,
             "plugin_module_imported": self.plugin_module_imported,
+            "imported_builtin_modules": (
+                list(self.imported_builtin_modules)
+                if self.imported_builtin_modules is not None
+                else None
+            ),
         }
 
 
@@ -435,15 +455,26 @@ def _parse_manifest(
                 compare_within_build=variant.compare_within_build,
                 parse_json=variant.parse_json,
                 plugin_import_expected=variant.plugin_import_expected,
+                expected_imported_modules=tuple(variant.expected_imported_modules),
+                expected_unimported_modules=tuple(variant.expected_unimported_modules),
             )
             for variant in row.variant
         )
         if len({variant.name for variant in variants}) != len(variants):
             raise ValueError(f"duplicate variant name in scenario {name!r}")
-        if (
-            row.plugin_package is not None
-            and re.fullmatch(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*", row.plugin_package)
-            is None
+        plugin_packages = tuple(
+            sorted(
+                set(row.plugin_packages)
+                | ({row.plugin_package} if row.plugin_package is not None else set())
+            )
+        )
+        if len(plugin_packages) != len(row.plugin_packages) + (
+            1 if row.plugin_package is not None else 0
+        ):
+            raise ValueError(f"scenario {name!r} repeats a plugin package")
+        if any(
+            re.fullmatch(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*", package) is None
+            for package in plugin_packages
         ):
             raise ValueError(f"scenario {name!r} has an invalid plugin package name")
         if any(
@@ -468,13 +499,13 @@ def _parse_manifest(
             for package in row.npm_packages
         ):
             raise ValueError(f"scenario {name!r} npm dependencies must use exact pins")
-        if row.plugin_package is None and any(
+        if not plugin_packages and any(
             variant.plugin_import_expected is not None for variant in row.variant
         ):
             raise ValueError(
                 f"scenario {name!r} expects a plugin import without a plugin package"
             )
-        if row.plugin_package is not None and any(
+        if plugin_packages and any(
             variant.plugin_import_expected is None for variant in row.variant
         ):
             raise ValueError(
@@ -512,6 +543,36 @@ def _parse_manifest(
             raise ValueError(
                 f"scenario {name!r} has selector labels without direct or profile evidence"
             )
+        if row.expected_step_kinds and not row.expected_step_names:
+            raise ValueError(
+                f"scenario {name!r} declares step kinds without expected steps"
+            )
+        if row.expected_step_kinds and len(row.expected_step_kinds) != len(
+            row.expected_step_names
+        ):
+            raise ValueError(
+                f"scenario {name!r} must declare one expected kind per profile step"
+            )
+        if row.expected_step_statuses and len(row.expected_step_statuses) != len(
+            row.expected_step_names
+        ):
+            raise ValueError(
+                f"scenario {name!r} must declare one expected status per profile step"
+            )
+        for variant in variants:
+            expected_imports = set(variant.expected_imported_modules)
+            expected_unimports = set(variant.expected_unimported_modules)
+            if expected_imports & expected_unimports:
+                raise ValueError(
+                    f"scenario {name!r}/{variant.name} expects a module both loaded and unloaded"
+                )
+            if any(
+                not module.startswith("alphus.gates.")
+                for module in expected_imports | expected_unimports
+            ):
+                raise ValueError(
+                    f"scenario {name!r}/{variant.name} import assertions must target built-in gates"
+                )
         if row.expected_reported_step_rules and not row.expected_step_names:
             raise ValueError(
                 f"scenario {name!r} reports step rules without expected steps"
@@ -545,6 +606,8 @@ def _parse_manifest(
                 expected_exit=expected_exit,
                 minimum_findings=row.minimum_findings,
                 expected_step_names=tuple(row.expected_step_names),
+                expected_step_kinds=tuple(row.expected_step_kinds),
+                expected_step_statuses=tuple(row.expected_step_statuses),
                 expected_step_rules=tuple(row.expected_step_rules),
                 expected_reported_step_rules=tuple(row.expected_reported_step_rules),
                 require_passed_steps=row.require_passed_steps,
@@ -563,6 +626,7 @@ def _parse_manifest(
                     for backend in row.expected_cyclomatic_backends
                 ),
                 plugin_package=row.plugin_package,
+                plugin_packages=plugin_packages,
                 python_distributions=tuple(row.python_distributions),
                 npm_packages=tuple(row.npm_packages),
                 isolate_native_tools=row.isolate_native_tools,
@@ -1274,7 +1338,7 @@ def _snapshot_plugin_packages(
     destination.mkdir(parents=True, exist_ok=True)
     snapshots: dict[str, FixtureSnapshot] = {}
     packages = sorted(
-        {scenario.plugin_package for scenario in scenarios if scenario.plugin_package}
+        {package for scenario in scenarios for package in scenario.plugin_packages}
     )
     for name in packages:
         source = repository / "tests" / "differential" / "plugin-packages" / name
@@ -1347,6 +1411,7 @@ def _run_variant(
     native_tool_directories: Sequence[Path] = (),
     isolate_native_tools: bool = False,
     plugin_marker: Path | None = None,
+    import_trace_file: Path | None = None,
 ) -> ProcessResult:
     arguments = [
         str(python.parent / "alphus"),
@@ -1365,6 +1430,9 @@ def _run_variant(
     environment = _process_environment(python, path_override=path_override)
     if plugin_marker is not None:
         environment["ALPHUS_PLUGIN_IMPORT_MARKER"] = str(plugin_marker)
+    if import_trace_file is not None:
+        environment["PYTHONPATH"] = str(import_trace_file.parent)
+        environment["ALPHUS_BUILTIN_IMPORT_TRACE"] = str(import_trace_file)
     if "{empty_path}" in arguments:
         arguments = [
             argument.replace("{empty_path}", str(empty_path)) for argument in arguments
@@ -1392,8 +1460,29 @@ def _run_variant(
     normalized = _normalize_result(
         result.stdout, result.stderr, result.returncode, is_json, root
     )
+    imported_modules: tuple[str, ...] | None = None
+    if import_trace_file is not None:
+        if not import_trace_file.is_file():
+            raise ValueError(f"{variant.name} did not produce a built-in import trace")
+        imported_modules = tuple(
+            _BUILTIN_MODULES.validate_json(import_trace_file.read_bytes())
+        )
+        imported_set = set(imported_modules)
+        missing_imports = set(variant.expected_imported_modules) - imported_set
+        unexpected_imports = set(variant.expected_unimported_modules) & imported_set
+        if missing_imports or unexpected_imports:
+            raise ValueError(
+                f"{variant.name} built-in import trace mismatch; "
+                f"missing={sorted(missing_imports)!r}, "
+                f"unexpected={sorted(unexpected_imports)!r}"
+            )
     if variant.plugin_import_expected is None:
-        return normalized
+        return ProcessResult(
+            normalized.exit_code,
+            normalized.stdout,
+            normalized.stderr,
+            imported_builtin_modules=imported_modules,
+        )
     if plugin_marker is None:
         raise ValueError("plugin import expectation has no marker path")
     imported = plugin_marker.is_file()
@@ -1407,6 +1496,7 @@ def _run_variant(
         normalized.stdout,
         normalized.stderr,
         plugin_module_imported=imported,
+        imported_builtin_modules=imported_modules,
     )
 
 
@@ -1473,6 +1563,21 @@ def _assert_scenario_output(
                     f"{scenario.name}/{variant_name} selected rules {rules!r}, "
                     f"expected reported rules "
                     f"{scenario.expected_reported_step_rules!r}"
+                )
+        if scenario.expected_step_kinds:
+            actual_kinds = tuple(step.kind for step in steps)
+            if actual_kinds != scenario.expected_step_kinds:
+                raise ValueError(
+                    f"{scenario.name}/{variant_name} selected step kinds "
+                    f"{actual_kinds!r}, expected {scenario.expected_step_kinds!r}"
+                )
+        if scenario.expected_step_statuses:
+            actual_statuses = tuple(step.status for step in steps)
+            if actual_statuses != scenario.expected_step_statuses:
+                raise ValueError(
+                    f"{scenario.name}/{variant_name} selected step statuses "
+                    f"{actual_statuses!r}, expected "
+                    f"{scenario.expected_step_statuses!r}"
                 )
         if scenario.require_passed_steps and any(
             step.status != "passed" for step in steps
@@ -1546,13 +1651,31 @@ def _validate_profile_contract(scenario: Scenario, fixture: Path) -> None:
     config = _ProfileFixtureConfig.model_validate(
         tomllib.loads(config_path.read_text(encoding="utf-8"))
     )
+    steps_by_name = {step.name: step for step in config.orchestration.steps}
+    selected_steps = tuple(
+        steps_by_name[step_name]
+        for step_name in scenario.expected_step_names
+        if step_name in steps_by_name
+    )
+    if len(selected_steps) != len(scenario.expected_step_names):
+        raise ValueError(
+            f"{scenario.name} config omits one or more expected profile steps"
+        )
+    selected_kinds = tuple(step.kind for step in selected_steps)
+    if scenario.expected_step_kinds and selected_kinds != scenario.expected_step_kinds:
+        raise ValueError(
+            f"{scenario.name} config maps steps to kinds {selected_kinds!r}; "
+            f"expected {scenario.expected_step_kinds!r}"
+        )
     rules_by_name = {
         step.name: step.rule
-        for step in config.orchestration.steps
+        for step in selected_steps
         if step.kind == "rule" and step.rule is not None
     }
     selected_rules = tuple(
-        rules_by_name.get(step_name) for step_name in scenario.expected_step_names
+        rule
+        for step_name in scenario.expected_step_names
+        if (rule := rules_by_name.get(step_name)) is not None
     )
     if selected_rules != scenario.expected_step_rules:
         raise ValueError(
@@ -1601,6 +1724,29 @@ def _run_scenarios(
                 marker_directory.mkdir(parents=True, exist_ok=True)
                 plugin_marker = marker_directory / f"{variant.name}.txt"
                 plugin_marker.unlink(missing_ok=True)
+            import_trace_file = None
+            if variant.expected_imported_modules or variant.expected_unimported_modules:
+                trace_directory = (
+                    temporary_root
+                    / "builtin-import-traces"
+                    / scenario.name
+                    / variant.name
+                )
+                trace_directory.mkdir(parents=True, exist_ok=True)
+                import_trace_file = trace_directory / "imported.json"
+                (trace_directory / "sitecustomize.py").write_text(
+                    "import atexit, json, os, sys\n"
+                    "from pathlib import Path\n"
+                    "def _record_builtin_imports():\n"
+                    "    destination = os.environ.get('ALPHUS_BUILTIN_IMPORT_TRACE')\n"
+                    "    if destination is not None:\n"
+                    "        modules = sorted(name for name in sys.modules "
+                    "if name.startswith('alphus.gates.'))\n"
+                    "        Path(destination).write_text(json.dumps(modules), "
+                    "encoding='utf-8')\n"
+                    "atexit.register(_record_builtin_imports)\n",
+                    encoding="utf-8",
+                )
             results[variant.name] = _run_variant(
                 python,
                 fixture,
@@ -1609,6 +1755,7 @@ def _run_scenarios(
                 native_tool_directories=native_tool_directories,
                 isolate_native_tools=scenario.isolate_native_tools,
                 plugin_marker=plugin_marker,
+                import_trace_file=import_trace_file,
             )
         if (
             npm_tool_path is not None
@@ -1623,6 +1770,7 @@ def _run_scenarios(
             fixture_sha256=before,
             fixture_git_commit=fixture_commit,
             plugin_package=scenario.plugin_package,
+            plugin_packages=scenario.plugin_packages,
             python_distributions=scenario.python_distributions,
             npm_packages=scenario.npm_packages,
             isolate_native_tools=scenario.isolate_native_tools,
@@ -1854,7 +2002,7 @@ def run(
                     f"frozen fixture Git identity changed during run: {name}"
                 )
         report = _DifferentialReport(
-            schema_version=3,
+            schema_version=4,
             plugin_wheels=tuple(plugin_wheels),
             reference=_WheelBuildReport(
                 commit=baseline,
