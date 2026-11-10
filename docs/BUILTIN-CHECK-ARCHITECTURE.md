@@ -119,6 +119,42 @@ does not discover or enable them. Plugin API v1 also remains a separate,
 explicit trust boundary. No universal result payload or selector identity is
 needed for those roles.
 
+### What the 62-check catalog actually contains
+
+The generated catalog reports 56 `findings` output shapes (55 ordinary
+`FindingBuiltinFeature` registrations and one composite), three `messages`, and
+one each of `python-style`, `shared-utilities`, and `cyclomatic-report`. Those
+forms describe result and dispatch contracts; they do not by themselves
+classify how a detector reads or analyzes its inputs. A scan of the owning
+modules shows several reusable work patterns:
+
+| Work pattern | Existing examples | Existing shared boundary or limit |
+| --- | --- | --- |
+| Bytes, text, tokens, and paths | `file-size`, `line-length`, `comment-markers` | `support.source_text` and inventory helpers; `file-size` also parses Python initializer syntax, so it is a mixed case. |
+| Language syntax and AST patterns | `python-style`, `test-quality`, `numeric-literals` | Python-specific AST and source helpers; matching a universal concern does not create a provider for another language. |
+| Bindings, aliases, and semantic structure | `positional-semantic-overrides`, `parallel-normalization`, several numerical rules | Reuse `support.source_scanning.import_aliases`, `gates/review/_module_bindings.py`, and `gates/review/numerical/common/ast_helpers.py` where their exact contract fits. |
+| Structured documents and mixed inputs | `dynamic-markdown`, `json-structure`, `suppression-reasons` | Structured parsers and existing readers; `suppression-reasons` joins Python comments with active Ruff TOML. |
+| Repository indexes and cross-file joins | `package-boundaries`, `dependency-locks`, `repository-layout` | Repository inventory and explicitly declared secondary policies; do not turn local checks into a repository-wide graph scan. |
+| Native tools, VCS, and external evidence | `cyclomatic-complexity`, `git-history`, `source-test-coverage` | Preserve native plans and version provenance; `source-test-coverage` consumes revision-matched evidence rather than analyzing test source. |
+| Validated artifacts and source-to-artifact audits | `run-artifacts`, PDF consumer checks | `run-artifacts` is source-AST analysis; generated artifacts and command steps have separate effect/result contracts. |
+
+These are observed reusable scaffolds, not a new universal AST or a promise
+that one parser covers every language. Composition is a separate dimension:
+`parallel-normalization` evaluates explicitly paired functions within one file
+and reports separate-file pairs as not evaluated; it does not infer equivalence.
+The catalog also includes checks that mix work patterns. Add a new check by
+choosing the smallest existing reader/analyzer boundary that matches its actual
+inputs, then use a feature-owned typed result form. Do not choose a result type
+as a proxy for detector semantics, and do not copy a neighboring analyzer when
+a shared helper already expresses the needed operation.
+
+The current authoring scaffold standardizes declaration, policy resolution,
+static registration, typed dispatch, morphology, and reporting. It does not yet
+generate analyzer-specific AST visitors, native-tool adapters, or evidence
+validators from a family template. The next scaffold improvement should be
+measured against these observed patterns and authoring effort, rather than
+adding abstract types before a second real consumer needs them.
+
 The 62 distinct registration modules and ignored generated aggregates remove
 the shared registry/config/catalog/runner edit for a built-in registration.
 They do not eliminate conflicts in genuinely shared policy models, analyzers,
@@ -299,6 +335,40 @@ owner's GitHub threads. The Pydantic default-convention preference and broader
 semantic guidance work remain tracked by
 [issue #51](https://github.com/sheepfling/alphus/issues/51); they are distinct
 from this compatibility-preserving manifest cleanup.
+
+### Parallel contribution experiment
+
+A disposable clone of production head `1d37ce4` tested independent authored
+changes, not the earlier toy registry spike. Branch `6a69c1c` added a
+synthetic complaint to the existing `test-quality` aggregate. Branch
+`fa8b5d3` added a new selector with its own policy model, registration
+module, test, and check page. Their authored paths did not overlap. Merging
+in both orders (`c8794fd` and `32e52a8`) was clean; regenerating the ignored
+views after each merge produced identical hashes. Installed wheels built
+from each order executed both contributions, and focused tests passed 47/47
+in each order. The temporary probe additions were not copied into this PR and
+did not change 0.0.3 detection behavior.
+
+The second complaint-only branch (`c0c4bef`) tested the limit: two independent
+complaints added to the same `test-quality` aggregate conflicted in
+`src/alphus/gates/review/test_quality.py` and its mirrored engine test in both
+merge orders. Each synthetic complaint reused `TestQualityPolicy`; it did not
+exercise an independently owned policy fragment because the current feature
+model has one policy model/resolver and one runner per selector. A complaint
+with a separate policy fragment would also need a composition point in the
+shared feature declaration. Therefore, selector-level parallel registration
+is demonstrated, but the stronger requirement for conflict-free parallel
+complaint additions inside one existing aggregate is not met. The existing
+duplicate-selector, duplicate-finding-ID, and conflicting-policy-model guards
+reject those collisions deterministically.
+
+For 0.0.3, the compatible rule is to give an independently authored check its
+own selector, feature module, policy, mirrored tests, and standalone docs; a
+consumer can group selected selectors in an explicit profile. Keep legacy
+aggregate selectors stable. If multiple independently authored contributions
+must share one selector and one combined policy/output contract, that requires
+a separate contribution-composition design and compatibility review; this PR
+does not claim to provide it.
 
 ### Earlier candidate snapshots (historical; current status is above)
 

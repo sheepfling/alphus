@@ -6,35 +6,31 @@ This page records morphology vocabulary and the current 0.0.3 status.
 
 ## Current implementation status
 
-At code commit
-`52d1297bb90984cc7b318433b9743377a54eb99c` and the current working changes,
-all 62 built-in selectors use feature-owned declarations and narrow typed
-registrations. Their declared policy models and resolvers connect to typed
-runner/result shapes for findings, composites, messages, Python-style category
-maps, shared-utilities reports, and cyclomatic reports. Existing selectors,
-strict config fields, output adapters, findings, and enforcement remain the
-compatibility contract.
+At the current PR branch head, all 62 built-in selectors have feature-owned
+declarations and narrow typed registrations. The 62 output contracts comprise
+56 finding results (55 ordinary finding forms and one composite), three message
+results, and one each for Python-style compatibility output, shared-utilities
+reports, and cyclomatic reports. Across the 62 selectors, morphology declares
+235 finding identities; these are not 235 independent analyzers. The largest
+identity sets belong to `package-boundaries` (33), `python-style` (25),
+`path-discovery` (18), `repository-layout` (16), and `pydantic-practices` (14).
 
-The exact-head hosted run compared 154 scenarios on the pinned reference and
-candidate wheels. Public outputs matched. On `132c8e5`, two incorrect expected
-exits were shared by both builds: invalid plugin results yield a failed profile
-step and profile exit 1; the 35-byte file-size fixture exceeds its 3-byte
-configured limit and yields quality exit 1. On `52d1297`, the rerun showed that
-the catalog variant of the same lazy-import scenario exits 0 while selected
-file-size exits 1. The current working change adds strict per-variant expected
-exits and assigns the override only to selected file-size; fresh exact-head
-validation is required before parity is claimed. Additional installed-wheel
-evidence covers unsupported cyclomatic planning (classified as planned-only),
-duplicate plugin entry-point rejection before plugin import, invalid
-plugin-return reporting, serialized lazy built-in import traces, and a
-side-effecting three-command profile compared serially and in parallel. The
-manifest contains 154 entries:
-147 behavioral scenarios, five controls, and two planned-only scenarios. This
-is bounded evidence, not exhaustive equivalence. The package-boundaries
-history digest is versioned to include all declared effective policy inputs;
-this intentionally starts a distinct history cohort, is tested separately,
-and is not asserted equal to the baseline digest. The history-identity scenario
-remains outside baseline equality.
+All five hosted workflows passed on exact head
+`1d37ce4d320fc0349243a980abb68479e3402709`. The pinned reference/candidate
+wheel differential passed all 154 manifested scenarios against baseline
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`; the [workflow run](https://github.com/sheepfling/alphus/actions/runs/42757575821)
+includes the required comparison step and retained evidence. The manifest has
+147 behavioral scenarios, five controls, and two planned-only entries. This is
+bounded evidence, not exhaustive equivalence. The package-boundaries history
+digest creates a separately versioned cohort and is intentionally not asserted
+equal to the baseline; archive/index schema and legacy archive semantics remain
+unchanged.
+
+Local validation on this branch passed the full `check` profile (27 passed,
+zero failed, four provisional), 2,608 package tests with 44 skipped, Ruff,
+formatting, Pyright (zero errors), import smoke, and compatibility imports.
+The installed-wheel feature-registration acceptance and targeted morphology
+and style tests also pass. No new detector or default selection was added.
 
 Registration migration and the manifested comparison are substantial evidence,
 not completion of issue #87. Persistent caching, local-model execution, new
