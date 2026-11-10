@@ -388,9 +388,11 @@ def test_remaining_wheel_evidence_cases_have_executable_contracts() -> None:
     )
 
     invalid_plugin = by_name["plugin-invalid-result"]
+    assert invalid_plugin.fixture is None
     assert invalid_plugin.plugin_packages == ("example",)
     assert invalid_plugin.expected_step_statuses == ("failed",)
     duplicate_plugin = by_name["plugin-duplicate-entry-point-rejected"]
+    assert duplicate_plugin.fixture is None
     assert duplicate_plugin.plugin_packages == ("duplicate", "example")
     assert all(
         variant.plugin_import_expected is False for variant in duplicate_plugin.variants

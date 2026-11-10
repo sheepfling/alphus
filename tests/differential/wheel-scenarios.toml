@@ -1469,7 +1469,6 @@ arguments = ["--config", "quality-gates.toml", "--rule", "cyclomatic-complexity"
 
 [[scenario]]
 name = "plugin-invalid-result"
-fixture = "plugin-enabled"
 plugin_package = "example"
 selectors = ["invalid-result:malformed"]
 behavior = ["installed-api-v1-plugin", "invalid-callback-result", "operational-failure-report"]
@@ -1480,6 +1479,7 @@ expected_step_statuses = ["failed"]
 expected_step_rules = ["invalid-result:malformed"]
 required_output = ["plugin checkers must return PluginFinding records"]
 materialized_files = [
+  { path = "README.md", contents = "# Plugin failure fixture\n" },
   { path = "quality-gates.toml", contents = """schema_version = 1
 
 [files]
@@ -1510,7 +1510,6 @@ plugin_import_expected = true
 
 [[scenario]]
 name = "plugin-duplicate-entry-point-rejected"
-fixture = "plugin-unselected"
 plugin_packages = ["duplicate", "example"]
 behavior = ["duplicate-api-v1-entry-point", "reject-before-plugin-import"]
 expected_exit = 2
