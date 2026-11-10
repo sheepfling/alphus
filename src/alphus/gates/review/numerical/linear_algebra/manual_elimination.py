@@ -283,16 +283,12 @@ def manual_elimination_sites(
         lambda function: _match(function, policy),
         lambda site: (site.function, site.pivot_line),
     )
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
-        return direct
-    augmented = [
-        site
-        for node in ast.walk(tree)
-        if isinstance(node, ast.FunctionDef)
-        if (site := _match_augmented_inverse(node, policy)) is not None
-    ]
+    augmented = configured_function_observations(
+        source,
+        policy.function_names,
+        lambda function: _match_augmented_inverse(function, policy),
+        lambda site: (site.function, site.pivot_line),
+    )
     return sorted(
         {*direct, *augmented}, key=lambda site: (site.function, site.pivot_line)
     )
