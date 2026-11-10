@@ -312,9 +312,9 @@ def test_byte_hash_scan_is_disabled_without_a_configured_owner(
         _write(
             tmp_path,
             f"src/{name}.py",
-            "import hashlib\\n"
-            f"def {name}(payload):\\n"
-            "    return hashlib.sha256(payload).hexdigest()\\n",
+            "import hashlib\n"
+            f"def {name}(payload):\n"
+            "    return hashlib.sha256(payload).hexdigest()\n",
         )
     policy = POLICY.model_copy(
         update={
