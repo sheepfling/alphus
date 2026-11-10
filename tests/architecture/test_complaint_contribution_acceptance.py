@@ -299,7 +299,6 @@ def test_independent_same_aggregate_contributions_merge_both_ways_and_run_from_w
         "-m",
         "pip",
         "wheel",
-        "--no-build-isolation",
         "--no-deps",
         "--wheel-dir",
         str(wheelhouse),
