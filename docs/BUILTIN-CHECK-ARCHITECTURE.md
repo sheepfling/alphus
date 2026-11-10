@@ -119,26 +119,28 @@ in review time. Measure correction categories and registration edits in future
 parallel contributions instead of inferring productivity from this migration.
 
 The current scenario manifest has 149 entries: 144 behavior-labeled, four
-controls, and one planned-only entry. Five capabilities need separate
-treatment: the package-boundaries history identity has focused tests but is
-intentionally outside baseline parity because its corrected digest starts a
-new cohort; four other capabilities remain deferred.
-The last completed exact-head comparison before the digest correction, at
-`862e8bb797c23ee3fc251f5499c7aff6e1cc7d65`, passed its required
+controls, and one planned-only entry. The package-boundaries history identity
+now includes all declared secondary policy inputs under identity version 2.
+That deliberate change starts a distinct cohort, so the history-digest case
+is not asserted equal to the baseline wheel. Four other capabilities remain
+deferred.
+All five exact-head hosted workflows passed on code commit
+`21219e646f9aef3d4a1df01d695fb0e70f3fb447`, including the required
 `equivalent-for-manifested-scenarios` check against baseline
-`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`. All five hosted workflows
-passed, including the pinned differential, installed consumers, Python
-self-check matrix, minimum dependencies, optional gates, source archive, and
-native PDF smoke. The report is retained with this [exact-head workflow
-artifact](https://github.com/sheepfling/alphus/actions/runs/42593541909/artifacts/13662892735).
-This proves parity for the finite manifested cases, not every possible input;
-a planned-only entry or deferred capability is not a successful behavior run.
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`. The report is retained with this
+[exact-head workflow and differential
+artifact](https://github.com/sheepfling/alphus/actions/runs/42724928340/artifacts/13722980964).
+This proves parity only for the finite scenarios designated for comparison,
+not every possible input; the versioned history identity, planned-only entry,
+and deferred capabilities are not baseline-equivalence claims.
 
-The local full self-profile on `9e39702` passed 2,598 tests (44 skipped), with
-27 profile checks passed, zero failed, and four provisional passes. Ruff,
-formatting, strict Pyright, generated-view checks, and `git diff --check` passed.
-Older candidate failures and partial comparisons are historical migration
-evidence, not current blockers.
+Local focused morphology/history tests passed (15 tests), with Ruff,
+formatting, strict Pyright (0 errors), generated-view checks, and
+`git diff --check` passing. The local full suite encountered four wheel/build
+tests blocked by PyPI DNS and one FastAPI test blocked by a Ruff cache write;
+that FastAPI test passed on the authorized retry. Exact-head hosted self-quality
+passed all jobs. Older candidate failures and partial comparisons are
+historical migration evidence, not current blockers.
 
 Generate the current machine-readable selector and runner inventory on demand:
 
@@ -698,9 +700,11 @@ package-boundaries slice declares its primary package policy plus the existing
 architecture-graph, version-sync and callable-registry fields. A feature-owned
 router composes those configured providers while `RuleSpec.policy_field`, the
 public selector and strict TOML names remain unchanged. This is one proven
-composite, not yet a generic provider-graph API. Its history digest still has
-a separate known input gap. Do not change legacy history cohorts during
-registration work.
+composite, not yet a generic provider-graph API. Its history identity now
+hashes all declared secondary policies using identity version 2. New composite
+runs therefore form a distinct cohort; archived history records and the index
+schema are unchanged, and single-policy digest identities remain byte-for-byte
+compatible.
 
 ### Human-facing smell names and stable finding IDs
 
@@ -1440,9 +1444,18 @@ evidence, repeatability, provenance, lazy binding, and dependency declarations
 from 0.0.3 are extension seams only; 0.0.3 should not ship dormant AI or cache
 frameworks.
 
+The 0.0.4 advisory backlog includes [#51's](https://github.com/sheepfling/alphus/issues/51)
+conservative Pydantic default guidance and [#48's fixed-position tuple
+review](https://github.com/sheepfling/alphus/issues/48#issuecomment-6676590600). The current
+differential manifest uses immutable tuple fields with direct `= ()` defaults
+for static empty collections; Pydantic v2 supports both `Annotated` metadata
+and `Field` forms, so this is not a deprecation claim. The cyclomatic
+`CyclomaticOption(name, value)` record gives the internal slots meaning while
+its adapter preserves the existing two-element JSON arrays.
+
 One release-readiness question remains: whether the planned-only scenario and
 four deferred capabilities block #87's exit. Keep this finite evidence distinct
-from exhaustive equivalence. The history-digest correction has focused unit
+from exhaustive equivalence. The corrected history digest has focused unit
 coverage and is intentionally excluded from baseline equality because the new
 versioned cohort cannot equal the legacy digest.
 

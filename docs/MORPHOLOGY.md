@@ -6,24 +6,31 @@ This page records morphology vocabulary and the current 0.0.3 status.
 
 ## Current implementation status
 
-At the last fully verified PR #100 head before the digest correction,
-`862e8bb797c23ee3fc251f5499c7aff6e1cc7d65`, all 62 built-in selectors use
+At code commit
+`21219e646f9aef3d4a1df01d695fb0e70f3fb447`, all 62 built-in selectors use
 feature-owned declarations and narrow typed registrations. Their declared
 policy models and resolvers connect to typed runner/result shapes for findings,
 composites, messages, Python-style category maps, shared-utilities reports, and
 cyclomatic reports. The existing selectors, strict config fields, output
 adapters, findings, and enforcement remain the compatibility contract.
 
-All five exact-head hosted workflows passed on that head. The pinned wheel
-comparison passed with zero differences across the 149 manifested scenarios
-against baseline `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`. The manifest contains 144
-behavior-labeled entries, four controls, and one planned-only entry. The
-package-boundaries history digest now has focused tests but is intentionally
-outside baseline equality; four other capabilities remain deferred. This is
+All five exact-head hosted workflows passed on this code commit. The pinned
+wheel comparison passed its required checks for the manifest-designated
+baseline-parity scenarios against `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`.
+The report is retained with this [exact-head workflow and differential
+artifact](https://github.com/sheepfling/alphus/actions/runs/42724928340/artifacts/13722980964).
+The manifest contains 149 entries: 144 behavior-labeled, four controls, and one
+planned-only entry. The package-boundaries history digest is versioned to
+include all declared effective policy inputs; this intentionally starts a
+distinct history cohort and is not asserted equal to the baseline digest. Four
+other capabilities remain deferred. This is
 bounded scenario evidence, not exhaustive equivalence for every possible
-input. On prior code head `9e39702`, the local full self-profile passed 2,598 tests
-(44 skipped); 27 checks passed, none failed, and four were provisional. Ruff,
-formatting, strict Pyright, generated-view checks, and `git diff --check` passed.
+input. Local focused morphology/history tests passed (15 tests), with Ruff,
+formatting, strict Pyright (0 errors), generated-view checks, and
+`git diff --check` passing. The local full suite encountered four wheel/build
+tests blocked by PyPI DNS and one FastAPI test blocked by a Ruff cache write;
+that FastAPI test passed on the authorized retry. Exact-head hosted self-quality
+passed all jobs.
 
 Registration migration and the manifested comparison are substantial evidence,
 not completion of issue #87. Persistent caching, local-model execution, new
