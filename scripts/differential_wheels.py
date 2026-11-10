@@ -18,6 +18,7 @@ import tempfile
 import tomllib
 import venv
 import zipfile
+from collections import Counter
 from collections.abc import Collection, Generator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -76,6 +77,7 @@ class _ScenarioDocument(_StrictDocument):
     fixture: str | None = None
     plugin_package: str | None = None
     plugin_packages: tuple[str, ...] = ()
+    expected_duplicate_plugin_entry_points: tuple[str, ...] = ()
     python_distributions: tuple[str, ...] = ()
     npm_packages: tuple[str, ...] = ()
     isolate_native_tools: bool = False
@@ -224,6 +226,7 @@ class _ScenarioRunReport(_StrictDocument):
     fixture_git_commit: str
     plugin_package: str | None = None
     plugin_packages: tuple[str, ...] = ()
+    observed_duplicate_plugin_entry_points: tuple[str, ...] = ()
     python_distributions: tuple[str, ...] = ()
     npm_packages: tuple[str, ...] = ()
     isolate_native_tools: bool = False
@@ -349,6 +352,7 @@ class Scenario:
     expected_cyclomatic_backends: tuple[tuple[str, str, str, int, int], ...] = ()
     plugin_package: str | None = None
     plugin_packages: tuple[str, ...] = ()
+    expected_duplicate_plugin_entry_points: tuple[str, ...] = ()
     python_distributions: tuple[str, ...] = ()
     npm_packages: tuple[str, ...] = ()
     isolate_native_tools: bool = False
@@ -477,6 +481,23 @@ def _parse_manifest(
             for package in plugin_packages
         ):
             raise ValueError(f"scenario {name!r} has an invalid plugin package name")
+        expected_duplicate_entry_points = tuple(
+            row.expected_duplicate_plugin_entry_points
+        )
+        if expected_duplicate_entry_points and not plugin_packages:
+            raise ValueError(
+                f"scenario {name!r} expects duplicate plugin entry points "
+                "without installed plugin packages"
+            )
+        if len(set(expected_duplicate_entry_points)) != len(
+            expected_duplicate_entry_points
+        ) or any(
+            re.fullmatch(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*", entry_point) is None
+            for entry_point in expected_duplicate_entry_points
+        ):
+            raise ValueError(
+                f"scenario {name!r} has invalid duplicate plugin entry-point names"
+            )
         if any(
             re.fullmatch(
                 r"[A-Za-z0-9][A-Za-z0-9_.-]*==[A-Za-z0-9][A-Za-z0-9_.+-]*",
@@ -627,6 +648,9 @@ def _parse_manifest(
                 ),
                 plugin_package=row.plugin_package,
                 plugin_packages=plugin_packages,
+                expected_duplicate_plugin_entry_points=(
+                    expected_duplicate_entry_points
+                ),
                 python_distributions=tuple(row.python_distributions),
                 npm_packages=tuple(row.npm_packages),
                 isolate_native_tools=row.isolate_native_tools,
@@ -856,6 +880,35 @@ def _plugin_environment(
             raise ValueError(f"plugin wheel is unavailable for package {name!r}")
         _install_wheel(python, wheel)
     return python
+
+
+def _installed_duplicate_plugin_entry_points(python: Path) -> tuple[str, ...]:
+    """Read plugin entry-point metadata without importing any plugin provider."""
+    probe = (
+        "import importlib.metadata, json; "
+        "print(json.dumps(sorted(item.name for item in "
+        "importlib.metadata.entry_points(group='alphus.rules.v1'))))"
+    )
+    result = subprocess.run(
+        [str(python), "-c", probe],
+        env=_process_environment(python),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            "installed plugin entry-point metadata probe failed: "
+            f"{result.stderr[-1000:]}"
+        )
+    try:
+        names = TypeAdapter(list[str]).validate_json(result.stdout, strict=True)
+    except ValidationError as error:
+        raise ValueError(
+            "installed plugin entry-point metadata probe returned invalid JSON"
+        ) from error
+    counts = Counter(names)
+    return tuple(sorted(name for name, count in counts.items() if count > 1))
 
 
 def _process_environment(
@@ -1726,6 +1779,19 @@ def _run_scenarios(
     _prepare_isolated_native_path(empty_path)
     for scenario in scenarios:
         scenario_python = plugin_environments.get(scenario.plugin_packages, python)
+        observed_duplicate_entry_points = (
+            _installed_duplicate_plugin_entry_points(scenario_python)
+            if scenario.expected_duplicate_plugin_entry_points
+            else ()
+        )
+        missing_duplicates = set(
+            scenario.expected_duplicate_plugin_entry_points
+        ).difference(observed_duplicate_entry_points)
+        if missing_duplicates:
+            raise ValueError(
+                f"{scenario.name} did not install duplicate plugin entry points: "
+                f"{sorted(missing_duplicates)!r}"
+            )
         snapshot = fixture_snapshots[scenario.name]
         fixture = _fixture_root(snapshot, temporary_root / "fixtures" / scenario.name)
         fixture_commit = _git_head(fixture)
@@ -1804,6 +1870,7 @@ def _run_scenarios(
             fixture_git_commit=fixture_commit,
             plugin_package=scenario.plugin_package,
             plugin_packages=scenario.plugin_packages,
+            observed_duplicate_plugin_entry_points=observed_duplicate_entry_points,
             python_distributions=scenario.python_distributions,
             npm_packages=scenario.npm_packages,
             isolate_native_tools=scenario.isolate_native_tools,

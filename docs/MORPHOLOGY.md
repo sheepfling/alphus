@@ -7,18 +7,24 @@ This page records morphology vocabulary and the current 0.0.3 status.
 ## Current implementation status
 
 At code commit
-`3983626b69db4d3b521efe7929c825492ed1166b`, all 62 built-in selectors use
+`1eabe25fcfb940c7674b77e1246b2cc3049e59ae` and the current working changes,
+all 62 built-in selectors use
 feature-owned declarations and narrow typed registrations. Their declared
 policy models and resolvers connect to typed runner/result shapes for findings,
 composites, messages, Python-style category maps, shared-utilities reports, and
 cyclomatic reports. The existing selectors, strict config fields, output
 adapters, findings, and enforcement remain the compatibility contract.
 
-The latest exact-head run for this code commit has four workflows passing and
-the self-quality workflow failing in its differential step. The new unsupported
-native-plan scenario was rejected by strict config validation because its
-fixture omitted required fields. That fixture has been corrected locally; the
-corrected wheel comparison and exact-head hosted checks are pending. The
+The last exact-head run on `1eabe25` had four workflows pass and failed its
+differential step: duplicate plugin entry-point rejection correctly produced
+the CLI's generic strict-config diagnostic on stderr, while the scenario
+incorrectly required JSON and an internal error string. Its contract now
+expects the public diagnostic and verifies no plugin import; the exact registry
+reason remains covered by plugin tests. The earlier unsupported native-plan
+fixture error has also been corrected. The duplicate-entry-point scenario now
+also verifies that the installed wheels expose two `diff` entry points before
+checking Alphus's generic config diagnostic and confirming that neither
+provider imports. A new hosted run is pending. The
 manifest contains 154 entries: 147 behavioral scenarios, five controls, and
 two planned-only scenarios. The package-boundaries history digest is versioned to
 include all declared effective policy inputs; this intentionally starts a
@@ -26,13 +32,14 @@ distinct history cohort and is not asserted equal to the baseline digest. The
 history-identity scenario remains deliberately outside baseline equality; the
 unsupported native-plan scenario is plan-only and does not claim analyzer
 execution. This is bounded scenario evidence, not exhaustive equivalence for
-every possible input. On `3983626`, the local full profile passed (27 passed,
-zero failed, four provisional), and the package suite passed (2,605 passed, 44
-skipped). The current working diff has the same clean self-profile; focused
-manifest tests, Ruff, formatting, Pyright (0 errors), imports, line length and
-diff checks pass. An unfiltered local pytest run had five environment failures:
+every possible input. On the current working changes, the local full profile
+passed (27 passed, zero failed, four provisional), and the package suite
+passed (2,606 passed, 44 skipped). Focused differential/history tests passed
+(52); Ruff, formatting, Pyright (0 errors), imports, line length, Markdown
+shell review, and diff checks pass. An unfiltered local pytest run had five environment failures:
 four wheel/version cases could not fetch PyPI dependencies and one Ruff fixture
-could not write its cache. Hosted checks for the corrected fixture are pending.
+could not write its cache. Hosted checks for the corrected duplicate-entry
+scenario are pending.
 
 Registration migration and the manifested comparison are substantial evidence,
 not completion of issue #87. Persistent caching, local-model execution, new

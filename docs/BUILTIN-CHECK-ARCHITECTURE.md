@@ -127,12 +127,19 @@ unsupported native capabilities; the other checks profile planning. Neither
 claims analyzer execution. The effectful command and plugin-failure cases
 execute.
 
-On exact head `3983626b69db4d3b521efe7929c825492ed1166b`, four hosted workflows
-passed and Alphus self-quality failed in its differential step. The new
-unsupported-native-plan fixture did not satisfy strict config validation; it
-has been corrected locally, and a new exact-head comparison is pending. On
-the current working diff, the full self-profile passes (27 passed, zero
-failed, four provisional), with 2,605 package tests passed and 44 skipped.
+On exact head `1eabe25fcfb940c7674b77e1246b2cc3049e59ae`, four hosted workflows
+passed and Alphus self-quality failed in its differential step. The duplicate
+plugin-entry-point case correctly stopped during strict config loading, whose
+public CLI diagnostic is generic stderr text, but the scenario expected JSON
+and the internal registry reason. It now expects the public diagnostic and
+checks that neither plugin module imported. A preflight reads installed
+entry-point metadata and requires at least two `diff` entries without loading
+providers, preventing a missing-plugin error from masquerading as duplicate
+coverage. Unit tests assert the exact duplicate-name error. The earlier
+unsupported-native-plan fixture was also corrected. A new exact-head
+comparison is pending. On the current working
+diff, the full self-profile passes (27 passed, zero
+failed, four provisional), with 2,606 package tests passed and 44 skipped.
 Ruff, formatting, strict Pyright (0 errors), imports, documentation line
 length, focused manifest tests, and `git diff --check` also pass. An
 unfiltered local pytest run separately had five environment failures: four
@@ -145,7 +152,7 @@ candidate failures and partial comparisons remain historical evidence.
 
 Older candidate failures and partial comparisons remain historical migration
 evidence. The current local checks are listed above; hosted exact-head checks
-for the corrected fixture remain pending.
+for the corrected duplicate-entry scenario remain pending.
 
 Generate the current machine-readable selector and runner inventory on demand:
 
@@ -1450,7 +1457,10 @@ inputs. No historical policy is inferred or backfilled.
 
 This sequence records the original execution plan, not remaining registration
 work. Inventory, typed registration and migration of the existing selectors
-have been carried out. The manifested wheel comparison passed at the current exact head. Additional
+have been carried out. The last exact-head manifested comparison failed before
+producing a report because the duplicate-entry-point scenario expected JSON
+from a strict-config failure. The local harness now validates duplicate
+metadata before checking the public CLI error. Additional
 coverage for deferred capabilities and inputs not represented in the manifest
 remains open; do not describe the finite result as exhaustive.
 
@@ -1466,8 +1476,9 @@ remains open; do not describe the finite result as exhaustive.
    Existing checker bodies, strict config names, selection and result behavior
    remain the compatibility target.
 5. **Differential validation — in progress for 154 manifested scenarios.** The
-   exact-head run exposed a strict-config error in the unsupported-native-plan
-   fixture; the corrected fixture is local and awaits a new wheel comparison.
+   unsupported-native-plan fixture is corrected. The exact-head run exposed
+   an incorrect JSON expectation for duplicate entry-point config rejection;
+   the revised preflight and public-output assertion await a new wheel run.
    The finite comparison will not imply arbitrary-input equivalence.
 6. **Remaining 0.0.3 review — in progress.** Reconcile accepted feedback, keep
    contributor guidance current, and retain finite compatibility evidence.

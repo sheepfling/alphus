@@ -408,8 +408,22 @@ def test_remaining_wheel_evidence_cases_have_executable_contracts() -> None:
     duplicate_plugin = by_name["plugin-duplicate-entry-point-rejected"]
     assert duplicate_plugin.fixture is None
     assert duplicate_plugin.plugin_packages == ("duplicate", "example")
+    assert duplicate_plugin.expected_duplicate_plugin_entry_points == ("diff",)
     assert all(
         variant.plugin_import_expected is False for variant in duplicate_plugin.variants
+    )
+    assert all(variant.parse_json is False for variant in duplicate_plugin.variants)
+    assert duplicate_plugin.required_output == ("Invalid quality policy",)
+    duplicate_variant = duplicate_plugin.variants[0]
+    _assert_scenario_output(
+        duplicate_plugin,
+        duplicate_variant.name,
+        ProcessResult(
+            exit_code=2,
+            stdout="",
+            stderr="Invalid quality policy: configuration values failed validation.",
+            plugin_module_imported=False,
+        ),
     )
 
     lazy_imports = by_name["builtin-module-import-laziness"].variants
@@ -423,6 +437,26 @@ def test_remaining_wheel_evidence_cases_have_executable_contracts() -> None:
     assert {item.capability for item in deferred} == {
         "package-boundaries-history-digest-identity"
     }
+
+
+def test_duplicate_plugin_probe_counts_names_without_loading_providers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def run_probe(
+        arguments: Sequence[str], **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        del kwargs
+        assert "importlib.metadata.entry_points" in arguments[-1]
+        assert ".load(" not in arguments[-1]
+        return subprocess.CompletedProcess(
+            args=arguments, returncode=0, stdout='["diff", "diff"]\n', stderr=""
+        )
+
+    monkeypatch.setattr(differential_wheels.subprocess, "run", run_probe)
+
+    assert differential_wheels._installed_duplicate_plugin_entry_points(
+        Path("/venv/bin/python")
+    ) == ("diff",)
 
 
 def test_step_status_contract_rejects_unexpected_plugin_result_success() -> None:

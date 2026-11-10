@@ -1516,9 +1516,10 @@ plugin_import_expected = true
 [[scenario]]
 name = "plugin-duplicate-entry-point-rejected"
 plugin_packages = ["duplicate", "example"]
+expected_duplicate_plugin_entry_points = ["diff"]
 behavior = ["duplicate-api-v1-entry-point", "reject-before-plugin-import"]
 expected_exit = 2
-required_output = ["multiple Alphus rule plugins use entry point name"]
+required_output = ["Invalid quality policy"]
 materialized_files = [
   { path = "quality-gates.toml", contents = """schema_version = 1
 
@@ -1531,6 +1532,7 @@ enabled = ["diff"]
 name = "catalog"
 arguments = ["--config", "quality-gates.toml", "--catalog", "--json"]
 plugin_import_expected = false
+parse_json = false
 
 [[scenario]]
 name = "builtin-module-import-laziness"
