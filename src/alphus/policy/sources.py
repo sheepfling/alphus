@@ -624,11 +624,15 @@ class SharedUtilitiesPolicy(PythonSourceScanPolicy):
 
     canonical_file_hash_path: str
     canonical_file_hash_function: str
+    canonical_byte_hash_path: str | None = None
+    canonical_byte_hash_function: str | None = None
     canonical_git_path: str | None = None
     minimum_body_statements: Annotated[int, Field(gt=0)]
     minimum_ast_nodes: Annotated[int, Field(gt=0)]
 
-    @field_validator("canonical_file_hash_path", "canonical_git_path")
+    @field_validator(
+        "canonical_file_hash_path", "canonical_byte_hash_path", "canonical_git_path"
+    )
     @classmethod
     def validate_canonical_path(cls, path: str | None) -> str | None:
         if path is None:
@@ -642,19 +646,27 @@ class SharedUtilitiesPolicy(PythonSourceScanPolicy):
             or "\\" in path
             or any(character in path for character in "*?[]")
         ):
-            raise ValueError("canonical file-hash path must be a relative POSIX path")
+            raise ValueError("canonical owner path must be a relative POSIX path")
         if ".." in path_value.parts:
-            raise ValueError(
-                "canonical file-hash path cannot traverse parent directories"
-            )
+            raise ValueError("canonical owner path cannot traverse parent directories")
         return path
 
-    @field_validator("canonical_file_hash_function")
+    @field_validator("canonical_file_hash_function", "canonical_byte_hash_function")
     @classmethod
-    def validate_canonical_function(cls, name: str) -> str:
-        if not name.isidentifier():
-            raise ValueError("canonical file-hash function must be an identifier")
+    def validate_canonical_function(cls, name: str | None) -> str | None:
+        if name is not None and not name.isidentifier():
+            raise ValueError("canonical hash function must be an identifier")
         return name
+
+    @model_validator(mode="after")
+    def validate_byte_hash_owner(self) -> Self:
+        if (self.canonical_byte_hash_path is None) != (
+            self.canonical_byte_hash_function is None
+        ):
+            raise ValueError(
+                "canonical byte-hash path and function must be configured together"
+            )
+        return self
 
 
 class PythonStylePolicy(PythonSourceScanPolicy):

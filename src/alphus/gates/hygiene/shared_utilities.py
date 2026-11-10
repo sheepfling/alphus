@@ -16,18 +16,20 @@ from alphus.support.source_text import read_python_source
 
 @dataclass(frozen=True, slots=True)
 class SharedUtilitiesReport:
-    """Structured results from the two related shared-utility checks."""
+    """Structured results from the shared-utility checks."""
 
     duplicate_groups: tuple[tuple[str, ...], ...]
     file_hash_implementations: tuple[str, ...]
     direct_git_calls: tuple[str, ...]
+    byte_hash_implementations: tuple[str, ...] = ()
 
     @property
     def failed(self) -> bool:
-        """Return whether duplicate helpers or multiple file hashers were found."""
+        """Return whether repeated implementations or direct Git calls were found."""
         return (
             bool(self.duplicate_groups)
             or len(self.file_hash_implementations) > 1
+            or len(self.byte_hash_implementations) > 1
             or bool(self.direct_git_calls)
         )
 
@@ -215,6 +217,42 @@ def file_sha256_helpers(
     return sorted(locations)
 
 
+def byte_sha256_helpers(
+    root: Path, paths: Iterable[Path], policy: SharedUtilitiesPolicy
+) -> list[str]:
+    """Find repeated direct hashes of named in-memory values outside their owner."""
+    locations: list[str] = []
+    checkout = root.resolve(strict=True)
+    canonical_path = policy.canonical_byte_hash_path
+    canonical_function = policy.canonical_byte_hash_function
+    if canonical_path is None:
+        return []
+    for relative in _selected_python_files(paths, policy):
+        path = checkout / relative
+        if not path.is_file():
+            continue
+        module = ast.parse(read_python_source(path), filename=relative.as_posix())
+        for qualified_name, node in _function_definitions(module):
+            if (
+                relative.as_posix() == canonical_path
+                and node.name == canonical_function
+            ):
+                continue
+            for child in ast.walk(node):
+                match child:
+                    case ast.Call(
+                        func=ast.Attribute(attr="sha256", value=ast.Name(id="hashlib")),
+                        args=[ast.Name(), *_],
+                    ):
+                        locations.append(
+                            f"{relative.as_posix()}:{node.lineno}:{qualified_name}"
+                        )
+                        break
+                    case _:
+                        pass
+    return sorted(locations)
+
+
 def direct_git_subprocesses(
     root: Path, paths: Iterable[Path], policy: SharedUtilitiesPolicy
 ) -> tuple[str, ...]:
@@ -254,8 +292,10 @@ def check_shared_utilities(
     duplicates = duplicate_helpers(root, paths, policy)
     file_hashes = file_sha256_helpers(root, paths, policy)
     git_calls = direct_git_subprocesses(root, paths, policy)
+    byte_hashes = byte_sha256_helpers(root, paths, policy)
     return SharedUtilitiesReport(
         duplicate_groups=tuple(tuple(group) for group in duplicates.values()),
         file_hash_implementations=tuple(file_hashes),
         direct_git_calls=git_calls,
+        byte_hash_implementations=tuple(byte_hashes),
     )
