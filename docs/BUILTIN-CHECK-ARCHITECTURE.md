@@ -128,18 +128,18 @@ claims analyzer execution. The effectful command and plugin-failure cases
 execute.
 
 On exact head `1eabe25fcfb940c7674b77e1246b2cc3049e59ae`, four hosted workflows
-passed and Alphus self-quality failed in its differential step. The duplicate
-plugin-entry-point case correctly stopped during strict config loading, whose
-public CLI diagnostic is generic stderr text, but the scenario expected JSON
-and the internal registry reason. It now expects the public diagnostic and
-checks that neither plugin module imported. A preflight reads installed
-entry-point metadata and requires at least two `diff` entries without loading
-providers, preventing a missing-plugin error from masquerading as duplicate
-coverage. Unit tests assert the exact duplicate-name error. The earlier
-unsupported-native-plan fixture was also corrected. A new exact-head
-comparison is pending. On the current working
+passed and self-quality failed because the duplicate-plugin scenario expected
+JSON and an internal error string instead of the CLI's generic strict-config
+diagnostic. It now preflights installed entry-point metadata for two `diff`
+entries without loading providers, then checks the public diagnostic and no
+plugin imports. Unit tests assert the precise duplicate-registry error. On
+`311aa61`, all other hosted workflows passed; the manifested comparison reached
+the lazy-import report and exposed a nested list-versus-tuple mismatch under
+strict immutable-model normalization. The local fix records import traces as
+tuples internally, which JSON serializes as arrays. A fresh exact-head run is
+pending. On the current working
 diff, the full self-profile passes (27 passed, zero
-failed, four provisional), with 2,606 package tests passed and 44 skipped.
+failed, four provisional), with 2,607 package tests passed and 44 skipped.
 Ruff, formatting, strict Pyright (0 errors), imports, documentation line
 length, focused manifest tests, and `git diff --check` also pass. An
 unfiltered local pytest run separately had five environment failures: four
@@ -1476,9 +1476,10 @@ remains open; do not describe the finite result as exhaustive.
    Existing checker bodies, strict config names, selection and result behavior
    remain the compatibility target.
 5. **Differential validation — in progress for 154 manifested scenarios.** The
-   unsupported-native-plan fixture is corrected. The exact-head run exposed
-   an incorrect JSON expectation for duplicate entry-point config rejection;
-   the revised preflight and public-output assertion await a new wheel run.
+   unsupported native plan and duplicate-entry metadata checks are corrected.
+   Exact-head hosted execution then exposed and localized a nested immutable
+   report type mismatch for import traces; the tuple-preserving JSON fix awaits
+   a new wheel run.
    The finite comparison will not imply arbitrary-input equivalence.
 6. **Remaining 0.0.3 review — in progress.** Reconcile accepted feedback, keep
    contributor guidance current, and retain finite compatibility evidence.

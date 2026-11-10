@@ -210,7 +210,7 @@ class ProcessResultWire(TypedDict):
     stdout: str
     stderr: str
     plugin_module_imported: bool | None
-    imported_builtin_modules: list[str] | None
+    imported_builtin_modules: tuple[str, ...] | None
 
 
 class WheelModuleRecord(TypedDict):
@@ -400,11 +400,7 @@ class ProcessResult:
             "stdout": self.stdout,
             "stderr": self.stderr,
             "plugin_module_imported": self.plugin_module_imported,
-            "imported_builtin_modules": (
-                list(self.imported_builtin_modules)
-                if self.imported_builtin_modules is not None
-                else None
-            ),
+            "imported_builtin_modules": self.imported_builtin_modules,
         }
 
 

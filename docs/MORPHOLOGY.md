@@ -7,7 +7,7 @@ This page records morphology vocabulary and the current 0.0.3 status.
 ## Current implementation status
 
 At code commit
-`1eabe25fcfb940c7674b77e1246b2cc3049e59ae` and the current working changes,
+`311aa61865053d871cd01f6145098f2c83369a01` and the current working changes,
 all 62 built-in selectors use
 feature-owned declarations and narrow typed registrations. Their declared
 policy models and resolvers connect to typed runner/result shapes for findings,
@@ -15,16 +15,17 @@ composites, messages, Python-style category maps, shared-utilities reports, and
 cyclomatic reports. The existing selectors, strict config fields, output
 adapters, findings, and enforcement remain the compatibility contract.
 
-The last exact-head run on `1eabe25` had four workflows pass and failed its
-differential step: duplicate plugin entry-point rejection correctly produced
-the CLI's generic strict-config diagnostic on stderr, while the scenario
-incorrectly required JSON and an internal error string. Its contract now
-expects the public diagnostic and verifies no plugin import; the exact registry
-reason remains covered by plugin tests. The earlier unsupported native-plan
-fixture error has also been corrected. The duplicate-entry-point scenario now
-also verifies that the installed wheels expose two `diff` entry points before
-checking Alphus's generic config diagnostic and confirming that neither
-provider imports. A new hosted run is pending. The
+The exact-head run on `1eabe25` failed because duplicate plugin entry-point
+rejection correctly produced the CLI's generic strict-config diagnostic on
+stderr, while the scenario incorrectly required JSON and an internal error
+string. The harness now preflights installed metadata for two `diff` entries
+without loading providers, then expects the public diagnostic and no plugin
+imports; unit tests retain the precise duplicate-registry error assertion. The
+unsupported-native-plan fixture was also corrected. On `311aa61`, the hosted
+comparison reached the lazy-import trace report but strict validation exposed a
+list-versus-tuple mismatch caused by immutable model normalization. The working
+fix declares the trace tuple internally and preserves JSON array output. A new
+exact-head hosted run is pending. The
 manifest contains 154 entries: 147 behavioral scenarios, five controls, and
 two planned-only scenarios. The package-boundaries history digest is versioned to
 include all declared effective policy inputs; this intentionally starts a
@@ -34,8 +35,8 @@ unsupported native-plan scenario is plan-only and does not claim analyzer
 execution. This is bounded scenario evidence, not exhaustive equivalence for
 every possible input. On the current working changes, the local full profile
 passed (27 passed, zero failed, four provisional), and the package suite
-passed (2,606 passed, 44 skipped). Focused differential/history tests passed
-(52); Ruff, formatting, Pyright (0 errors), imports, line length, Markdown
+passed (2,607 passed, 44 skipped). Focused differential/history tests passed
+(53); Ruff, formatting, Pyright (0 errors), imports, line length, Markdown
 shell review, and diff checks pass. An unfiltered local pytest run had five environment failures:
 four wheel/version cases could not fetch PyPI dependencies and one Ruff fixture
 could not write its cache. Hosted checks for the corrected duplicate-entry

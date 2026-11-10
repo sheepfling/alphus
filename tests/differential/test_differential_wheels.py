@@ -800,6 +800,32 @@ def test_builtin_import_trace_is_evidence_not_consumer_output() -> None:
     )
 
 
+def test_builtin_import_trace_report_keeps_json_array_contract() -> None:
+    process_result = ProcessResult(
+        0,
+        "{}",
+        "",
+        imported_builtin_modules=("alphus.gates.hygiene.file_size",),
+    )
+    report = _ScenarioRunReport.model_validate(
+        {
+            "fixture_sha256": "fixture-hash",
+            "fixture_git_commit": "fixture-commit",
+            "selectors": ["file-size"],
+            "execution_classification": "control",
+            "behavior": [],
+            "variants": {"catalog": process_result.to_wire()},
+            "within_build_equal": True,
+            "build": "candidate",
+        }
+    )
+
+    wire = json.loads(report.model_dump_json())
+    assert wire["variants"]["catalog"]["imported_builtin_modules"] == [
+        "alphus.gates.hygiene.file_size"
+    ]
+
+
 def test_builtin_import_expectation_identifies_candidate_contract_misses() -> None:
     variant = differential_wheels.RunVariant(
         name="selected-file-size",
