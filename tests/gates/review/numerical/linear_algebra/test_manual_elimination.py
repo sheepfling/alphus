@@ -79,7 +79,7 @@ def test_matches_augmented_inverse_with_zero_guard_and_right_half_return() -> No
 
 
 def test_augmented_inverse_respects_configured_function_scope() -> None:
-    nested = "def wrapper():\\n" + "\\n".join(
+    nested = "def wrapper():\n" + "\n".join(
         "    " + line for line in _AUGMENTED.splitlines()
     )
 
