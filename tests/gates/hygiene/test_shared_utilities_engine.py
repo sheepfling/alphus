@@ -305,6 +305,34 @@ def test_byte_hash_scan_reports_repeated_named_inputs_and_skips_owner(
     assert report.failed
 
 
+def test_byte_hash_scan_is_disabled_without_a_configured_owner(
+    tmp_path: Path,
+) -> None:
+    for name in ("first", "second"):
+        _write(
+            tmp_path,
+            f"src/{name}.py",
+            "import hashlib\\n"
+            f"def {name}(payload):\\n"
+            "    return hashlib.sha256(payload).hexdigest()\\n",
+        )
+    policy = POLICY.model_copy(
+        update={
+            "canonical_byte_hash_path": None,
+            "canonical_byte_hash_function": None,
+        }
+    )
+
+    report = check_shared_utilities(
+        tmp_path,
+        [Path("src/first.py"), Path("src/second.py")],
+        policy,
+    )
+
+    assert report.byte_hash_implementations == ()
+    assert not report.failed
+
+
 def test_byte_hash_scan_keeps_single_use_and_embedded_probe_clean(
     tmp_path: Path,
 ) -> None:
