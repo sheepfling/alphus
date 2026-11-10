@@ -406,7 +406,8 @@ def test_remaining_wheel_evidence_cases_have_executable_contracts() -> None:
     assert any(variant.expected_unimported_modules for variant in lazy_imports)
 
     command = by_name["effectful-command-profile"]
-    assert command.expected_step_kinds == ("command", "command", "command")
+    command_config = dict(command.materialized_files)["quality-gates.toml"]
+    assert command_config.count('kind = "command"') == 3
     assert any(variant.compare_within_build for variant in command.variants)
     assert {item.capability for item in deferred} == {
         "package-boundaries-history-digest-identity"
