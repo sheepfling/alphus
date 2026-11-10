@@ -542,9 +542,7 @@ def _render_shared_utilities(report: SharedUtilitiesReport) -> None:
     if len(report.file_hash_implementations) > 1:
         _human_print(f"{hash_tag}: {', '.join(report.file_hash_implementations)}")
     if len(report.byte_hash_implementations) > 1:
-        _human_print(
-            f"{byte_hash_tag}: {', '.join(report.byte_hash_implementations)}"
-        )
+        _human_print(f"{byte_hash_tag}: {', '.join(report.byte_hash_implementations)}")
     _human_print(f"Shared utilities: {len(report.duplicate_groups)} duplicate group(s)")
     _human_print(
         "File SHA-256 copies outside the shared helper: "
