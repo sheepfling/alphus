@@ -30,6 +30,7 @@ from scripts.differential_wheels import (
     _ProfileFinding,
     _scenario_classification,
     _scenario_executes,
+    _ScenarioDocument,
     _ScenarioRunReport,
     _validate_materialized_files,
     _VariantDocument,
@@ -264,6 +265,24 @@ def test_static_empty_tuple_defaults_preserve_strict_json_array_contract() -> No
         _VariantDocument.model_validate({"name": "help", "arguments": None})
     with pytest.raises(ValueError):
         _variant_from_json('{"name":"help","arguments":null}')
+
+    scenario_data = {
+        "name": "defaulted-distributions",
+        "behavior": [],
+        "expected_exit": 0,
+        "variant": [{"name": "help"}],
+    }
+    scenario = _ScenarioDocument.model_validate(scenario_data)
+    distribution_field = _ScenarioDocument.model_fields["python_distributions"]
+
+    assert scenario.python_distributions == ()
+    assert distribution_field.default == ()
+    assert distribution_field.default_factory is None
+    assert json.loads(scenario.model_dump_json())["python_distributions"] == []
+    with pytest.raises(ValueError):
+        _ScenarioDocument.model_validate(
+            {**scenario_data, "python_distributions": None}
+        )
 
 
 def test_profile_finding_preserves_legacy_message_without_location() -> None:
