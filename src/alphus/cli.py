@@ -529,16 +529,30 @@ def _render_shared_utilities(report: SharedUtilitiesReport) -> None:
         Category.MAINTAINABILITY,
         "duplicate-file-hash-implementation",
     )
+    byte_hash_tag = rule_tag(
+        Scope.PYTHON,
+        Framework.NONE,
+        Category.MAINTAINABILITY,
+        "duplicate-byte-hash-implementation",
+    )
     for location in report.direct_git_calls:
         _human_print(f"{_DIRECT_GIT_SUBPROCESS_TAG}: {location}")
     for locations in report.duplicate_groups:
         _human_print(f"{duplicate_tag}: {', '.join(locations)}")
     if len(report.file_hash_implementations) > 1:
         _human_print(f"{hash_tag}: {', '.join(report.file_hash_implementations)}")
+    if len(report.byte_hash_implementations) > 1:
+        _human_print(
+            f"{byte_hash_tag}: {', '.join(report.byte_hash_implementations)}"
+        )
     _human_print(f"Shared utilities: {len(report.duplicate_groups)} duplicate group(s)")
     _human_print(
         "File SHA-256 copies outside the shared helper: "
         f"{len(report.file_hash_implementations)}"
+    )
+    _human_print(
+        "Direct in-memory SHA-256 implementations: "
+        f"{len(report.byte_hash_implementations)}"
     )
 
 
@@ -915,6 +929,7 @@ def _execute(
                     "duplicate_groups": shared_report.duplicate_groups,
                     "failed": shared_report.failed,
                     "file_hash_implementations": shared_report.file_hash_implementations,
+                    "byte_hash_implementations": shared_report.byte_hash_implementations,
                 },
                 sort_keys=True,
             )
