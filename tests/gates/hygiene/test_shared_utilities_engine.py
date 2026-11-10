@@ -11,7 +11,6 @@ from alphus.cli import main
 from alphus.config import SharedUtilitiesPolicy
 from alphus.gates.hygiene.shared_utilities import (
     check_shared_utilities,
-    byte_sha256_helpers,
     duplicate_helpers,
     file_sha256_helpers,
 )
@@ -358,6 +357,18 @@ def test_shared_utilities_cli_reports_groups_and_machine_readable_metrics(
         "        digest.update(stream.read())\n"
         "    return digest.hexdigest()\n",
     )
+    _write(
+        tmp_path,
+        "src/byte_first.py",
+        "import hashlib\ndef direct_bytes(payload):\n"
+        "    return hashlib.sha256(payload).digest()\n",
+    )
+    _write(
+        tmp_path,
+        "src/byte_second.py",
+        "import hashlib\ndef other_direct_bytes(content):\n"
+        "    return hashlib.sha256(content).digest()\n",
+    )
     arguments = [
         "--root",
         str(tmp_path),
@@ -374,6 +385,11 @@ def test_shared_utilities_cli_reports_groups_and_machine_readable_metrics(
         in output
     )
     assert "File SHA-256 copies outside the shared helper: 2" in output
+    assert "Direct in-memory SHA-256 implementations: 2" in output
+    assert (
+        "alphus/python/none/maintainability/duplicate-byte-hash-implementation:"
+        in output
+    )
 
     assert main([*arguments, "--report", "--json"]) == 0
     assert capsys.readouterr().out == (
