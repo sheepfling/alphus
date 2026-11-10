@@ -225,6 +225,8 @@ def byte_sha256_helpers(
     checkout = root.resolve(strict=True)
     canonical_path = policy.canonical_byte_hash_path
     canonical_function = policy.canonical_byte_hash_function
+    if canonical_path is None:
+        return []
     for relative in _selected_python_files(paths, policy):
         path = checkout / relative
         if not path.is_file():
