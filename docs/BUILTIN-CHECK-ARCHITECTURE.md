@@ -155,14 +155,43 @@ validators from a family template. The next scaffold improvement should be
 measured against these observed patterns and authoring effort, rather than
 adding abstract types before a second real consumer needs them.
 
+### Rule guidance for agent-assisted quality work
+
+The existing `Finding.message` is the concise explanation shown with a
+diagnostic. It should state the observed issue and, when the safe action is
+clear, the immediate correction. Longer rationale, examples, and legitimate
+exceptions should remain in discoverable documentation rather than being
+copied into each finding or injected as project instructions. Today the
+registry has no separate per-rule guidance URI or documented path convention;
+this is an authoring/scaffold gap, not implemented morphology behavior.
+
+A follow-on design should make guidance discoverable from the stable rule
+identity without adding a shared hand-maintained index. One candidate is a
+conventional rule-owned page keyed by the full `RuleTag.rule_id`, with the
+generated catalog exposing the derived link and a check for missing or stale
+pages. This lets concurrent complaint contributions own separate documents.
+The exact path and whether selector-level checks without findings need a
+separate guide remain design decisions. Project `AGENTS.md` files stay
+authoritative user-owned context: Alphus may suggest a project instruction
+change for review, but rule execution must not write or inject one.
+
+The quality-stream workflow should use rule guidance as context, not as a
+zero-findings objective: identify which checks were selected and actually ran,
+read guidance for emitted rule IDs, assess findings against project purpose
+and constraints, then recommend a sound correction or record an evidence-based
+exception. It should surface unknown applicability and rule gaps for review,
+not mechanically remove findings or broaden selection. No such agent
+workflow or guidance-link field is implemented in this 0.0.3 slice.
+
 The 62 distinct registration modules and ignored generated aggregates remove
 the shared registry/config/catalog/runner edit for a built-in registration.
 They do not eliminate conflicts in genuinely shared policy models, analyzers,
-CLI code, or common result adapters. The two-branch installed-wheel merge test
-is an architecture fixture, not a production-contribution trial. Treat reduced
-registration friction as a structural property, not as a measured reduction
-in review time. Measure correction categories and registration edits in future
-parallel contributions instead of inferring productivity from this migration.
+CLI code, or common result adapters. Two disposable production-repository
+branch experiments now demonstrate clean selector-level contribution merges
+and installed-wheel dispatch, but they do not measure actual review-time
+savings. Treat reduced registration friction as a structural property and
+measure correction categories and registration edits in future parallel
+contributions instead of inferring productivity from this migration.
 
 The current scenario manifest has 154 entries: 147 behavioral scenarios, five
 controls, and two planned-only entries. The package-boundaries history
@@ -173,35 +202,25 @@ unsupported native capabilities; the other checks profile planning. Neither
 claims analyzer execution. The effectful command and plugin-failure cases
 execute.
 
-The exact-head run on `132c8e5735fbd9b7fc558eab8efa2da65a891d92` executed all
-154 scenarios against the pinned wheels and found no reference/candidate
-public-output differences. It exposed two wrong expected exits shared by both
-builds: an invalid-plugin profile's failed step yields profile exit 1 (not 2),
-and the 35-byte file-size fixture exceeds its configured 3-byte limit and
-returns quality exit 1 (not 0). The next exact-head run on `52d1297` confirmed
-those corrections and exposed that the scenario has two different outcomes:
-catalog exits 0, while selected file-size exits 1. The current working change
-adds a strict optional per-variant expected-exit field; the catalog inherits the
-scenario default and only the selected check overrides it. A fresh exact-head
-comparison is required before parity is claimed. Other installed-wheel cases
-check the unsupported cyclomatic plan as `planned-only`, duplicate plugin
-entry-point rejection before provider import, invalid plugin return reporting,
-serialized lazy built-in import traces, and serial/parallel equality for a
-side-effecting three-command profile. These prove only their declared cases,
-not exhaustive equivalence. The current local `check` profile passes (27 passed,
-zero failed, four provisional), with 2,608 package tests passed and 44 skipped.
-The 45 focused differential tests, Ruff, formatting, strict Pyright (0 errors),
-imports, line length, Markdown-shell review, and `git diff --check` pass. The
-latest hosted comparison on `52d1297` completed all 154 scenarios but failed
-because the catalog and selected file-size variants have distinct expected
-exits. The current per-variant expectation fix is local and its exact-head
-workflow is pending. The explicit workflow review has two existing
-informational setup-action duplication candidates. An earlier unfiltered local
-pytest run had five environment failures: four wheel/version tests could not
-fetch PyPI build dependencies, and one Ruff fixture could not write its cache.
-Any differential result proves parity only for finite manifested scenarios,
-not every possible input. The versioned history identity and planned-only
-entries remain outside baseline-equivalence claims.
+The pinned installed-wheel comparison on code head
+`1d37ce4d320fc0349243a980abb68479e3402709` passed all 154 manifested scenarios
+against baseline `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`, with all five
+hosted workflows green. The manifest contains 147 behavioral scenarios, five
+controls, and two planned-only entries. It exercises unsupported cyclomatic
+planning without claiming analyzer execution, duplicate plugin entry-point
+rejection before provider import, invalid plugin return reporting, serialized
+lazy built-in import traces, and serial/parallel equality for a side-effecting
+three-command profile. This is finite evidence, not exhaustive equivalence for
+every input. The versioned history identity and planned-only entries are
+outside baseline-equality claims.
+
+On current docs-only head `be27539c1baa763a6d3b07f374f9fccecd04496e`, four
+of five hosted workflows have passed and self-quality (including the pinned
+differential) is still running. Local documentation-link, style, and shell
+fence validation passed 105 tests. The preceding exact code head also passed
+the full local `check` profile (27 passed, zero failed, four provisional),
+2,608 package tests (44 skipped), Ruff, formatting, Pyright (zero errors),
+import smoke, and compatibility imports.
 
 Generate the current machine-readable selector and runner inventory on demand:
 
@@ -364,11 +383,21 @@ reject those collisions deterministically.
 
 For 0.0.3, the compatible rule is to give an independently authored check its
 own selector, feature module, policy, mirrored tests, and standalone docs; a
-consumer can group selected selectors in an explicit profile. Keep legacy
-aggregate selectors stable. If multiple independently authored contributions
-must share one selector and one combined policy/output contract, that requires
-a separate contribution-composition design and compatibility review; this PR
-does not claim to provide it.
+consumer can group selected selectors in an explicit profile. A second
+production-repository experiment added two different selectors in independent
+branches from `1d37ce4`: `fa8b5d3` and `2f87c61`. Each owned four distinct
+paths (policy, feature registration, mirrored test, and check page); there was
+no path overlap. Both merge orders (`ca49d31`, `228ae4e`) were clean. Generating
+after either merge produced the same SHA-256 for each generated view. Installed
+wheels from both orders exposed and dispatched both selectors to their declared
+finding IDs; the two mirrored tests passed in both trees. The wheel files
+themselves are not claimed byte-identical because their version metadata
+includes the different merge commits.
+
+Keep legacy aggregate selectors stable. If multiple independently authored
+contributions must share one selector and one combined policy/output contract,
+that requires a separate contribution-composition design and compatibility
+review; this PR does not claim to provide it.
 
 ### Earlier candidate snapshots (historical; current status is above)
 
