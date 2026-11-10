@@ -393,7 +393,8 @@ def test_shared_utilities_cli_reports_groups_and_machine_readable_metrics(
 
     assert main([*arguments, "--report", "--json"]) == 0
     assert capsys.readouterr().out == (
-        '{"byte_hash_implementations": [], "direct_git_calls": [], '
+        '{"byte_hash_implementations": ["src/byte_first.py:2:direct_bytes", '
+        '"src/byte_second.py:2:other_direct_bytes"], "direct_git_calls": [], '
         '"duplicate_groups": [], "failed": true, '
         '"file_hash_implementations": ["src/first.py:2:direct", '
         '"src/second.py:2:streamed"]}\n'
