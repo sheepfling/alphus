@@ -11,6 +11,7 @@ from alphus.cli import main
 from alphus.config import SharedUtilitiesPolicy
 from alphus.gates.hygiene.shared_utilities import (
     check_shared_utilities,
+    byte_sha256_helpers,
     duplicate_helpers,
     file_sha256_helpers,
 )
@@ -28,6 +29,8 @@ POLICY = SharedUtilitiesPolicy(
     ],
     canonical_file_hash_path="src/common/files.py",
     canonical_file_hash_function="sha256_file",
+    canonical_byte_hash_path="src/common/bytes.py",
+    canonical_byte_hash_function="bytes_sha256",
     minimum_body_statements=3,
     minimum_ast_nodes=15,
 )
@@ -70,6 +73,8 @@ extensions = [".py"]
 exclude = []
 canonical_file_hash_path = "src/common/files.py"
 canonical_file_hash_function = "sha256_file"
+canonical_byte_hash_path = "src/common/bytes.py"
+canonical_byte_hash_function = "bytes_sha256"
 minimum_body_statements = 3
 minimum_ast_nodes = 15
 
@@ -268,6 +273,56 @@ def test_file_hash_scan_skips_configured_canonical_and_non_file_hashes(
     ]
 
 
+def test_byte_hash_scan_reports_repeated_named_inputs_and_skips_owner(
+    tmp_path: Path,
+) -> None:
+    sources = {
+        "src/common/bytes.py": (
+            "import hashlib\\n"
+            "def bytes_sha256(payload):\\n"
+            "    return hashlib.sha256(payload).digest()\\n"
+        ),
+        "src/first.py": (
+            "import hashlib\\n"
+            "def first_digest(payload):\\n"
+            "    return hashlib.sha256(payload).hexdigest()\\n"
+        ),
+        "src/second.py": (
+            "import hashlib\\n"
+            "def second_digest(content):\\n"
+            "    return hashlib.sha256(content).hexdigest()\\n"
+        ),
+    }
+    for name, source in sources.items():
+        _write(tmp_path, name, source)
+
+    paths = [Path(name) for name in sources]
+    report = check_shared_utilities(tmp_path, paths, POLICY)
+
+    assert report.byte_hash_implementations == (
+        "src/first.py:2:first_digest",
+        "src/second.py:2:second_digest",
+    )
+    assert report.failed
+
+
+def test_byte_hash_scan_keeps_single_use_and_embedded_probe_clean(
+    tmp_path: Path,
+) -> None:
+    source = (
+        "import hashlib\\n"
+        "def recipe_identity(payload):\\n"
+        "    return hashlib.sha256(payload).hexdigest()\\n"
+        "PROBE = 'hashlib.sha256(payload).hexdigest()'\\n"
+    )
+    _write(tmp_path, "src/recipe.py", source)
+
+    report = check_shared_utilities(tmp_path, [Path("src/recipe.py")], POLICY)
+
+    assert report.byte_hash_implementations == ("src/recipe.py:2:recipe_identity",)
+    assert not report.failed
+
+
 def test_report_exposes_success_metrics_and_failure_state(tmp_path: Path) -> None:
     _write(
         tmp_path,
@@ -279,6 +334,7 @@ def test_report_exposes_success_metrics_and_failure_state(tmp_path: Path) -> Non
 
     assert report.duplicate_groups == ()
     assert report.file_hash_implementations == ("src/one.py:2:checksum",)
+    assert report.byte_hash_implementations == ()
     assert report.direct_git_calls == ()
     assert not report.failed
 
@@ -321,7 +377,8 @@ def test_shared_utilities_cli_reports_groups_and_machine_readable_metrics(
 
     assert main([*arguments, "--report", "--json"]) == 0
     assert capsys.readouterr().out == (
-        '{"direct_git_calls": [], "duplicate_groups": [], "failed": true, '
+        '{"byte_hash_implementations": [], "direct_git_calls": [], '
+        '"duplicate_groups": [], "failed": true, '
         '"file_hash_implementations": ["src/first.py:2:direct", '
         '"src/second.py:2:streamed"]}\n'
     )
