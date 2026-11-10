@@ -648,9 +648,7 @@ class SharedUtilitiesPolicy(PythonSourceScanPolicy):
         ):
             raise ValueError("canonical owner path must be a relative POSIX path")
         if ".." in path_value.parts:
-            raise ValueError(
-                "canonical owner path cannot traverse parent directories"
-            )
+            raise ValueError("canonical owner path cannot traverse parent directories")
         return path
 
     @field_validator("canonical_file_hash_function", "canonical_byte_hash_function")
