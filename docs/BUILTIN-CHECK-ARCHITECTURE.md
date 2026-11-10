@@ -128,15 +128,27 @@ forms describe result and dispatch contracts; they do not by themselves
 classify how a detector reads or analyzes its inputs. A scan of the owning
 modules shows several reusable work patterns:
 
-| Work pattern | Existing examples | Existing shared boundary or limit |
-| --- | --- | --- |
-| Bytes, text, tokens, and paths | `file-size`, `line-length`, `comment-markers` | `support.source_text` and inventory helpers; `file-size` also parses Python initializer syntax, so it is a mixed case. |
-| Language syntax and AST patterns | `python-style`, `test-quality`, `numeric-literals` | Python-specific AST and source helpers; matching a universal concern does not create a provider for another language. |
-| Bindings, aliases, and semantic structure | `positional-semantic-overrides`, `parallel-normalization`, several numerical rules | Reuse `support.source_scanning.import_aliases`, `gates/review/_module_bindings.py`, and `gates/review/numerical/common/ast_helpers.py` where their exact contract fits. |
-| Structured documents and mixed inputs | `dynamic-markdown`, `json-structure`, `suppression-reasons` | Structured parsers and existing readers; `suppression-reasons` joins Python comments with active Ruff TOML. |
-| Repository indexes and cross-file joins | `package-boundaries`, `dependency-locks`, `repository-layout` | Repository inventory and explicitly declared secondary policies; do not turn local checks into a repository-wide graph scan. |
-| Native tools, VCS, and external evidence | `cyclomatic-complexity`, `git-history`, `source-test-coverage` | Preserve native plans and version provenance; `source-test-coverage` consumes revision-matched evidence rather than analyzing test source. |
-| Validated artifacts and source-to-artifact audits | `run-artifacts`, PDF consumer checks | `run-artifacts` is source-AST analysis; generated artifacts and command steps have separate effect/result contracts. |
+- **Bytes, text, tokens, and paths:** `file-size`, `line-length`, and
+  `comment-markers` reuse text and inventory helpers. `file-size` also parses
+  Python initializer syntax, so it is a mixed case.
+- **Language syntax and AST patterns:** `python-style`, `test-quality`, and
+  `numeric-literals` use Python-specific AST helpers. A shared concern does
+  not create a provider for another language.
+- **Bindings and semantic structure:** `positional-semantic-overrides`,
+  `parallel-normalization`, and numerical rules reuse existing alias, binding,
+  and AST helpers where their exact contracts fit.
+- **Structured documents and mixed inputs:** `dynamic-markdown`,
+  `json-structure`, and `suppression-reasons` use structured readers. The last
+  joins Python comments with active Ruff TOML.
+- **Repository indexes and cross-file joins:** `package-boundaries`,
+  `dependency-locks`, and `repository-layout` use inventory and declared
+  secondary policies. Local checks should not become graph scans.
+- **Native tools, VCS, and external evidence:** `cyclomatic-complexity`,
+  `git-history`, and `source-test-coverage` preserve tool/version provenance.
+  The last consumes revision-matched evidence, not test source.
+- **Validated artifacts and source-to-artifact audits:** `run-artifacts` is
+  source-AST analysis. Generated artifacts and command steps have separate
+  effect and result contracts.
 
 These are observed reusable scaffolds, not a new universal AST or a promise
 that one parser covers every language. Composition is a separate dimension:

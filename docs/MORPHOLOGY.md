@@ -18,7 +18,8 @@ identity sets belong to `package-boundaries` (33), `python-style` (25),
 All five hosted workflows passed on exact head
 `1d37ce4d320fc0349243a980abb68479e3402709`. The pinned reference/candidate
 wheel differential passed all 154 manifested scenarios against baseline
-`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`; the [workflow run](https://github.com/sheepfling/alphus/actions/runs/42757575821)
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`.
+[Workflow run 42757575821](https://github.com/sheepfling/alphus/actions/runs/42757575821)
 includes the required comparison step and retained evidence. The manifest has
 147 behavioral scenarios, five controls, and two planned-only entries. This is
 bounded evidence, not exhaustive equivalence. The package-boundaries history
