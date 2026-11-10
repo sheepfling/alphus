@@ -234,9 +234,10 @@ claims.
 
 The current pushed candidate adds the same-aggregate complaint contribution
 path and generated policy-class aliases described below. These changes add no
-detector and do not change the 154-scenario manifest. Local full-profile and
-focused validation passed; exact-head hosted validation is running for this
-candidate and must finish before its hosted status is called green.
+detector and do not change the 154-scenario manifest. Exact-head validation on
+`700496c2240e69420a46fa4e1119a1bd3c080448` passed all five hosted workflows,
+including the pinned 154-scenario wheel differential against baseline
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` ([run 42778667376](https://github.com/sheepfling/alphus/actions/runs/42778667376); [retained report](https://github.com/sheepfling/alphus/actions/runs/42778667376/artifacts/13745502327)).
 
 Generate the current machine-readable selector and runner inventory on demand:
 
@@ -1058,7 +1059,8 @@ not complete runtime registration. All 62 built-ins now use feature-owned typed
 forms and generated runtime views. The latest published 154-scenario result is
 bounded evidence, not proof for every input or completion of issue #87. The
 same-aggregate complaint extension is implemented in the current candidate
-and must pass exact-head hosted validation before it is included in the current status.
+and passed exact-head hosted validation at `700496c`. The 154-scenario result is
+bounded evidence, not exhaustive equivalence.
 
 ## Existing-check mappings
 
@@ -1728,8 +1730,8 @@ missing execution coverage. The four previously identified capability gaps
 now have executable scenarios as described above. The corrected history digest
 has focused unit coverage and is intentionally excluded from baseline equality
 because its versioned cohort cannot equal the legacy digest. Issue #87 still
-needs independent review and exact-head validation of the current candidate;
-the 154 scenarios are not exhaustive equivalence.
+needs independent review of the current candidate; the 154 scenarios are not
+exhaustive equivalence.
 
 PR #100 remains draft. Registration is complete for the current 62 built-ins;
 the issue's broader exit status remains subject to review of deferred compatibility

@@ -16,17 +16,11 @@ identity sets belong to `package-boundaries` (33), `python-style` (25),
 `path-discovery` (18), `repository-layout` (16), and `pydantic-practices` (14).
 
 All five hosted workflows passed on exact head
-`0966f4d6e01188754ed4ee508efaf70ca0d83dda`. The pinned reference/candidate
+`700496c2240e69420a46fa4e1119a1bd3c080448`. The pinned reference/candidate
 wheel differential passed all 154 manifested scenarios against baseline
 `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`.
-[Workflow run 42761791173](https://github.com/sheepfling/alphus/actions/runs/42761791173)
-includes the required comparison step and retained evidence. The manifest has
-147 behavioral scenarios, five controls, and two planned-only entries. The
-planned-only cases verify planning semantics and do not claim analyzer
-execution. This is bounded evidence, not exhaustive equivalence. The
-package-boundaries history digest creates a separately versioned cohort and is
-intentionally not asserted equal to the baseline; archive/index schema and
-legacy archive semantics remain unchanged.
+[Workflow run 42778667376](https://github.com/sheepfling/alphus/actions/runs/42778667376)
+includes the required comparison step; the [retained report](https://github.com/sheepfling/alphus/actions/runs/42778667376/artifacts/13745502327) records provenance and results. The manifest has 147 behavioral scenarios, five controls, and two planned-only entries. The planned-only cases verify planning semantics and do not claim analyzer execution. This is bounded evidence, not exhaustive equivalence. The package-boundaries history digest creates a separately versioned cohort and is intentionally not asserted equal to the baseline; archive/index schema and legacy archive semantics remain unchanged.
 
 The current candidate adds typed feature-owned complaint contributions to an
 existing finding selector. Its installed-wheel acceptance proves that two
@@ -35,8 +29,8 @@ identical policy and morphology views, reject policy/finding collisions,
 validate strict config, load only selected providers, and report their declared
 IDs. These are synthetic acceptance providers; shipped detector behavior and
 default selection are unchanged. The focused tests and full local self-profile
-passed. Exact-head hosted checks are running; this candidate is not called
-hosted-green until they finish.
+passed. Exact-head hosted checks for this candidate also passed all five
+workflows, including the pinned 154-scenario comparison.
 
 Registration migration and manifested comparison are substantial evidence,
 not completion of issue #87. Persistent caching, local-model execution, new
