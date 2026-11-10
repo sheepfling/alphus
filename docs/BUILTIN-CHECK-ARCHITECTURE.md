@@ -84,12 +84,16 @@ Dispatch narrows the loaded form, then adapts its typed result to the existing
 the existing `python-style` selector: path to named Python categories to line
 numbers. The CLI and result adapter preserve that wire shape without importing
 the analyzer during catalog or config inspection. It is not a registry for
-future style checks. A new `*-style` selector should normally be a separate
-feature with its own concern and policy, `FindingBuiltinFeature`, and
-`list[Finding]` output; it should not add a category to this Python-only
-`TypedDict` or use `PythonStyleBuiltinFeature`. The suffix in a selector does
-not choose a result shape. The installed-wheel extension acceptance test
-exercises that ordinary finding path with a new style-named selector.
+future style checks. The current Python aggregate still has a maintenance
+cost: its fixed categories must stay aligned across the analyzer, complaint
+IDs, morphology, and legacy renderer. This is preserved for 0.0.3 wire
+compatibility, not endorsed as the extension pattern. A new `*-style` selector
+should normally be a separate feature with its own concern and policy,
+`FindingBuiltinFeature`, and `list[Finding]` output; it should not add a category
+to this Python-only `TypedDict` or use `PythonStyleBuiltinFeature`. The suffix
+in a selector does not choose a result shape. The installed-wheel test uses a
+synthetic style-named registration probe to exercise that ordinary finding
+path; it does not add a style analyzer or claim cross-language detection.
 
 The 0.0.3 shapes currently fit without forcing one result type:
 
