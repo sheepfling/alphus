@@ -237,7 +237,11 @@ path and generated policy-class aliases described below. These changes add no
 detector and do not change the 154-scenario manifest. Exact-head validation on
 `700496c2240e69420a46fa4e1119a1bd3c080448` passed all five hosted workflows,
 including the pinned 154-scenario wheel differential against baseline
-`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` ([run 42778667376](https://github.com/sheepfling/alphus/actions/runs/42778667376); [retained report](https://github.com/sheepfling/alphus/actions/runs/42778667376/artifacts/13745502327)).
+`c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e` ([run 42778667376][run-current];
+[retained report][report-current]).
+
+[run-current]: https://github.com/sheepfling/alphus/actions/runs/42778667376
+[report-current]: https://github.com/sheepfling/alphus/actions/runs/42778667376/artifacts/13745502327
 
 Generate the current machine-readable selector and runner inventory on demand:
 

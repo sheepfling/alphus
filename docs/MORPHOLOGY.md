@@ -19,8 +19,17 @@ All five hosted workflows passed on exact head
 `700496c2240e69420a46fa4e1119a1bd3c080448`. The pinned reference/candidate
 wheel differential passed all 154 manifested scenarios against baseline
 `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`.
-[Workflow run 42778667376](https://github.com/sheepfling/alphus/actions/runs/42778667376)
-includes the required comparison step; the [retained report](https://github.com/sheepfling/alphus/actions/runs/42778667376/artifacts/13745502327) records provenance and results. The manifest has 147 behavioral scenarios, five controls, and two planned-only entries. The planned-only cases verify planning semantics and do not claim analyzer execution. This is bounded evidence, not exhaustive equivalence. The package-boundaries history digest creates a separately versioned cohort and is intentionally not asserted equal to the baseline; archive/index schema and legacy archive semantics remain unchanged.
+[workflow run][run-current] includes the required comparison step; the
+[retained report][report-current] records provenance and results. The manifest
+has 147 behavioral scenarios, five controls, and two planned-only entries. The
+planned-only cases verify planning semantics and do not claim analyzer execution.
+This is bounded evidence, not exhaustive equivalence. The package-boundaries
+history digest creates a separately versioned cohort and is intentionally not
+asserted equal to the baseline; archive/index schema and legacy archive
+semantics remain unchanged.
+
+[run-current]: https://github.com/sheepfling/alphus/actions/runs/42778667376
+[report-current]: https://github.com/sheepfling/alphus/actions/runs/42778667376/artifacts/13745502327
 
 The current candidate adds typed feature-owned complaint contributions to an
 existing finding selector. Its installed-wheel acceptance proves that two
