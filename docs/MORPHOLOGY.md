@@ -7,7 +7,7 @@ This page records morphology vocabulary and the current 0.0.3 status.
 ## Current implementation status
 
 At code commit
-`132c8e5735fbd9b7fc558eab8efa2da65a891d92` and the current working changes,
+`52d1297bb90984cc7b318433b9743377a54eb99c` and the current working changes,
 all 62 built-in selectors use feature-owned declarations and narrow typed
 registrations. Their declared policy models and resolvers connect to typed
 runner/result shapes for findings, composites, messages, Python-style category
@@ -16,16 +16,19 @@ strict config fields, output adapters, findings, and enforcement remain the
 compatibility contract.
 
 The exact-head hosted run compared 154 scenarios on the pinned reference and
-candidate wheels. Public outputs matched, but the comparison failed on two
-incorrect expected-exit declarations shared by both wheels: invalid plugin
-results yield a failed profile step and profile exit 1; the 35-byte file-size
-fixture exceeds its 3-byte configured limit and yields quality exit 1. The
-manifest correction is now in the working diff and needs a fresh exact-head
-run before parity is claimed. Additional installed-wheel evidence covers
-unsupported cyclomatic planning (classified as planned-only), duplicate plugin
-entry-point rejection before plugin import, invalid plugin-return reporting,
-serialized lazy built-in import traces, and a side-effecting three-command
-profile compared serially and in parallel. The manifest contains 154 entries:
+candidate wheels. Public outputs matched. On `132c8e5`, two incorrect expected
+exits were shared by both builds: invalid plugin results yield a failed profile
+step and profile exit 1; the 35-byte file-size fixture exceeds its 3-byte
+configured limit and yields quality exit 1. On `52d1297`, the rerun showed that
+the catalog variant of the same lazy-import scenario exits 0 while selected
+file-size exits 1. The current working change adds strict per-variant expected
+exits and assigns the override only to selected file-size; fresh exact-head
+validation is required before parity is claimed. Additional installed-wheel
+evidence covers unsupported cyclomatic planning (classified as planned-only),
+duplicate plugin entry-point rejection before plugin import, invalid
+plugin-return reporting, serialized lazy built-in import traces, and a
+side-effecting three-command profile compared serially and in parallel. The
+manifest contains 154 entries:
 147 behavioral scenarios, five controls, and two planned-only scenarios. This
 is bounded evidence, not exhaustive equivalence. The package-boundaries
 history digest is versioned to include all declared effective policy inputs;

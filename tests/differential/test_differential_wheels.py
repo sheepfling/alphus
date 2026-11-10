@@ -198,6 +198,58 @@ def test_report_manifest_derives_selector_coverage_without_a_total_list(
     assert not any(item.capability.startswith("plugin-api-v1") for item in deferred)
 
 
+def test_variant_specific_exit_expectation_matches_each_invocation() -> None:
+    scenarios, _ = load_manifest(Path("tests/differential/wheel-scenarios.toml"))
+    scenario = next(
+        item for item in scenarios if item.name == "builtin-module-import-laziness"
+    )
+    assert scenario.expected_exit == 0
+    assert {variant.name: variant.expected_exit for variant in scenario.variants} == {
+        "catalog": None,
+        "selected-file-size": 1,
+    }
+
+    def report(build: str, selected_exit: int) -> _ScenarioRunReport:
+        return _ScenarioRunReport.model_validate(
+            {
+                "fixture_sha256": "same-fixture",
+                "fixture_git_commit": "same-commit",
+                "selectors": scenario.selectors,
+                "execution_classification": "behavioral",
+                "behavior": scenario.behavior,
+                "variants": {
+                    "catalog": ProcessResult(0, "catalog", "").to_wire(),
+                    "selected-file-size": ProcessResult(
+                        selected_exit, "selected", ""
+                    ).to_wire(),
+                },
+                "within_build_equal": True,
+                "build": build,
+            }
+        )
+
+    reference = report("reference", 1)
+    matching_candidate = report("candidate", 1)
+    assert (
+        _compare_reports(
+            (scenario,),
+            {scenario.name: reference},
+            {scenario.name: matching_candidate},
+        )
+        == []
+    )
+
+    incorrect_candidate = report("candidate", 0)
+    assert (
+        "candidate builtin-module-import-laziness/selected-file-size exit was 0, expected 1"
+        in _compare_reports(
+            (scenario,),
+            {scenario.name: reference},
+            {scenario.name: incorrect_candidate},
+        )
+    )
+
+
 def test_partial_cyclomatic_scenario_pins_its_isolated_python_backend(
     pytestconfig: pytest.Config,
 ) -> None:

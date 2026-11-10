@@ -1539,7 +1539,7 @@ name = "builtin-module-import-laziness"
 fixture = "file-size"
 selectors = ["file-size"]
 behavior = ["installed-builtin-entry-point", "selected-provider-import", "unselected-provider-laziness"]
-expected_exit = 1
+expected_exit = 0
 
 [[scenario.variant]]
 name = "catalog"
@@ -1553,6 +1553,7 @@ expected_unimported_modules = [
 [[scenario.variant]]
 name = "selected-file-size"
 arguments = ["--config", "quality-gates.toml", "--rule", "file-size", "--json"]
+expected_exit = 1
 expected_imported_modules = ["alphus.gates.hygiene.file_size"]
 expected_unimported_modules = [
   "alphus.gates.hygiene.line_length",

@@ -127,38 +127,35 @@ unsupported native capabilities; the other checks profile planning. Neither
 claims analyzer execution. The effectful command and plugin-failure cases
 execute.
 
-On exact head `132c8e5735fbd9b7fc558eab8efa2da65a891d92`, the hosted differential
-executed all 154 scenarios against the pinned baseline and candidate wheels.
-The comparison found no reference/candidate public-output differences; it
-failed because two scenario `expected_exit` values were wrong in both builds.
-The invalid-plugin profile reports its failed step with the established profile
-exit 1 (the scenario had expected operational exit 2). The file-size fixture is
-35 bytes against a configured 3-byte limit, so its selected direct check returns
-quality exit 1 (the scenario had expected success). The manifest correction is
-now in the working diff; the exact-head comparison must rerun before parity is
-claimed. The unsupported cyclomatic plan is explicitly `planned-only`, not
-analyzer execution. The installed-wheel scenarios also check duplicate plugin
+The exact-head run on `132c8e5735fbd9b7fc558eab8efa2da65a891d92` executed all
+154 scenarios against the pinned wheels and found no reference/candidate
+public-output differences. It exposed two wrong expected exits shared by both
+builds: an invalid-plugin profile's failed step yields profile exit 1 (not 2),
+and the 35-byte file-size fixture exceeds its configured 3-byte limit and
+returns quality exit 1 (not 0). The next exact-head run on `52d1297` confirmed
+those corrections and exposed that the scenario has two different outcomes:
+catalog exits 0, while selected file-size exits 1. The current working change
+adds a strict optional per-variant expected-exit field; the catalog inherits the
+scenario default and only the selected check overrides it. A fresh exact-head
+comparison is required before parity is claimed. Other installed-wheel cases
+check the unsupported cyclomatic plan as `planned-only`, duplicate plugin
 entry-point rejection before provider import, invalid plugin return reporting,
-serialized built-in import traces for selected and unselected providers, and
-serial/parallel equality for an effectful three-command profile. These prove
-only their declared cases, not exhaustive equivalence. On the current working
-diff, the full self-profile passes (27 passed, zero
-failed, four provisional), with 2,607 package tests passed and 44 skipped.
-Ruff, formatting, strict Pyright (0 errors), imports, documentation line
-length, 70 focused workflow/differential tests, and `git diff --check` also
-pass. The explicit workflow review has two existing informational setup-action
-duplication candidates. An
-unfiltered local pytest run separately had five environment failures: four
-wheel/version tests could not fetch PyPI build dependencies, and one Ruff
-fixture could not write its cache. Any future differential result proves
-parity only for finite scenarios
-designated for comparison, not every possible input. The versioned history
-identity and planned-only entries are not baseline-equivalence claims. Older
-candidate failures and partial comparisons remain historical evidence.
-
-Older candidate failures and partial comparisons remain historical migration
-evidence. The current local checks are listed above; hosted exact-head checks
-for the report difference and its diagnosis are pending.
+serialized lazy built-in import traces, and serial/parallel equality for a
+side-effecting three-command profile. These prove only their declared cases,
+not exhaustive equivalence. The current local `check` profile passes (27 passed,
+zero failed, four provisional), with 2,608 package tests passed and 44 skipped.
+The 45 focused differential tests, Ruff, formatting, strict Pyright (0 errors),
+imports, line length, Markdown-shell review, and `git diff --check` pass. The
+latest hosted comparison on `52d1297` completed all 154 scenarios but failed
+because the catalog and selected file-size variants have distinct expected
+exits. The current per-variant expectation fix is local and its exact-head
+workflow is pending. The explicit workflow review has two existing
+informational setup-action duplication candidates. An earlier unfiltered local
+pytest run had five environment failures: four wheel/version tests could not
+fetch PyPI build dependencies, and one Ruff fixture could not write its cache.
+Any differential result proves parity only for finite manifested scenarios,
+not every possible input. The versioned history identity and planned-only
+entries remain outside baseline-equivalence claims.
 
 Generate the current machine-readable selector and runner inventory on demand:
 

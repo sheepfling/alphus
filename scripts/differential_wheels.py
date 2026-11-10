@@ -59,6 +59,7 @@ class _VariantDocument(_StrictDocument):
     arguments: tuple[str, ...] = ()
     compare_within_build: bool = False
     parse_json: bool | None = None
+    expected_exit: int | None = None
     plugin_import_expected: bool | None = None
     expected_imported_modules: tuple[str, ...] = ()
     expected_unimported_modules: tuple[str, ...] = ()
@@ -323,6 +324,7 @@ class RunVariant:
     arguments: tuple[str, ...]
     compare_within_build: bool
     parse_json: bool | None
+    expected_exit: int | None = None
     plugin_import_expected: bool | None = None
     expected_imported_modules: tuple[str, ...] = ()
     expected_unimported_modules: tuple[str, ...] = ()
@@ -454,6 +456,7 @@ def _parse_manifest(
                 arguments=tuple(variant.arguments),
                 compare_within_build=variant.compare_within_build,
                 parse_json=variant.parse_json,
+                expected_exit=variant.expected_exit,
                 plugin_import_expected=variant.plugin_import_expected,
                 expected_imported_modules=tuple(variant.expected_imported_modules),
                 expected_unimported_modules=tuple(variant.expected_unimported_modules),
@@ -531,6 +534,15 @@ def _parse_manifest(
         expected_exit = row.expected_exit
         if not 0 <= expected_exit <= 255:
             raise ValueError(f"invalid expected exit for scenario {name!r}")
+        for variant in variants:
+            if (
+                variant.expected_exit is not None
+                and not 0 <= variant.expected_exit <= 255
+            ):
+                raise ValueError(
+                    f"invalid expected exit for variant {variant.name!r} "
+                    f"in scenario {name!r}"
+                )
         if not variants:
             raise ValueError(f"scenario {name!r} must contain at least one variant")
         expected_findings = tuple(
@@ -1932,15 +1944,20 @@ def _compare_reports(
                 cand_result
             ):
                 differences.append(f"{scenario.name}/{variant.name} differs")
-            if ref_result["exit_code"] != scenario.expected_exit:
+            expected_exit = (
+                scenario.expected_exit
+                if variant.expected_exit is None
+                else variant.expected_exit
+            )
+            if ref_result["exit_code"] != expected_exit:
                 differences.append(
                     f"reference {scenario.name}/{variant.name} exit was "
-                    f"{ref_result['exit_code']}, expected {scenario.expected_exit}"
+                    f"{ref_result['exit_code']}, expected {expected_exit}"
                 )
-            if cand_result["exit_code"] != scenario.expected_exit:
+            if cand_result["exit_code"] != expected_exit:
                 differences.append(
                     f"candidate {scenario.name}/{variant.name} exit was "
-                    f"{cand_result['exit_code']}, expected {scenario.expected_exit}"
+                    f"{cand_result['exit_code']}, expected {expected_exit}"
                 )
     return differences
 
