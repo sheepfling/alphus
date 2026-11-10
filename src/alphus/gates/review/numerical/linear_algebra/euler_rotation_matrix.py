@@ -80,7 +80,7 @@ def _normalize_matrix_containers(node: ast.expr) -> ast.List | None:
     """Normalize only the supported direct 3-by-3 list/tuple matrix containers."""
     if not isinstance(node, ast.List | ast.Tuple) or len(node.elts) != 3:
         return None
-    rows: list[ast.List] = []
+    rows: list[ast.expr] = []
     for row in node.elts:
         if not isinstance(row, ast.List | ast.Tuple) or len(row.elts) != 3:
             return None
