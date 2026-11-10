@@ -232,10 +232,11 @@ profile. This is finite evidence, not exhaustive equivalence. The versioned
 history identity and two planned-only entries remain outside baseline-equality
 claims.
 
-The current unpublished candidate adds the same-aggregate complaint
-contribution path and generated policy-class aliases described below. Those
-changes do not add a detector or change the 154-scenario manifest; they still
-need exact-head hosted validation before their status can be called green.
+The current pushed candidate adds the same-aggregate complaint contribution
+path and generated policy-class aliases described below. These changes add no
+detector and do not change the 154-scenario manifest. Local full-profile and
+focused validation passed; exact-head hosted validation is running for this
+candidate and must finish before its hosted status is called green.
 
 Generate the current machine-readable selector and runner inventory on demand:
 
@@ -320,7 +321,7 @@ with a direct callback for lazy execution. The established `RuleEvaluation`
 and CLI result adapters remain shared, so adding a feature still uses the
 existing output contract. Registration migration is complete for the existing
 selector set; the last published candidate passed the current finite manifest,
-but the unpublished complaint-contribution change still needs exact-head
+but the complaint-contribution change still needs exact-head hosted
 validation. Equivalence is finite, not exhaustive. These declarations are now typed
 `FeatureDefinition(...)` calls
 paired with immutable
@@ -1047,8 +1048,8 @@ registration locations against the baseline. The objective is zero
 hand-maintained central selector, config, catalog, or runner enumerations for a
 new check; the migration itself remains a bounded, reviewed change. The
 registration criterion is met for the current 62 selectors. The latest
-published manifested comparison passed; the current unpublished contribution
-candidate still requires exact-head validation. Human correction effort and
+published manifested comparison passed; the current complaint-contribution
+candidate has passed local validation and requires exact-head hosted validation. Human correction effort and
 behavior outside manifested scenarios have not been measured or proven
 equivalent.
 
@@ -1056,8 +1057,8 @@ The six-check morphology pilot was an early metadata-discovery stage; it did
 not complete runtime registration. All 62 built-ins now use feature-owned typed
 forms and generated runtime views. The latest published 154-scenario result is
 bounded evidence, not proof for every input or completion of issue #87. The
-same-aggregate complaint extension is implemented in the unpublished candidate
-and must pass exact-head validation before it is included in the current status.
+same-aggregate complaint extension is implemented in the current candidate
+and must pass exact-head hosted validation before it is included in the current status.
 
 ## Existing-check mappings
 
@@ -1663,13 +1664,12 @@ inputs. No historical policy is inferred or backfilled.
 ## Ordered migration slices
 
 This sequence began as the migration plan. Inventory and registration for all
-current selectors are implemented. The latest published head is
-`0966f4d6e01188754ed4ee508efaf70ca0d83dda`; its pinned wheel comparison passed
-the 154 manifested scenarios and all five hosted workflows. The current
-unpublished candidate adds feature-owned complaint contributions and a
-production-path two-branch acceptance test. It requires its own exact-head
-validation before it can be described as passing. Finite manifested coverage
-is not exhaustive equivalence.
+current selectors are implemented. The latest baseline comparison passed the
+154 manifested scenarios against `c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e`.
+The current complaint-contribution candidate includes a production-path
+two-branch acceptance test and has passed the full local self-profile and
+package suite. Exact-head hosted checks are in progress. Finite manifested
+coverage is not exhaustive equivalence.
 
 1. **Inventory and reference baseline — complete.** Source-derived inventories
    compare current declarations with the pinned baseline without committed JSON.
@@ -1689,8 +1689,8 @@ is not exhaustive equivalence.
    metadata, invalid plugin returns, serialized lazy-import traces, and an
    effectful command profile have executed evidence. The comparison remains
    bounded to its declared manifest.
-6. **Same-aggregate contribution path — implemented in the current candidate;
-   validation pending.** Two independent complaint additions to `test-quality`
+6. **Same-aggregate contribution path — implemented and locally validated;
+   exact-head hosted checks pending.** Two independent complaint additions to `test-quality`
    merge in either order without authored-path conflicts. The test regenerates
    the production views, builds a wheel, and exercises strict config, lazy
    imports, dispatch, policy types, and reported finding IDs. Duplicate policy

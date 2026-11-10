@@ -28,15 +28,15 @@ package-boundaries history digest creates a separately versioned cohort and is
 intentionally not asserted equal to the baseline; archive/index schema and
 legacy archive semantics remain unchanged.
 
-The current unpublished candidate adds typed feature-owned complaint
-contributions to an existing finding selector. Its installed-wheel acceptance
-proves that two independent additions to `test-quality` merge in both orders,
-regenerate identical policy and morphology views, reject policy/finding
-collisions, validate strict config, load only selected providers, and report
-their declared IDs. These are synthetic acceptance providers; shipped detector
-behavior and default selection are unchanged. Focused tests have passed, but
-this candidate still needs the full local profile and exact-head hosted checks
-before its results can be called final.
+The current candidate adds typed feature-owned complaint contributions to an
+existing finding selector. Its installed-wheel acceptance proves that two
+independent additions to `test-quality` merge in both orders, regenerate
+identical policy and morphology views, reject policy/finding collisions,
+validate strict config, load only selected providers, and report their declared
+IDs. These are synthetic acceptance providers; shipped detector behavior and
+default selection are unchanged. The focused tests and full local self-profile
+passed. Exact-head hosted checks are running; this candidate is not called
+hosted-green until they finish.
 
 Registration migration and manifested comparison are substantial evidence,
 not completion of issue #87. Persistent caching, local-model execution, new
