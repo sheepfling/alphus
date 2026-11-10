@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import cast
 
 from alphus.contracts.model import StrictModel
-from alphus.plugins import PluginFinding, PluginRuleSpec, RulePlugin
+from alphus.plugins import PluginRuleSpec, RulePlugin
 from alphus.plugins.api import PluginChecker
 
 _marker = os.environ.get("ALPHUS_PLUGIN_IMPORT_MARKER")
