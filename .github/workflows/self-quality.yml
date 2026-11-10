@@ -96,6 +96,7 @@ jobs:
           echo "exit_code=$result" >> "$GITHUB_OUTPUT"
           if [ "$result" -ne 0 ]; then
             cat "$RUNNER_TEMP/$ALPHUS_REPORT_DIR/stderr.log" >&2
+            cat "$RUNNER_TEMP/$ALPHUS_REPORT_DIR/stdout.log" >&2
           fi
           exit "$result"
       - name: Retain comparison outcome and report provenance

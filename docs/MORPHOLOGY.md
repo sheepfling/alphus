@@ -23,9 +23,12 @@ without loading providers, then expects the public diagnostic and no plugin
 imports; unit tests retain the precise duplicate-registry error assertion. The
 unsupported-native-plan fixture was also corrected. On `311aa61`, the hosted
 comparison reached the lazy-import trace report but strict validation exposed a
-list-versus-tuple mismatch caused by immutable model normalization. The working
-fix declares the trace tuple internally and preserves JSON array output. A new
-exact-head hosted run is pending. The
+list-versus-tuple mismatch caused by immutable model normalization. That was
+fixed by retaining tuple traces internally and serializing them as JSON arrays.
+On `af5d070`, the full comparison completed but found one or more scenario
+differences. The workflow retained its report but did not print the harness's
+concise difference summary; failure logging now includes that summary. The
+specific differences remain unresolved until the next run reports them. The
 manifest contains 154 entries: 147 behavioral scenarios, five controls, and
 two planned-only scenarios. The package-boundaries history digest is versioned to
 include all declared effective policy inputs; this intentionally starts a
@@ -35,12 +38,13 @@ unsupported native-plan scenario is plan-only and does not claim analyzer
 execution. This is bounded scenario evidence, not exhaustive equivalence for
 every possible input. On the current working changes, the local full profile
 passed (27 passed, zero failed, four provisional), and the package suite
-passed (2,607 passed, 44 skipped). Focused differential/history tests passed
-(53); Ruff, formatting, Pyright (0 errors), imports, line length, Markdown
-shell review, and diff checks pass. An unfiltered local pytest run had five environment failures:
+ passed (2,607 passed, 44 skipped). Focused differential/history tests passed
+(53); 70 targeted workflow/differential tests passed. Ruff, formatting, Pyright
+(0 errors), imports, line length, Markdown shell review, and diff checks pass.
+An unfiltered local pytest run had five environment failures:
 four wheel/version cases could not fetch PyPI dependencies and one Ruff fixture
-could not write its cache. Hosted checks for the corrected duplicate-entry
-scenario are pending.
+could not write its cache. Hosted checks for the diagnostic failure summary are
+pending; the specific `af5d070` differences have not yet been identified.
 
 Registration migration and the manifested comparison are substantial evidence,
 not completion of issue #87. Persistent caching, local-model execution, new

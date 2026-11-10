@@ -135,13 +135,18 @@ entries without loading providers, then checks the public diagnostic and no
 plugin imports. Unit tests assert the precise duplicate-registry error. On
 `311aa61`, all other hosted workflows passed; the manifested comparison reached
 the lazy-import report and exposed a nested list-versus-tuple mismatch under
-strict immutable-model normalization. The local fix records import traces as
-tuples internally, which JSON serializes as arrays. A fresh exact-head run is
-pending. On the current working
+strict immutable-model normalization. The fix records import traces as tuples
+internally, which JSON serializes as arrays. On `af5d070`, all 154 scenario
+executions completed, but report comparison found one or more differences.
+The workflow retained the report artifact without logging the concise list of
+differences. A follow-up adds that summary to failure logs; the specific
+mismatch is not yet resolved. On the current working
 diff, the full self-profile passes (27 passed, zero
 failed, four provisional), with 2,607 package tests passed and 44 skipped.
 Ruff, formatting, strict Pyright (0 errors), imports, documentation line
-length, focused manifest tests, and `git diff --check` also pass. An
+length, 70 focused workflow/differential tests, and `git diff --check` also
+pass. The explicit workflow review has two existing informational setup-action
+duplication candidates. An
 unfiltered local pytest run separately had five environment failures: four
 wheel/version tests could not fetch PyPI build dependencies, and one Ruff
 fixture could not write its cache. Any future differential result proves
@@ -152,7 +157,7 @@ candidate failures and partial comparisons remain historical evidence.
 
 Older candidate failures and partial comparisons remain historical migration
 evidence. The current local checks are listed above; hosted exact-head checks
-for the corrected duplicate-entry scenario remain pending.
+for the report difference and its diagnosis are pending.
 
 Generate the current machine-readable selector and runner inventory on demand:
 
@@ -1477,9 +1482,9 @@ remains open; do not describe the finite result as exhaustive.
    remain the compatibility target.
 5. **Differential validation — in progress for 154 manifested scenarios.** The
    unsupported native plan and duplicate-entry metadata checks are corrected.
-   Exact-head hosted execution then exposed and localized a nested immutable
-   report type mismatch for import traces; the tuple-preserving JSON fix awaits
-   a new wheel run.
+   The tuple-preserving import trace fix passes local checks. Exact-head hosted
+   comparison now completes but reports output differences; the run retained
+   the report, and its concise diagnostics will be emitted on the next run.
    The finite comparison will not imply arbitrary-input equivalence.
 6. **Remaining 0.0.3 review — in progress.** Reconcile accepted feedback, keep
    contributor guidance current, and retain finite compatibility evidence.
