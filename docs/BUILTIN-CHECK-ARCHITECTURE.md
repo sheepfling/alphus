@@ -127,20 +127,21 @@ unsupported native capabilities; the other checks profile planning. Neither
 claims analyzer execution. The effectful command and plugin-failure cases
 execute.
 
-On exact head `1eabe25fcfb940c7674b77e1246b2cc3049e59ae`, four hosted workflows
-passed and self-quality failed because the duplicate-plugin scenario expected
-JSON and an internal error string instead of the CLI's generic strict-config
-diagnostic. It now preflights installed entry-point metadata for two `diff`
-entries without loading providers, then checks the public diagnostic and no
-plugin imports. Unit tests assert the precise duplicate-registry error. On
-`311aa61`, all other hosted workflows passed; the manifested comparison reached
-the lazy-import report and exposed a nested list-versus-tuple mismatch under
-strict immutable-model normalization. The fix records import traces as tuples
-internally, which JSON serializes as arrays. On `af5d070`, all 154 scenario
-executions completed, but report comparison found one or more differences.
-The workflow retained the report artifact without logging the concise list of
-differences. A follow-up adds that summary to failure logs; the specific
-mismatch is not yet resolved. On the current working
+On exact head `132c8e5735fbd9b7fc558eab8efa2da65a891d92`, the hosted differential
+executed all 154 scenarios against the pinned baseline and candidate wheels.
+The comparison found no reference/candidate public-output differences; it
+failed because two scenario `expected_exit` values were wrong in both builds.
+The invalid-plugin profile reports its failed step with the established profile
+exit 1 (the scenario had expected operational exit 2). The file-size fixture is
+35 bytes against a configured 3-byte limit, so its selected direct check returns
+quality exit 1 (the scenario had expected success). The manifest correction is
+now in the working diff; the exact-head comparison must rerun before parity is
+claimed. The unsupported cyclomatic plan is explicitly `planned-only`, not
+analyzer execution. The installed-wheel scenarios also check duplicate plugin
+entry-point rejection before provider import, invalid plugin return reporting,
+serialized built-in import traces for selected and unselected providers, and
+serial/parallel equality for an effectful three-command profile. These prove
+only their declared cases, not exhaustive equivalence. On the current working
 diff, the full self-profile passes (27 passed, zero
 failed, four provisional), with 2,607 package tests passed and 44 skipped.
 Ruff, formatting, strict Pyright (0 errors), imports, documentation line

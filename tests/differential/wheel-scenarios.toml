@@ -1478,7 +1478,7 @@ name = "plugin-invalid-result"
 plugin_package = "example"
 selectors = ["invalid-result:malformed"]
 behavior = ["installed-api-v1-plugin", "invalid-callback-result", "operational-failure-report"]
-expected_exit = 2
+expected_exit = 1
 expected_step_names = ["malformed-result"]
 expected_step_statuses = ["failed"]
 expected_step_rules = ["invalid-result:malformed"]
@@ -1539,7 +1539,7 @@ name = "builtin-module-import-laziness"
 fixture = "file-size"
 selectors = ["file-size"]
 behavior = ["installed-builtin-entry-point", "selected-provider-import", "unselected-provider-laziness"]
-expected_exit = 0
+expected_exit = 1
 
 [[scenario.variant]]
 name = "catalog"

@@ -7,44 +7,31 @@ This page records morphology vocabulary and the current 0.0.3 status.
 ## Current implementation status
 
 At code commit
-`311aa61865053d871cd01f6145098f2c83369a01` and the current working changes,
-all 62 built-in selectors use
-feature-owned declarations and narrow typed registrations. Their declared
-policy models and resolvers connect to typed runner/result shapes for findings,
-composites, messages, Python-style category maps, shared-utilities reports, and
-cyclomatic reports. The existing selectors, strict config fields, output
-adapters, findings, and enforcement remain the compatibility contract.
+`132c8e5735fbd9b7fc558eab8efa2da65a891d92` and the current working changes,
+all 62 built-in selectors use feature-owned declarations and narrow typed
+registrations. Their declared policy models and resolvers connect to typed
+runner/result shapes for findings, composites, messages, Python-style category
+maps, shared-utilities reports, and cyclomatic reports. Existing selectors,
+strict config fields, output adapters, findings, and enforcement remain the
+compatibility contract.
 
-The exact-head run on `1eabe25` failed because duplicate plugin entry-point
-rejection correctly produced the CLI's generic strict-config diagnostic on
-stderr, while the scenario incorrectly required JSON and an internal error
-string. The harness now preflights installed metadata for two `diff` entries
-without loading providers, then expects the public diagnostic and no plugin
-imports; unit tests retain the precise duplicate-registry error assertion. The
-unsupported-native-plan fixture was also corrected. On `311aa61`, the hosted
-comparison reached the lazy-import trace report but strict validation exposed a
-list-versus-tuple mismatch caused by immutable model normalization. That was
-fixed by retaining tuple traces internally and serializing them as JSON arrays.
-On `af5d070`, the full comparison completed but found one or more scenario
-differences. The workflow retained its report but did not print the harness's
-concise difference summary; failure logging now includes that summary. The
-specific differences remain unresolved until the next run reports them. The
-manifest contains 154 entries: 147 behavioral scenarios, five controls, and
-two planned-only scenarios. The package-boundaries history digest is versioned to
-include all declared effective policy inputs; this intentionally starts a
-distinct history cohort and is not asserted equal to the baseline digest. The
-history-identity scenario remains deliberately outside baseline equality; the
-unsupported native-plan scenario is plan-only and does not claim analyzer
-execution. This is bounded scenario evidence, not exhaustive equivalence for
-every possible input. On the current working changes, the local full profile
-passed (27 passed, zero failed, four provisional), and the package suite
- passed (2,607 passed, 44 skipped). Focused differential/history tests passed
-(53); 70 targeted workflow/differential tests passed. Ruff, formatting, Pyright
-(0 errors), imports, line length, Markdown shell review, and diff checks pass.
-An unfiltered local pytest run had five environment failures:
-four wheel/version cases could not fetch PyPI dependencies and one Ruff fixture
-could not write its cache. Hosted checks for the diagnostic failure summary are
-pending; the specific `af5d070` differences have not yet been identified.
+The exact-head hosted run compared 154 scenarios on the pinned reference and
+candidate wheels. Public outputs matched, but the comparison failed on two
+incorrect expected-exit declarations shared by both wheels: invalid plugin
+results yield a failed profile step and profile exit 1; the 35-byte file-size
+fixture exceeds its 3-byte configured limit and yields quality exit 1. The
+manifest correction is now in the working diff and needs a fresh exact-head
+run before parity is claimed. Additional installed-wheel evidence covers
+unsupported cyclomatic planning (classified as planned-only), duplicate plugin
+entry-point rejection before plugin import, invalid plugin-return reporting,
+serialized lazy built-in import traces, and a side-effecting three-command
+profile compared serially and in parallel. The manifest contains 154 entries:
+147 behavioral scenarios, five controls, and two planned-only scenarios. This
+is bounded evidence, not exhaustive equivalence. The package-boundaries
+history digest is versioned to include all declared effective policy inputs;
+this intentionally starts a distinct history cohort, is tested separately,
+and is not asserted equal to the baseline digest. The history-identity scenario
+remains outside baseline equality.
 
 Registration migration and the manifested comparison are substantial evidence,
 not completion of issue #87. Persistent caching, local-model execution, new
