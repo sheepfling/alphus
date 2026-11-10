@@ -78,6 +78,16 @@ def test_matches_augmented_inverse_with_zero_guard_and_right_half_return() -> No
     )
 
 
+def test_augmented_inverse_respects_configured_function_scope() -> None:
+    nested = "def wrapper():\\n" + "\\n".join(
+        "    " + line for line in _AUGMENTED.splitlines()
+    )
+
+    assert manual_elimination_sites(
+        nested, _policy(function_names=("_inverse",))
+    ) == []
+
+
 def test_augmented_inverse_requires_identity_initialization_and_right_half() -> None:
     wrong_identity = _AUGMENTED.replace("float(i == j)", "float(i != j)")
     wrong_result = _AUGMENTED.replace("row[size:]", "row[:size]")
