@@ -278,19 +278,19 @@ def test_byte_hash_scan_reports_repeated_named_inputs_and_skips_owner(
 ) -> None:
     sources = {
         "src/common/bytes.py": (
-            "import hashlib\\n"
-            "def bytes_sha256(payload):\\n"
-            "    return hashlib.sha256(payload).digest()\\n"
+            "import hashlib\n"
+            "def bytes_sha256(payload):\n"
+            "    return hashlib.sha256(payload).digest()\n"
         ),
         "src/first.py": (
-            "import hashlib\\n"
-            "def first_digest(payload):\\n"
-            "    return hashlib.sha256(payload).hexdigest()\\n"
+            "import hashlib\n"
+            "def first_digest(payload):\n"
+            "    return hashlib.sha256(payload).hexdigest()\n"
         ),
         "src/second.py": (
-            "import hashlib\\n"
-            "def second_digest(content):\\n"
-            "    return hashlib.sha256(content).hexdigest()\\n"
+            "import hashlib\n"
+            "def second_digest(content):\n"
+            "    return hashlib.sha256(content).hexdigest()\n"
         ),
     }
     for name, source in sources.items():
@@ -310,10 +310,10 @@ def test_byte_hash_scan_keeps_single_use_and_embedded_probe_clean(
     tmp_path: Path,
 ) -> None:
     source = (
-        "import hashlib\\n"
-        "def recipe_identity(payload):\\n"
-        "    return hashlib.sha256(payload).hexdigest()\\n"
-        "PROBE = 'hashlib.sha256(payload).hexdigest()'\\n"
+        "import hashlib\n"
+        "def recipe_identity(payload):\n"
+        "    return hashlib.sha256(payload).hexdigest()\n"
+        "PROBE = 'hashlib.sha256(payload).hexdigest()'\n"
     )
     _write(tmp_path, "src/recipe.py", source)
 
