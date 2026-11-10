@@ -46,6 +46,7 @@ _NUMERICAL_SOURCE_RULES: tuple[QualityRuleName, ...] = (
     "manual-quaternion-inversion",
     "manual-quaternion-vector-rotation",
     "manual-quaternion-matrix-conversion",
+    "euler-rotation-matrix",
     "ecef-enu-transform",
     "ecef-ned-matrix-transform",
     "ned-basis-vectors",

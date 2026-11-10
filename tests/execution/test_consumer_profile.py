@@ -151,7 +151,11 @@ def test_markdown_example_pairs_two_fixers_without_duplicate_missing_links(
 def test_manual_matrix_kernel_example_is_scoped_and_provisional() -> None:
     config = load_config(Path("examples/numerics/manual-matrix-kernels.toml"))
     assert config.files is not None
-    assert config.files.include == ("src/numerics/*.py", "src/geometry/*.py")
+    assert config.files.include == (
+        "src/numerics/*.py",
+        "src/geometry/*.py",
+        "tests/fixtures/numerics/manual_euler_matrix.py",
+    )
     policy = config.checks.manual_matrix_kernels
     assert policy is not None
     assert policy.source_paths == ("src/numerics/*.py",)
@@ -211,6 +215,11 @@ def test_manual_matrix_kernel_example_is_scoped_and_provisional() -> None:
     assert "Quaternion inversion review" in plan.steps
     assert "Quaternion vector rotation review" in plan.steps
     assert "Quaternion matrix conversion review" in plan.steps
+    euler_policy = config.checks.euler_rotation_matrix
+    assert euler_policy is not None
+    assert euler_policy.angles == ("yaw", "pitch", "roll")
+    assert euler_policy.trig_symbols == ("cy", "sy", "cp", "sp", "cr", "sr")
+    assert "Euler rotation matrix review" in plan.steps
     assert "ECEF to ENU transform review" in plan.steps
     assert "ECEF to NED matrix review" in plan.steps
     assert "Manual elimination review" in plan.steps

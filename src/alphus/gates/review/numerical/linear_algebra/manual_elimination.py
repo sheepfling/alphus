@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import copy
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -231,7 +232,12 @@ def _match(function: ast.FunctionDef, policy: ManualEliminationPolicy) -> _Site 
         not isinstance(pair.iter, ast.Call)
         or _id(pair.iter.func) != "zip"
         or len(pair.iter.args) != 2
-        or pair.iter.keywords
+        or any(
+            keyword.arg != "strict"
+            or not isinstance(keyword.value, ast.Constant)
+            or keyword.value.value is not True
+            for keyword in pair.iter.keywords
+        )
     ):
         return None
     if (
@@ -249,7 +255,6 @@ def _match(function: ast.FunctionDef, policy: ManualEliminationPolicy) -> _Site 
         row,
         size,
         diagonal,
-        value_name,
         factor,
         current,
         pivot_value,
@@ -272,12 +277,180 @@ def manual_elimination_sites(
         return []
     if _module_shadows_elimination_builtins(tree):
         return []
-    return configured_function_observations(
+    direct = configured_function_observations(
         source,
         policy.function_names,
         lambda function: _match(function, policy),
         lambda site: (site.function, site.pivot_line),
     )
+    augmented = configured_function_observations(
+        source,
+        policy.function_names,
+        lambda function: _match_augmented_inverse(function, policy),
+        lambda site: (site.function, site.pivot_line),
+    )
+    return sorted(
+        {*direct, *augmented}, key=lambda site: (site.function, site.pivot_line)
+    )
+
+
+def _match_augmented_inverse(
+    function: ast.FunctionDef, policy: ManualEliminationPolicy
+) -> _Site | None:
+    """Recognize the configured augmented-list inverse and its exact result slice."""
+    args = (*function.args.posonlyargs, *function.args.args)
+    if (
+        function.name not in policy.function_names
+        or len(args) != 1
+        or args[0].arg != policy.matrix_name
+        or function.args.defaults
+        or function.args.kwonlyargs
+        or function.args.vararg
+        or function.args.kwarg
+    ):
+        return None
+    body = function.body[1:] if ast.get_docstring(function) else function.body
+    if len(body) != 4:
+        return None
+    size_assign, augmented_assign, outer, returned = body
+    if not isinstance(size_assign, ast.Assign) or len(size_assign.targets) != 1:
+        return None
+    size = _id(size_assign.targets[0])
+    if (
+        size is None
+        or not isinstance(size_assign.value, ast.Call)
+        or _id(size_assign.value.func) != "len"
+        or len(size_assign.value.args) != 1
+        or _id(size_assign.value.args[0]) != policy.matrix_name
+    ):
+        return None
+    if (
+        not isinstance(augmented_assign, ast.Assign)
+        or len(augmented_assign.targets) != 1
+    ):
+        return None
+    rows = _id(augmented_assign.targets[0])
+    comp = augmented_assign.value
+    if (
+        rows is None
+        or not isinstance(comp, ast.ListComp)
+        or len(comp.generators) != 1
+        or not isinstance(comp.elt, ast.BinOp)
+        or not isinstance(comp.elt.op, ast.Add)
+        or not isinstance(comp.elt.left, ast.Call)
+        or _id(comp.elt.left.func) != "list"
+        or len(comp.elt.left.args) != 1
+        or not isinstance(comp.elt.right, ast.ListComp)
+        or len(comp.elt.right.generators) != 1
+    ):
+        return None
+    row_comp = comp.generators[0]
+    row_index: str | None = None
+    row_name: str | None = None
+    if isinstance(row_comp.target, ast.Tuple) and len(row_comp.target.elts) == 2:
+        row_index, row_name = map(_id, row_comp.target.elts)
+    row_source = row_comp.iter
+    identity = comp.elt.right
+    identity_gen = identity.generators[0]
+    col_index = _id(identity_gen.target)
+    if (
+        row_comp.ifs
+        or row_comp.is_async
+        or row_index is None
+        or row_name is None
+        or not isinstance(row_source, ast.Call)
+        or _id(row_source.func) != "enumerate"
+        or len(row_source.args) != 1
+        or _id(row_source.args[0]) != policy.matrix_name
+        or not isinstance(comp.elt.left.args[0], ast.Name)
+        or comp.elt.left.args[0].id != row_name
+        or identity_gen.ifs
+        or identity_gen.is_async
+        or col_index is None
+        or not isinstance(identity_gen.iter, ast.Call)
+        or _id(identity_gen.iter.func) != "range"
+        or len(identity_gen.iter.args) != 1
+        or _id(identity_gen.iter.args[0]) != size
+        or not isinstance(identity.elt, ast.Call)
+        or _id(identity.elt.func) != "float"
+        or len(identity.elt.args) != 1
+        or not isinstance(identity.elt.args[0], ast.Compare)
+    ):
+        return None
+    equality = identity.elt.args[0]
+    if not (
+        _id(equality.left) == row_index
+        and len(equality.ops) == 1
+        and isinstance(equality.ops[0], ast.Eq)
+        and len(equality.comparators) == 1
+        and _id(equality.comparators[0]) == col_index
+    ):
+        return None
+    if not isinstance(returned, ast.Return) or not isinstance(
+        returned.value, ast.ListComp
+    ):
+        return None
+    output = returned.value
+    if (
+        len(output.generators) != 1
+        or not isinstance(output.elt, ast.Subscript)
+        or _id(output.elt.value) != row_name
+        or not isinstance(output.elt.slice, ast.Slice)
+        or output.elt.slice.lower is None
+        or _id(output.elt.slice.lower) != size
+        or output.elt.slice.upper is not None
+        or output.elt.slice.step is not None
+        or _id(output.generators[0].target) != row_name
+        or _id(output.generators[0].iter) != rows
+        or output.generators[0].ifs
+        or output.generators[0].is_async
+        or not isinstance(outer, ast.For)
+        or len(outer.body) != 6
+    ):
+        return None
+    pivot = _id(outer.target)
+    divisor_assign, zero_guard = outer.body[2:4]
+    if (
+        pivot is None
+        or not isinstance(divisor_assign, ast.Assign)
+        or len(divisor_assign.targets) != 1
+        or (divisor := _id(divisor_assign.targets[0])) is None
+        or _cell(divisor_assign.value, rows) != (pivot, pivot)
+        or not isinstance(zero_guard, ast.If)
+        or not isinstance(zero_guard.test, ast.Compare)
+        or _id(zero_guard.test.left) != divisor
+        or len(zero_guard.test.ops) != 1
+        or not isinstance(zero_guard.test.ops[0], ast.Eq)
+        or len(zero_guard.test.comparators) != 1
+        or not isinstance(zero_guard.test.comparators[0], ast.Constant)
+        or zero_guard.test.comparators[0].value != 0
+        or zero_guard.orelse
+        or len(zero_guard.body) != 1
+        or not isinstance(zero_guard.body[0], ast.Raise)
+    ):
+        return None
+
+    class _RenameRows(ast.NodeTransformer):
+        def visit_Name(self, node: ast.Name) -> ast.Name:
+            if node.id == rows:
+                node.id = policy.matrix_name
+            return node
+
+    loop = _RenameRows().visit(copy.deepcopy(outer))
+    del loop.body[3]
+    normalized = ast.FunctionDef(
+        name=function.name,
+        args=ast.arguments(
+            posonlyargs=[],
+            args=[ast.arg(arg=policy.matrix_name), ast.arg(arg=size)],
+            kwonlyargs=[],
+            kw_defaults=[],
+            defaults=[],
+        ),
+        body=[loop],
+        decorator_list=[],
+    )
+    return _match(normalized, policy)
 
 
 def _module_shadows_elimination_builtins(tree: ast.Module) -> bool:
@@ -298,9 +471,12 @@ def _module_shadows_elimination_builtins(tree: ast.Module) -> bool:
             bound = {alias.asname or alias.name for alias in node.names}
             if bound & builtins:
                 return True
-        elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
-            if node.id in builtins:
-                return True
+        elif (
+            isinstance(node, ast.Name)
+            and isinstance(node.ctx, ast.Store)
+            and node.id in builtins
+        ):
+            return True
         if isinstance(
             node,
             ast.Lambda | ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp,

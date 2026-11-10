@@ -364,6 +364,12 @@ RULE_SPECS: Mapping[str, RuleSpec] = MappingProxyType(
             "Reviews configured quaternion-to-matrix conversions.",
             ("python", "numerical"),
         ),
+        "euler-rotation-matrix": RuleSpec(
+            "euler_rotation_matrix",
+            RuleOutputShape.FINDINGS,
+            "Reviews configured explicit ZYX Euler rotation matrix formulas.",
+            ("python", "numerical"),
+        ),
         "ecef-enu-transform": RuleSpec(
             "ecef_enu_transform",
             RuleOutputShape.FINDINGS,

@@ -166,6 +166,7 @@ _SOURCE_SCAN_RULES: frozenset[QualityRuleName] = frozenset(
         "manual-elimination",
         "array-representation-churn",
         "cholesky-recurrence",
+        "euler-rotation-matrix",
         "manual-quaternion-conjugation",
         "manual-quaternion-products",
         "manual-quaternion-normalization",

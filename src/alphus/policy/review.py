@@ -576,6 +576,43 @@ class QuaternionMatrixConversionPolicy(PythonSourceScanPolicy):
         return tuple(values)
 
 
+class EulerRotationMatrixPolicy(PythonSourceScanPolicy):
+    """Opt-in exact ZYX Euler rotation matrix syntax review."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    function_names: Annotated[tuple[str, ...], Field(min_length=1)]
+    angles: Annotated[tuple[str, str, str], Field(min_length=3)]
+    trig_symbols: Annotated[tuple[str, str, str, str, str, str], Field(min_length=6)]
+    sine_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    cosine_helpers: Annotated[tuple[str, ...], Field(min_length=1)]
+    convention: Literal["zyx"]
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @field_validator("function_names", "angles", "trig_symbols")
+    @classmethod
+    def validate_identifiers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(not value.isidentifier() for value in values):
+            raise ValueError("Euler matrix selectors must be identifiers")
+        require_unique(values, "Euler matrix selectors must be unique")
+        return tuple(values)
+
+    @field_validator("sine_helpers", "cosine_helpers")
+    @classmethod
+    def validate_helpers(cls, values: Sequence[str]) -> tuple[str, ...]:
+        if any(
+            not value or any(not part.isidentifier() for part in value.split("."))
+            for value in values
+        ):
+            raise ValueError("Euler trigonometric helpers must be dotted identifiers")
+        require_unique(values, "Euler trigonometric helpers must be unique")
+        return tuple(values)
+
+
 class EcefEnuTransformPolicy(PythonSourceScanPolicy):
     """Consumer-declared contract for one ECEF displacement to ENU basis."""
 

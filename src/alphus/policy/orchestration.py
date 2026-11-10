@@ -49,6 +49,7 @@ from alphus.policy.review import (
     EcefEnuTransformPolicy,
     EcefNedMatrixTransformPolicy,
     EmbeddedSemanticOverridePolicy,
+    EulerRotationMatrixPolicy,
     FastApiPracticePolicy,
     HeuristicTotalConsumptionPolicy,
     InputContractPolicy,
@@ -128,6 +129,7 @@ class CheckPolicies(StrictModel):
     manual_quaternion_inversion: QuaternionInversionPolicy | None = None
     manual_quaternion_vector_rotation: QuaternionVectorRotationPolicy | None = None
     manual_quaternion_matrix_conversion: QuaternionMatrixConversionPolicy | None = None
+    euler_rotation_matrix: EulerRotationMatrixPolicy | None = None
     ecef_enu_transform: EcefEnuTransformPolicy | None = None
     ecef_ned_matrix_transform: EcefNedMatrixTransformPolicy | None = None
     ned_basis_vectors: NedBasisVectorsPolicy | None = None

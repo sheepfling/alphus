@@ -9,6 +9,7 @@ from pathlib import Path
 from alphus.config import CholeskyRecurrencePolicy
 from alphus.contracts.findings import Finding
 from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.gates.review.numerical.common.ast_helpers import qualified_call_name
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
 
@@ -18,17 +19,6 @@ _RULE_ID = rule_tag(
     Category.MAINTAINABILITY,
     "manual-cholesky-recurrence",
 )
-
-
-def _qualified_name(node: ast.expr) -> str | None:
-    match node:
-        case ast.Name(id=name):
-            return name
-        case ast.Attribute(value=value, attr=attr):
-            parent = _qualified_name(value)
-            return f"{parent}.{attr}" if parent else None
-        case _:
-            return None
 
 
 def _index(node: ast.expr, base: str, first: str, second: str) -> bool:
@@ -135,13 +125,12 @@ def _index_parts(node: ast.expr) -> tuple[str, str, str] | None:
 
 def _sum_product_name(
     statements: Iterable[ast.stmt], row: str, column: str
-) -> tuple[str, int, str] | None:
+) -> tuple[str | None, int, str, ast.Call] | None:
     for statement in statements:
         for node in ast.walk(statement):
             match node:
-                case ast.Assign(
-                    targets=[ast.Name(id=name)],
-                    value=ast.Call(
+                case (
+                    ast.Call(
                         func=ast.Name(id="sum"),
                         args=[
                             ast.GeneratorExp(
@@ -165,7 +154,7 @@ def _sum_product_name(
                             )
                         ],
                         keywords=[],
-                    ),
+                    ) as call
                 ) if (
                     bound == column
                     and (left_parts := _index_parts(left)) is not None
@@ -174,7 +163,20 @@ def _sum_product_name(
                     and left_parts[1:] == (row, index)
                     and right_parts[1:] == (column, index)
                 ):
-                    return name, node.lineno, left_parts[0]
+                    assignment = (
+                        statement if _assignment_value(statement) is call else None
+                    )
+                    target = (
+                        _assignment_target(assignment)
+                        if assignment is not None
+                        else None
+                    )
+                    return (
+                        target.id if isinstance(target, ast.Name) else None,
+                        call.lineno,
+                        left_parts[0],
+                        call,
+                    )
                 case _:
                     continue
     return None
@@ -234,13 +236,15 @@ def _match_function(
                 sum_result = _sum_product_name(statements, row, column)
                 if sum_result is None:
                     continue
-                sum_name, sum_line, sum_factor = sum_result
+                sum_name, sum_line, sum_factor, sum_call = sum_result
                 factor: str | None = None
                 sqrt_line: int | None = None
                 diagonal_assignment: ast.Assign | None = None
                 # Only a direct assignment in the equality arm is diagonal
                 # evidence; walking the full If also visits its non-diagonal else.
-                for candidate in diagonal.body:
+                for candidate in ast.walk(
+                    ast.Module(body=diagonal.body, type_ignores=[])
+                ):
                     target = _assignment_target(candidate)
                     target_factor = (
                         _target_factor(target, row, column)
@@ -254,7 +258,7 @@ def _match_function(
                             ast.Assign(
                                 value=ast.Call(func=func, args=[_], keywords=[])
                             ) as assignment
-                        ) if _qualified_name(func) in sqrt_helpers:
+                        ) if qualified_call_name(func) in sqrt_helpers:
                             sqrt_line = assignment.lineno
                             factor = target_factor
                             diagonal_assignment = assignment
@@ -272,7 +276,7 @@ def _match_function(
                 # lower-triangle recurrence divides by the earlier diagonal.
                 diagonal_value = _assignment_value(diagonal_assignment)
                 if diagonal_value is None or not _uses_sum_reduction(
-                    diagonal_value, sum_name, row
+                    diagonal_value, sum_name, sum_call, row, column, statements
                 ):
                     continue
                 for candidate in ast.walk(
@@ -285,20 +289,14 @@ def _match_function(
                         case (
                             ast.Assign(
                                 value=ast.BinOp(
-                                    left=ast.BinOp(
-                                        left=source,
-                                        op=ast.Sub(),
-                                        right=ast.Name(id=name),
-                                    ),
+                                    left=difference,
                                     op=ast.Div(),
                                     right=denominator,
                                 )
                             ) as assignment
-                        ) if (
-                            name == sum_name
-                            and _contains_source_index(source, row, column)
-                            and _index(denominator, factor, column, column)
-                        ):
+                        ) if _sum_difference(
+                            difference, sum_name, sum_call, row, column, statements
+                        ) and _index(denominator, factor, column, column):
                             return (
                                 outer.lineno,
                                 inner.lineno,
@@ -321,18 +319,56 @@ def _target_factor(node: ast.expr, first: str, second: str) -> str | None:
             return None
 
 
-def _uses_sum_reduction(node: ast.expr, name: str, row: str) -> bool:
-    match node:
-        case ast.Call(
-            args=[
-                ast.BinOp(
-                    left=source,
-                    op=ast.Sub(),
-                    right=ast.Name(id=rhs),
-                )
+def _sum_difference(
+    expression: ast.expr,
+    sum_name: str | None,
+    sum_call: ast.Call,
+    row: str,
+    column: str,
+    statements: Iterable[ast.stmt],
+) -> bool:
+    """Recognize the matrix diagonal minus the lower-factor product sum."""
+    match expression:
+        case ast.BinOp(left=source, op=ast.Sub(), right=ast.Name(id=rhs)) if (
+            sum_name is not None and rhs == sum_name
+        ):
+            return _contains_source_index(source, row, column)
+        case ast.BinOp(left=source, op=ast.Sub(), right=ast.Call() as call) if (
+            call is sum_call
+        ):
+            return _contains_source_index(source, row, column)
+        case ast.Name(id=alias):
+            assignments = [
+                statement
+                for statement in statements
+                if isinstance(statement, ast.Assign)
+                and len(statement.targets) == 1
+                and isinstance(statement.targets[0], ast.Name)
+                and statement.targets[0].id == alias
             ]
-        ) if rhs == name:
-            return _contains_source_index(source, row, row)
+            return len(assignments) == 1 and _sum_difference(
+                assignments[0].value, sum_name, sum_call, row, column, ()
+            )
+        case _:
+            return False
+
+
+def _uses_sum_reduction(
+    node: ast.expr,
+    name: str | None,
+    sum_call: ast.Call,
+    row: str,
+    column: str,
+    statements: Iterable[ast.stmt],
+) -> bool:
+    match node:
+        case ast.Call(args=[argument]):
+            return any(
+                _sum_difference(
+                    argument, name, sum_call, row, source_column, statements
+                )
+                for source_column in (row, column)
+            )
         case _:
             return False
 
