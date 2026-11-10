@@ -42,6 +42,7 @@ class _SharedUtilitiesWire(BaseModel):
     failed: bool
     file_hash_implementations: tuple[str, ...]
     direct_git_calls: tuple[str, ...] = ()
+    byte_hash_implementations: tuple[str, ...] = ()
 
 
 class _CyclomaticWire(BaseModel):
@@ -169,6 +170,7 @@ def _shared_diagnostics(
     groups: Sequence[Sequence[str]],
     hash_implementations: Sequence[str],
     direct_git_calls: Sequence[str],
+    byte_hash_implementations: Sequence[str],
     *,
     failed: bool,
 ) -> list[Diagnostic]:
@@ -214,6 +216,22 @@ def _shared_diagnostics(
         )
         for location in direct_git_calls
     )
+    if len(byte_hash_implementations) > 1:
+        diagnostics.append(
+            Diagnostic(
+                source="alphus",
+                rule_id=rule_tag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.MAINTAINABILITY,
+                    "duplicate-byte-hash-implementation",
+                ),
+                message=(
+                    "Repeated in-memory byte SHA-256 implementation: "
+                    f"{', '.join(byte_hash_implementations)}"
+                ),
+            )
+        )
     if failed and not diagnostics:
         diagnostics.append(
             Diagnostic(
@@ -256,6 +274,7 @@ def diagnostics_from_output(rule: RuleSelector, output: RuleOutput) -> list[Diag
         report.duplicate_groups,
         report.file_hash_implementations,
         report.direct_git_calls,
+        report.byte_hash_implementations,
         failed=report.failed,
     )
 
@@ -286,6 +305,7 @@ def diagnostics_from_json(rule: RuleSelector, encoded: str) -> list[Diagnostic]:
         report.duplicate_groups,
         report.file_hash_implementations,
         report.direct_git_calls,
+        report.byte_hash_implementations,
         failed=report.failed,
     )
 
