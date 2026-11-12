@@ -1342,3 +1342,10 @@ versions, fenced examples, linked methods, historical report paths, and exact
 scoped exceptions. This sample does not measure precision or enforcement
 performance; collect multiple human-labeled real positives and negatives before
 making those claims.
+
+## Environment propagation boundaries
+
+The opt-in [`environment-boundary` guide](../ENVIRONMENT-BOUNDARY.md) connects explicit consumer contracts to
+supported Python setting sources and literal child launches. Its separate
+[synthetic regression recipe](../ENVIRONMENT-BOUNDARY-RECIPE.md) exercises real subprocess inheritance without
+recording complete environments or credentials. Dynamic behavior remains unassessed.
