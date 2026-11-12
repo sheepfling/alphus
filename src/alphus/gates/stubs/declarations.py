@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from alphus.gates.stubs.checker_reports import PyrightReport
 from alphus.gates.stubs.environments import child_environment, probe_python
 from alphus.support.python_runtime import current_python_executable
+from alphus.support.source_text import read_utf8_text
 
 INVENTORY_SCRIPT = """
 import importlib.metadata as metadata
@@ -67,7 +68,7 @@ def snapshot_declarations(
         marker = package / "py.typed"
         if not name.endswith("-stubs") or not marker.is_file():
             continue
-        if "partial" not in marker.read_text(encoding="utf-8").splitlines():
+        if "partial" not in read_utf8_text(marker).splitlines():
             continue
         # PEP 561 partial stubs supplement their installed runtime package.
         # Copy only that package's Python sources, never the checker environment.

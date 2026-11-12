@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import venv
 from pathlib import Path
@@ -17,6 +16,7 @@ from alphus.gates.stubs.declarations import (
     snapshot_declarations,
     validate_declaration_report,
 )
+from alphus.support.platform_utils import is_windows
 from alphus.support.python_runtime import current_python_executable
 
 
@@ -125,7 +125,7 @@ def test_installed_partial_stub_retains_runtime_and_package_context(
     pytest.importorskip("pyright")
     target = tmp_path / "target"
     venv.EnvBuilder(with_pip=False).create(target)
-    python = target / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    python = target / ("Scripts/python.exe" if is_windows() else "bin/python")
     result = subprocess.run(
         [str(python), "-I", "-c", "import site; print(site.getsitepackages()[0])"],
         check=True,
