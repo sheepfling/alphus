@@ -19,6 +19,7 @@ from alphus.cli import main
 from alphus.config import load_config
 from alphus.contracts.findings import Diagnostic
 from alphus.contracts.process import ExitCode
+from alphus.execution.results import diagnostics_from_json
 from alphus.gates.source import (
     _lizard_analysis as lizard_analysis,
 )
@@ -846,6 +847,22 @@ steps = ["Cyclomatic", "Existing command"]
     assert step["report"]["backends"][0]["actual_version"] == "0.16.1"
     assert step["stdout"].startswith("Cyclomatic complexity: clean")
     assert "report" not in payload["steps"][1]
+
+    assert (
+        main(
+            [
+                "--root",
+                str(root),
+                "--config",
+                str(config),
+                "--rule",
+                "cyclomatic-complexity",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    assert diagnostics_from_json("cyclomatic-complexity", capsys.readouterr().out) == []
 
 
 def test_report_exit_code_keeps_advisories_and_operational_errors_distinct() -> None:

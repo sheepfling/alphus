@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Self, TypeAlias, cast
+from typing import NamedTuple, Self, TypeAlias, cast
 
-from pydantic import BaseModel, ConfigDict, TypeAdapter
+from pydantic import BaseModel, ConfigDict, TypeAdapter, field_validator
 
 from alphus.contracts.cli_policy import CliPolicyReport
-from alphus.contracts.cyclomatic import CyclomaticReport
+from alphus.contracts.cyclomatic import CyclomaticOption, CyclomaticReport
 from alphus.contracts.findings import (
     Diagnostic,
     Finding,
@@ -43,6 +43,36 @@ class _SharedUtilitiesWire(BaseModel):
     direct_git_calls: tuple[str, ...] = ()
 
 
+class _CyclomaticOptionPair(NamedTuple):
+    """The established positional option shape in direct-rule JSON."""
+
+    name: str
+    value: str
+
+
+_CYCLOMATIC_OPTION_PAIRS: TypeAdapter[tuple[_CyclomaticOptionPair, ...]] = TypeAdapter(
+    tuple[_CyclomaticOptionPair, ...]
+)
+
+
+def _cyclomatic_backend_from_wire(value: object) -> object:
+    """Adapt option pairs without bypassing the backend contract validation."""
+    match value:
+        case Mapping():
+            backend = cast(Mapping[str, object], value)
+        case _:
+            return value
+    if "effective_options" not in backend:
+        return backend
+    pairs = _CYCLOMATIC_OPTION_PAIRS.validate_python(backend["effective_options"])
+    return {
+        **backend,
+        "effective_options": tuple(
+            CyclomaticOption(pair.name, pair.value) for pair in pairs
+        ),
+    }
+
+
 class _CyclomaticWire(BaseModel):
     """Validate the direct-rule report and diagnostic envelope together."""
 
@@ -51,6 +81,28 @@ class _CyclomaticWire(BaseModel):
     diagnostics: tuple[Diagnostic, ...]
     report: CyclomaticReport
     summary: str
+
+    @field_validator("report", mode="before")
+    @classmethod
+    def adapt_report_options(cls, value: object) -> object:
+        """Keep legacy pairs at the wire boundary and named options internally."""
+        match value:
+            case Mapping():
+                report = cast(Mapping[str, object], value)
+            case _:
+                return value
+        backends = report.get("backends")
+        match backends:
+            case list():
+                return {
+                    **report,
+                    "backends": [
+                        _cyclomatic_backend_from_wire(backend)
+                        for backend in cast(list[object], backends)
+                    ],
+                }
+            case _:
+                return report
 
 
 _FINDINGS: TypeAdapter[list[Finding]] = TypeAdapter(list[Finding])
