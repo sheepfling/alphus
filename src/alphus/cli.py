@@ -203,6 +203,7 @@ _LEGACY_SOURCE_SCAN_RULES: tuple[QualityRuleName, ...] = (
     "input-contracts",
     "positional-interfaces",
     "pydantic-practices",
+    "fastapi-practices",
     "sqlalchemy-practices",
 )
 
@@ -210,7 +211,13 @@ _LEGACY_SOURCE_SCAN_RULES: tuple[QualityRuleName, ...] = (
 def _configured_source_scan_rules() -> frozenset[QualityRuleName]:
     selectors: set[QualityRuleName] = set(_LEGACY_SOURCE_SCAN_RULES)
     for selector, definition in FEATURE_DEFINITIONS.items():
-        if selector in RULE_SPECS and definition.input_mode == "configured-source-scan":
+        # Input mode describes ownership of the inventory, not its policy shape.
+        # Markdown, for example, owns include patterns rather than extensions.
+        if (
+            selector in RULE_SPECS
+            and definition.input_mode == "configured-source-scan"
+            and issubclass(definition.policy_model, SourceScanPolicy)
+        ):
             selectors.add(cast(QualityRuleName, selector))
     return frozenset(selectors)
 

@@ -77,6 +77,53 @@ def test_numerical_rule_audit_inventory_respects_source_paths(
     ]
 
 
+def test_source_scan_inventory_does_not_treat_markdown_as_extension_policy(
+    tmp_path: Path,
+) -> None:
+    config = QualityGateConfig.model_validate(
+        {
+            "schema_version": 1,
+            "files": {"include": ["**/*"]},
+            "checks": {"markdown_shell_fences": {"include": ["docs/**/*.md"]}},
+        }
+    )
+
+    # Independent Markdown inventory was historically unreported in plan JSON.
+    # It must not crash or claim extension-based SourceScanPolicy semantics.
+    assert "markdown-shell-fences" not in _SOURCE_SCAN_RULES
+    assert _selected_rule_files(tmp_path, config, "markdown-shell-fences") is None
+
+
+def test_fastapi_audit_inventory_preserves_caller_source_scope(tmp_path: Path) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    for name in (
+        "routes/api.py",
+        "routes/generated.py",
+        "routes/types.pyi",
+        "other.py",
+    ):
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("pass\n", encoding="utf-8")
+    config = QualityGateConfig.model_validate(
+        {
+            "schema_version": 1,
+            "files": {"include": ["routes/**"]},
+            "checks": {
+                "fastapi_practices": {
+                    "extensions": [".py"],
+                    "exclude": ["**/generated.py"],
+                }
+            },
+        }
+    )
+
+    assert "fastapi-practices" in _SOURCE_SCAN_RULES
+    assert _selected_rule_files(tmp_path, config, "fastapi-practices") == [
+        "routes/api.py"
+    ]
+
+
 def test_audit_manifest_reports_manual_matrix_inventory(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -1206,3 +1253,60 @@ def test_audit_manifest_rejects_duplicate_top_level_and_nested_keys(
 
     assert exit_code == 2
     assert "audit manifest is invalid" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("selector", "policy_field", "selected_files"),
+    (
+        ("fastapi-practices", "fastapi_practices", ["src/api.py"]),
+        ("markdown-shell-fences", "markdown_shell_fences", None),
+    ),
+)
+def test_profile_plan_preserves_feature_specific_scope_contracts(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    selector: str,
+    policy_field: str,
+    selected_files: Sequence[str] | None,
+) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src/api.py").write_text("pass\n", encoding="utf-8")
+    (tmp_path / "README.md").write_text("# Documentation\n", encoding="utf-8")
+    policy_options = 'extensions = [".py"]' if selector == "fastapi-practices" else ""
+    (tmp_path / "quality.toml").write_text(
+        f'''schema_version = 1
+[files]
+include = ["src/**"]
+[checks.{policy_field}]
+{policy_options}
+[orchestration]
+default_profile = "audit"
+[[orchestration.steps]]
+kind = "rule"
+name = "Selected feature"
+rule = "{selector}"
+[[orchestration.profiles]]
+name = "audit"
+steps = ["Selected feature"]
+''',
+        encoding="utf-8",
+    )
+
+    assert (
+        main(
+            [
+                "--root",
+                str(tmp_path),
+                "--config",
+                "quality.toml",
+                "--profile",
+                "audit",
+                "--plan",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    plan = json.loads(capsys.readouterr().out)
+    assert plan["steps"][0].get("selected_files") == selected_files

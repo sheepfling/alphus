@@ -127,6 +127,7 @@ def test_registered_runner_combines_application_contract_evidence(
             "checks": {
                 "fastapi_practices": {
                     "application": "routes:app",
+                    "extensions": [".py"],
                     "require_response_contract": True,
                 },
             },
