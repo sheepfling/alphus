@@ -285,3 +285,34 @@ These changes do not modify the released 0.0.2 gate. Consumers pinned to that
 tag should retain any stricter native identity and analysis-count guards until
 they deliberately adopt and validate the newer implementation. Package-specific
 known checker gaps and declaration audits remain separate obligations.
+
+### Installed declaration-tree checks (planned 0.0.4)
+
+Set `verification.declaration_check` to `true` in `stub-quality.json` to check
+all `.pyi` files recorded by the built distribution after installation. This
+optional lane requires Pyright in the checker environment. It queries target
+package metadata without importing the package, rejects empty, missing or
+ambiguous inventories, and requires Pyright to analyze every declaration.
+
+The gate checks a byte-preserving snapshot of the installed declarations outside
+site-packages. This avoids Pyright's partial-stub overlay hiding physical
+`*-stubs` paths. Nested paths remain intact, and configuration paths are relative
+to the canonical snapshot base. The target interpreter supplies dependencies;
+checkout stubs are not added to the import search path. The standalone command is:
+
+```shell
+python -m alphus.gates.stubs.declarations \
+  --distribution PACKAGE-STUBS --target-python PATH
+```
+
+Declaration scanning uses strict Pyright settings and treats deprecations as
+errors. It does not replace consumer fixtures, package-specific API coverage,
+runtime tests or known-checker-gap assertions. The verification report records
+this lane separately as selected, omitted, not run, passed or failed. It is a
+package-verification command stage, not a morphology-native source rule.
+
+Explicit ty fixture arguments bypass ignore/exclusion selection, while retaining
+consumer configuration and diagnostic rules. Native tests cover ty 0.0.91 and
+0.0.100. Existing versions already check explicitly named gitignored files in
+ordinary invocation; the safeguard also overrides force-exclusion rather than
+claiming a default skipping bug in those versions.

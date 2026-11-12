@@ -58,6 +58,7 @@ class VerificationConfig(BaseModel):
     stubtest_allowlist: NonEmptyString
     positive_fixture: NonEmptyString
     negative_fixture: NonEmptyString
+    declaration_check: bool = False
     api_audit_module: NonEmptyString | None = None
     api_audit_args: tuple[str, ...] = ()
     runtime_smoke_module: NonEmptyString | None = None
@@ -344,6 +345,7 @@ def _verification_lanes(
         ("Checker: Twine artifact metadata", with_twine),
         ("Install built wheel into verification environment", True),
         ("Installed dependency consistency", True),
+        ("Installed declaration tree", settings.declaration_check),
         ("Runtime-to-stub API audit", settings.api_audit_module is not None),
         (f"Positive and expected-negative {checker_names} fixtures", True),
         ("Stubtest runtime compatibility", True),
@@ -514,6 +516,22 @@ def main(argv: Sequence[str] | None = None) -> int:
                 env=target_env,
                 stages=stages,
             )
+            if settings.declaration_check:
+                elapsed += run_step(
+                    "Installed declaration tree",
+                    [
+                        checker.executable,
+                        "-m",
+                        "alphus.gates.stubs.declarations",
+                        "--distribution",
+                        artifact.distribution,
+                        "--target-python",
+                        target.executable,
+                    ],
+                    cwd=consumer,
+                    env=checker_env,
+                    stages=stages,
+                )
             if settings.api_audit_module is not None:
                 audit_command = module_command(
                     settings.api_audit_module, python=target.executable

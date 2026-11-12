@@ -12,10 +12,8 @@ import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
-
+from alphus.gates.stubs.checker_reports import pyright_output
 from alphus.gates.stubs.environments import child_environment, probe_python
 from alphus.support.python_runtime import current_python_executable
 from alphus.support.source_text import read_python_source
@@ -78,60 +76,6 @@ def _fixture_error_lines(output: str, fixture: Path, root: Path) -> set[int]:
     return lines
 
 
-class _PyrightPosition(BaseModel):
-    model_config = ConfigDict(strict=True, frozen=True)
-    line: Annotated[int, Field(ge=0)]
-
-
-class _PyrightRange(BaseModel):
-    model_config = ConfigDict(strict=True, frozen=True)
-    start: _PyrightPosition
-
-
-class _PyrightDiagnostic(BaseModel):
-    model_config = ConfigDict(strict=True, frozen=True)
-    severity: Literal["error", "warning", "information"]
-    file: str
-    message: str
-    range: _PyrightRange
-    rule: str | None = None
-
-
-class _PyrightSummary(BaseModel):
-    model_config = ConfigDict(strict=True, frozen=True)
-    files_analyzed: Annotated[int, Field(alias="filesAnalyzed", ge=0)]
-    error_count: Annotated[int, Field(alias="errorCount", ge=0)]
-
-
-class _PyrightReport(BaseModel):
-    model_config = ConfigDict(strict=True, frozen=True)
-    summary: _PyrightSummary
-    diagnostics: Annotated[
-        tuple[_PyrightDiagnostic, ...], Field(alias="generalDiagnostics")
-    ]
-
-
-def _pyright_output(output: str) -> str:
-    """Validate the machine report and retain native diagnostic evidence."""
-    report = _PyrightReport.model_validate_json(output)
-    if report.summary.files_analyzed != 1:
-        raise ValueError(
-            f"expected 1 analyzed file, got {report.summary.files_analyzed}"
-        )
-    lines: list[str] = []
-    for diagnostic in report.diagnostics:
-        if diagnostic.severity != "error":
-            continue
-        suffix = f" ({diagnostic.rule})" if diagnostic.rule else ""
-        message = diagnostic.message.replace("\n", " ")
-        lines.append(
-            f"{diagnostic.file}:{diagnostic.range.start.line + 1}: error: {message}{suffix}"
-        )
-    if report.summary.error_count != len(lines):
-        raise ValueError("Pyright errorCount disagrees with diagnostics")
-    return "\n".join(lines)
-
-
 def build_command(
     checker: Checker,
     fixture: Path,
@@ -158,7 +102,18 @@ def build_command(
         if python_version is not None:
             command.extend(("--pythonversion", python_version))
     elif checker.name == "ty":
-        command.extend(("check", "--output-format", "concise", "--no-progress"))
+        # Explicit gate fixtures must not disappear behind consumer exclusions.
+        # Keep the consumer config (including diagnostic/deprecation policy).
+        command.extend(
+            (
+                "check",
+                "--output-format",
+                "concise",
+                "--no-progress",
+                "--no-respect-ignore-files",
+                "--no-force-exclude",
+            )
+        )
         if target_python is not None:
             command.extend(("--python", target_python))
         if python_version is not None:
@@ -321,7 +276,7 @@ def run_case(
         output = "\n".join(part for part in (result.stdout, result.stderr) if part)
         if checker.name == "pyright":
             try:
-                output = _pyright_output(result.stdout)
+                output = pyright_output(result.stdout)
             except (ValueError, TypeError) as error:
                 _report_failure(checker, actual_fixture, command, str(error), output)
                 return False
