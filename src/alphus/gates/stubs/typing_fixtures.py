@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import subprocess
@@ -12,6 +13,7 @@ import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 from alphus.gates.stubs.environments import child_environment, probe_python
 from alphus.support.python_runtime import current_python_executable
@@ -56,6 +58,77 @@ def observed_error_lines(output: str, filename: str) -> set[int]:
     }
 
 
+def _fixture_error_lines(output: str, fixture: Path, root: Path) -> set[int]:
+    """Resolve diagnostic paths against the actual checker working directory."""
+    location = re.compile(
+        r"^\s*(.+?):(\d+)(?::\d+)?"
+        r"(?::\s*error(?::|\[[^\]]+\]:?)|\s+-\s+error:)"
+    )
+    lines: set[int] = set()
+    for line in output.splitlines():
+        match = location.search(line)
+        if match is None:
+            continue
+        path = Path(match.group(1))
+        if not path.is_absolute():
+            path = root / path
+        if path.resolve() == fixture.resolve():
+            lines.add(int(match.group(2)))
+    return lines
+
+
+def _pyright_output(output: str) -> str:
+    """Validate the machine report and retain native diagnostic evidence."""
+    report = json.loads(output)
+    if not isinstance(report, dict):
+        raise TypeError("Pyright report must be an object")
+    report = cast(dict[str, object], report)
+    summary = report.get("summary")
+    if not isinstance(summary, dict):
+        raise TypeError("Pyright summary must be an object")
+    summary = cast(dict[str, object], summary)
+    if type(summary.get("filesAnalyzed")) is not int:
+        raise ValueError("Pyright report lacks an integer filesAnalyzed")
+    if summary["filesAnalyzed"] != 1:
+        raise ValueError(f"expected 1 analyzed file, got {summary['filesAnalyzed']}")
+    diagnostics = report.get("generalDiagnostics")
+    if not isinstance(diagnostics, list):
+        raise TypeError("Pyright report lacks generalDiagnostics")
+    lines: list[str] = []
+    errors = 0
+    for diagnostic in cast(list[object], diagnostics):
+        if not isinstance(diagnostic, dict):
+            raise TypeError("invalid Pyright diagnostic")
+        diagnostic = cast(dict[str, object], diagnostic)
+        severity = diagnostic.get("severity")
+        if severity not in ("error", "warning", "information"):
+            raise ValueError("invalid Pyright diagnostic severity")
+        if severity != "error":
+            continue
+        errors += 1
+        path = diagnostic.get("file")
+        message = diagnostic.get("message")
+        span = diagnostic.get("range")
+        start = (
+            cast(dict[str, object], span).get("start")
+            if isinstance(span, dict)
+            else None
+        )
+        line = (
+            cast(dict[str, object], start).get("line")
+            if isinstance(start, dict)
+            else None
+        )
+        if not isinstance(path, str) or not isinstance(message, str):
+            raise TypeError("Pyright diagnostic lacks file or message")
+        if type(line) is not int or line < 0:
+            raise ValueError("Pyright diagnostic lacks nonnegative line")
+        lines.append(f"{path}:{line + 1}: error: {message.replace(chr(10), ' ')}")
+    if type(summary.get("errorCount")) is not int or summary["errorCount"] != errors:
+        raise ValueError("Pyright errorCount disagrees with diagnostics")
+    return "\n".join(lines)
+
+
 def build_command(
     checker: Checker,
     fixture: Path,
@@ -77,6 +150,7 @@ def build_command(
         if python_version is not None:
             command.extend(("--python-version", python_version))
     elif checker.name == "pyright":
+        command.append("--outputjson")
         command.extend(("--pythonpath", target_python or current_python_executable()))
         if python_version is not None:
             command.extend(("--pythonversion", python_version))
@@ -100,6 +174,7 @@ def check_result(
     expect_errors: bool,
     expected_count: int | None = None,
     required_diagnostics: Sequence[str] = (),
+    root: Path | None = None,
 ) -> list[str]:
     error_lines = [line for line in output.splitlines() if ERROR_LINE.search(line)]
     issues: list[str] = []
@@ -113,13 +188,14 @@ def check_result(
         return issues
 
     expected_lines = expected_error_lines(read_python_source(fixture))
-    observed_lines = observed_error_lines(output, fixture.name)
+    diagnostic_root = fixture.parent if root is None else root
+    observed_lines = _fixture_error_lines(output, fixture, diagnostic_root)
     if returncode == 0:
         issues.append("negative fixture unexpectedly passed")
     if returncode not in (0, 1):
         issues.append(f"expected diagnostic exit 1, got {returncode}")
-    if expected_lines and any(
-        not observed_error_lines(line, fixture.name) for line in error_lines
+    if any(
+        not _fixture_error_lines(line, fixture, diagnostic_root) for line in error_lines
     ):
         issues.append("errors outside the configured negative fixture")
     if expected_lines and observed_lines != expected_lines:
@@ -240,6 +316,17 @@ def run_case(
             return False
 
         output = "\n".join(part for part in (result.stdout, result.stderr) if part)
+        if checker.name == "pyright":
+            try:
+                output = _pyright_output(result.stdout)
+            except (ValueError, TypeError) as error:
+                _report_failure(checker, actual_fixture, command, str(error), output)
+                return False
+            if result.stderr.strip():
+                _report_failure(
+                    checker, actual_fixture, command, "unexpected stderr", result.stderr
+                )
+                return False
         issues = check_result(
             actual_fixture,
             result.returncode,
@@ -247,6 +334,7 @@ def run_case(
             expect_errors=expect_errors,
             expected_count=expected_count,
             required_diagnostics=required_diagnostics,
+            root=resolved_root,
         )
         elapsed = time.monotonic() - started
         if issues:

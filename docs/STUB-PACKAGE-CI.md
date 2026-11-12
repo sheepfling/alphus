@@ -271,3 +271,17 @@ stub-action matrix runs `stubs` once for each target 3.10–3.14. The local defa
 inside `quality`. Both actions and local requirements pin the same Alphus SHA.
 See [consumer profiles](CONSUMER-PROFILES.md) for composition and pinning.
 The stub-only action above retains its existing interface for other callers.
+
+### Diagnostic identity hardening (planned 0.0.4)
+
+The fixture runner resolves diagnostic paths against the checker's working
+directory and compares canonical paths, rather than accepting another file
+with the same basename. This applies to marker-based and count-only negative
+contracts. Pyright runs with machine-readable output and must report exactly
+one analyzed file; malformed reports and inconsistent error counts fail closed.
+Other checkers retain their native diagnostic output and exit contracts.
+
+These changes do not modify the released 0.0.2 gate. Consumers pinned to that
+tag should retain any stricter native identity and analysis-count guards until
+they deliberately adopt and validate the newer implementation. Package-specific
+known checker gaps and declaration audits remain separate obligations.
