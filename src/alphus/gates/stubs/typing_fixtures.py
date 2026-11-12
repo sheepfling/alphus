@@ -123,7 +123,13 @@ def _pyright_output(output: str) -> str:
             raise TypeError("Pyright diagnostic lacks file or message")
         if type(line) is not int or line < 0:
             raise ValueError("Pyright diagnostic lacks nonnegative line")
-        lines.append(f"{path}:{line + 1}: error: {message.replace(chr(10), ' ')}")
+        rule = diagnostic.get("rule")
+        if rule is not None and not isinstance(rule, str):
+            raise TypeError("invalid Pyright diagnostic rule")
+        suffix = f" ({rule})" if rule else ""
+        lines.append(
+            f"{path}:{line + 1}: error: {message.replace(chr(10), ' ')}{suffix}"
+        )
     if type(summary.get("errorCount")) is not int or summary["errorCount"] != errors:
         raise ValueError("Pyright errorCount disagrees with diagnostics")
     return "\n".join(lines)

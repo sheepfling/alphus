@@ -131,3 +131,36 @@ def test_pyright_json_foreign_diagnostic_cannot_satisfy_negative(
     assert not run_case(
         CHECKERS[1], fixture, root=tmp_path, expect_errors=True, process_runner=runner
     )
+
+
+def test_pyright_preserves_native_rule_codes(tmp_path: Path) -> None:
+    fixture = tmp_path / "negative.py"
+    fixture.write_text("bad()  # expect-error\n")
+
+    def runner(
+        command: list[str], **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        report = json.dumps(
+            {
+                "summary": {"filesAnalyzed": 1, "errorCount": 1},
+                "generalDiagnostics": [
+                    {
+                        "severity": "error",
+                        "file": command[-1],
+                        "range": {"start": {"line": 0}},
+                        "message": "wrong type",
+                        "rule": "reportArgumentType",
+                    }
+                ],
+            }
+        )
+        return subprocess.CompletedProcess(command, 1, report, "")
+
+    assert run_case(
+        CHECKERS[1],
+        fixture,
+        root=tmp_path,
+        expect_errors=True,
+        required_diagnostics=("reportArgumentType",),
+        process_runner=runner,
+    )
