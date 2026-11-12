@@ -12,8 +12,15 @@ import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import NoReturn
 
-from alphus.gates.stubs.checker_reports import pyright_output
+from alphus.gates.stubs.checker_reports import (
+    FixtureCaseResult,
+    FixtureReport,
+    NativeDiagnostic,
+    parse_checker_diagnostics,
+    pyright_output,
+)
 from alphus.gates.stubs.environments import child_environment, probe_python
 from alphus.support.python_runtime import current_python_executable
 from alphus.support.source_text import read_python_source
@@ -31,7 +38,7 @@ class Checker:
 CHECKERS = (Checker("mypy", "mypy"), Checker("pyright", "pyright"))
 OPTIONAL_CHECKERS = (Checker("ty", "ty"),)
 AVAILABLE_CHECKERS = CHECKERS + OPTIONAL_CHECKERS
-DEFAULT_CHECKERS = (CHECKERS[1],)
+DEFAULT_CHECKERS = AVAILABLE_CHECKERS
 ProcessRunner = Callable[..., subprocess.CompletedProcess[str]]
 
 
@@ -91,7 +98,9 @@ def build_command(
     if checker.name == "mypy":
         if cache_directory is None:
             raise ValueError("mypy requires a temporary cache directory")
-        command.extend(("--strict", "--cache-dir", str(cache_directory)))
+        command.extend(
+            ("--strict", "--cache-dir", str(cache_directory), "--output", "json")
+        )
         if target_python is not None:
             command.extend(("--python-executable", target_python))
         if python_version is not None:
@@ -108,7 +117,7 @@ def build_command(
             (
                 "check",
                 "--output-format",
-                "concise",
+                "gitlab",
                 "--no-progress",
                 "--no-respect-ignore-files",
                 "--no-force-exclude",
@@ -213,7 +222,7 @@ def _checker_diagnostic_guidance(checker: Checker, output: str) -> str | None:
     return None
 
 
-def run_case(
+def evaluate_case(
     checker: Checker,
     fixture: Path,
     *,
@@ -224,19 +233,23 @@ def run_case(
     process_runner: ProcessRunner | None = None,
     target_python: str | None = None,
     python_version: str | None = None,
-) -> bool:
-    """Run one fixture and enforce its checker-specific result contract."""
+) -> FixtureCaseResult:
+    """Evaluate a fixture without rendering or hiding native checker evidence."""
     runner = subprocess.run if process_runner is None else process_runner
     resolved_fixture = fixture.resolve()
     resolved_root = root.resolve()
-    try:
-        resolved_fixture.relative_to(resolved_root)
-    except ValueError:
-        raise ValueError(
-            "typing fixtures must remain inside the consumer root"
-        ) from None
 
-    def invoke(actual_fixture: Path, cache_directory: Path | None) -> bool:
+    def failure(message: str) -> FixtureCaseResult:
+        return FixtureCaseResult(
+            checker=checker.name,
+            fixture=str(resolved_fixture),
+            analyzed_fixture=str(resolved_fixture),
+            expect_errors=expect_errors,
+            passed=False,
+            issues=(message,),
+        )
+
+    def invoke(actual_fixture: Path, cache_directory: Path | None) -> FixtureCaseResult:
         command = build_command(
             checker,
             actual_fixture,
@@ -245,6 +258,10 @@ def run_case(
             python_version=python_version,
         )
         started = time.monotonic()
+        stdout = stderr = output = ""
+        returncode: int | None = None
+        issues: list[str] = []
+        native_diagnostics: tuple[NativeDiagnostic, ...] = ()
         try:
             result = runner(
                 command,
@@ -257,85 +274,137 @@ def run_case(
                 timeout=180,
                 env=child_environment(os.environ, current_python_executable()),
             )
-        except subprocess.TimeoutExpired as error:
-            output = "\n".join(
-                part
-                for part in (_text_output(error.stdout), _text_output(error.stderr))
-                if part
-            )
-            _report_failure(
-                checker, actual_fixture, command, "timed out after 180 seconds", output
-            )
-            return False
-        except OSError as error:
-            _report_failure(
-                checker, actual_fixture, command, f"could not start checker: {error}"
-            )
-            return False
-
-        output = "\n".join(part for part in (result.stdout, result.stderr) if part)
-        if checker.name == "pyright":
+            stdout, stderr, returncode = result.stdout, result.stderr, result.returncode
+            output = "\n".join(part for part in (stdout, stderr) if part)
             try:
-                output = pyright_output(result.stdout)
+                native_diagnostics = parse_checker_diagnostics(checker.name, stdout)
+                if checker.name == "pyright":
+                    output = pyright_output(stdout)
+                else:
+                    output = "\n".join(
+                        f"{item.path}:{item.line}: error: {item.message.replace(chr(10), ' ')}"
+                        + (f" ({item.rule})" if item.rule else "")
+                        for item in native_diagnostics
+                        if item.severity == "error"
+                    )
             except (ValueError, TypeError) as error:
-                _report_failure(checker, actual_fixture, command, str(error), output)
-                return False
-            if result.stderr.strip():
-                _report_failure(
-                    checker, actual_fixture, command, "unexpected stderr", result.stderr
+                issues.append(str(error))
+            if stderr.strip():
+                issues.append("unexpected stderr")
+            if not issues:
+                issues.extend(
+                    check_result(
+                        actual_fixture,
+                        returncode,
+                        output,
+                        expect_errors=expect_errors,
+                        expected_count=expected_count,
+                        required_diagnostics=required_diagnostics,
+                        root=resolved_root,
+                    )
                 )
-                return False
-        issues = check_result(
-            actual_fixture,
-            result.returncode,
-            output,
+        except subprocess.TimeoutExpired as error:
+            stdout, stderr = _text_output(error.stdout), _text_output(error.stderr)
+            output = "\n".join(part for part in (stdout, stderr) if part)
+            issues.append("timed out after 180 seconds")
+        except OSError as error:
+            issues.append(f"could not start checker: {error}")
+        return FixtureCaseResult(
+            checker=checker.name,
+            fixture=str(resolved_fixture),
+            analyzed_fixture=str(actual_fixture),
             expect_errors=expect_errors,
-            expected_count=expected_count,
-            required_diagnostics=required_diagnostics,
-            root=resolved_root,
+            passed=not issues,
+            command=tuple(command),
+            returncode=returncode,
+            elapsed_seconds=time.monotonic() - started,
+            stdout=stdout,
+            stderr=stderr,
+            diagnostics=output,
+            native_diagnostics=native_diagnostics,
+            issues=tuple(issues),
+            guidance=_checker_diagnostic_guidance(checker, output),
         )
-        elapsed = time.monotonic() - started
-        if issues:
-            _report_failure(
-                checker,
-                actual_fixture,
-                command,
-                "; ".join(issues),
-                output,
-                result.returncode,
-            )
-            return False
-        expectation = "expected errors" if expect_errors else "clean"
-        print(
-            f"PASS {checker.name} {actual_fixture.name}: {expectation} ({elapsed:.2f}s)"
-        )
-        if expect_errors:
-            lines = sorted(observed_error_lines(output, actual_fixture.name))
-            print(f"  matched diagnostic lines: {lines}")
-            if output.strip():
-                print("  native diagnostics:")
-                print(output.rstrip())
-        return True
 
-    def run_with_cache(actual_fixture: Path) -> bool:
+    def run_with_cache(actual_fixture: Path) -> FixtureCaseResult:
         if checker.name == "mypy":
             with tempfile.TemporaryDirectory(prefix="alphus-mypy-cache-") as cache:
                 return invoke(actual_fixture, Path(cache))
         return invoke(actual_fixture, None)
 
-    if expect_errors:
+    try:
+        if not resolved_fixture.is_relative_to(resolved_root):
+            return failure("typing fixtures must remain inside the consumer root")
         source = read_python_source(resolved_fixture)
-        if not expected_error_lines(source) and expected_count is None:
-            print(
-                "negative fixture has no markers or configured expected diagnostic count",
-                file=sys.stderr,
-            )
-            return False
-        with tempfile.TemporaryDirectory(prefix="alphus-negative-types-") as temporary:
-            generated_fixture = Path(temporary) / "negative_typecheck.py"
-            generated_fixture.write_text(source, encoding="utf-8")
-            return run_with_cache(generated_fixture)
-    return run_with_cache(resolved_fixture)
+        if expect_errors:
+            if not expected_error_lines(source) and expected_count is None:
+                return failure(
+                    "negative fixture has no markers or configured expected diagnostic count"
+                )
+            with tempfile.TemporaryDirectory(
+                prefix="alphus-negative-types-"
+            ) as temporary:
+                generated_fixture = Path(temporary) / "negative_typecheck.py"
+                generated_fixture.write_text(source, encoding="utf-8")
+                return run_with_cache(generated_fixture)
+        return run_with_cache(resolved_fixture)
+    except (OSError, ValueError, SyntaxError) as error:
+        return failure(str(error))
+
+
+def render_case(result: FixtureCaseResult) -> None:
+    """Render a structured result using the established human-readable format."""
+    fixture = Path(result.analyzed_fixture)
+    if not result.passed:
+        _report_failure(
+            Checker(result.checker, result.checker),
+            fixture,
+            result.command,
+            "; ".join(result.issues),
+            result.diagnostics,
+            result.returncode,
+        )
+        return
+    expectation = "expected errors" if result.expect_errors else "clean"
+    print(
+        f"PASS {result.checker} {fixture.name}: {expectation} ({result.elapsed_seconds:.2f}s)"
+    )
+    if result.expect_errors:
+        lines = sorted(observed_error_lines(result.diagnostics, fixture.name))
+        print(f"  matched diagnostic lines: {lines}")
+        if result.diagnostics.strip():
+            print("  native diagnostics:")
+            print(result.diagnostics.rstrip())
+
+
+def run_case(
+    checker: Checker,
+    fixture: Path,
+    *,
+    root: Path,
+    expect_errors: bool,
+    expected_count: int | None = None,
+    required_diagnostics: Sequence[str] = (),
+    process_runner: ProcessRunner | None = None,
+    target_python: str | None = None,
+    python_version: str | None = None,
+) -> bool:
+    """Compatibility wrapper returning a Boolean and human-readable evidence."""
+    if not fixture.resolve().is_relative_to(root.resolve()):
+        raise ValueError("typing fixtures must remain inside the consumer root")
+    result = evaluate_case(
+        checker,
+        fixture,
+        root=root,
+        expect_errors=expect_errors,
+        expected_count=expected_count,
+        required_diagnostics=required_diagnostics,
+        process_runner=process_runner,
+        target_python=target_python,
+        python_version=python_version,
+    )
+    render_case(result)
+    return result.passed
 
 
 def run_suite(
@@ -351,16 +420,47 @@ def run_suite(
     target_python: str | None = None,
     python_version: str | None = None,
 ) -> bool:
-    """Run both fixtures through each checker with the configured contracts."""
-    success = True
+    """Render the structured suite while retaining the Boolean public interface."""
+    report = evaluate_suite(
+        positive_fixture,
+        negative_fixture,
+        root=root,
+        expected_count=expected_count,
+        mypy_diagnostics=mypy_diagnostics,
+        pyright_diagnostics=pyright_diagnostics,
+        ty_diagnostics=ty_diagnostics,
+        checkers=checkers,
+        target_python=target_python,
+        python_version=python_version,
+    )
+    for result in report.cases:
+        render_case(result)
+    return report.passed
+
+
+def evaluate_suite(
+    positive_fixture: Path,
+    negative_fixture: Path,
+    *,
+    root: Path,
+    expected_count: int | None = None,
+    mypy_diagnostics: Sequence[str] = (),
+    pyright_diagnostics: Sequence[str] = (),
+    ty_diagnostics: Sequence[str] = (),
+    checkers: Sequence[Checker] = DEFAULT_CHECKERS,
+    target_python: str | None = None,
+    python_version: str | None = None,
+) -> FixtureReport:
+    """Collect checker results without rendering to stdout or stderr."""
+    cases: list[FixtureCaseResult] = []
     diagnostics_by_name = {
         "mypy": mypy_diagnostics,
         "pyright": pyright_diagnostics,
         "ty": ty_diagnostics,
     }
     for checker in checkers:
-        success = (
-            run_case(
+        cases.append(
+            evaluate_case(
                 checker,
                 positive_fixture,
                 root=root,
@@ -368,10 +468,9 @@ def run_suite(
                 target_python=target_python,
                 python_version=python_version,
             )
-            and success
         )
-        success = (
-            run_case(
+        cases.append(
+            evaluate_case(
                 checker,
                 negative_fixture,
                 root=root,
@@ -381,13 +480,29 @@ def run_suite(
                 expected_count=expected_count,
                 required_diagnostics=diagnostics_by_name.get(checker.name, ()),
             )
-            and success
         )
-    return success
+    return FixtureReport(
+        passed=bool(cases) and all(case.passed for case in cases),
+        checkers=tuple(checker.name for checker in checkers),
+        cases=tuple(cases),
+    )
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+class FixtureArgumentParser(argparse.ArgumentParser):
+    """Keep JSON argument failures inside the versioned result contract."""
+
+    json_output: bool = False
+
+    def error(self, message: str) -> NoReturn:
+        if self.json_output:
+            raise ValueError(message)
+        super().error(message)
+
+
+def _main(argv: Sequence[str], *, json_output: bool) -> int:
+    parser = FixtureArgumentParser(description=__doc__)
+    parser.json_output = json_output
+    parser.add_argument("--output", choices=("human", "json"), default="human")
     parser.add_argument("--positive-fixture", required=True, type=Path)
     parser.add_argument("--negative-fixture", required=True, type=Path)
     parser.add_argument("--root", type=Path, required=True)
@@ -395,7 +510,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--checkers",
         nargs="+",
         choices=tuple(checker.name for checker in AVAILABLE_CHECKERS),
-        default=("pyright",),
+        default=tuple(checker.name for checker in DEFAULT_CHECKERS),
     )
     parser.add_argument("--target-python")
     parser.add_argument("--python-version")
@@ -404,12 +519,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--pyright-diagnostic", action="append", default=[])
     parser.add_argument("--ty-diagnostic", action="append", default=[])
     options = parser.parse_args(argv)
+    if sum(arg == "--output" or arg.startswith("--output=") for arg in argv) > 1:
+        parser.error("--output must be supplied at most once")
 
     if options.expected_count is not None and options.expected_count < 1:
         parser.error("--expected-count must be a positive integer")
-    checkers = tuple(
-        checker for checker in AVAILABLE_CHECKERS if checker.name in options.checkers
-    )
+    if len(options.checkers) != len(set(options.checkers)):
+        parser.error("--checkers must not contain duplicates")
+    by_name = {checker.name: checker for checker in AVAILABLE_CHECKERS}
+    checkers = tuple(by_name[name] for name in options.checkers)
     for checker in checkers:
         probe = probe_python_module(current_python_executable(), checker.module)
         if not probe.available:
@@ -427,7 +545,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
             options.target_python = target.executable
             options.python_version = target.minor
-        success = run_suite(
+        report = evaluate_suite(
             options.positive_fixture,
             options.negative_fixture,
             root=options.root,
@@ -441,7 +559,31 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
     except (OSError, ValueError) as error:
         parser.error(str(error))
-    return 0 if success else 1
+    if options.output == "json":
+        print(report.model_dump_json())
+    else:
+        for result in report.cases:
+            render_case(result)
+    return 0 if report.passed else 1
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    # Detect requested rendering without emitting argparse's human error output.
+    # The real parser still validates every argument below.
+    json_output = False
+    for index, argument in enumerate(arguments):
+        if argument.startswith("--output="):
+            json_output = argument == "--output=json"
+        elif argument == "--output" and index + 1 < len(arguments):
+            json_output = arguments[index + 1] == "json"
+    try:
+        return _main(arguments, json_output=json_output)
+    except (OSError, ValueError, SyntaxError) as error:
+        if not json_output:
+            raise
+        print(FixtureReport(passed=False, errors=(str(error),)).model_dump_json())
+        return 2
 
 
 if __name__ == "__main__":

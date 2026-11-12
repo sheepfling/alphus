@@ -12,19 +12,24 @@ import tempfile
 import time
 import zipfile
 from collections.abc import Mapping, MutableSequence, Sequence
+from contextlib import nullcontext, redirect_stdout
 from email import policy as email_policy
 from email.parser import BytesParser
 from pathlib import Path, PurePosixPath
-from typing import Annotated, Literal
+from typing import Annotated, Literal, NoReturn
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 import alphus_stub_quality
+from alphus.gates.stubs.checker_reports import FixtureReport
+from alphus.gates.stubs.declarations import DeclarationReport
+from alphus.gates.stubs.declarations import render_human as render_declarations
 from alphus.gates.stubs.environments import (
     PythonRuntime,
     child_environment,
     probe_python,
 )
+from alphus.gates.stubs.typing_fixtures import render_case
 from alphus.support.git import git_value
 from alphus.support.python_runtime import current_python_executable
 from alphus.support.source_text import read_utf8_text
@@ -66,10 +71,17 @@ class VerificationConfig(BaseModel):
     negative_expected_count: Annotated[int, Field(strict=True, ge=1)] | None = None
     typing_checkers: Annotated[
         tuple[Literal["mypy", "pyright", "ty"], ...], Field(min_length=1)
-    ] = ("pyright",)
+    ] = ("mypy", "pyright", "ty")
     mypy_diagnostics: tuple[NonEmptyString, ...] = ()
     pyright_diagnostics: tuple[NonEmptyString, ...] = ()
     ty_diagnostics: tuple[NonEmptyString, ...] = ()
+
+    @field_validator("typing_checkers")
+    @classmethod
+    def validate_checkers(cls, values: tuple[str, ...]) -> tuple[str, ...]:
+        if len(values) != len(set(values)):
+            raise ValueError("typing checker names must be unique")
+        return values
 
     @field_validator("runtime_distributions")
     @classmethod
@@ -91,6 +103,7 @@ class VerificationStage(BaseModel):
     exit_code: int
     elapsed: float
     error: str | None = None
+    evidence: FixtureReport | DeclarationReport | None = None
     output: str = ""
     output_truncated: bool = False
     timeout_seconds: int = DEFAULT_STAGE_TIMEOUT_SECONDS
@@ -113,14 +126,38 @@ class ArtifactIdentity(BaseModel):
 
 
 class VerificationReport(BaseModel):
+    """Versioned result shared by JSON stdout and the optional report file."""
+
     model_config = ConfigDict(frozen=True)
-    checker: PythonRuntime
-    target: PythonRuntime
-    source_revision: str | None
-    artifact: ArtifactIdentity | None
-    lanes: tuple[VerificationLane, ...]
-    stages: tuple[VerificationStage, ...]
+    schema_version: Literal[1] = 1
+    kind: Literal["stub-verification"] = "stub-verification"
+    checker: PythonRuntime | None = None
+    target: PythonRuntime | None = None
+    source_revision: str | None = None
+    artifact: ArtifactIdentity | None = None
+    typing_checkers: tuple[Literal["mypy", "pyright", "ty"], ...] = ()
+    lanes: tuple[VerificationLane, ...] = ()
+    stages: tuple[VerificationStage, ...] = ()
     passed: bool
+    errors: tuple[str, ...] = ()
+
+
+class VerificationOptions(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    root: Path
+    config: Path
+    with_twine: bool
+    target_python: str
+    report: Path | None
+    output: Literal["human", "json"]
+    checkers: tuple[Literal["mypy", "pyright", "ty"], ...] | None
+
+    @field_validator("checkers")
+    @classmethod
+    def unique_checkers(cls, values: tuple[str, ...] | None) -> tuple[str, ...] | None:
+        if values is not None and len(values) != len(set(values)):
+            raise ValueError("checker names must be unique")
+        return values
 
 
 class VerificationDocument(BaseModel):
@@ -178,6 +215,32 @@ def _captured_text(value: str | bytes | None) -> str:
     return value or ""
 
 
+def render_stage_evidence(evidence: FixtureReport | DeclarationReport) -> None:
+    """Render the same typed result used by JSON serialization."""
+    if isinstance(evidence, FixtureReport):
+        for case in evidence.cases:
+            render_case(case)
+        for error in evidence.errors:
+            print(error, file=sys.stderr)
+    else:
+        print(render_declarations(evidence), flush=True)
+
+
+def validate_stage_selection(
+    evidence: FixtureReport | DeclarationReport, arguments: Sequence[str]
+) -> None:
+    """Bind a child report to the exact selected checker set in its invocation."""
+    if "--checkers" not in arguments:
+        return
+    selected: list[str] = []
+    for argument in arguments[arguments.index("--checkers") + 1 :]:
+        if argument.startswith("--"):
+            break
+        selected.append(argument)
+    if tuple(selected) != evidence.checkers:
+        raise ValueError("structured stage checkers disagree with requested selection")
+
+
 def run_step(
     name: str,
     arguments: Sequence[str],
@@ -191,6 +254,7 @@ def run_step(
     started = time.monotonic()
     error_message = None
     output = ""
+    evidence: FixtureReport | DeclarationReport | None = None
     try:
         result = subprocess.run(
             arguments,
@@ -207,7 +271,24 @@ def run_step(
         stdout = result.stdout or ""
         stderr = result.stderr or ""
         output = "\n".join(part for part in (stdout, stderr) if part)
-        if stdout:
+        if "--output" in arguments and "json" in arguments:
+            try:
+                if "alphus.gates.stubs.typing_fixtures" in arguments:
+                    evidence = FixtureReport.model_validate_json(stdout)
+                elif "alphus.gates.stubs.declarations" in arguments:
+                    evidence = DeclarationReport.model_validate_json(stdout)
+                if evidence is not None:
+                    validate_stage_selection(evidence, arguments)
+                if evidence is not None and evidence.passed != (exit_code == 0):
+                    raise ValueError(
+                        "structured stage result disagrees with exit status"
+                    )
+            except ValueError as error:
+                exit_code = 1
+                error_message = f"invalid structured stage result: {error}"
+        if evidence is not None:
+            render_stage_evidence(evidence)
+        elif stdout:
             print(stdout, end="" if stdout.endswith("\n") else "\n", flush=True)
         if stderr:
             print(
@@ -246,6 +327,7 @@ def run_step(
                 exit_code=exit_code,
                 elapsed=elapsed,
                 error=error_message,
+                evidence=evidence,
                 output=output[-MAX_RECORDED_OUTPUT:],
                 output_truncated=len(output) > MAX_RECORDED_OUTPUT,
                 timeout_seconds=timeout_seconds,
@@ -370,8 +452,34 @@ def _verification_lanes(
     )
 
 
+def system_exit_code(value: int | str | None) -> int:
+    """Normalize argparse and stage exceptions without losing numeric exits."""
+    if isinstance(value, int):
+        return value
+    return 0 if value is None else 1
+
+
+def system_exit_reason(value: int | str | None) -> str:
+    """Keep textual preflight errors while describing numeric stage exits."""
+    if isinstance(value, str):
+        return value
+    return f"verification failed with exit {system_exit_code(value)}"
+
+
+class VerificationParser(argparse.ArgumentParser):
+    def error(self, message: str) -> NoReturn:
+        raise ValueError(message)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    json_output = "--output=json" in arguments or any(
+        value == "--output"
+        and index + 1 < len(arguments)
+        and arguments[index + 1] == "json"
+        for index, value in enumerate(arguments)
+    )
+    parser = VerificationParser(description=__doc__)
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--config", type=Path, default=Path("stub-quality.json"))
     parser.add_argument("--with-twine", action="store_true")
@@ -380,30 +488,88 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=os.environ.get("ALPHUS_TARGET_PYTHON", current_python_executable()),
     )
     parser.add_argument("--report", type=Path)
-    options = parser.parse_args(argv)
-    if options.report is not None:
-        options.report.unlink(missing_ok=True)
+    parser.add_argument("--output", choices=("human", "json"), default="human")
+    parser.add_argument("--checkers", choices=("mypy", "pyright", "ty"), nargs="+")
+    reports: list[VerificationReport] = []
+    options: VerificationOptions | None = None
+    code = 0
+    reason = ""
+    try:
+        with redirect_stdout(sys.stderr) if json_output else nullcontext():
+            if (
+                sum(
+                    value == "--output" or value.startswith("--output=")
+                    for value in arguments
+                )
+                > 1
+            ):
+                raise ValueError("--output must be supplied at most once")
+            options = VerificationOptions.model_validate(
+                vars(parser.parse_args(arguments))
+            )
+            if options.report is not None:
+                options.report.unlink(missing_ok=True)
+            code = _run_verification(options, reports)
+    except SystemExit as error:
+        if not json_output:
+            raise
+        code = system_exit_code(error.code)
+        reason = system_exit_reason(error.code)
+    except (ValueError, OSError) as error:
+        if not json_output:
+            parser.exit(2, f"{parser.prog}: error: {error}\n")
+        code = 2
+        reason = str(error)
+    if code:
+        if not reports:
+            reports.append(VerificationReport(passed=False, errors=(reason,)))
+        elif not reports[-1].errors:
+            reports[-1] = reports[-1].model_copy(update={"errors": (reason,)})
+    if not reports:
+        return code
+    if json_output:
+        report = reports[-1]
+        payload = report.model_dump_json(indent=2) + "\n"
+        if options is not None and options.report is not None:
+            try:
+                options.report.write_text(payload, encoding="utf-8")
+            except OSError as error:
+                code = 2
+                report = report.model_copy(
+                    update={
+                        "passed": False,
+                        "errors": (
+                            *report.errors,
+                            f"could not write report file: {error}",
+                        ),
+                    }
+                )
+                payload = report.model_dump_json(indent=2) + "\n"
+        print(payload, end="")
+    return code
+
+
+def _run_verification(
+    options: VerificationOptions, reports: MutableSequence[VerificationReport]
+) -> int:
     root = options.root.resolve()
     settings = read_config(root, options.config)
-    try:
-        checker = probe_python(current_python_executable())
-        target = probe_python(
-            options.target_python,
-            requested_distributions=settings.runtime_distributions,
+    if options.checkers is not None:
+        settings = settings.model_copy(update={"typing_checkers": options.checkers})
+    checker = probe_python(current_python_executable())
+    target = probe_python(
+        options.target_python,
+        requested_distributions=settings.runtime_distributions,
+    )
+    if checker.version[:2] < (3, 11):
+        raise ValueError("Alphus verification requires a checker interpreter >=3.11")
+    if target.version[:2] < (3, 10):
+        raise ValueError("shared target audit helpers require Python >=3.10")
+    if target.missing_distributions:
+        raise ValueError(
+            "target Python is missing configured runtime distribution(s): "
+            + ", ".join(target.missing_distributions)
         )
-        if checker.version[:2] < (3, 11):
-            raise ValueError(
-                "Alphus verification requires a checker interpreter >=3.11"
-            )
-        if target.version[:2] < (3, 10):
-            raise ValueError("shared target audit helpers require Python >=3.10")
-        if target.missing_distributions:
-            raise ValueError(
-                "target Python is missing configured runtime distribution(s): "
-                + ", ".join(target.missing_distributions)
-            )
-    except ValueError as error:
-        parser.error(str(error))
     print("Checker runtime: " + checker.model_dump_json(), flush=True)
     print("Target runtime: " + target.model_dump_json(), flush=True)
 
@@ -527,6 +693,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                         artifact.distribution,
                         "--target-python",
                         target.executable,
+                        "--checkers",
+                        *settings.typing_checkers,
+                        "--output",
+                        "json",
                     ],
                     cwd=consumer,
                     env=checker_env,
@@ -564,6 +734,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 str(consumer),
                 "--checkers",
                 *settings.typing_checkers,
+                "--output",
+                "json",
             ]
             if settings.negative_expected_count is not None:
                 typecheck_command.extend(
@@ -614,18 +786,20 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         passed = True
     finally:
-        if options.report is not None:
-            report = VerificationReport(
-                checker=checker,
-                target=target,
-                source_revision=source_revision,
-                artifact=artifact,
-                lanes=_verification_lanes(
-                    settings, with_twine=options.with_twine, stages=stages
-                ),
-                stages=tuple(stages),
-                passed=passed,
-            )
+        report = VerificationReport(
+            checker=checker,
+            target=target,
+            source_revision=source_revision,
+            artifact=artifact,
+            typing_checkers=settings.typing_checkers,
+            lanes=_verification_lanes(
+                settings, with_twine=options.with_twine, stages=stages
+            ),
+            stages=tuple(stages),
+            passed=passed,
+        )
+        reports.append(report)
+        if options.report is not None and options.output != "json":
             options.report.write_text(
                 report.model_dump_json(indent=2) + "\n", encoding="utf-8"
             )

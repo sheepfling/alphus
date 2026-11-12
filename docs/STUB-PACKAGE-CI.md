@@ -9,7 +9,7 @@ Alphus is a verification tool; consumer distributions retain only their stubs
 and runtime requirements.
 
 The action owns the repeated CI harness: dependency/tool setup, external wheel
-and sdist build, installation of the built wheel, positive mypy and Pyright
+and sdist build, installation of the built wheel, positive Mypy, Pyright and Ty
 consumer checks, marked negative fixtures, `pip check`, and `stubtest`. It also
 provides generic API-audit inspection helpers to package-specific audit scripts.
 Negative fixtures may use exact `# expect-error` line markers or an exact
@@ -31,7 +31,7 @@ second type checker. Use the following ownership when interpreting a green run:
 - **Runtime members and callable compatibility:** target-environment `mypy.stubtest`.
   Stub `...` means a default exists; it does not compare the runtime value.
 - **Call acceptance, overload choice, inference and result types:** positive and
-  expected-negative Mypy/Pyright fixtures. The AST audit does not establish
+  expected-negative Mypy/Pyright/Ty fixtures. The AST audit does not establish
   checker behavior.
 - **Wheel contents, PEP 561 resolution and dependencies:** installed-artifact
   checks and target-environment `pip check`. A source checkout alone is not
@@ -85,7 +85,7 @@ and installed tool versions before running. It preserves venv executable paths.
 | ------------------------------------------------------- | --------------------------------------------- |
 | Wheel/sdist build without isolation; install; pip check | Target                                        |
 | API adapter; native mypy.stubtest; runtime smoke        | Target                                        |
-| Pyright fixtures; optional Mypy/Ty                      | Checker; explicit target packages and version |
+| Selected Mypy/Pyright/Ty checks                         | Checker; explicit target packages and version |
 | Optional native Twine metadata check                    | Checker                                       |
 
 Mypy receives `--python-executable TARGET --python-version X.Y`; Pyright
@@ -105,7 +105,7 @@ work="$(mktemp -d)"
 python3.12 -m venv "$work/checker"
 python3.10 -m venv "$work/target"
 "$work/checker/bin/python" -m pip install "$ALPHUS_WHEEL" \
-  'mypy>=2.3' 'pyright>=1.1.414' 'twine>=7.0'
+  'mypy>=2.3' 'pyright>=1.1.414' 'ty==0.0.91' 'twine>=7.0'
 "$work/target/bin/python" -m pip install -r "$repo/requirements-target.txt" \
   -r "$repo/requirements-compat.txt"
 (
@@ -151,15 +151,24 @@ version. The caller retains its trigger and permission policy.
 ## Generic gates and consumer adapters
 
 `alphus-typing-fixtures` (also `python -m alphus.gates.stubs.typing_fixtures`)
-checks positive and expected-negative examples with Pyright by default.
-Mypy and Ty are opt-in fixture checkers: install `alphus[python,mypy]` or
-`alphus[python,ty]` in the checker environment, then select
-`--checkers pyright mypy` or `--checkers pyright ty`. The Ty extra pins its
-pre-1.0 checker version because its diagnostic contract can change between
-releases. Ty uses concise diagnostics and accepts the selected target
-interpreter and Python version. Add `--ty-diagnostic` to require a specific
-negative diagnostic. The isolated verifier accepts
-`typing_checkers = ["pyright", "mypy", "ty"]` in its `verification` config.
+checks positive and expected-negative examples with **Mypy, Pyright and Ty by
+default**. Install `alphus[python,mypy,ty]` in the checker environment. Consumers
+may down-select exactly the checkers they support with `--checkers pyright`,
+`--checkers ty`, or `--checkers mypy pyright`. A missing selected tool is a
+failure, never silently omitted. Duplicate names are rejected.
+
+The isolated verifier uses `verification.typing_checkers` for both fixture checks
+and the optional declaration-tree lane. Omission selects all three; an explicit
+configuration remains authoritative. Its `--checkers` option overrides that
+configuration for the current run. `mypy.stubtest` is a separate runtime-API lane,
+so Mypy remains needed in the target environment even if Mypy static checking is
+not selected.
+
+The Ty extra pins its pre-1.0 checker version because its diagnostic contract can
+change. Native reports are parsed before rendering: Pyright JSON, Mypy JSON Lines,
+and Ty GitLab JSON. All retain checker identity, source path, line, severity and
+rule/code where supplied. `--ty-diagnostic` still requires a specific negative
+diagnostic, and the target interpreter/version remain explicit.
 
 The fixture runner probes every selected checker module before running cases.
 The shared `alphus.support.tool_probe` also locates native commands; the C++
@@ -290,30 +299,48 @@ known checker gaps and declaration audits remain separate obligations.
 
 Set `verification.declaration_check` to `true` in `stub-quality.json` to check
 all `.pyi` files recorded by the built distribution after installation. This
-optional lane requires Pyright in the checker environment. It queries target
-package metadata without importing the package, rejects empty, missing or
-ambiguous inventories, and requires Pyright to analyze every declaration.
+optional lane uses the selected checkers (all three by default). It queries target
+package metadata without importing the package and rejects empty, missing or
+ambiguous inventories. Pyright must report the exact analyzed-file count. Mypy
+and Ty receive every declaration as explicit input; their reports record
+`coverage_kind="explicit-inputs"` and `analyzed_files=null`, rather than inventing
+a native coverage count. Every selected checker runs, preserving independent
+failures and diagnostics.
 
-The gate checks a byte-preserving snapshot of the installed declarations outside
-site-packages. This avoids Pyright's partial-stub overlay hiding physical
-`*-stubs` paths. The snapshot retains the complete package hierarchy and maps
-`PACKAGE-stubs` to its importable `PACKAGE` name. For explicitly partial stub
-packages, installed sibling runtime Python sources are copied first, then the
-owned declarations overlay them byte-for-byte. Relative and absolute self-imports
-therefore retain their package context, including a lone nested declaration. Only
-the distribution-owned declarations enter the analysis inventory; runtime fallback
-files do not inflate that coverage count. Native-extension-only fallback is not
-reconstructed by this source snapshot. Configuration paths are relative to the
-canonical snapshot base. The target interpreter supplies other dependencies;
-checkout stubs are not added to the import search path. The standalone command is:
+The gate checks byte-preserving snapshots of installed declarations outside
+site-packages. Mypy and Pyright use the complete package hierarchy with
+`PACKAGE-stubs` directory components normalized to importable `PACKAGE` names,
+including nested namespace packages. This avoids Pyright's partial-stub overlay
+hiding physical `*-stubs` paths. Ty uses a separate snapshot that retains
+**root-level** `PACKAGE-stubs` package names and their `py.typed` markers, while
+normalizing nested namespace components. This prevents the target's installed
+stub overlay from shadowing the inspected package and breaking its relative
+imports. Every checker receives the same original declaration bytes and inventory;
+only checker-specific import layout differs.
+
+These are installed-layout conventions, not restrictions on repository or
+distribution names: `types-foo`, `foo-stubs`, or an arbitrary distribution name
+may own ordinary `.pyi` paths. Ordinary package directories retain their names.
+For explicitly partial stub packages, installed sibling runtime Python sources
+are copied into their importable package location. Owned declarations overlay
+those sources in the normalized snapshot; Ty resolves its retained root stub
+package alongside that runtime fallback. Relative and absolute self-imports keep
+their package context, including a lone nested declaration. Only distribution-owned
+declarations enter the analysis inventory; runtime fallback files do not inflate
+that coverage count. Native-extension-only fallback is not reconstructed by this
+source snapshot. Configuration paths are relative to the canonical snapshot base.
+The target interpreter supplies other dependencies; checkout stubs are not added
+to the import search path. The standalone command is:
 
 ```shell
 python -m alphus.gates.stubs.declarations \
   --distribution PACKAGE-STUBS --target-python PATH
 ```
 
-Declaration scanning uses strict Pyright settings and treats deprecations as
-errors. It does not replace consumer fixtures, package-specific API coverage,
+Declaration scanning uses native strict Mypy/Pyright settings, and explicit Ty
+inputs that bypass selection exclusions. Native diagnostics are not equated
+across tools; each checker reports its own evidence. It does not replace consumer
+fixtures, package-specific API coverage,
 runtime tests or known-checker-gap assertions. The verification report records
 this lane separately as selected, omitted, not run, passed or failed. It is a
 package-verification command stage, not a morphology-native source rule.
@@ -323,3 +350,33 @@ consumer configuration and diagnostic rules. Native tests cover ty 0.0.91 and
 0.0.100. Existing versions already check explicitly named gitignored files in
 ordinary invocation; the safeguard also overrides force-exclusion rather than
 claiming a default skipping bug in those versions.
+
+## Human and JSON serializers
+
+The verifier, fixture CLI and declaration CLI accept `--output human|json`.
+Human output remains the default. JSON mode emits **one JSON object on stdout**;
+progress and human diagnostics go to stderr. This applies to failed checks and
+preflight/configuration errors too. Exit status remains nonzero for failures.
+Expected diagnostics in a negative fixture are successful evidence when they
+match its contract, not automatically a failed check.
+
+The envelopes have `schema_version: 1`, `kind`, `passed`, and `errors`. Kinds are
+`stub-verification`, `stub-typing-fixtures`, and `stub-declarations`. Fixture
+reports contain per-checker `cases`; declaration reports contain `results` with
+submitted paths, native diagnostics and coverage evidence. Verifier stages embed
+these objects under `evidence`, not as double-encoded JSON strings. Raw bounded
+stage output remains available separately for troubleshooting.
+
+```shell
+alphus-stub-quality --root . --checkers mypy pyright ty --output json > result.json
+jq -e '.passed' result.json
+jq '.stages[] | select(.evidence != null) | .evidence' result.json
+```
+
+`--report PATH` remains available for a file artifact. In JSON mode it receives
+the same envelope as stdout, including a structured preflight failure, replacing
+an older report. Human mode retains its existing preflight behavior of removing
+the old report and failing before stages. Consumers should inspect `passed`,
+`errors` and lane status rather than infer success from a report's existence.
+Report files may include local paths and native tool messages; review them before
+sharing outside the project.
