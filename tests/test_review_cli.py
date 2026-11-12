@@ -6,6 +6,7 @@ import json
 import shutil
 import subprocess
 import sys
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,7 @@ from pydantic import ValidationError
 
 from alphus.cli import main
 from alphus.config import (
+    ArgparsePrecedencePolicy,
     InputContractPolicy,
     NumericLiteralPolicy,
     NumericLiteralSpec,
@@ -416,6 +418,7 @@ def test_older_configs_leave_review_checks_opt_in(tmp_path: Path) -> None:
     assert checks.repeated_numeric_limits is None
     assert checks.test_quality is None
     assert checks.input_contracts is None
+    assert checks.argparse_precedence is None
     assert checks.positional_interfaces is None
     assert checks.pydantic_practices is None
     assert checks.fastapi_practices is None
@@ -613,3 +616,147 @@ def test_finite_integer_catalog_values_do_not_require_float_conversion() -> None
     value = 10**500
     spec = NumericLiteralSpec(name="exact integer", values=[value], replacement="named")
     assert spec.values == (value,)
+
+
+@pytest.mark.parametrize("severity", ["info", "warning", "error"])
+def test_argparse_precedence_cli_reports_configured_risk_severity(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], severity: str
+) -> None:
+    arguments = repository(
+        tmp_path,
+        "source.py",
+        "import argparse\n"
+        "parser = argparse.ArgumentParser()\n"
+        "parser.add_argument('--output')\n"
+        "commands = parser.add_subparsers()\n"
+        "child = commands.add_parser('export')\n"
+        "child.add_argument('--output')\n",
+        "[checks.argparse_precedence]\n"
+        'extensions = [".py"]\nsource_paths = ["source.py"]\n'
+        f'severity = "{severity}"\n',
+    )
+    assert main([*arguments, "--rule", "argparse-precedence", "--json"]) == (
+        1 if severity == "error" else 0
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert len(payload) == 1
+    assert payload[0]["rule_id"] == (
+        "alphus/python/none/correctness/argparse-default-overwrite"
+    )
+    assert payload[0]["severity"] == severity
+    assert payload[0]["path"] == "source.py"
+    assert payload[0]["line"] == 6
+
+
+def test_argparse_precedence_catalog_and_example_policy(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], pytestconfig: pytest.Config
+) -> None:
+    assert main(["--root", str(tmp_path), "--catalog", "--json"]) == 0
+    rules = json.loads(capsys.readouterr().out)["rules"]
+    entry = next(item for item in rules if item["selector"] == "argparse-precedence")
+    assert entry["applies_to"] == ["python"]
+    assert entry["domains"] == []
+    example = pytestconfig.rootpath / "examples/review/argparse-precedence.toml"
+    config = load_config(example)
+    assert config.checks.argparse_precedence is not None
+    assert config.checks.argparse_precedence.severity == "info"
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"source_paths": []},
+        {"source_paths": ["../escape.py"]},
+        {"extensions": [".js"]},
+        {
+            "exceptions": [
+                {
+                    "path": "*.py",
+                    "destination": "out",
+                    "reason": "A sufficiently long explanation.",
+                }
+            ],
+        },
+        {
+            "exceptions": [
+                {
+                    "path": "cli.py",
+                    "destination": "",
+                    "reason": "A sufficiently long explanation.",
+                }
+            ],
+        },
+        {
+            "exceptions": [{"path": "cli.py", "destination": "out", "reason": "short"}],
+        },
+        {
+            "exceptions": [
+                {
+                    "path": "cli.py",
+                    "destination": "out",
+                    "reason": "A sufficiently long explanation.",
+                }
+            ]
+            * 2,
+        },
+    ],
+)
+def test_argparse_precedence_policy_rejects_invalid_scope_and_exceptions(
+    overrides: Mapping[str, Sequence[str] | Sequence[Mapping[str, str]]],
+) -> None:
+    values: dict[str, Sequence[str] | Sequence[Mapping[str, str]]] = {
+        "extensions": [".py"],
+        "source_paths": ["cli.py"],
+    }
+    values.update(overrides)
+    with pytest.raises(ValidationError):
+        ArgparsePrecedencePolicy.model_validate(values)
+
+
+def test_argparse_precedence_policy_requires_explicit_source_paths() -> None:
+    with pytest.raises(ValidationError):
+        ArgparsePrecedencePolicy.model_validate({"extensions": [".py"]})
+
+
+def test_argparse_precedence_unassessed_stays_informational(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    arguments = repository(
+        tmp_path,
+        "source.py",
+        "import argparse\n"
+        "parser = argparse.ArgumentParser(parents=[make_parent()])\n"
+        "parser.add_argument('--output')\n",
+        "[checks.argparse_precedence]\n"
+        'extensions = [".py"]\nsource_paths = ["source.py"]\n'
+        'severity = "error"\n',
+    )
+    assert main([*arguments, "--rule", "argparse-precedence", "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload
+    assert all(item["severity"] == "info" for item in payload)
+    assert all(
+        item["rule_id"]
+        == "alphus/python/none/correctness/argparse-precedence-unassessed"
+        for item in payload
+    )
+
+
+def test_argparse_precedence_policy_accepts_distinct_exact_exceptions() -> None:
+    policy = ArgparsePrecedencePolicy.model_validate(
+        {
+            "extensions": [".py"],
+            "source_paths": ["cli.py"],
+            "exceptions": [
+                {
+                    "path": "cli.py",
+                    "destination": destination,
+                    "reason": "The command-specific default intentionally wins.",
+                }
+                for destination in ("out", "log")
+            ],
+        }
+    )
+    assert policy.severity == "info"
+    assert policy.exclude == ()
+    assert len(policy.exceptions) == 2

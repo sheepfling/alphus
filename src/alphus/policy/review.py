@@ -26,6 +26,56 @@ from alphus.policy.base import (
 from alphus.policy.sources import PythonSourceScanPolicy, SourceScanPolicy
 
 
+class ArgparsePrecedenceException(StrictModel):
+    """One reviewed destination whose child default intentionally wins."""
+
+    path: str
+    destination: str
+    reason: str
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, value: str) -> str:
+        return validate_single_path(value, "argparse precedence exception paths")
+
+    @field_validator("destination")
+    @classmethod
+    def validate_destination(cls, value: str) -> str:
+        destination = validate_one_line_message(value)
+        if not destination.strip():
+            raise ValueError("argparse precedence exceptions require a destination")
+        return destination
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, value: str) -> str:
+        reason = validate_one_line_message(value)
+        if len(reason.strip()) < 20:
+            raise ValueError("argparse precedence exception reasons need 20 characters")
+        return reason
+
+
+class ArgparsePrecedencePolicy(PythonSourceScanPolicy):
+    """Opt-in static review of argparse ancestor/child default precedence."""
+
+    source_paths: Annotated[tuple[str, ...], Field(min_length=1)]
+    exceptions: tuple[ArgparsePrecedenceException, ...] = ()
+    severity: Severity = "info"
+
+    @field_validator("source_paths")
+    @classmethod
+    def validate_source_paths(cls, values: Sequence[str]) -> tuple[str, ...]:
+        return validate_patterns(values)
+
+    @model_validator(mode="after")
+    def validate_exceptions(self) -> Self:
+        require_unique(
+            tuple((item.path, item.destination) for item in self.exceptions),
+            "argparse precedence exception path/destination pairs must be unique",
+        )
+        return self
+
+
 class DocumentHeadingSuppression(StrictModel):
     """One exact visible heading exempted from document-level density review."""
 

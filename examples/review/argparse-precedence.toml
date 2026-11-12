@@ -1,0 +1,31 @@
+schema_version = 1
+
+[files]
+include = ["src/cli/*.py"]
+exclude = []
+
+[checks.argparse_precedence]
+extensions = [".py"]
+source_paths = ["src/cli/*.py"]
+exclude = []
+severity = "info"
+
+# Use exact repository-relative paths and parsed namespace destinations.
+# Enable only after confirming that the child default should win.
+# [[checks.argparse_precedence.exceptions]]
+# path = "src/cli/export.py"
+# destination = "output"
+# reason = "Export intentionally uses its command-specific destination by default."
+
+[orchestration]
+default_profile = "argparse-review"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Review argparse precedence"
+rule = "argparse-precedence"
+rollout = "provisional"
+
+[[orchestration.profiles]]
+name = "argparse-review"
+steps = ["Review argparse precedence"]

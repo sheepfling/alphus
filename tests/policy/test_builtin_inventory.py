@@ -145,13 +145,17 @@ def test_current_registration_contract_matches_pinned_mainline_baseline(
     baseline = _generate_inventory(
         root, baseline_root, tmp_path / "baseline-inventory.json"
     )
-    assert current.selector_count == baseline.selector_count
+    assert current.selector_count == baseline.selector_count + 1
     assert current.shared_selection_surfaces == baseline.shared_selection_surfaces
     assert current.shared_reporting_surfaces == baseline.shared_reporting_surfaces
-    assert len(current.checks) == len(baseline.checks)
-    for current_check, baseline_check in zip(
-        current.checks, baseline.checks, strict=True
-    ):
+    additions = {"argparse-precedence"}
+    assert {check.selector for check in current.checks} == (
+        {check.selector for check in baseline.checks} | additions
+    )
+    preserved = tuple(
+        check for check in current.checks if check.selector not in additions
+    )
+    for current_check, baseline_check in zip(preserved, baseline.checks, strict=True):
         assert current_check.selector == baseline_check.selector
         assert current_check.policy_field == baseline_check.policy_field
         assert current_check.policy_fields == baseline_check.policy_fields
