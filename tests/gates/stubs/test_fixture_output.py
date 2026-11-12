@@ -271,3 +271,35 @@ def test_duplicate_output_selector_is_rejected_before_execution(
     assert result == 2
     assert report.errors == ("--output must be supplied at most once",)
     assert captured.err == ""
+
+
+def test_native_mypy_rule_keeps_bracketed_required_diagnostic(tmp_path: Path) -> None:
+    fixture = tmp_path / "negative.py"
+    fixture.write_text("bad()  # expect-error\n", encoding="utf-8")
+
+    def runner(
+        command: Sequence[str], **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        diagnostic = json.dumps(
+            {
+                "file": command[-1],
+                "line": 1,
+                "severity": "error",
+                "message": "Argument has incompatible type",
+                "code": "arg-type",
+            }
+        )
+        return subprocess.CompletedProcess(command, 1, diagnostic, "")
+
+    result = evaluate_case(
+        Checker("mypy", "mypy"),
+        fixture,
+        root=tmp_path,
+        expect_errors=True,
+        required_diagnostics=("[arg-type]",),
+        process_runner=runner,
+    )
+    assert result.passed, result.issues
+    assert "[arg-type]" in result.diagnostics
+    assert "(arg-type)" not in result.diagnostics
+    assert result.native_diagnostics[0].rule == "arg-type"

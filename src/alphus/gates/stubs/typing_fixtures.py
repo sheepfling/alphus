@@ -283,7 +283,15 @@ def evaluate_case(
                 else:
                     output = "\n".join(
                         f"{item.path}:{item.line}: error: {item.message.replace(chr(10), ' ')}"
-                        + (f" ({item.rule})" if item.rule else "")
+                        + (
+                            (
+                                f" [{item.rule}]"
+                                if checker.name == "mypy"
+                                else f" ({item.rule})"
+                            )
+                            if item.rule
+                            else ""
+                        )
                         for item in native_diagnostics
                         if item.severity == "error"
                     )
