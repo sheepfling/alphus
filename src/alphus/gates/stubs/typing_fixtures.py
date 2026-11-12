@@ -12,6 +12,9 @@ import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Annotated, Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from alphus.gates.stubs.environments import child_environment, probe_python
 from alphus.support.python_runtime import current_python_executable
@@ -56,6 +59,79 @@ def observed_error_lines(output: str, filename: str) -> set[int]:
     }
 
 
+def _fixture_error_lines(output: str, fixture: Path, root: Path) -> set[int]:
+    """Resolve diagnostic paths against the actual checker working directory."""
+    location = re.compile(
+        r"^\s*(.+?):(\d+)(?::\d+)?"
+        r"(?::\s*error(?::|\[[^\]]+\]:?)|\s+-\s+error:)"
+    )
+    lines: set[int] = set()
+    for line in output.splitlines():
+        match = location.search(line)
+        if match is None:
+            continue
+        path = Path(match.group(1))
+        if not path.is_absolute():
+            path = root / path
+        if path.resolve() == fixture.resolve():
+            lines.add(int(match.group(2)))
+    return lines
+
+
+class _PyrightPosition(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True)
+    line: Annotated[int, Field(ge=0)]
+
+
+class _PyrightRange(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True)
+    start: _PyrightPosition
+
+
+class _PyrightDiagnostic(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True)
+    severity: Literal["error", "warning", "information"]
+    file: str
+    message: str
+    range: _PyrightRange
+    rule: str | None = None
+
+
+class _PyrightSummary(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True)
+    files_analyzed: Annotated[int, Field(alias="filesAnalyzed", ge=0)]
+    error_count: Annotated[int, Field(alias="errorCount", ge=0)]
+
+
+class _PyrightReport(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True)
+    summary: _PyrightSummary
+    diagnostics: Annotated[
+        tuple[_PyrightDiagnostic, ...], Field(alias="generalDiagnostics")
+    ]
+
+
+def _pyright_output(output: str) -> str:
+    """Validate the machine report and retain native diagnostic evidence."""
+    report = _PyrightReport.model_validate_json(output)
+    if report.summary.files_analyzed != 1:
+        raise ValueError(
+            f"expected 1 analyzed file, got {report.summary.files_analyzed}"
+        )
+    lines: list[str] = []
+    for diagnostic in report.diagnostics:
+        if diagnostic.severity != "error":
+            continue
+        suffix = f" ({diagnostic.rule})" if diagnostic.rule else ""
+        message = diagnostic.message.replace("\n", " ")
+        lines.append(
+            f"{diagnostic.file}:{diagnostic.range.start.line + 1}: error: {message}{suffix}"
+        )
+    if report.summary.error_count != len(lines):
+        raise ValueError("Pyright errorCount disagrees with diagnostics")
+    return "\n".join(lines)
+
+
 def build_command(
     checker: Checker,
     fixture: Path,
@@ -77,6 +153,7 @@ def build_command(
         if python_version is not None:
             command.extend(("--python-version", python_version))
     elif checker.name == "pyright":
+        command.append("--outputjson")
         command.extend(("--pythonpath", target_python or current_python_executable()))
         if python_version is not None:
             command.extend(("--pythonversion", python_version))
@@ -100,6 +177,7 @@ def check_result(
     expect_errors: bool,
     expected_count: int | None = None,
     required_diagnostics: Sequence[str] = (),
+    root: Path | None = None,
 ) -> list[str]:
     error_lines = [line for line in output.splitlines() if ERROR_LINE.search(line)]
     issues: list[str] = []
@@ -113,13 +191,14 @@ def check_result(
         return issues
 
     expected_lines = expected_error_lines(read_python_source(fixture))
-    observed_lines = observed_error_lines(output, fixture.name)
+    diagnostic_root = fixture.parent if root is None else root
+    observed_lines = _fixture_error_lines(output, fixture, diagnostic_root)
     if returncode == 0:
         issues.append("negative fixture unexpectedly passed")
     if returncode not in (0, 1):
         issues.append(f"expected diagnostic exit 1, got {returncode}")
-    if expected_lines and any(
-        not observed_error_lines(line, fixture.name) for line in error_lines
+    if any(
+        not _fixture_error_lines(line, fixture, diagnostic_root) for line in error_lines
     ):
         issues.append("errors outside the configured negative fixture")
     if expected_lines and observed_lines != expected_lines:
@@ -240,6 +319,17 @@ def run_case(
             return False
 
         output = "\n".join(part for part in (result.stdout, result.stderr) if part)
+        if checker.name == "pyright":
+            try:
+                output = _pyright_output(result.stdout)
+            except (ValueError, TypeError) as error:
+                _report_failure(checker, actual_fixture, command, str(error), output)
+                return False
+            if result.stderr.strip():
+                _report_failure(
+                    checker, actual_fixture, command, "unexpected stderr", result.stderr
+                )
+                return False
         issues = check_result(
             actual_fixture,
             result.returncode,
@@ -247,6 +337,7 @@ def run_case(
             expect_errors=expect_errors,
             expected_count=expected_count,
             required_diagnostics=required_diagnostics,
+            root=resolved_root,
         )
         elapsed = time.monotonic() - started
         if issues:
