@@ -26,13 +26,15 @@ if record.files is None:
     raise SystemExit('installed distribution has no file inventory')
 files = sorted(str(pathlib.Path(record.locate_file(item)).resolve())
                for item in record.files if str(item).endswith('.pyi'))
-print(json.dumps({'distribution': record.metadata['Name'], 'files': files}))
+print(json.dumps({'distribution': record.metadata['Name'], 'files': files,
+                  'installation_root': str(pathlib.Path(record.locate_file('')).resolve())}))
 """
 
 
 class InstalledDeclarations(BaseModel):
     model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
     distribution: str
+    installation_root: str
     files: Annotated[tuple[str, ...], Field(min_length=1)]
 
 
@@ -50,18 +52,43 @@ def declaration_paths(inventory: InstalledDeclarations) -> tuple[Path, ...]:
     return paths
 
 
-def snapshot_declarations(paths: Sequence[Path], destination: Path) -> tuple[Path, ...]:
-    """Copy installed declaration bytes, avoiding Pyright's site-packages overlay."""
+def snapshot_declarations(
+    paths: Sequence[Path], destination: Path, installation_root: Path
+) -> tuple[Path, ...]:
+    """Preserve installed module identities and partial-package runtime fallback."""
     if not paths:
         raise ValueError("installed declaration inventory is empty")
-    base = paths[0].parent
-    while not all(path.is_relative_to(base) for path in paths):
-        if base.parent == base:
-            raise ValueError("installed declarations must share a filesystem root")
-        base = base.parent
+    base = installation_root.resolve()
+    if not installation_root.is_absolute() or not base.is_dir():
+        raise ValueError("installed declaration root must be an absolute directory")
+    relative_paths = tuple(path.resolve().relative_to(base) for path in paths)
+    for name in sorted({path.parts[0] for path in relative_paths}):
+        package = base / name
+        marker = package / "py.typed"
+        if not name.endswith("-stubs") or not marker.is_file():
+            continue
+        if "partial" not in marker.read_text(encoding="utf-8").splitlines():
+            continue
+        # PEP 561 partial stubs supplement their installed runtime package.
+        # Copy only that package's Python sources, never the checker environment.
+        runtime = base / name.removesuffix("-stubs")
+        if runtime.is_dir():
+            for source in sorted(runtime.rglob("*")):
+                if source.is_file() and (
+                    source.suffix in {".py", ".pyi"} or source.name == "py.typed"
+                ):
+                    target = destination / runtime.name / source.relative_to(runtime)
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(source.read_bytes())
     copied: list[Path] = []
-    for path in paths:
-        target = destination / path.relative_to(base)
+    for path, relative in zip(paths, relative_paths, strict=True):
+        # A foo-stubs distribution supplies the importable foo package. Keep
+        # the full package hierarchy, including for a lone nested declaration.
+        top, *rest = relative.parts
+        target = destination / top.removesuffix("-stubs")
+        target = target.joinpath(*rest)
+        if target in copied:
+            raise ValueError("installed declarations map to duplicate modules")
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(path.read_bytes())
         copied.append(target)
@@ -75,6 +102,7 @@ class DeclarationConfig(BaseModel):
     ] = "strict"
     python_version: Annotated[str, Field(alias="pythonVersion")]
     include: tuple[str, ...]
+    extra_paths: Annotated[tuple[str, ...], Field(alias="extraPaths")] = ()
     report_missing_module_source: Annotated[
         bool, Field(alias="reportMissingModuleSource")
     ] = False
@@ -84,12 +112,18 @@ class DeclarationConfig(BaseModel):
 
 
 def declaration_config(
-    paths: Sequence[Path], config_directory: Path, python_version: str
+    paths: Sequence[Path],
+    config_directory: Path,
+    python_version: str,
+    import_root: Path | None = None,
 ) -> DeclarationConfig:
     """Resolve snapshot paths relative to their canonical configuration base."""
     base = config_directory.resolve()
     return DeclarationConfig(
         python_version=python_version,
+        extra_paths=(str(import_root.resolve().relative_to(base)),)
+        if import_root
+        else (),
         include=tuple(str(path.resolve().relative_to(base)) for path in paths),
     )
 
@@ -134,11 +168,13 @@ def main() -> int:
             )
             paths = declaration_paths(inventory)
             config = root / "pyrightconfig.json"
-            copied = snapshot_declarations(paths, root / "declarations")
+            copied = snapshot_declarations(
+                paths, root / "declarations", Path(inventory.installation_root)
+            )
             config.write_text(
-                declaration_config(copied, root, target.minor).model_dump_json(
-                    by_alias=True
-                ),
+                declaration_config(
+                    copied, root, target.minor, root / "declarations"
+                ).model_dump_json(by_alias=True),
                 encoding="utf-8",
             )
             result = subprocess.run(

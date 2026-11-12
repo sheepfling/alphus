@@ -296,8 +296,15 @@ ambiguous inventories, and requires Pyright to analyze every declaration.
 
 The gate checks a byte-preserving snapshot of the installed declarations outside
 site-packages. This avoids Pyright's partial-stub overlay hiding physical
-`*-stubs` paths. Nested paths remain intact, and configuration paths are relative
-to the canonical snapshot base. The target interpreter supplies dependencies;
+`*-stubs` paths. The snapshot retains the complete package hierarchy and maps
+`PACKAGE-stubs` to its importable `PACKAGE` name. For explicitly partial stub
+packages, installed sibling runtime Python sources are copied first, then the
+owned declarations overlay them byte-for-byte. Relative and absolute self-imports
+therefore retain their package context, including a lone nested declaration. Only
+the distribution-owned declarations enter the analysis inventory; runtime fallback
+files do not inflate that coverage count. Native-extension-only fallback is not
+reconstructed by this source snapshot. Configuration paths are relative to the
+canonical snapshot base. The target interpreter supplies other dependencies;
 checkout stubs are not added to the import search path. The standalone command is:
 
 ```shell
