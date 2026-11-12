@@ -30,6 +30,11 @@ from alphus.policy.base import (
     validate_single_path,
 )
 from alphus.policy.catalog import RULE_SPECS
+from alphus.policy.environment_boundary import (
+    EnvironmentBoundaryContract,
+    EnvironmentBoundaryPolicy,
+    EnvironmentChildContract,
+)
 from alphus.policy.intents import (
     IntentFileOverride,
     IntentLanguageOverride,
@@ -190,6 +195,9 @@ __all__ = [
     "EcefEnuTransformPolicy",
     "EcefNedMatrixTransformPolicy",
     "EmbeddedSemanticOverridePolicy",
+    "EnvironmentBoundaryContract",
+    "EnvironmentBoundaryPolicy",
+    "EnvironmentChildContract",
     "ErrorCodeCallSpec",
     "EslintCyclomaticBinding",
     "FastApiFindingOverride",

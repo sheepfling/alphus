@@ -56,3 +56,6 @@ The C++ checker implementations ship in `src/alphus/gates/cpp/`. Their
 detailed evidence contracts live in [the C++ guide index](cpp/README.md),
 and sample JSON policy inputs live under
 [`examples/cpp/policies/`](../examples/cpp/policies/).
+
+- [Environment propagation review](ENVIRONMENT-BOUNDARY.md) and its
+  [synthetic regression recipe](ENVIRONMENT-BOUNDARY-RECIPE.md).
