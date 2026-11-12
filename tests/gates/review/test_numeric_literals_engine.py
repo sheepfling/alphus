@@ -2,11 +2,16 @@
 
 from pathlib import Path
 
-from alphus.config import NumericLiteralPolicy, NumericLiteralSpec
+from alphus.config import NumericLiteralPolicy, NumericLiteralSpec, QualityGateConfig
+from alphus.execution.dispatch import run_builtin_rule
 from alphus.gates.review.numeric_literals import (
+    ALPHUS_FEATURE,
     check_numeric_literals,
     numeric_literal_findings,
+    resolve_numeric_literals_policy,
+    run_numeric_literals_feature,
 )
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 
 def _policy(
@@ -276,3 +281,27 @@ def test_named_formula_does_not_exempt_its_inline_constant() -> None:
     assert [(finding.line, finding.rule_id) for finding in findings] == [
         (1, "alphus/python/none/style/inline-constant"),
     ]
+
+
+def test_feature_registration_preserves_configured_finding_behavior(
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "src/geometry/constants.py"
+    source_path.parent.mkdir(parents=True)
+    source_path.write_text("source = 2 * 3.14 * radius\n", encoding="utf-8")
+    relative = Path("src/geometry/constants.py")
+    policy = _policy()
+    config = QualityGateConfig.model_validate(
+        {"schema_version": 1, "checks": {"numeric_literals": policy}}, strict=True
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is NumericLiteralPolicy
+    resolved = resolve_numeric_literals_policy(config)
+    assert type(resolved) is NumericLiteralPolicy
+    expected = check_numeric_literals(tmp_path, [relative], policy)
+    assert expected
+    assert run_numeric_literals_feature(tmp_path, [relative], resolved) == expected
+    assert (
+        run_builtin_rule("numeric-literals", tmp_path, [relative], config) == expected
+    )

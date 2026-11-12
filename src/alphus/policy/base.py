@@ -6,81 +6,21 @@ import re
 from collections.abc import Hashable, Sequence
 from collections.abc import Set as AbstractSet
 from pathlib import PurePosixPath
-from typing import Annotated, Literal, TypeAlias, TypeVar
+from typing import Annotated, TypeAlias, TypeVar
 
 from pydantic import AfterValidator
 
 from alphus.contracts.model import StrictModel as _StrictModel
+from alphus.policy._generated_quality_rule_names import (
+    QualityRuleName as _QualityRuleName,
+)
 
 
 class StrictModel(_StrictModel):
     """Keep the established policy import path for the shared model."""
 
 
-QualityRuleName: TypeAlias = Literal[
-    "file-size",
-    "comment-markers",
-    "line-length",
-    "json-structure",
-    "output-escaping",
-    "path-discovery",
-    "shared-utilities",
-    "module-roles",
-    "python-style",
-    "runtime-types",
-    "cli",
-    "script-policy",
-    "package-boundaries",
-    "dependency-locks",
-    "repository-layout",
-    "documentation-config",
-    "markdown-shell-fences",
-    "git-ignores",
-    "git-attributes",
-    "git-history",
-    "numeric-literals",
-    "repeated-numeric-limits",
-    "typing-stub-suggestions",
-    "prose-as-control",
-    "rendered-value-reparsed",
-    "positional-semantic-overrides",
-    "unexplained-empty-results",
-    "embedded-semantic-overrides",
-    "heuristic-total-consumption",
-    "provenance-as-ownership",
-    "semantic-work-in-presentation",
-    "parallel-normalization",
-    "patch-cascade",
-    "manual-matrix-kernels",
-    "manual-elimination",
-    "array-representation-churn",
-    "cholesky-recurrence",
-    "manual-quaternion-conjugation",
-    "manual-quaternion-products",
-    "manual-quaternion-normalization",
-    "manual-quaternion-inversion",
-    "manual-quaternion-vector-rotation",
-    "manual-quaternion-matrix-conversion",
-    "ecef-enu-transform",
-    "ecef-ned-matrix-transform",
-    "ned-basis-vectors",
-    "scipy-constants",
-    "run-artifacts",
-    "ci-workflows",
-    "source-test-coverage",
-    "test-quality",
-    "input-contracts",
-    "source-families",
-    "benchmark-docs",
-    "positional-interfaces",
-    "pydantic-practices",
-    "fastapi-practices",
-    "sqlalchemy-practices",
-    "dynamic-markdown",
-    "document-style",
-    "suppression-reasons",
-    "cyclomatic-complexity",
-]
+QualityRuleName: TypeAlias = _QualityRuleName
 RuleSelector: TypeAlias = str
 
 PolicyT = TypeVar("PolicyT")

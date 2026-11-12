@@ -1,0 +1,106 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py"]
+exclude = []
+
+[checks.ecef_enu_transform]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/geometry/*.py"]
+function_names = ["ecef_delta_to_enu"]
+components = ["dx", "dy", "dz"]
+latitude_name = "latitude"
+longitude_name = "longitude"
+preferred_helpers = ["pyproj.Transformer.from_pipeline"]
+source_frame = "ECEF"
+destination_frame = "ENU"
+direction = "ecef-to-enu"
+latitude_type = "geodetic"
+origin = "anchor-point"
+reference_ellipsoid = "WGS84"
+angle_units = "radians"
+length_units = "meters"
+axis_order = "east-north-up"
+handedness = "right-handed"
+operation = "displacement-vector"
+output_shape = "tuple3"
+
+[checks.ecef_ned_matrix_transform]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/geometry/*.py"]
+function_names = ["ecef_to_ned_matrix"]
+latitude_name = "lat_rad"
+longitude_name = "lon_rad"
+sin_latitude_name = "slat"
+cos_latitude_name = "clat"
+sin_longitude_name = "slon"
+cos_longitude_name = "clon"
+preferred_helpers = ["pyproj.Transformer.from_pipeline"]
+array_constructor = "np.array"
+math_module = "math"
+source_frame = "ECEF"
+destination_frame = "NED"
+direction = "ecef-to-ned"
+latitude_type = "geodetic"
+origin = "anchor-point"
+reference_ellipsoid = "WGS84"
+angle_units = "radians"
+length_units = "meters"
+axis_order = "north-east-down"
+handedness = "right-handed"
+operation = "displacement-vector"
+vector_orientation = "column"
+matrix_layout = "row-major"
+output_shape = "matrix3x3"
+
+[checks.ned_basis_vectors]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/geometry/*.py"]
+function_names = ["geodetic_unit_vectors"]
+preferred_helpers = ["pyproj.Transformer.from_pipeline"]
+latitude_type = "geodetic"
+output_representation = "basis3"
+longitude_name = "longitude"
+latitude_name = "latitude"
+sine_latitude_name = "sine_latitude"
+cosine_latitude_name = "cosine_latitude"
+sine_longitude_name = "sine_longitude"
+cosine_longitude_name = "cosine_longitude"
+north_name = "first"
+east_name = "second"
+vector_constructor = "Vector3"
+basis_constructor = "Basis3"
+frame_type = "Frame"
+source_frame = "ECFC"
+destination_frame = "GEODETIC_HORIZON"
+direction = "ecfc-to-local-ned"
+angle_units = "radians"
+axis_order = "north-east-down"
+handedness = "right-handed"
+operation = "basis-vectors"
+
+[orchestration]
+default_profile = "coordinate-frames"
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "ECEF to ENU"
+rule = "ecef-enu-transform"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "ECEF to NED matrix"
+rule = "ecef-ned-matrix-transform"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "NED basis vectors"
+rule = "ned-basis-vectors"
+
+[[orchestration.profiles]]
+name = "coordinate-frames"
+steps = ["ECEF to ENU", "ECEF to NED matrix", "NED basis vectors"]

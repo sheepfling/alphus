@@ -4,24 +4,23 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from types import MappingProxyType
 from typing import Self, TypeAlias, cast
 
 from pydantic import BaseModel, ConfigDict, TypeAdapter
 
 from alphus.contracts.cli_policy import CliPolicyReport
+from alphus.contracts.cyclomatic import CyclomaticReport
 from alphus.contracts.findings import (
     Diagnostic,
     Finding,
     Severity,
     severity_meets_threshold,
 )
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
-from alphus.gates.hygiene.shared_utilities import SharedUtilitiesReport
-from alphus.gates.languages.python.style import StyleFindings
-from alphus.gates.source.cyclomatic_complexity import CyclomaticReport
+from alphus.contracts.python_style import StyleFindings
+from alphus.contracts.shared_utilities import SharedUtilitiesReport
+from alphus.policy._generated_feature_definitions import FEATURE_DEFINITIONS
 from alphus.policy.base import QualityRuleName, RuleSelector
-from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
+from alphus.policy.catalog import RULE_SPECS, RuleOutputShape, RuleSpec
 
 RuleOutput: TypeAlias = (
     list[Finding]
@@ -63,37 +62,25 @@ _SHARED_REPORT: TypeAdapter[SharedUtilitiesReport] = TypeAdapter(SharedUtilities
 _CYCLOMATIC_WIRE: TypeAdapter[_CyclomaticWire] = TypeAdapter(_CyclomaticWire)
 _ADVISORY_STYLE_CATEGORIES = frozenset({"opaque_mappings", "unnamed_tuple_returns"})
 _STYLE_COMPATIBILITY_ONLY_CATEGORIES = frozenset({"concrete_self_returns"})
-_CLI_PRESENTATION_RULE_ID = rule_tag(
-    Scope.PYTHON, Framework.NONE, Category.STYLE, "cli-presentation-policy"
-)
 
-_MESSAGE_RULE_IDS: Mapping[QualityRuleName, str] = MappingProxyType(
-    {
-        "runtime-types": rule_tag(
-            Scope.PYTHON,
-            Framework.NONE,
-            Category.TYPING,
-            "runtime-type-contract-violation",
-        ),
-        "cli": rule_tag(
-            Scope.PYTHON, Framework.NONE, Category.CORRECTNESS, "cli-contract-violation"
-        ),
-        "script-policy": rule_tag(
-            Scope.PYTHON, Framework.NONE, Category.SECURITY, "script-policy-violation"
-        ),
-    }
-)
+
+def _message_rule_id(rule: QualityRuleName) -> str:
+    if rule == "cli":
+        return _feature_complaint_id(rule, "cli-contract-violation")
+    if rule in FEATURE_DEFINITIONS:
+        morphology = RULE_SPECS[rule].morphology
+        if morphology is None or len(morphology.finding_ids) != 1:
+            raise ValueError(
+                f"feature message rule {rule!r} needs exactly one morphology finding ID"
+            )
+        return morphology.finding_ids[0].rule_id
+    raise ValueError(f"no diagnostic tag registered for message rule {rule!r}")
 
 
 def _message_diagnostics(
     rule: QualityRuleName, messages: Sequence[str]
 ) -> list[Diagnostic]:
-    try:
-        rule_id = _MESSAGE_RULE_IDS[rule]
-    except KeyError as error:
-        raise ValueError(
-            f"no diagnostic tag registered for message rule {rule!r}"
-        ) from error
+    rule_id = _message_rule_id(rule)
     output: list[Diagnostic] = []
     for message in messages:
         inconclusive = "[presentation:inconclusive] "
@@ -101,7 +88,7 @@ def _message_diagnostics(
             output.append(
                 Diagnostic(
                     source="alphus",
-                    rule_id=_CLI_PRESENTATION_RULE_ID,
+                    rule_id=_feature_complaint_id(rule, "cli-presentation-policy"),
                     message=message,
                     severity="info",
                 )
@@ -118,7 +105,7 @@ def _message_diagnostics(
                 output.append(
                     Diagnostic(
                         source="alphus",
-                        rule_id=_CLI_PRESENTATION_RULE_ID,
+                        rule_id=_feature_complaint_id(rule, "cli-presentation-policy"),
                         message=message,
                         severity=severity,
                     )
@@ -133,9 +120,9 @@ def _cli_policy_diagnostics(report: CliPolicyReport) -> list[Diagnostic]:
         Diagnostic(
             source="alphus",
             rule_id=(
-                _CLI_PRESENTATION_RULE_ID
+                _feature_complaint_id("cli", "cli-presentation-policy")
                 if finding.classification == "presentation"
-                else _MESSAGE_RULE_IDS["cli"]
+                else _feature_complaint_id("cli", "cli-contract-violation")
             ),
             message=finding.to_legacy_message(),
             severity=finding.severity,
@@ -150,9 +137,7 @@ def _style_diagnostics(
     return [
         Diagnostic(
             source="alphus",
-            rule_id=rule_tag(
-                Scope.PYTHON, Framework.NONE, Category.STYLE, category.replace("_", "-")
-            ),
+            rule_id=_feature_complaint_id("python-style", category.replace("_", "-")),
             path=path,
             line=line,
             message=category.replace("_", " "),
@@ -165,7 +150,23 @@ def _style_diagnostics(
     ]
 
 
+def _feature_complaint_id(rule: RuleSelector, complaint: str) -> str:
+    spec = RULE_SPECS.get(rule)
+    morphology = None if spec is None else spec.morphology
+    if morphology is None:
+        raise ValueError(f"rule {rule!r} has no feature-owned morphology")
+    matches = [
+        tag.rule_id for tag in morphology.finding_ids if tag.complaint == complaint
+    ]
+    if len(matches) != 1:
+        raise ValueError(
+            f"rule {rule!r} morphology must declare complaint {complaint!r} exactly once"
+        )
+    return matches[0]
+
+
 def _shared_diagnostics(
+    rule: RuleSelector,
     groups: Sequence[Sequence[str]],
     hash_implementations: Sequence[str],
     direct_git_calls: Sequence[str],
@@ -175,12 +176,7 @@ def _shared_diagnostics(
     diagnostics = [
         Diagnostic(
             source="alphus",
-            rule_id=rule_tag(
-                Scope.PYTHON,
-                Framework.NONE,
-                Category.MAINTAINABILITY,
-                "duplicate-helper",
-            ),
+            rule_id=_feature_complaint_id(rule, "duplicate-helper"),
             message=f"Duplicate Python helper: {', '.join(group)}",
         )
         for group in groups
@@ -189,11 +185,8 @@ def _shared_diagnostics(
         diagnostics.append(
             Diagnostic(
                 source="alphus",
-                rule_id=rule_tag(
-                    Scope.PYTHON,
-                    Framework.NONE,
-                    Category.MAINTAINABILITY,
-                    "duplicate-file-hash-implementation",
+                rule_id=_feature_complaint_id(
+                    rule, "duplicate-file-hash-implementation"
                 ),
                 message=(
                     "Repeated file SHA-256 implementation: "
@@ -204,12 +197,7 @@ def _shared_diagnostics(
     diagnostics.extend(
         Diagnostic(
             source="alphus",
-            rule_id=rule_tag(
-                Scope.PYTHON,
-                Framework.NONE,
-                Category.MAINTAINABILITY,
-                "direct-git-subprocess",
-            ),
+            rule_id=_feature_complaint_id(rule, "direct-git-subprocess"),
             message=f"Git subprocess bypasses shared adapter: {location}",
         )
         for location in direct_git_calls
@@ -218,16 +206,25 @@ def _shared_diagnostics(
         diagnostics.append(
             Diagnostic(
                 source="alphus",
-                rule_id=rule_tag(
-                    Scope.PYTHON,
-                    Framework.NONE,
-                    Category.MAINTAINABILITY,
-                    "shared-utilities-check-failed",
-                ),
+                rule_id=_feature_complaint_id(rule, "shared-utilities-check-failed"),
                 message="Shared utilities check reported failure without details.",
             )
         )
     return diagnostics
+
+
+def _validate_declared_finding_ids(
+    rule: RuleSelector, spec: RuleSpec, findings: Sequence[Finding]
+) -> None:
+    morphology = spec.morphology
+    if morphology is None:
+        return
+    declared_ids = {tag.rule_id for tag in morphology.finding_ids}
+    for finding in findings:
+        if finding.tag.rule_id not in declared_ids:
+            raise ValueError(
+                f"rule {rule!r} emitted undeclared finding ID {finding.tag.rule_id!r}"
+            )
 
 
 def diagnostics_from_output(rule: RuleSelector, output: RuleOutput) -> list[Diagnostic]:
@@ -237,7 +234,9 @@ def diagnostics_from_output(rule: RuleSelector, output: RuleOutput) -> list[Diag
         return _DIAGNOSTICS.validate_python(output)
     shape = spec.output_shape
     if shape is RuleOutputShape.FINDINGS:
-        return [item.as_diagnostic() for item in _FINDINGS.validate_python(output)]
+        findings = _FINDINGS.validate_python(output, strict=True)
+        _validate_declared_finding_ids(rule, spec, findings)
+        return [item.as_diagnostic() for item in findings]
     if shape is RuleOutputShape.MESSAGES:
         if rule == "cli" and isinstance(output, CliPolicyReport):
             return _cli_policy_diagnostics(output)
@@ -248,11 +247,14 @@ def diagnostics_from_output(rule: RuleSelector, output: RuleOutput) -> list[Diag
         payload = _PYTHON_STYLE.validate_python(output)
         return _style_diagnostics(payload)
     if shape is RuleOutputShape.CYCLOMATIC_REPORT:
-        return list(output.diagnostics) if isinstance(output, CyclomaticReport) else []
+        if not isinstance(output, CyclomaticReport):
+            raise TypeError("cyclomatic-complexity runner must return CyclomaticReport")
+        return list(output.diagnostics)
     if shape is not RuleOutputShape.SHARED_UTILITIES:
         raise ValueError(f"rule {rule!r} has no output normalizer")
     report = _SHARED_REPORT.validate_python(output)
     return _shared_diagnostics(
+        rule,
         report.duplicate_groups,
         report.file_hash_implementations,
         report.direct_git_calls,
@@ -267,7 +269,9 @@ def diagnostics_from_json(rule: RuleSelector, encoded: str) -> list[Diagnostic]:
         return _DIAGNOSTICS.validate_json(encoded)
     shape = spec.output_shape
     if shape is RuleOutputShape.FINDINGS:
-        return [item.as_diagnostic() for item in _FINDINGS.validate_json(encoded)]
+        findings = _FINDINGS.validate_json(encoded)
+        _validate_declared_finding_ids(rule, spec, findings)
+        return [item.as_diagnostic() for item in findings]
     if shape is RuleOutputShape.MESSAGES:
         return _message_diagnostics(
             cast(QualityRuleName, rule), _MESSAGES.validate_json(encoded)
@@ -283,6 +287,7 @@ def diagnostics_from_json(rule: RuleSelector, encoded: str) -> list[Diagnostic]:
         raise ValueError(f"rule {rule!r} has no JSON output normalizer")
     report = _SHARED_UTILITIES.validate_json(encoded)
     return _shared_diagnostics(
+        rule,
         report.duplicate_groups,
         report.file_hash_implementations,
         report.direct_git_calls,
@@ -293,7 +298,7 @@ def diagnostics_from_json(rule: RuleSelector, encoded: str) -> list[Diagnostic]:
 def is_nonfatal_cli_presentation_diagnostic(diagnostic: Diagnostic) -> bool:
     """Keep inconclusive renderer evidence nonfatal across profile adapters."""
     return (
-        diagnostic.rule_id == _CLI_PRESENTATION_RULE_ID
+        diagnostic.rule_id == _feature_complaint_id("cli", "cli-presentation-policy")
         and diagnostic.severity == "info"
     )
 

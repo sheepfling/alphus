@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import subprocess
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass, replace
 from functools import partial
@@ -13,11 +13,20 @@ from pathlib import Path
 from typing import cast
 
 from alphus.config import QualityGateConfig, RuleSelector
+from alphus.contracts.cyclomatic import (
+    CyclomaticBackendPlan,
+    CyclomaticBackendResult,
+    CyclomaticFunctionMetric,
+    CyclomaticPlan,
+    CyclomaticReport,
+)
+from alphus.contracts.findings import Finding, Severity
 from alphus.execution.commands import (
     command_arguments,
     step_directory,
     windows_shell_required,
 )
+from alphus.execution.dispatch import cyclomatic_rule_operations
 from alphus.execution.processes import run_captured_process
 from alphus.execution.scheduler import WorkOutcome, WorkUnit, run_work_units
 from alphus.execution.step_results import RuleRunResult
@@ -26,20 +35,52 @@ from alphus.execution.worker_protocol import (
     WorkerRequest,
     WorkerResponse,
 )
-from alphus.gates.source.cyclomatic_complexity import (
-    BackendRun,
-    CyclomaticBackendPlan,
-    CyclomaticReport,
-    backend_failure,
-    build_cyclomatic_plan,
-    combine_cyclomatic_backends,
-    report_exit_code,
-    report_payload,
-    report_summary,
-)
+from alphus.policy.metrics import CyclomaticComplexityPolicy
 from alphus.policy.orchestration import CommandRunStep, RuleRunStep
+from alphus.support.data_access import JsonValue
 from alphus.support.inventory import candidate_files
 from alphus.support.python_runtime import current_python_executable
+
+BackendRun = tuple[
+    CyclomaticBackendResult,
+    Sequence[CyclomaticFunctionMetric],
+    Sequence[Finding],
+]
+
+
+def backend_failure(
+    plan: CyclomaticBackendPlan,
+    policy: CyclomaticComplexityPolicy,
+    message: str,
+) -> BackendRun:
+    """Load the native result adapter only when a cyclomatic worker fails."""
+    return cyclomatic_rule_operations().backend_failure(plan, policy, message)
+
+
+def build_cyclomatic_plan(
+    root: Path, policy: CyclomaticComplexityPolicy
+) -> CyclomaticPlan:
+    """Resolve native tool plans only for an explicitly selected profile step."""
+    return cyclomatic_rule_operations().build_plan(root, policy)
+
+
+def combine_cyclomatic_backends(
+    policy: CyclomaticComplexityPolicy, runs: Sequence[BackendRun]
+) -> CyclomaticReport:
+    """Reduce native backend results on the selected cyclomatic path."""
+    return cyclomatic_rule_operations().combine_backends(policy, runs)
+
+
+def report_exit_code(report: CyclomaticReport, threshold: Severity) -> int:
+    return cyclomatic_rule_operations().report_exit_code(report, threshold)
+
+
+def report_payload(report: CyclomaticReport) -> Mapping[str, JsonValue]:
+    return cyclomatic_rule_operations().report_payload(report)
+
+
+def report_summary(report: CyclomaticReport) -> str:
+    return cyclomatic_rule_operations().report_summary(report)
 
 
 @dataclass(frozen=True, slots=True)

@@ -4,7 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from alphus.config import SourceScanPolicy
+from alphus.config import QualityGateConfig, SourceScanPolicy
+from alphus.execution.dispatch import run_builtin_rule
 from alphus.gates.languages.javascript.json_decoding import (
     DECODERS as JS_DECODERS,
 )
@@ -18,6 +19,8 @@ from alphus.gates.languages.python.json_decoding import (
     json_findings as python_json_findings,
 )
 from alphus.gates.source.json_structure import check_json_structure
+from alphus.plugins.builtin import FindingBuiltinFeature
+from alphus.plugins.builtin_registry import load_builtin_feature
 
 
 def test_python_import_aliases_and_from_imports_are_reported() -> None:
@@ -153,4 +156,40 @@ def test_check_reads_utf8_bom_source(tmp_path: Path) -> None:
 
     assert [(finding.path, finding.line, finding.rule_id) for finding in findings] == [
         ("src/decoder.py", 2, "alphus/python/none/validation/unvalidated-json-decode")
+    ]
+
+
+def test_registered_json_structure_runner_preserves_python_and_javascript_ids(
+    tmp_path: Path,
+) -> None:
+    assert isinstance(load_builtin_feature("json-structure"), FindingBuiltinFeature)
+    python_path = Path("src/example.py")
+    javascript_path = Path("src/client.js")
+    (tmp_path / python_path).parent.mkdir(parents=True)
+    (tmp_path / python_path).write_text(
+        "import json\nvalue = json.loads(source)\n", encoding="utf-8"
+    )
+    (tmp_path / javascript_path).write_text(
+        "const value = JSON.parse(source);\n", encoding="utf-8"
+    )
+    config = QualityGateConfig.model_validate(
+        {
+            "schema_version": 1,
+            "checks": {"json_structure": {"extensions": [".py", ".js"], "exclude": []}},
+        }
+    )
+
+    findings = run_builtin_rule(
+        "json-structure", tmp_path, (python_path, javascript_path), config
+    )
+
+    assert [(item.rule_id, item.path) for item in findings] == [
+        (
+            "alphus/javascript/none/validation/unvalidated-json-decode",
+            "src/client.js",
+        ),
+        (
+            "alphus/python/none/validation/unvalidated-json-decode",
+            "src/example.py",
+        ),
     ]

@@ -5,19 +5,29 @@ from __future__ import annotations
 import ast
 import sys
 import tomllib
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from importlib import metadata
 from pathlib import Path, PurePosixPath
-from typing import Any, cast
+from typing import Any, Final, cast
 
 from packaging.requirements import InvalidRequirement, Requirement
 from packaging.specifiers import SpecifierSet
 from packaging.utils import canonicalize_name
 from packaging.version import Version
 
-from alphus.config import TypingStubCandidate, TypingStubSuggestionPolicy
+from alphus.config import QualityGateConfig, TypingStubCandidate
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
+from alphus.plugins.builtin import FindingBuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import TypingStubSuggestionPolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source, read_utf8_text
 
@@ -573,3 +583,86 @@ def check_typing_stub_suggestions(
             )
         )
     return findings
+
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="typing-stub-suggestions",
+    policy_field="typing_stub_suggestions",
+    policy_model=TypingStubSuggestionPolicy,
+    output_shape="findings",
+    summary="Suggests compatible typing stub packages for declared dependencies.",
+    applies_to=("python", "typing"),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="typing-stub-suggestions",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.DEPENDENCIES,
+            "typing-stub-suggestion",
+        ),
+    ),
+    concern="typing-stub-compatibility",
+    claim_kind=ClaimKind.CONDITION,
+    claim=(
+        "Explicit source imports, dependency constraints and package metadata can "
+        "support a stub suggestion; no type checker is run and package metadata "
+        "does not establish stub correctness."
+    ),
+    mechanisms=(DetectionMechanism.EXACT_RULE,),
+    inspected_scope=(
+        "selected-python-imports",
+        "configured-pep621-dependencies",
+        "installed-runtime-and-stub-metadata",
+    ),
+    languages_formats=("python", "toml", "distribution-metadata"),
+    evidence_kinds=(
+        "python-imports",
+        "dependency-version-specifiers",
+        "stub-package-metadata",
+        "checker-selection",
+    ),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
+
+
+def run_typing_stub_suggestions_rule(
+    root: Path, files: Sequence[Path], config: QualityGateConfig
+) -> list[Finding]:
+    """Adapt the configured dependency-metadata review to feature dispatch."""
+    return check_typing_stub_suggestions(
+        root,
+        files,
+        require_policy(
+            config.checks.typing_stub_suggestions,
+            "typing_stub_suggestions",
+        ),
+    )
+
+
+def resolve_typing_stub_suggestions_policy(
+    config: QualityGateConfig,
+) -> TypingStubSuggestionPolicy:
+    """Resolve the strict typing stub suggestions policy from validated config."""
+    return require_policy(
+        config.checks.typing_stub_suggestions, "typing_stub_suggestions"
+    )
+
+
+def run_typing_stub_suggestions_feature(
+    root: Path, paths: Sequence[Path], policy: TypingStubSuggestionPolicy
+) -> list[Finding]:
+    """Run this review with its feature-owned policy type."""
+    return check_typing_stub_suggestions(root, paths, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_typing_stub_suggestions_feature,
+    policy_resolver=resolve_typing_stub_suggestions_policy,
+)

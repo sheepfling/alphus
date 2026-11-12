@@ -1,0 +1,100 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py"]
+exclude = []
+
+[checks.manual_quaternion_conjugation]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/geometry/*.py"]
+function_names = ["conjugate_quaternion"]
+components = ["w", "x", "y", "z"]
+
+[checks.manual_quaternion_products]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/geometry/*.py"]
+function_names = ["multiply_quaternions"]
+left_components = ["lw", "lx", "ly", "lz"]
+right_components = ["rw", "rx", "ry", "rz"]
+result_components = ["ow", "ox", "oy", "oz"]
+
+[checks.manual_quaternion_normalization]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/geometry/*.py"]
+function_names = ["normalize_attitude"]
+components = ["w", "x", "y", "z"]
+square_root_helpers = ["math.sqrt"]
+rotation_consumer_helpers = ["Rotation.from_quat"]
+
+[checks.manual_quaternion_inversion]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/geometry/*.py"]
+function_names = ["inverse_quaternion"]
+components = ["w", "x", "y", "z"]
+
+[checks.manual_quaternion_vector_rotation]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/geometry/*.py"]
+function_names = ["rotate_vector"]
+components = ["w", "x", "y", "z"]
+vector_components = ["vx", "vy", "vz"]
+multiplication_helpers = ["multiply"]
+conjugation_helpers = ["conjugate"]
+
+[checks.manual_quaternion_matrix_conversion]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/geometry/*.py"]
+function_names = ["quaternion_to_matrix"]
+components = ["w", "x", "y", "z"]
+convention = "active-column-scalar-first"
+
+[orchestration]
+default_profile = "quaternion-review"
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "quaternion-conjugation"
+rule = "manual-quaternion-conjugation"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "quaternion-products"
+rule = "manual-quaternion-products"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "quaternion-normalization"
+rule = "manual-quaternion-normalization"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "quaternion-inversion"
+rule = "manual-quaternion-inversion"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "quaternion-vector-rotation"
+rule = "manual-quaternion-vector-rotation"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "quaternion-matrix-conversion"
+rule = "manual-quaternion-matrix-conversion"
+
+[[orchestration.profiles]]
+name = "quaternion-review"
+steps = [
+    "quaternion-conjugation",
+    "quaternion-products",
+    "quaternion-normalization",
+    "quaternion-inversion",
+    "quaternion-vector-rotation",
+    "quaternion-matrix-conversion",
+]

@@ -1,0 +1,22 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py"]
+exclude = []
+
+[checks.pydantic_practices]
+extensions = [".py"]
+
+[orchestration]
+default_profile = "pydantic-review"
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "pydantic-review"
+rule = "pydantic-practices"
+severity = "warning"
+
+[[orchestration.profiles]]
+name = "pydantic-review"
+steps = ["pydantic-review"]

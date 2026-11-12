@@ -10,6 +10,8 @@ from alphus.gates.languages.python.output_escaping import (
     escape_findings as python_escape_findings,
 )
 from alphus.gates.source.output_escaping import check_output_escaping
+from alphus.plugins.builtin import FindingBuiltinFeature
+from alphus.plugins.builtin_registry import load_builtin_feature
 
 
 def test_python_detects_common_format_escapes() -> None:
@@ -65,8 +67,8 @@ def test_scan_uses_extensions_and_exclusions_from_policy(tmp_path: Path) -> None
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(source, encoding="utf-8")
     policy = SourceScanPolicy(
-        extensions=[".py"],
-        exclude=["**/vendor/**", "vendor/**"],
+        extensions=(".py",),
+        exclude=("**/vendor/**", "vendor/**"),
     )
 
     findings = check_output_escaping(tmp_path, list(sources), policy)
@@ -83,3 +85,37 @@ def test_scan_uses_extensions_and_exclusions_from_policy(tmp_path: Path) -> None
             "manual output escape replacement; use a library or tested shared utility",
         ),
     ]
+
+
+def test_scan_uses_feature_owned_ids_for_each_language_scope(tmp_path: Path) -> None:
+    sources = {
+        Path("src/render.py"): 'value = value.replace("<", "&lt;")\n',
+        Path("src/render.js"): 'const html = value.replaceAll("&", "&amp;");\n',
+    }
+    for relative, source in sources.items():
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(source, encoding="utf-8")
+
+    findings = check_output_escaping(
+        tmp_path,
+        list(sources),
+        SourceScanPolicy(extensions=(".py", ".js"), exclude=()),
+    )
+
+    assert [(finding.rule_id, finding.path, finding.line) for finding in findings] == [
+        (
+            "alphus/javascript/none/security/manual-output-escaping",
+            "src/render.js",
+            1,
+        ),
+        (
+            "alphus/python/none/security/manual-output-escaping",
+            "src/render.py",
+            1,
+        ),
+    ]
+
+
+def test_output_escaping_uses_typed_finding_registration() -> None:
+    assert isinstance(load_builtin_feature("output-escaping"), FindingBuiltinFeature)

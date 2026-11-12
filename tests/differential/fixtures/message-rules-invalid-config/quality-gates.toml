@@ -1,0 +1,19 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py", "scripts/**/*"]
+exclude = []
+
+[checks.runtime_types]
+extensions = [".py"]
+exclude = []
+unexpected_runtime_option = true
+
+[checks.script_policy]
+extensions = [".sh"]
+exclude = []
+cmd_router_line_limit = 12
+python_module_prefix = "scripts"
+launcher_message = "use a Python module for operational scripts"
+cmd_message = "CMD must route to a Python module"
+unexpected_script_option = true

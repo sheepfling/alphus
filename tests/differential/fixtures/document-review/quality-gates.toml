@@ -1,0 +1,30 @@
+schema_version = 1
+
+[files]
+include = ["docs/**/*.md"]
+exclude = []
+
+[checks.document_style]
+extensions = [".md"]
+exclude = []
+
+[checks.benchmark_docs]
+include = ["docs/performance.md"]
+
+[orchestration]
+default_profile = "document-review"
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "heading-style-review"
+rule = "document-style"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "benchmark-context-review"
+rule = "benchmark-docs"
+
+[[orchestration.profiles]]
+name = "document-review"
+steps = ["heading-style-review", "benchmark-context-review"]

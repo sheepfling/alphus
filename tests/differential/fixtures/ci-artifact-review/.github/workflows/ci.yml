@@ -1,0 +1,16 @@
+name: CI
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Static checks
+        run: |
+          ruff check src
+          pyright src
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Static checks
+        run: |
+          ruff check src
+          pyright src

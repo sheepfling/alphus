@@ -6,12 +6,17 @@ from types import MappingProxyType
 
 import pytest
 
-from alphus.config import InputContractPolicy, load_config
+from alphus.config import InputContractPolicy, QualityGateConfig, load_config
 from alphus.contracts.findings import Finding
+from alphus.execution.dispatch import run_builtin_rule
 from alphus.gates.review.input_contracts import (
+    ALPHUS_FEATURE,
     check_input_contracts,
     input_contract_findings,
+    resolve_input_contracts_policy,
+    run_input_contracts_feature,
 )
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 POLICY = InputContractPolicy(extensions=[".py"], exclude=[])
 DOMAIN_POLICY = InputContractPolicy(
@@ -1798,3 +1803,30 @@ def test_manual_schema_contracts_validate_identity_and_custom_review_reasons() -
         manual_schema_findings(
             "def parse_options(payload): pass", justification="custom"
         )
+
+
+def test_typed_registration_preserves_input_contract_findings(
+    tmp_path: Path,
+) -> None:
+    relative = Path("src/collection.py")
+    source = tmp_path / relative
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "def append_value(values: list[str], item: str) -> None:\n"
+        "    values.append(item)\n",
+        encoding="utf-8",
+    )
+    policy_value = InputContractPolicy(extensions=(".py",), exclude=())
+    config = QualityGateConfig.model_validate(
+        {"schema_version": 1, "checks": {"input_contracts": policy_value}},
+        strict=True,
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is InputContractPolicy
+    policy = resolve_input_contracts_policy(config)
+    expected = run_input_contracts_feature(tmp_path, (relative,), policy)
+    assert check_input_contracts(tmp_path, (relative,), policy) == expected
+    assert (
+        run_builtin_rule("input-contracts", tmp_path, (relative,), config) == expected
+    )

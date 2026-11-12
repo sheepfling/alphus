@@ -1,0 +1,30 @@
+schema_version = 1
+
+[files]
+include = ["src/render/*.py"]
+exclude = []
+
+[checks.prose_as_control]
+extensions = [".py"]
+source_paths = ["src/render/*.py"]
+lossy_text_rewrite = true
+regex_sub_helpers = ["re.sub"]
+rendered_value_helpers = ["render_latex"]
+
+[orchestration]
+default_profile = "review-prose"
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Prose as control"
+rule = "prose-as-control"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Rendered value reparsed"
+rule = "rendered-value-reparsed"
+
+[[orchestration.profiles]]
+name = "review-prose"
+steps = ["Prose as control", "Rendered value reparsed"]

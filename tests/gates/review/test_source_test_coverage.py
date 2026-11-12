@@ -8,8 +8,16 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Literal, TypedDict
 
+from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.gates.review.source_test_coverage import check_source_test_coverage
+from alphus.execution.dispatch import run_builtin_rule
+from alphus.gates.review.source_test_coverage import (
+    ALPHUS_FEATURE,
+    check_source_test_coverage,
+    resolve_source_test_coverage_policy,
+    run_source_test_coverage_feature,
+)
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.source_test_coverage import (
     SourceTestCoveragePolicy,
     SourceTestRelationship,
@@ -674,3 +682,35 @@ def test_symlink_loop_is_unverified_not_fatal(tmp_path: Path) -> None:
 
     assert any("[coverage:unverified]" in item.message for item in findings)
     assert not any("[coverage:checked]" in item.message for item in findings)
+
+
+def test_feature_registration_binds_source_coverage_policy_and_finding_output(
+    tmp_path: Path,
+) -> None:
+    _commit_checkout(
+        tmp_path,
+        {
+            "src/service.py": "VALUE = 1\n",
+            "tests/test_service.py": "def test_service(): pass\n",
+        },
+    )
+    policy = SourceTestCoveragePolicy(
+        relationships=(
+            SourceTestRelationship(
+                source="src/service.py", tests=("tests/test_service.py",)
+            ),
+        )
+    )
+    config = QualityGateConfig.model_validate(
+        {"schema_version": 1, "checks": {"source_test_coverage": policy}},
+        strict=True,
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is SourceTestCoveragePolicy
+    assert type(resolve_source_test_coverage_policy(config)) is SourceTestCoveragePolicy
+    expected = run_source_test_coverage_feature(
+        tmp_path, (), resolve_source_test_coverage_policy(config)
+    )
+    assert check_source_test_coverage(tmp_path, (), policy) == expected
+    assert run_builtin_rule("source-test-coverage", tmp_path, (), config) == expected

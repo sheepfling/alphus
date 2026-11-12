@@ -1,12 +1,19 @@
 """Portable repository quality gates driven by validated TOML policy."""
 
-from alphus.config import QualityGateConfig, load_config
-from alphus.contracts.findings import Finding
-from alphus.gates.hygiene.rules import check_file_size, check_line_length
-from alphus.gates.source.json_structure import check_json_structure
-from alphus.gates.source.output_escaping import check_output_escaping
-from alphus.gates.source.path_discovery import check_path_discovery
-from alphus.support.inventory import candidate_files, git_files
+from __future__ import annotations
+
+from alphus.support.public_imports import make_public_dir, resolve_public_attribute
+
+Finding: type[object]
+QualityGateConfig: type[object]
+candidate_files: object
+check_file_size: object
+check_json_structure: object
+check_line_length: object
+check_output_escaping: object
+check_path_discovery: object
+git_files: object
+load_config: object
 
 __all__ = [
     "Finding",
@@ -20,3 +27,6 @@ __all__ = [
     "git_files",
     "load_config",
 ]
+
+__getattr__ = resolve_public_attribute
+__dir__ = make_public_dir(tuple(globals()), __all__)

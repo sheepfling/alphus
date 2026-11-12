@@ -1,0 +1,11 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py"]
+exclude = []
+
+[checks.positional_interfaces]
+extensions = [".py"]
+exclude = []
+report_same_type_primitives = true
+unrecognized_option = true

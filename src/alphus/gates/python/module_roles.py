@@ -3,14 +3,101 @@
 from __future__ import annotations
 
 import ast
+from collections.abc import Sequence
 from fnmatch import fnmatchcase
 from pathlib import Path, PurePosixPath
-from typing import NamedTuple
+from typing import Final, NamedTuple
 
-from alphus.config import ModuleRolePolicy, ModuleRoleRule
+from alphus.config import ModuleRoleRule, QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
+from alphus.plugins.builtin import FindingBuiltinFeature
+from alphus.policy.architecture import ModuleRolePolicy
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
 from alphus.support.source_text import read_python_source
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="module-roles",
+    policy_field="module_roles",
+    policy_model=ModuleRolePolicy,
+    output_shape="findings",
+    summary="Checks configured Python module-role and ownership conventions.",
+    applies_to=("python",),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="module-roles",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.CORRECTNESS,
+            "module-syntax-invalid",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.ARCHITECTURE,
+            "forbidden-module-import",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.ARCHITECTURE,
+            "forbidden-module-import-pattern",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.SECURITY,
+            "forbidden-module-call",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.ARCHITECTURE,
+            "forbidden-module-definition",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.ARCHITECTURE,
+            "forbidden-module-assignment",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.CONFIGURATION,
+            "module-role-path-invalid",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.CONFIGURATION,
+            "module-role-file-unreadable",
+        ),
+    ),
+    concern="module-role-boundaries",
+    claim_kind=ClaimKind.CONDITION,
+    claim=(
+        "A configured Python module violates a declared dependency, symbol, "
+        "call, assignment, or path boundary."
+    ),
+    mechanisms=(DetectionMechanism.EXACT_RULE,),
+    inspected_scope=("configured-module-paths",),
+    languages_formats=("python",),
+    evidence_kinds=("ast-node", "repository-path-state"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
 
 
 def _finding(
@@ -320,3 +407,23 @@ def check_module_roles(root: Path, policy: ModuleRolePolicy) -> list[Finding]:
             finding.message,
         ),
     )
+
+
+def resolve_module_roles_policy(config: QualityGateConfig) -> ModuleRolePolicy:
+    """Resolve the feature's strict module roles policy."""
+    return require_policy(config.checks.module_roles, "module_roles")
+
+
+def run_module_roles_feature(
+    root: Path, _files: Sequence[Path], policy: ModuleRolePolicy
+) -> list[Finding]:
+    """Run the configured module roles check with its typed policy."""
+    return check_module_roles(root, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_module_roles_feature,
+    policy_resolver=resolve_module_roles_policy,
+)

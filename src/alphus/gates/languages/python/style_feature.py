@@ -1,0 +1,474 @@
+"""Own built-in registration for Python source-style analysis."""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+from pathlib import Path
+from typing import Final
+
+from alphus.config import QualityGateConfig
+from alphus.contracts.complaints import ComplaintContract, ComplaintEntry
+from alphus.contracts.python_style import StyleFindings
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
+from alphus.gates.languages.python.style import findings_for
+from alphus.plugins.builtin import PythonStyleBuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.sources import PythonStylePolicy
+
+__all__ = [
+    "ALPHUS_CHECK",
+    "ALPHUS_COMPLAINT_CONTRACTS",
+    "ALPHUS_FEATURE",
+    "ALPHUS_MORPHOLOGY",
+    "run_python_style_rule",
+]
+
+ALPHUS_COMPLAINT_CONTRACTS: Final = (
+    ComplaintContract(
+        name="python-style-findings",
+        emitters=("python-style",),
+        entries=(
+            ComplaintEntry(
+                emitter="python-style",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.STYLE,
+                    "bare-containers",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="python-style",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.STYLE,
+                    "bare-tuples",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="python-style",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.STYLE,
+                    "concrete-inputs",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="python-style",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.STYLE,
+                    "local-imports",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="python-style",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.STYLE,
+                    "opaque-mappings",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="python-style",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.STYLE,
+                    "unslotted-dataclasses",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="python-style",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.STYLE,
+                    "quoted-types",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="python-style",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.STYLE,
+                    "type-checking-imports",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="python-style",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.STYLE,
+                    "os-path",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="python-style",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.STYLE,
+                    "main-module-imports",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="python-style",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.STYLE,
+                    "legacy-pydantic-fields",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="python-style",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.STYLE,
+                    "mutable-module-constants",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="python-style",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.STYLE,
+                    "literal-rule-ids",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="python-style",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.STYLE,
+                    "literal-rule-dimensions",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="python-style",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.STYLE,
+                    "raw-reporting-prints",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="python-style",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.STYLE,
+                    "magic-exit-codes",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="python-style",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.STYLE,
+                    "repeated-literals",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="python-style",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.STYLE,
+                    "unnamed-tuple-returns",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="python-style",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.STYLE,
+                    "undifferentiated-patterns",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="python-style",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.STYLE,
+                    "concrete-classmethod-returns",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="python-style",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.STYLE,
+                    "concrete-model-validator-returns",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="python-style",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.STYLE,
+                    "direct-text-reads",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="python-style",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.STYLE,
+                    "duplicate-literal-catalogs",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="python-style",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.STYLE,
+                    "unused-public-constants",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="python-style",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.STYLE,
+                    "pydantic-collection-contracts",
+                ),
+            ),
+        ),
+    ),
+)
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="python-style",
+    policy_field="python_style",
+    policy_model=PythonStylePolicy,
+    output_shape="python-style",
+    summary="Runs configured Python source-style checks.",
+    applies_to=("python",),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="python-style",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.STYLE,
+            "bare-containers",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.STYLE,
+            "bare-tuples",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.STYLE,
+            "concrete-inputs",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.STYLE,
+            "local-imports",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.STYLE,
+            "opaque-mappings",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.STYLE,
+            "unslotted-dataclasses",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.STYLE,
+            "quoted-types",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.STYLE,
+            "type-checking-imports",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.STYLE,
+            "os-path",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.STYLE,
+            "main-module-imports",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.STYLE,
+            "legacy-pydantic-fields",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.STYLE,
+            "mutable-module-constants",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.STYLE,
+            "literal-rule-ids",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.STYLE,
+            "literal-rule-dimensions",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.STYLE,
+            "raw-reporting-prints",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.STYLE,
+            "magic-exit-codes",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.STYLE,
+            "repeated-literals",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.STYLE,
+            "unnamed-tuple-returns",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.STYLE,
+            "undifferentiated-patterns",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.STYLE,
+            "concrete-classmethod-returns",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.STYLE,
+            "concrete-model-validator-returns",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.STYLE,
+            "direct-text-reads",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.STYLE,
+            "duplicate-literal-catalogs",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.STYLE,
+            "unused-public-constants",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.STYLE,
+            "pydantic-collection-contracts",
+        ),
+    ),
+    finding_contracts=("python-style-findings",),
+    concern="python-source-maintainability-and-api-clarity",
+    claim_kind=ClaimKind.STYLE_PREFERENCE,
+    claim=(
+        "Selected Python source uses annotation, module-structure, or API patterns "
+        "that differ from configured project conventions; these static findings "
+        "identify review risks and do not by themselves prove runtime defects."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("caller-selected-python-source", "configured-python-style-policy"),
+    languages_formats=("python",),
+    evidence_kinds=("python-ast-and-source-structure", "configured-style-policy"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
+
+
+def run_python_style_rule(
+    root: Path, paths: Sequence[Path], config: QualityGateConfig
+) -> dict[str, StyleFindings]:
+    """Adapt the declared Python style policy to the existing typed result."""
+    return findings_for(
+        root, paths, require_policy(config.checks.python_style, "python_style")
+    )
+
+
+def resolve_python_style_policy(config: QualityGateConfig) -> PythonStylePolicy:
+    """Resolve the strict Python-style policy from validated config."""
+    return require_policy(config.checks.python_style, "python_style")
+
+
+def run_python_style_feature(
+    root: Path, paths: Sequence[Path], policy: PythonStylePolicy
+) -> dict[str, StyleFindings]:
+    """Return the existing named style categories from the typed provider."""
+    return findings_for(root, paths, policy)
+
+
+ALPHUS_FEATURE: Final = PythonStyleBuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_python_style_feature,
+    policy_resolver=resolve_python_style_policy,
+)

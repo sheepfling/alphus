@@ -7,23 +7,35 @@ import re
 import shutil
 import subprocess
 from collections.abc import Mapping, Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 from pathlib import Path
 from types import MappingProxyType
-from typing import Annotated, Literal, TypeAlias
+from typing import Annotated, Final, TypeAlias, cast
 
 from packaging.version import InvalidVersion, Version
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
+from alphus.config import QualityGateConfig
+from alphus.contracts.cyclomatic import (
+    CyclomaticBackendPlan,
+    CyclomaticBackendResult,
+    CyclomaticFunctionMetric,
+    CyclomaticOption,
+    CyclomaticPlan,
+    CyclomaticReport,
+    CyclomaticRuleOperations,
+)
 from alphus.contracts.findings import (
-    Diagnostic,
     Finding,
     Severity,
     severity_meets_threshold,
 )
 from alphus.contracts.process import ExitCode
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
 from alphus.gates.source._lizard_contracts import LizardWorkerResponse as _LizardPayload
+from alphus.plugins.builtin import CyclomaticBuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
 from alphus.policy.metrics import (
     CyclomaticBackendBinding,
     CyclomaticComplexityPolicy,
@@ -31,9 +43,65 @@ from alphus.policy.metrics import (
     LizardCyclomaticBinding,
     RuffCyclomaticBinding,
 )
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.support.data_access import JsonValue
 from alphus.support.inventory import candidate_files
 from alphus.support.platform_utils import is_windows
 from alphus.support.python_runtime import current_python_executable
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="cyclomatic-complexity",
+    policy_field="cyclomatic_complexity",
+    policy_model=CyclomaticComplexityPolicy,
+    output_shape="cyclomatic-report",
+    summary="Measures bounded cyclomatic complexity for supported source backends.",
+    applies_to=("python", "javascript", "cpp"),
+    domains=(),
+    requires_files=False,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="cyclomatic-complexity",
+    finding_ids=(
+        RuleTag(
+            Scope.ANY,
+            Framework.NONE,
+            Category.MAINTAINABILITY,
+            "cyclomatic-complexity-threshold",
+        ),
+        RuleTag(
+            Scope.ANY,
+            Framework.NONE,
+            Category.CONFIGURATION,
+            "cyclomatic-backend-failure",
+        ),
+    ),
+    concern="function-complexity",
+    claim_kind=ClaimKind.CONDITION,
+    claim=(
+        "A selected function exceeds its configured complexity threshold under "
+        "the selected native backend, or that backend fails explicitly."
+    ),
+    mechanisms=(
+        DetectionMechanism.NATIVE_TOOL,
+        DetectionMechanism.EXACT_RULE,
+    ),
+    inspected_scope=("selected-functions", "configured-thresholds"),
+    languages_formats=("python", "javascript", "cpp"),
+    evidence_kinds=(
+        "native-tool-result",
+        "tool-version",
+        "function-identity",
+        "path-line",
+    ),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
+
 
 _EXTENSIONS: Mapping[str, frozenset[str]] = MappingProxyType(
     {
@@ -92,96 +160,6 @@ _RUFF_DIAGNOSTICS: TypeAdapter[tuple[_RuffDiagnostic, ...]] = TypeAdapter(
 _ESLINT_RESULTS: TypeAdapter[tuple[_EslintFileResult, ...]] = TypeAdapter(
     tuple[_EslintFileResult, ...]
 )
-
-
-@dataclass(frozen=True, slots=True)
-class CyclomaticFunctionMetric:
-    """One native function record or one native gate diagnostic."""
-
-    language: str
-    backend: str
-    backend_version: str
-    native_rule: str
-    count_method: str
-    function_identity: str
-    path: str
-    line: int
-    column: int | None
-    value: int | None
-    maximum: int
-    severity: Severity
-    violated: bool
-    native_message: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class CyclomaticBackendPlan:
-    """Deterministic native invocation, selected scope, and capability limits."""
-
-    language: str
-    backend: str
-    expected_version: str
-    native_rule: str
-    count_method: str
-    maximum: int
-    severity: Severity
-    variant: str | None
-    files: tuple[str, ...]
-    command: tuple[str, ...] | None
-    api_call: str | None
-    numeric_inventory: bool
-    unsupported_capabilities: tuple[str, ...]
-    status: Literal["ready", "no_matching_files"]
-
-
-@dataclass(frozen=True, slots=True)
-class CyclomaticPlan:
-    """Resolved, side-effect-free plan for all configured language backends."""
-
-    metric: str
-    maximum: int
-    severity: Severity
-    timeout_seconds: int
-    lizard_manifest_max_bytes: int
-    backends: tuple[CyclomaticBackendPlan, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class CyclomaticBackendResult:
-    """One backend's tool/version provenance and analyzed-file coverage."""
-
-    language: str
-    backend: str
-    status: Literal["clean", "violations", "no_matching_files", "operational_failure"]
-    expected_version: str
-    actual_version: str | None
-    native_rule: str
-    count_method: str
-    maximum: int
-    severity: Severity
-    variant: str | None
-    selected_file_count: int
-    analyzed_file_count: int
-    record_scope: Literal["all_functions", "violations_only"]
-    effective_options: tuple[tuple[str, str], ...]
-    failure: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class CyclomaticReport:
-    """Serializable result preserving metric provenance and coverage limits."""
-
-    metric: str
-    outcome: Literal[
-        "clean",
-        "violations",
-        "incomplete_coverage",
-        "no_matching_files",
-        "operational_failure",
-    ]
-    backends: tuple[CyclomaticBackendResult, ...]
-    functions: tuple[CyclomaticFunctionMetric, ...]
-    diagnostics: tuple[Diagnostic, ...]
 
 
 def _maximum(
@@ -643,20 +621,20 @@ def _result(
 
 def _effective_options(
     plan: CyclomaticBackendPlan,
-) -> tuple[tuple[str, str], ...]:
+) -> tuple[CyclomaticOption, ...]:
     """List native options and common policy controls in stable order."""
     options = [
-        ("maximum", str(plan.maximum)),
-        ("severity", plan.severity),
-        ("variant", plan.variant or "backend-default"),
+        CyclomaticOption("maximum", str(plan.maximum)),
+        CyclomaticOption("severity", plan.severity),
+        CyclomaticOption("variant", plan.variant or "backend-default"),
     ]
     if plan.backend == "ruff":
-        options.append(("select", "C901"))
+        options.append(CyclomaticOption("select", "C901"))
     elif plan.backend == "eslint":
-        options.append(("complexity_rule", "error"))
+        options.append(CyclomaticOption("complexity_rule", "error"))
     else:
         extension = "mccabe" if plan.variant == "modified" else "none"
-        options.append(("extension", extension))
+        options.append(CyclomaticOption("extension", extension))
     return tuple(options)
 
 
@@ -933,6 +911,22 @@ def run_cyclomatic_complexity(
     return combine_cyclomatic_backends(policy, runs)
 
 
+def resolve_cyclomatic_policy(
+    config: QualityGateConfig,
+) -> CyclomaticComplexityPolicy:
+    """Resolve native cyclomatic policy using the strict config contract."""
+    return require_policy(config.checks.cyclomatic_complexity, "cyclomatic_complexity")
+
+
+def run_cyclomatic_rule(
+    root: Path,
+    _files: Sequence[Path],
+    policy: CyclomaticComplexityPolicy,
+) -> CyclomaticReport:
+    """Adapt the typed selected policy to the existing native report runner."""
+    return run_cyclomatic_complexity(root, policy)
+
+
 def report_exit_code(
     report: CyclomaticReport,
     failure_threshold: Severity,
@@ -965,11 +959,20 @@ def plan_payload(plan: CyclomaticPlan) -> dict[str, object]:
 
 
 # opaque-boundary: Dataclass serialization preserves native report fields.
-def report_payload(report: CyclomaticReport) -> dict[str, object]:
+def report_payload(report: CyclomaticReport) -> dict[str, JsonValue]:
     """Serialize the structured report for JSON output and orchestration."""
     payload = asdict(report)
     payload["diagnostics"] = [item.to_wire() for item in report.diagnostics]
-    return payload
+    payload["backends"] = [
+        {
+            **asdict(backend),
+            "effective_options": [
+                [option.name, option.value] for option in backend.effective_options
+            ],
+        }
+        for backend in report.backends
+    ]
+    return cast(dict[str, JsonValue], payload)
 
 
 def report_summary(report: CyclomaticReport) -> str:
@@ -983,3 +986,19 @@ def report_summary(report: CyclomaticReport) -> str:
     return f"Cyclomatic complexity: {report.outcome}" + (
         f" ({details})" if details else ""
     )
+
+
+ALPHUS_FEATURE: Final = CyclomaticBuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_cyclomatic_rule,
+    policy_resolver=resolve_cyclomatic_policy,
+    cyclomatic_operations=CyclomaticRuleOperations(
+        build_plan=build_cyclomatic_plan,
+        backend_failure=backend_failure,
+        combine_backends=combine_cyclomatic_backends,
+        report_exit_code=report_exit_code,
+        report_payload=report_payload,
+        report_summary=report_summary,
+    ),
+)

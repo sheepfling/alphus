@@ -1,0 +1,24 @@
+schema_version = 1
+
+[files]
+include = ["**/*.txt"]
+exclude = []
+
+[checks.dependency_locks]
+pairs = [
+  { input_file = "requirements.txt", lock_file = "locks.txt" },
+]
+
+[orchestration]
+failure_threshold = "error"
+default_profile = "dependency-review"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "dependency-check"
+rule = "dependency-locks"
+severity = "warning"
+
+[[orchestration.profiles]]
+name = "dependency-review"
+steps = ["dependency-check"]

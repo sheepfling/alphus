@@ -1,0 +1,33 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py"]
+exclude = []
+
+[checks.dynamic_markdown]
+extensions = [".py"]
+producer_paths = ["src/render/*.py"]
+
+[checks.embedded_semantic_overrides]
+extensions = [".py"]
+source_paths = ["src/render/*.py"]
+replacement_maps = ["fixed_paragraphs"]
+source_anchor_helpers = ["source_anchor"]
+
+[orchestration]
+default_profile = "review-text"
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Dynamic Markdown"
+rule = "dynamic-markdown"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Embedded semantic overrides"
+rule = "embedded-semantic-overrides"
+
+[[orchestration.profiles]]
+name = "review-text"
+steps = ["Dynamic Markdown", "Embedded semantic overrides"]

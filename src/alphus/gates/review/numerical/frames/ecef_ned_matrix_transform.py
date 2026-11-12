@@ -3,20 +3,66 @@
 from __future__ import annotations
 
 import ast
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
-from alphus.config import EcefNedMatrixTransformPolicy
+from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
 from alphus.gates.review.numerical.common.ast_helpers import (
     configured_function_observations,
     redefined_function_names,
 )
+from alphus.plugins.builtin import FindingBuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import EcefNedMatrixTransformPolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="ecef-ned-matrix-transform",
+    input_mode="configured-source-scan",
+    policy_field="ecef_ned_matrix_transform",
+    policy_model=EcefNedMatrixTransformPolicy,
+    output_shape="findings",
+    summary="Reviews configured ECEF-to-NED matrix patterns.",
+    applies_to=("python", "geospatial"),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="ecef-ned-matrix-transform",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.MAINTAINABILITY,
+            "ecef-ned-matrix-transform-reuse",
+        ),
+    ),
+    concern="coordinate-frame-transform-implementation",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "A configured Python function matches the exact bounded ECEF-to-NED "
+        "matrix formula; this is a review signal, not proof of mathematical error."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("configured-python-files", "configured-functions"),
+    languages_formats=("python",),
+    evidence_kinds=("configured-source-path", "ast-pattern-match", "source-location"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
 
 _RULE_ID = rule_tag(
     Scope.PYTHON,
@@ -278,3 +324,27 @@ def check_ecef_ned_matrix_transform(
                 )
             )
     return findings
+
+
+def resolve_ecef_ned_matrix_transform_policy(
+    config: QualityGateConfig,
+) -> EcefNedMatrixTransformPolicy:
+    """Resolve this frame review's strict feature policy."""
+    return require_policy(
+        config.checks.ecef_ned_matrix_transform, "ecef_ned_matrix_transform"
+    )
+
+
+def run_ecef_ned_matrix_transform_feature(
+    root: Path, files: Sequence[Path], policy: EcefNedMatrixTransformPolicy
+) -> list[Finding]:
+    """Run this configured frame review with its typed policy."""
+    return check_ecef_ned_matrix_transform(root, files, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_ecef_ned_matrix_transform_feature,
+    policy_resolver=resolve_ecef_ned_matrix_transform_policy,
+)

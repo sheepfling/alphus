@@ -152,19 +152,36 @@ def test_new_review_rules_emit_structured_advisory_findings(
     assert payload[0]["line"] > 0
 
 
-def test_scipy_direct_rule_uses_its_own_label(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+@pytest.mark.parametrize(
+    ("selector", "policy", "source", "label"),
+    (
+        (
+            "numeric-literals",
+            '[checks.numeric_literals]\nextensions = [".py"]\n',
+            "area = 3.14 * radius\n",
+            "Numeric literals",
+        ),
+        (
+            "scipy-constants",
+            '[checks.scipy_constants]\nextensions = [".py"]\n',
+            "energy = frequency * 6.62607015e-34\n",
+            "SciPy constants",
+        ),
+    ),
+)
+def test_numeric_direct_rule_uses_its_feature_label(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    selector: str,
+    policy: str,
+    source: str,
+    label: str,
 ) -> None:
-    arguments = repository(
-        tmp_path,
-        "physics.py",
-        "energy = frequency * 6.62607015e-34\n",
-        '[checks.scipy_constants]\nextensions = [".py"]\n',
-    )
+    arguments = repository(tmp_path, "physics.py", source, policy)
 
-    assert main([*arguments, "--rule", "scipy-constants"]) == 0
+    assert main([*arguments, "--rule", selector]) == 0
     output = capsys.readouterr().out
-    assert "SciPy constants: 1 finding(s)" in output
+    assert f"{label}: 1 finding(s)" in output
     assert "File size:" not in output
 
 

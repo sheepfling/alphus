@@ -5,17 +5,61 @@ from zipfile import ZipFile
 
 import pytest
 
-from alphus.config import load_config
+from alphus.config import QualityGateConfig, load_config
+from alphus.execution.dispatch import run_builtin_rule
 from alphus.gates.review.document_style import (
+    ALPHUS_FEATURE,
     DocumentSection,
     check_document_style,
     extract_docx_sections,
     extract_html_sections,
     extract_latex_sections,
     extract_markdown_sections,
+    resolve_document_style_policy,
     rhetorical_heading_findings,
+    run_document_style_feature,
+    run_document_style_rule,
 )
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.review import DocumentHeadingSuppression, DocumentStylePolicy
+
+
+def test_registered_document_style_runner_preserves_style_result(
+    tmp_path: Path,
+) -> None:
+    relative = Path("docs/headings.md")
+    document = tmp_path / relative
+    document.parent.mkdir(parents=True)
+    document.write_text(
+        "# From inputs to models\n"
+        "## From data to results\n"
+        "## From signals to decisions\n"
+        "## Methods\n## Results\n## Discussion\n## Limits\n## Appendix\n",
+        encoding="utf-8",
+    )
+    config = QualityGateConfig.model_validate(
+        {
+            "schema_version": 1,
+            "checks": {"document_style": {"extensions": [".md"], "exclude": []}},
+        }
+    )
+
+    findings = run_builtin_rule("document-style", tmp_path, (relative,), config)
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.runner is run_document_style_feature
+    assert type(resolve_document_style_policy(config)) is DocumentStylePolicy
+    assert run_document_style_rule(tmp_path, (relative,), config) == findings
+    assert [
+        (item.rule_id, item.path, item.line, item.severity) for item in findings
+    ] == [
+        (
+            "alphus/any/none/style/rhetorical-heading-density",
+            "docs/headings.md",
+            1,
+            "info",
+        )
+    ]
 
 
 def test_markdown_extraction_preserves_lines_and_skips_front_matter_fences_and_toc() -> (

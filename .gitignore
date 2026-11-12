@@ -22,6 +22,10 @@ var/
 wheels/
 share/python-wheels/
 *.egg-info/
+.registry-build/
+src/alphus/execution/_generated_dispatch.py
+src/alphus/plugins/builtin_registry.pyi
+src/alphus/policy/_generated_*.py
 .installed.cfg
 *.egg
 MANIFEST

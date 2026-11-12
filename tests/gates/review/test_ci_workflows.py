@@ -4,8 +4,16 @@ from pathlib import Path
 
 import pytest
 
-from alphus.config import CiWorkflowPolicy
-from alphus.gates.review.ci_workflows import check_ci_workflows, workflow_run_findings
+from alphus.config import CiWorkflowPolicy, QualityGateConfig
+from alphus.execution.dispatch import run_builtin_rule
+from alphus.gates.review.ci_workflows import (
+    ALPHUS_FEATURE,
+    check_ci_workflows,
+    resolve_ci_workflows_policy,
+    run_ci_workflows_feature,
+    workflow_run_findings,
+)
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 
 def policy(**updates: object) -> CiWorkflowPolicy:
@@ -725,3 +733,29 @@ def test_azure_setup_task_advisory_skips_context_and_different_inputs() -> None:
       versionSpec: $(pythonVersion)
 """
     assert workflow_run_findings(dynamic, "azure-pipelines.yml", configured) == []
+
+
+def test_feature_registration_preserves_workflow_findings(tmp_path: Path) -> None:
+    relative = Path(".github/workflows/ci.yml")
+    workflow = tmp_path / relative
+    workflow.parent.mkdir(parents=True)
+    workflow.write_text(
+        "jobs:\n  lint:\n    steps:\n      - run: |\n"
+        "          ruff check src\n          pytest\n"
+        "  audit:\n    steps:\n      - run: |\n"
+        "          ruff check src\n          pytest\n",
+        encoding="utf-8",
+    )
+    policy_value = CiWorkflowPolicy(extensions=(".yml",), exclude=())
+    config = QualityGateConfig.model_validate(
+        {"schema_version": 1, "checks": {"ci_workflows": policy_value}},
+        strict=True,
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is CiWorkflowPolicy
+    policy = resolve_ci_workflows_policy(config)
+    assert type(policy) is CiWorkflowPolicy
+    expected = run_ci_workflows_feature(tmp_path, [relative], policy)
+    assert expected == check_ci_workflows(tmp_path, [relative], policy)
+    assert run_builtin_rule("ci-workflows", tmp_path, [relative], config) == expected

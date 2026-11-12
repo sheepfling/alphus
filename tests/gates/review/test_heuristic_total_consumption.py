@@ -3,11 +3,16 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from alphus.config import HeuristicTotalConsumptionPolicy
+from alphus.config import HeuristicTotalConsumptionPolicy, QualityGateConfig
+from alphus.execution.dispatch import run_builtin_rule
 from alphus.gates.review.heuristic_total_consumption import (
+    ALPHUS_FEATURE,
     check_heuristic_total_consumption,
     heuristic_total_consumption_sites,
+    resolve_heuristic_total_consumption_policy,
+    run_heuristic_total_consumption_feature,
 )
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 _DIRECT = """\
 import re
@@ -149,4 +154,32 @@ def test_check_honors_path_scope_and_exclusion(tmp_path: Path) -> None:
     assert len(check_heuristic_total_consumption(tmp_path, (path,), _policy())) == 1
     assert not check_heuristic_total_consumption(
         tmp_path, (path,), _policy(exclude=("src/text/normalizer.py",))
+    )
+
+
+def test_registration_binds_typed_heuristic_policy_and_finding_runner(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "src/text/parser.py"
+    path.parent.mkdir(parents=True)
+    path.write_text(_DIRECT, encoding="utf-8")
+    relative = path.relative_to(tmp_path)
+    policy = _policy()
+    config = QualityGateConfig.model_validate(
+        {"schema_version": 1, "checks": {"heuristic_total_consumption": policy}},
+        strict=True,
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is HeuristicTotalConsumptionPolicy
+    assert type(resolve_heuristic_total_consumption_policy(config)) is (
+        HeuristicTotalConsumptionPolicy
+    )
+    expected = run_heuristic_total_consumption_feature(
+        tmp_path, [relative], resolve_heuristic_total_consumption_policy(config)
+    )
+    assert check_heuristic_total_consumption(tmp_path, [relative], policy) == expected
+    assert (
+        run_builtin_rule("heuristic-total-consumption", tmp_path, [relative], config)
+        == expected
     )

@@ -3,15 +3,27 @@
 from __future__ import annotations
 
 import ast
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import replace
 from pathlib import Path
+from typing import Final
 
-from alphus.config import FastApiPracticePolicy
+from alphus.config import QualityGateConfig
+from alphus.contracts.complaints import ComplaintContract, ComplaintEntry
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
 from alphus.gates.review.frameworks.fastapi_contracts import fastapi_contract_findings
+from alphus.plugins.builtin import FindingBuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import FastApiPracticePolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_scanning import (
     ImportAliases,
@@ -242,3 +254,193 @@ def check_fastapi_practices(
             item.severity,
         ),
     )
+
+
+def run_fastapi_practices_rule(
+    root: Path, paths: Sequence[Path], config: QualityGateConfig
+) -> list[Finding]:
+    """Adapt strict feature policy to the existing findings runner contract."""
+    return check_fastapi_practices(
+        root,
+        paths,
+        require_policy(config.checks.fastapi_practices, "fastapi_practices"),
+    )
+
+
+ALPHUS_COMPLAINT_CONTRACTS: Final = (
+    ComplaintContract(
+        name="fastapi-practices",
+        emitters=("fastapi-practices",),
+        entries=(
+            ComplaintEntry(
+                emitter="fastapi-practices",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.FASTAPI,
+                    Category.CORRECTNESS,
+                    "literal-http-status",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="fastapi-practices",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.FASTAPI,
+                    Category.CORRECTNESS,
+                    "literal-error-code",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="fastapi-practices",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.FASTAPI,
+                    Category.CORRECTNESS,
+                    "duplicate-route",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="fastapi-practices",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.FASTAPI,
+                    Category.METADATA,
+                    "missing-operation-id",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="fastapi-practices",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.FASTAPI,
+                    Category.METADATA,
+                    "duplicate-operation-id",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="fastapi-practices",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.FASTAPI,
+                    Category.VALIDATION,
+                    "missing-response-contract",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="fastapi-practices",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.FASTAPI,
+                    Category.METADATA,
+                    "missing-route-metadata",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="fastapi-practices",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.FASTAPI,
+                    Category.SECURITY,
+                    "missing-openapi-security",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="fastapi-practices",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.FASTAPI,
+                    Category.VALIDATION,
+                    "openapi-breaking-change",
+                ),
+            ),
+        ),
+    ),
+)
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="fastapi-practices",
+    display_name="FastAPI practices",
+    policy_field="fastapi_practices",
+    policy_model=FastApiPracticePolicy,
+    output_shape="findings",
+    summary=("Reviews configured FastAPI route and dependency practices."),
+    applies_to=("python", "fastapi"),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="fastapi-practices",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON, Framework.FASTAPI, Category.CORRECTNESS, "literal-http-status"
+        ),
+        RuleTag(
+            Scope.PYTHON, Framework.FASTAPI, Category.CORRECTNESS, "literal-error-code"
+        ),
+        RuleTag(
+            Scope.PYTHON, Framework.FASTAPI, Category.CORRECTNESS, "duplicate-route"
+        ),
+        RuleTag(
+            Scope.PYTHON, Framework.FASTAPI, Category.METADATA, "missing-operation-id"
+        ),
+        RuleTag(
+            Scope.PYTHON, Framework.FASTAPI, Category.METADATA, "duplicate-operation-id"
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.FASTAPI,
+            Category.VALIDATION,
+            "missing-response-contract",
+        ),
+        RuleTag(
+            Scope.PYTHON, Framework.FASTAPI, Category.METADATA, "missing-route-metadata"
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.FASTAPI,
+            Category.SECURITY,
+            "missing-openapi-security",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.FASTAPI,
+            Category.VALIDATION,
+            "openapi-breaking-change",
+        ),
+    ),
+    finding_contracts=("fastapi-practices",),
+    concern="fastapi-route-and-openapi-practices",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "Configured FastAPI source and application evidence may warrant review; "
+        "the check does not prove runtime security or API compatibility."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("configured-python-source", "configured-fastapi-application"),
+    languages_formats=("python", "openapi"),
+    evidence_kinds=("python-ast-pattern", "framework-route", "openapi-schema"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
+
+
+def resolve_fastapi_practices_policy(
+    config: QualityGateConfig,
+) -> FastApiPracticePolicy:
+    """Resolve the strict fastapi practices policy from validated config."""
+    return require_policy(config.checks.fastapi_practices, "fastapi_practices")
+
+
+def run_fastapi_practices_feature(
+    root: Path, paths: Sequence[Path], policy: FastApiPracticePolicy
+) -> list[Finding]:
+    """Run this framework review with its feature-owned policy type."""
+    return check_fastapi_practices(root, paths, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_fastapi_practices_feature,
+    policy_resolver=resolve_fastapi_practices_policy,
+)

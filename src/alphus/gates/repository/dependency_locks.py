@@ -7,17 +7,124 @@ from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
+from typing import Final
 
 from packaging.requirements import InvalidRequirement, Requirement
 from packaging.specifiers import Specifier
 from packaging.utils import canonicalize_name
 from packaging.version import Version
 
-from alphus.config import DependencyLockPolicy
+from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
+from alphus.plugins.builtin import FindingBuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.repository import DependencyLockPolicy
 from alphus.support.data_access import contained_file
 from alphus.support.source_text import read_utf8_text
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="dependency-locks",
+    policy_field="dependency_locks",
+    policy_model=DependencyLockPolicy,
+    output_shape="findings",
+    summary="Checks consistency and pairing of configured dependency lockfiles.",
+    applies_to=("python", "javascript"),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="dependency-locks",
+    finding_ids=(
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.DEPENDENCIES,
+            "lock-include-cycle",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.DEPENDENCIES,
+            "lock-input-missing",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.DEPENDENCIES,
+            "requirement-pin-not-exact",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.DEPENDENCIES,
+            "requirement-unlocked",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.DEPENDENCIES,
+            "lock-include-invalid",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.DEPENDENCIES,
+            "requirement-invalid",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.DEPENDENCIES,
+            "duplicate-requirement-conflict",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.DEPENDENCIES,
+            "duplicate-requirement-marker-uncertain",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.DEPENDENCIES,
+            "lock-source-mismatch",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.DEPENDENCIES,
+            "requirement-pin-unsatisfied",
+        ),
+    ),
+    concern="dependency-lock-consistency",
+    claim_kind=ClaimKind.CONDITION,
+    claim=(
+        "Configured requirement declarations and lock entries are consistent "
+        "under their declared version and source constraints."
+    ),
+    mechanisms=(
+        DetectionMechanism.EXACT_RULE,
+        DetectionMechanism.BOUNDED_HEURISTIC,
+    ),
+    inspected_scope=("repository", "requirement-files", "lock-files"),
+    languages_formats=("python-requirements", "pep508-metadata"),
+    evidence_kinds=(
+        "resolved-requirement",
+        "version-specifier",
+        "include-edge",
+        "marker",
+    ),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -354,3 +461,32 @@ def check_dependency_locks(root: Path, policy: DependencyLockPolicy) -> list[Fin
         findings.extend(_duplicate_exact_pin_findings(load.declarations))
         findings.extend(_exact_pin_findings(lock_file, load.requirements))
     return findings
+
+
+def run_dependency_lock_gate(
+    root: Path, files: Sequence[Path], config: QualityGateConfig
+) -> list[Finding]:
+    """Run the feature-owned dependency-lock check with its strict policy."""
+    return run_dependency_lock_feature(
+        root, files, resolve_dependency_lock_policy(config)
+    )
+
+
+def resolve_dependency_lock_policy(config: QualityGateConfig) -> DependencyLockPolicy:
+    """Resolve the strict dependency-lock policy for this feature."""
+    return require_policy(config.checks.dependency_locks, "dependency_locks")
+
+
+def run_dependency_lock_feature(
+    root: Path, _files: Sequence[Path], policy: DependencyLockPolicy
+) -> list[Finding]:
+    """Run lock consistency checks from the feature's typed policy input."""
+    return check_dependency_locks(root, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_dependency_lock_feature,
+    policy_resolver=resolve_dependency_lock_policy,
+)

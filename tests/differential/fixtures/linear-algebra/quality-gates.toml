@@ -1,0 +1,57 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py"]
+exclude = []
+
+[checks.manual_matrix_kernels]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/numerics/*.py"]
+
+[checks.manual_elimination]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/numerics/*.py"]
+function_names = ["invert_matrix"]
+matrix_name = "matrix"
+
+[checks.array_representation_churn]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/numerics/*.py"]
+array_constructors = ["np.asarray"]
+
+[checks.cholesky_recurrence]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/numerics/*.py"]
+square_root_helpers = ["math.sqrt"]
+
+[orchestration]
+default_profile = "linear-algebra"
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Manual matrix kernels"
+rule = "manual-matrix-kernels"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Manual elimination"
+rule = "manual-elimination"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Array representation churn"
+rule = "array-representation-churn"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Cholesky recurrence"
+rule = "cholesky-recurrence"
+
+[[orchestration.profiles]]
+name = "linear-algebra"
+steps = ["Manual matrix kernels", "Manual elimination", "Array representation churn", "Cholesky recurrence"]

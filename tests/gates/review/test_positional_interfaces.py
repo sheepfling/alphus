@@ -8,15 +8,36 @@ from textwrap import dedent
 import pytest
 from pydantic import ValidationError
 
-from alphus.config import PositionalInterfacePolicy
+from alphus.config import PositionalInterfacePolicy, QualityGateConfig
 from alphus.contracts.findings import Finding
 from alphus.gates.review.positional_interfaces import (
+    ALPHUS_FEATURE,
     check_positional_interfaces,
     positional_interface_findings,
+    resolve_positional_interfaces_policy,
+    run_positional_interfaces_feature,
+    run_positional_interfaces_rule,
 )
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 _POLICY = PositionalInterfacePolicy(extensions=(".py",))
 _RULE_ID = "alphus/python/none/correctness/confusable-positional-parameters"
+
+
+def test_registration_uses_typed_policy_and_keeps_direct_adapter(
+    tmp_path: Path,
+) -> None:
+    config = QualityGateConfig.model_validate(
+        {"schema_version": 1, "checks": {"positional_interfaces": _POLICY}},
+        strict=True,
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.runner is run_positional_interfaces_feature
+    assert (
+        type(resolve_positional_interfaces_policy(config)) is PositionalInterfacePolicy
+    )
+    assert run_positional_interfaces_rule(tmp_path, (), config) == []
 
 
 def analyze(source: str, policy: PositionalInterfacePolicy = _POLICY) -> list[Finding]:

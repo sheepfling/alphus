@@ -2,11 +2,16 @@ from pathlib import Path
 
 import pytest
 
-from alphus.config import QuaternionInversionPolicy
+from alphus.config import QualityGateConfig, QuaternionInversionPolicy
+from alphus.execution.dispatch import run_builtin_rule
 from alphus.gates.review.numerical.quaternions.manual_quaternion_inversion import (
+    ALPHUS_FEATURE,
     check_manual_quaternion_inversion,
     quaternion_inversion_sites,
+    resolve_manual_quaternion_inversion_policy,
+    run_manual_quaternion_inversion_feature,
 )
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 _SOURCE = """\
 def inverse_quaternion(w, x, y, z):
@@ -117,3 +122,42 @@ def test_configuration_names_and_scope_bound_the_match(tmp_path: Path) -> None:
 def test_invalid_component_names_are_rejected() -> None:
     with pytest.raises(ValueError, match="quaternion components must be unique"):
         _policy(components=("w", "x", "x", "z"))
+
+
+def test_feature_registration_preserves_configured_finding_behavior(
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "src/geometry/operations.py"
+    source_path.parent.mkdir(parents=True)
+    source = chr(10).join(
+        (
+            "def inverse_quaternion(w, x, y, z):",
+            "    norm_squared = w * w + x * x + y * y + z * z",
+            (
+                "    return (w / norm_squared, -x / norm_squared, -y / norm_squared, -z /"
+                " norm_squared)"
+            ),
+        )
+    ) + chr(10)
+    source_path.write_text(source, encoding="utf-8")
+    relative = Path("src/geometry/operations.py")
+    policy = _policy()
+    config = QualityGateConfig.model_validate(
+        {"schema_version": 1, "checks": {"manual_quaternion_inversion": policy}},
+        strict=True,
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is QuaternionInversionPolicy
+    resolved = resolve_manual_quaternion_inversion_policy(config)
+    assert type(resolved) is QuaternionInversionPolicy
+    expected = check_manual_quaternion_inversion(tmp_path, [relative], policy)
+    assert expected
+    assert (
+        run_manual_quaternion_inversion_feature(tmp_path, [relative], resolved)
+        == expected
+    )
+    assert (
+        run_builtin_rule("manual-quaternion-inversion", tmp_path, [relative], config)
+        == expected
+    )

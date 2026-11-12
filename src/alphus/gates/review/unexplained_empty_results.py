@@ -3,15 +3,59 @@
 from __future__ import annotations
 
 import ast
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import NamedTuple
+from typing import Final, NamedTuple
 
-from alphus.config import UnexplainedEmptyResultPolicy
+from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
+from alphus.plugins.builtin import FindingBuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import UnexplainedEmptyResultPolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="unexplained-empty-results",
+    policy_field="unexplained_empty_results",
+    policy_model=UnexplainedEmptyResultPolicy,
+    output_shape="findings",
+    summary="Reviews empty results without an evident explanation.",
+    applies_to=("python",),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="unexplained-empty-results",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.VALIDATION,
+            "unexplained-empty-result",
+        ),
+    ),
+    concern="unknown-inference-is-presented-as-valid-empty-result",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "A configured nonempty input and unavailable-inference branch returns an "
+        "empty list; the syntax does not prove that emptiness is incorrect."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("configured-python-source", "unknown-inference-branches"),
+    languages_formats=("python",),
+    evidence_kinds=("configured-name-pairs", "ast-branch-analysis", "source-location"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
 
 _RULE_ID = rule_tag(
     Scope.PYTHON,
@@ -131,3 +175,28 @@ def check_unexplained_empty_results(
                 )
             )
     return findings
+
+
+def resolve_unexplained_empty_results_policy(
+    config: QualityGateConfig,
+) -> UnexplainedEmptyResultPolicy:
+    """Resolve the check's strict policy from validated aggregate config."""
+    return require_policy(
+        config.checks.unexplained_empty_results, "unexplained_empty_results"
+    )
+
+
+def _run_builtin_unexplained_empty_results(
+    root: Path,
+    files: Sequence[Path],
+    policy: UnexplainedEmptyResultPolicy,
+) -> list[Finding]:
+    return check_unexplained_empty_results(root, files, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=_run_builtin_unexplained_empty_results,
+    policy_resolver=resolve_unexplained_empty_results_policy,
+)

@@ -1,0 +1,5 @@
+schema_version = 1
+
+[checks.ecef_enu_transform]
+extensions = [".py"]
+unknown_setting = true

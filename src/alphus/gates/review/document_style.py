@@ -9,14 +9,59 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
+from typing import Final
 
 from markdown_it import MarkdownIt
 
-from alphus.config import DocumentStylePolicy
+from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
+from alphus.plugins.builtin import FindingBuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import DocumentStylePolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_utf8_text
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="document-style",
+    policy_field="document_style",
+    policy_model=DocumentStylePolicy,
+    output_shape="findings",
+    summary=(
+        "Reviews heading styles in selected Markdown, LaTeX, and source HTML documents."
+    ),
+    applies_to=("markdown", "latex", "html"),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="document-style",
+    finding_ids=(
+        RuleTag(
+            Scope.ANY,
+            Framework.NONE,
+            Category.STYLE,
+            "rhetorical-heading-density",
+        ),
+    ),
+    concern="rhetorical-heading-style",
+    claim_kind=ClaimKind.STYLE_PREFERENCE,
+    claim="Selected documents may repeat configured rhetorical heading patterns.",
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("selected-document-headings", "document-structure"),
+    languages_formats=("markdown", "latex", "html", "docx", "pptx"),
+    evidence_kinds=("document-heading", "format-specific-location"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
+
 
 _RULE_ID = rule_tag(
     Scope.ANY, Framework.NONE, Category.STYLE, "rhetorical-heading-density"
@@ -806,3 +851,32 @@ def check_document_style(
             )
         )
     return sorted(findings, key=lambda item: (item.path, item.line or 0, item.message))
+
+
+def run_document_style_rule(
+    root: Path, paths: Sequence[Path], config: QualityGateConfig
+) -> list[Finding]:
+    """Resolve strict feature policy before extracting selected documents."""
+    return run_document_style_feature(
+        root, paths, resolve_document_style_policy(config)
+    )
+
+
+def resolve_document_style_policy(config: QualityGateConfig) -> DocumentStylePolicy:
+    """Resolve the strict document-style policy from validated config."""
+    return require_policy(config.checks.document_style, "document_style")
+
+
+def run_document_style_feature(
+    root: Path, paths: Sequence[Path], policy: DocumentStylePolicy
+) -> list[Finding]:
+    """Run document heading review with its feature-owned policy type."""
+    return check_document_style(root, paths, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_document_style_feature,
+    policy_resolver=resolve_document_style_policy,
+)

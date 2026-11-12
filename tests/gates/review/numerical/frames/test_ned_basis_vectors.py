@@ -3,11 +3,16 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from alphus.config import NedBasisVectorsPolicy
+from alphus.config import NedBasisVectorsPolicy, QualityGateConfig
+from alphus.execution.dispatch import run_builtin_rule
 from alphus.gates.review.numerical.frames.ned_basis_vectors import (
+    ALPHUS_FEATURE,
     check_ned_basis_vectors,
     ned_basis_vector_sites,
+    resolve_ned_basis_vectors_policy,
+    run_ned_basis_vectors_feature,
 )
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 _GEOCENTRIC = """\
 import math
@@ -220,3 +225,27 @@ def test_unrelated_function_local_alias_does_not_hide_candidate() -> None:
         + "\ndef unrelated():\n    math = object()\n    CartesianVector3 = object\n"
     )
     assert len(ned_basis_vector_sites(source, _policy("geocentric"))) == 1
+
+
+def test_feature_registration_preserves_configured_finding_behavior(
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "src/geometry/operations.py"
+    source_path.parent.mkdir(parents=True)
+    source_path.write_text(_GEOCENTRIC, encoding="utf-8")
+    relative = Path("src/geometry/operations.py")
+    policy = _policy("geocentric")
+    config = QualityGateConfig.model_validate(
+        {"schema_version": 1, "checks": {"ned_basis_vectors": policy}}, strict=True
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is NedBasisVectorsPolicy
+    resolved = resolve_ned_basis_vectors_policy(config)
+    assert type(resolved) is NedBasisVectorsPolicy
+    expected = check_ned_basis_vectors(tmp_path, [relative], policy)
+    assert expected
+    assert run_ned_basis_vectors_feature(tmp_path, [relative], resolved) == expected
+    assert (
+        run_builtin_rule("ned-basis-vectors", tmp_path, [relative], config) == expected
+    )

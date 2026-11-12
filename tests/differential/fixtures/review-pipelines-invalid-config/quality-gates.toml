@@ -1,0 +1,11 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py"]
+exclude = []
+
+[checks.parallel_normalization]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/*.py"]
+undeclared_field = true

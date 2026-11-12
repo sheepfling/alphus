@@ -6,16 +6,79 @@ It does not import SciPy or infer dimensions from source code.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from pathlib import Path
+from typing import Final
 
-from alphus.config import NumericLiteralSpec, ScipyConstantsPolicy
+from alphus.config import NumericLiteralSpec, QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Framework
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
 from alphus.gates.review.numeric_catalog import NumericLiteralFinding
 from alphus.gates.review.numeric_engine import scan_numeric_literals
+from alphus.plugins.builtin import FindingBuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import ScipyConstantsPolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="scipy-constants",
+    display_name="SciPy constants",
+    input_mode="configured-source-scan",
+    policy_field="scipy_constants",
+    policy_model=ScipyConstantsPolicy,
+    output_shape="findings",
+    summary=(
+        "Finds selected SciPy physical constants and unit-conversion factors in "
+        "Python arithmetic; it does not validate units or coordinate systems."
+    ),
+    applies_to=("python",),
+    domains=(
+        "scientific-computing",
+        "simulation",
+        "earth-science",
+        "trajectory-analysis",
+        "physical-units",
+    ),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="scipy-constants",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.SCIPY,
+            Category.STYLE,
+            "inline-constant",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.SCIPY,
+            Category.STYLE,
+            "inline-conversion",
+        ),
+    ),
+    concern="scientific-constant-reuse",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "Arithmetic matches a selected SciPy constant or unit factor; this "
+        "review does not validate dimensions or coordinate systems."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("selected-python-files", "arithmetic-expressions"),
+    languages_formats=("python",),
+    evidence_kinds=("configured-literal-match", "operation", "source-location"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+    finding_contracts=("numeric-inline",),
+)
 
 _PHYSICAL_CONSTANTS = (
     NumericLiteralSpec(
@@ -107,7 +170,13 @@ def scipy_literal_findings(
         *(_unit_specs(policy.inverse_conversions) if policy.unit_conversions else ()),
         *policy.constants,
     )
-    return scan_numeric_literals(source, specs, framework=Framework.SCIPY)
+    return scan_numeric_literals(
+        source,
+        specs,
+        complaint_contract="numeric-inline",
+        emitter="scipy-constants",
+        framework=Framework.SCIPY,
+    )
 
 
 def check_scipy_constants(
@@ -136,3 +205,23 @@ def check_scipy_constants(
             for finding in scipy_literal_findings(read_python_source(path), policy)
         )
     return findings
+
+
+def resolve_scipy_constants_policy(config: QualityGateConfig) -> ScipyConstantsPolicy:
+    """Resolve this numeric review's strict feature policy."""
+    return require_policy(config.checks.scipy_constants, "scipy_constants")
+
+
+def run_scipy_constants_feature(
+    root: Path, paths: Sequence[Path], policy: ScipyConstantsPolicy
+) -> list[Finding]:
+    """Run this numeric feature through its shared evidence engine."""
+    return check_scipy_constants(root, paths, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_scipy_constants_feature,
+    policy_resolver=resolve_scipy_constants_policy,
+)

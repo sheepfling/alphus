@@ -14,8 +14,13 @@ from packaging.specifiers import SpecifierSet
 from packaging.version import Version
 
 from alphus.config import load_config
+from alphus.gates.languages.python.style_feature import (
+    resolve_python_style_policy,
+    run_python_style_feature,
+)
 from alphus.gates.review.test_quality import python_findings
-from alphus.gates.source.runners import SOURCE_RULE_RUNNERS
+from alphus.plugins.builtin import PythonStyleBuiltinFeature
+from alphus.plugins.builtin_registry import load_builtin_feature
 
 
 def test_self_check_enforces_review_and_repository_toml() -> None:
@@ -89,9 +94,21 @@ def test_self_profile_python_style_requires_exact_result_api_scope(
     policy = config.checks.python_style
     assert policy is not None
     assert not policy.semantic_result_apis
-    runner = SOURCE_RULE_RUNNERS["python-style"]
-    assert runner(tmp_path, files, config) == {}
-    assert runner(Path(pytestconfig.rootpath), files, config) == {}
+    feature = load_builtin_feature("python-style")
+    assert isinstance(feature, PythonStyleBuiltinFeature)
+    resolved = resolve_python_style_policy(config)
+    assert resolved is policy
+    assert feature.runner is run_python_style_feature
+    assert run_python_style_feature(tmp_path, files, resolved) == {}
+    assert run_python_style_feature(Path(pytestconfig.rootpath), files, resolved) == {}
+
+
+def test_self_profile_excludes_only_the_lazy_provider_spike_file() -> None:
+    config = load_config(Path("quality-gates.toml"))
+    policy = config.checks.python_style
+    assert policy is not None
+    assert "scripts/registry_spike/provider_factory.py" in policy.exclude
+    assert "scripts/registry_spike/**" not in policy.exclude
 
 
 def test_declared_script_entry_points_resolve_to_callables() -> None:
@@ -125,6 +142,30 @@ def test_hosted_dependency_floor_uses_package_metadata() -> None:
     workflow = Path(".github/workflows/self-quality.yml").read_text(encoding="utf-8")
     floor_job = workflow.split("  minimum-dependencies:", 1)[1]
     assert "python scripts/ci.py --root . --minimum" in floor_job
+
+
+def test_wheel_differential_keeps_optional_native_tools_scenario_scoped() -> None:
+    workflow = yaml.safe_load(
+        Path(".github/workflows/self-quality.yml").read_text(encoding="utf-8")
+    )
+    job = workflow["jobs"]["morphology-wheel-differential"]
+    dependency_step = next(
+        step
+        for step in job["steps"]
+        if step.get("name")
+        == "Install wheel build, test, Ruff, and JavaScript parser dependencies"
+    )
+    assert "cyclomatic-lizard" not in dependency_step["run"]
+
+    scenarios = tomllib.loads(
+        Path("tests/differential/wheel-scenarios.toml").read_text(encoding="utf-8")
+    )["scenario"]
+    lizard_scenario = next(
+        scenario
+        for scenario in scenarios
+        if scenario["name"] == "cyclomatic-cpp-lizard"
+    )
+    assert lizard_scenario["python_distributions"] == ["lizard==1.24.2"]
 
 
 def test_source_family_self_review_propagates_pipeline_errors_without_blocking_advisories(

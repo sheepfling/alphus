@@ -5,11 +5,16 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from alphus.config import SqlAlchemyPracticePolicy
+from alphus.config import QualityGateConfig, SqlAlchemyPracticePolicy
+from alphus.execution.dispatch import run_builtin_rule
 from alphus.gates.review.frameworks.sqlalchemy_practices import (
+    ALPHUS_FEATURE,
     check_sqlalchemy_practices,
+    resolve_sqlalchemy_practices_policy,
+    run_sqlalchemy_practices_feature,
     sqlalchemy_practice_findings,
 )
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 
 def _policy(
@@ -426,3 +431,40 @@ def test_file_scope_and_exclusions_are_applied_before_source_reads(
     assert [(finding.path, finding.rule_id) for finding in findings] == [
         ("src/keep.py", "alphus/python/sqlalchemy/style/legacy-query")
     ]
+
+
+def test_typed_registration_preserves_sqlalchemy_practice_findings(
+    tmp_path: Path,
+) -> None:
+    relative = Path("src/database.py")
+    source = tmp_path / relative
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "from sqlalchemy.orm import Session\n"
+        "def load(session: Session):\n"
+        "    return session.query(User).all()\n",
+        encoding="utf-8",
+    )
+    config = QualityGateConfig.model_validate(
+        {
+            "schema_version": 1,
+            "checks": {
+                "sqlalchemy_practices": {
+                    "extensions": [".py"],
+                    "target_sqlalchemy": ">=2.0,<3.0",
+                },
+            },
+        },
+        strict=True,
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is SqlAlchemyPracticePolicy
+    policy = resolve_sqlalchemy_practices_policy(config)
+    assert type(policy) is SqlAlchemyPracticePolicy
+    expected = run_sqlalchemy_practices_feature(tmp_path, (relative,), policy)
+    assert expected == check_sqlalchemy_practices(tmp_path, (relative,), policy)
+    assert (
+        run_builtin_rule("sqlalchemy-practices", tmp_path, (relative,), config)
+        == expected
+    )

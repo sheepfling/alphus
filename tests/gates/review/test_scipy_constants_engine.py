@@ -6,11 +6,16 @@ from pathlib import Path
 
 import pytest
 
-from alphus.config import NumericLiteralSpec, ScipyConstantsPolicy
+from alphus.config import NumericLiteralSpec, QualityGateConfig, ScipyConstantsPolicy
+from alphus.execution.dispatch import run_builtin_rule
 from alphus.gates.review.scipy_constants import (
+    ALPHUS_FEATURE,
     check_scipy_constants,
+    resolve_scipy_constants_policy,
+    run_scipy_constants_feature,
     scipy_literal_findings,
 )
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 
 def _policy(**options: bool) -> ScipyConstantsPolicy:
@@ -156,3 +161,25 @@ def test_expanded_catalog_is_exact_and_configurable() -> None:
     assert scipy_literal_findings(source, policy) == []
     findings = scipy_literal_findings(source, _policy(inverse_conversions=False))
     assert [finding.line for finding in findings] == [1, 2, 4]
+
+
+def test_feature_registration_preserves_configured_finding_behavior(
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "src/geometry/constants.py"
+    source_path.parent.mkdir(parents=True)
+    source_path.write_text("distance = seconds * 299792458\n", encoding="utf-8")
+    relative = Path("src/geometry/constants.py")
+    policy = _policy()
+    config = QualityGateConfig.model_validate(
+        {"schema_version": 1, "checks": {"scipy_constants": policy}}, strict=True
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is ScipyConstantsPolicy
+    resolved = resolve_scipy_constants_policy(config)
+    assert type(resolved) is ScipyConstantsPolicy
+    expected = check_scipy_constants(tmp_path, [relative], policy)
+    assert expected
+    assert run_scipy_constants_feature(tmp_path, [relative], resolved) == expected
+    assert run_builtin_rule("scipy-constants", tmp_path, [relative], config) == expected

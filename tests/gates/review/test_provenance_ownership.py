@@ -3,11 +3,16 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from alphus.config import ProvenanceOwnershipPolicy
+from alphus.config import ProvenanceOwnershipPolicy, QualityGateConfig
+from alphus.execution.dispatch import run_builtin_rule
 from alphus.gates.review.provenance_ownership import (
+    ALPHUS_FEATURE,
     check_provenance_ownership,
     provenance_ownership_sites,
+    resolve_provenance_ownership_policy,
+    run_provenance_ownership_feature,
 )
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 _PATH_ONLY = """\
 def remaining_paragraphs(tables, paragraphs):
@@ -228,4 +233,27 @@ def test_check_honors_source_paths_and_exclusions(tmp_path: Path) -> None:
     assert len(check_provenance_ownership(tmp_path, (path,), _policy())) == 1
     assert not check_provenance_ownership(
         tmp_path, (path,), _policy(exclude=("src/render/filter.py",))
+    )
+
+
+def test_typed_registration_preserves_provenance_ownership_findings(
+    tmp_path: Path,
+) -> None:
+    relative = Path("src/render/page.py")
+    source = tmp_path / relative
+    source.parent.mkdir(parents=True)
+    source.write_text(_PATH_ONLY, encoding="utf-8")
+    config = QualityGateConfig.model_validate(
+        {"schema_version": 1, "checks": {"provenance_ownership": _policy()}},
+        strict=True,
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is ProvenanceOwnershipPolicy
+    policy = resolve_provenance_ownership_policy(config)
+    expected = run_provenance_ownership_feature(tmp_path, (relative,), policy)
+    assert check_provenance_ownership(tmp_path, (relative,), policy) == expected
+    assert (
+        run_builtin_rule("provenance-as-ownership", tmp_path, (relative,), config)
+        == expected
     )

@@ -5,8 +5,14 @@ from __future__ import annotations
 import argparse
 import ast
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 from typing import NamedTuple
+
+from scripts.generate_morphology_manifest import (
+    feature_registrations,
+    render_quality_rule_names,
+)
 
 
 class _RunnerModule(NamedTuple):
@@ -78,8 +84,9 @@ def _runner_modules(root: Path) -> tuple[_RunnerModule, ...]:
 
 
 def _catalog_selectors(root: Path) -> frozenset[str]:
-    path = root / "src" / "alphus" / "policy" / "base.py"
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    path = root / "src" / "alphus" / "policy" / "_generated_quality_rule_names.py"
+    source = render_quality_rule_names(root)
+    tree = ast.parse(source, filename=str(path))
     for statement in tree.body:
         match statement:
             case ast.AnnAssign(
@@ -115,6 +122,7 @@ def _catalog_selectors(root: Path) -> frozenset[str]:
 def render_manifest(root: Path) -> str:
     """Render static imports after validating uniqueness and catalog coverage."""
     modules = _runner_modules(root)
+    features = feature_registrations(root)
     owners: dict[str, str] = {}
     for module in modules:
         for selector in module.selectors:
@@ -125,6 +133,14 @@ def render_manifest(root: Path) -> str:
                     f"{previous!r} and {module.theme!r}"
                 )
             owners[selector] = module.theme
+    for feature in features:
+        previous = owners.get(feature.selector)
+        if previous is not None:
+            raise ValueError(
+                f"duplicate selector {feature.selector!r} in theme {previous!r} "
+                "and feature declaration"
+            )
+        owners[feature.selector] = feature.registration_module
 
     expected = _catalog_selectors(root)
     found = set(owners)
@@ -160,11 +176,11 @@ def render_manifest(root: Path) -> str:
     return "\n".join(lines)
 
 
-def main() -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, required=True, help="repository root")
     parser.add_argument("--check", action="store_true")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     root: Path = args.root
     target = root / "src" / "alphus" / "execution" / "_generated_dispatch.py"
     try:
@@ -176,7 +192,7 @@ def main() -> int:
     if args.check:
         if not target.is_file() or target.read_text(encoding="utf-8") != expected:
             print(
-                f"{target} is stale; run scripts/generate_runner_manifest.py --root .",
+                f"{target} is stale; run python -m scripts.generate_runner_manifest --root .",
                 file=sys.stderr,
             )
             return 1

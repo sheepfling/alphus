@@ -39,6 +39,239 @@ jobs:
           npm run format:markdown:check
           npm run typecheck
 
+  morphology-wheel-differential:
+    name: Morphology pinned wheel differential
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.ref == 'feature/issue-87-morphology'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      ALPHUS_BASELINE: c880093f7ccb73c2af78ffb5c7de8c15d2b75b0e
+      ALPHUS_CANDIDATE: ${{ github.event.pull_request.head.sha }}
+      ALPHUS_REPORT_DIR: alphus-wheel-differential
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Prepare differential evidence directory
+        run: mkdir -p "$RUNNER_TEMP/$ALPHUS_REPORT_DIR"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked JavaScript dependencies
+        run: npm ci
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install wheel build, test, Ruff, and JavaScript parser dependencies
+        run: >-
+          python -m pip install --disable-pip-version-check -e
+          '.[python,javascript]'
+          'setuptools>=80' 'setuptools-scm>=10.3.4,<11'
+      - name: Verify exact comparison revisions
+        id: verify-revisions
+        run: |
+          checked_out_commit="$(git rev-parse HEAD)"
+          test "$checked_out_commit" = "$ALPHUS_CANDIDATE"
+          git cat-file -e "$ALPHUS_BASELINE^{commit}"
+          echo "checked_out_commit=$checked_out_commit" >> "$GITHUB_OUTPUT"
+      - name: Compare pinned reference and candidate wheels
+        id: wheel-differential
+        continue-on-error: true
+        run: |
+          set +e
+          python -m scripts.differential_wheels \
+            --root . \
+            --baseline "$ALPHUS_BASELINE" \
+            --candidate "$ALPHUS_CANDIDATE" \
+            --output "$RUNNER_TEMP/$ALPHUS_REPORT_DIR/harness-report.json" \
+            >"$RUNNER_TEMP/$ALPHUS_REPORT_DIR/stdout.log" \
+            2>"$RUNNER_TEMP/$ALPHUS_REPORT_DIR/stderr.log"
+          result=$?
+          echo "exit_code=$result" >> "$GITHUB_OUTPUT"
+          if [ "$result" -ne 0 ]; then
+            cat "$RUNNER_TEMP/$ALPHUS_REPORT_DIR/stderr.log" >&2
+            cat "$RUNNER_TEMP/$ALPHUS_REPORT_DIR/stdout.log" >&2
+          fi
+          exit "$result"
+      - name: Retain comparison outcome and report provenance
+        if: always()
+        env:
+          DIFFERENTIAL_OUTCOME: ${{ steps.wheel-differential.outcome }}
+          DIFFERENTIAL_EXIT_CODE: ${{ steps.wheel-differential.outputs.exit_code }}
+          VERIFIED_CHECKOUT: ${{ steps.verify-revisions.outputs.checked_out_commit }}
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import tomllib
+          from pathlib import Path
+
+          report_dir = Path(os.environ["RUNNER_TEMP"]) / os.environ["ALPHUS_REPORT_DIR"]
+          harness_report = report_dir / "harness-report.json"
+          stderr_log = report_dir / "stderr.log"
+          manifest = Path("tests/differential/wheel-scenarios.toml")
+          manifest_bytes = manifest.read_bytes()
+          report: dict[str, object] | None = None
+          result = "setup-failed"
+          equivalent: bool | None = None
+          coverage: dict[str, object] | None = None
+          differences: list[object] | None = None
+          scenario_classification: dict[str, object] | None = None
+          if harness_report.is_file():
+              try:
+                  loaded_report = json.loads(harness_report.read_text(encoding="utf-8"))
+              except (OSError, json.JSONDecodeError):
+                  result = "invalid-report"
+              else:
+                  if not isinstance(loaded_report, dict):
+                      result = "invalid-report"
+                      loaded_report = None
+                  if loaded_report is not None:
+                      report = loaded_report
+          if report is not None:
+              report_manifest_sha256 = report.get("manifest_sha256")
+              report_harness_sha256 = report.get("harness_sha256")
+              raw_equivalent = report.get("equivalent_for_manifested_scenarios")
+              if isinstance(raw_equivalent, bool):
+                  equivalent = raw_equivalent
+              reference = report.get("reference")
+              candidate = report.get("candidate")
+              if not isinstance(reference, dict) or not isinstance(candidate, dict):
+                  result = "invalid-report"
+              elif report_manifest_sha256 != hashlib.sha256(manifest_bytes).hexdigest():
+                  result = "manifest-identity-mismatch"
+              elif reference.get("commit") != os.environ["ALPHUS_BASELINE"]:
+                  result = "baseline-identity-mismatch"
+              elif candidate.get("commit") != os.environ["ALPHUS_CANDIDATE"]:
+                  result = "candidate-identity-mismatch"
+              elif report_harness_sha256 is None:
+                  result = "missing-harness-identity"
+              elif equivalent is True and os.environ["DIFFERENTIAL_EXIT_CODE"] == "0":
+                  result = "equivalent-for-manifested-scenarios"
+              elif equivalent is False:
+                  result = "differences-found"
+              else:
+                  result = "comparison-failed"
+              raw_coverage = report.get("coverage")
+              if isinstance(raw_coverage, dict):
+                  untested_selectors = raw_coverage.get(
+                      "selectors_not_behaviorally_exercised"
+                  )
+                  planned_only_selectors = raw_coverage.get(
+                      "selectors_in_plan_only_scenarios"
+                  )
+                  catalog_selector_count = raw_coverage.get("catalog_selector_count")
+                  exercised_selectors = raw_coverage.get(
+                      "behaviorally_exercised_selectors"
+                  )
+                  selector_coverage_complete = (
+                      isinstance(catalog_selector_count, int)
+                      and isinstance(exercised_selectors, list)
+                      and len(exercised_selectors) == catalog_selector_count
+                  )
+                  coverage = {
+                      "catalog_selector_count": catalog_selector_count,
+                      "behaviorally_exercised_selector_count": (
+                          len(exercised_selectors)
+                          if isinstance(exercised_selectors, list)
+                          else None
+                      ),
+                      "selectors_not_behaviorally_exercised": untested_selectors,
+                      "selectors_in_plan_only_scenarios": planned_only_selectors,
+                      "selector_coverage_complete": selector_coverage_complete,
+                      "deferred_capabilities": raw_coverage.get("deferred_capabilities"),
+                  }
+              raw_differences = report.get("differences")
+              if isinstance(raw_differences, list):
+                  differences = raw_differences
+              raw_classification = report.get("scenario_classification")
+              if isinstance(raw_classification, dict):
+                  scenario_classification = raw_classification
+          elif result == "setup-failed" and os.environ["DIFFERENTIAL_OUTCOME"] == "failure":
+              result = "failed-before-report"
+
+          outcome = {
+              "schema": "alphus-wheel-differential-job-v1",
+              "result": result,
+              "scenario_equivalence_scope": "manifested scenarios only",
+              "equivalent_for_manifested_scenarios": (
+                  result == "equivalent-for-manifested-scenarios"
+              ),
+              "harness_claimed_equivalent_for_manifested_scenarios": equivalent,
+              "baseline_commit": os.environ["ALPHUS_BASELINE"],
+              "candidate_commit": os.environ["ALPHUS_CANDIDATE"],
+              "checked_out_commit": os.environ["VERIFIED_CHECKOUT"] or None,
+              "manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
+              "manifest_scenario_count": len(tomllib.loads(manifest_bytes.decode())["scenario"]),
+              "behavioral_scenario_count": (
+                  len(scenario_classification["behavioral"])
+                  if scenario_classification is not None
+                  and isinstance(scenario_classification.get("behavioral"), list)
+                  else None
+              ),
+              "planned_only_scenario_count": (
+                  len(scenario_classification["planned_only"])
+                  if scenario_classification is not None
+                  and isinstance(scenario_classification.get("planned_only"), list)
+                  else None
+              ),
+              "harness_report": harness_report.name if report is not None else None,
+              "harness_sha256": report.get("harness_sha256") if report is not None else None,
+              "coverage": coverage,
+              "differences": differences,
+              "difference_count": len(differences) if differences is not None else None,
+              "harness_exit_code": os.environ["DIFFERENTIAL_EXIT_CODE"] or None,
+              "harness_step_outcome": os.environ["DIFFERENTIAL_OUTCOME"],
+              "failure_stderr_tail": (
+                  stderr_log.read_text(encoding="utf-8").splitlines()[-40:]
+                  if stderr_log.is_file()
+                  else []
+              ),
+          }
+          if coverage is not None:
+              selector_coverage_status = (
+                  "complete"
+                  if coverage["selector_coverage_complete"] is True
+                  else "incomplete"
+              )
+          else:
+              selector_coverage_status = "unavailable"
+          outcome["selector_coverage_status"] = selector_coverage_status
+          (report_dir / "job-status.json").write_text(
+              json.dumps(outcome, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          PY
+      - name: Upload differential evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: alphus-wheel-differential-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/alphus-wheel-differential/
+          if-no-files-found: error
+          retention-days: 90
+      - name: Require a successful manifested-scenario comparison
+        if: always()
+        run: |
+          python - "$RUNNER_TEMP/$ALPHUS_REPORT_DIR/job-status.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          status = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          if status["result"] != "equivalent-for-manifested-scenarios":
+              raise SystemExit(
+                  "Pinned wheel differential did not complete successfully for "
+                  f"the manifested scenarios: {status['result']}"
+              )
+          PY
+
   self-check:
     runs-on: ubuntu-latest
     strategy:
@@ -200,7 +433,7 @@ jobs:
             tests/gates/review/test_scipy_constants_engine.py \
             tests/gates/review/frameworks/test_fastapi_contracts_engine.py \
             examples/consumer/fastapi/tests \
-            tests/test_review_cli.py::test_scipy_direct_rule_uses_its_own_label 2>&1); then
+            tests/test_review_cli.py::test_numeric_direct_rule_uses_its_feature_label 2>&1); then
             printf '%s\n' "$output"
             exit 1
           fi

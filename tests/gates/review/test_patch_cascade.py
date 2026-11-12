@@ -4,8 +4,16 @@ from pathlib import Path
 
 import pytest
 
-from alphus.config import PatchCascadePolicy
-from alphus.gates.review.patch_cascade import check_patch_cascade, patch_cascade_sites
+from alphus.config import PatchCascadePolicy, QualityGateConfig
+from alphus.execution.dispatch import run_builtin_rule
+from alphus.gates.review.patch_cascade import (
+    ALPHUS_FEATURE,
+    check_patch_cascade,
+    patch_cascade_sites,
+    resolve_patch_cascade_policy,
+    run_patch_cascade_feature,
+)
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 
 def _policy() -> PatchCascadePolicy:
@@ -304,3 +312,31 @@ def parse_document(repair_id, text):
         _policy().model_copy(update={"exclude": ("src/parser.py",)}),
     )
     assert not check_patch_cascade(tmp_path, (Path("other/parser.py"),), _policy())
+
+
+def test_typed_registration_preserves_patch_cascade_findings(
+    tmp_path: Path,
+) -> None:
+    relative = Path("src/parser.py")
+    source = tmp_path / relative
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "def parse_document(repair_id, text):\n"
+        '    if repair_id == "vendor-a":\n'
+        '        text = normalize_text(text, " ")\n'
+        '    if repair_id == "vendor-b":\n'
+        '        text = normalize_text(text, "-")\n'
+        "    return text\n",
+        encoding="utf-8",
+    )
+    config = QualityGateConfig.model_validate(
+        {"schema_version": 1, "checks": {"patch_cascade": _policy()}},
+        strict=True,
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is PatchCascadePolicy
+    policy = resolve_patch_cascade_policy(config)
+    expected = run_patch_cascade_feature(tmp_path, (relative,), policy)
+    assert check_patch_cascade(tmp_path, (relative,), policy) == expected
+    assert run_builtin_rule("patch-cascade", tmp_path, (relative,), config) == expected

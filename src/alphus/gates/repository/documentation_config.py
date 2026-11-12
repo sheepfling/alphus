@@ -9,13 +9,78 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from types import MappingProxyType
-from typing import NamedTuple, TypeAlias
+from typing import Final, NamedTuple, TypeAlias
 
-from alphus.config import DocumentationConfigPolicy
+from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
+from alphus.plugins.builtin import FindingBuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.repository import DocumentationConfigPolicy
 from alphus.support.inventory import git_files, matches_path
 from alphus.support.source_text import read_python_source, read_utf8_text
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="documentation-config",
+    policy_field="documentation_config",
+    policy_model=DocumentationConfigPolicy,
+    output_shape="findings",
+    summary=(
+        "Checks documentation links and repository-specific documentation "
+        "configuration."
+    ),
+    applies_to=("markdown", "repository"),
+    domains=(),
+    requires_files=False,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="documentation-config",
+    finding_ids=(
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.MAINTAINABILITY,
+            "documented-config-duplicate",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.CONFIGURATION,
+            "documented-config-conflict",
+        ),
+        RuleTag(
+            Scope.REPOSITORY,
+            Framework.NONE,
+            Category.CONFIGURATION,
+            "documented-config-unknown",
+        ),
+    ),
+    concern="documented-configuration-consistency",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "Explicit Markdown claims about simple Python defaults are compared "
+        "against statically resolved source values; unsupported or ambiguous "
+        "claims are reported as uncertain."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("selected-python-source", "selected-markdown", "cross-file"),
+    languages_formats=("python", "markdown"),
+    evidence_kinds=(
+        "literal-default",
+        "markdown-claim",
+        "symbol-match",
+        "value-comparison",
+    ),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
 
 Scalar: TypeAlias = str | int | float | bool | None
 _DUPLICATED = rule_tag(
@@ -787,3 +852,34 @@ def check_documentation_config(
             item.message,
         ),
     )
+
+
+def run_documentation_config_gate(
+    root: Path, files: Sequence[Path], config: QualityGateConfig
+) -> list[Finding]:
+    """Run documentation/config comparison with its validated strict policy."""
+    return run_documentation_config_feature(
+        root, files, resolve_documentation_config_policy(config)
+    )
+
+
+def resolve_documentation_config_policy(
+    config: QualityGateConfig,
+) -> DocumentationConfigPolicy:
+    """Resolve the strict documentation/config policy for this feature."""
+    return require_policy(config.checks.documentation_config, "documentation_config")
+
+
+def run_documentation_config_feature(
+    root: Path, _files: Sequence[Path], policy: DocumentationConfigPolicy
+) -> list[Finding]:
+    """Compare bounded documentation claims using the typed policy input."""
+    return check_documentation_config(root, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_documentation_config_feature,
+    policy_resolver=resolve_documentation_config_policy,
+)

@@ -3,6 +3,7 @@
 import json
 import shutil
 import subprocess
+from io import StringIO
 from pathlib import Path
 
 import pytest
@@ -12,11 +13,17 @@ from alphus.config import (
     SuppressionReasonException,
     SuppressionReasonPolicy,
     load_config,
+    load_config_stream,
 )
+from alphus.execution.dispatch import run_builtin_rule
 from alphus.gates.review.suppression_reasons import (
+    ALPHUS_FEATURE,
     check_suppression_reasons,
+    resolve_suppression_reasons_policy,
+    run_suppression_reasons_feature,
     suppression_reason_findings,
 )
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 
 def test_selected_inline_suppression_without_reason_is_reported_at_comment_line() -> (
@@ -1138,3 +1145,30 @@ def test_sample_profile_is_opt_in_and_selects_only_suppression_reasons() -> None
     plan = config.orchestration.resolve_profile("suppression-review")
     assert plan is not None
     assert plan.steps == ("Suppression reasons",)
+
+
+def test_feature_registration_preserves_selected_suppression_findings(
+    tmp_path: Path,
+) -> None:
+    relative = Path("src/module.py")
+    source = tmp_path / relative
+    source.parent.mkdir(parents=True)
+    source.write_text("import optional_runtime  # noqa: E402\n", encoding="utf-8")
+    policy_value = SuppressionReasonPolicy(extensions=(".py",), exclude=())
+    config = load_config_stream(
+        StringIO(
+            'schema_version = 1\n\n[checks.suppression_reasons]\nextensions = [".py"]\n'
+        )
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is SuppressionReasonPolicy
+    policy = resolve_suppression_reasons_policy(config)
+    assert type(policy) is SuppressionReasonPolicy
+    assert policy == policy_value
+    expected = run_suppression_reasons_feature(tmp_path, [relative], policy)
+    assert expected == check_suppression_reasons(tmp_path, [relative], policy)
+    assert (
+        run_builtin_rule("suppression-reasons", tmp_path, [relative], config)
+        == expected
+    )

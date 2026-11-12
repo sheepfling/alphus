@@ -1,0 +1,23 @@
+schema_version = 1
+
+[files]
+include = ["docs/**/*.md"]
+exclude = []
+
+[checks.markdown_shell_fences]
+include = ["docs/**/*.md"]
+exclude = []
+
+[orchestration]
+default_profile = "markdown-review"
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "shell-fence-check"
+rule = "markdown-shell-fences"
+severity = "warning"
+
+[[orchestration.profiles]]
+name = "markdown-review"
+steps = ["shell-fence-check"]

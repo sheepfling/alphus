@@ -9,11 +9,10 @@ from typing import Annotated, Literal, NamedTuple, Self, cast
 from pydantic import Field, field_validator, model_validator
 
 from alphus.contracts.findings import RemediationPriority, Severity
+from alphus.policy._generated_feature_policies import GeneratedFeaturePolicies
 from alphus.policy.architecture import (
     ArchitectureGraphCheckPolicy,
     CallableRegistryPolicy,
-    ModuleRolePolicy,
-    PackageBoundaryPolicy,
 )
 from alphus.policy.base import (
     QualityRuleName,
@@ -30,139 +29,20 @@ from alphus.policy.intents import (
     SharedQualityIntent,
     resolve_intent_bindings,
 )
-from alphus.policy.markdown import MarkdownShellFencesPolicy
-from alphus.policy.metrics import CyclomaticComplexityPolicy
-from alphus.policy.repository import (
-    DependencyLockPolicy,
-    DocumentationConfigPolicy,
-    GitRepositoryPolicy,
-    RepositoryLayoutPolicy,
-    VersionSyncPolicy,
-)
-from alphus.policy.review import (
-    ArrayRepresentationPolicy,
-    BenchmarkDocPolicy,
-    CholeskyRecurrencePolicy,
-    CiWorkflowPolicy,
-    DocumentStylePolicy,
-    DynamicMarkdownPolicy,
-    EcefEnuTransformPolicy,
-    EcefNedMatrixTransformPolicy,
-    EmbeddedSemanticOverridePolicy,
-    FastApiPracticePolicy,
-    HeuristicTotalConsumptionPolicy,
-    InputContractPolicy,
-    ManualEliminationPolicy,
-    ManualMatrixKernelPolicy,
-    NedBasisVectorsPolicy,
-    NumericLiteralPolicy,
-    ParallelNormalizationPolicy,
-    PatchCascadePolicy,
-    PositionalInterfacePolicy,
-    PositionalSemanticOverridePolicy,
-    ProseAsControlPolicy,
-    ProvenanceOwnershipPolicy,
-    PydanticPracticePolicy,
-    QuaternionConjugationPolicy,
-    QuaternionInversionPolicy,
-    QuaternionMatrixConversionPolicy,
-    QuaternionNormalizationPolicy,
-    QuaternionProductPolicy,
-    QuaternionVectorRotationPolicy,
-    RepeatedNumericLimitPolicy,
-    RunArtifactPolicy,
-    ScipyConstantsPolicy,
-    SemanticWorkPresentationPolicy,
-    SourceFamilyPolicy,
-    SqlAlchemyPracticePolicy,
-    SuppressionReasonPolicy,
-    TestQualityPolicy,
-    TypingStubSuggestionPolicy,
-    UnexplainedEmptyResultPolicy,
-)
-from alphus.policy.source_test_coverage import SourceTestCoveragePolicy
+from alphus.policy.repository import VersionSyncPolicy
 from alphus.policy.sources import (
-    CliPolicy,
-    CommentMarkerPolicy,
     FileInventoryPolicy,
-    FileSizePolicy,
     FunctionShapePolicy,
-    LineLengthPolicy,
-    PathDiscoveryPolicy,
-    PythonStylePolicy,
-    RuntimeTypePolicy,
-    ScriptPolicy,
-    SharedUtilitiesPolicy,
-    SourceScanPolicy,
 )
 
 
-class CheckPolicies(StrictModel):
+class CheckPolicies(GeneratedFeaturePolicies):
     """Settings for the currently available source gates."""
 
-    file_size: FileSizePolicy | None = None
-    comment_markers: CommentMarkerPolicy | None = None
-    line_length: LineLengthPolicy | None = None
-    json_structure: SourceScanPolicy | None = None
-    output_escaping: SourceScanPolicy | None = None
-    path_discovery: PathDiscoveryPolicy | None = None
-    numeric_literals: NumericLiteralPolicy | None = None
-    repeated_numeric_limits: RepeatedNumericLimitPolicy | None = None
-    typing_stub_suggestions: TypingStubSuggestionPolicy | None = None
-    prose_as_control: ProseAsControlPolicy | None = None
-    positional_semantic_overrides: PositionalSemanticOverridePolicy | None = None
-    unexplained_empty_results: UnexplainedEmptyResultPolicy | None = None
-    embedded_semantic_overrides: EmbeddedSemanticOverridePolicy | None = None
-    heuristic_total_consumption: HeuristicTotalConsumptionPolicy | None = None
-    provenance_ownership: ProvenanceOwnershipPolicy | None = None
-    semantic_work_presentation: SemanticWorkPresentationPolicy | None = None
-    parallel_normalization: ParallelNormalizationPolicy | None = None
-    patch_cascade: PatchCascadePolicy | None = None
-    manual_matrix_kernels: ManualMatrixKernelPolicy | None = None
-    manual_elimination: ManualEliminationPolicy | None = None
-    array_representation_churn: ArrayRepresentationPolicy | None = None
-    cholesky_recurrence: CholeskyRecurrencePolicy | None = None
-    manual_quaternion_conjugation: QuaternionConjugationPolicy | None = None
-    manual_quaternion_products: QuaternionProductPolicy | None = None
-    manual_quaternion_normalization: QuaternionNormalizationPolicy | None = None
-    manual_quaternion_inversion: QuaternionInversionPolicy | None = None
-    manual_quaternion_vector_rotation: QuaternionVectorRotationPolicy | None = None
-    manual_quaternion_matrix_conversion: QuaternionMatrixConversionPolicy | None = None
-    ecef_enu_transform: EcefEnuTransformPolicy | None = None
-    ecef_ned_matrix_transform: EcefNedMatrixTransformPolicy | None = None
-    ned_basis_vectors: NedBasisVectorsPolicy | None = None
-    scipy_constants: ScipyConstantsPolicy | None = None
-    run_artifacts: RunArtifactPolicy | None = None
-    ci_workflows: CiWorkflowPolicy | None = None
-    source_test_coverage: SourceTestCoveragePolicy | None = None
-    test_quality: TestQualityPolicy | None = None
-    input_contracts: InputContractPolicy | None = None
-    source_families: SourceFamilyPolicy | None = None
-    benchmark_docs: BenchmarkDocPolicy | None = None
-    positional_interfaces: PositionalInterfacePolicy | None = None
-    pydantic_practices: PydanticPracticePolicy | None = None
-    fastapi_practices: FastApiPracticePolicy | None = None
-    sqlalchemy_practices: SqlAlchemyPracticePolicy | None = None
-    dynamic_markdown: DynamicMarkdownPolicy | None = None
-    document_style: DocumentStylePolicy | None = None
-    suppression_reasons: SuppressionReasonPolicy | None = None
-    shared_utilities: SharedUtilitiesPolicy | None = None
-    python_style: PythonStylePolicy | None = None
-    runtime_types: RuntimeTypePolicy | None = None
-    cli: CliPolicy | None = None
-    script_policy: ScriptPolicy | None = None
-    package_boundaries: PackageBoundaryPolicy | None = None
-    module_roles: ModuleRolePolicy | None = None
     architecture_graph: ArchitectureGraphCheckPolicy | None = None
-    repository_layout: RepositoryLayoutPolicy | None = None
-    documentation_config: DocumentationConfigPolicy | None = None
-    markdown_shell_fences: MarkdownShellFencesPolicy | None = None
     version_sync: VersionSyncPolicy | None = None
     callable_registry: CallableRegistryPolicy | None = None
-    dependency_locks: DependencyLockPolicy | None = None
-    git: GitRepositoryPolicy | None = None
     function_shape: FunctionShapePolicy | None = None
-    cyclomatic_complexity: CyclomaticComplexityPolicy | None = None
 
     def require_rule(self, rule: QualityRuleName) -> None:
         """Validate only the primary policy needed by a selected rule."""

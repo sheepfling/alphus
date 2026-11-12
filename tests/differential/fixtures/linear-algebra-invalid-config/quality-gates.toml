@@ -1,0 +1,11 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py"]
+exclude = []
+
+[checks.manual_matrix_kernels]
+extensions = [".py"]
+exclude = []
+source_paths = ["src/numerics/*.py"]
+unexpected = true

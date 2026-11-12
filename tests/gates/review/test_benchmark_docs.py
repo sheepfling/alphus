@@ -14,7 +14,12 @@ from alphus.config import BenchmarkDocPolicy, load_config_stream
 from alphus.execution.dispatch import run_builtin_rule
 from alphus.execution.results import diagnostics_from_output
 from alphus.gates.review import benchmark_docs
-from alphus.gates.review.benchmark_docs import _sections, benchmark_doc_findings
+from alphus.gates.review.benchmark_docs import (
+    _sections,
+    benchmark_doc_findings,
+    run_benchmark_docs_rule,
+)
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 FIXTURE_BASE = Path("tests/fixtures/benchmark_docs")
 
@@ -453,5 +458,19 @@ def test_rule_runs_through_the_policy_and_runner_catalog(tmp_path: Path) -> None
 
     findings = run_builtin_rule("benchmark-docs", root, paths, config)
 
+    assert isinstance(benchmark_docs.ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert (
+        type(benchmark_docs.resolve_benchmark_docs_policy(config)) is BenchmarkDocPolicy
+    )
+    assert (
+        benchmark_docs.ALPHUS_FEATURE.runner
+        is benchmark_docs.run_benchmark_docs_feature
+    )
+    assert run_benchmark_docs_rule(root, paths, config) == findings
     assert isinstance(findings, list)
     assert len(findings) == 1
+    assert findings[0].rule_id == (
+        "alphus/markdown/none/maintainability/brittle-benchmark-prose"
+    )
+    assert findings[0].path == "docs/quatops-style.md"
+    assert findings[0].line == 1

@@ -3,14 +3,64 @@
 from __future__ import annotations
 
 import ast
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from pathlib import Path
+from typing import Final
 
-from alphus.config import ManualMatrixKernelPolicy
+from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
+from alphus.plugins.builtin import FindingBuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import ManualMatrixKernelPolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="manual-matrix-kernels",
+    input_mode="configured-source-scan",
+    policy_field="manual_matrix_kernels",
+    policy_model=ManualMatrixKernelPolicy,
+    output_shape="findings",
+    summary="Reviews configured hand-written matrix kernel patterns.",
+    applies_to=("python", "numerical"),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="manual-matrix-kernels",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.MAINTAINABILITY,
+            "manual-matrix-kernel",
+        ),
+    ),
+    concern="matrix-kernel-implementation",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "A configured Python expression matches one nested indexed matrix-product "
+        "shape; review suitability without assuming a defect or speedup."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("configured-python-files", "nested-list-comprehensions"),
+    languages_formats=("python",),
+    evidence_kinds=(
+        "configured-source-path",
+        "ast-pattern-match",
+        "source-location",
+    ),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
 
 _RULE_ID = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.MAINTAINABILITY, "manual-matrix-kernel"
@@ -203,3 +253,25 @@ def check_manual_matrix_kernels(
                 )
             )
     return findings
+
+
+def resolve_manual_matrix_kernels_policy(
+    config: QualityGateConfig,
+) -> ManualMatrixKernelPolicy:
+    """Resolve this linear-algebra review's strict feature policy."""
+    return require_policy(config.checks.manual_matrix_kernels, "manual_matrix_kernels")
+
+
+def run_manual_matrix_kernels_feature(
+    root: Path, files: Sequence[Path], policy: ManualMatrixKernelPolicy
+) -> list[Finding]:
+    """Run this configured linear-algebra review with its typed policy."""
+    return check_manual_matrix_kernels(root, files, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_manual_matrix_kernels_feature,
+    policy_resolver=resolve_manual_matrix_kernels_policy,
+)

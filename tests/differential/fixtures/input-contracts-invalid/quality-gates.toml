@@ -1,0 +1,7 @@
+schema_version = 1
+[files]
+include = ["*.py", "src/**"]
+exclude = []
+[checks.input_contracts]
+extensions = [".py"]
+unknown_setting = true

@@ -8,8 +8,14 @@ from pathlib import Path
 import pytest
 
 from alphus.config import QualityGateConfig
-from alphus.gates.vcs.git_quality import check_attributes, check_ignores
-from alphus.gates.vcs.runners import VCS_RULE_RUNNERS
+from alphus.execution.dispatch import run_builtin_rule
+from alphus.gates.vcs.git_quality import (
+    check_attributes,
+    check_history,
+    check_ignores,
+)
+from alphus.plugins.builtin import FindingBuiltinFeature
+from alphus.plugins.builtin_registry import load_builtin_feature
 from alphus.policy.repository import (
     GitAttributeRequirement,
     GitRepositoryPolicy,
@@ -20,6 +26,53 @@ from alphus.policy.repository import (
 
 def _git(root: Path, *arguments: str) -> None:
     subprocess.run(["git", *arguments], cwd=root, check=True, capture_output=True)
+
+
+def test_git_feature_registrations_dispatch_with_shared_policy_model(
+    tmp_path: Path,
+) -> None:
+    _git(tmp_path, "init", "--quiet")
+    _git(tmp_path, "config", "user.name", "Alphus tests")
+    _git(tmp_path, "config", "user.email", "alphus-tests@example.invalid")
+    (tmp_path / ".gitattributes").write_text("*.py text eol=lf\n", encoding="utf-8")
+    (tmp_path / ".gitignore").write_text("__pycache__/\n", encoding="utf-8")
+    source = tmp_path / "src/example.py"
+    source.parent.mkdir()
+    source.write_text("value = 1\n", encoding="utf-8")
+    _git(tmp_path, "add", ".gitattributes", ".gitignore", "src/example.py")
+    _git(tmp_path, "commit", "--quiet", "-m", "Add repository fixtures")
+
+    config = QualityGateConfig.model_validate(
+        {
+            "schema_version": 1,
+            "checks": {
+                "git": {
+                    "languages": ["python"],
+                    "max_blob_mib": 5.0,
+                    "attributes": [
+                        {"path": "src/example.py", "attribute": "eol", "value": "lf"}
+                    ],
+                }
+            },
+        },
+        strict=True,
+    )
+    policy = config.checks.git
+    assert policy is not None
+
+    expected_by_selector = {
+        "git-ignores": check_ignores(
+            tmp_path,
+            policy.languages,
+            policy.generated_outputs,
+            policy.generated_provenance,
+        ),
+        "git-attributes": check_attributes(tmp_path, policy.attributes),
+        "git-history": check_history(tmp_path, policy.max_blob_mib),
+    }
+    for selector, expected in expected_by_selector.items():
+        assert isinstance(load_builtin_feature(selector), FindingBuiltinFeature)
+        assert run_builtin_rule(selector, tmp_path, (), config) == expected
 
 
 def test_attributes_rule_reports_untracked_file_and_effective_mismatch(
@@ -170,7 +223,7 @@ def test_git_ignores_runner_uses_declared_generated_output_contract(
         }
     )
 
-    findings = VCS_RULE_RUNNERS["git-ignores"](tmp_path, (), config)
+    findings = run_builtin_rule("git-ignores", tmp_path, (), config)
     generated = [
         item
         for item in findings

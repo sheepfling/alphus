@@ -3,10 +3,20 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Callable, Sequence
+from importlib import import_module
 from pathlib import Path
+from typing import cast
 
 from alphus.cli import run_profile_rule
 from alphus.config import load_config
+from alphus.contracts.cyclomatic import (
+    CyclomaticBackendPlan,
+    CyclomaticBackendResult,
+    CyclomaticFunctionMetric,
+    CyclomaticPlan,
+)
+from alphus.contracts.findings import Finding
 from alphus.execution.worker_protocol import (
     BackendWorkerResponse,
     DiagnosticPayload,
@@ -15,10 +25,13 @@ from alphus.execution.worker_protocol import (
     WorkerRequest,
     WorkerResponse,
 )
-from alphus.gates.source.cyclomatic_complexity import (
-    build_cyclomatic_plan,
-    run_cyclomatic_backend,
-)
+from alphus.policy.metrics import CyclomaticBackendBinding, CyclomaticComplexityPolicy
+
+BackendRun = tuple[
+    CyclomaticBackendResult,
+    Sequence[CyclomaticFunctionMetric],
+    Sequence[Finding],
+]
 
 
 def dispatch_worker_request(request: WorkerRequest) -> WorkerResponse:
@@ -56,7 +69,24 @@ def dispatch_worker_request(request: WorkerRequest) -> WorkerResponse:
         policy = config.checks.cyclomatic_complexity
         if policy is None:
             raise ValueError("cyclomatic complexity policy is missing")
-        plan = build_cyclomatic_plan(root, policy)
+        engine = import_module("alphus.gates.source.cyclomatic_complexity")
+        build_plan = cast(
+            Callable[[Path, CyclomaticComplexityPolicy], CyclomaticPlan],
+            engine.build_cyclomatic_plan,
+        )
+        run_backend = cast(
+            Callable[
+                [
+                    Path,
+                    CyclomaticComplexityPolicy,
+                    CyclomaticBackendBinding,
+                    CyclomaticBackendPlan,
+                ],
+                BackendRun,
+            ],
+            engine.run_cyclomatic_backend,
+        )
+        plan = build_plan(root, policy)
         choices = {
             item.language: (item, binding)
             for item, binding in zip(
@@ -68,9 +98,7 @@ def dispatch_worker_request(request: WorkerRequest) -> WorkerResponse:
         selected, binding = choices[language]
         if selected != request.expected_plan:
             raise ValueError("cyclomatic backend plan changed during execution")
-        result, records, findings = run_cyclomatic_backend(
-            root, policy, binding, selected
-        )
+        result, records, findings = run_backend(root, policy, binding, selected)
         return BackendWorkerResponse(
             result=result,
             records=tuple(records),

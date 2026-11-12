@@ -1,0 +1,24 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py"]
+exclude = []
+
+[checks.repository_layout]
+required_paths = [
+  { path = "src/required.py", message = "required file missing" },
+]
+
+[orchestration]
+failure_threshold = "error"
+default_profile = "layout-review"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "layout-check"
+rule = "repository-layout"
+severity = "warning"
+
+[[orchestration.profiles]]
+name = "layout-review"
+steps = ["layout-check"]

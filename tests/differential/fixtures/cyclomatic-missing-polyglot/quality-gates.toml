@@ -1,0 +1,28 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*"]
+exclude = []
+
+[checks.cyclomatic_complexity]
+metric = "cyclomatic"
+maximum = 1
+severity = "warning"
+timeout_seconds = 15
+
+[checks.cyclomatic_complexity.files]
+include = ["src/**/*"]
+exclude = []
+
+[[checks.cyclomatic_complexity.backends]]
+language = "javascript"
+backend = "eslint"
+variant = "classic"
+version = "10.13.0"
+executable = "alphus-missing-eslint"
+
+[[checks.cyclomatic_complexity.backends]]
+language = "cpp"
+backend = "lizard"
+variant = "standard"
+version = "1.24.2"

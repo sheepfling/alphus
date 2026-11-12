@@ -3,16 +3,61 @@
 from __future__ import annotations
 
 import ast
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
-from alphus.config import SemanticWorkPresentationPolicy
+from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
 from alphus.gates.review._module_bindings import module_binding_counts
+from alphus.plugins.builtin import FindingBuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import SemanticWorkPresentationPolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="semantic-work-in-presentation",
+    policy_field="semantic_work_presentation",
+    policy_model=SemanticWorkPresentationPolicy,
+    output_shape="findings",
+    summary="Reviews semantic work placed in presentation code.",
+    applies_to=("python",),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="semantic-work-in-presentation",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.ARCHITECTURE,
+            "semantic-work-in-presentation",
+        ),
+    ),
+    concern="semantic-responsibilities-co-located-in-presentation",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "Configured source-layout, correction, ownership, and serialization calls "
+        "co-occur in a presentation function; this does not prove coupling or a defect."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("configured-python-functions", "consumer-declared-helper-roles"),
+    languages_formats=("python",),
+    evidence_kinds=("configured-role-contract", "ast-call-analysis", "source-location"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
 
 _RULE_ID = rule_tag(
     Scope.PYTHON,
@@ -173,3 +218,29 @@ def check_semantic_work_presentation(
                 )
             )
     return findings
+
+
+def resolve_semantic_work_presentation_policy(
+    config: QualityGateConfig,
+) -> SemanticWorkPresentationPolicy:
+    """Resolve this check's strict presentation-risk policy."""
+    return require_policy(
+        config.checks.semantic_work_presentation, "semantic_work_presentation"
+    )
+
+
+def run_semantic_work_presentation_feature(
+    root: Path,
+    files: Sequence[Path],
+    policy: SemanticWorkPresentationPolicy,
+) -> list[Finding]:
+    """Run the configured semantic-work review with its policy type."""
+    return check_semantic_work_presentation(root, files, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_semantic_work_presentation_feature,
+    policy_resolver=resolve_semantic_work_presentation_policy,
+)

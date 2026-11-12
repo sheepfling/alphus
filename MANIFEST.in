@@ -1,1 +1,6 @@
 exclude .git_archival.txt
+include build_backend.py
+recursive-include scripts *.py
+include src/alphus/execution/_generated_dispatch.py
+include src/alphus/plugins/builtin_registry.pyi
+include src/alphus/policy/_generated_*.py

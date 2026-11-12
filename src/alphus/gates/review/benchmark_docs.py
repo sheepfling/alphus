@@ -6,11 +6,57 @@ import re
 from collections.abc import Iterable, Mapping, Sequence
 from heapq import nsmallest
 from pathlib import Path, PurePosixPath
+from typing import Final
 
-from alphus.config import BenchmarkDocPolicy as _BenchmarkDocPolicy
+from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
+from alphus.plugins.builtin import FindingBuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import BenchmarkDocPolicy
 from alphus.support.inventory import matches_path
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="benchmark-docs",
+    policy_field="benchmark_docs",
+    policy_model=BenchmarkDocPolicy,
+    output_shape="findings",
+    summary="Reviews benchmark documentation for required result context.",
+    applies_to=("markdown", "benchmarking"),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="benchmark-docs",
+    finding_ids=(
+        RuleTag(
+            Scope.MARKDOWN,
+            Framework.NONE,
+            Category.MAINTAINABILITY,
+            "brittle-benchmark-prose",
+        ),
+    ),
+    concern="benchmark-reproducibility-context",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "Benchmark documentation may omit protocol or result context needed to "
+        "reproduce or assess measurements."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("selected-markdown-files", "benchmark-sections"),
+    languages_formats=("markdown",),
+    evidence_kinds=("bounded-lexical-match", "heading-context", "document-location"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
+
 
 _DURATION = re.compile(
     r"(?<![\w.])\d+(?:[,_]\d{3})*(?:\.\d+)?\s*"
@@ -45,7 +91,7 @@ _HEADING = re.compile(r"^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$")
 _SETEXT_HEADING = re.compile(r"^\s{0,3}(=+|-+)\s*$")
 
 
-def _selected_paths(paths: Iterable[Path], policy: _BenchmarkDocPolicy) -> list[Path]:
+def _selected_paths(paths: Iterable[Path], policy: BenchmarkDocPolicy) -> list[Path]:
     selected = (
         Path(*PurePosixPath(path.as_posix()).parts)
         for path in paths
@@ -316,7 +362,7 @@ def _analyze_heading(
 
 
 def benchmark_doc_findings(
-    root: Path, paths: Iterable[Path], policy: _BenchmarkDocPolicy
+    root: Path, paths: Iterable[Path], policy: BenchmarkDocPolicy
 ) -> list[Finding]:
     """Return section-level review candidates without evaluating claims."""
     checkout = root.resolve(strict=True)
@@ -440,7 +486,36 @@ def benchmark_doc_findings(
 
 
 def check_benchmark_docs(
-    root: Path, paths: Sequence[Path], policy: _BenchmarkDocPolicy
+    root: Path, paths: Sequence[Path], policy: BenchmarkDocPolicy
 ) -> list[Finding]:
     """Adapt the benchmark documentation scanner to the built-in runner contract."""
     return benchmark_doc_findings(root, paths, policy)
+
+
+def run_benchmark_docs_rule(
+    root: Path, paths: Sequence[Path], config: QualityGateConfig
+) -> list[Finding]:
+    """Resolve strict feature policy before invoking the prose analyzer."""
+    return run_benchmark_docs_feature(
+        root, paths, resolve_benchmark_docs_policy(config)
+    )
+
+
+def resolve_benchmark_docs_policy(config: QualityGateConfig) -> BenchmarkDocPolicy:
+    """Resolve the strict benchmark-prose policy from validated config."""
+    return require_policy(config.checks.benchmark_docs, "benchmark_docs")
+
+
+def run_benchmark_docs_feature(
+    root: Path, paths: Sequence[Path], policy: BenchmarkDocPolicy
+) -> list[Finding]:
+    """Run bounded benchmark prose review with its feature-owned policy type."""
+    return check_benchmark_docs(root, paths, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_benchmark_docs_feature,
+    policy_resolver=resolve_benchmark_docs_policy,
+)

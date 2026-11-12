@@ -4,19 +4,75 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import Protocol, TypeAlias, cast
+from typing import Final, Protocol, TypeAlias, cast
 
 import yaml
 from yaml.events import AliasEvent
 from yaml.nodes import MappingNode, Node, ScalarNode, SequenceNode
 
-from alphus.config import CiWorkflowPolicy
+from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
+from alphus.plugins.builtin import FindingBuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import CiWorkflowPolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_utf8_text
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="ci-workflows",
+    policy_field="ci_workflows",
+    policy_model=CiWorkflowPolicy,
+    output_shape="findings",
+    summary="Reviews selected CI workflow commands for repeated job work.",
+    applies_to=("yaml", "ci"),
+    domains=(),
+    requires_files=False,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="ci-workflows",
+    finding_ids=(
+        RuleTag(
+            Scope.ANY,
+            Framework.NONE,
+            Category.ORCHESTRATION,
+            "duplicate-workflow-run",
+        ),
+        RuleTag(
+            Scope.ANY,
+            Framework.NONE,
+            Category.ORCHESTRATION,
+            "long-inline-workflow-script",
+        ),
+        RuleTag(
+            Scope.ANY,
+            Framework.NONE,
+            Category.ORCHESTRATION,
+            "repeated-workflow-setup-action",
+        ),
+    ),
+    concern="repeated-ci-workflow-work",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "Static workflow repetition is a review candidate; isolated jobs, matrix "
+        "differences, and runtime expressions can make repeated work necessary."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("configured-yaml-workflows", "static-commands-and-setup"),
+    languages_formats=("yaml", "github-actions", "azure-pipelines"),
+    evidence_kinds=("workflow-policy", "static-yaml-nodes", "source-location"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
 
 _Fingerprint: TypeAlias = str | tuple[object, ...]
 
@@ -652,3 +708,34 @@ def check_ci_workflows(
         if path.is_file():
             findings.extend(workflow_run_findings(read_utf8_text(path), name, policy))
     return findings
+
+
+def run_ci_workflows_rule(
+    root: Path, paths: Sequence[Path], config: QualityGateConfig
+) -> list[Finding]:
+    """Adapt the read-only workflow reviewer to the typed built-in runner."""
+    return check_ci_workflows(
+        root,
+        paths,
+        require_policy(config.checks.ci_workflows, "ci_workflows"),
+    )
+
+
+def resolve_ci_workflows_policy(config: QualityGateConfig) -> CiWorkflowPolicy:
+    """Resolve the strict workflow review policy from validated config."""
+    return require_policy(config.checks.ci_workflows, "ci_workflows")
+
+
+def run_ci_workflows_feature(
+    root: Path, paths: Sequence[Path], policy: CiWorkflowPolicy
+) -> list[Finding]:
+    """Run static CI workflow review with its feature-owned policy type."""
+    return check_ci_workflows(root, paths, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_ci_workflows_feature,
+    policy_resolver=resolve_ci_workflows_policy,
+)

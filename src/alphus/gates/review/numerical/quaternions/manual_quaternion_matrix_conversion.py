@@ -3,19 +3,76 @@
 from __future__ import annotations
 
 import ast
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
-from alphus.config import QuaternionMatrixConversionPolicy
+from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import (
+    Category,
+    Framework,
+    RuleTag,
+    Scope,
+    rule_tag,
+)
 from alphus.gates.review.numerical.common.ast_helpers import (
     configured_function_observations,
     redefined_function_names,
 )
+from alphus.plugins.builtin import FindingBuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import QuaternionMatrixConversionPolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="manual-quaternion-matrix-conversion",
+    input_mode="configured-source-scan",
+    policy_field="manual_quaternion_matrix_conversion",
+    policy_model=QuaternionMatrixConversionPolicy,
+    output_shape="findings",
+    summary="Reviews configured quaternion-to-matrix conversions.",
+    applies_to=("python", "numerical"),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="manual-quaternion-matrix-conversion",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.MAINTAINABILITY,
+            "manual-quaternion-matrix-conversion",
+        ),
+    ),
+    concern="quaternion-operation-implementation",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "The configured Python function matches this operation's bounded syntax "
+        "shape; a match is a review signal and does not prove mathematical error."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("configured-python-files", "configured-functions"),
+    languages_formats=("python",),
+    evidence_kinds=(
+        "configured-source-path",
+        "configured-function-name",
+        "ast-pattern-match",
+        "source-location",
+    ),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
 
 _RULE_ID = rule_tag(
     Scope.PYTHON,
@@ -159,3 +216,28 @@ def check_manual_quaternion_matrix_conversion(
                 )
             )
     return findings
+
+
+def resolve_manual_quaternion_matrix_conversion_policy(
+    config: QualityGateConfig,
+) -> QuaternionMatrixConversionPolicy:
+    """Resolve this quaternion check's strict feature policy."""
+    return require_policy(
+        config.checks.manual_quaternion_matrix_conversion,
+        "manual_quaternion_matrix_conversion",
+    )
+
+
+def run_manual_quaternion_matrix_conversion_feature(
+    root: Path, files: Sequence[Path], policy: QuaternionMatrixConversionPolicy
+) -> list[Finding]:
+    """Run this configured quaternion review with its typed policy."""
+    return check_manual_quaternion_matrix_conversion(root, files, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_manual_quaternion_matrix_conversion_feature,
+    policy_resolver=resolve_manual_quaternion_matrix_conversion_policy,
+)

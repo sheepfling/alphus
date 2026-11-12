@@ -3,16 +3,65 @@
 from __future__ import annotations
 
 import ast
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
-from alphus.config import PatchCascadePolicy
+from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
 from alphus.gates.review._module_bindings import module_binding_counts
+from alphus.plugins.builtin import FindingBuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import PatchCascadePolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="patch-cascade",
+    policy_field="patch_cascade",
+    policy_model=PatchCascadePolicy,
+    output_shape="findings",
+    summary="Reviews ordered patch operations that can cascade across edits.",
+    applies_to=("python",),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="patch-cascade",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.MAINTAINABILITY,
+            "patch-cascade",
+        ),
+    ),
+    concern="source-specific-patch-cascade",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "Multiple configured source-specific repair branches may accumulate in a "
+        "general parser; declarations do not prove unrelated patches or a defect."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=(
+        "configured-python-functions",
+        "repair-id-branches",
+        "helper-calls",
+    ),
+    languages_formats=("python",),
+    evidence_kinds=("declared-repair-contract", "python-ast", "source-location"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
 
 _RULE_ID = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.MAINTAINABILITY, "patch-cascade"
@@ -374,3 +423,34 @@ def check_patch_cascade(
                 )
             )
     return findings
+
+
+def run_patch_cascade_rule(
+    root: Path, paths: Sequence[Path], config: QualityGateConfig
+) -> list[Finding]:
+    """Adapt the existing patch-cascade policy to the typed built-in runner."""
+    return check_patch_cascade(
+        root,
+        paths,
+        require_policy(config.checks.patch_cascade, "patch_cascade"),
+    )
+
+
+def resolve_patch_cascade_policy(config: QualityGateConfig) -> PatchCascadePolicy:
+    """Resolve the strict patch cascade policy from validated config."""
+    return require_policy(config.checks.patch_cascade, "patch_cascade")
+
+
+def run_patch_cascade_feature(
+    root: Path, paths: Sequence[Path], policy: PatchCascadePolicy
+) -> list[Finding]:
+    """Run this source review with its feature-owned policy type."""
+    return check_patch_cascade(root, paths, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_patch_cascade_feature,
+    policy_resolver=resolve_patch_cascade_policy,
+)

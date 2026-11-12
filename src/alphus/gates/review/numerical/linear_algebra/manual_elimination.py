@@ -3,18 +3,68 @@
 from __future__ import annotations
 
 import ast
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
-from alphus.config import ManualEliminationPolicy
+from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
 from alphus.gates.review.numerical.common.ast_helpers import (
     configured_function_observations,
 )
+from alphus.plugins.builtin import FindingBuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import ManualEliminationPolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="manual-elimination",
+    input_mode="configured-source-scan",
+    policy_field="manual_elimination",
+    policy_model=ManualEliminationPolicy,
+    output_shape="findings",
+    summary="Reviews configured hand-written elimination patterns.",
+    applies_to=("python", "numerical"),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="manual-elimination",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.MAINTAINABILITY,
+            "manual-elimination",
+        ),
+    ),
+    concern="matrix-elimination-implementation",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "A configured Python function matches a direct-list pivot, swap, "
+        "normalization, and elimination shape; this is advisory."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("configured-python-files", "configured-functions"),
+    languages_formats=("python",),
+    evidence_kinds=(
+        "configured-source-path",
+        "ast-pattern-match",
+        "source-location",
+    ),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
 
 _RULE_ID = rule_tag(
     Scope.PYTHON, Framework.NONE, Category.MAINTAINABILITY, "manual-elimination"
@@ -346,3 +396,25 @@ def check_manual_elimination(
                 )
             )
     return findings
+
+
+def resolve_manual_elimination_policy(
+    config: QualityGateConfig,
+) -> ManualEliminationPolicy:
+    """Resolve this linear-algebra review's strict feature policy."""
+    return require_policy(config.checks.manual_elimination, "manual_elimination")
+
+
+def run_manual_elimination_feature(
+    root: Path, files: Sequence[Path], policy: ManualEliminationPolicy
+) -> list[Finding]:
+    """Run this configured linear-algebra review with its typed policy."""
+    return check_manual_elimination(root, files, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_manual_elimination_feature,
+    policy_resolver=resolve_manual_elimination_policy,
+)

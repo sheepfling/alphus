@@ -1,10 +1,11 @@
 [build-system]
 requires = ["setuptools>=80", "setuptools-scm>=10.3.4,<11"]
-build-backend = "setuptools.build_meta"
+build-backend = "build_backend"
+backend-path = ["."]
 
 [project]
 name = "alphus"
-dynamic = ["version"]
+dynamic = ["version", "entry-points"]
 description = "Portable, policy-driven source quality gates for Git repositories"
 requires-python = ">=3.11,<3.16"
 readme = "README.md"
@@ -60,6 +61,9 @@ local_scheme = "node-and-date"
 [tool.setuptools_scm.scm.git]
 pre_parse = "fail_on_shallow"
 
+[tool.setuptools.dynamic]
+entry-points = {file = ".registry-build/entry_points.txt"}
+
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 
@@ -73,5 +77,5 @@ pythonVersion = "3.11"
 typeCheckingMode = "strict"
 
 [tool.setuptools.package-data]
-alphus = ["py.typed"]
+alphus = ["py.typed", "*.pyi"]
 alphus_stub_quality = ["py.typed"]

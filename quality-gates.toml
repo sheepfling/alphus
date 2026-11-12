@@ -23,7 +23,12 @@ extensions = [
   ".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".java",
 ]
 markers = ["TODO", "FIXME", "HACK", "XXX", "XXXX"]
-exclude = []
+# Positive and malformed polyglot fixtures exercise comment findings and
+# parser-error identity; the differential scenarios assert those exact results.
+exclude = [
+  "tests/differential/fixtures/comment-markers-polyglot/docs/guide.toml",
+  "tests/differential/fixtures/comment-markers-polyglot/src/example.py",
+]
 
 [checks.line_length]
 exclude = ["docs/cpp/**"]
@@ -42,9 +47,13 @@ exclude = ["tests/**"]
 
 [checks.output_escaping]
 extensions = [".py"]
-# The synthetic fixture owns a tiny serializer solely so markdown-it-py can
-# inspect its output; the render assertions independently verify these escapes.
-exclude = ["tests/gates/review/test_dynamic_markdown_rendering.py"]
+# These fixtures intentionally contain unsafe renderer input to prove the
+# differential scenarios report the findings; assertions live in those scenarios.
+exclude = [
+  "tests/gates/review/test_dynamic_markdown_rendering.py",
+  "tests/differential/fixtures/output-escaping/src/render.py",
+  "tests/differential/fixtures/output-escaping-polyglot/src/render.py",
+]
 
 [checks.path_discovery]
 extensions = [".py"]
@@ -64,7 +73,19 @@ minimum_ast_nodes = 15
 
 [checks.python_style]
 extensions = [".py"]
-exclude = []
+# Positive differential fixtures retain the concrete input and registry shapes
+# needed to assert their findings; their scenario contracts verify those reports.
+exclude = [
+  # The spike exercises a typed lazy import; Ruff, Pyright, and its tests still scan it.
+  "scripts/registry_spike/provider_factory.py",
+  "tests/differential/fixtures/input-contracts/src/example.py",
+  "tests/differential/fixtures/package-boundaries/registry.py",
+  # This differential fixture intentionally accepts a mutable matrix and mutates it
+  # to prove the manual-elimination check without creating unrelated style findings.
+  "tests/differential/fixtures/linear-algebra/src/numerics/elimination.py",
+  # Positive dump/revalidation fixture exercises the same dynamic mapping shape.
+  "tests/differential/fixtures/pydantic-practices/src/example.py",
+]
 opaque_boundary_paths = [
   "src/alphus/config.py",
   "src/alphus/cli.py",
@@ -127,25 +148,37 @@ exclude = [
 
 [checks.numeric_literals]
 extensions = [".py"]
-exclude = []
+# The fixture intentionally includes 3.14 so the installed-wheel scenario can
+# assert the numeric-literal finding.
+exclude = ["tests/differential/fixtures/numeric-literals/src/example.py"]
 math_constants = true
 
 [checks.scipy_constants]
 extensions = [".py"]
-exclude = []
+# This is an intentional positive fixture exercised by the pinned-wheel test.
+exclude = ["tests/differential/fixtures/scipy-constants/src/example.py"]
 physical_constants = true
 unit_conversions = true
 inverse_conversions = true
 
 [checks.test_quality]
 extensions = [".py"]
-exclude = []
+# The fixture intentionally has a large prose equality so the differential
+# scenario can assert the test-quality finding.
+exclude = ["tests/differential/fixtures/test-quality/tests/report_fixture.py"]
 test_paths = ["tests/**"]
 ephemeral_document_patterns = ["docs/**"]
 
 [checks.input_contracts]
 extensions = [".py"]
-exclude = []
+# The fixture intentionally mutates its input so the differential scenario can
+# assert the input-contract finding.
+exclude = [
+  "tests/differential/fixtures/input-contracts/src/example.py",
+  # The elimination fixture mutates its matrix to exercise that advisory check;
+  # the pinned-wheel scenario asserts its existing finding and source location.
+  "tests/differential/fixtures/linear-algebra/src/numerics/elimination.py",
+]
 sequence_narrowing_paths = ["src/alphus/gates/review/positional_interfaces.py"]
 
 [checks.typing_stub_suggestions]
@@ -187,7 +220,9 @@ max_findings = 10
 
 [checks.pydantic_practices]
 extensions = [".py"]
-exclude = []
+# This positive wheel fixture intentionally triggers dump revalidation; the
+# differential scenarios retain and assert its warning and stable source line.
+exclude = ["tests/differential/fixtures/pydantic-practices/src/example.py"]
 report_dump_revalidation = true
 require_explicit_frozen = false
 report_deprecated_v1_apis = false
@@ -202,12 +237,16 @@ external_model_names = [
 
 [checks.fastapi_practices]
 extensions = [".py"]
-exclude = []
+# This positive wheel fixture intentionally triggers a literal-status finding;
+# its differential scenario retains and asserts the stable ID and source line.
+exclude = ["tests/differential/fixtures/fastapi-practices/src/api.py"]
 
 [checks.sqlalchemy_practices]
 target_sqlalchemy = ">=2.0,<3.0"
 extensions = [".py"]
-exclude = []
+# This positive wheel fixture intentionally triggers legacy query review; the
+# differential scenarios retain and assert its warning and stable source line.
+exclude = ["tests/differential/fixtures/sqlalchemy-practices/src/example.py"]
 report_legacy_query = true
 report_legacy_declarative_base = true
 report_backref = true

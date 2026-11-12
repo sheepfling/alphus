@@ -4,7 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from alphus.config import PathDiscoveryPolicy
+from alphus.config import PathDiscoveryPolicy, QualityGateConfig
+from alphus.execution.dispatch import run_builtin_rule
 from alphus.gates.languages.javascript.path_discovery import (
     JS_INSPECTION_PATTERNS,
     JS_PATTERNS,
@@ -19,6 +20,8 @@ from alphus.gates.languages.python.path_discovery import (
     python_path_findings,
 )
 from alphus.gates.source.path_discovery import check_path_discovery
+from alphus.plugins.builtin import FindingBuiltinFeature
+from alphus.plugins.builtin_registry import load_builtin_feature
 
 
 def test_javascript_path_discovery_exports_are_explicit() -> None:
@@ -46,6 +49,48 @@ def test_selected_parent_walk_is_flagged(tmp_path: Path) -> None:
     )
     assert [(item.path, item.line, item.message) for item in findings] == [
         ("scripts/verify.py", 2, "module __file__ used to infer a parent root")
+    ]
+
+
+def test_registered_path_discovery_runner_preserves_language_specific_results(
+    tmp_path: Path,
+) -> None:
+    assert isinstance(load_builtin_feature("path-discovery"), FindingBuiltinFeature)
+    python_path = Path("src/example.py")
+    javascript_path = Path("src/client.js")
+    (tmp_path / python_path).parent.mkdir(parents=True)
+    (tmp_path / python_path).write_text("root = Path.cwd()\n", encoding="utf-8")
+    (tmp_path / javascript_path).write_text(
+        "const root = process.cwd();\n", encoding="utf-8"
+    )
+    config = QualityGateConfig.model_validate(
+        {
+            "schema_version": 1,
+            "checks": {
+                "path_discovery": {
+                    "extensions": [".py", ".js"],
+                    "exclude": [],
+                    "inspection_exclude": [],
+                }
+            },
+        }
+    )
+
+    findings = run_builtin_rule(
+        "path-discovery", tmp_path, (python_path, javascript_path), config
+    )
+
+    assert [(item.rule_id, item.path, item.line) for item in findings] == [
+        (
+            "alphus/javascript/none/portability/implicit-working-directory",
+            "src/client.js",
+            1,
+        ),
+        (
+            "alphus/python/none/portability/implicit-working-directory",
+            "src/example.py",
+            1,
+        ),
     ]
 
 

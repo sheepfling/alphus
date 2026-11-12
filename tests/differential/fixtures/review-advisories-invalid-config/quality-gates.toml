@@ -1,0 +1,20 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py"]
+exclude = []
+
+[checks.heuristic_total_consumption]
+extensions = [".py"]
+source_paths = ["src/*.py"]
+function_names = ["preserve_text"]
+input_names = ["text"]
+token_match_helpers = ["re.findall"]
+output_contract = "preserve-unmatched-spans"
+unknown_setting = true
+
+[checks.unexplained_empty_results]
+extensions = [".py"]
+source_paths = ["src/*.py"]
+nonempty_inputs = ["records"]
+unavailable_flags = ["inferred_schema"]

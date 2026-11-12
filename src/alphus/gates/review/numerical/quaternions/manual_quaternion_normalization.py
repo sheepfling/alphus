@@ -6,10 +6,17 @@ import ast
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
-from alphus.config import QuaternionNormalizationPolicy
+from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import (
+    Category,
+    Framework,
+    RuleTag,
+    Scope,
+    rule_tag,
+)
 from alphus.gates.review.numerical.common.ast_helpers import (
     configured_function_observations,
     qualified_call_name,
@@ -17,8 +24,58 @@ from alphus.gates.review.numerical.common.ast_helpers import (
 from alphus.gates.review.numerical.quaternions.ast_patterns import (
     is_sum_of_four_squares,
 )
+from alphus.plugins.builtin import FindingBuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import QuaternionNormalizationPolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="manual-quaternion-normalization",
+    input_mode="configured-source-scan",
+    policy_field="manual_quaternion_normalization",
+    policy_model=QuaternionNormalizationPolicy,
+    output_shape="findings",
+    summary="Reviews configured hand-written quaternion normalization patterns.",
+    applies_to=("python", "numerical"),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="manual-quaternion-normalization",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.MAINTAINABILITY,
+            "manual-quaternion-normalization",
+        ),
+    ),
+    concern="quaternion-operation-implementation",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "The configured Python function matches this operation's bounded syntax "
+        "shape; a match is a review signal and does not prove mathematical error."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("configured-python-files", "configured-functions"),
+    languages_formats=("python",),
+    evidence_kinds=(
+        "configured-source-path",
+        "configured-function-name",
+        "ast-pattern-match",
+        "source-location",
+    ),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
 
 _RULE_ID = rule_tag(
     Scope.PYTHON,
@@ -177,3 +234,27 @@ def check_manual_quaternion_normalization(
                 )
             )
     return findings
+
+
+def resolve_manual_quaternion_normalization_policy(
+    config: QualityGateConfig,
+) -> QuaternionNormalizationPolicy:
+    """Resolve this quaternion check's strict feature policy."""
+    return require_policy(
+        config.checks.manual_quaternion_normalization, "manual_quaternion_normalization"
+    )
+
+
+def run_manual_quaternion_normalization_feature(
+    root: Path, files: Sequence[Path], policy: QuaternionNormalizationPolicy
+) -> list[Finding]:
+    """Run this configured quaternion review with its typed policy."""
+    return check_manual_quaternion_normalization(root, files, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_manual_quaternion_normalization_feature,
+    policy_resolver=resolve_manual_quaternion_normalization_policy,
+)

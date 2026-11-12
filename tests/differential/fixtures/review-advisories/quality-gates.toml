@@ -1,0 +1,37 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py"]
+exclude = []
+
+[checks.heuristic_total_consumption]
+extensions = [".py"]
+source_paths = ["src/*.py"]
+function_names = ["preserve_text"]
+input_names = ["text"]
+token_match_helpers = ["re.findall"]
+output_contract = "preserve-unmatched-spans"
+
+[checks.unexplained_empty_results]
+extensions = [".py"]
+source_paths = ["src/*.py"]
+nonempty_inputs = ["records"]
+unavailable_flags = ["inferred_schema"]
+
+[orchestration]
+default_profile = "review-advisories"
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Heuristic total consumption"
+rule = "heuristic-total-consumption"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Unexplained empty results"
+rule = "unexplained-empty-results"
+
+[[orchestration.profiles]]
+name = "review-advisories"
+steps = ["Heuristic total consumption", "Unexplained empty results"]

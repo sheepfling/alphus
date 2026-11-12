@@ -3,16 +3,65 @@
 from __future__ import annotations
 
 import ast
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
-from alphus.config import HeuristicTotalConsumptionPolicy
+from alphus.config import QualityGateConfig
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
 from alphus.gates.review._module_bindings import module_binding_counts
+from alphus.plugins.builtin import FindingBuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import HeuristicTotalConsumptionPolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="heuristic-total-consumption",
+    policy_field="heuristic_total_consumption",
+    policy_model=HeuristicTotalConsumptionPolicy,
+    output_shape="findings",
+    summary="Reviews heuristic assumptions about total input consumption.",
+    applies_to=("python",),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="heuristic-total-consumption",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.CORRECTNESS,
+            "heuristic-total-consumption",
+        ),
+    ),
+    concern="heuristic-token-consumption-may-drop-unmatched-input",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "Configured text-preserving functions return token matches; this does not "
+        "prove that unmatched spans are required by the consumer contract."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("configured-python-functions", "token-matcher-returns"),
+    languages_formats=("python",),
+    evidence_kinds=(
+        "configured-helper-name",
+        "ast-binding-analysis",
+        "source-location",
+    ),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
 
 _RULE_ID = rule_tag(
     Scope.PYTHON,
@@ -193,3 +242,29 @@ def check_heuristic_total_consumption(
                 )
             )
     return findings
+
+
+def resolve_heuristic_total_consumption_policy(
+    config: QualityGateConfig,
+) -> HeuristicTotalConsumptionPolicy:
+    """Resolve this check's strict consumer-declared heuristic policy."""
+    return require_policy(
+        config.checks.heuristic_total_consumption, "heuristic_total_consumption"
+    )
+
+
+def run_heuristic_total_consumption_feature(
+    root: Path,
+    files: Sequence[Path],
+    policy: HeuristicTotalConsumptionPolicy,
+) -> list[Finding]:
+    """Run the configured heuristic with its feature-owned policy type."""
+    return check_heuristic_total_consumption(root, files, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_heuristic_total_consumption_feature,
+    policy_resolver=resolve_heuristic_total_consumption_policy,
+)

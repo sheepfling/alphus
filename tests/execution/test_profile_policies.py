@@ -4,18 +4,110 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
+from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
-from typing import get_args
+from typing import cast, get_args
 
 import pytest
 from pydantic import ValidationError
 
 from alphus.cli import main
-from alphus.config import CheckPolicies, QualityRuleName, load_config
-from alphus.execution.dispatch import BUILTIN_RULES, RULE_RUNNERS
-from alphus.gates.hygiene.rules import check_file_size, check_line_length
+from alphus.config import (
+    CheckPolicies,
+    CliPolicy,
+    QualityGateConfig,
+    QualityRuleName,
+    load_config,
+)
+from alphus.contracts.cyclomatic import CyclomaticReport
+from alphus.contracts.findings import Finding
+from alphus.execution import dispatch
+from alphus.execution.dispatch import (
+    BUILTIN_RULES,
+    RULE_RUNNERS,
+    EntryPointBuiltinRuleBinding,
+    run_builtin_rule,
+)
+from alphus.gates.hygiene.file_size import check_file_size
+from alphus.gates.hygiene.line_length import check_line_length
+from alphus.plugins.builtin import BuiltinFeatureRegistration
+from alphus.plugins.builtin_registry import (
+    builtin_check_entry_points,
+    load_builtin_feature,
+)
 from alphus.policy.base import MissingPolicyError
 from alphus.policy.catalog import RULE_SPECS
+from alphus.policy.sources import FileSizePolicy
+
+
+def test_feature_policy_resolution_rejects_a_different_policy_model() -> None:
+    definition = dispatch.FEATURE_DEFINITIONS["file-size"]
+
+    def forged_resolver(_config: QualityGateConfig) -> FileSizePolicy:
+        return cast(FileSizePolicy, CliPolicy.model_construct())
+
+    with pytest.raises(TypeError, match="policy resolver returned CliPolicy"):
+        dispatch._resolve_feature_policy(
+            forged_resolver,
+            definition,
+            QualityGateConfig.model_construct(),
+        )
+
+
+def test_feature_policy_resolution_returns_validated_mapping_as_model() -> None:
+    definition = dispatch.FEATURE_DEFINITIONS["file-size"]
+    raw_policy = {
+        "code_extensions": (".py",),
+        "code_limit": 120,
+        "hard_limit": 240,
+        "initializer_name": "__init__.py",
+        "initializer_limit": 100,
+        "raw_byte_limits": (),
+        "path_raw_byte_limits": (),
+        "exclude": (),
+    }
+
+    def mapping_resolver(_config: QualityGateConfig) -> FileSizePolicy:
+        return cast(FileSizePolicy, raw_policy)
+
+    resolved = dispatch._resolve_feature_policy(
+        mapping_resolver,
+        definition,
+        QualityGateConfig.model_construct(),
+    )
+
+    assert isinstance(resolved, FileSizePolicy)
+    assert resolved.code_extensions == (".py",)
+    assert resolved.code_limit == 120
+    assert resolved.hard_limit == 240
+    assert resolved.initializer_limit == 100
+
+
+def test_feature_policy_resolution_preserves_valid_typed_policy() -> None:
+    definition = dispatch.FEATURE_DEFINITIONS["file-size"]
+    expected = FileSizePolicy(
+        code_extensions=(".py",),
+        code_limit=120,
+        hard_limit=240,
+        initializer_name="__init__.py",
+        initializer_limit=100,
+        raw_byte_limits=(),
+        path_raw_byte_limits=(),
+        exclude=(),
+    )
+
+    def typed_resolver(_config: QualityGateConfig) -> FileSizePolicy:
+        return expected
+
+    resolved = dispatch._resolve_feature_policy(
+        typed_resolver,
+        definition,
+        QualityGateConfig.model_construct(),
+    )
+
+    assert resolved is expected
 
 
 def repository(tmp_path: Path, extra: str = "") -> Path:
@@ -127,6 +219,106 @@ def test_typing_stub_rule_requires_source_inventory(
     assert "top-level [files]" in capsys.readouterr().err
 
 
+def test_source_test_coverage_uses_generated_registration_without_file_inventory(
+    tmp_path: Path,
+) -> None:
+    config = QualityGateConfig.model_validate(
+        {
+            "schema_version": 1,
+            "checks": {"source_test_coverage": {}},
+        },
+        strict=True,
+    )
+
+    binding = BUILTIN_RULES["source-test-coverage"]
+    assert not binding.requires_files
+    output = run_builtin_rule("source-test-coverage", tmp_path, (), config)
+
+    assert len(output) == 1
+    assert isinstance(output[0], Finding)
+    assert output[0].rule_id == "alphus/repository/none/testing/source-test-coverage"
+    assert output[0].path == "."
+    assert "no source-to-test relationships are declared" in output[0].message
+
+
+def test_feature_owned_review_policies_remain_strict() -> None:
+    for field in (
+        "source_families",
+        "typing_stub_suggestions",
+        "shared_utilities",
+    ):
+        with pytest.raises(ValidationError):
+            QualityGateConfig.model_validate(
+                {
+                    "schema_version": 1,
+                    "checks": {field: {"unexpected": True}},
+                },
+                strict=True,
+            )
+
+
+@pytest.mark.parametrize(
+    ("selector", "provider", "policy_field"),
+    (
+        (
+            "source-families",
+            "alphus.gates.review.source_families",
+            "source_families",
+        ),
+        (
+            "typing-stub-suggestions",
+            "alphus.gates.review.typing_stub_suggestions",
+            "typing_stub_suggestions",
+        ),
+        (
+            "shared-utilities",
+            "alphus.gates.hygiene.shared_utilities",
+            "shared_utilities",
+        ),
+    ),
+)
+def test_review_feature_providers_load_only_after_explicit_dispatch(
+    pytestconfig: pytest.Config,
+    selector: str,
+    provider: str,
+    policy_field: str,
+) -> None:
+    policies = {
+        "typing-stub-suggestions": {"extensions": [".py"]},
+        "shared-utilities": {
+            "extensions": [".py"],
+            "canonical_file_hash_path": "src/hash.py",
+            "canonical_file_hash_function": "sha256_file",
+            "minimum_body_statements": 3,
+            "minimum_ast_nodes": 15,
+        },
+    }
+    policy = policies.get(selector, {})
+    script = f"""
+import sys
+from pathlib import Path
+from alphus.config import QualityGateConfig
+from alphus.execution.dispatch import run_builtin_rule
+provider = {provider!r}
+assert provider not in sys.modules
+config = QualityGateConfig.model_validate({{
+    "schema_version": 1,
+    "checks": {{{policy_field!r}: {policy!r}}},
+}}, strict=True)
+run_builtin_rule({selector!r}, Path.cwd(), (), config)
+assert provider in sys.modules
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=pytestconfig.rootpath,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
 @pytest.mark.parametrize("rule", get_args(QualityRuleName))
 def test_each_selected_portable_rule_requires_its_policy(rule: QualityRuleName) -> None:
     with pytest.raises(MissingPolicyError, match=RULE_SPECS[rule].policy_field):
@@ -135,16 +327,111 @@ def test_each_selected_portable_rule_requires_its_policy(rule: QualityRuleName) 
 
 def test_rule_catalog_covers_every_public_selector_and_policy_field() -> None:
     assert set(RULE_SPECS) == set(get_args(QualityRuleName))
-    assert set(RULE_RUNNERS) == set(RULE_SPECS)
+    entry_points = builtin_check_entry_points()
+    assert set(RULE_RUNNERS) | set(entry_points) == set(RULE_SPECS)
     assert set(BUILTIN_RULES) == set(RULE_SPECS)
-    assert all(
-        BUILTIN_RULES[selector].spec is spec
-        and BUILTIN_RULES[selector].runner is RULE_RUNNERS[selector]
-        for selector, spec in RULE_SPECS.items()
-    )
+    for selector, spec in RULE_SPECS.items():
+        binding = BUILTIN_RULES[selector]
+        assert binding.spec is spec
+        if selector in entry_points:
+            assert isinstance(binding, EntryPointBuiltinRuleBinding)
+        else:
+            assert binding.runner is RULE_RUNNERS[selector]
     assert all(
         spec.policy_field in CheckPolicies.model_fields for spec in RULE_SPECS.values()
     )
+
+
+def test_entrypoint_dispatch_keeps_findings_and_native_report_shapes(
+    tmp_path: Path,
+) -> None:
+    file_root = tmp_path / "file-check"
+    file_root.mkdir()
+    source = file_root / "sample.py"
+    source.write_text("one\ntwo\nthree\n", encoding="utf-8")
+    config = QualityGateConfig.model_validate(
+        {
+            "schema_version": 1,
+            "checks": {
+                "file_size": {
+                    "code_extensions": [".py"],
+                    "code_limit": 1,
+                    "hard_limit": 1,
+                    "initializer_name": "__init__.py",
+                    "initializer_limit": 10,
+                },
+                "cyclomatic_complexity": {
+                    "metric": "cyclomatic",
+                    "maximum": 5,
+                    "files": {"include": ["**/*.py"]},
+                    "backends": [
+                        {
+                            "language": "python",
+                            "backend": "ruff",
+                            "version": "0.16.1",
+                        }
+                    ],
+                },
+            },
+        },
+        strict=True,
+    )
+
+    findings = run_builtin_rule("file-size", file_root, (Path("sample.py"),), config)
+    report_root = tmp_path / "native-report-check"
+    report_root.mkdir()
+    subprocess.run(["git", "init", "--quiet", str(report_root)], check=True)
+    report = run_builtin_rule("cyclomatic-complexity", report_root, (), config)
+
+    assert isinstance(findings, list)
+    assert findings
+    assert isinstance(report, CyclomaticReport)
+    assert report.outcome == "no_matching_files"
+
+
+def test_entrypoint_dispatch_rejects_coercible_finding_mappings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def malformed_runner(
+        _root: Path,
+        _files: Sequence[Path],
+        _policy: FileSizePolicy,
+    ) -> list[Finding]:
+        return cast(
+            list[Finding],
+            [
+                {
+                    "rule_id": "alphus/python/none/maintainability/file-exceeds-hard-limit",
+                    "path": "sample.py",
+                    "message": "too large",
+                }
+            ],
+        )
+
+    feature = replace(load_builtin_feature("file-size"), runner=malformed_runner)
+
+    def load_malformed_feature(_selector: str) -> BuiltinFeatureRegistration:
+        return feature
+
+    monkeypatch.setattr(dispatch, "load_builtin_feature", load_malformed_feature)
+    config = QualityGateConfig.model_validate(
+        {
+            "schema_version": 1,
+            "checks": {
+                "file_size": {
+                    "code_extensions": [".py"],
+                    "code_limit": 1,
+                    "hard_limit": 1,
+                    "initializer_name": "__init__.py",
+                    "initializer_limit": 1,
+                }
+            },
+        },
+        strict=True,
+    )
+
+    with pytest.raises(ValidationError):
+        run_builtin_rule("file-size", tmp_path, (), config)
 
 
 def test_cli_catalog_exposes_domain_recommendation_metadata(

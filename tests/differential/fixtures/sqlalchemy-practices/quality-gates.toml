@@ -1,0 +1,23 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py"]
+exclude = []
+
+[checks.sqlalchemy_practices]
+extensions = [".py"]
+target_sqlalchemy = ">=2.0,<3.0"
+
+[orchestration]
+default_profile = "sqlalchemy-review"
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "sqlalchemy-review"
+rule = "sqlalchemy-practices"
+severity = "warning"
+
+[[orchestration.profiles]]
+name = "sqlalchemy-review"
+steps = ["sqlalchemy-review"]

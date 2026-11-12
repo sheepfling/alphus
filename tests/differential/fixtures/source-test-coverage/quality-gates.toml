@@ -1,0 +1,16 @@
+schema_version = 1
+
+[checks.source_test_coverage]
+
+[orchestration]
+default_profile = "coverage-review"
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "Declared source coverage"
+rule = "source-test-coverage"
+
+[[orchestration.profiles]]
+name = "coverage-review"
+steps = ["Declared source coverage"]

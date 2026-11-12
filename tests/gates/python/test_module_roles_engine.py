@@ -11,8 +11,15 @@ import pytest
 from pydantic import ValidationError
 
 from alphus.cli import main
-from alphus.config import ModuleRolePolicy
-from alphus.gates.python.module_roles import check_module_roles
+from alphus.config import ModuleRolePolicy, QualityGateConfig
+from alphus.execution.dispatch import run_builtin_rule
+from alphus.gates.python.module_roles import (
+    ALPHUS_FEATURE,
+    check_module_roles,
+    resolve_module_roles_policy,
+    run_module_roles_feature,
+)
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 
 def _policy(
@@ -323,3 +330,24 @@ forbidden_module_assignments = ["RegistryProvider"]
             "src/provider.py",
         ),
     ]
+
+
+def test_feature_registration_preserves_configured_finding_behavior(
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "src/application/runtime_provider.py"
+    source_path.parent.mkdir(parents=True)
+    source_path.write_text("import internal.transport\n", encoding="utf-8")
+    policy = _role_policy("src/application/runtime_provider.py", "composition")
+    config = QualityGateConfig.model_validate(
+        {"schema_version": 1, "checks": {"module_roles": policy}}, strict=True
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is ModuleRolePolicy
+    resolved = resolve_module_roles_policy(config)
+    assert type(resolved) is ModuleRolePolicy
+    expected = check_module_roles(tmp_path, policy)
+    assert expected
+    assert run_module_roles_feature(tmp_path, (), resolved) == expected
+    assert run_builtin_rule("module-roles", tmp_path, (), config) == expected

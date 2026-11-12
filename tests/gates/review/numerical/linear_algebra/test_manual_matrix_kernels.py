@@ -3,11 +3,16 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from alphus.config import ManualMatrixKernelPolicy
+from alphus.config import ManualMatrixKernelPolicy, QualityGateConfig
+from alphus.execution.dispatch import run_builtin_rule
 from alphus.gates.review.numerical.linear_algebra.manual_matrix_kernels import (
+    ALPHUS_FEATURE,
     check_manual_matrix_kernels,
     matrix_kernel_lines,
+    resolve_manual_matrix_kernels_policy,
+    run_manual_matrix_kernels_feature,
 )
+from alphus.plugins.builtin import FindingBuiltinFeature
 
 _PRODUCT = """result = [
     [
@@ -75,3 +80,31 @@ def test_scans_only_declared_paths_and_respects_exclusions(tmp_path: Path) -> No
 def test_policy_requires_an_explicit_numeric_scope() -> None:
     with pytest.raises(ValidationError, match="source_paths"):
         ManualMatrixKernelPolicy(extensions=(".py",))
+
+
+def test_feature_registration_preserves_configured_finding_behavior(
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "src/numerics/kernel.py"
+    source_path.parent.mkdir(parents=True)
+    source_path.write_text(_PRODUCT, encoding="utf-8")
+    relative_path = Path("src/numerics/kernel.py")
+    policy = _policy()
+    config = QualityGateConfig.model_validate(
+        {"schema_version": 1, "checks": {"manual_matrix_kernels": policy}}, strict=True
+    )
+
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is ManualMatrixKernelPolicy
+    resolved = resolve_manual_matrix_kernels_policy(config)
+    assert type(resolved) is ManualMatrixKernelPolicy
+    expected = check_manual_matrix_kernels(tmp_path, [relative_path], policy)
+    assert expected
+    assert (
+        run_manual_matrix_kernels_feature(tmp_path, [relative_path], resolved)
+        == expected
+    )
+    assert (
+        run_builtin_rule("manual-matrix-kernels", tmp_path, [relative_path], config)
+        == expected
+    )

@@ -1,0 +1,22 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*.py"]
+exclude = []
+
+[checks.input_contracts]
+extensions = [".py"]
+
+[orchestration]
+default_profile = "input-contract-review"
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "input-contract-review"
+rule = "input-contracts"
+severity = "warning"
+
+[[orchestration.profiles]]
+name = "input-contract-review"
+steps = ["input-contract-review"]

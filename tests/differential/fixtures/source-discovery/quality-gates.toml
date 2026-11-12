@@ -1,0 +1,34 @@
+schema_version = 1
+
+[files]
+include = ["src/**/*"]
+exclude = []
+
+[checks.json_structure]
+extensions = [".py", ".js"]
+exclude = []
+
+[checks.path_discovery]
+extensions = [".py", ".js"]
+exclude = []
+inspection_exclude = []
+
+[orchestration]
+default_profile = "source-discovery-review"
+failure_threshold = "error"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "json-decode-review"
+rule = "json-structure"
+severity = "warning"
+
+[[orchestration.steps]]
+kind = "rule"
+name = "path-discovery-review"
+rule = "path-discovery"
+severity = "warning"
+
+[[orchestration.profiles]]
+name = "source-discovery-review"
+steps = ["json-decode-review", "path-discovery-review"]

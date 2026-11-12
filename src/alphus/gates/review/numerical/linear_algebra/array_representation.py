@@ -3,14 +3,67 @@
 from __future__ import annotations
 
 import ast
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
+from typing import Final
 
-from alphus.config import ArrayRepresentationContract, ArrayRepresentationPolicy
+from alphus.config import (
+    ArrayRepresentationContract,
+    QualityGateConfig,
+)
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope, rule_tag
+from alphus.plugins.builtin import FindingBuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import ArrayRepresentationPolicy
 from alphus.support.inventory import matches_path
 from alphus.support.source_text import read_python_source
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="array-representation-churn",
+    input_mode="configured-source-scan",
+    policy_field="array_representation_churn",
+    policy_model=ArrayRepresentationPolicy,
+    output_shape="findings",
+    summary="Reviews configured array representation conversion patterns.",
+    applies_to=("python", "numerical"),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="array-representation-churn",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.MAINTAINABILITY,
+            "array-representation-churn",
+        ),
+    ),
+    concern="array-representation-conversion",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "A configured Python operation rebuilds an array from a list conversion; "
+        "this does not establish a performance problem."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=("configured-python-files", "array-conversion-expressions"),
+    languages_formats=("python",),
+    evidence_kinds=(
+        "configured-source-path",
+        "ast-pattern-match",
+        "source-location",
+    ),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
 
 _RULE_ID = rule_tag(
     Scope.PYTHON,
@@ -451,3 +504,27 @@ def check_array_representation(
                 )
             )
     return findings
+
+
+def resolve_array_representation_policy(
+    config: QualityGateConfig,
+) -> ArrayRepresentationPolicy:
+    """Resolve this linear-algebra review's strict feature policy."""
+    return require_policy(
+        config.checks.array_representation_churn, "array_representation_churn"
+    )
+
+
+def run_array_representation_feature(
+    root: Path, files: Sequence[Path], policy: ArrayRepresentationPolicy
+) -> list[Finding]:
+    """Run this configured linear-algebra review with its typed policy."""
+    return check_array_representation(root, files, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_array_representation_feature,
+    policy_resolver=resolve_array_representation_policy,
+)

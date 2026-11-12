@@ -16,7 +16,13 @@ from alphus.config import (
 from alphus.contracts.findings import Finding
 from alphus.execution.dispatch import run_builtin_rule
 from alphus.gates.markdown import shell_fences
-from alphus.gates.markdown.shell_fences import check_markdown_shell_fences
+from alphus.gates.markdown.shell_fences import (
+    ALPHUS_FEATURE,
+    check_markdown_shell_fences,
+    resolve_markdown_shell_fences_policy,
+    run_markdown_shell_fences_feature,
+)
+from alphus.plugins.builtin import FindingBuiltinFeature
 from alphus.policy.catalog import RULE_SPECS, RuleOutputShape
 
 
@@ -1153,7 +1159,16 @@ def test_rule_runner_uses_git_inventory_without_a_files_policy(tmp_path: Path) -
     )
 
     findings = run_builtin_rule("markdown-shell-fences", tmp_path, (), config)
+    policy = config.checks.markdown_shell_fences
+    assert policy is not None
 
+    assert isinstance(ALPHUS_FEATURE, FindingBuiltinFeature)
+    assert ALPHUS_FEATURE.definition.policy_model is MarkdownShellFencesPolicy
+    assert (
+        type(resolve_markdown_shell_fences_policy(config)) is MarkdownShellFencesPolicy
+    )
+    assert run_markdown_shell_fences_feature(tmp_path, (), policy) == findings
+    assert check_markdown_shell_fences(tmp_path, policy) == findings
     assert len(findings) == 1
     assert findings[0].path == "README.md"
     assert findings[0].line == 2

@@ -9,11 +9,22 @@ from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
-from typing import Literal
+from typing import Final, Literal
 
-from alphus.config import InputContractPolicy, ManualSchemaBoundary
+from alphus.config import ManualSchemaBoundary, QualityGateConfig
+from alphus.contracts.complaints import ComplaintContract, ComplaintEntry
 from alphus.contracts.findings import Finding
-from alphus.contracts.rule_tags import Category, Framework, Scope, rule_tag
+from alphus.contracts.rule_tags import Category, Framework, RuleTag, Scope
+from alphus.plugins.builtin import FindingBuiltinFeature
+from alphus.policy.base import require_policy
+from alphus.policy.feature_definition import FeatureDefinition
+from alphus.policy.morphology import (
+    ClaimKind,
+    DetectionMechanism,
+    EvaluationMaturity,
+    RuleMorphology,
+)
+from alphus.policy.review import InputContractPolicy
 from alphus.support.ast_visitors import (
     visit_class_definition_header,
     visit_exception_handler_bindings,
@@ -25,6 +36,134 @@ from alphus.support.source_scanning import (
     import_aliases,
 )
 from alphus.support.source_text import read_python_source
+
+ALPHUS_COMPLAINT_CONTRACTS: tuple[ComplaintContract, ...] = (
+    ComplaintContract(
+        name="input-contracts",
+        emitters=("input-contracts",),
+        entries=(
+            ComplaintEntry(
+                emitter="input-contracts",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.CORRECTNESS,
+                    "argument-mutation",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="input-contracts",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.CORRECTNESS,
+                    "read-only-interface-violation",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="input-contracts",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.CORRECTNESS,
+                    "generic-mapping-domain-escape",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="input-contracts",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.CORRECTNESS,
+                    "broad-object-domain-input",
+                ),
+            ),
+            ComplaintEntry(
+                emitter="input-contracts",
+                tag=RuleTag(
+                    Scope.PYTHON,
+                    Framework.NONE,
+                    Category.CORRECTNESS,
+                    "manual-schema-validation",
+                ),
+            ),
+        ),
+    ),
+)
+
+ALPHUS_CHECK: Final = FeatureDefinition(
+    selector="input-contracts",
+    policy_field="input_contracts",
+    policy_model=InputContractPolicy,
+    output_shape="findings",
+    summary="Reviews local Python collection mutation and read-only input contracts.",
+    applies_to=("python",),
+    domains=(),
+    requires_files=True,
+)
+
+ALPHUS_MORPHOLOGY: Final = RuleMorphology(
+    selector="input-contracts",
+    finding_ids=(
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.CORRECTNESS,
+            "argument-mutation",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.CORRECTNESS,
+            "read-only-interface-violation",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.CORRECTNESS,
+            "generic-mapping-domain-escape",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.CORRECTNESS,
+            "broad-object-domain-input",
+        ),
+        RuleTag(
+            Scope.PYTHON,
+            Framework.NONE,
+            Category.CORRECTNESS,
+            "manual-schema-validation",
+        ),
+    ),
+    finding_contracts=("input-contracts",),
+    concern="python-input-collection-contracts",
+    claim_kind=ClaimKind.RISK,
+    claim=(
+        "Local source evidence may show caller-visible mutation, broad collection "
+        "interfaces, or repeated admission checks."
+    ),
+    mechanisms=(DetectionMechanism.BOUNDED_HEURISTIC,),
+    inspected_scope=(
+        "configured-python-source-files",
+        "function-parameters",
+        "local-uses",
+    ),
+    languages_formats=("python",),
+    evidence_kinds=("syntax-tree-pattern", "configured-boundary", "source-location"),
+    evaluation_maturity=EvaluationMaturity.SYNTHETIC_ONLY,
+)
+
+
+def _input_contract_tag(complaint: str) -> str:
+    for contract in ALPHUS_COMPLAINT_CONTRACTS:
+        if contract.name != "input-contracts":
+            continue
+        for entry in contract.entries:
+            if entry.emitter == "input-contracts" and entry.tag.complaint == complaint:
+                return entry.tag.rule_id
+    raise ValueError(f"unknown input-contract complaint {complaint!r}")
+
 
 Family = Literal["sequence", "mapping", "set", "binary"]
 _ABSTRACT_FAMILIES: tuple[tuple[str, Family], ...] = (
@@ -706,12 +845,7 @@ def _function_findings(
                 )
                 findings.append(
                     Finding(
-                        rule_id=rule_tag(
-                            Scope.PYTHON,
-                            Framework.NONE,
-                            Category.CORRECTNESS,
-                            "argument-mutation",
-                        ),
+                        rule_id=_input_contract_tag("argument-mutation"),
                         path=path,
                         line=mutation.line,
                         severity="warning",
@@ -751,12 +885,7 @@ def _function_findings(
                 continue
             findings.append(
                 Finding(
-                    rule_id=rule_tag(
-                        Scope.PYTHON,
-                        Framework.NONE,
-                        Category.CORRECTNESS,
-                        "read-only-interface-violation",
-                    ),
+                    rule_id=_input_contract_tag("read-only-interface-violation"),
                     path=path,
                     line=usage.line,
                     severity="warning",
@@ -1736,12 +1865,7 @@ def _domain_mapping_findings(
                 )
             findings.append(
                 Finding(
-                    rule_id=rule_tag(
-                        Scope.PYTHON,
-                        Framework.NONE,
-                        Category.CORRECTNESS,
-                        "generic-mapping-domain-escape",
-                    ),
+                    rule_id=_input_contract_tag("generic-mapping-domain-escape"),
                     path=path,
                     line=argument.lineno,
                     severity=policy.domain_mapping_severity,
@@ -1804,12 +1928,7 @@ def _domain_mapping_findings(
             continue
         findings.append(
             Finding(
-                rule_id=rule_tag(
-                    Scope.PYTHON,
-                    Framework.NONE,
-                    Category.CORRECTNESS,
-                    rule_id,
-                ),
+                rule_id=_input_contract_tag(rule_id),
                 path=path,
                 line=argument.lineno,
                 severity=policy.domain_mapping_severity,
@@ -1943,12 +2062,7 @@ def _manual_schema_finding(
     }
     if parameter not in declared_parameters:
         return Finding(
-            rule_id=rule_tag(
-                Scope.PYTHON,
-                Framework.NONE,
-                Category.CORRECTNESS,
-                "manual-schema-validation",
-            ),
+            rule_id=_input_contract_tag("manual-schema-validation"),
             path=path,
             line=function.lineno,
             severity=policy.manual_schema_validation_severity,
@@ -2153,12 +2267,7 @@ def _manual_schema_finding(
     evidence = ", ".join(map(str, sorted(evidence_lines)))
     constraint_evidence = ", ".join(sorted(constraints))
     return Finding(
-        rule_id=rule_tag(
-            Scope.PYTHON,
-            Framework.NONE,
-            Category.CORRECTNESS,
-            "manual-schema-validation",
-        ),
+        rule_id=_input_contract_tag("manual-schema-validation"),
         path=path,
         line=function.lineno,
         severity=policy.manual_schema_validation_severity,
@@ -2262,3 +2371,31 @@ def check_input_contracts(
         source = read_python_source(checkout / relative)
         findings.extend(input_contract_findings(source, policy, path=name))
     return findings
+
+
+def run_input_contracts_rule(
+    root: Path, files: Sequence[Path], config: QualityGateConfig
+) -> list[Finding]:
+    """Adapt the existing configured source scan to built-in dispatch."""
+    policy = require_policy(config.checks.input_contracts, "input_contracts")
+    return check_input_contracts(root, files, policy)
+
+
+def resolve_input_contracts_policy(config: QualityGateConfig) -> InputContractPolicy:
+    """Resolve the strict input contracts policy from validated config."""
+    return require_policy(config.checks.input_contracts, "input_contracts")
+
+
+def run_input_contracts_feature(
+    root: Path, paths: Sequence[Path], policy: InputContractPolicy
+) -> list[Finding]:
+    """Run this source review with its feature-owned policy type."""
+    return check_input_contracts(root, paths, policy)
+
+
+ALPHUS_FEATURE: Final = FindingBuiltinFeature(
+    definition=ALPHUS_CHECK,
+    morphology=ALPHUS_MORPHOLOGY,
+    runner=run_input_contracts_feature,
+    policy_resolver=resolve_input_contracts_policy,
+)
