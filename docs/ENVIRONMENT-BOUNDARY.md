@@ -120,7 +120,6 @@ step-severity behavior unchanged. An explicit `info` failure threshold includes 
 use the default threshold for advisory review. The example uses the existing provisional rollout option.
 Scans never edit code, import it, launch children, execute fixtures, install dependencies, or change CI.
 
-
 ## Registration and portability
 
 The feature owns its typed policy, executable feature declaration, and morphology metadata.
