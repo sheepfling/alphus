@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import re
 import subprocess
@@ -13,7 +12,9 @@ import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
+from typing import Annotated, Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from alphus.gates.stubs.environments import child_environment, probe_python
 from alphus.support.python_runtime import current_python_executable
@@ -77,60 +78,56 @@ def _fixture_error_lines(output: str, fixture: Path, root: Path) -> set[int]:
     return lines
 
 
+class _PyrightPosition(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True)
+    line: Annotated[int, Field(ge=0)]
+
+
+class _PyrightRange(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True)
+    start: _PyrightPosition
+
+
+class _PyrightDiagnostic(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True)
+    severity: Literal["error", "warning", "information"]
+    file: str
+    message: str
+    range: _PyrightRange
+    rule: str | None = None
+
+
+class _PyrightSummary(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True)
+    files_analyzed: Annotated[int, Field(alias="filesAnalyzed", ge=0)]
+    error_count: Annotated[int, Field(alias="errorCount", ge=0)]
+
+
+class _PyrightReport(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True)
+    summary: _PyrightSummary
+    diagnostics: Annotated[
+        tuple[_PyrightDiagnostic, ...], Field(alias="generalDiagnostics")
+    ]
+
+
 def _pyright_output(output: str) -> str:
     """Validate the machine report and retain native diagnostic evidence."""
-    report = json.loads(output)
-    if not isinstance(report, dict):
-        raise TypeError("Pyright report must be an object")
-    report = cast(dict[str, object], report)
-    summary = report.get("summary")
-    if not isinstance(summary, dict):
-        raise TypeError("Pyright summary must be an object")
-    summary = cast(dict[str, object], summary)
-    if type(summary.get("filesAnalyzed")) is not int:
-        raise ValueError("Pyright report lacks an integer filesAnalyzed")
-    if summary["filesAnalyzed"] != 1:
-        raise ValueError(f"expected 1 analyzed file, got {summary['filesAnalyzed']}")
-    diagnostics = report.get("generalDiagnostics")
-    if not isinstance(diagnostics, list):
-        raise TypeError("Pyright report lacks generalDiagnostics")
+    report = _PyrightReport.model_validate_json(output)
+    if report.summary.files_analyzed != 1:
+        raise ValueError(
+            f"expected 1 analyzed file, got {report.summary.files_analyzed}"
+        )
     lines: list[str] = []
-    errors = 0
-    for diagnostic in cast(list[object], diagnostics):
-        if not isinstance(diagnostic, dict):
-            raise TypeError("invalid Pyright diagnostic")
-        diagnostic = cast(dict[str, object], diagnostic)
-        severity = diagnostic.get("severity")
-        if severity not in ("error", "warning", "information"):
-            raise ValueError("invalid Pyright diagnostic severity")
-        if severity != "error":
+    for diagnostic in report.diagnostics:
+        if diagnostic.severity != "error":
             continue
-        errors += 1
-        path = diagnostic.get("file")
-        message = diagnostic.get("message")
-        span = diagnostic.get("range")
-        start = (
-            cast(dict[str, object], span).get("start")
-            if isinstance(span, dict)
-            else None
-        )
-        line = (
-            cast(dict[str, object], start).get("line")
-            if isinstance(start, dict)
-            else None
-        )
-        if not isinstance(path, str) or not isinstance(message, str):
-            raise TypeError("Pyright diagnostic lacks file or message")
-        if type(line) is not int or line < 0:
-            raise ValueError("Pyright diagnostic lacks nonnegative line")
-        rule = diagnostic.get("rule")
-        if rule is not None and not isinstance(rule, str):
-            raise TypeError("invalid Pyright diagnostic rule")
-        suffix = f" ({rule})" if rule else ""
+        suffix = f" ({diagnostic.rule})" if diagnostic.rule else ""
+        message = diagnostic.message.replace("\n", " ")
         lines.append(
-            f"{path}:{line + 1}: error: {message.replace(chr(10), ' ')}{suffix}"
+            f"{diagnostic.file}:{diagnostic.range.start.line + 1}: error: {message}{suffix}"
         )
-    if type(summary.get("errorCount")) is not int or summary["errorCount"] != errors:
+    if report.summary.error_count != len(lines):
         raise ValueError("Pyright errorCount disagrees with diagnostics")
     return "\n".join(lines)
 

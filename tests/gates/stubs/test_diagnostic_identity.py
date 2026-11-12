@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
@@ -57,7 +58,7 @@ def test_pyright_requires_one_analyzed_file(
     )
 
     def runner(
-        command: list[str], **kwargs: object
+        command: Sequence[str], **kwargs: object
     ) -> subprocess.CompletedProcess[str]:
         assert "--outputjson" in command
         return subprocess.CompletedProcess(command, 0, report, "")
@@ -95,7 +96,7 @@ def test_pyright_rejects_malformed_or_inconsistent_report(
     fixture.write_text("x = 1\n")
 
     def runner(
-        command: list[str], **kwargs: object
+        command: Sequence[str], **kwargs: object
     ) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(command, 0, report, "")
 
@@ -124,7 +125,7 @@ def test_pyright_json_foreign_diagnostic_cannot_satisfy_negative(
     )
 
     def runner(
-        command: list[str], **kwargs: object
+        command: Sequence[str], **kwargs: object
     ) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(command, 1, report, "")
 
@@ -138,7 +139,7 @@ def test_pyright_preserves_native_rule_codes(tmp_path: Path) -> None:
     fixture.write_text("bad()  # expect-error\n")
 
     def runner(
-        command: list[str], **kwargs: object
+        command: Sequence[str], **kwargs: object
     ) -> subprocess.CompletedProcess[str]:
         report = json.dumps(
             {
