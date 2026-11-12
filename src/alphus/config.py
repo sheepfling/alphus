@@ -81,6 +81,8 @@ from alphus.policy.repository import (
     VersionSyncPolicy,
 )
 from alphus.policy.review import (
+    ArgparsePrecedenceException,
+    ArgparsePrecedencePolicy,
     ArrayRepresentationContract,
     ArrayRepresentationPolicy,
     BenchmarkDocException,
@@ -168,6 +170,8 @@ from alphus.support.source_text import read_utf8_text
 __all__ = [
     "ArchitectureGraphCheckPolicy",
     "ArchitectureGraphPolicy",
+    "ArgparsePrecedenceException",
+    "ArgparsePrecedencePolicy",
     "ArrayRepresentationContract",
     "ArrayRepresentationPolicy",
     "BenchmarkDocException",
@@ -272,9 +276,9 @@ __all__ = [
     "SharedQualityIntent",
     "SharedUtilitiesPolicy",
     "SourceFamilyPolicy",
+    "SourceScanPolicy",
     "SourceTestCoveragePolicy",
     "SourceTestRelationship",
-    "SourceScanPolicy",
     "SqlAlchemyPracticePolicy",
     "SuppressionReasonException",
     "SuppressionReasonPolicy",

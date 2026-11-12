@@ -1342,3 +1342,8 @@ versions, fenced examples, linked methods, historical report paths, and exact
 scoped exceptions. This sample does not measure precision or enforcement
 performance; collect multiple human-labeled real positives and negatives before
 making those claims.
+
+## Argparse destination precedence
+
+See the [argparse precedence advisory](../ARGPARSE-PRECEDENCE.md) for its
+opt-in grammar, regression recipe, and unassessed dynamic-construction boundary.
