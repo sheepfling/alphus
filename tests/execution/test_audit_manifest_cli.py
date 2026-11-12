@@ -1267,7 +1267,7 @@ def test_profile_plan_preserves_feature_specific_scope_contracts(
     capsys: pytest.CaptureFixture[str],
     selector: str,
     policy_field: str,
-    selected_files: list[str] | None,
+    selected_files: Sequence[str] | None,
 ) -> None:
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     (tmp_path / "src").mkdir()
