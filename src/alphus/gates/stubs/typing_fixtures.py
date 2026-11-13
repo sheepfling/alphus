@@ -222,6 +222,17 @@ def _checker_diagnostic_guidance(checker: Checker, output: str) -> str | None:
     return None
 
 
+def native_error_line(checker: Checker, diagnostic: NativeDiagnostic) -> str:
+    """Retain checker-specific rule spelling used by consumer contracts."""
+    message = diagnostic.message.replace("\n", " ")
+    prefix = f"{diagnostic.path}:{diagnostic.line}: "
+    if checker.name == "ty" and diagnostic.rule:
+        message = message.removeprefix(f"{diagnostic.rule}: ")
+        return f"{prefix}error[{diagnostic.rule}] {message}"
+    suffix = f" [{diagnostic.rule}]" if diagnostic.rule else ""
+    return f"{prefix}error: {message}{suffix}"
+
+
 def evaluate_case(
     checker: Checker,
     fixture: Path,
@@ -282,16 +293,7 @@ def evaluate_case(
                     output = pyright_output(stdout)
                 else:
                     output = "\n".join(
-                        f"{item.path}:{item.line}: error: {item.message.replace(chr(10), ' ')}"
-                        + (
-                            (
-                                f" [{item.rule}]"
-                                if checker.name == "mypy"
-                                else f" ({item.rule})"
-                            )
-                            if item.rule
-                            else ""
-                        )
+                        native_error_line(checker, item)
                         for item in native_diagnostics
                         if item.severity == "error"
                     )

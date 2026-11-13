@@ -121,7 +121,7 @@ def test_native_scan_catches_unused_invalid_declaration(tmp_path: Path) -> None:
 def test_installed_partial_stub_retains_runtime_and_package_context(
     tmp_path: Path, invalid_unused: bool
 ) -> None:
-    """A lone nested partial declaration keeps its parent's runtime imports."""
+    """Pyright retains parent runtime imports for a lone partial declaration."""
     pytest.importorskip("pyright")
     target = tmp_path / "target"
     venv.EnvBuilder(with_pip=False).create(target)
@@ -171,6 +171,8 @@ def test_installed_partial_stub_retains_runtime_and_package_context(
             "sample-stubs",
             "--target-python",
             str(python),
+            "--checkers",
+            "pyright",
         ],
         cwd=tmp_path,
         capture_output=True,

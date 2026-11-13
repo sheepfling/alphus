@@ -175,6 +175,9 @@ extensions = [".py"]
 # assert the input-contract finding.
 exclude = [
   "tests/differential/fixtures/input-contracts/src/example.py",
+  # The verifier CLI transport fake intentionally appends to its explicitly
+  # typed MutableSequence result collector, matching the production callback.
+  "tests/gates/stubs/test_verifier_output.py",
   # The elimination fixture mutates its matrix to exercise that advisory check;
   # the pinned-wheel scenario asserts its existing finding and source location.
   "tests/differential/fixtures/linear-algebra/src/numerics/elimination.py",

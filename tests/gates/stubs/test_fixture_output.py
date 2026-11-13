@@ -12,6 +12,7 @@ import pytest
 from alphus.gates.stubs import typing_fixtures
 from alphus.gates.stubs.checker_reports import FixtureReport, PyrightSummary
 from alphus.gates.stubs.typing_fixtures import Checker, evaluate_case
+from alphus.support.python_runtime import current_python_executable
 from alphus.support.tool_probe import ToolProbe
 
 
@@ -243,11 +244,29 @@ def test_forged_fixture_success_is_rejected(change: str) -> None:
         FixtureReport.model_validate_json(json.dumps(report))
 
 
-def test_partial_fixture_failure_remains_serializable() -> None:
-    report = FixtureReport(
-        passed=False, checkers=("pyright",), errors=("setup failed",)
+def test_partial_fixture_failure_remains_serializable(tmp_path: Path) -> None:
+    # This is a real producer/consumer process boundary, not model reconstruction.
+    producer = subprocess.run(
+        [
+            current_python_executable(),
+            "-I",
+            "-c",
+            (
+                "from alphus.gates.stubs.checker_reports import FixtureReport; "
+                "print(FixtureReport(passed=False, checkers=('pyright',), "
+                "errors=('setup failed',)).model_dump_json())"
+            ),
+        ],
+        cwd=tmp_path,
+        text=True,
+        capture_output=True,
+        check=True,
     )
-    assert not FixtureReport.model_validate_json(report.model_dump_json()).passed
+    report = FixtureReport.model_validate_json(producer.stdout)
+    assert not report.passed
+    assert report.checkers == ("pyright",)
+    assert report.errors == ("setup failed",)
+    assert not report.cases
 
 
 def test_duplicate_output_selector_is_rejected_before_execution(
@@ -303,3 +322,23 @@ def test_native_mypy_rule_keeps_bracketed_required_diagnostic(tmp_path: Path) ->
     assert "[arg-type]" in result.diagnostics
     assert "(arg-type)" not in result.diagnostics
     assert result.native_diagnostics[0].rule == "arg-type"
+
+
+def test_native_ty_rule_keeps_required_concise_diagnostic(tmp_path: Path) -> None:
+    pytest.importorskip("ty")
+    fixture = tmp_path / "negative.py"
+    fixture.write_text(
+        'def takes_int(value: int) -> None: ...\ntakes_int("wrong")  # expect-error\n',
+        encoding="utf-8",
+    )
+    result = evaluate_case(
+        Checker("ty", "ty"),
+        fixture,
+        root=tmp_path,
+        expect_errors=True,
+        required_diagnostics=("error[invalid-argument-type] Argument to function",),
+    )
+    assert result.passed, result.issues
+    assert "error[invalid-argument-type] Argument to function" in result.diagnostics
+    assert result.native_diagnostics[0].rule == "invalid-argument-type"
+    assert result.native_diagnostics[0].message.startswith("invalid-argument-type: ")
