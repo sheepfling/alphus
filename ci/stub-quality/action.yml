@@ -55,7 +55,7 @@ runs:
         ALPHUS_ROOT: ${{ github.action_path }}/../..
       run: |
         "$ALPHUS_CHECKER_PYTHON" -m pip install --disable-pip-version-check "$ALPHUS_ROOT" \
-          "mypy>=2.3" "pyright>=1.1.414"
+          "mypy>=2.3" "pyright>=1.1.414" "ty==0.0.91"
         if [[ "$WITH_TWINE" == "true" ]]; then
           "$ALPHUS_CHECKER_PYTHON" -m pip install --disable-pip-version-check "twine>=7.0"
         fi

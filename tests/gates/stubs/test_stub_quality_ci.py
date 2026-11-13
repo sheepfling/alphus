@@ -244,7 +244,7 @@ def test_mypy_cache_is_temporary_and_subprocess_uses_no_shell(
         assert kwargs["encoding"] == "utf-8"
         assert "shell" not in kwargs
         cache_paths.append(cache)
-        return subprocess.CompletedProcess(command, 0, "Success: no issues found", "")
+        return subprocess.CompletedProcess(command, 0, "", "")
 
     assert run_case(
         CHECKERS[0],
@@ -267,7 +267,15 @@ def test_expected_negative_fixture_emits_matched_native_diagnostics(
     def fake_run(
         command: Sequence[str], **_kwargs: object
     ) -> subprocess.CompletedProcess[str]:
-        diagnostic = f"{command[-1]}:1: error: expected diagnostic"
+        diagnostic = json.dumps(
+            {
+                "file": command[-1],
+                "line": 1,
+                "severity": "error",
+                "message": "expected diagnostic",
+                "code": "assignment",
+            }
+        )
         return subprocess.CompletedProcess(command, 1, diagnostic, "")
 
     assert run_case(
@@ -297,9 +305,21 @@ def test_ty_unspellable_subtype_failure_gets_fixture_guidance_without_passing(
     def ty_unspellable_subtype(
         command: Sequence[str], **_kwargs: object
     ) -> subprocess.CompletedProcess[str]:
-        diagnostic = (
-            f"{fixture.name}:3:1: error[assert-type-unspellable-subtype] "
-            "Type `<class 'Model'>` does not match asserted type `type[Model]`"
+        diagnostic = json.dumps(
+            [
+                {
+                    "check_name": "assert-type-unspellable-subtype",
+                    "severity": "major",
+                    "description": (
+                        "Type `<class 'Model'>` does not match "
+                        "asserted type `type[Model]`"
+                    ),
+                    "location": {
+                        "path": str(fixture),
+                        "positions": {"begin": {"line": 3}},
+                    },
+                }
+            ]
         )
         return subprocess.CompletedProcess(command, 1, diagnostic, "")
 
@@ -582,12 +602,16 @@ def test_api_audit_module_accepts_package_specific_cli_args(tmp_path: Path) -> N
     )
 
 
-def test_pyright_is_the_default_typing_fixture_checker() -> None:
-    assert tuple(checker.name for checker in DEFAULT_CHECKERS) == ("pyright",)
+def test_all_checkers_are_the_default_typing_fixture_checkers() -> None:
+    assert tuple(checker.name for checker in DEFAULT_CHECKERS) == (
+        "mypy",
+        "pyright",
+        "ty",
+    )
     settings = VerificationConfig(
         stubtest_module="example",
         stubtest_allowlist="allowlist.txt",
         positive_fixture="positive.py",
         negative_fixture="negative.py",
     )
-    assert settings.typing_checkers == ("pyright",)
+    assert settings.typing_checkers == ("mypy", "pyright", "ty")
